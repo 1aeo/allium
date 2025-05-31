@@ -148,6 +148,8 @@ class Relays:
                 "bandwidth": 0,
                 "exit_count": 0,
                 "middle_count": 0,
+                "consensus_weight": 0,
+                "consensus_weight_fraction": 0.0,
             }
 
         bw = relay["observed_bandwidth"]
@@ -158,6 +160,12 @@ class Relays:
             self.json["sorted"][k][v]["exit_count"] += 1
         else:
             self.json["sorted"][k][v]["middle_count"] += 1
+
+        # Add consensus weight tracking
+        if relay.get("consensus_weight"):
+            self.json["sorted"][k][v]["consensus_weight"] += relay["consensus_weight"]
+        if relay.get("consensus_weight_fraction"):
+            self.json["sorted"][k][v]["consensus_weight_fraction"] += float(relay["consensus_weight_fraction"])
 
         if k == "as":
             self.json["sorted"][k][v]["country"] = relay.get("country")

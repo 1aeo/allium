@@ -60,6 +60,7 @@ if __name__ == "__main__":
     # miscellaneous page filename suffixes and sorted-by keys
     misc_pages = {
         "by-bandwidth": "1.bandwidth",
+        "by-consensus-weight": "1.consensus_weight_fraction,1.bandwidth",
         "by-exit-count": "1.exit_count,1.bandwidth",
         "by-middle-count": "1.middle_count,1.bandwidth",
         "by-first-seen": "1.first_seen,1.bandwidth",
