@@ -42,6 +42,17 @@
                 .unverified-hostname {
                     color: #FE9F30;
                 }
+
+                /* Custom breakpoint for very large screens */
+                @media (min-width: 1400px) {
+                    .container {
+                        max-width: 100% !important;
+                        padding-right: 15px;
+                        padding-left: 15px;
+                        margin-right: auto;
+                        margin-left: auto;
+                    }
+                }
             </style>
         </head>
     {% endblock %}
