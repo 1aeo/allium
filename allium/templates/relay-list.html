@@ -34,8 +34,8 @@ Last fetch was at {{ relays.timestamp }}.
     {% endif -%}
     {% for relay in relay_list -%}
 	<tr>
-	    {% set obs_bandwidth, obs_unit = relays._format_bandwidth(relay['observed_bandwidth']) -%}
-	    {% set obs_bandwidth = '%s %s'|format(obs_bandwidth, obs_unit) -%}
+	    {% set obs_unit = relays._determine_unit(relay['observed_bandwidth']) -%}
+	    {% set obs_bandwidth = relays._format_bandwidth_with_unit(relay['observed_bandwidth'], obs_unit) -%}
 	    {% if relay['running'] -%}
 		<td>
 		    <span class="circle circle-online" title="This relay is online"></span>
@@ -73,7 +73,7 @@ Last fetch was at {{ relays.timestamp }}.
 			<span class="contact-text">{{ relay['contact_aroi_display']|escape }}</span>
 		    </td>
 		{% endif -%}
-		<td>{{ obs_bandwidth }}</td>
+		<td>{{ obs_bandwidth }} {{ obs_unit }}</td>
 		<td class="visible-md visible-lg">
 		    <a href="https://bgp.tools/prefix/{{ relay['or_addresses'][0].split(':', 1)[0]|escape }}">{{
 		    relay['or_addresses'][0].split(':', 1)[0]|escape }}</a>
