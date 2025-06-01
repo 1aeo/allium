@@ -316,16 +316,16 @@ class Relays:
         """Determine unit - simple threshold checking"""
         if self.use_bits:
             bits = bandwidth_bytes * 8
-            if bits > 1000000000: # If greater than 1 Gbit/s
+            if bits >= 1000000000: # If greater than or equal to 1 Gbit/s
                 return "Gbit/s"
-            elif bits > 1000000: # If greater than 1 Mbit/s
+            elif bits >= 1000000: # If greater than or equal to 1 Mbit/s
                 return "Mbit/s"
             else:
                 return "Kbit/s"
         else:
-            if bandwidth_bytes > 1000000000: # If greater than 1 GB/s
+            if bandwidth_bytes >= 1000000000: # If greater than or equal to 1 GB/s
                 return "GB/s"
-            elif bandwidth_bytes > 1000000: # If greater than 1 MB/s
+            elif bandwidth_bytes >= 1000000: # If greater than or equal to 1 MB/s
                 return "MB/s"
             else:
                 return "KB/s"
@@ -333,10 +333,10 @@ class Relays:
     def _get_divisor_for_unit(self, unit):
         """Simple dictionary lookup for divisors"""
         divisors = {
-            # Bits
-            "Gbit/s": 8000000000,
-            "Mbit/s": 8000000,
-            "Kbit/s": 8000,
+            # Bits (convert bytes to bits, then to unit)
+            "Gbit/s": 125000000,   # 1000000000 / 8
+            "Mbit/s": 125000,      # 1000000 / 8  
+            "Kbit/s": 125,         # 1000 / 8
             # Bytes  
             "GB/s": 1000000000,
             "MB/s": 1000000,
