@@ -195,6 +195,7 @@ class Relays:
                 "relays": list(),
                 "bandwidth": 0,
                 "exit_count": 0,
+                "guard_count": 0,
                 "middle_count": 0,
                 "consensus_weight": 0,
                 "consensus_weight_fraction": 0.0,
@@ -206,6 +207,8 @@ class Relays:
 
         if "Exit" in relay["flags"]:
             self.json["sorted"][k][v]["exit_count"] += 1
+        elif "Guard" in relay["flags"]:
+            self.json["sorted"][k][v]["guard_count"] += 1
         else:
             self.json["sorted"][k][v]["middle_count"] += 1
 
@@ -384,6 +387,7 @@ class Relays:
                 bandwidth=bandwidth,
                 bandwidth_unit=bandwidth_unit,
                 exit_count=i["exit_count"],
+                guard_count=i["guard_count"],
                 middle_count=i["middle_count"],
                 is_index=False,
                 path_prefix="../../",
