@@ -39,10 +39,17 @@ if __name__ == "__main__":
         ),
         required=False,
     )
+    parser.add_argument(
+        "--display-bandwidth-units",
+        dest="bandwidth_units",
+        choices=['bits', 'bytes'],
+        default='bits',
+        help="display bandwidth in bits/second (Kbit/s, Mbit/s, Gbit/s) or bytes/second (KB/s, MB/s, GB/s). Default: bits",
+    )
     args = parser.parse_args()
 
     # object containing onionoo data and processing routines
-    RELAY_SET = Relays(args.output_dir, args.onionoo_url)
+    RELAY_SET = Relays(args.output_dir, args.onionoo_url, args.bandwidth_units == 'bits')
     if RELAY_SET.json == None:
         sys.exit(0)
 

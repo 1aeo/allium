@@ -26,9 +26,10 @@ ENV = Environment(
 class Relays:
     """Relay class consisting of processing routines and onionoo data"""
 
-    def __init__(self, output_dir, onionoo_url):
+    def __init__(self, output_dir, onionoo_url, use_bits=False):
         self.output_dir = output_dir
         self.onionoo_url = onionoo_url
+        self.use_bits = use_bits
         self.ts_file = os.path.join(os.path.dirname(ABS_PATH), "timestamp")
         self.json = self._fetch_onionoo_details()
         if self.json == None:
@@ -253,6 +254,31 @@ class Relays:
         with open(output, "w", encoding="utf8") as html:
             html.write(template_render)
 
+    def _format_bandwidth(self, bandwidth_bytes):
+        """
+        Format bandwidth according to the unit preference (bits or bytes)
+        
+        Args:
+            bandwidth_bytes: bandwidth value in bytes/second
+        Returns:
+            tuple of (value, unit)
+        """
+        if self.use_bits:
+            bandwidth_bits = bandwidth_bytes * 8
+            if bandwidth_bits > 1000000000:  # If greater than 1 Gbit/s
+                return round(bandwidth_bits / 1000000000, 2), "Gbit/s"
+            elif bandwidth_bits > 1000000:  # If greater than 1 Mbit/s
+                return round(bandwidth_bits / 1000000, 2), "Mbit/s"
+            else:
+                return round(bandwidth_bits / 1000, 2), "Kbit/s"
+        else:
+            if bandwidth_bytes > 1000000000:  # If greater than 1 GB/s
+                return round(bandwidth_bytes / 1000000000, 2), "GB/s"
+            elif bandwidth_bytes > 1000000:  # If greater than 1 MB/s
+                return round(bandwidth_bytes / 1000000, 2), "MB/s"
+            else:
+                return round(bandwidth_bytes / 1000, 2), "KB/s"
+
     def write_pages_by_key(self, k):
         """
         Render and write sorted HTML relay listings to disk
@@ -301,9 +327,13 @@ class Relays:
 
             os.makedirs(dir_path)
             self.json["relay_subset"] = members
+            
+            bandwidth, bandwidth_unit = self._format_bandwidth(i["bandwidth"])
+                
             rendered = template.render(
                 relays=self,
-                bandwidth=round(i["bandwidth"] / 1000000, 2),
+                bandwidth=bandwidth,
+                bandwidth_unit=bandwidth_unit,
                 exit_count=i["exit_count"],
                 middle_count=i["middle_count"],
                 is_index=False,

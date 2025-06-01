@@ -60,13 +60,8 @@
                 reverse=True) -%}
                 {% if relays.json['relays'][v['relays'][0]]['fingerprint'] not in processed -%}
                     <tr>
-                        {% if v['bandwidth'] > 1000000 -%}
-                            {% set obs_bandwidth = '%s %s'|format((v['bandwidth'] / 1000000)|round(2,
-                            'common'), 'MB/s') -%}
-                        {% else -%}
-                            {% set obs_bandwidth = '%s %s'|format((v['bandwidth'] / 1000)|round(2,
-                            'common'), 'KB/s') -%}
-                        {% endif -%}
+                        {% set obs_bandwidth, obs_unit = relays._format_bandwidth(v['bandwidth']) -%}
+                        {% set obs_bandwidth = '%s %s'|format(obs_bandwidth, obs_unit) -%}
                         <td>
                             <code><a href="{{ path_prefix }}family/{{ k|escape }}/">{{ k|escape
                             }}</a></code>
