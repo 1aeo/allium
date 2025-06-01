@@ -30,15 +30,19 @@
             {% endif -%}
             {% if sorted_by_label == 'exit_count' -%}
                 <th>
-                    Exit / <a href="networks-by-middle-count.html">Middle</a>
+                    <a href="networks-by-guard-count.html">Guard</a> / <a href="networks-by-middle-count.html">Middle</a> / Exit
+                </th>
+            {% elif sorted_by_label == 'guard_count' -%}
+                <th>
+                    Guard / <a href="networks-by-middle-count.html">Middle</a> / <a href="networks-by-exit-count.html">Exit</a>
                 </th>
             {% elif sorted_by_label == 'middle_count' -%}
                 <th>
-                    <a href="networks-by-exit-count.html">Exit</a> / Middle
+                    <a href="networks-by-guard-count.html">Guard</a> / Middle / <a href="networks-by-exit-count.html">Exit</a>
                 </th>
             {% else -%}
                 <th>
-                    <a href="networks-by-exit-count.html">Exit</a> / <a href="networks-by-middle-count.html">Middle</a>
+                    <a href="networks-by-guard-count.html">Guard</a> / <a href="networks-by-middle-count.html">Middle</a> / <a href="networks-by-exit-count.html">Exit</a>
                 </th>
             {% endif -%}
         </tr>
@@ -70,7 +74,7 @@
                         <td>X</td>
                     {% endif -%}
                     <td>{{ obs_bandwidth }}</td>
-                    <td>{{ v['exit_count'] }} / {{ v['middle_count'] }}</td>
+                    <td>{{ v['guard_count'] }} / {{ v['middle_count'] }} / {{ v['exit_count'] }}</td>
                 </tr>
             {% endfor -%}
         </tbody>

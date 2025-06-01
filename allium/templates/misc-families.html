@@ -35,15 +35,19 @@
             <th class="visible-md visible-lg">Contact</th>
             {% if sorted_by_label == 'exit_count' -%}
                 <th>
-                    Exit / <a href="families-by-middle-count.html">Middle</a>
+                    <a href="families-by-guard-count.html">Guard</a> / <a href="families-by-middle-count.html">Middle</a> / Exit
+                </th>
+            {% elif sorted_by_label == 'guard_count' -%}
+                <th>
+                    Guard / <a href="families-by-guard-count.html">Middle</a> / <a href="families-by-exit-count.html">Exit</a>
                 </th>
             {% elif sorted_by_label == 'middle_count' -%}
                 <th>
-                    <a href="families-by-exit-count.html">Exit</a> / Middle
+                    <a href="families-by-guard-count.html">Guard</a> / Middle / <a href="families-by-exit-count.html">Exit</a>
                 </th>
             {% else -%}
                 <th>
-                    <a href="families-by-exit-count.html">Exit</a> / <a href="families-by-middle-count.html">Middle</a>
+                    <a href="families-by-guard-count.html">Guard</a>  / <a href="families-by-guard-count.html">Middle</a> / <a href="families-by-exit-count.html">Exit</a>
                 </th>
             {% endif -%}
             {% if sorted_by_label == 'first_seen' -%}
@@ -76,7 +80,7 @@
                         {% else -%}
                             <td class="visible-md visible-lg">none</td>
                         {% endif -%}
-                        <td>{{ v['exit_count'] }} / {{ v['middle_count'] }}</td>
+                        <td>{{ v['guard_count'] }} / {{ v['middle_count'] }} / {{ v['exit_count'] }}</td>
                         <td>
                             <a href="{{ path_prefix }}first_seen/{{ v['first_seen'].split(' ', 1)[0]|escape }}">{{ v['first_seen'].split(' ', 1)[0]|escape }}</a>
                         </td>

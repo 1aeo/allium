@@ -7,6 +7,11 @@
     Relays with effective family member
     <code> {{ value|escape }}</code> are responsible for ~{{ bandwidth }} {{ bandwidth_unit }} of
     traffic, with
+    {% if guard_count > 0 %}
+        {{ guard_count }} guard relay
+        {%- if guard_count > 1 -%}s{% endif %}
+        {% if middle_count > 0 or exit_count > 0 %},{% endif %}
+    {% endif %}
     {% if middle_count > 0 %}
         {{ middle_count }} middle relay
         {%- if middle_count > 1 -%}s{% endif %}
