@@ -41,6 +41,7 @@ class Relays:
         self._trim_platform()
         self._add_hashed_contact()
         self._categorize()
+        self._process_aroi_contacts()
 
     def _fetch_onionoo_details(self):
         """
@@ -95,13 +96,47 @@ class Relays:
             if not relay.get("observed_bandwidth"):
                 self.json["relays"][idx]["observed_bandwidth"] = 0
 
+    def _simple_aroi_parsing(self, contact):
+        """
+        Parse simple AROI contact information to add website prefix if conditions are met.
+        For display purposes only - does not affect the stored/hashed contact info.
+        More details: https://nusenu.github.io/OrNetStats/aroi-setup
+        
+        Args:
+            contact: The contact string to process
+        Returns:
+            Processed AROI contact string for display
+        """
+        if not contact:
+            return contact
+            
+        # Check if both required patterns are present
+        url_match = re.search(r'url:https?://([\w.-]+)', contact)
+        ciiss_match = 'ciissversion:2' in contact
+        
+        if url_match and ciiss_match:
+            # Extract domain and add it as prefix
+            domain = url_match.group(1)
+            return f"{domain} | {contact}"
+        
+        return contact
+
+    def _process_aroi_contacts(self):
+        """
+        Process all relay contacts to add AROI display format.
+        """
+        for relay in self.json["relays"]:
+            contact = relay.get("contact", "")
+            relay["contact_aroi_display"] = self._simple_aroi_parsing(contact)
+
     def _add_hashed_contact(self):
         """
         Adds a hashed contact key/value for every relay
         """
         for idx, relay in enumerate(self.json["relays"]):
-            c = relay.get("contact", "").encode("utf-8")
-            self.json["relays"][idx]["contact_md5"] = hashlib.md5(c).hexdigest()
+            contact = relay.get("contact", "")
+            # Hash the original contact info
+            self.json["relays"][idx]["contact_md5"] = hashlib.md5(contact.encode("utf-8")).hexdigest()
 
     def _sort_by_bandwidth(self):
         """
@@ -176,6 +211,7 @@ class Relays:
         if k == "family":
             self.json["sorted"][k][v]["contact"] = relay.get("contact")
             self.json["sorted"][k][v]["contact_md5"] = relay.get("contact_md5")
+            self.json["sorted"][k][v]["contact_aroi_display"] = relay.get("contact_aroi_display")
 
             # update the first_seen parameter to always contain the oldest
             # relay's first_seen date

@@ -32,7 +32,7 @@ Contact
 {% if relay['contact'] -%}
 <dd>
 <a href="{{ path_prefix }}contact/{{ relay['contact_md5'] }}/">{{
-relay['contact']|escape }}</a>
+relay['contact_aroi_display']|escape }}</a>
 </dd>
 {% else -%}
 <dd>

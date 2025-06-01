@@ -71,7 +71,7 @@
                         {% if v['contact'] -%}
                             <td class="visible-md visible-lg">
                                 <a href="{{ path_prefix }}contact/{{ v['contact_md5'] }}/"
-                                title="{{ v['contact']|escape }}" class="contact-text">{{ v['contact']|escape }}</a>
+                                title="{{ v['contact_aroi_display']|escape }}" class="contact-text">{{ v['contact_aroi_display']|escape }}</a>
                             </td>
                         {% else -%}
                             <td class="visible-md visible-lg">none</td>
