@@ -26,9 +26,10 @@ ENV = Environment(
 class Relays:
     """Relay class consisting of processing routines and onionoo data"""
 
-    def __init__(self, output_dir, onionoo_url):
+    def __init__(self, output_dir, onionoo_url, use_bits=False):
         self.output_dir = output_dir
         self.onionoo_url = onionoo_url
+        self.use_bits = use_bits
         self.ts_file = os.path.join(os.path.dirname(ABS_PATH), "timestamp")
         self.json = self._fetch_onionoo_details()
         if self.json == None:
@@ -39,7 +40,8 @@ class Relays:
         self._sort_by_bandwidth()
         self._trim_platform()
         self._add_hashed_contact()
-        self._categorize()
+        self._process_aroi_contacts()  # Process AROI display info first
+        self._categorize()  # Then build categories with processed relay objects
 
     def _fetch_onionoo_details(self):
         """
@@ -94,13 +96,59 @@ class Relays:
             if not relay.get("observed_bandwidth"):
                 self.json["relays"][idx]["observed_bandwidth"] = 0
 
+    def _simple_aroi_parsing(self, contact):
+        """
+        Parse simple AROI contact information to add website prefix if conditions are met.
+        For display purposes only - does not affect the stored/hashed contact info.
+        More details: https://nusenu.github.io/OrNetStats/aroi-setup
+        
+        Args:
+            contact: The contact string to process
+        Returns:
+            Processed AROI contact string for display
+        """
+        if not contact:
+            return contact
+            
+        # Check if both required patterns are present
+        url_match = re.search(r'url:(?:https?://)?([^,\s]+)', contact)
+        ciiss_match = 'ciissversion:2' in contact
+        
+        if url_match and ciiss_match:
+            # Extract domain and clean it up
+            domain = url_match.group(1)
+            
+            # Handle protocol URLs (e.g. https://domain.com/path)
+            if '://' in domain:
+                domain = domain.split('://', 1)[1]
+            
+            # Remove www. prefix if present
+            if domain.startswith('www.'):
+                domain = domain[4:]
+                
+            # Remove trailing slash and anything after first /
+            domain = domain.split('/')[0]
+            
+            return f"{domain} | {contact}"
+        
+        return contact
+
+    def _process_aroi_contacts(self):
+        """
+        Process all relay contacts to add AROI display format.
+        """
+        for relay in self.json["relays"]:
+            contact = relay.get("contact", "")
+            relay["contact_aroi_display"] = self._simple_aroi_parsing(contact)
+
     def _add_hashed_contact(self):
         """
         Adds a hashed contact key/value for every relay
         """
         for idx, relay in enumerate(self.json["relays"]):
-            c = relay.get("contact", "").encode("utf-8")
-            self.json["relays"][idx]["contact_md5"] = hashlib.md5(c).hexdigest()
+            contact = relay.get("contact", "")
+            # Hash the original contact info
+            self.json["relays"][idx]["contact_md5"] = hashlib.md5(contact.encode("utf-8")).hexdigest()
 
     def _sort_by_bandwidth(self):
         """
@@ -148,6 +196,8 @@ class Relays:
                 "bandwidth": 0,
                 "exit_count": 0,
                 "middle_count": 0,
+                "consensus_weight": 0,
+                "consensus_weight_fraction": 0.0,
             }
 
         bw = relay["observed_bandwidth"]
@@ -159,14 +209,22 @@ class Relays:
         else:
             self.json["sorted"][k][v]["middle_count"] += 1
 
+        # Add consensus weight tracking
+        if relay.get("consensus_weight"):
+            self.json["sorted"][k][v]["consensus_weight"] += relay["consensus_weight"]
+        if relay.get("consensus_weight_fraction"):
+            self.json["sorted"][k][v]["consensus_weight_fraction"] += float(relay["consensus_weight_fraction"])
+
         if k == "as":
             self.json["sorted"][k][v]["country"] = relay.get("country")
             self.json["sorted"][k][v]["country_name"] = relay.get("country")
             self.json["sorted"][k][v]["as_name"] = relay.get("as_name")
 
         if k == "family":
-            self.json["sorted"][k][v]["contact"] = relay.get("contact")
-            self.json["sorted"][k][v]["contact_md5"] = relay.get("contact_md5")
+            # Use empty strings as defaults to avoid None values
+            self.json["sorted"][k][v]["contact"] = relay.get("contact", "")
+            self.json["sorted"][k][v]["contact_md5"] = relay.get("contact_md5", "")
+            self.json["sorted"][k][v]["contact_aroi_display"] = relay.get("contact_aroi_display", "")
 
             # update the first_seen parameter to always contain the oldest
             # relay's first_seen date
@@ -245,6 +303,31 @@ class Relays:
         with open(output, "w", encoding="utf8") as html:
             html.write(template_render)
 
+    def _format_bandwidth(self, bandwidth_bytes):
+        """
+        Format bandwidth according to the unit preference (bits or bytes)
+        
+        Args:
+            bandwidth_bytes: bandwidth value in bytes/second
+        Returns:
+            tuple of (value, unit)
+        """
+        if self.use_bits:
+            bandwidth_bits = bandwidth_bytes * 8
+            if bandwidth_bits > 1000000000:  # If greater than 1 Gbit/s
+                return round(bandwidth_bits / 1000000000, 2), "Gbit/s"
+            elif bandwidth_bits > 1000000:  # If greater than 1 Mbit/s
+                return round(bandwidth_bits / 1000000, 2), "Mbit/s"
+            else:
+                return round(bandwidth_bits / 1000, 2), "Kbit/s"
+        else:
+            if bandwidth_bytes > 1000000000:  # If greater than 1 GB/s
+                return round(bandwidth_bytes / 1000000000, 2), "GB/s"
+            elif bandwidth_bytes > 1000000:  # If greater than 1 MB/s
+                return round(bandwidth_bytes / 1000000, 2), "MB/s"
+            else:
+                return round(bandwidth_bytes / 1000, 2), "KB/s"
+
     def write_pages_by_key(self, k):
         """
         Render and write sorted HTML relay listings to disk
@@ -293,9 +376,13 @@ class Relays:
 
             os.makedirs(dir_path)
             self.json["relay_subset"] = members
+            
+            bandwidth, bandwidth_unit = self._format_bandwidth(i["bandwidth"])
+                
             rendered = template.render(
                 relays=self,
-                bandwidth=round(i["bandwidth"] / 1000000, 2),
+                bandwidth=bandwidth,
+                bandwidth_unit=bandwidth_unit,
                 exit_count=i["exit_count"],
                 middle_count=i["middle_count"],
                 is_index=False,

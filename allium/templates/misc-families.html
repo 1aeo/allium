@@ -10,6 +10,7 @@
         sorted_by_label|replace('_', ' ')|title }}
     </h2>
     <p>
+        Last fetch was at {{ relays.timestamp }}.
         The set of all relay families with > 1 effective members, sorted by {{
         sorted_by_label|replace('_', ' ') }}. The first seen parameter is taken from the
         oldest relay in the family.
@@ -22,6 +23,13 @@
             {% else -%}
                 <th>
                     <a href="families-by-bandwidth.html">Bandwidth</a>
+                </th>
+            {% endif -%}
+            {% if sorted_by_label == 'consensus_weight_fraction' -%}
+                <th>Consensus Weight</th>
+            {% else -%}
+                <th>
+                    <a href="families-by-consensus-weight.html">Consensus Weight</a>
                 </th>
             {% endif -%}
             <th class="visible-md visible-lg">Contact</th>
@@ -52,25 +60,19 @@
                 reverse=True) -%}
                 {% if relays.json['relays'][v['relays'][0]]['fingerprint'] not in processed -%}
                     <tr>
-                        {% if v['bandwidth'] > 1000000 -%}
-                            {% set obs_bandwidth = '%s %s'|format((v['bandwidth'] / 1000000)|round(2,
-                            'common'), 'MB/s') -%}
-                        {% else -%}
-                            {% set obs_bandwidth = '%s %s'|format((v['bandwidth'] / 1000)|round(2,
-                            'common'), 'KB/s') -%}
-                        {% endif -%}
+                        {% set obs_bandwidth, obs_unit = relays._format_bandwidth(v['bandwidth']) -%}
+                        {% set obs_bandwidth = '%s %s'|format(obs_bandwidth, obs_unit) -%}
                         <td>
                             <code><a href="{{ path_prefix }}family/{{ k|escape }}/">{{ k|escape
                             }}</a></code>
                         </td>
                         <td>{{ obs_bandwidth }}</td>
+                        <td>{{ "%.2f%%"|format(v['consensus_weight_fraction'] * 100)|default('N/A') }}</td>
                         {% if v['contact'] -%}
                             <td class="visible-md visible-lg">
-                                <code><a href="{{ path_prefix }}contact/{{ v['contact_md5'] }}/"
-   title="{{ v['contact']|escape }}">{{
-                                    v['contact']|truncate(50)|escape }}<a>
-                                </td>
-                            </code>
+                                <a href="{{ path_prefix }}contact/{{ v['contact_md5'] }}/"
+                                title="{{ v['contact_aroi_display']|escape }}" class="contact-text">{{ v['contact_aroi_display']|escape }}</a>
+                            </td>
                         {% else -%}
                             <td class="visible-md visible-lg">none</td>
                         {% endif -%}

@@ -10,7 +10,7 @@
 {% block header %}<a href="../../">Home</a> :: {{ country_name }}{% endblock %}
 {% block description %}
     {{ country_name }} ({{ country_abbr }}) is responsible
-    for ~{{ bandwidth }} MB/s of traffic, with
+    for ~{{ bandwidth }} {{ bandwidth_unit }} of traffic, with
     {% if middle_count > 0 %}
         {{ middle_count }} middle relay
         {%- if middle_count > 1 -%}s{%- endif -%}

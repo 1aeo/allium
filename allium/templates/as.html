@@ -3,7 +3,7 @@
 {% set as_name = relays.json['relay_subset'][0]['as_name']|escape %}
 {% block title %}Tor Relays :: {{ as_name }} ({{ as_number }}){% endblock %}
 {% block header %}<a href="../../">Home</a> :: {{ as_name }} ({{ as_number }}){% endblock %}
-{% block description %}{{ as_number }} is responsible for ~{{ bandwidth }} MB/s
+{% block description %}{{ as_number }} is responsible for ~{{ bandwidth }} {{ bandwidth_unit }}
 of traffic, with
 {% if middle_count > 0 %}
     {{ middle_count }} middle relay
