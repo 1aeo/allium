@@ -65,17 +65,17 @@ Last fetch was at {{ relays.timestamp }}.
 		{% if key != 'contact' -%}
 		    {% if relay['contact'] -%}
 			<td>
-			    <code><a href="{{ path_prefix }}contact/{{ relay['contact_md5'] }}/"
-title="{{ relay['contact']|escape }}" class="contact-text">{{ relay['contact']|escape }}</a></code>
+			    <a href="{{ path_prefix }}contact/{{ relay['contact_md5'] }}/"
+title="{{ relay['contact']|escape }}" class="contact-text">{{ relay['contact']|escape }}</a>
 			</td>
 		    {% else -%}
 			<td title="none">
-			    <code>none</code>
+			    none
 			</td>
 		    {% endif -%}
 		{% else -%}
 		    <td title="{{ relay['contact']|escape }}">
-			<code class="contact-text">{{ relay['contact']|escape }}</code>
+			<span class="contact-text">{{ relay['contact']|escape }}</span>
 		    </td>
 		{% endif -%}
 		<td>{{ obs_bandwidth }}</td>
