@@ -40,8 +40,8 @@ class Relays:
         self._sort_by_bandwidth()
         self._trim_platform()
         self._add_hashed_contact()
-        self._categorize()
-        self._process_aroi_contacts()
+        self._process_aroi_contacts()  # Process AROI display info first
+        self._categorize()  # Then build categories with processed relay objects
 
     def _fetch_onionoo_details(self):
         """
@@ -209,9 +209,10 @@ class Relays:
             self.json["sorted"][k][v]["as_name"] = relay.get("as_name")
 
         if k == "family":
-            self.json["sorted"][k][v]["contact"] = relay.get("contact")
-            self.json["sorted"][k][v]["contact_md5"] = relay.get("contact_md5")
-            self.json["sorted"][k][v]["contact_aroi_display"] = relay.get("contact_aroi_display")
+            # Use empty strings as defaults to avoid None values
+            self.json["sorted"][k][v]["contact"] = relay.get("contact", "")
+            self.json["sorted"][k][v]["contact_md5"] = relay.get("contact_md5", "")
+            self.json["sorted"][k][v]["contact_aroi_display"] = relay.get("contact_aroi_display", "")
 
             # update the first_seen parameter to always contain the oldest
             # relay's first_seen date
