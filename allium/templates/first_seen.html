@@ -3,7 +3,7 @@
 {% block header %}<a href="../../">Home</a> :: {{ value }}{% endblock %}
 {% block description %}
     Relays started on {{ value }} are responsible for ~{{
-    bandwidth }} MB/s of traffic, with
+    bandwidth }} {{ bandwidth_unit }} of traffic, with
     {% if middle_count > 0 %}
         {{ middle_count }}
         middle relay

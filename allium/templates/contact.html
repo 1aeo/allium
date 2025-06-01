@@ -1,7 +1,7 @@
 {% extends "relay-list.html" %}
 {% set contact_hash = relays.json['relay_subset'][0]['contact_md5'] %}
 {% if relays.json['relay_subset'][0]['contact'] %}
-    {% set contact = relays.json['relay_subset'][0]['contact']|escape %}
+    {% set contact = relays.json['relay_subset'][0]['contact_aroi_display']|escape %}
 {% else %}
     {% set contact = 'none' %}
 {% endif %}
@@ -9,8 +9,8 @@
 {% block header %}
     <a href="../../">Home</a> :: Contact {{ contact_hash }}{% endblock %}
     {% block description %}
-        Relays with contact info <code>{{ contact }}</code> are
-        responsible for ~{{ bandwidth }} MB/s of traffic, with
+        Relays with contact info <b>{{ contact }}</b> are
+        responsible for ~{{ bandwidth }} {{ bandwidth_unit }} of traffic, with
         {% if middle_count > 0 %}
             {{ middle_count }} middle relay
             {%- if middle_count > 1 -%}s{%- endif -%}

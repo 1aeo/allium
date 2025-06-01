@@ -8,6 +8,7 @@
 {% endblock -%}
 </h2>
 <p>
+Last fetch was at {{ relays.timestamp }}.
 {% block description -%}
 {% endblock -%}
 </p>
@@ -33,13 +34,8 @@
     {% endif -%}
     {% for relay in relay_list -%}
 	<tr>
-	    {% if relay['observed_bandwidth'] > 1000000 -%}
-		{% set obs_bandwidth = '%s %s'|format((relay['observed_bandwidth']
-		/ 1000000)|round(2, 'common'), 'MB/s') -%}
-	    {% else -%}
-		{% set obs_bandwidth = '%s %s'|format((relay['observed_bandwidth'] / 1000)|
-		round(2, 'common'), 'KB/s') -%}
-	    {% endif -%}
+	    {% set obs_bandwidth, obs_unit = relays._format_bandwidth(relay['observed_bandwidth']) -%}
+	    {% set obs_bandwidth = '%s %s'|format(obs_bandwidth, obs_unit) -%}
 	    {% if relay['running'] -%}
 		<td>
 		    <span class="circle circle-online" title="This relay is online"></span>
@@ -64,19 +60,17 @@
 		{% if key != 'contact' -%}
 		    {% if relay['contact'] -%}
 			<td>
-			    <code><a href="{{ path_prefix }}contact/{{ relay['contact_md5'] }}/"
-title="{{ relay['contact']|escape }}">{{ relay['contact_md5'][0:8]
-			    }}</a></code>
+			    <a href="{{ path_prefix }}contact/{{ relay['contact_md5'] }}/" 
+				title="{{ relay['contact_aroi_display']|escape }}" class="contact-text">{{ relay['contact_aroi_display']|escape }}</a>
 			</td>
 		    {% else -%}
 			<td title="none">
-			    <code>none</code>
+			    none
 			</td>
 		    {% endif -%}
 		{% else -%}
-		    <td title="{{ relay['contact']|escape }}">
-			<code>{{ relay['contact_md5'][0:8]
-			}}</code>
+		    <td title="{{ relay['contact_aroi_display']|escape }}">
+			<span class="contact-text">{{ relay['contact_aroi_display']|escape }}</span>
 		    </td>
 		{% endif -%}
 		<td>{{ obs_bandwidth }}</td>
