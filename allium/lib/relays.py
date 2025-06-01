@@ -111,12 +111,15 @@ class Relays:
             return contact
             
         # Check if both required patterns are present
-        url_match = re.search(r'url:https?://([\w.-]+)', contact)
+        url_match = re.search(r'url:(?:https?://)?([^,\s]+)', contact)
         ciiss_match = 'ciissversion:2' in contact
         
         if url_match and ciiss_match:
             # Extract domain and add it as prefix
             domain = url_match.group(1)
+            # Remove www. prefix if present
+            if domain.startswith('www.'):
+                domain = domain[4:]
             return f"{domain} | {contact}"
         
         return contact
