@@ -115,11 +115,20 @@ class Relays:
         ciiss_match = 'ciissversion:2' in contact
         
         if url_match and ciiss_match:
-            # Extract domain and add it as prefix
+            # Extract domain and clean it up
             domain = url_match.group(1)
+            
+            # Handle protocol URLs (e.g. https://domain.com/path)
+            if '://' in domain:
+                domain = domain.split('://', 1)[1]
+            
             # Remove www. prefix if present
             if domain.startswith('www.'):
                 domain = domain[4:]
+                
+            # Remove trailing slash and anything after first /
+            domain = domain.split('/')[0]
+            
             return f"{domain} | {contact}"
         
         return contact
