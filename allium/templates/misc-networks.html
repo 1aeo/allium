@@ -10,7 +10,7 @@
         sorted_by_label|replace('_', ' ')|title }}
     </h2>
     <p>
-        Last fetch was at {{ relays.timestamp }}
+        Last fetch was at {{ relays.timestamp }}.
         The set of all ({{ relays.json['sorted']['as']|length }}) recognized networks
         running at least one relay sorted by {{ sorted_by_label|replace('_', ' ') }}.
         This data is onionoo-derived and might be out of date with respect to other
