@@ -4,7 +4,26 @@
 {% block header %}<a href="../../">Home</a> :: {{ platform }}{% endblock %}
 {% block description %}
     {{ platform }} systems are responsible for ~{{ bandwidth
-    }} {{ bandwidth_unit }} of traffic, with
+    }} {{ bandwidth_unit }} of traffic
+    {%- if guard_count > 0 or middle_count > 0 or exit_count > 0 %} (
+        {%- if guard_count > 0 -%}
+            {{ guard_bandwidth }} {{ bandwidth_unit }} guard
+            {%- if middle_count > 0 or exit_count > 0 %}, {% endif -%}
+        {%- endif -%}
+        {%- if middle_count > 0 -%}
+            {{ middle_bandwidth }} {{ bandwidth_unit }} middle
+            {%- if exit_count > 0 %}, {% endif -%}
+        {%- endif -%}
+        {%- if exit_count > 0 -%}
+            {{ exit_bandwidth }} {{ bandwidth_unit }} exit
+        {%- endif -%}
+    )
+    {%- endif %}, with
+    {% if guard_count > 0 %}
+        {{ guard_count }} guard relay
+        {%- if guard_count > 1 -%}s{%- endif %}
+        {% if middle_count > 0 or exit_count > 0 %},{% endif %}
+    {% endif %}
     {% if middle_count > 0 %}
         {{ middle_count }} middle
         relay
