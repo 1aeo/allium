@@ -33,10 +33,16 @@
                 <th><a href="networks-by-overall-bandwidth.html">Overall</a> / <a href="networks-by-guard-bandwidth.html">Guard</a> / <a href="networks-by-middle-bandwidth.html">Middle</a> / <a href="networks-by-exit-bandwidth.html">Exit</a> Bandwidth</th>
             {% endif -%}
             {% if sorted_by_label == 'consensus_weight_fraction' -%}
-                <th>Consensus Weight</th>
+                <th><a href="networks-by-consensus-weight.html">Overall</a> / <a href="networks-by-guard-consensus-weight.html">Guard</a> / <a href="networks-by-middle-consensus-weight.html">Middle</a> / <a href="networks-by-exit-consensus-weight.html">Exit</a> Consensus Weight</th>
+            {% elif sorted_by_label == 'guard_consensus_weight_fraction' -%}
+                <th><a href="networks-by-consensus-weight.html">Overall</a> / Guard / <a href="networks-by-middle-consensus-weight.html">Middle</a> / <a href="networks-by-exit-consensus-weight.html">Exit</a> Consensus Weight</th>
+            {% elif sorted_by_label == 'middle_consensus_weight_fraction' -%}
+                <th><a href="networks-by-consensus-weight.html">Overall</a> / <a href="networks-by-guard-consensus-weight.html">Guard</a> / Middle / <a href="networks-by-exit-consensus-weight.html">Exit</a> Consensus Weight</th>
+            {% elif sorted_by_label == 'exit_consensus_weight_fraction' -%}
+                <th><a href="networks-by-consensus-weight.html">Overall</a> / <a href="networks-by-guard-consensus-weight.html">Guard</a> / <a href="networks-by-middle-consensus-weight.html">Middle</a> / Exit Consensus Weight</th>
             {% else -%}
                 <th>
-                    <a href="networks-by-consensus-weight.html">Consensus Weight</a>
+                    <a href="networks-by-consensus-weight.html">Overall</a> / <a href="networks-by-guard-consensus-weight.html">Guard</a> / <a href="networks-by-middle-consensus-weight.html">Middle</a> / <a href="networks-by-exit-consensus-weight.html">Exit</a> Consensus Weight
                 </th>
             {% endif -%}
             {% if sorted_by_label == 'exit_count' -%}
@@ -92,7 +98,11 @@
                     {% else -%}
                         <td>{{ obs_bandwidth }} / {{ guard_bw }} / {{ middle_bw }} / {{ exit_bw }} {{ obs_unit }}</td>
                     {% endif -%}
-                    <td>{{ "%.2f%%"|format(v['consensus_weight_fraction'] * 100)|default('N/A') }}</td>
+                    {% if v['consensus_weight_fraction'] == 0 and v['guard_consensus_weight_fraction'] == 0 and v['middle_consensus_weight_fraction'] == 0 and v['exit_consensus_weight_fraction'] == 0 -%}
+                        <td>0% / 0% / 0% / 0%</td>
+                    {% else -%}
+                        <td>{{ "%.2f%%"|format(v['consensus_weight_fraction'] * 100) }} / {{ "%.2f%%"|format(v['guard_consensus_weight_fraction'] * 100) }} / {{ "%.2f%%"|format(v['middle_consensus_weight_fraction'] * 100) }} / {{ "%.2f%%"|format(v['exit_consensus_weight_fraction'] * 100) }}</td>
+                    {% endif -%}
                     <td>{{ v['guard_count'] }} / {{ v['middle_count'] }} / {{ v['exit_count'] }}</td>
                 </tr>
             {% endfor -%}
