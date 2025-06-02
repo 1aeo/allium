@@ -98,17 +98,17 @@ class Relays:
 
     def _simple_aroi_parsing(self, contact):
         """
-        Parse simple AROI contact information to add website prefix if conditions are met.
+        Extract AROI domain from contact information if conditions are met.
         For display purposes only - does not affect the stored/hashed contact info.
-        More details: https://nusenu.github.io/OrNetStats/aroi-setup
+        More details: https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/
         
         Args:
             contact: The contact string to process
         Returns:
-            Processed AROI contact string for display
+            AROI domain string or empty string if no AROI detected
         """
         if not contact:
-            return contact
+            return "none"
             
         # Check if both required patterns are present
         url_match = re.search(r'url:(?:https?://)?([^,\s]+)', contact)
@@ -129,17 +129,20 @@ class Relays:
             # Remove trailing slash and anything after first /
             domain = domain.split('/')[0]
             
-            return f"{domain} | {contact}"
+            return domain
         
-        return contact
+        return "none"
 
     def _process_aroi_contacts(self):
         """
-        Process all relay contacts to add AROI display format.
+        Process all relay contacts to extract AROI domain information.
         """
         for relay in self.json["relays"]:
             contact = relay.get("contact", "")
-            relay["contact_aroi_display"] = self._simple_aroi_parsing(contact)
+            # Keep original contact_aroi_display for backward compatibility
+            relay["contact_aroi_display"] = f"{self._simple_aroi_parsing(contact)} | {contact}" if self._simple_aroi_parsing(contact) else contact
+            # Extract AROI domain for new display format
+            relay["aroi_domain"] = self._simple_aroi_parsing(contact)
 
     def _add_hashed_contact(self):
         """
@@ -242,6 +245,8 @@ class Relays:
             self.json["sorted"][k][v]["contact"] = relay.get("contact", "")
             self.json["sorted"][k][v]["contact_md5"] = relay.get("contact_md5", "")
             self.json["sorted"][k][v]["contact_aroi_display"] = relay.get("contact_aroi_display", "")
+            # Add AROI domain field for separate display
+            self.json["sorted"][k][v]["aroi_domain"] = relay.get("aroi_domain", "")
 
             # update the first_seen parameter to always contain the oldest
             # relay's first_seen date

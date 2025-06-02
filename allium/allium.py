@@ -71,14 +71,14 @@ if __name__ == "__main__":
         "by-guard-bandwidth": "1.guard_bandwidth",
         "by-middle-bandwidth": "1.middle_bandwidth", 
         "by-exit-bandwidth": "1.exit_bandwidth",
-        "by-consensus-weight": "1.consensus_weight_fraction,1.bandwidth",
-        "by-guard-consensus-weight": "1.guard_consensus_weight_fraction,1.bandwidth",
-        "by-middle-consensus-weight": "1.middle_consensus_weight_fraction,1.bandwidth",
-        "by-exit-consensus-weight": "1.exit_consensus_weight_fraction,1.bandwidth",
-        "by-exit-count": "1.exit_count,1.bandwidth",
-        "by-guard-count": "1.guard_count,1.bandwidth",
-        "by-middle-count": "1.middle_count,1.bandwidth",
-        "by-first-seen": "1.first_seen,1.bandwidth",
+        "by-consensus-weight": "1.consensus_weight_fraction",
+        "by-guard-consensus-weight": "1.guard_consensus_weight_fraction",
+        "by-middle-consensus-weight": "1.middle_consensus_weight_fraction",
+        "by-exit-consensus-weight": "1.exit_consensus_weight_fraction",
+        "by-exit-count": "1.exit_count",
+        "by-guard-count": "1.guard_count",
+        "by-middle-count": "1.middle_count",
+        "by-first-seen": "1.first_seen",
     }
 
     # miscellaneous-sorted (per misc_pages k/v) HTML pages

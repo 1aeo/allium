@@ -16,6 +16,7 @@ Last fetch was at {{ relays.timestamp }}.
 <tr>
     <th></th>
     <th>Nickname</th>
+    <th><a href="https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/" target="_blank" title="Autonomous Relay Operator Identifier - unverified">AROI</a></th>
     <th>Contact</th>
     <th>Bandwidth</th>
     <th class="visible-md visible-lg">IP Address</th>
@@ -58,10 +59,17 @@ Last fetch was at {{ relays.timestamp }}.
 		    </td>
 		{% endif -%}
 		{% if key != 'contact' -%}
+		    {% if relay['aroi_domain'] and relay['aroi_domain'] != 'none' -%}
+			<td>
+			    <a href="{{ path_prefix }}contact/{{ relay['contact_md5'] }}/" title="{{ relay['aroi_domain']|escape }}">{{ relay['aroi_domain']|escape }}</a>
+			</td>
+		    {% else -%}
+			<td>none</td>
+		    {% endif -%}
 		    {% if relay['contact'] -%}
 			<td>
 			    <a href="{{ path_prefix }}contact/{{ relay['contact_md5'] }}/" 
-				title="{{ relay['contact_aroi_display']|escape }}" class="contact-text">{{ relay['contact_aroi_display']|escape }}</a>
+				title="{{ relay['contact']|escape }}" class="contact-text">{{ relay['contact']|escape }}</a>
 			</td>
 		    {% else -%}
 			<td title="none">
@@ -69,8 +77,13 @@ Last fetch was at {{ relays.timestamp }}.
 			</td>
 		    {% endif -%}
 		{% else -%}
-		    <td title="{{ relay['contact_aroi_display']|escape }}">
-			<span class="contact-text">{{ relay['contact_aroi_display']|escape }}</span>
+		    {% if relay['aroi_domain'] and relay['aroi_domain'] != 'none' -%}
+			<td>{{ relay['aroi_domain']|escape }}</td>
+		    {% else -%}
+			<td>none</td>
+		    {% endif -%}
+		    <td title="{{ relay['contact']|escape }}">
+			<span class="contact-text">{{ relay['contact']|escape }}</span>
 		    </td>
 		{% endif -%}
 		<td>{{ obs_bandwidth }} {{ obs_unit }}</td>

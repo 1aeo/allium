@@ -27,12 +27,24 @@ OR Address
 </pre>
 </dd>
 <dt>
+AROI <a href="https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/" target="_blank" title="Autonomous Relay Operator Identifier - unverified">(?)</a>
+</dt>
+{% if relay['aroi_domain'] and relay['aroi_domain'] != 'none' -%}
+<dd>
+<a href="{{ path_prefix }}contact/{{ relay['contact_md5'] }}/">{{ relay['aroi_domain']|escape }}</a>
+</dd>
+{% else -%}
+<dd>
+none
+</dd>
+{% endif -%}
+<dt>
 Contact
 </dt>
 {% if relay['contact'] -%}
 <dd>
 <a href="{{ path_prefix }}contact/{{ relay['contact_md5'] }}/">{{
-relay['contact_aroi_display']|escape }}</a>
+relay['contact']|escape }}</a>
 </dd>
 {% else -%}
 <dd>
