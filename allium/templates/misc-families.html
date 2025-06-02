@@ -13,7 +13,7 @@
         Last fetch was at {{ relays.timestamp }}.
         The set of all relay families with > 1 effective members, sorted by {{
         sorted_by_label|replace('_', ' ') }}. The first seen parameter is taken from the
-        oldest relay in the family.
+        oldest relay in the family. Unique AS shows the number of different autonomous systems (networks) the family spans.
     </p>
     <table class="table table-condensed">
         <tr>
@@ -61,6 +61,13 @@
                     <a href="families-by-guard-count.html">Guard</a>  / <a href="families-by-middle-count.html">Middle</a> / <a href="families-by-exit-count.html">Exit</a>
                 </th>
             {% endif -%}
+            {% if sorted_by_label == 'unique_as_count' -%}
+                <th>Unique AS</th>
+            {% else -%}
+                <th>
+                    <a href="families-by-unique-as-count.html">Unique AS</a>
+                </th>
+            {% endif -%}
             {% if sorted_by_label == 'first_seen' -%}
                 <th>First Seen</th>
             {% else -%}
@@ -106,6 +113,7 @@
                             <td class="visible-md visible-lg">none</td>
                         {% endif -%}
                         <td>{{ v['guard_count'] }} / {{ v['middle_count'] }} / {{ v['exit_count'] }}</td>
+                        <td>{{ v['unique_as_count'] }}</td>
                         <td>
                             <a href="{{ path_prefix }}first_seen/{{ v['first_seen'].split(' ', 1)[0]|escape }}">{{ v['first_seen'].split(' ', 1)[0]|escape }}</a>
                         </td>
