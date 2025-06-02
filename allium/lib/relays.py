@@ -174,7 +174,7 @@ class Relays:
 
         return f_timestamp
 
-    def _sort(self, relay, idx, k, v):
+    def _sort(self, relay, idx, k, v, cw):
         """
         Populate self.sorted dictionary with values from :relay:
 
@@ -183,6 +183,7 @@ class Relays:
             idx:   index at which the relay can be found in self.json['relays']
             k:     the name of the key to use in self.sorted
             v:     the name of the subkey to use in self.sorted[k]
+            cw:    consensus weight for this relay (passed to avoid repeated extraction)
         """
         if not v or not re.match(r"^[A-Za-z0-9_-]+$", v):
             return
@@ -202,21 +203,28 @@ class Relays:
                 "middle_count": 0,
                 "consensus_weight": 0,
                 "consensus_weight_fraction": 0.0,
+                "guard_consensus_weight": 0,
+                "middle_consensus_weight": 0,
+                "exit_consensus_weight": 0,
             }
 
         bw = relay["observed_bandwidth"]
+        # Use the consensus weight passed from _categorize (no repeated dict lookup)
         self.json["sorted"][k][v]["relays"].append(idx)
         self.json["sorted"][k][v]["bandwidth"] += bw
 
         if "Exit" in relay["flags"]:
             self.json["sorted"][k][v]["exit_count"] += 1
             self.json["sorted"][k][v]["exit_bandwidth"] += bw
+            self.json["sorted"][k][v]["exit_consensus_weight"] += cw
         elif "Guard" in relay["flags"]:
             self.json["sorted"][k][v]["guard_count"] += 1
             self.json["sorted"][k][v]["guard_bandwidth"] += bw
+            self.json["sorted"][k][v]["guard_consensus_weight"] += cw
         else:
             self.json["sorted"][k][v]["middle_count"] += 1
             self.json["sorted"][k][v]["middle_bandwidth"] += bw
+            self.json["sorted"][k][v]["middle_consensus_weight"] += cw
 
         # Add consensus weight tracking
         if relay.get("consensus_weight"):
@@ -248,28 +256,84 @@ class Relays:
         discovered relays with attributes we use to generate static sets
         """
         self.json["sorted"] = dict()
+        
+        # Track network-wide totals for consensus weight fraction calculations
+        # We calculate these here to avoid re-iterating 7 times through all relays later with _sort 6 times and _calculate_consensus_weight_fractions 1 time
+        total_guard_cw = 0
+        total_middle_cw = 0
+        total_exit_cw = 0
 
         for idx, relay in enumerate(self.json["relays"]):
+            # Extract consensus weight once per relay to avoid repeated dict lookups
+            # This value gets used multiple times: once per _sort call + once for totals
+            cw = relay.get("consensus_weight", 0)
+            
+            # Accumulate network-wide totals while we have the consensus weight value
+            # Already inside the loop, so we don't need to iterate through all relays again in _sort 6 times and _calculate_consensus_weight_fractions 1 time
+            if "Exit" in relay["flags"]:
+                total_exit_cw += cw
+            elif "Guard" in relay["flags"]:
+                total_guard_cw += cw
+            else:
+                total_middle_cw += cw
+
             keys = ["as", "country", "platform"]
             for key in keys:
-                self._sort(relay, idx, key, relay.get(key))
+                # Pass consensus weight to avoid re-extracting it in _sort
+                self._sort(relay, idx, key, relay.get(key), cw)
 
             for flag in relay["flags"]:
-                self._sort(relay, idx, "flag", flag)
+                self._sort(relay, idx, "flag", flag, cw)
 
             if relay.get("effective_family"):
                 for member in relay["effective_family"]:
                     if not len(relay["effective_family"]) > 1:
                         continue
-                    self._sort(relay, idx, "family", member)
+                    self._sort(relay, idx, "family", member, cw)
 
             self._sort(
-                relay, idx, "first_seen", relay["first_seen"].split(" ")[0]
+                relay, idx, "first_seen", relay["first_seen"].split(" ")[0], cw
             )
 
             c_str = relay.get("contact", "").encode("utf-8")
             c_hash = hashlib.md5(c_str).hexdigest()
-            self._sort(relay, idx, "contact", c_hash)
+            self._sort(relay, idx, "contact", c_hash, cw)
+
+        # Calculate consensus weight fractions using the totals we accumulated above
+        # This avoids a second full iteration through all relays
+        self._calculate_consensus_weight_fractions(total_guard_cw, total_middle_cw, total_exit_cw)
+
+    def _calculate_consensus_weight_fractions(self, total_guard_cw, total_middle_cw, total_exit_cw):
+        """
+        Calculate consensus weight fractions for guard, middle, and exit relays
+        
+        Args:
+            total_guard_cw: Total consensus weight of all guard relays in the network
+            total_middle_cw: Total consensus weight of all middle relays in the network  
+            total_exit_cw: Total consensus weight of all exit relays in the network
+            
+        These totals are passed from _categorize to avoid re-iterating through all relays.
+        """
+        # Calculate fractions for each group using the provided network-wide totals
+        for k in self.json["sorted"]:
+            for v in self.json["sorted"][k]:
+                item = self.json["sorted"][k][v]
+                
+                # Calculate fractions, avoiding division by zero
+                if total_guard_cw > 0:
+                    item["guard_consensus_weight_fraction"] = item["guard_consensus_weight"] / total_guard_cw
+                else:
+                    item["guard_consensus_weight_fraction"] = 0.0
+                    
+                if total_middle_cw > 0:
+                    item["middle_consensus_weight_fraction"] = item["middle_consensus_weight"] / total_middle_cw
+                else:
+                    item["middle_consensus_weight_fraction"] = 0.0
+                    
+                if total_exit_cw > 0:
+                    item["exit_consensus_weight_fraction"] = item["exit_consensus_weight"] / total_exit_cw
+                else:
+                    item["exit_consensus_weight_fraction"] = 0.0
 
     def create_output_dir(self):
         """
@@ -414,6 +478,10 @@ class Relays:
                 guard_bandwidth=guard_bandwidth,
                 middle_bandwidth=middle_bandwidth,
                 exit_bandwidth=exit_bandwidth,
+                consensus_weight_fraction=i["consensus_weight_fraction"],
+                guard_consensus_weight_fraction=i["guard_consensus_weight_fraction"],
+                middle_consensus_weight_fraction=i["middle_consensus_weight_fraction"],
+                exit_consensus_weight_fraction=i["exit_consensus_weight_fraction"],
                 exit_count=i["exit_count"],
                 guard_count=i["guard_count"],
                 middle_count=i["middle_count"],

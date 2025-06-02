@@ -20,6 +20,20 @@
             {{ exit_bandwidth }} {{ bandwidth_unit }} exit
         {%- endif -%}
     )
+    {%- endif %} and {{ "%.2f%%"|format(consensus_weight_fraction * 100) }} consensus weight
+    {%- if guard_count > 0 or middle_count > 0 or exit_count > 0 %} (
+        {%- if guard_count > 0 -%}
+            {{ "%.2f%%"|format(guard_consensus_weight_fraction * 100) }} guard
+            {%- if middle_count > 0 or exit_count > 0 %}, {% endif -%}
+        {%- endif -%}
+        {%- if middle_count > 0 -%}
+            {{ "%.2f%%"|format(middle_consensus_weight_fraction * 100) }} middle
+            {%- if exit_count > 0 %}, {% endif -%}
+        {%- endif -%}
+        {%- if exit_count > 0 -%}
+            {{ "%.2f%%"|format(exit_consensus_weight_fraction * 100) }} exit
+        {%- endif -%}
+    )
     {%- endif %}, with
     {% if guard_count > 0 %}
         {{ guard_count }} guard relay
