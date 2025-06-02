@@ -22,23 +22,38 @@
             <th>AS Name</th>
             <th>Country</th>
             {% if sorted_by_label == 'bandwidth' -%}
-                <th>Bandwidth</th>
+                <th>Overall / <a href="networks-by-guard-bandwidth.html">Guard</a> / <a href="networks-by-middle-bandwidth.html">Middle</a> / <a href="networks-by-exit-bandwidth.html">Exit</a> Bandwidth</th>
+            {% elif sorted_by_label == 'guard_bandwidth' -%}
+                <th><a href="networks-by-overall-bandwidth.html">Overall</a> / Guard / <a href="networks-by-middle-bandwidth.html">Middle</a> / <a href="networks-by-exit-bandwidth.html">Exit</a> Bandwidth</th>
+            {% elif sorted_by_label == 'middle_bandwidth' -%}
+                <th><a href="networks-by-overall-bandwidth.html">Overall</a> / <a href="networks-by-guard-bandwidth.html">Guard</a> / Middle / <a href="networks-by-exit-bandwidth.html">Exit</a> Bandwidth</th>
+            {% elif sorted_by_label == 'exit_bandwidth' -%}
+                <th><a href="networks-by-overall-bandwidth.html">Overall</a> / <a href="networks-by-guard-bandwidth.html">Guard</a> / <a href="networks-by-middle-bandwidth.html">Middle</a> / Exit Bandwidth</th>
+            {% else -%}
+                <th><a href="networks-by-overall-bandwidth.html">Overall</a> / <a href="networks-by-guard-bandwidth.html">Guard</a> / <a href="networks-by-middle-bandwidth.html">Middle</a> / <a href="networks-by-exit-bandwidth.html">Exit</a> Bandwidth</th>
+            {% endif -%}
+            {% if sorted_by_label == 'consensus_weight_fraction' -%}
+                <th>Consensus Weight</th>
             {% else -%}
                 <th>
-                    <a href="networks-by-bandwidth.html">Bandwidth</a>
+                    <a href="networks-by-consensus-weight.html">Consensus Weight</a>
                 </th>
             {% endif -%}
             {% if sorted_by_label == 'exit_count' -%}
                 <th>
-                    Exit / <a href="networks-by-middle-count.html">Middle</a>
+                    <a href="networks-by-guard-count.html">Guard</a> / <a href="networks-by-middle-count.html">Middle</a> / Exit
+                </th>
+            {% elif sorted_by_label == 'guard_count' -%}
+                <th>
+                    Guard / <a href="networks-by-middle-count.html">Middle</a> / <a href="networks-by-exit-count.html">Exit</a>
                 </th>
             {% elif sorted_by_label == 'middle_count' -%}
                 <th>
-                    <a href="networks-by-exit-count.html">Exit</a> / Middle
+                    <a href="networks-by-guard-count.html">Guard</a> / Middle / <a href="networks-by-exit-count.html">Exit</a>
                 </th>
             {% else -%}
                 <th>
-                    <a href="networks-by-exit-count.html">Exit</a> / <a href="networks-by-middle-count.html">Middle</a>
+                    <a href="networks-by-guard-count.html">Guard</a> / <a href="networks-by-middle-count.html">Middle</a> / <a href="networks-by-exit-count.html">Exit</a>
                 </th>
             {% endif -%}
         </tr>
@@ -46,8 +61,11 @@
             {% for k, v in relays.json['sorted']['as'].items()|sort(attribute=sorted_by,
                 reverse=True) -%}
                 <tr>
-                    {% set obs_bandwidth, obs_unit = relays._format_bandwidth(v['bandwidth']) -%}
-                    {% set obs_bandwidth = '%s %s'|format(obs_bandwidth, obs_unit) -%}
+                    {% set obs_unit = relays._determine_unit(v['bandwidth']) -%}
+                    {% set obs_bandwidth = relays._format_bandwidth_with_unit(v['bandwidth'], obs_unit) -%}
+                    {% set guard_bw = relays._format_bandwidth_with_unit(v['guard_bandwidth'], obs_unit) -%}
+                    {% set middle_bw = relays._format_bandwidth_with_unit(v['middle_bandwidth'], obs_unit) -%}
+                    {% set exit_bw = relays._format_bandwidth_with_unit(v['exit_bandwidth'], obs_unit) -%}
                     <td>
                         <a href="{{ path_prefix }}as/{{ k|escape }}/">{{ k|escape }}</a>
                     </td>
@@ -69,8 +87,13 @@
                     {% else -%}
                         <td>X</td>
                     {% endif -%}
-                    <td>{{ obs_bandwidth }}</td>
-                    <td>{{ v['exit_count'] }} / {{ v['middle_count'] }}</td>
+                    {% if v['bandwidth'] == 0 -%}
+                        <td>0 / 0 / 0 / 0 {{ obs_unit }}</td>
+                    {% else -%}
+                        <td>{{ obs_bandwidth }} / {{ guard_bw }} / {{ middle_bw }} / {{ exit_bw }} {{ obs_unit }}</td>
+                    {% endif -%}
+                    <td>{{ "%.2f%%"|format(v['consensus_weight_fraction'] * 100)|default('N/A') }}</td>
+                    <td>{{ v['guard_count'] }} / {{ v['middle_count'] }} / {{ v['exit_count'] }}</td>
                 </tr>
             {% endfor -%}
         </tbody>

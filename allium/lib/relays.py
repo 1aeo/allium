@@ -194,7 +194,11 @@ class Relays:
             self.json["sorted"][k][v] = {
                 "relays": list(),
                 "bandwidth": 0,
+                "guard_bandwidth": 0,
+                "middle_bandwidth": 0,
+                "exit_bandwidth": 0,
                 "exit_count": 0,
+                "guard_count": 0,
                 "middle_count": 0,
                 "consensus_weight": 0,
                 "consensus_weight_fraction": 0.0,
@@ -206,8 +210,13 @@ class Relays:
 
         if "Exit" in relay["flags"]:
             self.json["sorted"][k][v]["exit_count"] += 1
+            self.json["sorted"][k][v]["exit_bandwidth"] += bw
+        elif "Guard" in relay["flags"]:
+            self.json["sorted"][k][v]["guard_count"] += 1
+            self.json["sorted"][k][v]["guard_bandwidth"] += bw
         else:
             self.json["sorted"][k][v]["middle_count"] += 1
+            self.json["sorted"][k][v]["middle_bandwidth"] += bw
 
         # Add consensus weight tracking
         if relay.get("consensus_weight"):
@@ -303,30 +312,44 @@ class Relays:
         with open(output, "w", encoding="utf8") as html:
             html.write(template_render)
 
-    def _format_bandwidth(self, bandwidth_bytes):
-        """
-        Format bandwidth according to the unit preference (bits or bytes)
-        
-        Args:
-            bandwidth_bytes: bandwidth value in bytes/second
-        Returns:
-            tuple of (value, unit)
-        """
+    def _determine_unit(self, bandwidth_bytes):
+        """Determine unit - simple threshold checking"""
         if self.use_bits:
-            bandwidth_bits = bandwidth_bytes * 8
-            if bandwidth_bits > 1000000000:  # If greater than 1 Gbit/s
-                return round(bandwidth_bits / 1000000000, 2), "Gbit/s"
-            elif bandwidth_bits > 1000000:  # If greater than 1 Mbit/s
-                return round(bandwidth_bits / 1000000, 2), "Mbit/s"
+            bits = bandwidth_bytes * 8
+            if bits >= 1000000000: # If greater than or equal to 1 Gbit/s
+                return "Gbit/s"
+            elif bits >= 1000000: # If greater than or equal to 1 Mbit/s
+                return "Mbit/s"
             else:
-                return round(bandwidth_bits / 1000, 2), "Kbit/s"
+                return "Kbit/s"
         else:
-            if bandwidth_bytes > 1000000000:  # If greater than 1 GB/s
-                return round(bandwidth_bytes / 1000000000, 2), "GB/s"
-            elif bandwidth_bytes > 1000000:  # If greater than 1 MB/s
-                return round(bandwidth_bytes / 1000000, 2), "MB/s"
+            if bandwidth_bytes >= 1000000000: # If greater than or equal to 1 GB/s
+                return "GB/s"
+            elif bandwidth_bytes >= 1000000: # If greater than or equal to 1 MB/s
+                return "MB/s"
             else:
-                return round(bandwidth_bytes / 1000, 2), "KB/s"
+                return "KB/s"
+
+    def _get_divisor_for_unit(self, unit):
+        """Simple dictionary lookup for divisors"""
+        divisors = {
+            # Bits (convert bytes to bits, then to unit)
+            "Gbit/s": 125000000,   # 1000000000 / 8
+            "Mbit/s": 125000,      # 1000000 / 8  
+            "Kbit/s": 125,         # 1000 / 8
+            # Bytes  
+            "GB/s": 1000000000,
+            "MB/s": 1000000,
+            "KB/s": 1000
+        }
+        if unit in divisors:
+            return divisors[unit]
+        raise ValueError(f"Unknown unit: {unit}")
+
+    def _format_bandwidth_with_unit(self, bandwidth_bytes, unit):
+        """Format bandwidth using specified unit"""
+        divisor = self._get_divisor_for_unit(unit)
+        return round(bandwidth_bytes / divisor, 2)
 
     def write_pages_by_key(self, k):
         """
@@ -377,13 +400,22 @@ class Relays:
             os.makedirs(dir_path)
             self.json["relay_subset"] = members
             
-            bandwidth, bandwidth_unit = self._format_bandwidth(i["bandwidth"])
+            bandwidth_unit = self._determine_unit(i["bandwidth"])
+            # Format all bandwidth values using the same unit
+            bandwidth = self._format_bandwidth_with_unit(i["bandwidth"], bandwidth_unit)
+            guard_bandwidth = self._format_bandwidth_with_unit(i["guard_bandwidth"], bandwidth_unit)
+            middle_bandwidth = self._format_bandwidth_with_unit(i["middle_bandwidth"], bandwidth_unit)
+            exit_bandwidth = self._format_bandwidth_with_unit(i["exit_bandwidth"], bandwidth_unit)
                 
             rendered = template.render(
                 relays=self,
                 bandwidth=bandwidth,
                 bandwidth_unit=bandwidth_unit,
+                guard_bandwidth=guard_bandwidth,
+                middle_bandwidth=middle_bandwidth,
+                exit_bandwidth=exit_bandwidth,
                 exit_count=i["exit_count"],
+                guard_count=i["guard_count"],
                 middle_count=i["middle_count"],
                 is_index=False,
                 path_prefix="../../",

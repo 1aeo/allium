@@ -67,10 +67,10 @@ none
 <dt>
 Observed Bandwidth
 </dt>
-{% set obs_bandwidth, obs_unit = relays._format_bandwidth(relay['observed_bandwidth']) -%}
-{% set obs_bandwidth = '%s %s'|format(obs_bandwidth, obs_unit) -%}
+{% set obs_unit = relays._determine_unit(relay['observed_bandwidth']) -%}
+{% set obs_bandwidth = relays._format_bandwidth_with_unit(relay['observed_bandwidth'], obs_unit) -%}
 <dd>
-{{ obs_bandwidth }}
+{{ obs_bandwidth }} {{ obs_unit }}
 </dd>
 <dt>
 IPv4 Exit Policy Summary
