@@ -139,8 +139,6 @@ class Relays:
         """
         for relay in self.json["relays"]:
             contact = relay.get("contact", "")
-            # Keep original contact_aroi_display for backward compatibility
-            relay["contact_aroi_display"] = f"{self._simple_aroi_parsing(contact)} | {contact}" if self._simple_aroi_parsing(contact) else contact
             # Extract AROI domain for new display format
             relay["aroi_domain"] = self._simple_aroi_parsing(contact)
 
@@ -245,7 +243,6 @@ class Relays:
             # Use empty strings as defaults to avoid None values
             self.json["sorted"][k][v]["contact"] = relay.get("contact", "")
             self.json["sorted"][k][v]["contact_md5"] = relay.get("contact_md5", "")
-            self.json["sorted"][k][v]["contact_aroi_display"] = relay.get("contact_aroi_display", "")
             # Add AROI domain field for separate display
             self.json["sorted"][k][v]["aroi_domain"] = relay.get("aroi_domain", "")
 
