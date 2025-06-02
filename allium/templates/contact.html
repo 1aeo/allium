@@ -28,7 +28,7 @@
                 {{ exit_bandwidth }} {{ bandwidth_unit }} exit
             {%- endif -%}
         )
-        {%- endif %} and {{ "%.2f%%"|format(consensus_weight_fraction * 100) }} consensus weight
+        {%- endif %} and {{ "%.2f%%"|format(consensus_weight_fraction * 100) }} CW
         {%- if guard_count > 0 or middle_count > 0 or exit_count > 0 %} (
             {%- if guard_count > 0 -%}
                 {{ "%.2f%%"|format(guard_consensus_weight_fraction * 100) }} guard

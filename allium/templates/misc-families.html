@@ -31,16 +31,16 @@
                 <th><a href="families-by-overall-bandwidth.html">Overall</a> / <a href="families-by-guard-bandwidth.html">Guard</a> / <a href="families-by-middle-bandwidth.html">Middle</a> / <a href="families-by-exit-bandwidth.html">Exit</a> Bandwidth</th>
             {% endif -%}
             {% if sorted_by_label == 'consensus_weight_fraction' -%}
-                <th><a href="families-by-consensus-weight.html">Overall</a> / <a href="families-by-guard-consensus-weight.html">Guard</a> / <a href="families-by-middle-consensus-weight.html">Middle</a> / <a href="families-by-exit-consensus-weight.html">Exit</a> Consensus Weight</th>
+                <th title="Consensus weight is a relay's relative share of Tor network traffic, based on its advertised bandwidth and uptime."><a href="families-by-consensus-weight.html">Overall</a> / <a href="families-by-guard-consensus-weight.html">Guard</a> / <a href="families-by-middle-consensus-weight.html">Middle</a> / <a href="families-by-exit-consensus-weight.html">Exit</a> CW</th>
             {% elif sorted_by_label == 'guard_consensus_weight_fraction' -%}
-                <th><a href="families-by-consensus-weight.html">Overall</a> / Guard / <a href="families-by-middle-consensus-weight.html">Middle</a> / <a href="families-by-exit-consensus-weight.html">Exit</a> Consensus Weight</th>
+                <th title="Consensus weight is a relay's relative share of Tor network traffic, based on its advertised bandwidth and uptime."><a href="families-by-consensus-weight.html">Overall</a> / Guard / <a href="families-by-middle-consensus-weight.html">Middle</a> / <a href="families-by-exit-consensus-weight.html">Exit</a> CW</th>
             {% elif sorted_by_label == 'middle_consensus_weight_fraction' -%}
-                <th><a href="families-by-consensus-weight.html">Overall</a> / <a href="families-by-guard-consensus-weight.html">Guard</a> / Middle / <a href="families-by-exit-consensus-weight.html">Exit</a> Consensus Weight</th>
+                <th title="Consensus weight is a relay's relative share of Tor network traffic, based on its advertised bandwidth and uptime."><a href="families-by-consensus-weight.html">Overall</a> / <a href="families-by-guard-consensus-weight.html">Guard</a> / Middle / <a href="families-by-exit-consensus-weight.html">Exit</a> CW</th>
             {% elif sorted_by_label == 'exit_consensus_weight_fraction' -%}
-                <th><a href="families-by-consensus-weight.html">Overall</a> / <a href="families-by-guard-consensus-weight.html">Guard</a> / <a href="families-by-middle-consensus-weight.html">Middle</a> / Exit Consensus Weight</th>
+                <th title="Consensus weight is a relay's relative share of Tor network traffic, based on its advertised bandwidth and uptime."><a href="families-by-consensus-weight.html">Overall</a> / <a href="families-by-guard-consensus-weight.html">Guard</a> / <a href="families-by-middle-consensus-weight.html">Middle</a> / Exit CW</th>
             {% else -%}
-                <th>
-                    <a href="families-by-consensus-weight.html">Overall</a> / <a href="families-by-guard-consensus-weight.html">Guard</a> / <a href="families-by-middle-consensus-weight.html">Middle</a> / <a href="families-by-exit-consensus-weight.html">Exit</a> Consensus Weight
+                <th title="Consensus weight is a relay's relative share of Tor network traffic, based on its advertised bandwidth and uptime.">
+                    <a href="families-by-consensus-weight.html">Overall</a> / <a href="families-by-guard-consensus-weight.html">Guard</a> / <a href="families-by-middle-consensus-weight.html">Middle</a> / <a href="families-by-exit-consensus-weight.html">Exit</a> CW
                 </th>
             {% endif -%}
             <th class="visible-md visible-lg">Contact</th>
