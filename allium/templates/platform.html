@@ -3,8 +3,8 @@
 {% block title %}Tor Relays :: {{ platform }}{% endblock %}
 {% block header %}<a href="../../">Home</a> :: {{ platform }}{% endblock %}
 {% block description %}
-    {{ platform }} systems are responsible for ~{{ bandwidth
-    }} {{ bandwidth_unit }} of traffic
+    Platform {{ value }} is responsible for ~{{ bandwidth }}
+    {{ bandwidth_unit }} of traffic
     {%- if guard_count > 0 or middle_count > 0 or exit_count > 0 %} (
         {%- if guard_count > 0 -%}
             {{ guard_bandwidth }} {{ bandwidth_unit }} guard
@@ -18,25 +18,36 @@
             {{ exit_bandwidth }} {{ bandwidth_unit }} exit
         {%- endif -%}
     )
+    {%- endif %} and {{ "%.2f%%"|format(consensus_weight_fraction * 100) }} consensus weight
+    {%- if guard_count > 0 or middle_count > 0 or exit_count > 0 %} (
+        {%- if guard_count > 0 -%}
+            {{ "%.2f%%"|format(guard_consensus_weight_fraction * 100) }} guard
+            {%- if middle_count > 0 or exit_count > 0 %}, {% endif -%}
+        {%- endif -%}
+        {%- if middle_count > 0 -%}
+            {{ "%.2f%%"|format(middle_consensus_weight_fraction * 100) }} middle
+            {%- if exit_count > 0 %}, {% endif -%}
+        {%- endif -%}
+        {%- if exit_count > 0 -%}
+            {{ "%.2f%%"|format(exit_consensus_weight_fraction * 100) }} exit
+        {%- endif -%}
+    )
     {%- endif %}, with
     {% if guard_count > 0 %}
         {{ guard_count }} guard relay
-        {%- if guard_count > 1 -%}s{%- endif %}
+        {%- if guard_count > 1 -%}s{%- endif -%}
         {% if middle_count > 0 or exit_count > 0 %},{% endif %}
     {% endif %}
     {% if middle_count > 0 %}
-        {{ middle_count }} middle
-        relay
-        {%- if middle_count > 1 -%}s{%- endif %}
+        {{ middle_count }} middle relay
+        {%- if middle_count > 1 -%}s{%- endif -%}
         {% if exit_count > 0 %}
             and
         {% endif %}
     {% endif %}
     {% if exit_count > 0 %}
         {{ exit_count }} exit relay
-        {%- if exit_count > 1 -%}
-            s
-        {%- endif -%}
+        {%- if exit_count > 1 -%}s{%- endif -%}
     {%- endif -%}
     .
 {% endblock %}
