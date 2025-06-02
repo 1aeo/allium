@@ -209,6 +209,7 @@ class Relays:
                 "guard_consensus_weight": 0,
                 "middle_consensus_weight": 0,
                 "exit_consensus_weight": 0,
+                "unique_as_set": set(),  # Track unique AS numbers for families
             }
 
         bw = relay["observed_bandwidth"]
@@ -247,6 +248,11 @@ class Relays:
             self.json["sorted"][k][v]["contact_aroi_display"] = relay.get("contact_aroi_display", "")
             # Add AROI domain field for separate display
             self.json["sorted"][k][v]["aroi_domain"] = relay.get("aroi_domain", "")
+
+            # Track unique AS numbers for this family
+            relay_as = relay.get("as")
+            if relay_as:
+                self.json["sorted"][k][v]["unique_as_set"].add(relay_as)
 
             # update the first_seen parameter to always contain the oldest
             # relay's first_seen date
@@ -307,6 +313,9 @@ class Relays:
         # Calculate consensus weight fractions using the totals we accumulated above
         # This avoids a second full iteration through all relays
         self._calculate_consensus_weight_fractions(total_guard_cw, total_middle_cw, total_exit_cw)
+        
+        # Convert unique AS sets to counts for families
+        self._finalize_unique_as_counts()
 
     def _calculate_consensus_weight_fractions(self, total_guard_cw, total_middle_cw, total_exit_cw):
         """
@@ -339,6 +348,21 @@ class Relays:
                     item["exit_consensus_weight_fraction"] = item["exit_consensus_weight"] / total_exit_cw
                 else:
                     item["exit_consensus_weight_fraction"] = 0.0
+
+    def _finalize_unique_as_counts(self):
+        """
+        Convert unique AS sets to counts for families and clean up memory.
+        This should be called after all family data has been processed.
+        """
+        if "family" in self.json["sorted"]:
+            for family_data in self.json["sorted"]["family"].values():
+                if "unique_as_set" in family_data:
+                    family_data["unique_as_count"] = len(family_data["unique_as_set"])
+                    # Remove the set to save memory and avoid JSON serialization issues
+                    del family_data["unique_as_set"]
+                else:
+                    # Fallback in case unique_as_set wasn't initialized
+                    family_data["unique_as_count"] = 0
 
     def create_output_dir(self):
         """

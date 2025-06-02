@@ -78,6 +78,7 @@ if __name__ == "__main__":
         "by-exit-count": "1.exit_count",
         "by-guard-count": "1.guard_count",
         "by-middle-count": "1.middle_count",
+        "by-unique-as-count": "1.unique_as_count",
         "by-first-seen": "1.first_seen",
     }
 
