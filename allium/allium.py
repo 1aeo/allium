@@ -79,6 +79,8 @@ if __name__ == "__main__":
         "by-guard-count": "1.guard_count",
         "by-middle-count": "1.middle_count",
         "by-unique-as-count": "1.unique_as_count",
+        "by-unique-contact-count": "1.unique_contact_count",
+        "by-unique-family-count": "1.unique_family_count",
         "by-first-seen": "1.first_seen",
     }
 
@@ -97,6 +99,16 @@ if __name__ == "__main__":
         RELAY_SET.write_misc(
             template="misc-contacts.html",
             path="misc/contacts-{}.html".format(k),
+            sorted_by=v,
+        )
+        RELAY_SET.write_misc(
+            template="misc-countries.html",
+            path="misc/countries-{}.html".format(k),
+            sorted_by=v,
+        )
+        RELAY_SET.write_misc(
+            template="misc-platforms.html",
+            path="misc/platforms-{}.html".format(k),
             sorted_by=v,
         )
 

@@ -239,17 +239,36 @@ class Relays:
             self.json["sorted"][k][v]["country_name"] = relay.get("country")
             self.json["sorted"][k][v]["as_name"] = relay.get("as_name")
 
-        if k == "family" or k == "contact":
-            # Both families and contacts benefit from the same additional data:
+        if k == "family" or k == "contact" or k == "country" or k == "platform":
+            # Families, contacts, countries, and platforms benefit from additional tracking data:
             # - Contact info and MD5 hash for linking
             # - AROI domain for display purposes  
             # - Unique AS tracking for network diversity analysis
             # - First seen date tracking (oldest relay in group)
+            # - For countries and platforms: also track unique contacts and families
+            if k == "country" or k == "platform":
+                # Track unique contacts and families for countries and platforms
+                if not self.json["sorted"][k][v].get("unique_contact_set"):
+                    self.json["sorted"][k][v]["unique_contact_set"] = set()
+                if not self.json["sorted"][k][v].get("unique_family_set"):
+                    self.json["sorted"][k][v]["unique_family_set"] = set()
+                
+                # Add this relay's contact hash to the country/platform's unique contacts
+                c_str = relay.get("contact", "").encode("utf-8")
+                c_hash = hashlib.md5(c_str).hexdigest()
+                self.json["sorted"][k][v]["unique_contact_set"].add(c_hash)
+                
+                # Add this relay's family to the country/platform's unique families
+                if relay.get("effective_family") and len(relay["effective_family"]) > 1:
+                    # Use the first family member as the family identifier
+                    family_id = relay["effective_family"][0]
+                    self.json["sorted"][k][v]["unique_family_set"].add(family_id)
+            
             self.json["sorted"][k][v]["contact"] = relay.get("contact", "")
             self.json["sorted"][k][v]["contact_md5"] = relay.get("contact_md5", "")
             self.json["sorted"][k][v]["aroi_domain"] = relay.get("aroi_domain", "")
 
-            # Track unique AS numbers for this family/contact
+            # Track unique AS numbers for this family/contact/country
             relay_as = relay.get("as")
             if relay_as:
                 self.json["sorted"][k][v]["unique_as_set"].add(relay_as)
@@ -314,7 +333,7 @@ class Relays:
         # This avoids a second full iteration through all relays
         self._calculate_consensus_weight_fractions(total_guard_cw, total_middle_cw, total_exit_cw)
         
-        # Convert unique AS sets to counts for families and contacts
+        # Convert unique AS sets to counts for families, contacts, countries, and platforms
         self._finalize_unique_as_counts()
 
     def _calculate_consensus_weight_fractions(self, total_guard_cw, total_middle_cw, total_exit_cw):
@@ -351,10 +370,10 @@ class Relays:
 
     def _finalize_unique_as_counts(self):
         """
-        Convert unique AS sets to counts for families and contacts and clean up memory.
-        This should be called after all family and contact data has been processed.
+        Convert unique AS sets to counts for families, contacts, countries, and platforms and clean up memory.
+        This should be called after all family, contact, country, and platform data has been processed.
         """
-        for category in ["family", "contact"]:
+        for category in ["family", "contact", "country", "platform"]:
             if category in self.json["sorted"]:
                 for data in self.json["sorted"][category].values():
                     if "unique_as_set" in data:
@@ -364,6 +383,20 @@ class Relays:
                     else:
                         # Fallback in case unique_as_set wasn't initialized
                         data["unique_as_count"] = 0
+                    
+                    # Handle country and platform-specific unique counts
+                    if category == "country" or category == "platform":
+                        if "unique_contact_set" in data:
+                            data["unique_contact_count"] = len(data["unique_contact_set"])
+                            del data["unique_contact_set"]
+                        else:
+                            data["unique_contact_count"] = 0
+                            
+                        if "unique_family_set" in data:
+                            data["unique_family_count"] = len(data["unique_family_set"])
+                            del data["unique_family_set"]
+                        else:
+                            data["unique_family_count"] = 0
 
     def create_output_dir(self):
         """
