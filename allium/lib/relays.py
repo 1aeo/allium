@@ -476,7 +476,8 @@ class Relays:
     def _format_bandwidth_with_unit(self, bandwidth_bytes, unit):
         """Format bandwidth using specified unit"""
         divisor = self._get_divisor_for_unit(unit)
-        return round(bandwidth_bytes / divisor, 2)
+        value = bandwidth_bytes / divisor
+        return f"{value:.2f}"
 
     def write_pages_by_key(self, k):
         """
