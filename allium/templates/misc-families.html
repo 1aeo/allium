@@ -17,8 +17,7 @@
     </p>
     <table class="table table-condensed">
         <tr>
-            <th>Family</th>
-            <th><a href="https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/" target="_blank" title="Autonomous Relay Operator Identifier - unverified">AROI</a></th>
+            <th title="Grouped by effective family members. Shows AROI domain (when available), number of relays in effective family, and family hash identifier. Hover for full family hash.">Family AROI</th></th>
             {% if sorted_by_label == 'bandwidth' -%}
                 <th>Overall / <a href="families-by-guard-bandwidth.html">Guard</a> / <a href="families-by-middle-bandwidth.html">Middle</a> / <a href="families-by-exit-bandwidth.html">Exit</a> BW</th>
             {% elif sorted_by_label == 'guard_bandwidth' -%}
@@ -88,16 +87,12 @@
                         {% set middle_bw = relays._format_bandwidth_with_unit(v['middle_bandwidth'], obs_unit) -%}
                         {% set exit_bw = relays._format_bandwidth_with_unit(v['exit_bandwidth'], obs_unit) -%}
                         <td>
-                            <code><a href="{{ path_prefix }}family/{{ k|escape }}/">{{ k|escape
-                            }}</a></code>
+                            {% if v['aroi_domain'] and v['aroi_domain'] != 'none' -%}
+                                <a href="{{ path_prefix }}family/{{ k|escape }}/" title="Family {{ k|escape }}" style="text-decoration: underline;">{{ v['aroi_domain']|escape }} ({{ v['relays']|length }} relays) {{ k[:4]|escape }}</a>
+                            {% else -%}
+                                <a href="{{ path_prefix }}family/{{ k|escape }}/" title="Family {{ k|escape }}" style="text-decoration: underline;">{{ v['relays']|length }} Relays {{ k[:8]|escape }}</a>
+                            {% endif -%}
                         </td>
-                        {% if v['aroi_domain'] and v['aroi_domain'] != 'none' -%}
-                            <td>
-                                <a href="{{ path_prefix }}contact/{{ v['contact_md5'] }}/" title="{{ v['aroi_domain']|escape }}">{{ v['aroi_domain']|escape }}</a>
-                            </td>
-                        {% else -%}
-                            <td>none</td>
-                        {% endif -%}
                         <td>{{ obs_bandwidth }} / {{ guard_bw }} / {{ middle_bw }} / {{ exit_bw }} {{ obs_unit }}</td>
                         {% if v['consensus_weight_fraction'] == 0 and v['guard_consensus_weight_fraction'] == 0 and v['middle_consensus_weight_fraction'] == 0 and v['exit_consensus_weight_fraction'] == 0 -%}
                             <td>0% / 0% / 0% / 0%</td>
