@@ -22,26 +22,26 @@
             <th>AS Name</th>
             <th>Country</th>
             {% if sorted_by_label == 'bandwidth' -%}
-                <th class="text-center bw-header">Overall / <a href="networks-by-guard-bandwidth.html">Guard</a> / <a href="networks-by-middle-bandwidth.html">Middle</a> / <a href="networks-by-exit-bandwidth.html">Exit</a> BW</th>
+                <th class="text-center bw-header" title="Bandwidth">Overall / <a href="networks-by-guard-bandwidth.html">Guard</a> / <a href="networks-by-middle-bandwidth.html">Middle</a> / <a href="networks-by-exit-bandwidth.html">Exit</a> BW</th>
             {% elif sorted_by_label == 'guard_bandwidth' -%}
-                <th class="text-center bw-header"><a href="networks-by-overall-bandwidth.html">Overall</a> / Guard / <a href="networks-by-middle-bandwidth.html">Middle</a> / <a href="networks-by-exit-bandwidth.html">Exit</a> BW</th>
+                <th class="text-center bw-header" title="Bandwidth"><a href="networks-by-overall-bandwidth.html">Overall</a> / Guard / <a href="networks-by-middle-bandwidth.html">Middle</a> / <a href="networks-by-exit-bandwidth.html">Exit</a> BW</th>
             {% elif sorted_by_label == 'middle_bandwidth' -%}
-                <th class="text-center bw-header"><a href="networks-by-overall-bandwidth.html">Overall</a> / <a href="networks-by-guard-bandwidth.html">Guard</a> / Middle / <a href="networks-by-exit-bandwidth.html">Exit</a> BW</th>
+                <th class="text-center bw-header" title="Bandwidth"><a href="networks-by-overall-bandwidth.html">Overall</a> / <a href="networks-by-guard-bandwidth.html">Guard</a> / Middle / <a href="networks-by-exit-bandwidth.html">Exit</a> BW</th>
             {% elif sorted_by_label == 'exit_bandwidth' -%}
-                <th class="text-center bw-header"><a href="networks-by-overall-bandwidth.html">Overall</a> / <a href="networks-by-guard-bandwidth.html">Guard</a> / <a href="networks-by-middle-bandwidth.html">Middle</a> / Exit BW</th>
+                <th class="text-center bw-header" title="Bandwidth"><a href="networks-by-overall-bandwidth.html">Overall</a> / <a href="networks-by-guard-bandwidth.html">Guard</a> / <a href="networks-by-middle-bandwidth.html">Middle</a> / Exit BW</th>
             {% else -%}
-                <th class="text-center bw-header"><a href="networks-by-overall-bandwidth.html">Overall</a> / <a href="networks-by-guard-bandwidth.html">Guard</a> / <a href="networks-by-middle-bandwidth.html">Middle</a> / <a href="networks-by-exit-bandwidth.html">Exit</a> BW</th>
+                <th class="text-center bw-header" title="Bandwidth"><a href="networks-by-overall-bandwidth.html">Overall</a> / <a href="networks-by-guard-bandwidth.html">Guard</a> / <a href="networks-by-middle-bandwidth.html">Middle</a> / <a href="networks-by-exit-bandwidth.html">Exit</a> BW</th>
             {% endif -%}
             {% if sorted_by_label == 'consensus_weight_fraction' -%}
-                <th title="Consensus weight is a relay's relative share of Tor network bandwidth, based on its advertised bandwidth and uptime." class="text-center cw-header"><a href="networks-by-consensus-weight.html">Overall</a> / <a href="networks-by-guard-consensus-weight.html">Guard</a> / <a href="networks-by-middle-consensus-weight.html">Middle</a> / <a href="networks-by-exit-consensus-weight.html">Exit</a> CW</th>
+                <th class="text-center cw-header" title="Consensus Weight"><a href="networks-by-consensus-weight.html">Overall</a> / <a href="networks-by-guard-consensus-weight.html">Guard</a> / <a href="networks-by-middle-consensus-weight.html">Middle</a> / <a href="networks-by-exit-consensus-weight.html">Exit</a> CW</th>
             {% elif sorted_by_label == 'guard_consensus_weight_fraction' -%}
-                <th title="Consensus weight is a relay's relative share of Tor network bandwidth, based on its advertised bandwidth and uptime." class="text-center cw-header"><a href="networks-by-consensus-weight.html">Overall</a> / Guard / <a href="networks-by-middle-consensus-weight.html">Middle</a> / <a href="networks-by-exit-consensus-weight.html">Exit</a> CW</th>
+                <th class="text-center cw-header" title="Consensus Weight"><a href="networks-by-consensus-weight.html">Overall</a> / Guard / <a href="networks-by-middle-consensus-weight.html">Middle</a> / <a href="networks-by-exit-consensus-weight.html">Exit</a> CW</th>
             {% elif sorted_by_label == 'middle_consensus_weight_fraction' -%}
-                <th title="Consensus weight is a relay's relative share of Tor network bandwidth, based on its advertised bandwidth and uptime." class="text-center cw-header"><a href="networks-by-consensus-weight.html">Overall</a> / <a href="networks-by-guard-consensus-weight.html">Guard</a> / Middle / <a href="networks-by-exit-consensus-weight.html">Exit</a> CW</th>
+                <th class="text-center cw-header" title="Consensus Weight"><a href="networks-by-consensus-weight.html">Overall</a> / <a href="networks-by-guard-consensus-weight.html">Guard</a> / Middle / <a href="networks-by-exit-consensus-weight.html">Exit</a> CW</th>
             {% elif sorted_by_label == 'exit_consensus_weight_fraction' -%}
-                <th title="Consensus weight is a relay's relative share of Tor network bandwidth, based on its advertised bandwidth and uptime." class="text-center cw-header"><a href="networks-by-consensus-weight.html">Overall</a> / <a href="networks-by-guard-consensus-weight.html">Guard</a> / <a href="networks-by-middle-consensus-weight.html">Middle</a> / Exit CW</th>
+                <th class="text-center cw-header" title="Consensus Weight"><a href="networks-by-consensus-weight.html">Overall</a> / <a href="networks-by-guard-consensus-weight.html">Guard</a> / <a href="networks-by-middle-consensus-weight.html">Middle</a> / Exit CW</th>
             {% else -%}
-                <th title="Consensus weight is a relay's relative share of Tor network bandwidth, based on its advertised bandwidth and uptime." class="text-center cw-header">
+                <th class="text-center cw-header" title="Consensus Weight">
                     <a href="networks-by-consensus-weight.html">Overall</a> / <a href="networks-by-guard-consensus-weight.html">Guard</a> / <a href="networks-by-middle-consensus-weight.html">Middle</a> / <a href="networks-by-exit-consensus-weight.html">Exit</a> CW
                 </th>
             {% endif -%}
