@@ -1,21 +1,28 @@
+{% from "skeleton.html" import navigation %}
 {% extends "skeleton.html" -%}
 {% set sorted_by_label = sorted_by.split(',')[0].split('.')[1] -%}
 {% block title -%}
-    Tor Relays :: Contacts By {{ sorted_by_label|replace('_',
+    Relay Radar :: Contacts By {{ sorted_by_label|replace('_',
     ' ')|title }}
 {% endblock -%}
 {% block body -%}
     <h2>
-        <a href={{ path_prefix }}>Home</a> :: Contacts By {{
-        sorted_by_label|replace('_', ' ')|title }}
+        Contacts by {{ sorted_by_label|replace('_', ' ')|title }}
     </h2>
+    
+    {{ navigation('contacts', is_misc_page=true) }}
+    
     <p>
-        Last fetch was at {{ relays.timestamp }}.
         All relay operators grouped by contact information, sorted by {{
         sorted_by_label|replace('_', ' ') }}. First seen date represents the
         oldest relay for each contact. Unique AS indicates network diversity across
         different autonomous systems.
     </p>
+    
+    <p class="text-muted" style="margin-bottom: 15px;">
+    <small>Last updated: {{ relays.timestamp }}. Refreshed every 30 minutes from the Tor directory authorities via <a href="https://onionoo.torproject.org/">Tor Project's onionoo API</a>.</small>
+    </p>
+    
     <table class="table table-condensed">
         <tr>
             <th title="Grouped by contact information. Shows AROI domain (when available) and contact hash identifier. Hover for full contact info.">Contact and AROI</th>

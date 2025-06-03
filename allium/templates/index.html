@@ -1,8 +1,11 @@
 {% extends "relay-list.html" %}
-{% block title %}Tor Relays{% endblock %}
+{% block title %}Relay Radar{% endblock %}
 {% block header %}
-    Allium (<a href="https://github.com/1aeo/allium/">git</a>)
+    Tor Relay Radar (Allium fork)
+{% endblock %}
+{% block navigation %}
+    {{ navigation('top500', is_misc_page=false) }}
 {% endblock %}
 {% block description %}
-    Relay listings are statically generated every hour. Listing top 500 relays; <a href="misc/all.html">view full list</a>, <a href="./misc/networks-by-bandwidth.html">networks</a>, or <a href="./misc/families-by-bandwidth.html">families</a>.
+    Browse and analyze Tor network relays by different categories.
 {% endblock %}
