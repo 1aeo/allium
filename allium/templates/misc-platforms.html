@@ -13,11 +13,16 @@
     {{ navigation('platforms', is_misc_page=true) }}
     
     <p>
-        The set of all ({{ relays.json['sorted']['platform']|length }}) platforms
-        running at least one relay sorted by {{ sorted_by_label|replace('_', ' ') }}.
-        This data is onionoo-derived and might be out of date with respect to other
-        sources.
+        Operating systems running Tor relays - shows software diversity and potential vulnerability patterns.
     </p>
+
+    <ul style="margin-bottom: 15px;">
+        <li><strong>Platforms</strong>: Operating systems hosting relays ({{ relays.json['sorted']['platform']|length }} platforms currently detected)</li>
+        <li><strong>Network Totals</strong>: {{ relays.json['sorted']['platform'].values()|sum(attribute='guard_count') }} Guard, {{ relays.json['sorted']['platform'].values()|sum(attribute='middle_count') }} Middle, {{ relays.json['sorted']['platform'].values()|sum(attribute='exit_count') }} Exit for {{ relays.json['sorted']['platform'].values()|sum(attribute='guard_count') + relays.json['sorted']['platform'].values()|sum(attribute='middle_count') + relays.json['sorted']['platform'].values()|sum(attribute='exit_count') }} Total Relays | {{ "%.1f"|format(relays.json['sorted']['platform'].values()|sum(attribute='guard_consensus_weight_fraction') * 100) }}% Guard, {{ "%.1f"|format(relays.json['sorted']['platform'].values()|sum(attribute='middle_consensus_weight_fraction') * 100) }}% Middle, {{ "%.1f"|format(relays.json['sorted']['platform'].values()|sum(attribute='exit_consensus_weight_fraction') * 100) }}% Exit CW</li>
+        <li><strong>Software Diversity</strong>: {% set platform_list = relays.json['sorted']['platform'].values()|list %}{% set linux_count = 0 %}{% set windows_count = 0 %}{% set bsd_count = 0 %}{% for platform_data in platform_list %}{% if 'linux' in platform_data.platform|lower %}{% set linux_count = linux_count + (platform_data.consensus_weight_fraction|default(0)) %}{% elif 'windows' in platform_data.platform|lower %}{% set windows_count = windows_count + (platform_data.consensus_weight_fraction|default(0)) %}{% elif 'bsd' in platform_data.platform|lower %}{% set bsd_count = bsd_count + (platform_data.consensus_weight_fraction|default(0)) %}{% endif %}{% endfor %}{{ "%.1f"|format(linux_count * 100) }}% Linux | {{ "%.1f"|format(windows_count * 100) }}% Windows | {{ "%.1f"|format(bsd_count * 100) }}% BSD variants</li>
+        <li><strong>Sorted by</strong>: {{ sorted_by_label|replace('_', ' ') }}</li>
+        <li><strong>Key</strong>: BW = Bandwidth, CW = Consensus Weight, AS = Autonomous System (network provider)</li>
+    </ul>
     
     <p class="text-muted" style="margin-bottom: 15px;">
     <small>Last updated: {{ relays.timestamp }}. Refreshed every 30 minutes from the Tor directory authorities via <a href="https://onionoo.torproject.org/">Tor Project's onionoo API</a>.</small>
