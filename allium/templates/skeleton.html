@@ -58,6 +58,15 @@
                     margin-bottom: 1rem;
                 }
 
+                /* Precise alignment for multi-value columns using monospace */
+                .bw-header, .cw-header, .rc-header, /* rc = relay count */
+                .bw-data, .cw-data, .rc-data {
+                    font-family: Consolas, "Courier New", monospace;
+                    white-space: nowrap;
+                    text-align: center;
+                    letter-spacing: 0.05em; /* Slight spacing for readability */
+                }
+
                 /* Container breakpoint */
                 @media (min-width: 1400px) {
                     .container {
