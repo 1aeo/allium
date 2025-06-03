@@ -20,45 +20,45 @@
             <th>Family</th>
             <th><a href="https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/" target="_blank" title="Autonomous Relay Operator Identifier - unverified">AROI</a></th>
             {% if sorted_by_label == 'bandwidth' -%}
-                <th>Overall / <a href="families-by-guard-bandwidth.html">Guard</a> / <a href="families-by-middle-bandwidth.html">Middle</a> / <a href="families-by-exit-bandwidth.html">Exit</a> BW</th>
+                <th class="text-center bw-header">Overall / <a href="families-by-guard-bandwidth.html">Guard</a> / <a href="families-by-middle-bandwidth.html">Middle</a> / <a href="families-by-exit-bandwidth.html">Exit</a> BW</th>
             {% elif sorted_by_label == 'guard_bandwidth' -%}
-                <th><a href="families-by-overall-bandwidth.html">Overall</a> / Guard / <a href="families-by-middle-bandwidth.html">Middle</a> / <a href="families-by-exit-bandwidth.html">Exit</a> BW</th>
+                <th class="text-center bw-header"><a href="families-by-overall-bandwidth.html">Overall</a> / Guard / <a href="families-by-middle-bandwidth.html">Middle</a> / <a href="families-by-exit-bandwidth.html">Exit</a> BW</th>
             {% elif sorted_by_label == 'middle_bandwidth' -%}
-                <th><a href="families-by-overall-bandwidth.html">Overall</a> / <a href="families-by-guard-bandwidth.html">Guard</a> / Middle / <a href="families-by-exit-bandwidth.html">Exit</a> BW</th>
+                <th class="text-center bw-header"><a href="families-by-overall-bandwidth.html">Overall</a> / <a href="families-by-guard-bandwidth.html">Guard</a> / Middle / <a href="families-by-exit-bandwidth.html">Exit</a> BW</th>
             {% elif sorted_by_label == 'exit_bandwidth' -%}
-                <th><a href="families-by-overall-bandwidth.html">Overall</a> / <a href="families-by-guard-bandwidth.html">Guard</a> / <a href="families-by-middle-bandwidth.html">Middle</a> / Exit BW</th>
+                <th class="text-center bw-header"><a href="families-by-overall-bandwidth.html">Overall</a> / <a href="families-by-guard-bandwidth.html">Guard</a> / <a href="families-by-middle-bandwidth.html">Middle</a> / Exit BW</th>
             {% else -%}
-                <th><a href="families-by-overall-bandwidth.html">Overall</a> / <a href="families-by-guard-bandwidth.html">Guard</a> / <a href="families-by-middle-bandwidth.html">Middle</a> / <a href="families-by-exit-bandwidth.html">Exit</a> BW</th>
+                <th class="text-center bw-header"><a href="families-by-overall-bandwidth.html">Overall</a> / <a href="families-by-guard-bandwidth.html">Guard</a> / <a href="families-by-middle-bandwidth.html">Middle</a> / <a href="families-by-exit-bandwidth.html">Exit</a> BW</th>
             {% endif -%}
             {% if sorted_by_label == 'consensus_weight_fraction' -%}
-                <th title="Consensus weight is a relay's relative share of Tor network bandwidth, based on its advertised bandwidth and uptime."><a href="families-by-consensus-weight.html">Overall</a> / <a href="families-by-guard-consensus-weight.html">Guard</a> / <a href="families-by-middle-consensus-weight.html">Middle</a> / <a href="families-by-exit-consensus-weight.html">Exit</a> CW</th>
+                <th title="Consensus weight is a relay's relative share of Tor network bandwidth, based on its advertised bandwidth and uptime." class="text-center cw-header"><a href="families-by-consensus-weight.html">Overall</a> / <a href="families-by-guard-consensus-weight.html">Guard</a> / <a href="families-by-middle-consensus-weight.html">Middle</a> / <a href="families-by-exit-consensus-weight.html">Exit</a> CW</th>
             {% elif sorted_by_label == 'guard_consensus_weight_fraction' -%}
-                <th title="Consensus weight is a relay's relative share of Tor network bandwidth, based on its advertised bandwidth and uptime."><a href="families-by-consensus-weight.html">Overall</a> / Guard / <a href="families-by-middle-consensus-weight.html">Middle</a> / <a href="families-by-exit-consensus-weight.html">Exit</a> CW</th>
+                <th title="Consensus weight is a relay's relative share of Tor network bandwidth, based on its advertised bandwidth and uptime." class="text-center cw-header"><a href="families-by-consensus-weight.html">Overall</a> / Guard / <a href="families-by-middle-consensus-weight.html">Middle</a> / <a href="families-by-exit-consensus-weight.html">Exit</a> CW</th>
             {% elif sorted_by_label == 'middle_consensus_weight_fraction' -%}
-                <th title="Consensus weight is a relay's relative share of Tor network bandwidth, based on its advertised bandwidth and uptime."><a href="families-by-consensus-weight.html">Overall</a> / <a href="families-by-guard-consensus-weight.html">Guard</a> / Middle / <a href="families-by-exit-consensus-weight.html">Exit</a> CW</th>
+                <th title="Consensus weight is a relay's relative share of Tor network bandwidth, based on its advertised bandwidth and uptime." class="text-center cw-header"><a href="families-by-consensus-weight.html">Overall</a> / <a href="families-by-guard-consensus-weight.html">Guard</a> / Middle / <a href="families-by-exit-consensus-weight.html">Exit</a> CW</th>
             {% elif sorted_by_label == 'exit_consensus_weight_fraction' -%}
-                <th title="Consensus weight is a relay's relative share of Tor network bandwidth, based on its advertised bandwidth and uptime."><a href="families-by-consensus-weight.html">Overall</a> / <a href="families-by-guard-consensus-weight.html">Guard</a> / <a href="families-by-middle-consensus-weight.html">Middle</a> / Exit CW</th>
+                <th title="Consensus weight is a relay's relative share of Tor network bandwidth, based on its advertised bandwidth and uptime." class="text-center cw-header"><a href="families-by-consensus-weight.html">Overall</a> / <a href="families-by-guard-consensus-weight.html">Guard</a> / <a href="families-by-middle-consensus-weight.html">Middle</a> / Exit CW</th>
             {% else -%}
-                <th title="Consensus weight is a relay's relative share of Tor network bandwidth, based on its advertised bandwidth and uptime.">
+                <th title="Consensus weight is a relay's relative share of Tor network bandwidth, based on its advertised bandwidth and uptime." class="text-center cw-header">
                     <a href="families-by-consensus-weight.html">Overall</a> / <a href="families-by-guard-consensus-weight.html">Guard</a> / <a href="families-by-middle-consensus-weight.html">Middle</a> / <a href="families-by-exit-consensus-weight.html">Exit</a> CW
                 </th>
             {% endif -%}
             <th class="visible-md visible-lg">Contact</th>
             {% if sorted_by_label == 'exit_count' -%}
-                <th>
+                <th class="text-center rc-header">
                     <a href="families-by-guard-count.html">Guard</a> / <a href="families-by-middle-count.html">Middle</a> / Exit
                 </th>
             {% elif sorted_by_label == 'guard_count' -%}
-                <th>
+                <th class="text-center rc-header">
                     Guard / <a href="families-by-middle-count.html">Middle</a> / <a href="families-by-exit-count.html">Exit</a>
                 </th>
             {% elif sorted_by_label == 'middle_count' -%}
-                <th>
+                <th class="text-center rc-header">
                     <a href="families-by-guard-count.html">Guard</a> / Middle / <a href="families-by-exit-count.html">Exit</a>
                 </th>
             {% else -%}
-                <th>
-                    <a href="families-by-guard-count.html">Guard</a>  / <a href="families-by-middle-count.html">Middle</a> / <a href="families-by-exit-count.html">Exit</a>
+                <th class="text-center rc-header">
+                    <a href="families-by-guard-count.html">Guard</a> / <a href="families-by-middle-count.html">Middle</a> / <a href="families-by-exit-count.html">Exit</a>
                 </th>
             {% endif -%}
             {% if sorted_by_label == 'unique_as_count' -%}
@@ -98,11 +98,11 @@
                         {% else -%}
                             <td>none</td>
                         {% endif -%}
-                        <td>{{ obs_bandwidth }} / {{ guard_bw }} / {{ middle_bw }} / {{ exit_bw }} {{ obs_unit }}</td>
+                        <td class="text-center bw-data">{{ obs_bandwidth }} / {{ guard_bw }} / {{ middle_bw }} / {{ exit_bw }} {{ obs_unit }}</td>
                         {% if v['consensus_weight_fraction'] == 0 and v['guard_consensus_weight_fraction'] == 0 and v['middle_consensus_weight_fraction'] == 0 and v['exit_consensus_weight_fraction'] == 0 -%}
-                            <td>0% / 0% / 0% / 0%</td>
+                            <td class="text-center cw-data">0% / 0% / 0% / 0%</td>
                         {% else -%}
-                            <td>{{ "%.2f%%"|format(v['consensus_weight_fraction'] * 100) }} / {{ "%.2f%%"|format(v['guard_consensus_weight_fraction'] * 100) }} / {{ "%.2f%%"|format(v['middle_consensus_weight_fraction'] * 100) }} / {{ "%.2f%%"|format(v['exit_consensus_weight_fraction'] * 100) }}</td>
+                            <td class="text-center cw-data">{{ "%.2f%%"|format(v['consensus_weight_fraction'] * 100) }} / {{ "%.2f%%"|format(v['guard_consensus_weight_fraction'] * 100) }} / {{ "%.2f%%"|format(v['middle_consensus_weight_fraction'] * 100) }} / {{ "%.2f%%"|format(v['exit_consensus_weight_fraction'] * 100) }}</td>
                         {% endif -%}
                         {% if v['contact'] -%}
                             <td class="visible-md visible-lg">
@@ -112,7 +112,7 @@
                         {% else -%}
                             <td class="visible-md visible-lg">none</td>
                         {% endif -%}
-                        <td>{{ v['guard_count'] }} / {{ v['middle_count'] }} / {{ v['exit_count'] }}</td>
+                        <td class="text-center rc-data">{{ v['guard_count'] }} / {{ v['middle_count'] }} / {{ v['exit_count'] }}</td>
                         <td>{{ v['unique_as_count'] }}</td>
                         <td>
                             <a href="{{ path_prefix }}first_seen/{{ v['first_seen'].split(' ', 1)[0]|escape }}">{{ v['first_seen'].split(' ', 1)[0]|escape }}</a>
