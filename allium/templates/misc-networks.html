@@ -1,21 +1,28 @@
+{% from "skeleton.html" import navigation %}
 {% extends "skeleton.html" -%}
 {% set sorted_by_label = sorted_by.split(',')[0].split('.')[1] -%}
 {% block title -%}
-    Tor Relays :: Networks By {{ sorted_by_label|replace('_',
+    Relay Radar :: Networks By {{ sorted_by_label|replace('_',
     ' ')|title }}
 {% endblock -%}
 {% block body -%}
     <h2>
-        <a href={{ path_prefix }}>Home</a> :: Networks By {{
-        sorted_by_label|replace('_', ' ')|title }}
+        Networks by {{ sorted_by_label|replace('_', ' ')|title }}
     </h2>
+    
+    {{ navigation('networks', is_misc_page=true) }}
+    
     <p>
-        Last fetch was at {{ relays.timestamp }}.
         The set of all ({{ relays.json['sorted']['as']|length }}) recognized networks
         running at least one relay sorted by {{ sorted_by_label|replace('_', ' ') }}.
         This data is onionoo-derived and might be out of date with respect to other
         sources.
     </p>
+    
+    <p class="text-muted" style="margin-bottom: 15px;">
+    <small>Last updated: {{ relays.timestamp }}. Refreshed every 30 minutes from the Tor directory authorities via <a href="https://onionoo.torproject.org/">Tor Project's onionoo API</a>.</small>
+    </p>
+    
     <table class="table table-condensed">
         <tr>
             <th>AS Number</th>

@@ -1,9 +1,10 @@
 {% extends "relay-list.html" %}
 {% set relay_count = relays.json['relays']|length %}
-{% block title %}Tor Relays :: All{% endblock %}
-{% block header %}<a href="../">Home</a> :: All Relays{% endblock %}
+{% block title %}Relay Radar :: All Relays{% endblock %}
+{% block header %}All Relays{% endblock %}
+{% block navigation %}
+    {{ navigation('all', is_misc_page=true) }}
+{% endblock %}
 {% block description %}
-    All known (non-guard) relays, {{ relay_count }} in total.
-    A smaller browser-friendly subset (top 500) is <a href="../">available
-    here</a>.
+    Complete listing of all {{ relay_count }} known relays in the Tor network. For a more manageable view, see the <a href="../index.html">top 500 relays</a>.
 {% endblock %}
