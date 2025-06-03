@@ -2,12 +2,12 @@
 {% extends "skeleton.html" -%}
 {% set sorted_by_label = sorted_by.split(',')[0].split('.')[1] -%}
 {% block title -%}
-    Relay Radar :: Networks By {{ sorted_by_label|replace('_',
+    Relay Radar :: AS Networks By {{ sorted_by_label|replace('_',
     ' ')|title }}
 {% endblock -%}
 {% block body -%}
     <h2>
-        Networks by {{ sorted_by_label|replace('_', ' ')|title }}
+        AS Networks by {{ sorted_by_label|replace('_', ' ')|title }}
     </h2>
     
     {{ navigation('networks', is_misc_page=true) }}
