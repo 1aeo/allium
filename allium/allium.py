@@ -94,6 +94,11 @@ if __name__ == "__main__":
             path="misc/networks-{}.html".format(k),
             sorted_by=v,
         )
+        RELAY_SET.write_misc(
+            template="misc-contacts.html",
+            path="misc/contacts-{}.html".format(k),
+            sorted_by=v,
+        )
 
     # onionoo keys used to generate pages by unique value; e.g. AS43350
     keys = [
