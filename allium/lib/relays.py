@@ -239,14 +239,17 @@ class Relays:
             self.json["sorted"][k][v]["country_name"] = relay.get("country")
             self.json["sorted"][k][v]["as_name"] = relay.get("as_name")
 
-        if k == "family":
-            # Use empty strings as defaults to avoid None values
+        if k == "family" or k == "contact":
+            # Both families and contacts benefit from the same additional data:
+            # - Contact info and MD5 hash for linking
+            # - AROI domain for display purposes  
+            # - Unique AS tracking for network diversity analysis
+            # - First seen date tracking (oldest relay in group)
             self.json["sorted"][k][v]["contact"] = relay.get("contact", "")
             self.json["sorted"][k][v]["contact_md5"] = relay.get("contact_md5", "")
-            # Add AROI domain field for separate display
             self.json["sorted"][k][v]["aroi_domain"] = relay.get("aroi_domain", "")
 
-            # Track unique AS numbers for this family
+            # Track unique AS numbers for this family/contact
             relay_as = relay.get("as")
             if relay_as:
                 self.json["sorted"][k][v]["unique_as_set"].add(relay_as)
@@ -311,7 +314,7 @@ class Relays:
         # This avoids a second full iteration through all relays
         self._calculate_consensus_weight_fractions(total_guard_cw, total_middle_cw, total_exit_cw)
         
-        # Convert unique AS sets to counts for families
+        # Convert unique AS sets to counts for families and contacts
         self._finalize_unique_as_counts()
 
     def _calculate_consensus_weight_fractions(self, total_guard_cw, total_middle_cw, total_exit_cw):
@@ -348,18 +351,19 @@ class Relays:
 
     def _finalize_unique_as_counts(self):
         """
-        Convert unique AS sets to counts for families and clean up memory.
-        This should be called after all family data has been processed.
+        Convert unique AS sets to counts for families and contacts and clean up memory.
+        This should be called after all family and contact data has been processed.
         """
-        if "family" in self.json["sorted"]:
-            for family_data in self.json["sorted"]["family"].values():
-                if "unique_as_set" in family_data:
-                    family_data["unique_as_count"] = len(family_data["unique_as_set"])
-                    # Remove the set to save memory and avoid JSON serialization issues
-                    del family_data["unique_as_set"]
-                else:
-                    # Fallback in case unique_as_set wasn't initialized
-                    family_data["unique_as_count"] = 0
+        for category in ["family", "contact"]:
+            if category in self.json["sorted"]:
+                for data in self.json["sorted"][category].values():
+                    if "unique_as_set" in data:
+                        data["unique_as_count"] = len(data["unique_as_set"])
+                        # Remove the set to save memory and avoid JSON serialization issues
+                        del data["unique_as_set"]
+                    else:
+                        # Fallback in case unique_as_set wasn't initialized
+                        data["unique_as_count"] = 0
 
     def create_output_dir(self):
         """
