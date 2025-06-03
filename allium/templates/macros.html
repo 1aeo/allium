@@ -1,0 +1,43 @@
+{% macro navigation(active_section, is_misc_page=true) -%}
+    <div class="row" style="margin-bottom: 20px;">
+        <div class="col-md-12">
+            <div class="btn-group btn-group-justified" role="group">
+                <div class="btn-group" role="group">
+                    {% if is_misc_page %}
+                        <a href="contacts-by-bandwidth.html" class="btn {% if active_section == 'contacts' %}btn-primary{% else %}btn-default{% endif %}">By AROI / Contact</a>
+                    {% else %}
+                        <a href="misc/contacts-by-bandwidth.html" class="btn {% if active_section == 'contacts' %}btn-primary{% else %}btn-default{% endif %}">By AROI / Contact</a>
+                    {% endif %}
+                </div>
+                <div class="btn-group" role="group">
+                    {% if is_misc_page %}
+                        <a href="families-by-bandwidth.html" class="btn {% if active_section == 'families' %}btn-primary{% else %}btn-default{% endif %}">By Family</a>
+                    {% else %}
+                        <a href="misc/families-by-bandwidth.html" class="btn {% if active_section == 'families' %}btn-primary{% else %}btn-default{% endif %}">By Family</a>
+                    {% endif %}
+                </div>
+                <div class="btn-group" role="group">
+                    {% if is_misc_page %}
+                        <a href="networks-by-bandwidth.html" class="btn {% if active_section == 'networks' %}btn-primary{% else %}btn-default{% endif %}">By Network</a>
+                    {% else %}
+                        <a href="misc/networks-by-bandwidth.html" class="btn {% if active_section == 'networks' %}btn-primary{% else %}btn-default{% endif %}">By Network</a>
+                    {% endif %}
+                </div>
+                <div class="btn-group" role="group">
+                    {% if is_misc_page %}
+                        <a href="../index.html" class="btn {% if active_section == 'top500' %}btn-primary{% else %}btn-default{% endif %}">Top 500 Relays</a>
+                    {% else %}
+                        <a href="index.html" class="btn {% if active_section == 'top500' %}btn-primary{% else %}btn-default{% endif %}">Top 500 Relays</a>
+                    {% endif %}
+                </div>
+                <div class="btn-group" role="group">
+                    {% if is_misc_page %}
+                        <a href="all.html" class="btn {% if active_section == 'all' %}btn-primary{% else %}btn-default{% endif %}">All Relays</a>
+                    {% else %}
+                        <a href="misc/all.html" class="btn {% if active_section == 'all' %}btn-primary{% else %}btn-default{% endif %}">All Relays</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+{%- endmacro %} 
