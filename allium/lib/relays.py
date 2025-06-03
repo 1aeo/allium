@@ -384,8 +384,8 @@ class Relays:
                         # Fallback in case unique_as_set wasn't initialized
                         data["unique_as_count"] = 0
                     
-                    # Handle country and platform-specific unique counts
-                    if category == "country" or category == "platform":
+                    # Handle country, platform, and network-specific unique counts
+                    if category == "country" or category == "platform" or category == "as":
                         if "unique_contact_set" in data:
                             data["unique_contact_count"] = len(data["unique_contact_set"])
                             del data["unique_contact_set"]
