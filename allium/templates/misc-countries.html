@@ -1,0 +1,127 @@
+{% from "macros.html" import navigation %}
+{% extends "skeleton.html" -%}
+{% set sorted_by_label = sorted_by.split(',')[0].split('.')[1] -%}
+{% block title -%}
+    Relay Radar :: Countries By {{ sorted_by_label|replace('_',
+    ' ')|title }}
+{% endblock -%}
+{% block body -%}
+    <h2>
+        Countries by {{ sorted_by_label|replace('_', ' ')|title }}
+    </h2>
+    
+    {{ navigation('countries', is_misc_page=true) }}
+    
+    <p>
+        The set of all ({{ relays.json['sorted']['country']|length }}) countries
+        running at least one relay sorted by {{ sorted_by_label|replace('_', ' ') }}.
+        This data is onionoo-derived and might be out of date with respect to other
+        sources.
+    </p>
+    
+    <p class="text-muted" style="margin-bottom: 15px;">
+    <small>Last updated: {{ relays.timestamp }}. Refreshed every 30 minutes from the Tor directory authorities via <a href="https://onionoo.torproject.org/">Tor Project's onionoo API</a>.</small>
+    </p>
+    
+    <table class="table table-condensed">
+        <tr>
+            <th>Country</th>
+            {% if sorted_by_label == 'bandwidth' -%}
+                <th class="text-center bw-header" title="Bandwidth">Overall / <a href="countries-by-guard-bandwidth.html">Guard</a> / <a href="countries-by-middle-bandwidth.html">Middle</a> / <a href="countries-by-exit-bandwidth.html">Exit</a> BW</th>
+            {% elif sorted_by_label == 'guard_bandwidth' -%}
+                <th class="text-center bw-header" title="Bandwidth"><a href="countries-by-overall-bandwidth.html">Overall</a> / Guard / <a href="countries-by-middle-bandwidth.html">Middle</a> / <a href="countries-by-exit-bandwidth.html">Exit</a> BW</th>
+            {% elif sorted_by_label == 'middle_bandwidth' -%}
+                <th class="text-center bw-header" title="Bandwidth"><a href="countries-by-overall-bandwidth.html">Overall</a> / <a href="countries-by-guard-bandwidth.html">Guard</a> / Middle / <a href="countries-by-exit-bandwidth.html">Exit</a> BW</th>
+            {% elif sorted_by_label == 'exit_bandwidth' -%}
+                <th class="text-center bw-header" title="Bandwidth"><a href="countries-by-overall-bandwidth.html">Overall</a> / <a href="countries-by-guard-bandwidth.html">Guard</a> / <a href="countries-by-middle-bandwidth.html">Middle</a> / Exit BW</th>
+            {% else -%}
+                <th class="text-center bw-header" title="Bandwidth"><a href="countries-by-overall-bandwidth.html">Overall</a> / <a href="countries-by-guard-bandwidth.html">Guard</a> / <a href="countries-by-middle-bandwidth.html">Middle</a> / <a href="countries-by-exit-bandwidth.html">Exit</a> BW</th>
+            {% endif -%}
+            {% if sorted_by_label == 'consensus_weight_fraction' -%}
+                <th class="text-center cw-header" title="Consensus Weight"><a href="countries-by-consensus-weight.html">Overall</a> / <a href="countries-by-guard-consensus-weight.html">Guard</a> / <a href="countries-by-middle-consensus-weight.html">Middle</a> / <a href="countries-by-exit-consensus-weight.html">Exit</a> CW</th>
+            {% elif sorted_by_label == 'guard_consensus_weight_fraction' -%}
+                <th class="text-center cw-header" title="Consensus Weight"><a href="countries-by-consensus-weight.html">Overall</a> / Guard / <a href="countries-by-middle-consensus-weight.html">Middle</a> / <a href="countries-by-exit-consensus-weight.html">Exit</a> CW</th>
+            {% elif sorted_by_label == 'middle_consensus_weight_fraction' -%}
+                <th class="text-center cw-header" title="Consensus Weight"><a href="countries-by-consensus-weight.html">Overall</a> / <a href="countries-by-guard-consensus-weight.html">Guard</a> / Middle / <a href="countries-by-exit-consensus-weight.html">Exit</a> CW</th>
+            {% elif sorted_by_label == 'exit_consensus_weight_fraction' -%}
+                <th class="text-center cw-header" title="Consensus Weight"><a href="countries-by-consensus-weight.html">Overall</a> / <a href="countries-by-guard-consensus-weight.html">Guard</a> / <a href="countries-by-middle-consensus-weight.html">Middle</a> / Exit CW</th>
+            {% else -%}
+                <th class="text-center cw-header" title="Consensus Weight">
+                    <a href="countries-by-consensus-weight.html">Overall</a> / <a href="countries-by-guard-consensus-weight.html">Guard</a> / <a href="countries-by-middle-consensus-weight.html">Middle</a> / <a href="countries-by-exit-consensus-weight.html">Exit</a> CW
+                </th>
+            {% endif -%}
+            {% if sorted_by_label == 'exit_count' -%}
+                <th class="text-center rc-header">
+                    <a href="countries-by-guard-count.html">Guard</a> / <a href="countries-by-middle-count.html">Middle</a> / Exit
+                </th>
+            {% elif sorted_by_label == 'guard_count' -%}
+                <th class="text-center rc-header">
+                    Guard / <a href="countries-by-middle-count.html">Middle</a> / <a href="countries-by-exit-count.html">Exit</a>
+                </th>
+            {% elif sorted_by_label == 'middle_count' -%}
+                <th class="text-center rc-header">
+                    <a href="countries-by-guard-count.html">Guard</a> / Middle / <a href="countries-by-exit-count.html">Exit</a>
+                </th>
+            {% else -%}
+                <th class="text-center rc-header">
+                    <a href="countries-by-guard-count.html">Guard</a> / <a href="countries-by-middle-count.html">Middle</a> / <a href="countries-by-exit-count.html">Exit</a>
+                </th>
+            {% endif -%}
+            {% if sorted_by_label == 'unique_contact_count' -%}
+                <th title="Number of unique AROI/contact operators in this country">Unique AROI/Contact</th>
+            {% else -%}
+                <th title="Number of unique AROI/contact operators in this country">
+                    <a href="countries-by-unique-contact-count.html">Unique AROI/Contact</a>
+                </th>
+            {% endif -%}
+            {% if sorted_by_label == 'unique_family_count' -%}
+                <th title="Number of unique effective families in this country">Unique Families</th>
+            {% else -%}
+                <th title="Number of unique effective families in this country">
+                    <a href="countries-by-unique-family-count.html">Unique Families</a>
+                </th>
+            {% endif -%}
+            {% if sorted_by_label == 'unique_as_count' -%}
+                <th title="Number of different autonomous systems (networks) in this country">Unique AS</th>
+            {% else -%}
+                <th title="Number of different autonomous systems (networks) in this country">
+                    <a href="countries-by-unique-as-count.html">Unique AS</a>
+                </th>
+            {% endif -%}
+        </tr>
+        <tbody>
+            {% for k, v in relays.json['sorted']['country'].items()|sort(attribute=sorted_by,
+                reverse=True) -%}
+                <tr>
+                    {% set obs_unit = relays._determine_unit(v['bandwidth']) -%}
+                    {% set obs_bandwidth = relays._format_bandwidth_with_unit(v['bandwidth'], obs_unit) -%}
+                    {% set guard_bw = relays._format_bandwidth_with_unit(v['guard_bandwidth'], obs_unit) -%}
+                    {% set middle_bw = relays._format_bandwidth_with_unit(v['middle_bandwidth'], obs_unit) -%}
+                    {% set exit_bw = relays._format_bandwidth_with_unit(v['exit_bandwidth'], obs_unit) -%}
+                    <td>
+                        <a href="{{ path_prefix }}country/{{ k|escape }}/">
+                            <img src="{{ path_prefix }}static/images/cc/{{ k|escape }}.png"
+                                 title="{{ v['country_name']|escape }}"
+                                 alt="{{ v['country_name']|escape }}">
+                            {{ v['country_name']|escape }}
+                        </a>
+                    </td>
+                    {% if v['bandwidth'] == 0 -%}
+                        <td class="text-center bw-data">0 / 0 / 0 / 0 {{ obs_unit }}</td>
+                    {% else -%}
+                        <td class="text-center bw-data">{{ obs_bandwidth }} / {{ guard_bw }} / {{ middle_bw }} / {{ exit_bw }} {{ obs_unit }}</td>
+                    {% endif -%}
+                    {% if v['consensus_weight_fraction'] == 0 and v['guard_consensus_weight_fraction'] == 0 and v['middle_consensus_weight_fraction'] == 0 and v['exit_consensus_weight_fraction'] == 0 -%}
+                        <td class="text-center cw-data">0% / 0% / 0% / 0%</td>
+                    {% else -%}
+                        <td class="text-center cw-data">{{ "%.2f%%"|format(v['consensus_weight_fraction'] * 100) }} / {{ "%.2f%%"|format(v['guard_consensus_weight_fraction'] * 100) }} / {{ "%.2f%%"|format(v['middle_consensus_weight_fraction'] * 100) }} / {{ "%.2f%%"|format(v['exit_consensus_weight_fraction'] * 100) }}</td>
+                    {% endif -%}
+                    <td class="text-center rc-data">{{ v['guard_count'] }} / {{ v['middle_count'] }} / {{ v['exit_count'] }}</td>
+                    <td>{{ v['unique_contact_count'] }}</td>
+                    <td>{{ v['unique_family_count'] }}</td>
+                    <td>{{ v['unique_as_count'] }}</td>
+                </tr>
+            {% endfor -%}
+        </tbody>
+    </table>
+{% endblock -%} 

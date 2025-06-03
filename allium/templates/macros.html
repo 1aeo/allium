@@ -25,6 +25,20 @@
                 </div>
                 <div class="btn-group" role="group">
                     {% if is_misc_page %}
+                        <a href="countries-by-bandwidth.html" class="btn {% if active_section == 'countries' %}btn-primary{% else %}btn-default{% endif %}">By Country</a>
+                    {% else %}
+                        <a href="misc/countries-by-bandwidth.html" class="btn {% if active_section == 'countries' %}btn-primary{% else %}btn-default{% endif %}">By Country</a>
+                    {% endif %}
+                </div>
+                <div class="btn-group" role="group">
+                    {% if is_misc_page %}
+                        <a href="platforms-by-bandwidth.html" class="btn {% if active_section == 'platforms' %}btn-primary{% else %}btn-default{% endif %}">By Platform</a>
+                    {% else %}
+                        <a href="misc/platforms-by-bandwidth.html" class="btn {% if active_section == 'platforms' %}btn-primary{% else %}btn-default{% endif %}">By Platform</a>
+                    {% endif %}
+                </div>
+                <div class="btn-group" role="group">
+                    {% if is_misc_page %}
                         <a href="../index.html" class="btn {% if active_section == 'top500' %}btn-primary{% else %}btn-default{% endif %}">Top 500 Relays</a>
                     {% else %}
                         <a href="index.html" class="btn {% if active_section == 'top500' %}btn-primary{% else %}btn-default{% endif %}">Top 500 Relays</a>
