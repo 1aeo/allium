@@ -1,57 +1,72 @@
 {% macro navigation(active_section, is_misc_page=true) -%}
-    <div class="row" style="margin-bottom: 20px;">
-        <div class="col-md-12">
-            <div class="btn-group btn-group-justified" role="group">
-                <div class="btn-group" role="group">
-                    {% if is_misc_page %}
-                        <a href="contacts-by-bandwidth.html" class="btn {% if active_section == 'contacts' %}btn-primary{% else %}btn-default{% endif %}">By AROI / Contact</a>
-                    {% else %}
-                        <a href="misc/contacts-by-bandwidth.html" class="btn {% if active_section == 'contacts' %}btn-primary{% else %}btn-default{% endif %}">By AROI / Contact</a>
-                    {% endif %}
-                </div>
-                <div class="btn-group" role="group">
-                    {% if is_misc_page %}
-                        <a href="families-by-bandwidth.html" class="btn {% if active_section == 'families' %}btn-primary{% else %}btn-default{% endif %}">By Family</a>
-                    {% else %}
-                        <a href="misc/families-by-bandwidth.html" class="btn {% if active_section == 'families' %}btn-primary{% else %}btn-default{% endif %}">By Family</a>
-                    {% endif %}
-                </div>
-                <div class="btn-group" role="group">
-                    {% if is_misc_page %}
-                        <a href="networks-by-bandwidth.html" class="btn {% if active_section == 'networks' %}btn-primary{% else %}btn-default{% endif %}">By Network</a>
-                    {% else %}
-                        <a href="misc/networks-by-bandwidth.html" class="btn {% if active_section == 'networks' %}btn-primary{% else %}btn-default{% endif %}">By Network</a>
-                    {% endif %}
-                </div>
-                <div class="btn-group" role="group">
-                    {% if is_misc_page %}
-                        <a href="countries-by-bandwidth.html" class="btn {% if active_section == 'countries' %}btn-primary{% else %}btn-default{% endif %}">By Country</a>
-                    {% else %}
-                        <a href="misc/countries-by-bandwidth.html" class="btn {% if active_section == 'countries' %}btn-primary{% else %}btn-default{% endif %}">By Country</a>
-                    {% endif %}
-                </div>
-                <div class="btn-group" role="group">
-                    {% if is_misc_page %}
-                        <a href="platforms-by-bandwidth.html" class="btn {% if active_section == 'platforms' %}btn-primary{% else %}btn-default{% endif %}">By Platform</a>
-                    {% else %}
-                        <a href="misc/platforms-by-bandwidth.html" class="btn {% if active_section == 'platforms' %}btn-primary{% else %}btn-default{% endif %}">By Platform</a>
-                    {% endif %}
-                </div>
-                <div class="btn-group" role="group">
-                    {% if is_misc_page %}
-                        <a href="../index.html" class="btn {% if active_section == 'top500' %}btn-primary{% else %}btn-default{% endif %}">Top 500 Relays</a>
-                    {% else %}
-                        <a href="index.html" class="btn {% if active_section == 'top500' %}btn-primary{% else %}btn-default{% endif %}">Top 500 Relays</a>
-                    {% endif %}
-                </div>
-                <div class="btn-group" role="group">
-                    {% if is_misc_page %}
-                        <a href="all.html" class="btn {% if active_section == 'all' %}btn-primary{% else %}btn-default{% endif %}">All Relays</a>
-                    {% else %}
-                        <a href="misc/all.html" class="btn {% if active_section == 'all' %}btn-primary{% else %}btn-default{% endif %}">All Relays</a>
-                    {% endif %}
-                </div>
+    <nav class="navbar navbar-default" style="margin-bottom: 20px;">
+        <div class="container-fluid">
+            <!-- CSS-only hamburger toggle using checkbox hack -->
+            <input type="checkbox" id="navbar-toggle" class="navbar-toggle-checkbox" style="display: none;">
+            
+            <div class="navbar-header">
+                <label for="navbar-toggle" class="navbar-toggle" role="button" aria-label="Toggle navigation">
+                    <span class="sr-only">Toggle navigation</span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </label>
+                <span class="navbar-brand visible-xs">Browse Categories</span>
+            </div>
+            
+            <div class="navbar-collapse" id="main-navbar">
+                <ul class="nav navbar-nav">
+                    <li class="{% if active_section == 'contacts' %}active{% endif %}">
+                        {% if is_misc_page %}
+                            <a href="contacts-by-bandwidth.html">By AROI / Contact</a>
+                        {% else %}
+                            <a href="misc/contacts-by-bandwidth.html">By AROI / Contact</a>
+                        {% endif %}
+                    </li>
+                    <li class="{% if active_section == 'families' %}active{% endif %}">
+                        {% if is_misc_page %}
+                            <a href="families-by-bandwidth.html">By Family</a>
+                        {% else %}
+                            <a href="misc/families-by-bandwidth.html">By Family</a>
+                        {% endif %}
+                    </li>
+                    <li class="{% if active_section == 'networks' %}active{% endif %}">
+                        {% if is_misc_page %}
+                            <a href="networks-by-bandwidth.html">By Network</a>
+                        {% else %}
+                            <a href="misc/networks-by-bandwidth.html">By Network</a>
+                        {% endif %}
+                    </li>
+                    <li class="{% if active_section == 'countries' %}active{% endif %}">
+                        {% if is_misc_page %}
+                            <a href="countries-by-bandwidth.html">By Country</a>
+                        {% else %}
+                            <a href="misc/countries-by-bandwidth.html">By Country</a>
+                        {% endif %}
+                    </li>
+                    <li class="{% if active_section == 'platforms' %}active{% endif %}">
+                        {% if is_misc_page %}
+                            <a href="platforms-by-bandwidth.html">By Platform</a>
+                        {% else %}
+                            <a href="misc/platforms-by-bandwidth.html">By Platform</a>
+                        {% endif %}
+                    </li>
+                    <li class="{% if active_section == 'top500' %}active{% endif %}">
+                        {% if is_misc_page %}
+                            <a href="../index.html">Top 500 Relays</a>
+                        {% else %}
+                            <a href="index.html">Top 500 Relays</a>
+                        {% endif %}
+                    </li>
+                    <li class="{% if active_section == 'all' %}active{% endif %}">
+                        {% if is_misc_page %}
+                            <a href="all.html">All Relays</a>
+                        {% else %}
+                            <a href="misc/all.html">All Relays</a>
+                        {% endif %}
+                    </li>
+                </ul>
             </div>
         </div>
-    </div>
+    </nav>
 {%- endmacro %} 
