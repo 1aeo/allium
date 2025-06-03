@@ -69,6 +69,20 @@
                     <a href="networks-by-guard-count.html">Guard</a> / <a href="networks-by-middle-count.html">Middle</a> / <a href="networks-by-exit-count.html">Exit</a>
                 </th>
             {% endif -%}
+            {% if sorted_by_label == 'unique_contact_count' -%}
+                <th title="Number of unique AROI / contact operators using this network">Unique AROI / Contact</th>
+            {% else -%}
+                <th title="Number of unique AROI / contact operators using this network">
+                    <a href="networks-by-unique-contact-count.html">Unique AROI / Contact</a>
+                </th>
+            {% endif -%}
+            {% if sorted_by_label == 'unique_family_count' -%}
+                <th title="Number of unique effective families using this network">Unique Families</th>
+            {% else -%}
+                <th title="Number of unique effective families using this network">
+                    <a href="networks-by-unique-family-count.html">Unique Families</a>
+                </th>
+            {% endif -%}
         </tr>
         <tbody>
             {% for k, v in relays.json['sorted']['as'].items()|sort(attribute=sorted_by,
@@ -111,6 +125,8 @@
                         <td class="text-center cw-data">{{ "%.2f%%"|format(v['consensus_weight_fraction'] * 100) }} / {{ "%.2f%%"|format(v['guard_consensus_weight_fraction'] * 100) }} / {{ "%.2f%%"|format(v['middle_consensus_weight_fraction'] * 100) }} / {{ "%.2f%%"|format(v['exit_consensus_weight_fraction'] * 100) }}</td>
                     {% endif -%}
                     <td class="text-center rc-data">{{ v['guard_count'] }} / {{ v['middle_count'] }} / {{ v['exit_count'] }}</td>
+                    <td>{{ v['unique_contact_count'] }}</td>
+                    <td>{{ v['unique_family_count'] }}</td>
                 </tr>
             {% endfor -%}
         </tbody>
