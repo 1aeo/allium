@@ -115,7 +115,7 @@
             <tr>
                 {% set is_problematic = not authority.running or (authority.uptime_zscore and authority.uptime_zscore <= -2.0) -%}
                 <td>
-                    <a href="{{ path_prefix }}relay/{{ authority.fingerprint }}/" 
+                    <a href="{{ path_prefix }}relay/{{ authority.fingerprint }}.html" 
                        {% if is_problematic %}style="color: #dc3545; font-weight: bold; text-decoration: underline;"
                        {% else %}style="text-decoration: underline;"{% endif %}>
                         {{ authority.nickname }}
