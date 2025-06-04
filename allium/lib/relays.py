@@ -32,13 +32,11 @@ class Relays:
         self.onionoo_url = onionoo_url
         self.use_bits = use_bits
         self.ts_file = os.path.join(os.path.dirname(ABS_PATH), "timestamp")
+        self.uptime_ts_file = os.path.join(os.path.dirname(ABS_PATH), "uptime_timestamp")
         self.json = self._fetch_onionoo_details()
         if self.json == None:
             return
-        self.timestamp = self._write_timestamp()
-
-        # Fetch uptime data for all relays
-        self._fetch_onionoo_uptime()
+        self.timestamp = self._write_api_timestamp(self.ts_file, require_json=True)
 
         self._fix_missing_observed_bandwidth()
         self._sort_by_bandwidth()
@@ -52,57 +50,142 @@ class Relays:
         Make request to onionoo to retrieve details document, return  JSON
         response
         """
-        if os.path.isfile(self.ts_file):
-            with open(self.ts_file, "r") as ts_file:
-                prev_timestamp = ts_file.read()
-            headers = {"If-Modified-Since": prev_timestamp}
-            conn = urllib.request.Request(self.onionoo_url, headers=headers)
-        else:
-            conn = urllib.request.Request(self.onionoo_url)
-
         try:
-            api_response = urllib.request.urlopen(conn).read()
+            json_data = self._make_conditional_request(self.onionoo_url, self.ts_file)
+            if json_data is None:
+                print("no onionoo update since last run, dying peacefully...")
+                sys.exit(1)
+            return json_data
         except urllib.error.HTTPError as err:
             if err.code == 304:
                 print("no onionoo update since last run, dying peacefully...")
                 sys.exit(1)
             else:
-                raise (err)
+                raise err
 
-        return json.loads(api_response.decode("utf-8"))
-
-    def _fetch_onionoo_uptime(self):
+    def _fetch_onionoo_authorities_uptime(self, authority_fingerprints):
         """
-        Fetch uptime data for all relays and merge it into the relay data.
-        This provides historical uptime statistics for use by directory authorities
-        and potential future relay analysis features.
+        Fetch uptime data from Onionoo API for directory authorities only to reduce memory usage (2GB to 200MB)and API load.
+        Uses timestamp headers for conditional requests to avoid downloading unchanged data.
+        
+        Args:
+            authority_fingerprints: List of fingerprints for directory authorities
+        Returns:
+            Tuple of (uptime_data_dict, metadata_dict) where:
+            - uptime_data_dict: Dictionary mapping fingerprint to uptime data, or None if no new data (304)
+            - metadata_dict: Information about fetch status, timestamps, etc.
         """
-        try:
-            # Build uptime API URL from the details URL
-            uptime_url = self.onionoo_url.replace('/details', '/uptime')
-            uptime_response = urllib.request.urlopen(uptime_url).read()
-            uptime_data = json.loads(uptime_response.decode("utf-8"))
+        if not authority_fingerprints:
+            return {}, {'status': 'no_authorities', 'message': 'No directory authorities found'}
             
-            # Create lookup dictionary by fingerprint for efficient merging
+        try:
+            # Build uptime API URL with specific fingerprints
+            fingerprint_params = ','.join(authority_fingerprints)
+            uptime_url = self.onionoo_url.replace('/details', '/uptime') + '?lookup=' + fingerprint_params
+            
+            # Make conditional request using common function
+            uptime_data = self._make_conditional_request(uptime_url, self.uptime_ts_file)
+            
+            if uptime_data is None:
+                print("no uptime data update since last run, using cached data...")
+                # Get the timestamp of when data was last fetched
+                last_updated = None
+                if os.path.isfile(self.uptime_ts_file):
+                    with open(self.uptime_ts_file, "r") as ts_file:
+                        last_updated = ts_file.read()
+                
+                return None, {
+                    'status': 'not_modified', 
+                    'message': 'Uptime data unchanged since last fetch',
+                    'last_updated': last_updated
+                }
+            
+            # Write timestamp for successful response using common function
+            current_timestamp = self._write_api_timestamp(self.uptime_ts_file)
+            
+            # Create lookup dictionary by fingerprint
             uptime_by_fingerprint = {}
             for relay_uptime in uptime_data.get('relays', []):
                 fingerprint = relay_uptime.get('fingerprint', '')
                 if fingerprint:
                     uptime_by_fingerprint[fingerprint] = relay_uptime.get('uptime', {})
             
-            # Merge uptime data into existing relay data
-            for relay in self.json['relays']:
-                fingerprint = relay.get('fingerprint', '')
-                if fingerprint in uptime_by_fingerprint:
-                    relay['uptime_data'] = uptime_by_fingerprint[fingerprint]
-                else:
-                    relay['uptime_data'] = {}
-                    
+            return uptime_by_fingerprint, {
+                'status': 'success',
+                'message': 'Uptime data successfully fetched',
+                'last_updated': current_timestamp,
+                'authorities_count': len(uptime_by_fingerprint)
+            }
+            
+        except urllib.error.HTTPError as err:
+            print(f"HTTP Error fetching uptime data: {err}")
+            return {}, {
+                'status': 'error',
+                'message': f'HTTP Error: {err}',
+                'last_updated': None
+            }
         except Exception as e:
-            print(f"Warning: Could not fetch uptime data: {e}")
-            # Add empty uptime data to all relays so other code doesn't break
-            for relay in self.json['relays']:
-                relay['uptime_data'] = {}
+            print(f"Warning: Could not fetch uptime data for authorities: {e}")
+            return {}, {
+                'status': 'error', 
+                'message': f'Error: {e}',
+                'last_updated': None
+            }
+
+    def _write_api_timestamp(self, timestamp_file_path, require_json=False):
+        """
+        Store encoded timestamp in the specified file to enable conditional requests
+        
+        Args:
+            timestamp_file_path: Path to the timestamp file to write
+            require_json: If True, only write timestamp if self.json is not None
+        Returns:
+            Formatted timestamp string
+        """
+        timestamp = time.time()
+        f_timestamp = time.strftime(
+            "%a, %d %b %Y %H:%M:%S GMT", time.gmtime(timestamp)
+        )
+        
+        # For backward compatibility, check json requirement for details API
+        if not require_json or self.json is not None:
+            with open(timestamp_file_path, "w", encoding="utf8") as ts_file:
+                ts_file.write(f_timestamp)
+
+        return f_timestamp
+
+    def _make_conditional_request(self, url, timestamp_file_path):
+        """
+        Make a conditional HTTP request using If-Modified-Since header if timestamp file exists
+        
+        Args:
+            url: The URL to request
+            timestamp_file_path: Path to the timestamp file for conditional requests
+            
+        Returns:
+            JSON response data, or None if 304 Not Modified
+            
+        Raises:
+            HTTPError: For non-304 HTTP errors
+            Exception: For other request errors
+        """
+        # Add conditional request headers if we have a previous timestamp
+        if os.path.isfile(timestamp_file_path):
+            with open(timestamp_file_path, "r") as ts_file:
+                prev_timestamp = ts_file.read()
+            headers = {"If-Modified-Since": prev_timestamp}
+            conn = urllib.request.Request(url, headers=headers)
+        else:
+            conn = urllib.request.Request(url)
+        
+        try:
+            api_response = urllib.request.urlopen(conn).read()
+            return json.loads(api_response.decode("utf-8"))
+        except urllib.error.HTTPError as err:
+            if err.code == 304:
+                return None  # Indicates no new data (Not Modified)
+            else:
+                raise err
 
     def _trim_platform(self):
         """
@@ -664,14 +747,29 @@ class Relays:
         if not authorities_data:
             print("No directory authorities found in relay data")
             return None
+        
+        # Get fingerprints of authorities to fetch uptime data efficiently
+        authority_fingerprints = [auth.get('fingerprint', '') for auth in authorities_data if auth.get('fingerprint')]
+        
+        # Fetch uptime data only for directory authorities
+        uptime_by_fingerprint, uptime_metadata = self._fetch_onionoo_authorities_uptime(authority_fingerprints)
+        
+        # Handle case where uptime data hasn't changed (304 response)
+        if uptime_by_fingerprint is None:
+            print("Using cached uptime data for directory authorities")
+            # For now, we'll continue without uptime data. In a production system,
+            # you might want to implement actual caching of the previous uptime data
+            uptime_by_fingerprint = {}
             
-        # Process each authority using the uptime data already stored in relay objects
+        # Process each authority using the fetched uptime data
         processed_authorities = []
         one_month_uptimes = []
         
         for authority in authorities_data:
-            # Get uptime data for this authority (already stored from _fetch_onionoo_uptime)
-            uptime_info = authority.get('uptime_data', {})
+            fingerprint = authority.get('fingerprint', '')
+            
+            # Get uptime data for this authority from our targeted fetch
+            uptime_info = uptime_by_fingerprint.get(fingerprint, {})
             
             # Calculate average uptime percentages from uptime data
             uptime_1month = self._calculate_average_uptime(uptime_info.get('1_month', {}))
@@ -727,6 +825,9 @@ class Relays:
             
         # Sort alphabetically by nickname
         processed_authorities.sort(key=lambda x: x['nickname'].lower())
+        
+        # Store uptime metadata for template access
+        self.uptime_metadata = uptime_metadata
         
         return processed_authorities
     

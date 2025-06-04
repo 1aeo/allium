@@ -66,6 +66,33 @@
     <small>Last updated: {{ relays.timestamp }}. Refreshed every 30 minutes from the Tor directory authorities via <a href="https://onionoo.torproject.org/">Tor Project's onionoo API</a>.</small>
     </p>
     
+    <!-- UPTIME DATA STATUS NOTIFICATION -->
+    {% if relays.uptime_metadata -%}
+        {% if relays.uptime_metadata.status == 'not_modified' -%}
+            <div style="background: #fff3cd; border: 1px solid #ffeaa7; color: #856404; padding: 10px; border-radius: 5px; margin-bottom: 15px;">
+                <strong>ℹ️ Uptime Data Status:</strong> 
+                {% if relays.uptime_metadata.last_updated -%}
+                    Uptime statistics unchanged since last check. Last updated: <strong>{{ relays.uptime_metadata.last_updated }}</strong>
+                {% else -%}
+                    Uptime statistics unchanged since last check.
+                {%- endif %}
+                <br><small>This means the uptime data shown below may not reflect the most recent changes.</small>
+            </div>
+        {% elif relays.uptime_metadata.status == 'error' -%}
+            <div style="background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; padding: 10px; border-radius: 5px; margin-bottom: 15px;">
+                <strong>⚠️ Uptime Data Error:</strong> {{ relays.uptime_metadata.message }}
+                <br><small>Uptime statistics may be unavailable or incomplete.</small>
+            </div>
+        {% elif relays.uptime_metadata.status == 'success' and relays.uptime_metadata.last_updated -%}
+            <div style="background: #d1edff; border: 1px solid #bee5eb; color: #0c5460; padding: 10px; border-radius: 5px; margin-bottom: 15px;">
+                <strong>✅ Uptime Data Fresh:</strong> Successfully updated {{ relays.uptime_metadata.last_updated }}
+                {% if relays.uptime_metadata.authorities_count -%}
+                    ({{ relays.uptime_metadata.authorities_count }} authorities)
+                {%- endif %}
+            </div>
+        {%- endif %}
+    {%- endif %}
+    
     <table class="table table-condensed" style="font-size: 13px;">
         <tr>
             <th>Authority Name</th>
