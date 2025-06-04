@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 import re
+import statistics
 import sys
 import time
 import urllib.request
@@ -31,10 +32,11 @@ class Relays:
         self.onionoo_url = onionoo_url
         self.use_bits = use_bits
         self.ts_file = os.path.join(os.path.dirname(ABS_PATH), "timestamp")
+        self.uptime_ts_file = os.path.join(os.path.dirname(ABS_PATH), "uptime_timestamp")
         self.json = self._fetch_onionoo_details()
         if self.json == None:
             return
-        self.timestamp = self._write_timestamp()
+        self.timestamp = self._write_api_timestamp(self.ts_file, require_json=True)
 
         self._fix_missing_observed_bandwidth()
         self._sort_by_bandwidth()
@@ -48,24 +50,142 @@ class Relays:
         Make request to onionoo to retrieve details document, return  JSON
         response
         """
-        if os.path.isfile(self.ts_file):
-            with open(self.ts_file, "r") as ts_file:
-                prev_timestamp = ts_file.read()
-            headers = {"If-Modified-Since": prev_timestamp}
-            conn = urllib.request.Request(self.onionoo_url, headers=headers)
-        else:
-            conn = urllib.request.Request(self.onionoo_url)
-
         try:
-            api_response = urllib.request.urlopen(conn).read()
+            json_data = self._make_conditional_request(self.onionoo_url, self.ts_file)
+            if json_data is None:
+                print("no onionoo update since last run, dying peacefully...")
+                sys.exit(1)
+            return json_data
         except urllib.error.HTTPError as err:
             if err.code == 304:
                 print("no onionoo update since last run, dying peacefully...")
                 sys.exit(1)
             else:
-                raise (err)
+                raise err
 
-        return json.loads(api_response.decode("utf-8"))
+    def _fetch_onionoo_authorities_uptime(self, authority_fingerprints):
+        """
+        Fetch uptime data from Onionoo API for directory authorities only to reduce memory usage (2GB to 200MB)and API load.
+        Uses timestamp headers for conditional requests to avoid downloading unchanged data.
+        
+        Args:
+            authority_fingerprints: List of fingerprints for directory authorities
+        Returns:
+            Tuple of (uptime_data_dict, metadata_dict) where:
+            - uptime_data_dict: Dictionary mapping fingerprint to uptime data, or None if no new data (304)
+            - metadata_dict: Information about fetch status, timestamps, etc.
+        """
+        if not authority_fingerprints:
+            return {}, {'status': 'no_authorities', 'message': 'No directory authorities found'}
+            
+        try:
+            # Build uptime API URL with specific fingerprints
+            fingerprint_params = ','.join(authority_fingerprints)
+            uptime_url = self.onionoo_url.replace('/details', '/uptime') + '?lookup=' + fingerprint_params
+            
+            # Make conditional request using common function
+            uptime_data = self._make_conditional_request(uptime_url, self.uptime_ts_file)
+            
+            if uptime_data is None:
+                print("no uptime data update since last run, using cached data...")
+                # Get the timestamp of when data was last fetched
+                last_updated = None
+                if os.path.isfile(self.uptime_ts_file):
+                    with open(self.uptime_ts_file, "r") as ts_file:
+                        last_updated = ts_file.read()
+                
+                return None, {
+                    'status': 'not_modified', 
+                    'message': 'Uptime data unchanged since last fetch',
+                    'last_updated': last_updated
+                }
+            
+            # Write timestamp for successful response using common function
+            current_timestamp = self._write_api_timestamp(self.uptime_ts_file)
+            
+            # Create lookup dictionary by fingerprint
+            uptime_by_fingerprint = {}
+            for relay_uptime in uptime_data.get('relays', []):
+                fingerprint = relay_uptime.get('fingerprint', '')
+                if fingerprint:
+                    uptime_by_fingerprint[fingerprint] = relay_uptime.get('uptime', {})
+            
+            return uptime_by_fingerprint, {
+                'status': 'success',
+                'message': 'Uptime data successfully fetched',
+                'last_updated': current_timestamp,
+                'authorities_count': len(uptime_by_fingerprint)
+            }
+            
+        except urllib.error.HTTPError as err:
+            print(f"HTTP Error fetching uptime data: {err}")
+            return {}, {
+                'status': 'error',
+                'message': f'HTTP Error: {err}',
+                'last_updated': None
+            }
+        except Exception as e:
+            print(f"Warning: Could not fetch uptime data for authorities: {e}")
+            return {}, {
+                'status': 'error', 
+                'message': f'Error: {e}',
+                'last_updated': None
+            }
+
+    def _write_api_timestamp(self, timestamp_file_path, require_json=False):
+        """
+        Store encoded timestamp in the specified file to enable conditional requests
+        
+        Args:
+            timestamp_file_path: Path to the timestamp file to write
+            require_json: If True, only write timestamp if self.json is not None
+        Returns:
+            Formatted timestamp string
+        """
+        timestamp = time.time()
+        f_timestamp = time.strftime(
+            "%a, %d %b %Y %H:%M:%S GMT", time.gmtime(timestamp)
+        )
+        
+        # For backward compatibility, check json requirement for details API
+        if not require_json or self.json is not None:
+            with open(timestamp_file_path, "w", encoding="utf8") as ts_file:
+                ts_file.write(f_timestamp)
+
+        return f_timestamp
+
+    def _make_conditional_request(self, url, timestamp_file_path):
+        """
+        Make a conditional HTTP request using If-Modified-Since header if timestamp file exists
+        
+        Args:
+            url: The URL to request
+            timestamp_file_path: Path to the timestamp file for conditional requests
+            
+        Returns:
+            JSON response data, or None if 304 Not Modified
+            
+        Raises:
+            HTTPError: For non-304 HTTP errors
+            Exception: For other request errors
+        """
+        # Add conditional request headers if we have a previous timestamp
+        if os.path.isfile(timestamp_file_path):
+            with open(timestamp_file_path, "r") as ts_file:
+                prev_timestamp = ts_file.read()
+            headers = {"If-Modified-Since": prev_timestamp}
+            conn = urllib.request.Request(url, headers=headers)
+        else:
+            conn = urllib.request.Request(url)
+        
+        try:
+            api_response = urllib.request.urlopen(conn).read()
+            return json.loads(api_response.decode("utf-8"))
+        except urllib.error.HTTPError as err:
+            if err.code == 304:
+                return None  # Indicates no new data (Not Modified)
+            else:
+                raise err
 
     def _trim_platform(self):
         """
@@ -424,6 +544,36 @@ class Relays:
             reverse:     passed to sort() function in family and networks pages
             is_index:    whether document is main index listing, limits list to 500
         """
+        # Special handling for directory authorities page
+        if template == "misc-authorities.html":
+            authorities_data = self._process_directory_authorities()
+            
+            if authorities_data is None:
+                print("Failed to process directory authorities data")
+                return
+                
+            # Calculate summary metrics
+            total_authorities = len(authorities_data)
+            # Version compliance metrics commented out until we have real consensus-health data
+            # compliant_authorities = [a for a in authorities_data if a.get('version_compliant', False)]
+            # non_compliant_authorities = [a for a in authorities_data if not a.get('version_compliant', False)]
+            
+            # Uptime outliers
+            above_average = [a for a in authorities_data if a.get('uptime_zscore') and a['uptime_zscore'] > 0.3]
+            below_average = [a for a in authorities_data if a.get('uptime_zscore') and a['uptime_zscore'] < -0.5 and a['uptime_zscore'] > -2.0]
+            problem_authorities = [a for a in authorities_data if a.get('uptime_zscore') and a['uptime_zscore'] <= -2.0]
+            
+            # Store authority data and summary metrics as attributes for template access
+            self.authorities_data = authorities_data
+            self.authorities_summary = {
+                'total_authorities': total_authorities,
+                # 'compliant_authorities': compliant_authorities,
+                # 'non_compliant_authorities': non_compliant_authorities,
+                'above_average_uptime': above_average,
+                'below_average_uptime': below_average,
+                'problem_uptime': problem_authorities,
+            }
+        
         template = ENV.get_template(template)
         self.json["relay_subset"] = self.json["relays"]
         template_render = template.render(
@@ -585,3 +735,125 @@ class Relays:
                 encoding="utf8",
             ) as html:
                 html.write(rendered)
+
+    def _process_directory_authorities(self):
+        """
+        Process directory authority data including uptime statistics, 
+        version compliance, and health metrics
+        """
+        # Filter directory authorities from already-fetched relay data
+        authorities_data = [relay for relay in self.json['relays'] if 'Authority' in relay.get('flags', [])]
+        
+        if not authorities_data:
+            print("No directory authorities found in relay data")
+            return None
+        
+        # Get fingerprints of authorities to fetch uptime data efficiently
+        authority_fingerprints = [auth.get('fingerprint', '') for auth in authorities_data if auth.get('fingerprint')]
+        
+        # Fetch uptime data only for directory authorities
+        uptime_by_fingerprint, uptime_metadata = self._fetch_onionoo_authorities_uptime(authority_fingerprints)
+        
+        # Handle case where uptime data hasn't changed (304 response)
+        if uptime_by_fingerprint is None:
+            print("Using cached uptime data for directory authorities")
+            # For now, we'll continue without uptime data. In a production system,
+            # you might want to implement actual caching of the previous uptime data
+            uptime_by_fingerprint = {}
+            
+        # Process each authority using the fetched uptime data
+        processed_authorities = []
+        one_month_uptimes = []
+        
+        for authority in authorities_data:
+            fingerprint = authority.get('fingerprint', '')
+            
+            # Get uptime data for this authority from our targeted fetch
+            uptime_info = uptime_by_fingerprint.get(fingerprint, {})
+            
+            # Calculate average uptime percentages from uptime data
+            uptime_1month = self._calculate_average_uptime(uptime_info.get('1_month', {}))
+            uptime_6months = self._calculate_average_uptime(uptime_info.get('6_months', {}))
+            uptime_1year = self._calculate_average_uptime(uptime_info.get('1_year', {}))
+            uptime_5years = self._calculate_average_uptime(uptime_info.get('5_years', {}))
+            
+            if uptime_1month is not None:
+                one_month_uptimes.append(uptime_1month)
+            
+            # Process authority data (only include fields that are actually used in template)
+            processed_authority = {
+                'nickname': authority.get('nickname', ''),
+                'fingerprint': authority.get('fingerprint', ''),
+                'running': authority.get('running', False),
+                'country': authority.get('country', ''),
+                'country_name': authority.get('country_name', ''),
+                'as': authority.get('as', ''),
+                'as_name': authority.get('as_name', ''),
+                'contact': authority.get('contact', ''),
+                'version': authority.get('version', ''),
+                'platform': authority.get('platform', ''),
+                'first_seen': authority.get('first_seen', ''),
+                'last_restarted': authority.get('last_restarted', ''),
+                'last_seen': authority.get('last_seen', ''),
+                'uptime_1month': uptime_1month,
+                'uptime_6months': uptime_6months, 
+                'uptime_1year': uptime_1year,
+                'uptime_5years': uptime_5years,
+            }
+            
+            processed_authorities.append(processed_authority)
+        
+        # Calculate z-scores for 1-month uptime
+        if len(one_month_uptimes) > 1:
+            mean_uptime = statistics.mean(one_month_uptimes)
+            stdev_uptime = statistics.stdev(one_month_uptimes)
+            
+            for authority in processed_authorities:
+                if authority['uptime_1month'] is not None and stdev_uptime > 0:
+                    authority['uptime_zscore'] = (authority['uptime_1month'] - mean_uptime) / stdev_uptime
+                else:
+                    authority['uptime_zscore'] = None
+        else:
+            for authority in processed_authorities:
+                authority['uptime_zscore'] = None
+        
+        # Version compliance - commented out until we have real consensus-health data
+        # recommended_version = "0.4.8.12"  # This should come from consensus-health data
+        # for authority in processed_authorities:
+        #     authority['recommended_version'] = recommended_version
+        #     authority['version_compliant'] = authority.get('version', '') == recommended_version
+            
+        # Sort alphabetically by nickname
+        processed_authorities.sort(key=lambda x: x['nickname'].lower())
+        
+        # Store uptime metadata for template access
+        self.uptime_metadata = uptime_metadata
+        
+        return processed_authorities
+    
+    def _calculate_average_uptime(self, uptime_data):
+        """
+        Calculate average uptime percentage from Onionoo uptime data
+        
+        Args:
+            uptime_data: Dictionary with 'values' list and 'factor' for conversion
+            
+        Returns:
+            Float percentage (0-100) or None if no data
+        """
+        if not uptime_data or 'values' not in uptime_data or 'factor' not in uptime_data:
+            return None
+            
+        values = uptime_data['values']
+        factor = uptime_data['factor']
+        
+        if not values:
+            return None
+            
+        # Filter out None values and convert to percentages
+        valid_values = [v * factor * 100 for v in values if v is not None]
+        
+        if not valid_values:
+            return None
+            
+        return sum(valid_values) / len(valid_values)

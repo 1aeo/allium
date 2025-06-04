@@ -112,6 +112,12 @@ if __name__ == "__main__":
             sorted_by=v,
         )
 
+    # directory authorities page
+    RELAY_SET.write_misc(
+        template="misc-authorities.html",
+        path="misc/authorities.html"
+    )
+
     # onionoo keys used to generate pages by unique value; e.g. AS43350
     keys = [
         "as",

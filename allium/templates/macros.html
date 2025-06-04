@@ -51,6 +51,13 @@
                             <a href="misc/platforms-by-bandwidth.html">By Platform</a>
                         {% endif %}
                     </li>
+                    <li class="{% if active_section == 'authorities' %}active{% endif %}">
+                        {% if is_misc_page %}
+                            <a href="authorities.html">Directory Authorities</a>
+                        {% else %}
+                            <a href="misc/authorities.html">Directory Authorities</a>
+                        {% endif %}
+                    </li>
                     <li class="{% if active_section == 'top500' %}active{% endif %}">
                         {% if is_misc_page %}
                             <a href="../index.html">Top 500 Relays</a>
