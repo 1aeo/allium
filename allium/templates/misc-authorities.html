@@ -18,19 +18,19 @@
     <div style="background: #e8f4fd; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
         <h3>Consensus Health Summary</h3>
         <ul>
-            <li><strong>Consensus age:</strong> <em>ch?</em>3 minutes (as of <em>ch?</em>{{ relays.timestamp }})</li>
-            <li><strong>Next consensus:</strong> <em>ch?</em>57 minutes (as of <em>ch?</em>{{ relays.timestamp }})</li>
-            <li><strong>Relays:</strong> <em>ch?</em>{{ relays.json['relays']|length }} total</li>
-            <li><strong>Relays failed consensus:</strong> <em>ch?</em>47 total, <em>ch?</em>0.53% of total</li>
-            <li><strong>Network relays - less than 3 bandwidth authorities measured:</strong> <em>ch?</em>156 total, <em>ch?</em>1.75% of total</li>
-            <li><strong>Network relays - less than 3 directory authority consensus votes:</strong> <em>ch?</em>23 total, <em>ch?</em>0.26% of total</li>
-            <li><strong>All on latest Tor version:</strong> <em>ch?</em>Yes</li>
+            <li><strong>Consensus age:</strong> <!-- TODO: Implement consensus age from consensus-health API -->TODO (as of {{ relays.timestamp }})</li>
+            <li><strong>Next consensus:</strong> <!-- TODO: Implement next consensus time from consensus-health API -->TODO (as of {{ relays.timestamp }})</li>
+            <li><strong>Relays:</strong> {{ relays.json['relays']|length }} total</li>
+            <li><strong>Relays failed consensus:</strong> <!-- TODO: Implement failed consensus count from consensus-health API -->TODO total, <!-- TODO: Calculate percentage -->TODO% of total</li>
+            <li><strong>Network relays - less than 3 bandwidth authorities measured:</strong> <!-- TODO: Implement BW authority measurement count from consensus-health API -->TODO total, <!-- TODO: Calculate percentage -->TODO% of total</li>
+            <li><strong>Network relays - less than 3 directory authority consensus votes:</strong> <!-- TODO: Implement dir auth vote count from consensus-health API -->TODO total, <!-- TODO: Calculate percentage -->TODO% of total</li>
+            <li><strong>All on latest Tor version:</strong> <!-- TODO: Implement version check from consensus-health API -->TODO</li>
         </ul>
         
         <h4>Directory Authority Metrics</h4>
         <ul>
-            <li style="margin: 5px 0;"><strong>Version Compliance:</strong> <em>ch?</em>8/{{ relays.authorities_summary.total_authorities }} authorities on recommended version (<em>ch?</em>0.4.8.12)</li>
-            <li style="margin: 5px 0;"><strong>Version Non-Compliance:</strong> <em>ch?</em>2/{{ relays.authorities_summary.total_authorities }} authorities outdated</li>
+            <li style="margin: 5px 0;"><strong>Version Compliance:</strong> <!-- TODO: Implement version compliance check -->TODO/{{ relays.authorities_summary.total_authorities }} authorities on recommended version (<!-- TODO: Get current recommended version -->TODO)</li>
+            <li style="margin: 5px 0;"><strong>Version Non-Compliance:</strong> <!-- TODO: Implement version non-compliance check -->TODO/{{ relays.authorities_summary.total_authorities }} authorities outdated</li>
             <li style="margin: 5px 0;"><strong>Uptime (1 month):</strong> 
                 {% if relays.authorities_summary.above_average_uptime -%}
                     <span style="color: green; font-weight: bold;">Above average: 
@@ -106,7 +106,7 @@
             <th>Uptime (1mo/6mo/1yr/5yr)</th>
             <th>Version</th>
             <th>Platform</th>
-            <th title="Recommended version: ch?0.4.8.12">Rec. Ver.</th>
+            <th title="Recommended version: TODO">Rec. Ver.</th>
             <th>First Seen</th>
             <th>Last Restarted</th>
         </tr>
@@ -128,9 +128,9 @@
                         <span style="color: red; font-weight: bold;">🔴 Offline (last seen: {{ authority.last_seen }})</span>
                     {%- endif %}
                 </td>
-                <td><em>ch?</em>N/A | <span style="color: #999;">Z: <em>ch?</em>N/A</span></td>
-                <td><em>ct?</em>{{ relays.timestamp.split(' ')[0] }} 02:50:00</td>
-                <td><em>ct?</em>{{ relays.timestamp.split(' ')[0] }} 01:30:00</td>
+                <td><!-- TODO: Implement relay coverage from consensus-health API -->TODO | <span style="color: #999;">Z: <!-- TODO: Calculate coverage Z-score -->TODO</span></td>
+                <td><!-- TODO: Implement last vote time from CollecTor API -->TODO</td>
+                <td><!-- TODO: Implement last BW measurement time from CollecTor API -->TODO</td>
                 <td>{{ authority.as if authority.as else "N/A" }}</td>
                 <td>{{ authority.as_name if authority.as_name else "Unknown" }}</td>
                 <td>
@@ -174,7 +174,7 @@
                 </td>
                 <td>{{ authority.version if authority.version else "Unknown" }}</td>
                 <td>{{ authority.platform if authority.platform else "Unknown" }}</td>
-                <td><em>ch?</em>✅❌</td>
+                <td><!-- TODO: Implement recommended version compliance check -->TODO</td>
                 <td>{{ authority.first_seen.split(' ')[0] if authority.first_seen else "Unknown" }}</td>
                 <td>{{ authority.last_restarted.split(' ')[0] if authority.last_restarted else "Unknown" }}</td>
             </tr>
@@ -196,7 +196,7 @@
             <li><strong>Uptime Z-Score:</strong> Based on 1-month uptime compared to other authorities. <span style="color: green; font-weight: bold;">Green (above average)</span>, <span style="color: #ff8c00; font-weight: bold;">Yellow (normal)</span>, <span style="color: red; font-weight: bold;">Red (below -2.0)</span></li>
             <li><strong>Version:</strong> Current Tor software version running on the authority</li>
             <li><strong>Platform:</strong> Full platform description including Tor version and operating system</li>
-            <li><strong>Rec. Ver.:</strong> <em>ch?</em>Recommended version compliance check. <span style="color: green; font-weight: bold;">✅ = On recommended version</span>, <span style="color: red; font-weight: bold;">❌ = Outdated version</span></li>
+            <li><strong>Rec. Ver.:</strong> Recommended version compliance check. <span style="color: green; font-weight: bold;">✅ = On recommended version</span>, <span style="color: red; font-weight: bold;">❌ = Outdated version</span></li>
             <li><strong>First Seen:</strong> When this authority first appeared in the directory consensus</li>
             <li><strong>Last Restarted:</strong> When the authority software was last restarted</li>
         </ul>
@@ -204,7 +204,7 @@
 
     <!-- FOOTER -->
     <br><br>
-    <p><i>Data sources: Onionoo API, <em>ct?</em>CollecTor, <em>ch?</em>consensus-health.torproject.org</i></p>
+    <p><i>Data sources: Onionoo API<!-- TODO: Add CollecTor API and consensus-health.torproject.org when implemented --></i></p>
     <p><i>Last updated: {{ relays.timestamp }} (updates every 15 minutes)</i></p>
 
 {% endblock -%} 
