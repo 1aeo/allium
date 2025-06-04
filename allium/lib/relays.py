@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 import re
+import statistics
 import sys
 import time
 import urllib.request
@@ -35,6 +36,9 @@ class Relays:
         if self.json == None:
             return
         self.timestamp = self._write_timestamp()
+
+        # Fetch uptime data for all relays
+        self._fetch_onionoo_uptime()
 
         self._fix_missing_observed_bandwidth()
         self._sort_by_bandwidth()
@@ -66,6 +70,39 @@ class Relays:
                 raise (err)
 
         return json.loads(api_response.decode("utf-8"))
+
+    def _fetch_onionoo_uptime(self):
+        """
+        Fetch uptime data for all relays and merge it into the relay data.
+        This provides historical uptime statistics for use by directory authorities
+        and potential future relay analysis features.
+        """
+        try:
+            # Build uptime API URL from the details URL
+            uptime_url = self.onionoo_url.replace('/details', '/uptime')
+            uptime_response = urllib.request.urlopen(uptime_url).read()
+            uptime_data = json.loads(uptime_response.decode("utf-8"))
+            
+            # Create lookup dictionary by fingerprint for efficient merging
+            uptime_by_fingerprint = {}
+            for relay_uptime in uptime_data.get('relays', []):
+                fingerprint = relay_uptime.get('fingerprint', '')
+                if fingerprint:
+                    uptime_by_fingerprint[fingerprint] = relay_uptime.get('uptime', {})
+            
+            # Merge uptime data into existing relay data
+            for relay in self.json['relays']:
+                fingerprint = relay.get('fingerprint', '')
+                if fingerprint in uptime_by_fingerprint:
+                    relay['uptime_data'] = uptime_by_fingerprint[fingerprint]
+                else:
+                    relay['uptime_data'] = {}
+                    
+        except Exception as e:
+            print(f"Warning: Could not fetch uptime data: {e}")
+            # Add empty uptime data to all relays so other code doesn't break
+            for relay in self.json['relays']:
+                relay['uptime_data'] = {}
 
     def _trim_platform(self):
         """
@@ -424,6 +461,36 @@ class Relays:
             reverse:     passed to sort() function in family and networks pages
             is_index:    whether document is main index listing, limits list to 500
         """
+        # Special handling for directory authorities page
+        if template == "misc-authorities.html":
+            authorities_data = self._process_directory_authorities()
+            
+            if authorities_data is None:
+                print("Failed to process directory authorities data")
+                return
+                
+            # Calculate summary metrics
+            total_authorities = len(authorities_data)
+            # Version compliance metrics commented out until we have real consensus-health data
+            # compliant_authorities = [a for a in authorities_data if a.get('version_compliant', False)]
+            # non_compliant_authorities = [a for a in authorities_data if not a.get('version_compliant', False)]
+            
+            # Uptime outliers
+            above_average = [a for a in authorities_data if a.get('uptime_zscore') and a['uptime_zscore'] > 0.3]
+            below_average = [a for a in authorities_data if a.get('uptime_zscore') and a['uptime_zscore'] < -0.5 and a['uptime_zscore'] > -2.0]
+            problem_authorities = [a for a in authorities_data if a.get('uptime_zscore') and a['uptime_zscore'] <= -2.0]
+            
+            # Store authority data and summary metrics as attributes for template access
+            self.authorities_data = authorities_data
+            self.authorities_summary = {
+                'total_authorities': total_authorities,
+                # 'compliant_authorities': compliant_authorities,
+                # 'non_compliant_authorities': non_compliant_authorities,
+                'above_average_uptime': above_average,
+                'below_average_uptime': below_average,
+                'problem_uptime': problem_authorities,
+            }
+        
         template = ENV.get_template(template)
         self.json["relay_subset"] = self.json["relays"]
         template_render = template.render(
@@ -585,3 +652,107 @@ class Relays:
                 encoding="utf8",
             ) as html:
                 html.write(rendered)
+
+    def _process_directory_authorities(self):
+        """
+        Process directory authority data including uptime statistics, 
+        version compliance, and health metrics
+        """
+        # Filter directory authorities from already-fetched relay data
+        authorities_data = [relay for relay in self.json['relays'] if 'Authority' in relay.get('flags', [])]
+        
+        if not authorities_data:
+            print("No directory authorities found in relay data")
+            return None
+            
+        # Process each authority using the uptime data already stored in relay objects
+        processed_authorities = []
+        one_month_uptimes = []
+        
+        for authority in authorities_data:
+            # Get uptime data for this authority (already stored from _fetch_onionoo_uptime)
+            uptime_info = authority.get('uptime_data', {})
+            
+            # Calculate average uptime percentages from uptime data
+            uptime_1month = self._calculate_average_uptime(uptime_info.get('1_month', {}))
+            uptime_6months = self._calculate_average_uptime(uptime_info.get('6_months', {}))
+            uptime_1year = self._calculate_average_uptime(uptime_info.get('1_year', {}))
+            uptime_5years = self._calculate_average_uptime(uptime_info.get('5_years', {}))
+            
+            if uptime_1month is not None:
+                one_month_uptimes.append(uptime_1month)
+            
+            # Process authority data (only include fields that are actually used in template)
+            processed_authority = {
+                'nickname': authority.get('nickname', ''),
+                'fingerprint': authority.get('fingerprint', ''),
+                'running': authority.get('running', False),
+                'country': authority.get('country', ''),
+                'country_name': authority.get('country_name', ''),
+                'as': authority.get('as', ''),
+                'as_name': authority.get('as_name', ''),
+                'contact': authority.get('contact', ''),
+                'version': authority.get('version', ''),
+                'platform': authority.get('platform', ''),
+                'first_seen': authority.get('first_seen', ''),
+                'last_restarted': authority.get('last_restarted', ''),
+                'last_seen': authority.get('last_seen', ''),
+                'uptime_1month': uptime_1month,
+                'uptime_6months': uptime_6months, 
+                'uptime_1year': uptime_1year,
+                'uptime_5years': uptime_5years,
+            }
+            
+            processed_authorities.append(processed_authority)
+        
+        # Calculate z-scores for 1-month uptime
+        if len(one_month_uptimes) > 1:
+            mean_uptime = statistics.mean(one_month_uptimes)
+            stdev_uptime = statistics.stdev(one_month_uptimes)
+            
+            for authority in processed_authorities:
+                if authority['uptime_1month'] is not None and stdev_uptime > 0:
+                    authority['uptime_zscore'] = (authority['uptime_1month'] - mean_uptime) / stdev_uptime
+                else:
+                    authority['uptime_zscore'] = None
+        else:
+            for authority in processed_authorities:
+                authority['uptime_zscore'] = None
+        
+        # Version compliance - commented out until we have real consensus-health data
+        # recommended_version = "0.4.8.12"  # This should come from consensus-health data
+        # for authority in processed_authorities:
+        #     authority['recommended_version'] = recommended_version
+        #     authority['version_compliant'] = authority.get('version', '') == recommended_version
+            
+        # Sort alphabetically by nickname
+        processed_authorities.sort(key=lambda x: x['nickname'].lower())
+        
+        return processed_authorities
+    
+    def _calculate_average_uptime(self, uptime_data):
+        """
+        Calculate average uptime percentage from Onionoo uptime data
+        
+        Args:
+            uptime_data: Dictionary with 'values' list and 'factor' for conversion
+            
+        Returns:
+            Float percentage (0-100) or None if no data
+        """
+        if not uptime_data or 'values' not in uptime_data or 'factor' not in uptime_data:
+            return None
+            
+        values = uptime_data['values']
+        factor = uptime_data['factor']
+        
+        if not values:
+            return None
+            
+        # Filter out None values and convert to percentages
+        valid_values = [v * factor * 100 for v in values if v is not None]
+        
+        if not valid_values:
+            return None
+            
+        return sum(valid_values) / len(valid_values)
