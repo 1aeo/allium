@@ -18,8 +18,8 @@
 
     <ul style="margin-bottom: 15px;">
         <li><strong>Families</strong>: {{ relays.json['sorted']['family']|length }} groups of relays with shared operators, families with 2+ members</li>
-        <li><strong>Network Totals</strong>: ? Guard, ? Middle, ? Exit for ? Total Relays
-        <li><strong>Centralization Risk</strong>: ?% of all relays in families | Largest family: ? relays | ? families have 10+ relays
+        <li><strong>Network Totals</strong>: {{ family_guard_total }} Guard, {{ family_middle_total }} Middle, {{ family_exit_total }} Exit for {{ family_total_relays }} Total Relays</li>
+        <li><strong>Centralization Risk</strong>: {{ centralization_percentage }}% of all relays in families | Largest family: {{ largest_family_size }} relays | {{ large_family_count }} families have 10+ relays</li>
         <li><strong>Sorted by</strong>: {{ sorted_by_label|replace('_', ' ') }}</li>
         <li><strong>Key</strong>: BW = Bandwidth, CW = Consensus Weight, AS = Autonomous System (network provider)</li>
     </ul>
