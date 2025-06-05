@@ -46,23 +46,50 @@ if __name__ == "__main__":
         default='bits',
         help="display bandwidth in bits/second (Kbit/s, Mbit/s, Gbit/s) or bytes/second (KB/s, MB/s, GB/s). Default: bits",
     )
+    parser.add_argument(
+        "-p", "--progress",
+        dest="progress",
+        action="store_true",
+        help="show progress updates during execution",
+        required=False,
+    )
     args = parser.parse_args()
 
+    if args.progress:
+        print("Progress: Starting allium static site generation...")
+
     # object containing onionoo data and processing routines
+    if args.progress:
+        print("Progress: Initializing relay data from onionoo...")
     RELAY_SET = Relays(args.output_dir, args.onionoo_url, args.bandwidth_units == 'bits')
     if RELAY_SET.json == None:
         sys.exit(0)
+    if args.progress:
+        print(f"Progress: Loaded relay data from onionoo - found {len(RELAY_SET.json.get('relays', []))} relays")
 
+    if args.progress:
+        print("Progress: Creating output directory...")
     RELAY_SET.create_output_dir()
+    if args.progress:
+        print(f"Progress: Output directory ready at {args.output_dir}")
 
     # index and "all" HTML relay sets; index set limited to 500 relays
+    if args.progress:
+        print("Progress: Generating index page...")
     RELAY_SET.write_misc(
         template="index.html",
         path="index.html",
         path_prefix="./",
         is_index=True,
     )
+    if args.progress:
+        print("Progress: Generated index page with top 500 relays")
+
+    if args.progress:
+        print("Progress: Generating all relays page...")
     RELAY_SET.write_misc(template="all.html", path="misc/all.html")
+    if args.progress:
+        print("Progress: Generated all relays page")
 
     # miscellaneous page filename suffixes and sorted-by keys
     misc_pages = {
@@ -85,6 +112,8 @@ if __name__ == "__main__":
     }
 
     # miscellaneous-sorted (per misc_pages k/v) HTML pages
+    if args.progress:
+        print("Progress: Generating miscellaneous sorted pages...")
     for k, v in misc_pages.items():
         RELAY_SET.write_misc(
             template="misc-families.html",
@@ -112,6 +141,13 @@ if __name__ == "__main__":
             sorted_by=v,
         )
 
+    # directory authorities page
+    RELAY_SET.write_misc(
+        template="misc-authorities.html",
+        path="misc/authorities.html"
+    )
+    if args.progress:
+        print(f"Progress: Generated 6 miscellaneous sorted pages")
     # onionoo keys used to generate pages by unique value; e.g. AS43350
     keys = [
         "as",
@@ -123,15 +159,33 @@ if __name__ == "__main__":
         "first_seen",
     ]
 
-    for k in keys:
+    if args.progress:
+        print("Progress: Generating pages by unique values...")
+    for i, k in enumerate(keys):
         RELAY_SET.write_pages_by_key(k)
+    if args.progress:
+        print(f"Progress: Generated pages for {len(keys)} unique value types")
 
     # per-relay info pages
+    if args.progress:
+        print("Progress: Generating individual relay info pages...")
     RELAY_SET.write_relay_info()
+    if args.progress:
+        print(f"Progress: Generated individual pages for {len(RELAY_SET.json.get('relays', []))} relays")
 
     # copy static directory and its contents if it doesn't exist
+    if args.progress:
+        print("Progress: Copying static files...")
     if not os.path.exists(os.path.join(args.output_dir, "static")):
         copytree(
             os.path.join(ABS_PATH, "static"),
             os.path.join(args.output_dir, "static"),
         )
+        if args.progress:
+            print("Progress: Copied static files to output directory")
+    else:
+        if args.progress:
+            print("Progress: Static files already exist, skipping copy")
+
+    if args.progress:
+        print("Progress: Allium static site generation completed successfully!")
