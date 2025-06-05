@@ -18,6 +18,26 @@ from lib.relays import Relays
 
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
 
+def ensure_output_directory(output_dir):
+    """
+    Create output directory and verify write permissions.
+    Fails fast with clear error messages before expensive processing begins.
+    
+    Args:
+        output_dir (str): Path to the output directory to create
+        
+    Raises:
+        SystemExit: If directory creation fails or permissions are insufficient
+    """
+    try:
+        os.makedirs(output_dir, exist_ok=True)
+    except PermissionError as e:
+        print(f"Error: Permission denied creating output directory '{output_dir}': {e}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error: Failed to create output directory '{output_dir}': {e}")
+        sys.exit(1)
+
 if __name__ == "__main__":
     desc = "allium: generate static tor relay metrics and statistics"
     parser = argparse.ArgumentParser(description=desc)
@@ -63,6 +83,13 @@ if __name__ == "__main__":
     if args.progress:
         print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] Progress: Starting allium static site generation...")
 
+    # Fail fast - ensure output directory exists before expensive processing
+    if args.progress:
+        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] Progress: Creating output directory...")
+    ensure_output_directory(args.output_dir)
+    if args.progress:
+        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] Progress: Output directory ready at {args.output_dir}")
+
     # object containing onionoo data and processing routines
     if args.progress:
         print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] Progress: Initializing relay data from onionoo...")
@@ -72,11 +99,7 @@ if __name__ == "__main__":
     if args.progress:
         print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] Progress: Loaded relay data from onionoo - found {len(RELAY_SET.json.get('relays', []))} relays")
 
-    if args.progress:
-        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] Progress: Creating output directory...")
-    RELAY_SET.create_output_dir()
-    if args.progress:
-        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] Progress: Output directory ready at {args.output_dir}")
+    # Output directory already created early via ensure_output_directory() - skip redundant creation
 
     # index and "all" HTML relay sets; index set limited to 500 relays
     if args.progress:
