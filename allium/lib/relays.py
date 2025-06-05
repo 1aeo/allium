@@ -473,12 +473,9 @@ class Relays:
         network_exit_total = self.json['network_totals']['exit_count']
         network_total_relays = self.json['network_totals']['total_relays']
         
-        # Cache family statistics in self.json for template access
+        # Cache family-specific statistics (centralization risk metrics only)
+        # Network totals are accessed directly via self.json['network_totals']
         self.json['family_statistics'] = {
-            'family_guard_total': network_guard_total,  # Template expects network totals, not family totals
-            'family_middle_total': network_middle_total,
-            'family_exit_total': network_exit_total,
-            'family_total_relays': network_total_relays,
             'centralization_percentage': centralization_percentage,
             'largest_family_size': largest_family_size,
             'large_family_count': large_family_count
@@ -557,10 +554,6 @@ class Relays:
         
         if template.name == "misc-families.html":
             family_stats = self.json.get('family_statistics', {
-                'family_guard_total': 0,
-                'family_middle_total': 0, 
-                'family_exit_total': 0,
-                'family_total_relays': 0,
                 'centralization_percentage': '0.0',
                 'largest_family_size': 0,
                 'large_family_count': 0
@@ -614,76 +607,7 @@ class Relays:
         value = bandwidth_bytes / divisor
         return f"{value:.2f}"
 
-    def _calculate_family_statistics(self):
-        """
-        Calculate family network totals and centralization risk statistics
-        
-        Optimized Python implementation of complex Jinja2 calculations for misc-families pages.
-        Replaces expensive template loops with efficient deduplication logic.
-        
-        Returns:
-            dict: Family statistics including network totals and centralization risk metrics
-        """
-        if 'family' not in self.json['sorted']:
-            return {
-                'family_guard_total': 0,
-                'family_middle_total': 0, 
-                'family_exit_total': 0,
-                'family_total_relays': 0,
-                'centralization_percentage': '0.0',
-                'largest_family_size': 0,
-                'large_family_count': 0
-            }
-        
-        processed_fingerprints = set()
-        family_guard_total = 0
-        family_middle_total = 0
-        family_exit_total = 0
-        actual_family_relay_total = 0
-        largest_family_size = 0
-        large_family_count = 0
-        
-        # Process each family only once using deduplication
-        for k, v in self.json['sorted']['family'].items():
-            # Get first relay fingerprint to check if this family was already processed
-            first_relay_idx = v['relays'][0]
-            first_relay_fingerprint = self.json['relays'][first_relay_idx]['fingerprint']
-            
-            if first_relay_fingerprint not in processed_fingerprints:
-                # Add relay counts for this family
-                family_guard_total += v['guard_count']
-                family_middle_total += v['middle_count']
-                family_exit_total += v['exit_count']
-                
-                # Track actual relay count and largest family
-                family_size = len(v['relays'])
-                actual_family_relay_total += family_size
-                largest_family_size = max(largest_family_size, family_size)
-                
-                # Count families with 10+ relays
-                if family_size >= 10:
-                    large_family_count += 1
-                
-                # Mark all relays in this family as processed
-                for r in v['relays']:
-                    relay_fingerprint = self.json['relays'][r]['fingerprint']
-                    processed_fingerprints.add(relay_fingerprint)
-        
-        # Calculate centralization percentage
-        total_relay_count = len(self.json['relays'])
-        centralization_percentage = '0.0'
-        if total_relay_count > 0:
-            centralization_percentage = f"{(actual_family_relay_total / total_relay_count) * 100:.1f}"
-        
-        return {
-            'family_guard_total': family_guard_total,
-            'family_middle_total': family_middle_total,
-            'family_exit_total': family_exit_total,
-            'family_total_relays': family_guard_total + family_middle_total + family_exit_total,
-            'centralization_percentage': centralization_percentage,
-            'largest_family_size': largest_family_size,
-            'large_family_count': large_family_count
-        }
+
 
     def write_pages_by_key(self, k):
         """

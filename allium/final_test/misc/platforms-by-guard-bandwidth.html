@@ -1,0 +1,409 @@
+    <!DOCTYPE html>
+    <html lang="en">
+        <head>
+            <title>
+Relay Radar :: Platforms By Guard Bandwidth
+            </title>
+            <meta name="description"
+                  content="Javascript-free Tor metrics generated from a 30 minute API request.">
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <link rel="stylesheet" href="../static/css/bootstrap.min.css">
+            <!--source: metrics.torproject.org-->
+            <style>
+                .circle {
+                    display: inline-block;
+                    vertical-align: middle;
+                    background: #999999;
+                    width: 7px;
+                    height: 7px;
+                    -moz-border-radius: 50%;
+                    -webkit-border-radius: 50%;
+                    border-radius: 50%;
+                }
+
+                .circle-online {
+                    background: #25d918;
+                }
+
+                .circle-offline {
+                    background: #ff1515;
+                }
+
+                .verified-hostname {
+                    color: #FE9F30;
+                }
+
+                .verified-hostname {
+                    color: #68b030;
+                }
+
+                .unverified-hostname {
+                    color: #FE9F30;
+                }
+
+                /* Dynamic text truncation for contact information */
+                .contact-text {
+                    display: inline-block;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    max-width: 20vw;  /* Use viewport width for responsive sizing */
+                }
+
+                /* Table styles */
+                .table {
+                    width: 100%;
+                    margin-bottom: 1rem;
+                }
+
+                /* Precise alignment for multi-value columns using monospace */
+                .bw-header, .cw-header, .rc-header, /* rc = relay count */
+                .bw-data, .cw-data, .rc-data {
+                    font-family: Consolas, "Courier New", monospace;
+                    white-space: nowrap;
+                    text-align: center;
+                    letter-spacing: 0.05em; /* Slight spacing for readability */
+                }
+
+                /* Container breakpoint */
+                @media (min-width: 1400px) {
+                    .container {
+                        width: 95%;
+                        max-width: none;
+                        padding-right: 15px;
+                        padding-left: 15px;
+                        margin-right: auto;
+                        margin-left: auto;
+                    }
+                }
+
+                /* CSS-only navbar collapse using checkbox hack */
+                .navbar-toggle {
+                    display: none;
+                    background-color: transparent;
+                    background-image: none;
+                    border: 1px solid #ddd;
+                    border-radius: 4px;
+                    padding: 9px 10px;
+                    margin-top: 8px;
+                    margin-right: 15px;
+                    margin-bottom: 8px;
+                    cursor: pointer;
+                    float: right;
+                }
+
+                .navbar-toggle:hover,
+                .navbar-toggle:focus {
+                    background-color: #ddd;
+                }
+
+                .navbar-toggle .icon-bar {
+                    display: block;
+                    width: 22px;
+                    height: 2px;
+                    background-color: #888;
+                    border-radius: 1px;
+                    margin: 4px 0;
+                }
+
+                .navbar-brand {
+                    float: left;
+                    height: 50px;
+                    padding: 15px;
+                    font-size: 18px;
+                    line-height: 20px;
+                    font-weight: bold;
+                }
+
+                /* Desktop: show navigation horizontally */
+                @media (min-width: 768px) {
+                    .navbar-collapse {
+                        display: block !important;
+                        height: auto !important;
+                        overflow: visible !important;
+                    }
+                    
+                    .nav.navbar-nav {
+                        float: left;
+                        margin: 0;
+                    }
+                    
+                    .nav.navbar-nav > li {
+                        float: left;
+                    }
+                    
+                    .nav.navbar-nav > li > a {
+                        padding-top: 15px;
+                        padding-bottom: 15px;
+                        color: #777;
+                        text-decoration: none;
+                        padding-left: 15px;
+                        padding-right: 15px;
+                    }
+                    
+                    .nav.navbar-nav > li.active > a,
+                    .nav.navbar-nav > li > a:hover,
+                    .nav.navbar-nav > li > a:focus {
+                        color: #333;
+                        background-color: #e7e7e7;
+                    }
+                    
+                    .navbar-brand {
+                        display: none;
+                    }
+                }
+
+                /* Mobile: hide navigation by default, show hamburger */
+                @media (max-width: 767px) {
+                    .navbar-toggle {
+                        display: block;
+                    }
+                    
+                    .navbar-collapse {
+                        display: none;
+                        clear: both;
+                        width: 100%;
+                        margin-top: 50px;
+                        border-top: 1px solid #e7e7e7;
+                        padding-top: 10px;
+                    }
+                    
+                    /* When checkbox is checked, show the menu */
+                    .navbar-toggle-checkbox:checked ~ .navbar-header + .navbar-collapse {
+                        display: block;
+                    }
+                    
+                    .nav.navbar-nav > li {
+                        float: none;
+                    }
+                    
+                    .nav.navbar-nav > li > a {
+                        display: block;
+                        padding: 12px 20px;
+                        color: #777;
+                        text-decoration: none;
+                        border-bottom: 1px solid #e7e7e7;
+                    }
+                    
+                    .nav.navbar-nav > li:last-child > a {
+                        border-bottom: none;
+                    }
+                    
+                    .nav.navbar-nav > li.active > a,
+                    .nav.navbar-nav > li > a:hover,
+                    .nav.navbar-nav > li > a:focus {
+                        color: #333;
+                        background-color: #f5f5f5;
+                    }
+                }
+            </style>
+        </head>
+    <body>
+        <div class="container">
+<h2>
+        Platforms by Guard Bandwidth
+    </h2>
+    
+    <nav class="navbar navbar-default" style="margin-bottom: 20px;">
+        <div class="container-fluid">
+            <!-- CSS-only hamburger toggle using checkbox hack -->
+            <input type="checkbox" id="navbar-toggle" class="navbar-toggle-checkbox" style="display: none;">
+            
+            <div class="navbar-header">
+                <label for="navbar-toggle" class="navbar-toggle" role="button" aria-label="Toggle navigation">
+                    <span class="sr-only">Toggle navigation</span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </label>
+                <span class="navbar-brand visible-xs">Browse Categories</span>
+            </div>
+            
+            <div class="navbar-collapse" id="main-navbar">
+                <ul class="nav navbar-nav">
+                    <li class="">
+                            <a href="contacts-by-bandwidth.html">By AROI / Contact</a>
+                    </li>
+                    <li class="">
+                            <a href="families-by-bandwidth.html">By Family</a>
+                    </li>
+                    <li class="">
+                            <a href="networks-by-bandwidth.html">By Network</a>
+                    </li>
+                    <li class="">
+                            <a href="countries-by-bandwidth.html">By Country</a>
+                    </li>
+                    <li class="active">
+                            <a href="platforms-by-bandwidth.html">By Platform</a>
+                    </li>
+                    <li class="">
+                            <a href="../index.html">Top 500 Relays</a>
+                    </li>
+                    <li class="">
+                            <a href="all.html">All Relays</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+    
+    <p>
+        Operating systems running Tor relays - shows software diversity and potential vulnerability patterns.
+    </p>
+
+    <ul style="margin-bottom: 15px;">
+        <li><strong>Platforms</strong>: 10 operating systems hosting relays currently detected</li>
+        <li><strong>Network Totals</strong>: 3817 Guard, 2979 Middle, 2855 Exit for 9651 Total Relays</li>
+        <li><strong>Software Diversity</strong>: 0.0% Linux | 0.0% Windows | 0.0% BSD variants</li>
+        <li><strong>Sorted by</strong>: guard bandwidth</li>
+        <li><strong>Key</strong>: BW = Bandwidth, CW = Consensus Weight, AS = Autonomous System (network provider)</li>
+    </ul>
+    
+    <p class="text-muted" style="margin-bottom: 15px;">
+    <small>Last updated: Thu, 05 Jun 2025 17:58:10 GMT. Refreshed every 30 minutes from the Tor directory authorities via <a href="https://onionoo.torproject.org/">Tor Project's onionoo API</a>.</small>
+    </p>
+    
+    <table class="table table-condensed">
+        <tr>
+            <th>Platform</th>
+<th class="text-center bw-header" title="Bandwidth"><a href="platforms-by-overall-bandwidth.html">Overall</a> / Guard / <a href="platforms-by-middle-bandwidth.html">Middle</a> / <a href="platforms-by-exit-bandwidth.html">Exit</a> BW</th>
+<th class="text-center cw-header" title="Consensus Weight">
+                    <a href="platforms-by-consensus-weight.html">Overall</a> / <a href="platforms-by-guard-consensus-weight.html">Guard</a> / <a href="platforms-by-middle-consensus-weight.html">Middle</a> / <a href="platforms-by-exit-consensus-weight.html">Exit</a> CW
+                </th>
+<th class="text-center rc-header">
+                    <a href="platforms-by-guard-count.html">Guard</a> / <a href="platforms-by-middle-count.html">Middle</a> / <a href="platforms-by-exit-count.html">Exit</a>
+                </th>
+<th title="Number of unique AROI / contact operators using this platform">
+                    <a href="platforms-by-unique-contact-count.html">Unique AROI / Contact</a>
+                </th>
+<th title="Number of unique effective families using this platform">
+                    <a href="platforms-by-unique-family-count.html">Unique Families</a>
+                </th>
+<th title="Number of different autonomous systems (networks) using this platform">
+                    <a href="platforms-by-unique-as-count.html">Unique AS</a>
+                </th>
+</tr>
+        <tbody>
+<tr>
+<td>
+                        <a href="../platform/Linux/">Linux</a>
+                    </td>
+<td class="text-center bw-data">1119.82 / 640.46 / 162.74 / 316.63 Gbit/s</td>
+<td class="text-center cw-data">91.33% / 94.85% / 95.23% / 85.77%</td>
+<td class="text-center rc-data">3602 / 2789 / 2575</td>
+                    <td>2970</td>
+                    <td>606</td>
+                    <td>995</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../platform/FreeBSD/">FreeBSD</a>
+                    </td>
+<td class="text-center bw-data">81.18 / 29.56 / 6.65 / 44.97 Gbit/s</td>
+<td class="text-center cw-data">8.30% / 4.80% / 3.66% / 14.17%</td>
+<td class="text-center rc-data">185 / 94 / 275</td>
+                    <td>145</td>
+                    <td>45</td>
+                    <td>101</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../platform/OpenBSD/">OpenBSD</a>
+                    </td>
+<td class="text-center bw-data">2.27 / 1.09 / 0.94 / 0.24 Gbit/s</td>
+<td class="text-center cw-data">0.13% / 0.14% / 0.31% / 0.04%</td>
+<td class="text-center rc-data">14 / 42 / 3</td>
+                    <td>50</td>
+                    <td>7</td>
+                    <td>39</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../platform/Windows/">Windows</a>
+                    </td>
+<td class="text-center bw-data">1.19 / 0.73 / 0.47 / 0.00 Gbit/s</td>
+<td class="text-center cw-data">0.05% / 0.06% / 0.14% / 0.00%</td>
+<td class="text-center rc-data">12 / 33 / 1</td>
+                    <td>29</td>
+                    <td>4</td>
+                    <td>33</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../platform/SunOS/">SunOS</a>
+                    </td>
+<td class="text-center bw-data">642.21 / 586.37 / 55.84 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.07% / 0.11% / 0.02% / 0.00%</td>
+<td class="text-center rc-data">2 / 6 / 0</td>
+                    <td>3</td>
+                    <td>1</td>
+                    <td>5</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../platform/ElectroBSD/">ElectroBSD</a>
+                    </td>
+<td class="text-center bw-data">629.78 / 141.28 / 488.49 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.07% / 0.03% / 0.37% / 0.00%</td>
+<td class="text-center rc-data">1 / 3 / 0</td>
+                    <td>1</td>
+                    <td>1</td>
+                    <td>2</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../platform/Darwin/">Darwin</a>
+                    </td>
+<td class="text-center bw-data">300.49 / 49.23 / 251.26 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.03% / 0.01% / 0.21% / 0.00%</td>
+<td class="text-center rc-data">1 / 4 / 0</td>
+                    <td>5</td>
+                    <td>1</td>
+                    <td>5</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../platform/NetBSD/">NetBSD</a>
+                    </td>
+<td class="text-center bw-data">261.38 / 0.00 / 153.85 / 107.53 Mbit/s</td>
+<td class="text-center cw-data">0.02% / 0.00% / 0.06% / 0.02%</td>
+<td class="text-center rc-data">0 / 5 / 1</td>
+                    <td>4</td>
+                    <td>1</td>
+                    <td>5</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../platform/kFreeBSD/">kFreeBSD</a>
+                    </td>
+<td class="text-center bw-data">16.19 / 0.00 / 16.19 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.00% / 0.00%</td>
+<td class="text-center rc-data">0 / 1 / 0</td>
+                    <td>1</td>
+                    <td>0</td>
+                    <td>1</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../platform/Linux-libre/">Linux-libre</a>
+                    </td>
+<td class="text-center bw-data">19.48 / 0.00 / 19.48 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.00% / 0.00%</td>
+<td class="text-center rc-data">0 / 2 / 0</td>
+                    <td>1</td>
+                    <td>1</td>
+                    <td>1</td>
+                </tr>
+</tbody>
+    </table>
+        </div>
+    </body>
+        <footer class="page-footer font-small">
+            <div class="footer-copyright text-center text-muted">
+                <p>
+                    Generated by a <a href="https://github.com/1aeo/allium">1aeo modified fork of allium</a>, based on original <a href="https://git.jordan.im/allium/">allium</a>, on Thu, 05 Jun 2025 17:58:10 GMT. Source data from <a href="https://onionoo.torproject.org/">Tor Project onionoo</a>.
+                </p>
+            </div>
+        </footer>
+    </html>

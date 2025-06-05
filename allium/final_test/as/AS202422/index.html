@@ -1,0 +1,1743 @@
+    <!DOCTYPE html>
+    <html lang="en">
+        <head>
+            <title>
+Tor Relays :: G-Core Labs S.A. (AS202422)            </title>
+            <meta name="description"
+                  content="Javascript-free Tor metrics generated from a 30 minute API request.">
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <link rel="stylesheet" href="../../static/css/bootstrap.min.css">
+            <!--source: metrics.torproject.org-->
+            <style>
+                .circle {
+                    display: inline-block;
+                    vertical-align: middle;
+                    background: #999999;
+                    width: 7px;
+                    height: 7px;
+                    -moz-border-radius: 50%;
+                    -webkit-border-radius: 50%;
+                    border-radius: 50%;
+                }
+
+                .circle-online {
+                    background: #25d918;
+                }
+
+                .circle-offline {
+                    background: #ff1515;
+                }
+
+                .verified-hostname {
+                    color: #FE9F30;
+                }
+
+                .verified-hostname {
+                    color: #68b030;
+                }
+
+                .unverified-hostname {
+                    color: #FE9F30;
+                }
+
+                /* Dynamic text truncation for contact information */
+                .contact-text {
+                    display: inline-block;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    max-width: 20vw;  /* Use viewport width for responsive sizing */
+                }
+
+                /* Table styles */
+                .table {
+                    width: 100%;
+                    margin-bottom: 1rem;
+                }
+
+                /* Precise alignment for multi-value columns using monospace */
+                .bw-header, .cw-header, .rc-header, /* rc = relay count */
+                .bw-data, .cw-data, .rc-data {
+                    font-family: Consolas, "Courier New", monospace;
+                    white-space: nowrap;
+                    text-align: center;
+                    letter-spacing: 0.05em; /* Slight spacing for readability */
+                }
+
+                /* Container breakpoint */
+                @media (min-width: 1400px) {
+                    .container {
+                        width: 95%;
+                        max-width: none;
+                        padding-right: 15px;
+                        padding-left: 15px;
+                        margin-right: auto;
+                        margin-left: auto;
+                    }
+                }
+
+                /* CSS-only navbar collapse using checkbox hack */
+                .navbar-toggle {
+                    display: none;
+                    background-color: transparent;
+                    background-image: none;
+                    border: 1px solid #ddd;
+                    border-radius: 4px;
+                    padding: 9px 10px;
+                    margin-top: 8px;
+                    margin-right: 15px;
+                    margin-bottom: 8px;
+                    cursor: pointer;
+                    float: right;
+                }
+
+                .navbar-toggle:hover,
+                .navbar-toggle:focus {
+                    background-color: #ddd;
+                }
+
+                .navbar-toggle .icon-bar {
+                    display: block;
+                    width: 22px;
+                    height: 2px;
+                    background-color: #888;
+                    border-radius: 1px;
+                    margin: 4px 0;
+                }
+
+                .navbar-brand {
+                    float: left;
+                    height: 50px;
+                    padding: 15px;
+                    font-size: 18px;
+                    line-height: 20px;
+                    font-weight: bold;
+                }
+
+                /* Desktop: show navigation horizontally */
+                @media (min-width: 768px) {
+                    .navbar-collapse {
+                        display: block !important;
+                        height: auto !important;
+                        overflow: visible !important;
+                    }
+                    
+                    .nav.navbar-nav {
+                        float: left;
+                        margin: 0;
+                    }
+                    
+                    .nav.navbar-nav > li {
+                        float: left;
+                    }
+                    
+                    .nav.navbar-nav > li > a {
+                        padding-top: 15px;
+                        padding-bottom: 15px;
+                        color: #777;
+                        text-decoration: none;
+                        padding-left: 15px;
+                        padding-right: 15px;
+                    }
+                    
+                    .nav.navbar-nav > li.active > a,
+                    .nav.navbar-nav > li > a:hover,
+                    .nav.navbar-nav > li > a:focus {
+                        color: #333;
+                        background-color: #e7e7e7;
+                    }
+                    
+                    .navbar-brand {
+                        display: none;
+                    }
+                }
+
+                /* Mobile: hide navigation by default, show hamburger */
+                @media (max-width: 767px) {
+                    .navbar-toggle {
+                        display: block;
+                    }
+                    
+                    .navbar-collapse {
+                        display: none;
+                        clear: both;
+                        width: 100%;
+                        margin-top: 50px;
+                        border-top: 1px solid #e7e7e7;
+                        padding-top: 10px;
+                    }
+                    
+                    /* When checkbox is checked, show the menu */
+                    .navbar-toggle-checkbox:checked ~ .navbar-header + .navbar-collapse {
+                        display: block;
+                    }
+                    
+                    .nav.navbar-nav > li {
+                        float: none;
+                    }
+                    
+                    .nav.navbar-nav > li > a {
+                        display: block;
+                        padding: 12px 20px;
+                        color: #777;
+                        text-decoration: none;
+                        border-bottom: 1px solid #e7e7e7;
+                    }
+                    
+                    .nav.navbar-nav > li:last-child > a {
+                        border-bottom: none;
+                    }
+                    
+                    .nav.navbar-nav > li.active > a,
+                    .nav.navbar-nav > li > a:hover,
+                    .nav.navbar-nav > li > a:focus {
+                        color: #333;
+                        background-color: #f5f5f5;
+                    }
+                }
+            </style>
+        </head>
+    <body>
+        <div class="container">
+<h2>
+<a href="../../">Home</a> :: G-Core Labs S.A. (AS202422)</h2>
+
+<p>
+AS202422 is responsible for ~2.61 Gbit/s of bandwidth (BW) (1.88 Gbit/s guard, 0.73 Gbit/s middle) and 0.21% consensus weight (CW) (0.30% guard, 0.47% middle), with
+    14 guard relays,    8 middle relays.</p>
+
+<p class="text-muted" style="margin-bottom: 15px;">
+<small>Last updated: Thu, 05 Jun 2025 17:58:10 GMT. Refreshed every 30 minutes from the Tor directory authorities via <a href="https://onionoo.torproject.org/">Tor Project's onionoo API</a>.</small>
+</p>
+
+<table class="table table-condensed">
+<tr>
+    <th></th>
+    <th>Nickname</th>
+    <th><a href="https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/" target="_blank" title="Autonomous Relay Operator Identifier - unverified">AROI</a></th>
+    <th>Contact</th>
+    <th>BW</th>
+    <th class="visible-md visible-lg">IP Address</th>
+    <th>AS Number</th>
+    <th>AS Name</th>
+    <th>Country</th>
+    <th>Platform</th>
+    <th class="visible-md visible-lg">Flags</th>
+    <th class="visible-md visible-lg">First Seen</th>
+</tr>
+<tbody>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="TannhauserGate">
+			<a href="../../relay/D53B7EFD1D481EB2550D03CF822B7E17D058261F.html">TannhauserGate</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/0a74bd1e862caf42d36a9178fc4f194f/" 
+				title="tor-operator@maxwellfarrior.tech" class="contact-text">tor-operator@maxwellfarrior.tech</a>
+			</td>
+<td>188.13 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/92.223.105.117">92.223.105.117</a>
+		</td>
+<td>AS202422</td>
+<td>
+			<a href="https://bgp.tools/AS202422"
+			   title="G-Core Labs S.A.">G-Core Labs S.A.</a>
+		    </td>
+<td>
+			    <a href="../../country/lu/">
+				<img src="../../static/images/cc/lu.png"
+				     title="Luxembourg"
+				     alt="Luxembourg">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-04-13/">2024-04-13</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="arapo">
+			<a href="../../relay/737BF8424F0F4457FCAB53F9282088992C7E104E.html">arapo</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/178c1b09b0aefb75d5426790286a5c2a/" 
+				title="tor@worldofmail.com" class="contact-text">tor@worldofmail.com</a>
+			</td>
+<td>187.80 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/5.181.77.8">5.181.77.8</a>
+		</td>
+<td>AS202422</td>
+<td>
+			<a href="https://bgp.tools/AS202422"
+			   title="G-Core Labs S.A.">G-Core Labs S.A.</a>
+		    </td>
+<td>
+			    <a href="../../country/hu/">
+				<img src="../../static/images/cc/hu.png"
+				     title="Hungary"
+				     alt="Hungary">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-10-13/">2024-10-13</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="bulkypirate5">
+			<a href="../../relay/14BE32AAACB9E7F0BCAFADC15986D787B1325BB6.html">bulkypirate5</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/334c4a4c42fdb79d7ebc3e73b517e6f8/" 
+				title="none" class="contact-text">none</a>
+			</td>
+<td>187.79 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.80.210.20">45.80.210.20</a>
+		</td>
+<td>AS202422</td>
+<td>
+			<a href="https://bgp.tools/AS202422"
+			   title="G-Core Labs S.A.">G-Core Labs S.A.</a>
+		    </td>
+<td>
+			    <a href="../../country/lu/">
+				<img src="../../static/images/cc/lu.png"
+				     title="Luxembourg"
+				     alt="Luxembourg">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2022-11-03/">2022-11-03</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="freakpark">
+			<a href="../../relay/12D5CABC9A021D94D5869A2692B3CD173DB97263.html">freakpark</a>
+		    </td>
+<td>none</td>
+<td title="none">
+			    none
+			</td>
+<td>186.75 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/95.85.90.130">95.85.90.130</a>
+		</td>
+<td>AS202422</td>
+<td>
+			<a href="https://bgp.tools/AS202422"
+			   title="G-Core Labs S.A.">G-Core Labs S.A.</a>
+		    </td>
+<td>
+			    <a href="../../country/fr/">
+				<img src="../../static/images/cc/fr.png"
+				     title="France"
+				     alt="France">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2023-01-26/">2023-01-26</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="tornode1568">
+			<a href="../../relay/50DEFF574677FD6EBE9AF17A898C2684B2DBC85A.html">tornode1568</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/e5e22a89870203fa1941ea36b46f90ec/" 
+				title="tornode1568@proton.me" class="contact-text">tornode1568@proton.me</a>
+			</td>
+<td>181.65 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/195.234.62.192">195.234.62.192</a>
+		</td>
+<td>AS202422</td>
+<td>
+			<a href="https://bgp.tools/AS202422"
+			   title="G-Core Labs S.A.">G-Core Labs S.A.</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2023-11-01/">2023-11-01</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="revengeTourII">
+			<a href="../../relay/21C9D9F1633246269DEB84A79495E85C07E8466D.html">revengeTourII</a>
+		    </td>
+<td>
+			    <a href="../../contact/2c6e56b78d440b2201bef652f2010d12/" title="nicoleiocana.com">nicoleiocana.com</a>
+			</td>
+<td>
+			    <a href="../../contact/2c6e56b78d440b2201bef652f2010d12/" 
+				title="Nicolei Ocana email:nicoleiocana[]gmail.com url:https://nicoleiocana.com proof:uri-rsa ciissversion:2 pgp:49763461C8DD122E66D2F7534B57CABC28D97E31 hoster:www.hosting.gcorelabs.com cost:4.95EUR uplinkbw:200 trafficacct:unmetered memory:1024 btc:33iJyUdfjf5AbuSAGbXZkSB4xMYtKzSc2F os:ubuntu/20.04 autoupdate:y" class="contact-text">Nicolei Ocana email:nicoleiocana[]gmail.com url:https://nicoleiocana.com proof:uri-rsa ciissversion:2 pgp:49763461C8DD122E66D2F7534B57CABC28D97E31 hoster:www.hosting.gcorelabs.com cost:4.95EUR uplinkbw:200 trafficacct:unmetered memory:1024 btc:33iJyUdfjf5AbuSAGbXZkSB4xMYtKzSc2F os:ubuntu/20.04 autoupdate:y</a>
+			</td>
+<td>180.04 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/92.223.105.174">92.223.105.174</a>
+		</td>
+<td>AS202422</td>
+<td>
+			<a href="https://bgp.tools/AS202422"
+			   title="G-Core Labs S.A.">G-Core Labs S.A.</a>
+		    </td>
+<td>
+			    <a href="../../country/lu/">
+				<img src="../../static/images/cc/lu.png"
+				     title="Luxembourg"
+				     alt="Luxembourg">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2020-09-20/">2020-09-20</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="vunreteqrado">
+			<a href="../../relay/CF9BEB3E3554C5C343024641A91CC9AE6B849882.html">vunreteqrado</a>
+		    </td>
+<td>none</td>
+<td title="none">
+			    none
+			</td>
+<td>175.98 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/87.120.237.130">87.120.237.130</a>
+		</td>
+<td>AS202422</td>
+<td>
+			<a href="https://bgp.tools/AS202422"
+			   title="G-Core Labs S.A.">G-Core Labs S.A.</a>
+		    </td>
+<td>
+			    <a href="../../country/it/">
+				<img src="../../static/images/cc/it.png"
+				     title="Italy"
+				     alt="Italy">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2022-08-31/">2022-08-31</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="i8WZOgrF">
+			<a href="../../relay/EE2E0E6EFE6D5A4DCC7A2A456D12289D8B82AF97.html">i8WZOgrF</a>
+		    </td>
+<td>none</td>
+<td title="none">
+			    none
+			</td>
+<td>163.72 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/5.181.77.235">5.181.77.235</a>
+		</td>
+<td>AS202422</td>
+<td>
+			<a href="https://bgp.tools/AS202422"
+			   title="G-Core Labs S.A.">G-Core Labs S.A.</a>
+		    </td>
+<td>
+			    <a href="../../country/hu/">
+				<img src="../../static/images/cc/hu.png"
+				     title="Hungary"
+				     alt="Hungary">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-05-31/">2025-05-31</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="9MAWFm7jBiNVIoHc">
+			<a href="../../relay/6FEB9E045D886FD60117C1857AD4601F7FD88A02.html">9MAWFm7...</a>
+		    </td>
+<td>none</td>
+<td title="none">
+			    none
+			</td>
+<td>152.99 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/89.44.197.45">89.44.197.45</a>
+		</td>
+<td>AS202422</td>
+<td>
+			<a href="https://bgp.tools/AS202422"
+			   title="G-Core Labs S.A.">G-Core Labs S.A.</a>
+		    </td>
+<td>
+			    <a href="../../country/bg/">
+				<img src="../../static/images/cc/bg.png"
+				     title="Bulgaria"
+				     alt="Bulgaria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-05-30/">2025-05-30</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="shallmakenolaw">
+			<a href="../../relay/AF69EADAF6905DB800955204587B5A77C5F24DBF.html">shallmakenolaw</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/b476dd1f2e29b48fea39d7af0d307101/" 
+				title="nah" class="contact-text">nah</a>
+			</td>
+<td>140.03 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.92.70.126">45.92.70.126</a>
+		</td>
+<td>AS202422</td>
+<td>
+			<a href="https://bgp.tools/AS202422"
+			   title="G-Core Labs S.A.">G-Core Labs S.A.</a>
+		    </td>
+<td>
+			    <a href="../../country/it/">
+				<img src="../../static/images/cc/it.png"
+				     title="Italy"
+				     alt="Italy">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-01-21/">2024-01-21</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="5C6vnXQYZfk5FAg4">
+			<a href="../../relay/0F80FF30DF90D67BA5E7D4ED9FAD3123CCE3FC2C.html">5C6vnXQ...</a>
+		    </td>
+<td>none</td>
+<td title="none">
+			    none
+			</td>
+<td>135.91 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.82.102.203">45.82.102.203</a>
+		</td>
+<td>AS202422</td>
+<td>
+			<a href="https://bgp.tools/AS202422"
+			   title="G-Core Labs S.A.">G-Core Labs S.A.</a>
+		    </td>
+<td>
+			    <a href="../../country/ro/">
+				<img src="../../static/images/cc/ro.png"
+				     title="Romania"
+				     alt="Romania">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-05-30/">2025-05-30</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="TORtalover">
+			<a href="../../relay/2DB40E6D8CB400F34244A18A069731DFBC55728A.html">TORtalover</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/c93a5e15488b89bdcd588cae91976e6e/" 
+				title="toreatsonions@proton.me" class="contact-text">toreatsonions@proton.me</a>
+			</td>
+<td>133.87 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/5.181.77.79">5.181.77.79</a>
+		</td>
+<td>AS202422</td>
+<td>
+			<a href="https://bgp.tools/AS202422"
+			   title="G-Core Labs S.A.">G-Core Labs S.A.</a>
+		    </td>
+<td>
+			    <a href="../../country/hu/">
+				<img src="../../static/images/cc/hu.png"
+				     title="Hungary"
+				     alt="Hungary">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/FreeBSD/">FreeBSD</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-05-10/">2025-05-10</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="voqelzwiebel">
+			<a href="../../relay/8EA364B3BE31A4D365BE535C5C1B80C3664EFA3A.html">voqelzwiebel</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/c9bde0098ddab3f657b5ee91e1117c67/" 
+				title="voqelfrei &lt;tor voqel AT pm me&gt; pgp:8018FA5B9E760EF9560DA88531AD8DB3FAD8F4A6" class="contact-text">voqelfrei &lt;tor voqel AT pm me&gt; pgp:8018FA5B9E760EF9560DA88531AD8DB3FAD8F4A6</a>
+			</td>
+<td>129.70 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/89.44.198.196">89.44.198.196</a>
+		</td>
+<td>AS202422</td>
+<td>
+			<a href="https://bgp.tools/AS202422"
+			   title="G-Core Labs S.A.">G-Core Labs S.A.</a>
+		    </td>
+<td>
+			    <a href="../../country/eu/">
+				<img src="../../static/images/cc/eu.png"
+				     title="European Union"
+				     alt="European Union">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-04-02/">2024-04-02</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="Liberty">
+		    <a href="../../relay/5157D91F108496ED3BB97368BEEAA0C50E18EB48.html">Liberty</a> (<a href="../../family/5157D91F108496ED3BB97368BEEAA0C50E18EB48/">3</a>)
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/20191a19caba60259b8c2b5fbd53ea8e/" 
+				title="tor@apt96.com" class="contact-text">tor@apt96.com</a>
+			</td>
+<td>104.05 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/180.149.44.156">180.149.44.156</a>
+		</td>
+<td>AS202422</td>
+<td>
+			<a href="https://bgp.tools/AS202422"
+			   title="G-Core Labs S.A.">G-Core Labs S.A.</a>
+		    </td>
+<td>
+			    <a href="../../country/az/">
+				<img src="../../static/images/cc/az.png"
+				     title="Azerbaijan"
+				     alt="Azerbaijan">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-01-22/">2024-01-22</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="Prowler">
+		    <a href="../../relay/494266D1B8F5875FA5546DD5837232B0BE65C70B.html">Prowler</a> (<a href="../../family/494266D1B8F5875FA5546DD5837232B0BE65C70B/">3</a>)
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/20191a19caba60259b8c2b5fbd53ea8e/" 
+				title="tor@apt96.com" class="contact-text">tor@apt96.com</a>
+			</td>
+<td>87.27 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/93.115.240.55">93.115.240.55</a>
+		</td>
+<td>AS202422</td>
+<td>
+			<a href="https://bgp.tools/AS202422"
+			   title="G-Core Labs S.A.">G-Core Labs S.A.</a>
+		    </td>
+<td>
+			    <a href="../../country/am/">
+				<img src="../../static/images/cc/am.png"
+				     title="Armenia"
+				     alt="Armenia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-02-17/">2024-02-17</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="0x0DAY">
+			<a href="../../relay/5266C578861DA1A374EF3DDE05D6D414BA279F89.html">0x0DAY</a>
+		    </td>
+<td>none</td>
+<td title="none">
+			    none
+			</td>
+<td>69.61 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/202.78.160.129">202.78.160.129</a>
+		</td>
+<td>AS202422</td>
+<td>
+			<a href="https://bgp.tools/AS202422"
+			   title="G-Core Labs S.A.">G-Core Labs S.A.</a>
+		    </td>
+<td>
+			    <a href="../../country/eu/">
+				<img src="../../static/images/cc/eu.png"
+				     title="European Union"
+				     alt="European Union">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-04-03/">2025-04-03</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="Beatrix">
+			<a href="../../relay/FE182BD3D1182B372E9B8E58BC751196F07A73A5.html">Beatrix</a>
+		    </td>
+<td>none</td>
+<td title="none">
+			    none
+			</td>
+<td>64.88 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/80.93.218.206">80.93.218.206</a>
+		</td>
+<td>AS202422</td>
+<td>
+			<a href="https://bgp.tools/AS202422"
+			   title="G-Core Labs S.A.">G-Core Labs S.A.</a>
+		    </td>
+<td>
+			    <a href="../../country/nl/">
+				<img src="../../static/images/cc/nl.png"
+				     title="Netherlands"
+				     alt="Netherlands">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-04-28/">2025-04-28</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="Islay">
+		    <a href="../../relay/F4873B3EC3325B81DC36C7E38AD3A5ED12B2F339.html">Islay</a> (<a href="../../family/F4873B3EC3325B81DC36C7E38AD3A5ED12B2F339/">21</a>)
+		    </td>
+<td>none</td>
+<td title="none">
+			    none
+			</td>
+<td>42.72 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/85.90.207.67">85.90.207.67</a>
+		</td>
+<td>AS202422</td>
+<td>
+			<a href="https://bgp.tools/AS202422"
+			   title="G-Core Labs S.A.">G-Core Labs S.A.</a>
+		    </td>
+<td>
+			    <a href="../../country/am/">
+				<img src="../../static/images/cc/am.png"
+				     title="Armenia"
+				     alt="Armenia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2019-02-18/">2019-02-18</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="Aegis">
+		    <a href="../../relay/8E939280E97A9415D4F389D2D7D0A97EFCB21D8A.html">Aegis</a> (<a href="../../family/8E939280E97A9415D4F389D2D7D0A97EFCB21D8A/">3</a>)
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/20191a19caba60259b8c2b5fbd53ea8e/" 
+				title="tor@apt96.com" class="contact-text">tor@apt96.com</a>
+			</td>
+<td>32.71 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.80.208.110">45.80.208.110</a>
+		</td>
+<td>AS202422</td>
+<td>
+			<a href="https://bgp.tools/AS202422"
+			   title="G-Core Labs S.A.">G-Core Labs S.A.</a>
+		    </td>
+<td>
+			    <a href="../../country/kz/">
+				<img src="../../static/images/cc/kz.png"
+				     title="Kazakhstan"
+				     alt="Kazakhstan">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-01-22/">2024-01-22</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="v2R9">
+			<a href="../../relay/BBE1F0B4793A13B043997CA6A9A3A64CF2C60AA5.html">v2R9</a>
+		    </td>
+<td>none</td>
+<td title="none">
+			    none
+			</td>
+<td>24.83 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/85.90.207.21">85.90.207.21</a>
+		</td>
+<td>AS202422</td>
+<td>
+			<a href="https://bgp.tools/AS202422"
+			   title="G-Core Labs S.A.">G-Core Labs S.A.</a>
+		    </td>
+<td>
+			    <a href="../../country/am/">
+				<img src="../../static/images/cc/am.png"
+				     title="Armenia"
+				     alt="Armenia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-06-03/">2025-06-03</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="Mattunjoch">
+			<a href="../../relay/4BC6E1A5F0B3137E4229BFD09853B18BBEEC4EBD.html">Mattunjoch</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/60f50b3e643a681029ddec8c02509b85/" 
+				title="email:tr1cortec[]dismail.de" class="contact-text">email:tr1cortec[]dismail.de</a>
+			</td>
+<td>23.20 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.80.208.21">45.80.208.21</a>
+		</td>
+<td>AS202422</td>
+<td>
+			<a href="https://bgp.tools/AS202422"
+			   title="G-Core Labs S.A.">G-Core Labs S.A.</a>
+		    </td>
+<td>
+			    <a href="../../country/kz/">
+				<img src="../../static/images/cc/kz.png"
+				     title="Kazakhstan"
+				     alt="Kazakhstan">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/FreeBSD/">FreeBSD</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-01-17/">2024-01-17</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="NightRelay">
+			<a href="../../relay/9CBD49371BDB88FB8FB278C25AE8A9F1DE1498EA.html">NightRelay</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/a339e4f1df1fdb74786d34ef3ed02dbb/" 
+				title="Not A Person &lt;nomail AT yet dot com&gt;" class="contact-text">Not A Person &lt;nomail AT yet dot com&gt;</a>
+			</td>
+<td>11.87 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/185.101.139.172">185.101.139.172</a>
+		</td>
+<td>AS202422</td>
+<td>
+			<a href="https://bgp.tools/AS202422"
+			   title="G-Core Labs S.A.">G-Core Labs S.A.</a>
+		    </td>
+<td>
+			    <a href="../../country/nl/">
+				<img src="../../static/images/cc/nl.png"
+				     title="Netherlands"
+				     alt="Netherlands">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2022-05-03/">2022-05-03</a>
+		    </td>
+</tr>
+</tbody>
+</table>
+        </div>
+    </body>
+        <footer class="page-footer font-small">
+            <div class="footer-copyright text-center text-muted">
+                <p>
+                    Generated by a <a href="https://github.com/1aeo/allium">1aeo modified fork of allium</a>, based on original <a href="https://git.jordan.im/allium/">allium</a>, on Thu, 05 Jun 2025 17:58:10 GMT. Source data from <a href="https://onionoo.torproject.org/">Tor Project onionoo</a>.
+                </p>
+            </div>
+        </footer>
+    </html>
