@@ -19,7 +19,7 @@
     <ul style="margin-bottom: 15px;">
         <li><strong>Networks</strong>: {{ relays.json['sorted']['as']|length }} Autonomous Systems (ASes) hosting relays currently active</li>
         <li><strong>Network Relays</strong>: Total: {{ relays.json['network_totals']['total_relays'] }}
-            <ul style="margin: 5px 0; padding-left: 20px;">
+            <ul style="margin: 2px 0; padding-left: 20px;">
                 <li><strong><span title="Main role with Exit priority, Exit > Guard > Middle">Primary Role</span></strong>: 
                     Guard: {{ relays.json['network_totals']['primary']['guard'] }} | 
                     Middle: {{ relays.json['network_totals']['primary']['middle'] }} | 
