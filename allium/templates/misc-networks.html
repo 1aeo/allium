@@ -28,66 +28,17 @@
     <small>Last updated: {{ relays.timestamp }}. Refreshed every 30 minutes from the Tor directory authorities via <a href="https://onionoo.torproject.org/">Tor Project's onionoo API</a>.</small>
     </p>
     
-    <table class="table table-condensed">
+    <div class="table-responsive-xs">
+    <table class="table table-condensed mobile-simplified">
         <tr>
             <th>AS Number</th>
-            <th>AS Name</th>
+            <th class="hidden-xs">AS Name</th>
             <th>Country</th>
-            {% if sorted_by_label == 'bandwidth' -%}
-                <th class="text-center bw-header" title="Bandwidth">Overall / <a href="networks-by-guard-bandwidth.html">Guard</a> / <a href="networks-by-middle-bandwidth.html">Middle</a> / <a href="networks-by-exit-bandwidth.html">Exit</a> BW</th>
-            {% elif sorted_by_label == 'guard_bandwidth' -%}
-                <th class="text-center bw-header" title="Bandwidth"><a href="networks-by-overall-bandwidth.html">Overall</a> / Guard / <a href="networks-by-middle-bandwidth.html">Middle</a> / <a href="networks-by-exit-bandwidth.html">Exit</a> BW</th>
-            {% elif sorted_by_label == 'middle_bandwidth' -%}
-                <th class="text-center bw-header" title="Bandwidth"><a href="networks-by-overall-bandwidth.html">Overall</a> / <a href="networks-by-guard-bandwidth.html">Guard</a> / Middle / <a href="networks-by-exit-bandwidth.html">Exit</a> BW</th>
-            {% elif sorted_by_label == 'exit_bandwidth' -%}
-                <th class="text-center bw-header" title="Bandwidth"><a href="networks-by-overall-bandwidth.html">Overall</a> / <a href="networks-by-guard-bandwidth.html">Guard</a> / <a href="networks-by-middle-bandwidth.html">Middle</a> / Exit BW</th>
-            {% else -%}
-                <th class="text-center bw-header" title="Bandwidth"><a href="networks-by-overall-bandwidth.html">Overall</a> / <a href="networks-by-guard-bandwidth.html">Guard</a> / <a href="networks-by-middle-bandwidth.html">Middle</a> / <a href="networks-by-exit-bandwidth.html">Exit</a> BW</th>
-            {% endif -%}
-            {% if sorted_by_label == 'consensus_weight_fraction' -%}
-                <th class="text-center cw-header" title="Consensus Weight"><a href="networks-by-consensus-weight.html">Overall</a> / <a href="networks-by-guard-consensus-weight.html">Guard</a> / <a href="networks-by-middle-consensus-weight.html">Middle</a> / <a href="networks-by-exit-consensus-weight.html">Exit</a> CW</th>
-            {% elif sorted_by_label == 'guard_consensus_weight_fraction' -%}
-                <th class="text-center cw-header" title="Consensus Weight"><a href="networks-by-consensus-weight.html">Overall</a> / Guard / <a href="networks-by-middle-consensus-weight.html">Middle</a> / <a href="networks-by-exit-consensus-weight.html">Exit</a> CW</th>
-            {% elif sorted_by_label == 'middle_consensus_weight_fraction' -%}
-                <th class="text-center cw-header" title="Consensus Weight"><a href="networks-by-consensus-weight.html">Overall</a> / <a href="networks-by-guard-consensus-weight.html">Guard</a> / Middle / <a href="networks-by-exit-consensus-weight.html">Exit</a> CW</th>
-            {% elif sorted_by_label == 'exit_consensus_weight_fraction' -%}
-                <th class="text-center cw-header" title="Consensus Weight"><a href="networks-by-consensus-weight.html">Overall</a> / <a href="networks-by-guard-consensus-weight.html">Guard</a> / <a href="networks-by-middle-consensus-weight.html">Middle</a> / Exit CW</th>
-            {% else -%}
-                <th class="text-center cw-header" title="Consensus Weight">
-                    <a href="networks-by-consensus-weight.html">Overall</a> / <a href="networks-by-guard-consensus-weight.html">Guard</a> / <a href="networks-by-middle-consensus-weight.html">Middle</a> / <a href="networks-by-exit-consensus-weight.html">Exit</a> CW
-                </th>
-            {% endif -%}
-            {% if sorted_by_label == 'exit_count' -%}
-                <th class="text-center rc-header">
-                    <a href="networks-by-guard-count.html">Guard</a> / <a href="networks-by-middle-count.html">Middle</a> / Exit
-                </th>
-            {% elif sorted_by_label == 'guard_count' -%}
-                <th class="text-center rc-header">
-                    Guard / <a href="networks-by-middle-count.html">Middle</a> / <a href="networks-by-exit-count.html">Exit</a>
-                </th>
-            {% elif sorted_by_label == 'middle_count' -%}
-                <th class="text-center rc-header">
-                    <a href="networks-by-guard-count.html">Guard</a> / Middle / <a href="networks-by-exit-count.html">Exit</a>
-                </th>
-            {% else -%}
-                <th class="text-center rc-header">
-                    <a href="networks-by-guard-count.html">Guard</a> / <a href="networks-by-middle-count.html">Middle</a> / <a href="networks-by-exit-count.html">Exit</a>
-                </th>
-            {% endif -%}
-            {% if sorted_by_label == 'unique_contact_count' -%}
-                <th title="Number of unique AROI / contact operators using this network">Unique AROI / Contact</th>
-            {% else -%}
-                <th title="Number of unique AROI / contact operators using this network">
-                    <a href="networks-by-unique-contact-count.html">Unique AROI / Contact</a>
-                </th>
-            {% endif -%}
-            {% if sorted_by_label == 'unique_family_count' -%}
-                <th title="Number of unique effective families using this network">Unique Families</th>
-            {% else -%}
-                <th title="Number of unique effective families using this network">
-                    <a href="networks-by-unique-family-count.html">Unique Families</a>
-                </th>
-            {% endif -%}
+            <th class="text-center bw-header" title="Bandwidth">BW</th>
+            <th class="text-center cw-header hidden-xs-extra" title="Consensus Weight">CW</th>
+            <th class="text-center rc-header">Relays</th>
+            <th class="hidden-xs" title="Number of unique AROI / contact operators using this network">Contacts</th>
+            <th class="hidden-sm" title="Number of unique effective families using this network">Families</th>
         </tr>
         <tbody>
             {% for k, v in relays.json['sorted']['as'].items()|sort(attribute=sorted_by,
@@ -102,11 +53,11 @@
                         <a href="{{ path_prefix }}as/{{ k|escape }}/">{{ k|escape }}</a>
                     </td>
                     {% if v['as_name'] -%}
-                        <td title="{{ v['as_name']|escape }}">
+                        <td class="hidden-xs" title="{{ v['as_name']|escape }}">
                             <a href="https://bgp.tools/{{ k|escape }}">{{ v['as_name']|truncate(20)|escape }}</a>
                         </td>
                     {% else -%}
-                        <td>Unknown</td>
+                        <td class="hidden-xs">Unknown</td>
                     {% endif -%}
                     {% if v['country'] -%}
                         <td>
@@ -120,20 +71,21 @@
                         <td>X</td>
                     {% endif -%}
                     {% if v['bandwidth'] == 0 -%}
-                        <td class="text-center bw-data">0 / 0 / 0 / 0 {{ obs_unit }}</td>
+                        <td class="text-center bw-data">0 {{ obs_unit }}</td>
                     {% else -%}
-                        <td class="text-center bw-data">{{ obs_bandwidth }} / {{ guard_bw }} / {{ middle_bw }} / {{ exit_bw }} {{ obs_unit }}</td>
+                        <td class="text-center bw-data">{{ obs_bandwidth }} {{ obs_unit }}</td>
                     {% endif -%}
                     {% if v['consensus_weight_fraction'] == 0 and v['guard_consensus_weight_fraction'] == 0 and v['middle_consensus_weight_fraction'] == 0 and v['exit_consensus_weight_fraction'] == 0 -%}
-                        <td class="text-center cw-data">0% / 0% / 0% / 0%</td>
+                        <td class="text-center cw-data hidden-xs-extra">0%</td>
                     {% else -%}
-                        <td class="text-center cw-data">{{ "%.2f%%"|format(v['consensus_weight_fraction'] * 100) }} / {{ "%.2f%%"|format(v['guard_consensus_weight_fraction'] * 100) }} / {{ "%.2f%%"|format(v['middle_consensus_weight_fraction'] * 100) }} / {{ "%.2f%%"|format(v['exit_consensus_weight_fraction'] * 100) }}</td>
+                        <td class="text-center cw-data hidden-xs-extra">{{ "%.2f%%"|format(v['consensus_weight_fraction'] * 100) }}</td>
                     {% endif -%}
-                    <td class="text-center rc-data">{{ v['guard_count'] }} / {{ v['middle_count'] }} / {{ v['exit_count'] }}</td>
-                    <td>{{ v['unique_contact_count'] }}</td>
-                    <td>{{ v['unique_family_count'] }}</td>
+                    <td class="text-center rc-data">{{ v['guard_count'] + v['middle_count'] + v['exit_count'] }}</td>
+                    <td class="hidden-xs">{{ v['unique_contact_count'] }}</td>
+                    <td class="hidden-sm">{{ v['unique_family_count'] }}</td>
                 </tr>
             {% endfor -%}
         </tbody>
     </table>
+    </div>
 {% endblock -%}

@@ -93,22 +93,23 @@
         {%- endif %}
     {%- endif %}
     
-    <table class="table table-condensed" style="font-size: 13px;">
+    <div class="table-responsive-xs">
+    <table class="table table-condensed mobile-simplified" style="font-size: 13px;">
         <tr>
             <th>Authority Name</th>
             <th>Online Status</th>
-            <th>Relay Coverage</th>
-            <th>Last Vote</th>
-            <th>Last BW Measurement</th>
-            <th>AS Number</th>
-            <th>AS Name</th>
+            <th class="hidden-xs">Relay Coverage</th>
+            <th class="hidden-xs">Last Vote</th>
+            <th class="hidden-xs">Last BW Measurement</th>
+            <th class="hidden-sm">AS Number</th>
+            <th class="hidden-xs">AS Name</th>
             <th>Country</th>
-            <th>Uptime (1mo/6mo/1yr/5yr)</th>
-            <th>Version</th>
-            <th>Platform</th>
-            <th title="Recommended version: TODO">Rec. Ver.</th>
-            <th>First Seen</th>
-            <th>Last Restarted</th>
+            <th class="hidden-xs-extra">Uptime (1mo/6mo/1yr/5yr)</th>
+            <th class="hidden-xs">Version</th>
+            <th class="hidden-xs">Platform</th>
+            <th class="hidden-xs" title="Recommended version: TODO">Rec. Ver.</th>
+            <th class="hidden-xs">First Seen</th>
+            <th class="hidden-xs">Last Restarted</th>
         </tr>
         <tbody>
         {% for authority in relays.authorities_data -%}
@@ -128,11 +129,11 @@
                         <span style="color: red; font-weight: bold;">🔴 Offline (last seen: {{ authority.last_seen }})</span>
                     {%- endif %}
                 </td>
-                <td><!-- TODO: Implement relay coverage from consensus-health API -->TODO | <span style="color: #999;">Z: <!-- TODO: Calculate coverage Z-score -->TODO</span></td>
-                <td><!-- TODO: Implement last vote time from CollecTor API -->TODO</td>
-                <td><!-- TODO: Implement last BW measurement time from CollecTor API -->TODO</td>
-                <td>{{ authority.as if authority.as else "N/A" }}</td>
-                <td>{{ authority.as_name if authority.as_name else "Unknown" }}</td>
+                <td class="hidden-xs"><!-- TODO: Implement relay coverage from consensus-health API -->TODO | <span style="color: #999;">Z: <!-- TODO: Calculate coverage Z-score -->TODO</span></td>
+                <td class="hidden-xs"><!-- TODO: Implement last vote time from CollecTor API -->TODO</td>
+                <td class="hidden-xs"><!-- TODO: Implement last BW measurement time from CollecTor API -->TODO</td>
+                <td class="hidden-sm">{{ authority.as if authority.as else "N/A" }}</td>
+                <td class="hidden-xs">{{ authority.as_name if authority.as_name else "Unknown" }}</td>
                 <td>
                     {% if authority.country_name -%}
                         🌍 {{ authority.country_name }}
@@ -140,7 +141,7 @@
                         Unknown
                     {%- endif %}
                 </td>
-                <td>
+                <td class="hidden-xs-extra">
                     {% if authority.uptime_1month is not none -%}
                         {{ "%.1f%%"|format(authority.uptime_1month) }}
                     {% else -%}
@@ -172,15 +173,16 @@
                         {%- endif %}>Z: {{ "%.1f"|format(authority.uptime_zscore) }}</span>
                     {%- endif %}
                 </td>
-                <td>{{ authority.version if authority.version else "Unknown" }}</td>
-                <td>{{ authority.platform if authority.platform else "Unknown" }}</td>
-                <td><!-- TODO: Implement recommended version compliance check -->TODO</td>
-                <td>{{ authority.first_seen.split(' ')[0] if authority.first_seen else "Unknown" }}</td>
-                <td>{{ authority.last_restarted.split(' ')[0] if authority.last_restarted else "Unknown" }}</td>
+                <td class="hidden-xs">{{ authority.version if authority.version else "Unknown" }}</td>
+                <td class="hidden-xs">{{ authority.platform if authority.platform else "Unknown" }}</td>
+                <td class="hidden-xs"><!-- TODO: Implement recommended version compliance check -->TODO</td>
+                <td class="hidden-xs">{{ authority.first_seen.split(' ')[0] if authority.first_seen else "Unknown" }}</td>
+                <td class="hidden-xs">{{ authority.last_restarted.split(' ')[0] if authority.last_restarted else "Unknown" }}</td>
             </tr>
         {% endfor -%}
         </tbody>
     </table>
+    </div>
 
     <br><br>
 

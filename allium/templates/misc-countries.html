@@ -28,69 +28,68 @@
     <small>Last updated: {{ relays.timestamp }}. Refreshed every 30 minutes from the Tor directory authorities via <a href="https://onionoo.torproject.org/">Tor Project's onionoo API</a>.</small>
     </p>
     
-    <table class="table table-condensed">
+    <div class="table-responsive-xs">
+    <table class="table table-condensed mobile-simplified">
         <tr>
             <th>Country</th>
             {% if sorted_by_label == 'bandwidth' -%}
-                <th class="text-center bw-header" title="Bandwidth">Overall / <a href="countries-by-guard-bandwidth.html">Guard</a> / <a href="countries-by-middle-bandwidth.html">Middle</a> / <a href="countries-by-exit-bandwidth.html">Exit</a> BW</th>
+                <th class="text-center bw-header" title="Bandwidth">BW</th>
             {% elif sorted_by_label == 'guard_bandwidth' -%}
-                <th class="text-center bw-header" title="Bandwidth"><a href="countries-by-overall-bandwidth.html">Overall</a> / Guard / <a href="countries-by-middle-bandwidth.html">Middle</a> / <a href="countries-by-exit-bandwidth.html">Exit</a> BW</th>
+                <th class="text-center bw-header" title="Bandwidth">BW</th>
             {% elif sorted_by_label == 'middle_bandwidth' -%}
-                <th class="text-center bw-header" title="Bandwidth"><a href="countries-by-overall-bandwidth.html">Overall</a> / <a href="countries-by-guard-bandwidth.html">Guard</a> / Middle / <a href="countries-by-exit-bandwidth.html">Exit</a> BW</th>
+                <th class="text-center bw-header" title="Bandwidth">BW</th>
             {% elif sorted_by_label == 'exit_bandwidth' -%}
-                <th class="text-center bw-header" title="Bandwidth"><a href="countries-by-overall-bandwidth.html">Overall</a> / <a href="countries-by-guard-bandwidth.html">Guard</a> / <a href="countries-by-middle-bandwidth.html">Middle</a> / Exit BW</th>
+                <th class="text-center bw-header" title="Bandwidth">BW</th>
             {% else -%}
-                <th class="text-center bw-header" title="Bandwidth"><a href="countries-by-overall-bandwidth.html">Overall</a> / <a href="countries-by-guard-bandwidth.html">Guard</a> / <a href="countries-by-middle-bandwidth.html">Middle</a> / <a href="countries-by-exit-bandwidth.html">Exit</a> BW</th>
+                <th class="text-center bw-header" title="Bandwidth">BW</th>
             {% endif -%}
             {% if sorted_by_label == 'consensus_weight_fraction' -%}
-                <th class="text-center cw-header" title="Consensus Weight"><a href="countries-by-consensus-weight.html">Overall</a> / <a href="countries-by-guard-consensus-weight.html">Guard</a> / <a href="countries-by-middle-consensus-weight.html">Middle</a> / <a href="countries-by-exit-consensus-weight.html">Exit</a> CW</th>
+                <th class="text-center cw-header hidden-xs-extra" title="Consensus Weight">CW</th>
             {% elif sorted_by_label == 'guard_consensus_weight_fraction' -%}
-                <th class="text-center cw-header" title="Consensus Weight"><a href="countries-by-consensus-weight.html">Overall</a> / Guard / <a href="countries-by-middle-consensus-weight.html">Middle</a> / <a href="countries-by-exit-consensus-weight.html">Exit</a> CW</th>
+                <th class="text-center cw-header hidden-xs-extra" title="Consensus Weight">CW</th>
             {% elif sorted_by_label == 'middle_consensus_weight_fraction' -%}
-                <th class="text-center cw-header" title="Consensus Weight"><a href="countries-by-consensus-weight.html">Overall</a> / <a href="countries-by-guard-consensus-weight.html">Guard</a> / Middle / <a href="countries-by-exit-consensus-weight.html">Exit</a> CW</th>
+                <th class="text-center cw-header hidden-xs-extra" title="Consensus Weight">CW</th>
             {% elif sorted_by_label == 'exit_consensus_weight_fraction' -%}
-                <th class="text-center cw-header" title="Consensus Weight"><a href="countries-by-consensus-weight.html">Overall</a> / <a href="countries-by-guard-consensus-weight.html">Guard</a> / <a href="countries-by-middle-consensus-weight.html">Middle</a> / Exit CW</th>
+                <th class="text-center cw-header hidden-xs-extra" title="Consensus Weight">CW</th>
             {% else -%}
-                <th class="text-center cw-header" title="Consensus Weight">
-                    <a href="countries-by-consensus-weight.html">Overall</a> / <a href="countries-by-guard-consensus-weight.html">Guard</a> / <a href="countries-by-middle-consensus-weight.html">Middle</a> / <a href="countries-by-exit-consensus-weight.html">Exit</a> CW
-                </th>
+                <th class="text-center cw-header hidden-xs-extra" title="Consensus Weight">CW</th>
             {% endif -%}
             {% if sorted_by_label == 'exit_count' -%}
                 <th class="text-center rc-header">
-                    <a href="countries-by-guard-count.html">Guard</a> / <a href="countries-by-middle-count.html">Middle</a> / Exit
+                    Relays
                 </th>
             {% elif sorted_by_label == 'guard_count' -%}
                 <th class="text-center rc-header">
-                    Guard / <a href="countries-by-middle-count.html">Middle</a> / <a href="countries-by-exit-count.html">Exit</a>
+                    Relays
                 </th>
             {% elif sorted_by_label == 'middle_count' -%}
                 <th class="text-center rc-header">
-                    <a href="countries-by-guard-count.html">Guard</a> / Middle / <a href="countries-by-exit-count.html">Exit</a>
+                    Relays
                 </th>
             {% else -%}
                 <th class="text-center rc-header">
-                    <a href="countries-by-guard-count.html">Guard</a> / <a href="countries-by-middle-count.html">Middle</a> / <a href="countries-by-exit-count.html">Exit</a>
+                    Relays
                 </th>
             {% endif -%}
             {% if sorted_by_label == 'unique_contact_count' -%}
-                <th title="Number of unique AROI / contact operators in this country">Unique AROI / Contact</th>
+                <th class="hidden-xs" title="Number of unique AROI / contact operators in this country">Contacts</th>
             {% else -%}
-                <th title="Number of unique AROI / contact operators in this country">
-                    <a href="countries-by-unique-contact-count.html">Unique AROI / Contact</a>
+                <th class="hidden-xs" title="Number of unique AROI / contact operators in this country">
+                    Contacts
                 </th>
             {% endif -%}
             {% if sorted_by_label == 'unique_family_count' -%}
-                <th title="Number of unique effective families in this country">Unique Families</th>
+                <th class="hidden-xs" title="Number of unique effective families in this country">Families</th>
             {% else -%}
-                <th title="Number of unique effective families in this country">
-                    <a href="countries-by-unique-family-count.html">Unique Families</a>
+                <th class="hidden-xs" title="Number of unique effective families in this country">
+                    Families
                 </th>
             {% endif -%}
             {% if sorted_by_label == 'unique_as_count' -%}
-                <th title="Number of different autonomous systems (networks) in this country">Unique AS</th>
+                <th class="hidden-sm" title="Number of different autonomous systems (networks) in this country">AS</th>
             {% else -%}
-                <th title="Number of different autonomous systems (networks) in this country">
-                    <a href="countries-by-unique-as-count.html">Unique AS</a>
+                <th class="hidden-sm" title="Number of different autonomous systems (networks) in this country">
+                    AS
                 </th>
             {% endif -%}
         </tr>
@@ -112,21 +111,22 @@
                         </a>
                     </td>
                     {% if v['bandwidth'] == 0 -%}
-                        <td class="text-center bw-data">0 / 0 / 0 / 0 {{ obs_unit }}</td>
+                        <td class="text-center bw-data">0 {{ obs_unit }}</td>
                     {% else -%}
-                        <td class="text-center bw-data">{{ obs_bandwidth }} / {{ guard_bw }} / {{ middle_bw }} / {{ exit_bw }} {{ obs_unit }}</td>
+                        <td class="text-center bw-data">{{ obs_bandwidth }} {{ obs_unit }}</td>
                     {% endif -%}
                     {% if v['consensus_weight_fraction'] == 0 and v['guard_consensus_weight_fraction'] == 0 and v['middle_consensus_weight_fraction'] == 0 and v['exit_consensus_weight_fraction'] == 0 -%}
-                        <td class="text-center cw-data">0% / 0% / 0% / 0%</td>
+                        <td class="text-center cw-data hidden-xs-extra">0%</td>
                     {% else -%}
-                        <td class="text-center cw-data">{{ "%.2f%%"|format(v['consensus_weight_fraction'] * 100) }} / {{ "%.2f%%"|format(v['guard_consensus_weight_fraction'] * 100) }} / {{ "%.2f%%"|format(v['middle_consensus_weight_fraction'] * 100) }} / {{ "%.2f%%"|format(v['exit_consensus_weight_fraction'] * 100) }}</td>
+                        <td class="text-center cw-data hidden-xs-extra">{{ "%.2f%%"|format(v['consensus_weight_fraction'] * 100) }}</td>
                     {% endif -%}
-                    <td class="text-center rc-data">{{ v['guard_count'] }} / {{ v['middle_count'] }} / {{ v['exit_count'] }}</td>
-                    <td>{{ v['unique_contact_count'] }}</td>
-                    <td>{{ v['unique_family_count'] }}</td>
-                    <td>{{ v['unique_as_count'] }}</td>
+                    <td class="text-center rc-data">{{ v['guard_count'] + v['middle_count'] + v['exit_count'] }}</td>
+                    <td class="hidden-xs">{{ v['unique_contact_count'] }}</td>
+                    <td class="hidden-xs">{{ v['unique_family_count'] }}</td>
+                    <td class="hidden-sm">{{ v['unique_as_count'] }}</td>
                 </tr>
             {% endfor -%}
         </tbody>
     </table>
+    </div>
 {% endblock -%} 

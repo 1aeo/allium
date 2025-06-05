@@ -67,6 +67,71 @@
                     letter-spacing: 0.05em; /* Slight spacing for readability */
                 }
 
+                /* Mobile table responsive classes */
+                @media (max-width: 767px) {
+                    /* Hide less critical columns on mobile */
+                    .hidden-xs {
+                        display: none !important;
+                    }
+                    
+                    /* Make tables horizontally scrollable on mobile */
+                    .table-responsive-xs {
+                        width: 100%;
+                        overflow-x: auto;
+                        -webkit-overflow-scrolling: touch;
+                        border: 1px solid #ddd;
+                        border-radius: 4px;
+                    }
+                    
+                    .table-responsive-xs > .table {
+                        margin-bottom: 0;
+                        min-width: 600px; /* Minimum width to maintain readability */
+                    }
+                    
+                    /* Adjust contact text width for mobile */
+                    .contact-text {
+                        max-width: 15vw;
+                    }
+                    
+                    /* Simplify complex columns on mobile */
+                    .mobile-simplified .bw-data,
+                    .mobile-simplified .cw-data,
+                    .mobile-simplified .rc-data {
+                        font-size: 12px;
+                        white-space: nowrap;
+                    }
+                    
+                    /* Make table headers smaller on mobile */
+                    .table th {
+                        font-size: 12px;
+                        padding: 6px 4px;
+                    }
+                    
+                    .table td {
+                        font-size: 12px;
+                        padding: 6px 4px;
+                    }
+                }
+
+                /* Tablet breakpoint - hide some columns */
+                @media (max-width: 991px) and (min-width: 768px) {
+                    .hidden-sm {
+                        display: none !important;
+                    }
+                }
+
+                /* Show/hide columns based on screen size */
+                @media (max-width: 576px) {
+                    /* Extra small screens - hide even more columns */
+                    .hidden-xs-extra {
+                        display: none !important;
+                    }
+                    
+                    .table-responsive-xs > .table {
+                        min-width: 400px; /* Even smaller minimum for very small screens */
+                    }
+                }
+
                 /* Container breakpoint */
                 @media (min-width: 1400px) {
                     .container {
