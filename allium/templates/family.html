@@ -6,47 +6,44 @@
 {% block description %}
     Relays with effective family member
     <code> {{ value|escape }}</code> are responsible for ~{{ bandwidth }} {{ bandwidth_unit }} of bandwidth (BW)
-    {%- if guard_count > 0 or middle_count > 0 or exit_count > 0 %} (
-        {%- if guard_count > 0 -%}
+    {%- if has_typed_relays %} (
+        {%- if has_guard -%}
             {{ guard_bandwidth }} {{ bandwidth_unit }} guard
-            {%- if middle_count > 0 or exit_count > 0 %}, {% endif -%}
+            {%- if has_middle or has_exit %}, {% endif -%}
         {%- endif -%}
-        {%- if middle_count > 0 -%}
+        {%- if has_middle -%}
             {{ middle_bandwidth }} {{ bandwidth_unit }} middle
-            {%- if exit_count > 0 %}, {% endif -%}
+            {%- if has_exit %}, {% endif -%}
         {%- endif -%}
-        {%- if exit_count > 0 -%}
+        {%- if has_exit -%}
             {{ exit_bandwidth }} {{ bandwidth_unit }} exit
         {%- endif -%}
     )
-    {%- endif %} and {{ "%.2f%%"|format(consensus_weight_fraction * 100) }} consensus weight (CW)
-    {%- if guard_count > 0 or middle_count > 0 or exit_count > 0 %} (
-        {%- if guard_count > 0 -%}
-            {{ "%.2f%%"|format(guard_consensus_weight_fraction * 100) }} guard
-            {%- if middle_count > 0 or exit_count > 0 %}, {% endif -%}
+    {%- endif %} and {{ consensus_weight_percentage }} consensus weight (CW)
+    {%- if has_typed_relays %} (
+        {%- if has_guard -%}
+            {{ guard_consensus_weight_percentage }} guard
+            {%- if has_middle or has_exit %}, {% endif -%}
         {%- endif -%}
-        {%- if middle_count > 0 -%}
-            {{ "%.2f%%"|format(middle_consensus_weight_fraction * 100) }} middle
-            {%- if exit_count > 0 %}, {% endif -%}
+        {%- if has_middle -%}
+            {{ middle_consensus_weight_percentage }} middle
+            {%- if has_exit %}, {% endif -%}
         {%- endif -%}
-        {%- if exit_count > 0 -%}
-            {{ "%.2f%%"|format(exit_consensus_weight_fraction * 100) }} exit
+        {%- if has_exit -%}
+            {{ exit_consensus_weight_percentage }} exit
         {%- endif -%}
     )
     {%- endif %}, with
-    {% if guard_count > 0 %}
-        {{ guard_count }} guard relay
-        {%- if guard_count > 1 -%}s{% endif %}
-        {% if middle_count > 0 or exit_count > 0 %},{% endif %}
+    {% if has_guard %}
+        {{ guard_count }} {{ guard_relay_text }}
+        {% if has_middle or has_exit %},{% endif %}
     {% endif %}
-    {% if middle_count > 0 %}
-        {{ middle_count }} middle relay
-        {%- if middle_count > 1 -%}s{% endif %}
-        {% if exit_count > 0 %} and{% endif %}
+    {% if has_middle %}
+        {{ middle_count }} {{ middle_relay_text }}
+        {% if has_exit %} and{% endif %}
     {% endif %}
-    {% if exit_count > 0 %}
-        {{ exit_count }} exit relay
-        {%- if exit_count > 1 -%}s{%- endif -%}
+    {% if has_exit %}
+        {{ exit_count }} {{ exit_relay_text }}
     {%- endif -%}
         .
-    {% endblock %}
+{% endblock %}
