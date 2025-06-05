@@ -233,11 +233,21 @@ First Seen
 <dd>
 <a href="{{ path_prefix }}first_seen/{{ relay['first_seen'].split(' ', 1)[0]|escape }}/">{{ relay['first_seen']|escape }}</a>
 </dd>
-<dt>
+<dt title="UTC timestamp when this relay was last (re-)started. Missing if router descriptor containing this information cannot be found.">
 Last Restarted
 </dt>
 <dd>
 {{ relay['last_restarted']|escape }}
+</dd>
+<dt title="UTC timestamp when this relay last stopped announcing an IPv4 or IPv6 address or TCP port where it previously accepted onion-routing or directory connections. This timestamp can serve as indicator whether this relay would be a suitable fallback directory.">
+Last Changed Address or Port
+</dt>
+<dd>
+{% if relay['last_changed_address_or_port'] -%}
+{{ relay['last_changed_address_or_port']|escape }}
+{% else -%}
+unknown
+{% endif -%}
 </dd>
 <dt title="Consensus weight is a relay's relative share of Tor network bandwidth, based on its advertised bandwidth and uptime.">
 CW
