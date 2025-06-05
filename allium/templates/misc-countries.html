@@ -18,7 +18,26 @@
 
     <ul style="margin-bottom: 15px;">
         <li><strong>Countries</strong>: {{ relays.json['sorted']['country']|length }} geographic locations hosting relays currently active</li>
-        <li><strong>Network Totals</strong>: {{ relays.json['network_totals']['guard_count'] }} Guard, {{ relays.json['network_totals']['middle_count'] }} Middle, {{ relays.json['network_totals']['exit_count'] }} Exit for {{ relays.json['network_totals']['total_relays'] }} Total Relays</li>
+        <li><strong>Network Relays</strong>: Total: {{ relays.json['network_totals']['total_relays'] }}
+            <ul style="margin: 5px 0; padding-left: 20px;">
+                <li><strong>Primary Role</strong> (Main role with Exit priority, Exit > Guard > Middle): 
+                    Guard: {{ relays.json['network_totals']['primary']['guard'] }} | 
+                    Middle: {{ relays.json['network_totals']['primary']['middle'] }} | 
+                    Exit: {{ relays.json['network_totals']['primary']['exit'] }}
+                </li>
+                <li><strong>Role Categories</strong> (Separate categories for all role combinations, adding Guard+Exit): 
+                    Guard: {{ relays.json['network_totals']['categories']['guard_only'] }} | 
+                    Middle: {{ relays.json['network_totals']['categories']['middle'] }} | 
+                    Exit: {{ relays.json['network_totals']['categories']['exit_only'] }} | 
+                    Guard+Exit: {{ relays.json['network_totals']['categories']['guard_exit'] }}
+                </li>
+                <li><strong>All Roles</strong> (Multi-role relays counted by every role they perform): 
+                    Guard: {{ relays.json['network_totals']['all']['guard'] }} | 
+                    Middle: {{ relays.json['network_totals']['all']['middle'] }} | 
+                    Exit: {{ relays.json['network_totals']['all']['exit'] }}
+                </li>
+            </ul>
+        </li>
         <li><strong>Geographic Diversity</strong>: {% set country_list = relays.json['sorted']['country'].values()|list %}{% set sorted_countries = country_list|sort(attribute='consensus_weight_fraction', reverse=true) %}{% set top_3_weight = sorted_countries[:3]|sum(attribute='consensus_weight_fraction') %}{{ "%.1f"|format(top_3_weight * 100) }}% in top 3 countries | {% set significant_countries = country_list|selectattr('consensus_weight_fraction', 'gt', 0.01)|list|length %}{{ significant_countries }} countries have >1% of network | {% set five_eyes_countries = ['us', 'gb', 'ca', 'au', 'nz', 'US', 'GB', 'CA', 'AU', 'NZ'] %}{% for country_code, country_data in relays.json['sorted']['country'].items() %}{% if country_code|lower in ['us', 'gb', 'ca', 'au', 'nz'] %}{% set five_eyes_weight = (five_eyes_weight|default(0)) + country_data.consensus_weight_fraction %}{% endif %}{% endfor %}{{ "%.1f"|format((five_eyes_weight|default(0)) * 100) }}% in Five Eyes countries</li>
         <li><strong>Sorted by</strong>: {{ sorted_by_label|replace('_', ' ') }}</li>
         <li><strong>Key</strong>: BW = Bandwidth, CW = Consensus Weight, AS = Autonomous System (network provider)</li>
