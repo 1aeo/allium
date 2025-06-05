@@ -450,10 +450,16 @@ class Relays:
 
     def _calculate_and_cache_family_statistics(self, total_guard_cw, total_middle_cw, total_exit_cw):
         """
-        Calculate family network totals and centralization risk statistics
+        Calculate family network totals and enhanced centralization risk statistics
         
         Optimized Python implementation of complex Jinja2 calculations for misc-families pages.
         Replaces expensive template loops with efficient deduplication logic.
+        
+        Enhanced with four-state family relationship analysis:
+        - Standalone: No family relationships declared
+        - Alleged Only: Family declared but not mutual
+        - Effective Only: All family claims are mutual  
+        - Mixed: Some mutual, some one-way relationships
         
         Args:
             total_guard_cw: Total consensus weight of all guard relays in the network
@@ -462,59 +468,119 @@ class Relays:
             
         These totals are passed from _categorize to avoid re-iterating through all relays.
         """
-        if 'family' not in self.json['sorted']:
-            return
+        # Initialize four-state family relationship counters
+        standalone_relays = 0
+        alleged_only_relays = 0
+        effective_only_relays = 0
+        mixed_relays = 0
         
-        processed_fingerprints = set()
-        family_guard_total = 0
-        family_middle_total = 0
-        family_exit_total = 0
-        actual_family_relay_total = 0
+        # Analyze each relay's family relationship state
+        for relay in self.json['relays']:
+            # Effective family should exclude the relay's own fingerprint and be 2+ members for actual family
+            effective_family = relay.get('effective_family', [])
+            alleged_family = relay.get('alleged_family', [])
+            
+            # Remove self-reference from effective family and check if there are other members
+            relay_fingerprint = relay.get('fingerprint', '')
+            if relay_fingerprint in effective_family:
+                effective_family = [fp for fp in effective_family if fp != relay_fingerprint]
+            
+            has_effective = len(effective_family) > 0
+            has_alleged = len(alleged_family) > 0
+            
+            if not has_effective and not has_alleged:
+                standalone_relays += 1
+            elif not has_effective and has_alleged:
+                alleged_only_relays += 1  
+            elif has_effective and not has_alleged:
+                effective_only_relays += 1
+            else:  # has_effective and has_alleged
+                mixed_relays += 1
+        
+        # Calculate family participation percentages
+        total_relay_count = len(self.json['relays'])
+        if total_relay_count > 0:
+            standalone_percentage = f"{(standalone_relays / total_relay_count) * 100:.1f}"
+            alleged_only_percentage = f"{(alleged_only_relays / total_relay_count) * 100:.1f}"
+            effective_only_percentage = f"{(effective_only_relays / total_relay_count) * 100:.1f}"
+            mixed_percentage = f"{(mixed_relays / total_relay_count) * 100:.1f}"
+            effective_total_relays = effective_only_relays + mixed_relays
+            effective_total_percentage = f"{(effective_total_relays / total_relay_count) * 100:.1f}"
+        else:
+            standalone_percentage = alleged_only_percentage = effective_only_percentage = mixed_percentage = effective_total_percentage = "0.0"
+            effective_total_relays = 0
+        
+        # Calculate configuration health metrics
+        total_family_declared = alleged_only_relays + effective_only_relays + mixed_relays
+        if total_family_declared > 0:
+            # Count allegations (from alleged_only + mixed relays)
+            total_alleged_count = 0
+            total_effective_count = 0
+            
+            for relay in self.json['relays']:
+                alleged_family = relay.get('alleged_family', [])
+                effective_family = relay.get('effective_family', [])
+                
+                if alleged_family:
+                    total_alleged_count += len(alleged_family)
+                if effective_family:
+                    total_effective_count += len(effective_family)
+            
+            total_family_declarations = total_alleged_count + total_effective_count
+            if total_family_declarations > 0:
+                misconfigured_percentage = f"{(total_alleged_count / total_family_declarations) * 100:.1f}"
+                configured_percentage = f"{(total_effective_count / total_family_declarations) * 100:.1f}"
+            else:
+                misconfigured_percentage = configured_percentage = "0.0"
+        else:
+            misconfigured_percentage = configured_percentage = "0.0"
+        
+        # Process existing family structure for largest family size and large family count
         largest_family_size = 0
         large_family_count = 0
         
-        # Process each family only once using deduplication
-        for k, v in self.json['sorted']['family'].items():
-            # Get first relay fingerprint to check if this family was already processed
-            first_relay_idx = v['relays'][0]
-            first_relay_fingerprint = self.json['relays'][first_relay_idx]['fingerprint']
+        if 'family' in self.json['sorted']:
+            processed_fingerprints = set()
             
-            if first_relay_fingerprint not in processed_fingerprints:
-                # Add relay counts for this family
-                family_guard_total += v['guard_count']
-                family_middle_total += v['middle_count']
-                family_exit_total += v['exit_count']
+            # Process each family only once using deduplication
+            for k, v in self.json['sorted']['family'].items():
+                # Get first relay fingerprint to check if this family was already processed
+                first_relay_idx = v['relays'][0]
+                first_relay_fingerprint = self.json['relays'][first_relay_idx]['fingerprint']
                 
-                # Track actual relay count and largest family
-                family_size = len(v['relays'])
-                actual_family_relay_total += family_size
-                largest_family_size = max(largest_family_size, family_size)
-                
-                # Count families with 10+ relays
-                if family_size >= 10:
-                    large_family_count += 1
-                
-                                # Mark all relays in this family as processed
-                for r in v['relays']:
-                    relay_fingerprint = self.json['relays'][r]['fingerprint']
-                    processed_fingerprints.add(relay_fingerprint)
+                if first_relay_fingerprint not in processed_fingerprints:
+                    # Track actual relay count and largest family
+                    family_size = len(v['relays'])
+                    largest_family_size = max(largest_family_size, family_size)
+                    
+                    # Count families with 10+ relays
+                    if family_size >= 10:
+                        large_family_count += 1
+                    
+                    # Mark all relays in this family as processed
+                    for r in v['relays']:
+                        relay_fingerprint = self.json['relays'][r]['fingerprint']
+                        processed_fingerprints.add(relay_fingerprint)
         
-        # Calculate centralization percentage
-        total_relay_count = len(self.json['relays'])
-        centralization_percentage = '0.0'
-        if total_relay_count > 0:
-            centralization_percentage = f"{(actual_family_relay_total / total_relay_count) * 100:.1f}"
-        
-        # Use cached network totals from _calculate_network_totals() instead of recalculating
-        network_guard_total = self.json['network_totals']['guard_count']
-        network_middle_total = self.json['network_totals']['middle_count'] 
-        network_exit_total = self.json['network_totals']['exit_count']
-        network_total_relays = self.json['network_totals']['total_relays']
-        
-        # Cache family-specific statistics (centralization risk metrics only)
-        # Network totals are accessed directly via self.json['network_totals']
+        # Cache enhanced family statistics
         self.json['family_statistics'] = {
-            'centralization_percentage': centralization_percentage,
+            # Four-state relationship counts
+            'standalone_relays': standalone_relays,
+            'standalone_percentage': standalone_percentage,
+            'alleged_only_relays': alleged_only_relays,
+            'alleged_only_percentage': alleged_only_percentage,
+            'effective_only_relays': effective_only_relays,
+            'effective_only_percentage': effective_only_percentage,
+            'mixed_relays': mixed_relays,
+            'mixed_percentage': mixed_percentage,
+            'effective_total_relays': effective_total_relays,
+            'effective_total_percentage': effective_total_percentage,
+            
+            # Configuration health metrics
+            'misconfigured_percentage': misconfigured_percentage,
+            'configured_percentage': configured_percentage,
+            
+            # Existing centralization metrics
             'largest_family_size': largest_family_size,
             'large_family_count': large_family_count
         }

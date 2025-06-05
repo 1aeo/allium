@@ -38,7 +38,27 @@
                 </li>
             </ul>
         </li>
-        <li><strong>Centralization Risk</strong>: {{ centralization_percentage }}% of all relays in families | Largest family: {{ largest_family_size }} relays | {{ large_family_count }} families have 10+ relays</li>
+        <li><strong>Centralization Risk</strong>: 
+            <ul style="margin: 2px 0; padding-left: 20px; font-size: 0.95em;">
+                <li><strong>Family Participation</strong>: 
+                    <span title="No family relationships declared">Standalone: {{ standalone_relays }} relays ({{ standalone_percentage }}%)</span> | 
+                    <span title="Family declared but not mutual">Alleged Only: {{ alleged_only_relays }} relays ({{ alleged_only_percentage }}%)</span> | 
+                    <span title="All family claims are mutual">Effective Only: {{ effective_only_relays }} relays ({{ effective_only_percentage }}%)</span>
+                    <ul style="margin: 2px 0; padding-left: 20px; font-size: 0.9em;">
+                        <li><span title="Some mutual, some one-way relationships">Mixed: {{ mixed_relays }} relays ({{ mixed_percentage }}%)</span></li>
+                        <li><span title="Family declared mutually (includes effective-only and mixed configurations)">Effective: {{ effective_total_relays }} relays ({{ effective_total_percentage }}%)</span></li>
+                    </ul>
+                </li>
+                <li><strong>Configuration Health</strong>: 
+                    <span title="Percentage of family declarations not mutual">Misconfigured Families: {{ misconfigured_percentage }}%</span> | 
+                    <span title="Percentage of mutual family declarations">Configured Families: {{ configured_percentage }}%</span>
+                </li>
+                <li><strong>Centralization Metrics</strong>: 
+                    <span title="Family size constrained to 360 relays due to microdescriptor length limits in directory authorities">Largest family: {{ largest_family_size }} relays</span> | 
+                    {{ large_family_count }} families have 10+ relays
+                </li>
+            </ul>
+        </li>
         <li><strong>Sorted by</strong>: {{ sorted_by_label|replace('_', ' ') }}</li>
         <li><strong>Key</strong>: BW = Bandwidth, CW = Consensus Weight, AS = Autonomous System (network provider)</li>
     </ul>
