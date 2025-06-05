@@ -333,6 +333,10 @@ class Relays:
         # This avoids a second full iteration through all relays
         self._calculate_consensus_weight_fractions(total_guard_cw, total_middle_cw, total_exit_cw)
         
+        # Calculate family statistics immediately after categorization when data is fresh
+        # This calculates both network totals and family-specific statistics for misc-families pages
+        self._calculate_and_cache_family_statistics(total_guard_cw, total_middle_cw, total_exit_cw)
+        
         # Convert unique AS sets to counts for families, contacts, countries, platforms, and networks
         self._finalize_unique_as_counts()
 
@@ -367,6 +371,80 @@ class Relays:
                     item["exit_consensus_weight_fraction"] = item["exit_consensus_weight"] / total_exit_cw
                 else:
                     item["exit_consensus_weight_fraction"] = 0.0
+
+    def _calculate_and_cache_family_statistics(self, total_guard_cw, total_middle_cw, total_exit_cw):
+        """
+        Calculate family network totals and centralization risk statistics
+        
+        Optimized Python implementation of complex Jinja2 calculations for misc-families pages.
+        Replaces expensive template loops with efficient deduplication logic.
+        
+        Args:
+            total_guard_cw: Total consensus weight of all guard relays in the network
+            total_middle_cw: Total consensus weight of all middle relays in the network  
+            total_exit_cw: Total consensus weight of all exit relays in the network
+            
+        These totals are passed from _categorize to avoid re-iterating through all relays.
+        """
+        if 'family' not in self.json['sorted']:
+            return
+        
+        processed_fingerprints = set()
+        family_guard_total = 0
+        family_middle_total = 0
+        family_exit_total = 0
+        actual_family_relay_total = 0
+        largest_family_size = 0
+        large_family_count = 0
+        
+        # Process each family only once using deduplication
+        for k, v in self.json['sorted']['family'].items():
+            # Get first relay fingerprint to check if this family was already processed
+            first_relay_idx = v['relays'][0]
+            first_relay_fingerprint = self.json['relays'][first_relay_idx]['fingerprint']
+            
+            if first_relay_fingerprint not in processed_fingerprints:
+                # Add relay counts for this family
+                family_guard_total += v['guard_count']
+                family_middle_total += v['middle_count']
+                family_exit_total += v['exit_count']
+                
+                # Track actual relay count and largest family
+                family_size = len(v['relays'])
+                actual_family_relay_total += family_size
+                largest_family_size = max(largest_family_size, family_size)
+                
+                # Count families with 10+ relays
+                if family_size >= 10:
+                    large_family_count += 1
+                
+                                # Mark all relays in this family as processed
+                for r in v['relays']:
+                    relay_fingerprint = self.json['relays'][r]['fingerprint']
+                    processed_fingerprints.add(relay_fingerprint)
+        
+        # Calculate centralization percentage
+        total_relay_count = len(self.json['relays'])
+        centralization_percentage = '0.0'
+        if total_relay_count > 0:
+            centralization_percentage = f"{(actual_family_relay_total / total_relay_count) * 100:.1f}"
+        
+        # Calculate network totals using exclusive categorization (Exit OR Guard OR Middle)
+        network_guard_total = sum(1 for relay in self.json['relays'] if 'Exit' not in relay['flags'] and 'Guard' in relay['flags'])
+        network_middle_total = sum(1 for relay in self.json['relays'] if 'Guard' not in relay['flags'] and 'Exit' not in relay['flags'])
+        network_exit_total = sum(1 for relay in self.json['relays'] if 'Exit' in relay['flags'])
+        network_total_relays = network_guard_total + network_middle_total + network_exit_total
+        
+        # Cache family statistics in self.json for template access
+        self.json['family_statistics'] = {
+            'family_guard_total': network_guard_total,  # Template expects network totals, not family totals
+            'family_middle_total': network_middle_total,
+            'family_exit_total': network_exit_total,
+            'family_total_relays': network_total_relays,
+            'centralization_percentage': centralization_percentage,
+            'largest_family_size': largest_family_size,
+            'large_family_count': large_family_count
+        }
 
     def _finalize_unique_as_counts(self):
         """
@@ -440,7 +518,15 @@ class Relays:
         }
         
         if template.name == "misc-families.html":
-            family_stats = self._calculate_family_statistics()
+            family_stats = self.json.get('family_statistics', {
+                'family_guard_total': 0,
+                'family_middle_total': 0, 
+                'family_exit_total': 0,
+                'family_total_relays': 0,
+                'centralization_percentage': '0.0',
+                'largest_family_size': 0,
+                'large_family_count': 0
+            })
             template_vars.update(family_stats)
         
         template_render = template.render(**template_vars)
@@ -523,7 +609,7 @@ class Relays:
         for k, v in self.json['sorted']['family'].items():
             # Get first relay fingerprint to check if this family was already processed
             first_relay_idx = v['relays'][0]
-            first_relay_fingerprint = self.json['relay_subset'][first_relay_idx]['fingerprint']
+            first_relay_fingerprint = self.json['relays'][first_relay_idx]['fingerprint']
             
             if first_relay_fingerprint not in processed_fingerprints:
                 # Add relay counts for this family
@@ -542,7 +628,7 @@ class Relays:
                 
                 # Mark all relays in this family as processed
                 for r in v['relays']:
-                    relay_fingerprint = self.json['relay_subset'][r]['fingerprint']
+                    relay_fingerprint = self.json['relays'][r]['fingerprint']
                     processed_fingerprints.add(relay_fingerprint)
         
         # Calculate centralization percentage
@@ -689,3 +775,32 @@ class Relays:
                 encoding="utf8",
             ) as html:
                 html.write(rendered)
+
+    def _finalize_unique_as_counts(self):
+        """
+        Convert unique AS sets to counts for families, contacts, countries, platforms, and networks
+        """
+        for category in ["family", "contact", "country", "platform", "as"]:
+            if category in self.json["sorted"]:
+                for data in self.json["sorted"][category].values():
+                    if "unique_as_set" in data:
+                        data["unique_as_count"] = len(data["unique_as_set"])
+                        # Remove the set to save memory and avoid JSON serialization issues
+                        del data["unique_as_set"]
+                    else:
+                        # Fallback in case unique_as_set wasn't initialized
+                        data["unique_as_count"] = 0
+                    
+                    # Handle country, platform, and network-specific unique counts
+                    if category == "country" or category == "platform" or category == "as":
+                        if "unique_contact_set" in data:
+                            data["unique_contact_count"] = len(data["unique_contact_set"])
+                            del data["unique_contact_set"]
+                        else:
+                            data["unique_contact_count"] = 0
+                            
+                        if "unique_family_set" in data:
+                            data["unique_family_count"] = len(data["unique_family_set"])
+                            del data["unique_family_set"]
+                        else:
+                            data["unique_family_count"] = 0
