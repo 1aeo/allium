@@ -30,17 +30,6 @@ if __name__ == "__main__":
         required=False,
     )
     parser.add_argument(
-        "--onionoo-url",
-        dest="onionoo_url",
-        type=str,
-        default="https://onionoo.torproject.org/details",
-        help=(
-            "onionoo HTTP URL (default "
-            '"https://onionoo.torproject.org/details")'
-        ),
-        required=False,
-    )
-    parser.add_argument(
         "--display-bandwidth-units",
         dest="bandwidth_units",
         choices=['bits', 'bytes'],
@@ -52,6 +41,17 @@ if __name__ == "__main__":
         dest="progress",
         action="store_true",
         help="show progress updates during execution",
+        required=False,
+    )
+    parser.add_argument(
+        "--onionoo-url",
+        dest="onionoo_url",
+        type=str,
+        default="https://onionoo.torproject.org/details",
+        help=(
+            "onionoo HTTP URL (default "
+            '"https://onionoo.torproject.org/details")'
+        ),
         required=False,
     )
     args = parser.parse_args()
