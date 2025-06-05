@@ -172,8 +172,58 @@ class Relays:
         if self.json is not None:
             with open(self.ts_file, "w", encoding="utf8") as ts_file:
                 ts_file.write(f_timestamp)
-
+        
         return f_timestamp
+
+    def _calculate_network_totals(self):
+        """
+        Calculate comprehensive network totals once for all misc page templates.
+        Replaces duplicate calculations across family statistics and template aggregations.
+        
+        Uses exclusive categorization: Exit OR Guard OR Middle (Exit takes precedence)
+        
+        Returns:
+            tuple: (total_guard_cw, total_middle_cw, total_exit_cw) for consensus weight fractions
+        """
+        # Single iteration through all relays
+        total_relays = len(self.json['relays'])
+        
+        # Consensus Weight totals (for fractions)
+        total_guard_cw = 0
+        total_middle_cw = 0  
+        total_exit_cw = 0
+        
+        # Relay Count totals (for display)
+        guard_count = 0
+        middle_count = 0
+        exit_count = 0
+        
+        for relay in self.json['relays']:
+            cw = relay.get("consensus_weight", 0)
+            
+            # Exclusive categorization: Exit OR Guard OR Middle
+            if "Exit" in relay["flags"]:
+                total_exit_cw += cw
+                exit_count += 1
+            elif "Guard" in relay["flags"]:
+                total_guard_cw += cw  
+                guard_count += 1
+            else:
+                total_middle_cw += cw
+                middle_count += 1
+        
+        # Cache in single location for all misc page templates
+        self.json['network_totals'] = {
+            'total_relays': total_relays,
+            'guard_count': guard_count,
+            'middle_count': middle_count,
+            'exit_count': exit_count,
+            'total_guard_cw': total_guard_cw,
+            'total_middle_cw': total_middle_cw,
+            'total_exit_cw': total_exit_cw
+        }
+        
+        return total_guard_cw, total_middle_cw, total_exit_cw
 
     def _sort(self, relay, idx, k, v, cw):
         """
@@ -287,25 +337,13 @@ class Relays:
         """
         self.json["sorted"] = dict()
         
-        # Track network-wide totals for consensus weight fraction calculations
-        # We calculate these here to avoid re-iterating 7 times through all relays later with _sort 6 times and _calculate_consensus_weight_fractions 1 time
-        total_guard_cw = 0
-        total_middle_cw = 0
-        total_exit_cw = 0
+        # Calculate comprehensive network totals once - replaces duplicate calculations
+        total_guard_cw, total_middle_cw, total_exit_cw = self._calculate_network_totals()
 
         for idx, relay in enumerate(self.json["relays"]):
             # Extract consensus weight once per relay to avoid repeated dict lookups
             # This value gets used multiple times: once per _sort call + once for totals
             cw = relay.get("consensus_weight", 0)
-            
-            # Accumulate network-wide totals while we have the consensus weight value
-            # Already inside the loop, so we don't need to iterate through all relays again in _sort 6 times and _calculate_consensus_weight_fractions 1 time
-            if "Exit" in relay["flags"]:
-                total_exit_cw += cw
-            elif "Guard" in relay["flags"]:
-                total_guard_cw += cw
-            else:
-                total_middle_cw += cw
 
             keys = ["as", "country", "platform"]
             for key in keys:
@@ -429,11 +467,11 @@ class Relays:
         if total_relay_count > 0:
             centralization_percentage = f"{(actual_family_relay_total / total_relay_count) * 100:.1f}"
         
-        # Calculate network totals using exclusive categorization (Exit OR Guard OR Middle)
-        network_guard_total = sum(1 for relay in self.json['relays'] if 'Exit' not in relay['flags'] and 'Guard' in relay['flags'])
-        network_middle_total = sum(1 for relay in self.json['relays'] if 'Guard' not in relay['flags'] and 'Exit' not in relay['flags'])
-        network_exit_total = sum(1 for relay in self.json['relays'] if 'Exit' in relay['flags'])
-        network_total_relays = network_guard_total + network_middle_total + network_exit_total
+        # Use cached network totals from _calculate_network_totals() instead of recalculating
+        network_guard_total = self.json['network_totals']['guard_count']
+        network_middle_total = self.json['network_totals']['middle_count'] 
+        network_exit_total = self.json['network_totals']['exit_count']
+        network_total_relays = self.json['network_totals']['total_relays']
         
         # Cache family statistics in self.json for template access
         self.json['family_statistics'] = {
