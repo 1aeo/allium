@@ -1,0 +1,1674 @@
+    <!DOCTYPE html>
+    <html lang="en">
+        <head>
+            <title>
+Tor Relays :: Contact 11b235d30ab012cf3c2b968cb5dfbcb1            </title>
+            <meta name="description"
+                  content="Javascript-free Tor metrics generated from a 30 minute API request.">
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <link rel="stylesheet" href="../../static/css/bootstrap.min.css">
+            <!--source: metrics.torproject.org-->
+            <style>
+                .circle {
+                    display: inline-block;
+                    vertical-align: middle;
+                    background: #999999;
+                    width: 7px;
+                    height: 7px;
+                    -moz-border-radius: 50%;
+                    -webkit-border-radius: 50%;
+                    border-radius: 50%;
+                }
+
+                .circle-online {
+                    background: #25d918;
+                }
+
+                .circle-offline {
+                    background: #ff1515;
+                }
+
+                .verified-hostname {
+                    color: #FE9F30;
+                }
+
+                .verified-hostname {
+                    color: #68b030;
+                }
+
+                .unverified-hostname {
+                    color: #FE9F30;
+                }
+
+                /* Dynamic text truncation for contact information */
+                .contact-text {
+                    display: inline-block;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    max-width: 20vw;  /* Use viewport width for responsive sizing */
+                }
+
+                /* Table styles */
+                .table {
+                    width: 100%;
+                    margin-bottom: 1rem;
+                }
+
+                /* Precise alignment for multi-value columns using monospace */
+                .bw-header, .cw-header, .rc-header, /* rc = relay count */
+                .bw-data, .cw-data, .rc-data {
+                    font-family: Consolas, "Courier New", monospace;
+                    white-space: nowrap;
+                    text-align: center;
+                    letter-spacing: 0.05em; /* Slight spacing for readability */
+                }
+
+                /* Container breakpoint */
+                @media (min-width: 1400px) {
+                    .container {
+                        width: 95%;
+                        max-width: none;
+                        padding-right: 15px;
+                        padding-left: 15px;
+                        margin-right: auto;
+                        margin-left: auto;
+                    }
+                }
+
+                /* CSS-only navbar collapse using checkbox hack */
+                .navbar-toggle {
+                    display: none;
+                    background-color: transparent;
+                    background-image: none;
+                    border: 1px solid #ddd;
+                    border-radius: 4px;
+                    padding: 9px 10px;
+                    margin-top: 8px;
+                    margin-right: 15px;
+                    margin-bottom: 8px;
+                    cursor: pointer;
+                    float: right;
+                }
+
+                .navbar-toggle:hover,
+                .navbar-toggle:focus {
+                    background-color: #ddd;
+                }
+
+                .navbar-toggle .icon-bar {
+                    display: block;
+                    width: 22px;
+                    height: 2px;
+                    background-color: #888;
+                    border-radius: 1px;
+                    margin: 4px 0;
+                }
+
+                .navbar-brand {
+                    float: left;
+                    height: 50px;
+                    padding: 15px;
+                    font-size: 18px;
+                    line-height: 20px;
+                    font-weight: bold;
+                }
+
+                /* Desktop: show navigation horizontally */
+                @media (min-width: 768px) {
+                    .navbar-collapse {
+                        display: block !important;
+                        height: auto !important;
+                        overflow: visible !important;
+                    }
+                    
+                    .nav.navbar-nav {
+                        float: left;
+                        margin: 0;
+                    }
+                    
+                    .nav.navbar-nav > li {
+                        float: left;
+                    }
+                    
+                    .nav.navbar-nav > li > a {
+                        padding-top: 15px;
+                        padding-bottom: 15px;
+                        color: #777;
+                        text-decoration: none;
+                        padding-left: 15px;
+                        padding-right: 15px;
+                    }
+                    
+                    .nav.navbar-nav > li.active > a,
+                    .nav.navbar-nav > li > a:hover,
+                    .nav.navbar-nav > li > a:focus {
+                        color: #333;
+                        background-color: #e7e7e7;
+                    }
+                    
+                    .navbar-brand {
+                        display: none;
+                    }
+                }
+
+                /* Mobile: hide navigation by default, show hamburger */
+                @media (max-width: 767px) {
+                    .navbar-toggle {
+                        display: block;
+                    }
+                    
+                    .navbar-collapse {
+                        display: none;
+                        clear: both;
+                        width: 100%;
+                        margin-top: 50px;
+                        border-top: 1px solid #e7e7e7;
+                        padding-top: 10px;
+                    }
+                    
+                    /* When checkbox is checked, show the menu */
+                    .navbar-toggle-checkbox:checked ~ .navbar-header + .navbar-collapse {
+                        display: block;
+                    }
+                    
+                    .nav.navbar-nav > li {
+                        float: none;
+                    }
+                    
+                    .nav.navbar-nav > li > a {
+                        display: block;
+                        padding: 12px 20px;
+                        color: #777;
+                        text-decoration: none;
+                        border-bottom: 1px solid #e7e7e7;
+                    }
+                    
+                    .nav.navbar-nav > li:last-child > a {
+                        border-bottom: none;
+                    }
+                    
+                    .nav.navbar-nav > li.active > a,
+                    .nav.navbar-nav > li > a:hover,
+                    .nav.navbar-nav > li > a:focus {
+                        color: #333;
+                        background-color: #f5f5f5;
+                    }
+                }
+            </style>
+        </head>
+    <body>
+        <div class="container">
+<h2>
+    <a href="../../">Home</a> :: Contact 11b235d30ab012cf3c2b968cb5dfbcb1</h2>
+
+<p>
+ContactInfo Random Person nobody@tor.org
+is responsible for ~1.72 Gbit/s of bandwidth (BW) (1.39 Gbit/s guard, 0.33 Gbit/s middle) and 0.15% consensus weight (CW) (0.23% guard, 0.22% middle), with
+            10 guard relays,            12 middle relays.
+</p>
+
+<p class="text-muted" style="margin-bottom: 15px;">
+<small>Last updated: Thu, 05 Jun 2025 17:58:10 GMT. Refreshed every 30 minutes from the Tor directory authorities via <a href="https://onionoo.torproject.org/">Tor Project's onionoo API</a>.</small>
+</p>
+
+<table class="table table-condensed">
+<tr>
+    <th></th>
+    <th>Nickname</th>
+    <th><a href="https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/" target="_blank" title="Autonomous Relay Operator Identifier - unverified">AROI</a></th>
+    <th>Contact</th>
+    <th>BW</th>
+    <th class="visible-md visible-lg">IP Address</th>
+    <th>AS Number</th>
+    <th>AS Name</th>
+    <th>Country</th>
+    <th>Platform</th>
+    <th class="visible-md visible-lg">Flags</th>
+    <th class="visible-md visible-lg">First Seen</th>
+</tr>
+<tbody>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="vitmp13">
+			<a href="../../relay/88D2E30F763F9B86D7DD5E27F4D585DE350CA1FB.html">vitmp13</a>
+		    </td>
+<td>none</td>
+<td title="Random Person nobody@tor.org">
+			<span class="contact-text">Random Person nobody@tor.org</span>
+		    </td>
+<td>209.95 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/194.0.252.34">194.0.252.34</a>
+		</td>
+<td>
+			    <a href="../../as/AS62217/">AS62217</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS62217"
+			   title="Vinters IT Ltd">Vinters IT Ltd</a>
+		    </td>
+<td>
+			    <a href="../../country/gb/">
+				<img src="../../static/images/cc/gb.png"
+				     title="United Kingdom of Great Britain and Northern Ireland"
+				     alt="United Kingdom of Great Britain and Northern Ireland">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-03-02/">2025-03-02</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="SomeTorinAS200462">
+			<a href="../../relay/8FD386BF70C5EBA82804A3FD2438BC07B45D0714.html">SomeTor...</a>
+		    </td>
+<td>none</td>
+<td title="Random Person nobody@tor.org">
+			<span class="contact-text">Random Person nobody@tor.org</span>
+		    </td>
+<td>194.53 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/2.58.52.163">2.58.52.163</a>
+		</td>
+<td>
+			    <a href="../../as/AS200462/">AS200462</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS200462"
+			   title="Lennart Seitz trading as &#34;ETH-Services&#34;">Lennart Seitz...</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-02-15/">2024-02-15</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="SomeTorinAS200462">
+			<a href="../../relay/8FDAFC439E2D09659A3EC0D723B9C3761EE5596D.html">SomeTor...</a>
+		    </td>
+<td>none</td>
+<td title="Random Person nobody@tor.org">
+			<span class="contact-text">Random Person nobody@tor.org</span>
+		    </td>
+<td>194.46 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/2.58.52.163">2.58.52.163</a>
+		</td>
+<td>
+			    <a href="../../as/AS200462/">AS200462</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS200462"
+			   title="Lennart Seitz trading as &#34;ETH-Services&#34;">Lennart Seitz...</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-02-15/">2024-02-15</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="SomeTorinAS200462">
+			<a href="../../relay/BBA4AC0A7CC698E97926AF69CE9A58AC26523CF9.html">SomeTor...</a>
+		    </td>
+<td>none</td>
+<td title="Random Person nobody@tor.org">
+			<span class="contact-text">Random Person nobody@tor.org</span>
+		    </td>
+<td>194.40 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/2.58.52.163">2.58.52.163</a>
+		</td>
+<td>
+			    <a href="../../as/AS200462/">AS200462</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS200462"
+			   title="Lennart Seitz trading as &#34;ETH-Services&#34;">Lennart Seitz...</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-02-15/">2024-02-15</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="SomeTorinAS200462">
+			<a href="../../relay/2A996A019EE0C451771C0B51C29A8C102800F69C.html">SomeTor...</a>
+		    </td>
+<td>none</td>
+<td title="Random Person nobody@tor.org">
+			<span class="contact-text">Random Person nobody@tor.org</span>
+		    </td>
+<td>194.20 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/2.58.52.163">2.58.52.163</a>
+		</td>
+<td>
+			    <a href="../../as/AS200462/">AS200462</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS200462"
+			   title="Lennart Seitz trading as &#34;ETH-Services&#34;">Lennart Seitz...</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-05-11/">2025-05-11</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="CaptainData">
+			<a href="../../relay/E2D33E78B3340C1A0DFE3FB08C2D65A6C6C53F6F.html">CaptainData</a>
+		    </td>
+<td>none</td>
+<td title="Random Person nobody@tor.org">
+			<span class="contact-text">Random Person nobody@tor.org</span>
+		    </td>
+<td>176.49 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/185.170.112.182">185.170.112.182</a>
+		</td>
+<td>
+			    <a href="../../as/AS197540/">AS197540</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS197540"
+			   title="netcup GmbH">netcup GmbH</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-03-13/">2025-03-13</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="notagain">
+			<a href="../../relay/87188ABC6B5813F1126499DEE28021038A90F7EF.html">notagain</a>
+		    </td>
+<td>none</td>
+<td title="Random Person nobody@tor.org">
+			<span class="contact-text">Random Person nobody@tor.org</span>
+		    </td>
+<td>144.82 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/87.185.59.8">87.185.59.8</a>
+		</td>
+<td>
+			    <a href="../../as/AS3320/">AS3320</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS3320"
+			   title="Deutsche Telekom AG">Deutsche Telekom AG</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-05-22/">2025-05-22</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="ididnteditheconfig">
+			<a href="../../relay/1CAC58ED03509FE112CFB780D5B04068644B28E8.html">ididnte...</a>
+		    </td>
+<td>none</td>
+<td title="Random Person nobody@tor.org">
+			<span class="contact-text">Random Person nobody@tor.org</span>
+		    </td>
+<td>87.30 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/62.238.237.242">62.238.237.242</a>
+		</td>
+<td>
+			    <a href="../../as/AS15435/">AS15435</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS15435"
+			   title="DELTA Fiber Nederland B.V.">DELTA Fiber...</a>
+		    </td>
+<td>
+			    <a href="../../country/nl/">
+				<img src="../../static/images/cc/nl.png"
+				     title="Netherlands"
+				     alt="Netherlands">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-11-03/">2024-11-03</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="TORHELPER">
+			<a href="../../relay/2083E72F003A9F2088829864F256DAC6DE438374.html">TORHELPER</a>
+		    </td>
+<td>none</td>
+<td title="Random Person nobody@tor.org">
+			<span class="contact-text">Random Person nobody@tor.org</span>
+		    </td>
+<td>81.06 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/5.59.248.158">5.59.248.158</a>
+		</td>
+<td>
+			    <a href="../../as/AS212271/">AS212271</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS212271"
+			   title="Cinzia Tocci trading as C1V">Cinzia Tocci...</a>
+		    </td>
+<td>
+			    <a href="../../country/it/">
+				<img src="../../static/images/cc/it.png"
+				     title="Italy"
+				     alt="Italy">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-12-29/">2024-12-29</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="maddy">
+			<a href="../../relay/D97F6C950EF607B9D84E5CC040C771A692188194.html">maddy</a>
+		    </td>
+<td>none</td>
+<td title="Random Person nobody@tor.org">
+			<span class="contact-text">Random Person nobody@tor.org</span>
+		    </td>
+<td>72.54 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/195.201.103.59">195.201.103.59</a>
+		</td>
+<td>
+			    <a href="../../as/AS24940/">AS24940</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS24940"
+			   title="Hetzner Online GmbH">Hetzner Online GmbH</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-02-05/">2024-02-05</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="BVX2">
+			<a href="../../relay/93ACD6E5D462BC086810A6F41CE18B8385FE6A94.html">BVX2</a>
+		    </td>
+<td>none</td>
+<td title="Random Person nobody@tor.org">
+			<span class="contact-text">Random Person nobody@tor.org</span>
+		    </td>
+<td>43.64 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/34.116.147.74">34.116.147.74</a>
+		</td>
+<td>
+			    <a href="../../as/AS396982/">AS396982</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS396982"
+			   title="Google LLC">Google LLC</a>
+		    </td>
+<td>
+			    <a href="../../country/pl/">
+				<img src="../../static/images/cc/pl.png"
+				     title="Poland"
+				     alt="Poland">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-02-01/">2024-02-01</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="Unnamed">
+			<a href="../../relay/A39DDAEF9E832414C66F7E6ED114671CF10D235A.html">Unnamed</a>
+		    </td>
+<td>none</td>
+<td title="Random Person nobody@tor.org">
+			<span class="contact-text">Random Person nobody@tor.org</span>
+		    </td>
+<td>32.59 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/158.51.111.120">158.51.111.120</a>
+		</td>
+<td>
+			    <a href="../../as/AS18526/">AS18526</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS18526"
+			   title="DDPS Networks, LLC">DDPS Networks, LLC</a>
+		    </td>
+<td>
+			    <a href="../../country/jp/">
+				<img src="../../static/images/cc/jp.png"
+				     title="Japan"
+				     alt="Japan">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-11-30/">2024-11-30</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="TORHELPER">
+			<a href="../../relay/5160C286891817761B2EE225F8B1E9B701677E8A.html">TORHELPER</a>
+		    </td>
+<td>none</td>
+<td title="Random Person nobody@tor.org">
+			<span class="contact-text">Random Person nobody@tor.org</span>
+		    </td>
+<td>30.99 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/94.159.98.28">94.159.98.28</a>
+		</td>
+<td>
+			    <a href="../../as/AS215730/">AS215730</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS215730"
+			   title="H2NEXUS LTD">H2NEXUS LTD</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-12-29/">2024-12-29</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="TORHELPER">
+			<a href="../../relay/682EF59F22D24465375F25DF061CD8952EF3044D.html">TORHELPER</a>
+		    </td>
+<td>none</td>
+<td title="Random Person nobody@tor.org">
+			<span class="contact-text">Random Person nobody@tor.org</span>
+		    </td>
+<td>30.90 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/193.31.25.141">193.31.25.141</a>
+		</td>
+<td>
+			    <a href="../../as/AS197540/">AS197540</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS197540"
+			   title="netcup GmbH">netcup GmbH</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-02-06/">2025-02-06</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="clucht">
+			<a href="../../relay/EE8A25A8558011689200A820CF3B092FAAE861A3.html">clucht</a>
+		    </td>
+<td>none</td>
+<td title="Random Person nobody@tor.org">
+			<span class="contact-text">Random Person nobody@tor.org</span>
+		    </td>
+<td>9.41 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/109.199.106.226">109.199.106.226</a>
+		</td>
+<td>
+			    <a href="../../as/AS51167/">AS51167</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS51167"
+			   title="Contabo GmbH">Contabo GmbH</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-03-26/">2025-03-26</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="iiyatsu">
+			<a href="../../relay/8E401B73DB1FF20EDE17134E6930DC76931DBFBB.html">iiyatsu</a>
+		    </td>
+<td>none</td>
+<td title="Random Person nobody@tor.org">
+			<span class="contact-text">Random Person nobody@tor.org</span>
+		    </td>
+<td>5.45 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/165.232.130.0">165.232.130.0</a>
+		</td>
+<td>
+			    <a href="../../as/AS14061/">AS14061</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS14061"
+			   title="DigitalOcean, LLC">DigitalOcean, LLC</a>
+		    </td>
+<td>
+			    <a href="../../country/us/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-04-06/">2025-04-06</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="TORHELPER">
+			<a href="../../relay/79B62499BDC6B9222732706FE7BD61C10830B7FA.html">TORHELPER</a>
+		    </td>
+<td>none</td>
+<td title="Random Person nobody@tor.org">
+			<span class="contact-text">Random Person nobody@tor.org</span>
+		    </td>
+<td>4.82 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/2.58.203.60">2.58.203.60</a>
+		</td>
+<td>
+			    <a href="../../as/AS203363/">AS203363</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS203363"
+			   title="Kuroit Limited">Kuroit Limited</a>
+		    </td>
+<td>
+			    <a href="../../country/gb/">
+				<img src="../../static/images/cc/gb.png"
+				     title="United Kingdom of Great Britain and Northern Ireland"
+				     alt="United Kingdom of Great Britain and Northern Ireland">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-12-29/">2024-12-29</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="b5408b331b13dd">
+			<a href="../../relay/C31E7D1E4B0044F9A82D3B2F8C6E13390D69F6D0.html">b5408b331b13dd</a>
+		    </td>
+<td>none</td>
+<td title="Random Person nobody@tor.org">
+			<span class="contact-text">Random Person nobody@tor.org</span>
+		    </td>
+<td>3.34 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/46.59.187.34">46.59.187.34</a>
+		</td>
+<td>
+			    <a href="../../as/AS15943/">AS15943</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS15943"
+			   title="wilhelm.tel GmbH">wilhelm.tel GmbH</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-06-20/">2024-06-20</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="TORHELPER">
+			<a href="../../relay/3639BCD456FA1266A9F3B8FC1A57A5359B291D7C.html">TORHELPER</a>
+		    </td>
+<td>none</td>
+<td title="Random Person nobody@tor.org">
+			<span class="contact-text">Random Person nobody@tor.org</span>
+		    </td>
+<td>2.14 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/147.78.240.211">147.78.240.211</a>
+		</td>
+<td>
+			    <a href="../../as/AS3214/">AS3214</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS3214"
+			   title="xTom GmbH">xTom GmbH</a>
+		    </td>
+<td>
+			    <a href="../../country/nl/">
+				<img src="../../static/images/cc/nl.png"
+				     title="Netherlands"
+				     alt="Netherlands">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-12-29/">2024-12-29</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="ididnteditheconfig">
+			<a href="../../relay/30B46FF0141C0F3748E00DBF6E45E1DDD54A1D51.html">ididnte...</a>
+		    </td>
+<td>none</td>
+<td title="Random Person nobody@tor.org">
+			<span class="contact-text">Random Person nobody@tor.org</span>
+		    </td>
+<td>952.27 Kbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/94.136.83.72">94.136.83.72</a>
+		</td>
+<td>
+			    <a href="../../as/AS12552/">AS12552</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS12552"
+			   title="GlobalConnect AB">GlobalConnect AB</a>
+		    </td>
+<td>
+			    <a href="../../country/se/">
+				<img src="../../static/images/cc/se.png"
+				     title="Sweden"
+				     alt="Sweden">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-10-06/">2024-10-06</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="ididnteditheconfig">
+			<a href="../../relay/18D8FAF2E45D28B9807DDD0653F517FF55A5898D.html">ididnte...</a>
+		    </td>
+<td>none</td>
+<td title="Random Person nobody@tor.org">
+			<span class="contact-text">Random Person nobody@tor.org</span>
+		    </td>
+<td>922.75 Kbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/31.220.81.242">31.220.81.242</a>
+		</td>
+<td>
+			    <a href="../../as/AS51167/">AS51167</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS51167"
+			   title="Contabo GmbH">Contabo GmbH</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2023-12-19/">2023-12-19</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="awesomerelay">
+			<a href="../../relay/DAD89E4565648DE138590057395624D46B092451.html">awesomerelay</a>
+		    </td>
+<td>none</td>
+<td title="Random Person nobody@tor.org">
+			<span class="contact-text">Random Person nobody@tor.org</span>
+		    </td>
+<td>918.22 Kbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/80.109.197.24">80.109.197.24</a>
+		</td>
+<td>
+			    <a href="../../as/AS8412/">AS8412</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS8412"
+			   title="T-Mobile Austria GmbH">T-Mobile Austria GmbH</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2023-01-28/">2023-01-28</a>
+		    </td>
+</tr>
+</tbody>
+</table>
+        </div>
+    </body>
+        <footer class="page-footer font-small">
+            <div class="footer-copyright text-center text-muted">
+                <p>
+                    Generated by a <a href="https://github.com/1aeo/allium">1aeo modified fork of allium</a>, based on original <a href="https://git.jordan.im/allium/">allium</a>, on Thu, 05 Jun 2025 17:58:10 GMT. Source data from <a href="https://onionoo.torproject.org/">Tor Project onionoo</a>.
+                </p>
+            </div>
+        </footer>
+    </html>

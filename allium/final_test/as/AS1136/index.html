@@ -1,0 +1,2022 @@
+    <!DOCTYPE html>
+    <html lang="en">
+        <head>
+            <title>
+Tor Relays :: KPN B.V. (AS1136)            </title>
+            <meta name="description"
+                  content="Javascript-free Tor metrics generated from a 30 minute API request.">
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <link rel="stylesheet" href="../../static/css/bootstrap.min.css">
+            <!--source: metrics.torproject.org-->
+            <style>
+                .circle {
+                    display: inline-block;
+                    vertical-align: middle;
+                    background: #999999;
+                    width: 7px;
+                    height: 7px;
+                    -moz-border-radius: 50%;
+                    -webkit-border-radius: 50%;
+                    border-radius: 50%;
+                }
+
+                .circle-online {
+                    background: #25d918;
+                }
+
+                .circle-offline {
+                    background: #ff1515;
+                }
+
+                .verified-hostname {
+                    color: #FE9F30;
+                }
+
+                .verified-hostname {
+                    color: #68b030;
+                }
+
+                .unverified-hostname {
+                    color: #FE9F30;
+                }
+
+                /* Dynamic text truncation for contact information */
+                .contact-text {
+                    display: inline-block;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    max-width: 20vw;  /* Use viewport width for responsive sizing */
+                }
+
+                /* Table styles */
+                .table {
+                    width: 100%;
+                    margin-bottom: 1rem;
+                }
+
+                /* Precise alignment for multi-value columns using monospace */
+                .bw-header, .cw-header, .rc-header, /* rc = relay count */
+                .bw-data, .cw-data, .rc-data {
+                    font-family: Consolas, "Courier New", monospace;
+                    white-space: nowrap;
+                    text-align: center;
+                    letter-spacing: 0.05em; /* Slight spacing for readability */
+                }
+
+                /* Container breakpoint */
+                @media (min-width: 1400px) {
+                    .container {
+                        width: 95%;
+                        max-width: none;
+                        padding-right: 15px;
+                        padding-left: 15px;
+                        margin-right: auto;
+                        margin-left: auto;
+                    }
+                }
+
+                /* CSS-only navbar collapse using checkbox hack */
+                .navbar-toggle {
+                    display: none;
+                    background-color: transparent;
+                    background-image: none;
+                    border: 1px solid #ddd;
+                    border-radius: 4px;
+                    padding: 9px 10px;
+                    margin-top: 8px;
+                    margin-right: 15px;
+                    margin-bottom: 8px;
+                    cursor: pointer;
+                    float: right;
+                }
+
+                .navbar-toggle:hover,
+                .navbar-toggle:focus {
+                    background-color: #ddd;
+                }
+
+                .navbar-toggle .icon-bar {
+                    display: block;
+                    width: 22px;
+                    height: 2px;
+                    background-color: #888;
+                    border-radius: 1px;
+                    margin: 4px 0;
+                }
+
+                .navbar-brand {
+                    float: left;
+                    height: 50px;
+                    padding: 15px;
+                    font-size: 18px;
+                    line-height: 20px;
+                    font-weight: bold;
+                }
+
+                /* Desktop: show navigation horizontally */
+                @media (min-width: 768px) {
+                    .navbar-collapse {
+                        display: block !important;
+                        height: auto !important;
+                        overflow: visible !important;
+                    }
+                    
+                    .nav.navbar-nav {
+                        float: left;
+                        margin: 0;
+                    }
+                    
+                    .nav.navbar-nav > li {
+                        float: left;
+                    }
+                    
+                    .nav.navbar-nav > li > a {
+                        padding-top: 15px;
+                        padding-bottom: 15px;
+                        color: #777;
+                        text-decoration: none;
+                        padding-left: 15px;
+                        padding-right: 15px;
+                    }
+                    
+                    .nav.navbar-nav > li.active > a,
+                    .nav.navbar-nav > li > a:hover,
+                    .nav.navbar-nav > li > a:focus {
+                        color: #333;
+                        background-color: #e7e7e7;
+                    }
+                    
+                    .navbar-brand {
+                        display: none;
+                    }
+                }
+
+                /* Mobile: hide navigation by default, show hamburger */
+                @media (max-width: 767px) {
+                    .navbar-toggle {
+                        display: block;
+                    }
+                    
+                    .navbar-collapse {
+                        display: none;
+                        clear: both;
+                        width: 100%;
+                        margin-top: 50px;
+                        border-top: 1px solid #e7e7e7;
+                        padding-top: 10px;
+                    }
+                    
+                    /* When checkbox is checked, show the menu */
+                    .navbar-toggle-checkbox:checked ~ .navbar-header + .navbar-collapse {
+                        display: block;
+                    }
+                    
+                    .nav.navbar-nav > li {
+                        float: none;
+                    }
+                    
+                    .nav.navbar-nav > li > a {
+                        display: block;
+                        padding: 12px 20px;
+                        color: #777;
+                        text-decoration: none;
+                        border-bottom: 1px solid #e7e7e7;
+                    }
+                    
+                    .nav.navbar-nav > li:last-child > a {
+                        border-bottom: none;
+                    }
+                    
+                    .nav.navbar-nav > li.active > a,
+                    .nav.navbar-nav > li > a:hover,
+                    .nav.navbar-nav > li > a:focus {
+                        color: #333;
+                        background-color: #f5f5f5;
+                    }
+                }
+            </style>
+        </head>
+    <body>
+        <div class="container">
+<h2>
+<a href="../../">Home</a> :: KPN B.V. (AS1136)</h2>
+
+<p>
+AS1136 is responsible for ~3.47 Gbit/s of bandwidth (BW) (2.38 Gbit/s guard, 1.09 Gbit/s middle) and 0.37% consensus weight (CW) (0.44% guard, 0.90% middle), with
+    13 guard relays,    15 middle relays.</p>
+
+<p class="text-muted" style="margin-bottom: 15px;">
+<small>Last updated: Thu, 05 Jun 2025 17:58:10 GMT. Refreshed every 30 minutes from the Tor directory authorities via <a href="https://onionoo.torproject.org/">Tor Project's onionoo API</a>.</small>
+</p>
+
+<table class="table table-condensed">
+<tr>
+    <th></th>
+    <th>Nickname</th>
+    <th><a href="https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/" target="_blank" title="Autonomous Relay Operator Identifier - unverified">AROI</a></th>
+    <th>Contact</th>
+    <th>BW</th>
+    <th class="visible-md visible-lg">IP Address</th>
+    <th>AS Number</th>
+    <th>AS Name</th>
+    <th>Country</th>
+    <th>Platform</th>
+    <th class="visible-md visible-lg">Flags</th>
+    <th class="visible-md visible-lg">First Seen</th>
+</tr>
+<tbody>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="op2">
+		    <a href="../../relay/752AA93C16DC039D86F88C8CAC5AC43CA3A87DDD.html">op2</a> (<a href="../../family/752AA93C16DC039D86F88C8CAC5AC43CA3A87DDD/">3</a>)
+		    </td>
+<td>
+			    <a href="../../contact/a5c2304aa2461ea690b0395d84977e07/" title="louis.weebl.me">louis.weebl.me</a>
+			</td>
+<td>
+			    <a href="../../contact/a5c2304aa2461ea690b0395d84977e07/" 
+				title="url:louis.weebl.me proof:uri-rsa ciissversion:2" class="contact-text">url:louis.weebl.me proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>424.21 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/77.174.62.158">77.174.62.158</a>
+		</td>
+<td>AS1136</td>
+<td>
+			<a href="https://bgp.tools/AS1136"
+			   title="KPN B.V.">KPN B.V.</a>
+		    </td>
+<td>
+			    <a href="../../country/nl/">
+				<img src="../../static/images/cc/nl.png"
+				     title="Netherlands"
+				     alt="Netherlands">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/FreeBSD/">FreeBSD</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2023-08-14/">2023-08-14</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="lw">
+		    <a href="../../relay/FD449127D30D8F5D124653D9EF736EDF4A12B4DC.html">lw</a> (<a href="../../family/FD449127D30D8F5D124653D9EF736EDF4A12B4DC/">3</a>)
+		    </td>
+<td>
+			    <a href="../../contact/a7433adbb905190ea384f7d2a2bc0bf7/" title="louis.weebl.me">louis.weebl.me</a>
+			</td>
+<td>
+			    <a href="../../contact/a7433adbb905190ea384f7d2a2bc0bf7/" 
+				title="Random Person yvqk4i3b1ziu11f url:louis.weebl.me proof:uri-rsa ciissversion:2" class="contact-text">Random Person yvqk4i3b1ziu11f url:louis.weebl.me proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>373.69 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/77.174.62.158">77.174.62.158</a>
+		</td>
+<td>AS1136</td>
+<td>
+			<a href="https://bgp.tools/AS1136"
+			   title="KPN B.V.">KPN B.V.</a>
+		    </td>
+<td>
+			    <a href="../../country/nl/">
+				<img src="../../static/images/cc/nl.png"
+				     title="Netherlands"
+				     alt="Netherlands">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2019-02-18/">2019-02-18</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="2cv">
+		    <a href="../../relay/482DF3247D2DF2B96042EDB7BB012F23319092F2.html">2cv</a> (<a href="../../family/482DF3247D2DF2B96042EDB7BB012F23319092F2/">3</a>)
+		    </td>
+<td>
+			    <a href="../../contact/a5c2304aa2461ea690b0395d84977e07/" title="louis.weebl.me">louis.weebl.me</a>
+			</td>
+<td>
+			    <a href="../../contact/a5c2304aa2461ea690b0395d84977e07/" 
+				title="url:louis.weebl.me proof:uri-rsa ciissversion:2" class="contact-text">url:louis.weebl.me proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>331.92 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/77.174.62.158">77.174.62.158</a>
+		</td>
+<td>AS1136</td>
+<td>
+			<a href="https://bgp.tools/AS1136"
+			   title="KPN B.V.">KPN B.V.</a>
+		    </td>
+<td>
+			    <a href="../../country/nl/">
+				<img src="../../static/images/cc/nl.png"
+				     title="Netherlands"
+				     alt="Netherlands">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2023-08-12/">2023-08-12</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="ProxTor">
+			<a href="../../relay/3CEA56B817455E13C4B063E7D3E7726C286F7C9B.html">ProxTor</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/ffc9d342dda936dae004ffc4cd296f25/" 
+				title="O n i on R	a s p	b e r	r	y S	o	u p@p	r	o	t o n ma	i	l	.	c	o m" class="contact-text">O n i on R	a s p	b e r	r	y S	o	u p@p	r	o	t o n ma	i	l	.	c	o m</a>
+			</td>
+<td>250.91 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/77.160.53.97">77.160.53.97</a>
+		</td>
+<td>AS1136</td>
+<td>
+			<a href="https://bgp.tools/AS1136"
+			   title="KPN B.V.">KPN B.V.</a>
+		    </td>
+<td>
+			    <a href="../../country/nl/">
+				<img src="../../static/images/cc/nl.png"
+				     title="Netherlands"
+				     alt="Netherlands">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2019-02-18/">2019-02-18</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="Middlerelay">
+		    <a href="../../relay/CCE0F2A2C70348FDA7E9B84F91C1D9EB83D806B0.html">Middlerelay</a> (<a href="../../family/CCE0F2A2C70348FDA7E9B84F91C1D9EB83D806B0/">5</a>)
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/ed2c21d79d58c59b521e0fbae460e334/" 
+				title="wett_egg@protonmail.com" class="contact-text">wett_egg@protonmail.com</a>
+			</td>
+<td>214.25 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/77.164.187.211">77.164.187.211</a>
+		</td>
+<td>AS1136</td>
+<td>
+			<a href="https://bgp.tools/AS1136"
+			   title="KPN B.V.">KPN B.V.</a>
+		    </td>
+<td>
+			    <a href="../../country/nl/">
+				<img src="../../static/images/cc/nl.png"
+				     title="Netherlands"
+				     alt="Netherlands">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-05-13/">2025-05-13</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="mrjoep">
+		    <a href="../../relay/C13578BF5478B48FDBD003B3DDE3C684BBA1160B.html">mrjoep</a> (<a href="../../family/C13578BF5478B48FDBD003B3DDE3C684BBA1160B/">5</a>)
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/76f087fdf119c71c13b0c35261a46b76/" 
+				title="tor@mr-joep.nl" class="contact-text">tor@mr-joep.nl</a>
+			</td>
+<td>188.09 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/77.166.188.222">77.166.188.222</a>
+		</td>
+<td>AS1136</td>
+<td>
+			<a href="https://bgp.tools/AS1136"
+			   title="KPN B.V.">KPN B.V.</a>
+		    </td>
+<td>
+			    <a href="../../country/nl/">
+				<img src="../../static/images/cc/nl.png"
+				     title="Netherlands"
+				     alt="Netherlands">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-05-13/">2025-05-13</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="CookieCrumble">
+			<a href="../../relay/2AD33BDA8BBC11CB921BE51E9C9E5269479EDC75.html">CookieCrumble</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/1a44b3a6547e6b4bd4d2d68d9faa9eec/" 
+				title="tozz@kijkt.tv" class="contact-text">tozz@kijkt.tv</a>
+			</td>
+<td>176.84 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/77.174.188.151">77.174.188.151</a>
+		</td>
+<td>AS1136</td>
+<td>
+			<a href="https://bgp.tools/AS1136"
+			   title="KPN B.V.">KPN B.V.</a>
+		    </td>
+<td>
+			    <a href="../../country/nl/">
+				<img src="../../static/images/cc/nl.png"
+				     title="Netherlands"
+				     alt="Netherlands">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-04-06/">2025-04-06</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="SmoothOperator">
+			<a href="../../relay/2E593E0EC59788020C7A4429BB93F2F825E47A21.html">SmoothOperator</a>
+		    </td>
+<td>none</td>
+<td title="none">
+			    none
+			</td>
+<td>172.39 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/77.162.216.182">77.162.216.182</a>
+		</td>
+<td>AS1136</td>
+<td>
+			<a href="https://bgp.tools/AS1136"
+			   title="KPN B.V.">KPN B.V.</a>
+		    </td>
+<td>
+			    <a href="../../country/nl/">
+				<img src="../../static/images/cc/nl.png"
+				     title="Netherlands"
+				     alt="Netherlands">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-09-17/">2024-09-17</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="mrjoep">
+		    <a href="../../relay/44B95E986D446BF517D2129DDB4CA3C04D9511BA.html">mrjoep</a> (<a href="../../family/44B95E986D446BF517D2129DDB4CA3C04D9511BA/">5</a>)
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/76f087fdf119c71c13b0c35261a46b76/" 
+				title="tor@mr-joep.nl" class="contact-text">tor@mr-joep.nl</a>
+			</td>
+<td>170.46 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/77.166.188.222">77.166.188.222</a>
+		</td>
+<td>AS1136</td>
+<td>
+			<a href="https://bgp.tools/AS1136"
+			   title="KPN B.V.">KPN B.V.</a>
+		    </td>
+<td>
+			    <a href="../../country/nl/">
+				<img src="../../static/images/cc/nl.png"
+				     title="Netherlands"
+				     alt="Netherlands">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-05-06/">2025-05-06</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="mrjoep">
+		    <a href="../../relay/059CACC32E52FBFC3475ACD4BC8A9B8551F92C1E.html">mrjoep</a> (<a href="../../family/059CACC32E52FBFC3475ACD4BC8A9B8551F92C1E/">5</a>)
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/76f087fdf119c71c13b0c35261a46b76/" 
+				title="tor@mr-joep.nl" class="contact-text">tor@mr-joep.nl</a>
+			</td>
+<td>164.77 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/77.166.188.222">77.166.188.222</a>
+		</td>
+<td>AS1136</td>
+<td>
+			<a href="https://bgp.tools/AS1136"
+			   title="KPN B.V.">KPN B.V.</a>
+		    </td>
+<td>
+			    <a href="../../country/nl/">
+				<img src="../../static/images/cc/nl.png"
+				     title="Netherlands"
+				     alt="Netherlands">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-05-06/">2025-05-06</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="ipenburg">
+			<a href="../../relay/A480D8C9F9B1112E47C24E33DAC0419CAF1A821A.html">ipenburg</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/ab0deed337f1b697c737d03fc273d0fa/" 
+				title="0x5c3732f4942cffc4 Roland van Ipenburg &lt;ipenburg@xs4all.nl&gt;" class="contact-text">0x5c3732f4942cffc4 Roland van Ipenburg &lt;ipenburg@xs4all.nl&gt;</a>
+			</td>
+<td>150.36 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/77.174.164.37">77.174.164.37</a>
+		</td>
+<td>AS1136</td>
+<td>
+			<a href="https://bgp.tools/AS1136"
+			   title="KPN B.V.">KPN B.V.</a>
+		    </td>
+<td>
+			    <a href="../../country/nl/">
+				<img src="../../static/images/cc/nl.png"
+				     title="Netherlands"
+				     alt="Netherlands">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2019-12-05/">2019-12-05</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="mrjoep">
+		    <a href="../../relay/5616B9AEA0C111BB595474ECD86EFC7789689158.html">mrjoep</a> (<a href="../../family/5616B9AEA0C111BB595474ECD86EFC7789689158/">5</a>)
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/76f087fdf119c71c13b0c35261a46b76/" 
+				title="tor@mr-joep.nl" class="contact-text">tor@mr-joep.nl</a>
+			</td>
+<td>148.20 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/77.166.188.222">77.166.188.222</a>
+		</td>
+<td>AS1136</td>
+<td>
+			<a href="https://bgp.tools/AS1136"
+			   title="KPN B.V.">KPN B.V.</a>
+		    </td>
+<td>
+			    <a href="../../country/nl/">
+				<img src="../../static/images/cc/nl.png"
+				     title="Netherlands"
+				     alt="Netherlands">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-05-06/">2025-05-06</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="bv0002w">
+			<a href="../../relay/4E8FCF9D0C137BE95052B1A98DD317F5F9DB74A9.html">bv0002w</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/9401f73727cbc34d05e0904bb23c784e/" 
+				title="Arjen &lt;2cc54472a9@sinenomine.email&gt;" class="contact-text">Arjen &lt;2cc54472a9@sinenomine.email&gt;</a>
+			</td>
+<td>100.17 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/77.172.70.151">77.172.70.151</a>
+		</td>
+<td>AS1136</td>
+<td>
+			<a href="https://bgp.tools/AS1136"
+			   title="KPN B.V.">KPN B.V.</a>
+		    </td>
+<td>
+			    <a href="../../country/nl/">
+				<img src="../../static/images/cc/nl.png"
+				     title="Netherlands"
+				     alt="Netherlands">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/FreeBSD/">FreeBSD</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2022-08-21/">2022-08-21</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="subspacerelay1">
+			<a href="../../relay/CD478DBDF96F456C386E2BE52670E76A815EDBF3.html">subspacerelay1</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/458ce38ac7a4809908bc3417573fda86/" 
+				title="cleshawnlamontegue@gmail.com" class="contact-text">cleshawnlamontegue@gmail.com</a>
+			</td>
+<td>98.47 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/77.162.249.122">77.162.249.122</a>
+		</td>
+<td>AS1136</td>
+<td>
+			<a href="https://bgp.tools/AS1136"
+			   title="KPN B.V.">KPN B.V.</a>
+		    </td>
+<td>
+			    <a href="../../country/nl/">
+				<img src="../../static/images/cc/nl.png"
+				     title="Netherlands"
+				     alt="Netherlands">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-07-13/">2024-07-13</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="JobiWan">
+			<a href="../../relay/460229771C96996C6BAB88070D11FA7135820378.html">JobiWan</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/16a428ad7cd51087a918f320392f0cfc/" 
+				title="Jobi-Wanker-Nobi &lt;help me dot jobi wan  AT  gmail dot com&gt;" class="contact-text">Jobi-Wanker-Nobi &lt;help me dot jobi wan  AT  gmail dot com&gt;</a>
+			</td>
+<td>88.11 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/86.80.225.203">86.80.225.203</a>
+		</td>
+<td>AS1136</td>
+<td>
+			<a href="https://bgp.tools/AS1136"
+			   title="KPN B.V.">KPN B.V.</a>
+		    </td>
+<td>
+			    <a href="../../country/nl/">
+				<img src="../../static/images/cc/nl.png"
+				     title="Netherlands"
+				     alt="Netherlands">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-09-20/">2024-09-20</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="ServifyHome">
+			<a href="../../relay/DDB172AB585BC98ADD923FBAC677BC7BC6FFE997.html">ServifyHome</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/698fb9cdcd077d9d0a9c2213843769c3/" 
+				title="Servify &lt;tor AT servify DOT nl&gt;" class="contact-text">Servify &lt;tor AT servify DOT nl&gt;</a>
+			</td>
+<td>78.08 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/77.166.211.126">77.166.211.126</a>
+		</td>
+<td>AS1136</td>
+<td>
+			<a href="https://bgp.tools/AS1136"
+			   title="KPN B.V.">KPN B.V.</a>
+		    </td>
+<td>
+			    <a href="../../country/nl/">
+				<img src="../../static/images/cc/nl.png"
+				     title="Netherlands"
+				     alt="Netherlands">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-04-11/">2025-04-11</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="oneup">
+			<a href="../../relay/FC83153EA2FF3807029506A4B30A27D953DD98D4.html">oneup</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/267cef4140a3d7b0f5efb17745e63fd4/" 
+				title="oneup1@gmail.com" class="contact-text">oneup1@gmail.com</a>
+			</td>
+<td>69.85 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/86.86.126.113">86.86.126.113</a>
+		</td>
+<td>AS1136</td>
+<td>
+			<a href="https://bgp.tools/AS1136"
+			   title="KPN B.V.">KPN B.V.</a>
+		    </td>
+<td>
+			    <a href="../../country/nl/">
+				<img src="../../static/images/cc/nl.png"
+				     title="Netherlands"
+				     alt="Netherlands">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-04-09/">2024-04-09</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="ikhebeenbootrelay">
+			<a href="../../relay/DBED0F7418CFE5F20E9ECC4A4540D315D023AD7B.html">ikhebee...</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/50554ae2195d64ba6ca4335a4a27b7d0/" 
+				title="Paul &lt;info AT ikhebeenboot.nl&gt;" class="contact-text">Paul &lt;info AT ikhebeenboot.nl&gt;</a>
+			</td>
+<td>65.76 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/77.172.190.93">77.172.190.93</a>
+		</td>
+<td>AS1136</td>
+<td>
+			<a href="https://bgp.tools/AS1136"
+			   title="KPN B.V.">KPN B.V.</a>
+		    </td>
+<td>
+			    <a href="../../country/nl/">
+				<img src="../../static/images/cc/nl.png"
+				     title="Netherlands"
+				     alt="Netherlands">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-04-05/">2024-04-05</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="MarinaOvsyannikova">
+			<a href="../../relay/94F16DA2BDDBA092954FF8EC29F9234A69949403.html">MarinaO...</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/b097741c52119be797783e5ef46cde6f/" 
+				title="flev @ kpnmail . nl" class="contact-text">flev @ kpnmail . nl</a>
+			</td>
+<td>64.20 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/77.162.229.73">77.162.229.73</a>
+		</td>
+<td>AS1136</td>
+<td>
+			<a href="https://bgp.tools/AS1136"
+			   title="KPN B.V.">KPN B.V.</a>
+		    </td>
+<td>
+			    <a href="../../country/nl/">
+				<img src="../../static/images/cc/nl.png"
+				     title="Netherlands"
+				     alt="Netherlands">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2019-02-18/">2019-02-18</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="4ebrv4v">
+			<a href="../../relay/17AFEC5644A584D6143830948FA60B94C3C3CA29.html">4ebrv4v</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/1125fcb42cd1e5ba863cf14230671901/" 
+				title="4ebrv4vf4cnk6lfg4fatxa6p2ryd@hidefrom.us" class="contact-text">4ebrv4vf4cnk6lfg4fatxa6p2ryd@hidefrom.us</a>
+			</td>
+<td>25.57 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/77.169.65.156">77.169.65.156</a>
+		</td>
+<td>AS1136</td>
+<td>
+			<a href="https://bgp.tools/AS1136"
+			   title="KPN B.V.">KPN B.V.</a>
+		    </td>
+<td>
+			    <a href="../../country/nl/">
+				<img src="../../static/images/cc/nl.png"
+				     title="Netherlands"
+				     alt="Netherlands">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-05-24/">2025-05-24</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="PrincessLipid">
+		    <a href="../../relay/C8426CC21A1605A0847D25DA175FE33460FF934C.html">PrincessLipid</a> (<a href="../../family/C8426CC21A1605A0847D25DA175FE33460FF934C/">4</a>)
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/fdba42d15434c622d72e97515784e319/" 
+				title="fullfungo+tor+relay@gmail.com" class="contact-text">fullfungo+tor+relay@gmail.com</a>
+			</td>
+<td>20.69 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/88.159.171.233">88.159.171.233</a>
+		</td>
+<td>AS1136</td>
+<td>
+			<a href="https://bgp.tools/AS1136"
+			   title="KPN B.V.">KPN B.V.</a>
+		    </td>
+<td>
+			    <a href="../../country/nl/">
+				<img src="../../static/images/cc/nl.png"
+				     title="Netherlands"
+				     alt="Netherlands">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-03-20/">2025-03-20</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="PrincessShroob">
+		    <a href="../../relay/07985DD5A8C8EEC65A38EC00143CE109B5D99534.html">Princ...</a> (<a href="../../family/07985DD5A8C8EEC65A38EC00143CE109B5D99534/">4</a>)
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/fdba42d15434c622d72e97515784e319/" 
+				title="fullfungo+tor+relay@gmail.com" class="contact-text">fullfungo+tor+relay@gmail.com</a>
+			</td>
+<td>20.34 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/88.159.171.233">88.159.171.233</a>
+		</td>
+<td>AS1136</td>
+<td>
+			<a href="https://bgp.tools/AS1136"
+			   title="KPN B.V.">KPN B.V.</a>
+		    </td>
+<td>
+			    <a href="../../country/nl/">
+				<img src="../../static/images/cc/nl.png"
+				     title="Netherlands"
+				     alt="Netherlands">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-03-20/">2025-03-20</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="PrincessDaisy">
+		    <a href="../../relay/482FAADEA78BE10026F1BD0A28039C6C437B8844.html">PrincessDaisy</a> (<a href="../../family/482FAADEA78BE10026F1BD0A28039C6C437B8844/">4</a>)
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/fdba42d15434c622d72e97515784e319/" 
+				title="fullfungo+tor+relay@gmail.com" class="contact-text">fullfungo+tor+relay@gmail.com</a>
+			</td>
+<td>20.31 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/88.159.171.233">88.159.171.233</a>
+		</td>
+<td>AS1136</td>
+<td>
+			<a href="https://bgp.tools/AS1136"
+			   title="KPN B.V.">KPN B.V.</a>
+		    </td>
+<td>
+			    <a href="../../country/nl/">
+				<img src="../../static/images/cc/nl.png"
+				     title="Netherlands"
+				     alt="Netherlands">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-02-09/">2025-02-09</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="PrincessShokora">
+		    <a href="../../relay/C2BF5BEB0598DF1107123D0C3AB4B54028D12CCB.html">Princ...</a> (<a href="../../family/C2BF5BEB0598DF1107123D0C3AB4B54028D12CCB/">4</a>)
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/fdba42d15434c622d72e97515784e319/" 
+				title="fullfungo+tor+relay@gmail.com" class="contact-text">fullfungo+tor+relay@gmail.com</a>
+			</td>
+<td>19.96 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/88.159.171.233">88.159.171.233</a>
+		</td>
+<td>AS1136</td>
+<td>
+			<a href="https://bgp.tools/AS1136"
+			   title="KPN B.V.">KPN B.V.</a>
+		    </td>
+<td>
+			    <a href="../../country/nl/">
+				<img src="../../static/images/cc/nl.png"
+				     title="Netherlands"
+				     alt="Netherlands">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-03-20/">2025-03-20</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="JohnnyHollow">
+			<a href="../../relay/7385FE85A2A098C22CFE5A08B6A76EC36FE509E1.html">JohnnyHollow</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/f0b555d3af88ab240285ed16ce34e628/" 
+				title="John Hollowman &lt;johnhollowman@protonmail.com&gt;" class="contact-text">John Hollowman &lt;johnhollowman@protonmail.com&gt;</a>
+			</td>
+<td>17.83 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/84.87.117.63">84.87.117.63</a>
+		</td>
+<td>AS1136</td>
+<td>
+			<a href="https://bgp.tools/AS1136"
+			   title="KPN B.V.">KPN B.V.</a>
+		    </td>
+<td>
+			    <a href="../../country/nl/">
+				<img src="../../static/images/cc/nl.png"
+				     title="Netherlands"
+				     alt="Netherlands">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2023-05-06/">2023-05-06</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="PrivacyRights">
+			<a href="../../relay/C375340737E0762641604AE5A8B766AEA25A06F7.html">PrivacyRights</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/2eda1c1c6dd849325aed815debfc73fd/" 
+				title="Privacy Rights &lt;privacyrights AT onionmail dot org&gt; btc:1BsTi9cqnUo3eba9VJbyZupnbRY4qFgXaP xmr:82u1vJcqh2LepLicfFzG2DFYGgTmrTyVJL2eQHkUcvchYFLn8QiDXp6BjnEg5BXCr7QdxSoSizTBKGTq39TQg726DbEeo2H" class="contact-text">Privacy Rights &lt;privacyrights AT onionmail dot org&gt; btc:1BsTi9cqnUo3eba9VJbyZupnbRY4qFgXaP xmr:82u1vJcqh2LepLicfFzG2DFYGgTmrTyVJL2eQHkUcvchYFLn8QiDXp6BjnEg5BXCr7QdxSoSizTBKGTq39TQg726DbEeo2H</a>
+			</td>
+<td>12.16 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/84.82.156.112">84.82.156.112</a>
+		</td>
+<td>AS1136</td>
+<td>
+			<a href="https://bgp.tools/AS1136"
+			   title="KPN B.V.">KPN B.V.</a>
+		    </td>
+<td>
+			    <a href="../../country/nl/">
+				<img src="../../static/images/cc/nl.png"
+				     title="Netherlands"
+				     alt="Netherlands">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-03-18/">2024-03-18</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="octavsly">
+			<a href="../../relay/69497036653189531207746B3D0E4ECB56888F3C.html">octavsly</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/0b289eb2aa9e4ab9fa326cae778c7b95/" 
+				title="octavsly@octavsly.net" class="contact-text">octavsly@octavsly.net</a>
+			</td>
+<td>3.67 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/82.168.32.82">82.168.32.82</a>
+		</td>
+<td>AS1136</td>
+<td>
+			<a href="https://bgp.tools/AS1136"
+			   title="KPN B.V.">KPN B.V.</a>
+		    </td>
+<td>
+			    <a href="../../country/nl/">
+				<img src="../../static/images/cc/nl.png"
+				     title="Netherlands"
+				     alt="Netherlands">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2019-02-18/">2019-02-18</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="centurion">
+			<a href="../../relay/BB4465B1EF3E765068C8D7231E316EF68B571499.html">centurion</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/911655dcc668415b5c031fabedd2b0b5/" 
+				title="admin@centurion.link" class="contact-text">admin@centurion.link</a>
+			</td>
+<td>1.83 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/82.168.62.152">82.168.62.152</a>
+		</td>
+<td>AS1136</td>
+<td>
+			<a href="https://bgp.tools/AS1136"
+			   title="KPN B.V.">KPN B.V.</a>
+		    </td>
+<td>
+			    <a href="../../country/nl/">
+				<img src="../../static/images/cc/nl.png"
+				     title="Netherlands"
+				     alt="Netherlands">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2022-09-30/">2022-09-30</a>
+		    </td>
+</tr>
+</tbody>
+</table>
+        </div>
+    </body>
+        <footer class="page-footer font-small">
+            <div class="footer-copyright text-center text-muted">
+                <p>
+                    Generated by a <a href="https://github.com/1aeo/allium">1aeo modified fork of allium</a>, based on original <a href="https://git.jordan.im/allium/">allium</a>, on Thu, 05 Jun 2025 17:58:10 GMT. Source data from <a href="https://onionoo.torproject.org/">Tor Project onionoo</a>.
+                </p>
+            </div>
+        </footer>
+    </html>

@@ -1,0 +1,4647 @@
+    <!DOCTYPE html>
+    <html lang="en">
+        <head>
+            <title>
+Tor Relays :: MAXKO d.o.o. (AS211619)            </title>
+            <meta name="description"
+                  content="Javascript-free Tor metrics generated from a 30 minute API request.">
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <link rel="stylesheet" href="../../static/css/bootstrap.min.css">
+            <!--source: metrics.torproject.org-->
+            <style>
+                .circle {
+                    display: inline-block;
+                    vertical-align: middle;
+                    background: #999999;
+                    width: 7px;
+                    height: 7px;
+                    -moz-border-radius: 50%;
+                    -webkit-border-radius: 50%;
+                    border-radius: 50%;
+                }
+
+                .circle-online {
+                    background: #25d918;
+                }
+
+                .circle-offline {
+                    background: #ff1515;
+                }
+
+                .verified-hostname {
+                    color: #FE9F30;
+                }
+
+                .verified-hostname {
+                    color: #68b030;
+                }
+
+                .unverified-hostname {
+                    color: #FE9F30;
+                }
+
+                /* Dynamic text truncation for contact information */
+                .contact-text {
+                    display: inline-block;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    max-width: 20vw;  /* Use viewport width for responsive sizing */
+                }
+
+                /* Table styles */
+                .table {
+                    width: 100%;
+                    margin-bottom: 1rem;
+                }
+
+                /* Precise alignment for multi-value columns using monospace */
+                .bw-header, .cw-header, .rc-header, /* rc = relay count */
+                .bw-data, .cw-data, .rc-data {
+                    font-family: Consolas, "Courier New", monospace;
+                    white-space: nowrap;
+                    text-align: center;
+                    letter-spacing: 0.05em; /* Slight spacing for readability */
+                }
+
+                /* Container breakpoint */
+                @media (min-width: 1400px) {
+                    .container {
+                        width: 95%;
+                        max-width: none;
+                        padding-right: 15px;
+                        padding-left: 15px;
+                        margin-right: auto;
+                        margin-left: auto;
+                    }
+                }
+
+                /* CSS-only navbar collapse using checkbox hack */
+                .navbar-toggle {
+                    display: none;
+                    background-color: transparent;
+                    background-image: none;
+                    border: 1px solid #ddd;
+                    border-radius: 4px;
+                    padding: 9px 10px;
+                    margin-top: 8px;
+                    margin-right: 15px;
+                    margin-bottom: 8px;
+                    cursor: pointer;
+                    float: right;
+                }
+
+                .navbar-toggle:hover,
+                .navbar-toggle:focus {
+                    background-color: #ddd;
+                }
+
+                .navbar-toggle .icon-bar {
+                    display: block;
+                    width: 22px;
+                    height: 2px;
+                    background-color: #888;
+                    border-radius: 1px;
+                    margin: 4px 0;
+                }
+
+                .navbar-brand {
+                    float: left;
+                    height: 50px;
+                    padding: 15px;
+                    font-size: 18px;
+                    line-height: 20px;
+                    font-weight: bold;
+                }
+
+                /* Desktop: show navigation horizontally */
+                @media (min-width: 768px) {
+                    .navbar-collapse {
+                        display: block !important;
+                        height: auto !important;
+                        overflow: visible !important;
+                    }
+                    
+                    .nav.navbar-nav {
+                        float: left;
+                        margin: 0;
+                    }
+                    
+                    .nav.navbar-nav > li {
+                        float: left;
+                    }
+                    
+                    .nav.navbar-nav > li > a {
+                        padding-top: 15px;
+                        padding-bottom: 15px;
+                        color: #777;
+                        text-decoration: none;
+                        padding-left: 15px;
+                        padding-right: 15px;
+                    }
+                    
+                    .nav.navbar-nav > li.active > a,
+                    .nav.navbar-nav > li > a:hover,
+                    .nav.navbar-nav > li > a:focus {
+                        color: #333;
+                        background-color: #e7e7e7;
+                    }
+                    
+                    .navbar-brand {
+                        display: none;
+                    }
+                }
+
+                /* Mobile: hide navigation by default, show hamburger */
+                @media (max-width: 767px) {
+                    .navbar-toggle {
+                        display: block;
+                    }
+                    
+                    .navbar-collapse {
+                        display: none;
+                        clear: both;
+                        width: 100%;
+                        margin-top: 50px;
+                        border-top: 1px solid #e7e7e7;
+                        padding-top: 10px;
+                    }
+                    
+                    /* When checkbox is checked, show the menu */
+                    .navbar-toggle-checkbox:checked ~ .navbar-header + .navbar-collapse {
+                        display: block;
+                    }
+                    
+                    .nav.navbar-nav > li {
+                        float: none;
+                    }
+                    
+                    .nav.navbar-nav > li > a {
+                        display: block;
+                        padding: 12px 20px;
+                        color: #777;
+                        text-decoration: none;
+                        border-bottom: 1px solid #e7e7e7;
+                    }
+                    
+                    .nav.navbar-nav > li:last-child > a {
+                        border-bottom: none;
+                    }
+                    
+                    .nav.navbar-nav > li.active > a,
+                    .nav.navbar-nav > li > a:hover,
+                    .nav.navbar-nav > li > a:focus {
+                        color: #333;
+                        background-color: #f5f5f5;
+                    }
+                }
+            </style>
+        </head>
+    <body>
+        <div class="container">
+<h2>
+<a href="../../">Home</a> :: MAXKO d.o.o. (AS211619)</h2>
+
+<p>
+AS211619 is responsible for ~4.15 Gbit/s of bandwidth (BW) (0.74 Gbit/s guard, 0.08 Gbit/s middle, 3.34 Gbit/s exit) and 0.11% consensus weight (CW) (0.13% guard, 0.04% middle, 0.57% exit), with
+    5 guard relays,    2 middle relays        and
+    52 exit relays.</p>
+
+<p class="text-muted" style="margin-bottom: 15px;">
+<small>Last updated: Thu, 05 Jun 2025 17:58:10 GMT. Refreshed every 30 minutes from the Tor directory authorities via <a href="https://onionoo.torproject.org/">Tor Project's onionoo API</a>.</small>
+</p>
+
+<table class="table table-condensed">
+<tr>
+    <th></th>
+    <th>Nickname</th>
+    <th><a href="https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/" target="_blank" title="Autonomous Relay Operator Identifier - unverified">AROI</a></th>
+    <th>Contact</th>
+    <th>BW</th>
+    <th class="visible-md visible-lg">IP Address</th>
+    <th>AS Number</th>
+    <th>AS Name</th>
+    <th>Country</th>
+    <th>Platform</th>
+    <th class="visible-md visible-lg">Flags</th>
+    <th class="visible-md visible-lg">First Seen</th>
+</tr>
+<tbody>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="torrelay02588122">
+		    <a href="../../relay/4B5FE85EC8F044CDAFD44431FA0D0C8FC2953DE6.html">torre...</a> (<a href="../../family/4B5FE85EC8F044CDAFD44431FA0D0C8FC2953DE6/">4</a>)
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/e6dd72eb13a371d000492c680b993f75/" 
+				title="carbon1958@protonmail.com" class="contact-text">carbon1958@protonmail.com</a>
+			</td>
+<td>337.68 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.9.168.18">45.9.168.18</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hu/">
+				<img src="../../static/images/cc/hu.png"
+				     title="Hungary"
+				     alt="Hungary">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-05-11/">2025-05-11</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="torexit02588122">
+		    <a href="../../relay/D281939CB5DDBB42E30F51611A24811B33CD16AD.html">torex...</a> (<a href="../../family/D281939CB5DDBB42E30F51611A24811B33CD16AD/">4</a>)
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/e6dd72eb13a371d000492c680b993f75/" 
+				title="carbon1958@protonmail.com" class="contact-text">carbon1958@protonmail.com</a>
+			</td>
+<td>305.83 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.9.168.18">45.9.168.18</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hu/">
+				<img src="../../static/images/cc/hu.png"
+				     title="Hungary"
+				     alt="Hungary">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-05-09/">2025-05-09</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="Zurich">
+			<a href="../../relay/6376F708BD865B477B2FBA68098EED046E34E64C.html">Zurich</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/304023429411fd4bf2f85f6d5b710706/" 
+				title="{peTelRobi aT gmaIl DOT cOm&gt;" class="contact-text">{peTelRobi aT gmaIl DOT cOm&gt;</a>
+			</td>
+<td>230.87 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.95.169.230">45.95.169.230</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hr/">
+				<img src="../../static/images/cc/hr.png"
+				     title="Croatia"
+				     alt="Croatia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2023-03-07/">2023-03-07</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="Lucerne">
+			<a href="../../relay/8B7DB87736C587DAE2E867117A227BE8E0E083F0.html">Lucerne</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/304023429411fd4bf2f85f6d5b710706/" 
+				title="{peTelRobi aT gmaIl DOT cOm&gt;" class="contact-text">{peTelRobi aT gmaIl DOT cOm&gt;</a>
+			</td>
+<td>159.95 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.95.169.154">45.95.169.154</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hr/">
+				<img src="../../static/images/cc/hr.png"
+				     title="Croatia"
+				     alt="Croatia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-02-22/">2024-02-22</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="CrockyLoophole">
+			<a href="../../relay/165DAD00B4D3D951127CD92B484B76E23A1A5CF9.html">CrockyLoophole</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/c2987c438d3cf03610c35c305e206e48/" 
+				title="your@e-mail" class="contact-text">your@e-mail</a>
+			</td>
+<td>128.95 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.95.169.171">45.95.169.171</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hr/">
+				<img src="../../static/images/cc/hr.png"
+				     title="Croatia"
+				     alt="Croatia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-02-14/">2025-02-14</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/DC48A541A1A4AE8EDBC6C286161635C9EC564E2C.html">Quetzalcoatl</a> (<a href="../../family/DC48A541A1A4AE8EDBC6C286161635C9EC564E2C/">340</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>88.19 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.95.169.109">45.95.169.109</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hr/">
+				<img src="../../static/images/cc/hr.png"
+				     title="Croatia"
+				     alt="Croatia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2023-05-12/">2023-05-12</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/555A6B7CB3D8ECA376B4CB6701596A7B211E21D3.html">Quetzalcoatl</a> (<a href="../../family/555A6B7CB3D8ECA376B4CB6701596A7B211E21D3/">316</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>81.58 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.95.169.104">45.95.169.104</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hr/">
+				<img src="../../static/images/cc/hr.png"
+				     title="Croatia"
+				     alt="Croatia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-07-07/">2021-07-07</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/42708A12892506EBCD881BCB3648E78D93DC2781.html">Quetzalcoatl</a> (<a href="../../family/42708A12892506EBCD881BCB3648E78D93DC2781/">316</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>80.68 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.95.169.104">45.95.169.104</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hr/">
+				<img src="../../static/images/cc/hr.png"
+				     title="Croatia"
+				     alt="Croatia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-07-07/">2021-07-07</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/D76BB8454145D0FB46D1489B1942D6B2207E5CE0.html">Quetzalcoatl</a> (<a href="../../family/D76BB8454145D0FB46D1489B1942D6B2207E5CE0/">340</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>80.22 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.95.169.109">45.95.169.109</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hr/">
+				<img src="../../static/images/cc/hr.png"
+				     title="Croatia"
+				     alt="Croatia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2023-05-12/">2023-05-12</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/10D5A1CC50849F63A91B3DF8068F806EE3532541.html">Quetzalcoatl</a> (<a href="../../family/10D5A1CC50849F63A91B3DF8068F806EE3532541/">340</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>79.61 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.95.169.109">45.95.169.109</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hr/">
+				<img src="../../static/images/cc/hr.png"
+				     title="Croatia"
+				     alt="Croatia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2020-12-02/">2020-12-02</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/87CD6C2D4AA3164D5A517DFC684BF83FE2EDB4A5.html">Quetzalcoatl</a> (<a href="../../family/87CD6C2D4AA3164D5A517DFC684BF83FE2EDB4A5/">8</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>78.23 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.95.169.104">45.95.169.104</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hr/">
+				<img src="../../static/images/cc/hr.png"
+				     title="Croatia"
+				     alt="Croatia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-03-26/">2025-03-26</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/4CE422446D43B0A21F0F9CA146D9075583402102.html">Quetzalcoatl</a> (<a href="../../family/4CE422446D43B0A21F0F9CA146D9075583402102/">340</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>74.11 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.95.169.109">45.95.169.109</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hr/">
+				<img src="../../static/images/cc/hr.png"
+				     title="Croatia"
+				     alt="Croatia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2020-12-09/">2020-12-09</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/DBC93B0F5225291F5D1EBF2CA4F3F90B879F00F8.html">Quetzalcoatl</a> (<a href="../../family/DBC93B0F5225291F5D1EBF2CA4F3F90B879F00F8/">316</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>73.30 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.95.169.104">45.95.169.104</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hr/">
+				<img src="../../static/images/cc/hr.png"
+				     title="Croatia"
+				     alt="Croatia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2023-07-21/">2023-07-21</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/495FE3F4B9B661DC7A2E1145297FD730BF89FB45.html">Quetzalcoatl</a> (<a href="../../family/495FE3F4B9B661DC7A2E1145297FD730BF89FB45/">8</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>71.64 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.95.169.104">45.95.169.104</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hr/">
+				<img src="../../static/images/cc/hr.png"
+				     title="Croatia"
+				     alt="Croatia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-03-26/">2025-03-26</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="Aramis">
+		    <a href="../../relay/589041BBB56DB215AD392115CC4399F3AA4EC773.html">Aramis</a> (<a href="../../family/589041BBB56DB215AD392115CC4399F3AA4EC773/">8</a>)
+		    </td>
+<td>
+			    <a href="../../contact/890794f4716fffcc30c3b846a16788e3/" title="torix-relays.org">torix-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/890794f4716fffcc30c3b846a16788e3/" 
+				title="email:torix[]protonmail.com url:https://torix-relays.org proof:uri-rsa hoster:Maxko ciissversion:2" class="contact-text">email:torix[]protonmail.com url:https://torix-relays.org proof:uri-rsa hoster:Maxko ciissversion:2</a>
+			</td>
+<td>71.24 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.95.169.14">45.95.169.14</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hr/">
+				<img src="../../static/images/cc/hr.png"
+				     title="Croatia"
+				     alt="Croatia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-04-06/">2025-04-06</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/446E16B00D5131DAC9643AB10136B3CD19B1E9B9.html">Quetzalcoatl</a> (<a href="../../family/446E16B00D5131DAC9643AB10136B3CD19B1E9B9/">316</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>69.93 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.95.169.110">45.95.169.110</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hr/">
+				<img src="../../static/images/cc/hr.png"
+				     title="Croatia"
+				     alt="Croatia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-06-27/">2021-06-27</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/5D8CC7C5FCB34CC72281300F8550722F32E92D1D.html">Quetzalcoatl</a> (<a href="../../family/5D8CC7C5FCB34CC72281300F8550722F32E92D1D/">340</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>69.76 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.95.169.109">45.95.169.109</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hr/">
+				<img src="../../static/images/cc/hr.png"
+				     title="Croatia"
+				     alt="Croatia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-06-07/">2021-06-07</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="Challanger">
+		    <a href="../../relay/213038B323FF8737A55C9DA15FEA1C9BBC4785D3.html">Challanger</a> (<a href="../../family/213038B323FF8737A55C9DA15FEA1C9BBC4785D3/">2</a>)
+		    </td>
+<td>none</td>
+<td title="none">
+			    none
+			</td>
+<td>69.05 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.95.169.43">45.95.169.43</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hr/">
+				<img src="../../static/images/cc/hr.png"
+				     title="Croatia"
+				     alt="Croatia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-03-10/">2025-03-10</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/470CA25DBABD7184461D8E3E451BF1B0AC46302A.html">Quetzalcoatl</a> (<a href="../../family/470CA25DBABD7184461D8E3E451BF1B0AC46302A/">316</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>68.58 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.95.169.104">45.95.169.104</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hr/">
+				<img src="../../static/images/cc/hr.png"
+				     title="Croatia"
+				     alt="Croatia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2023-08-04/">2023-08-04</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/6E23234E4A37971B3695A6CDB5A462564E629DF9.html">Quetzalcoatl</a> (<a href="../../family/6E23234E4A37971B3695A6CDB5A462564E629DF9/">340</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>67.51 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.95.169.109">45.95.169.109</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hr/">
+				<img src="../../static/images/cc/hr.png"
+				     title="Croatia"
+				     alt="Croatia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-06-07/">2021-06-07</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/98AE10E67739CCC9FAD8B223236BBB080C3B0852.html">Quetzalcoatl</a> (<a href="../../family/98AE10E67739CCC9FAD8B223236BBB080C3B0852/">316</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>67.44 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.95.169.104">45.95.169.104</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hr/">
+				<img src="../../static/images/cc/hr.png"
+				     title="Croatia"
+				     alt="Croatia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2023-07-21/">2023-07-21</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="litrebty">
+			<a href="../../relay/B4DC59EAF9555209E40E883234D84E2C25EBB2D8.html">litrebty</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/f5480ea302225fab25b342ade27a9584/" 
+				title="litrebty.upright501@silomails.com" class="contact-text">litrebty.upright501@silomails.com</a>
+			</td>
+<td>66.13 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.9.156.32">45.9.156.32</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/bg/">
+				<img src="../../static/images/cc/bg.png"
+				     title="Bulgaria"
+				     alt="Bulgaria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-05-13/">2025-05-13</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/7C9FC7C99D7F83980E621BA8D4E0D40FCE53104F.html">Quetzalcoatl</a> (<a href="../../family/7C9FC7C99D7F83980E621BA8D4E0D40FCE53104F/">340</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>65.65 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.95.169.109">45.95.169.109</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hr/">
+				<img src="../../static/images/cc/hr.png"
+				     title="Croatia"
+				     alt="Croatia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2023-07-07/">2023-07-07</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/916BAFF4BB3F7C04EDFD008C35808CC2DD561F86.html">Quetzalcoatl</a> (<a href="../../family/916BAFF4BB3F7C04EDFD008C35808CC2DD561F86/">8</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>63.05 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.95.169.110">45.95.169.110</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hr/">
+				<img src="../../static/images/cc/hr.png"
+				     title="Croatia"
+				     alt="Croatia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-02-21/">2025-02-21</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="Aramis">
+		    <a href="../../relay/8AB9376EAB09D2DA232D5240E641E23903B0E301.html">Aramis</a> (<a href="../../family/8AB9376EAB09D2DA232D5240E641E23903B0E301/">8</a>)
+		    </td>
+<td>
+			    <a href="../../contact/890794f4716fffcc30c3b846a16788e3/" title="torix-relays.org">torix-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/890794f4716fffcc30c3b846a16788e3/" 
+				title="email:torix[]protonmail.com url:https://torix-relays.org proof:uri-rsa hoster:Maxko ciissversion:2" class="contact-text">email:torix[]protonmail.com url:https://torix-relays.org proof:uri-rsa hoster:Maxko ciissversion:2</a>
+			</td>
+<td>62.94 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.95.169.14">45.95.169.14</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hr/">
+				<img src="../../static/images/cc/hr.png"
+				     title="Croatia"
+				     alt="Croatia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-04-06/">2025-04-06</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/69419D36198EB0508904660AAECAEE785D688A61.html">Quetzalcoatl</a> (<a href="../../family/69419D36198EB0508904660AAECAEE785D688A61/">316</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>62.74 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.95.169.104">45.95.169.104</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hr/">
+				<img src="../../static/images/cc/hr.png"
+				     title="Croatia"
+				     alt="Croatia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2023-07-07/">2023-07-07</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/3D2D6927F1ACC04A1373C91C015946B3C4B08797.html">Quetzalcoatl</a> (<a href="../../family/3D2D6927F1ACC04A1373C91C015946B3C4B08797/">340</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>61.69 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.95.169.109">45.95.169.109</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hr/">
+				<img src="../../static/images/cc/hr.png"
+				     title="Croatia"
+				     alt="Croatia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2023-07-07/">2023-07-07</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/00251F9F626F0E741030AF54CE019B115D01697D.html">Quetzalcoatl</a> (<a href="../../family/00251F9F626F0E741030AF54CE019B115D01697D/">8</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>58.33 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.95.169.110">45.95.169.110</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hr/">
+				<img src="../../static/images/cc/hr.png"
+				     title="Croatia"
+				     alt="Croatia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-02-21/">2025-02-21</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/88FA8CBAD03FD602D27985F0DF34FA5DAD9E7BB2.html">Quetzalcoatl</a> (<a href="../../family/88FA8CBAD03FD602D27985F0DF34FA5DAD9E7BB2/">8</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>57.61 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.95.169.110">45.95.169.110</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hr/">
+				<img src="../../static/images/cc/hr.png"
+				     title="Croatia"
+				     alt="Croatia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-02-21/">2025-02-21</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/8438C84D366E6962626B2CE387B20AA041912CF6.html">Quetzalcoatl</a> (<a href="../../family/8438C84D366E6962626B2CE387B20AA041912CF6/">8</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>57.30 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.95.169.110">45.95.169.110</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hr/">
+				<img src="../../static/images/cc/hr.png"
+				     title="Croatia"
+				     alt="Croatia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-02-21/">2025-02-21</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="Aramis">
+		    <a href="../../relay/7C16B19E355454FA1D96FF8D0578EABDE68EFED4.html">Aramis</a> (<a href="../../family/7C16B19E355454FA1D96FF8D0578EABDE68EFED4/">8</a>)
+		    </td>
+<td>
+			    <a href="../../contact/890794f4716fffcc30c3b846a16788e3/" title="torix-relays.org">torix-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/890794f4716fffcc30c3b846a16788e3/" 
+				title="email:torix[]protonmail.com url:https://torix-relays.org proof:uri-rsa hoster:Maxko ciissversion:2" class="contact-text">email:torix[]protonmail.com url:https://torix-relays.org proof:uri-rsa hoster:Maxko ciissversion:2</a>
+			</td>
+<td>56.78 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.95.169.14">45.95.169.14</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hr/">
+				<img src="../../static/images/cc/hr.png"
+				     title="Croatia"
+				     alt="Croatia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-04-06/">2025-04-06</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/E0DE8E084F325776D9E5101F8BA73B744299E304.html">Quetzalcoatl</a> (<a href="../../family/E0DE8E084F325776D9E5101F8BA73B744299E304/">8</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>56.21 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.95.169.110">45.95.169.110</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hr/">
+				<img src="../../static/images/cc/hr.png"
+				     title="Croatia"
+				     alt="Croatia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-02-21/">2025-02-21</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/098F98538A21A16332E8C4B724305C2A3496A467.html">Quetzalcoatl</a> (<a href="../../family/098F98538A21A16332E8C4B724305C2A3496A467/">316</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>55.47 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.95.169.110">45.95.169.110</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hr/">
+				<img src="../../static/images/cc/hr.png"
+				     title="Croatia"
+				     alt="Croatia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-06-26/">2021-06-26</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/6100509F949660DC87BB8E4801F36D6DCD96D8B3.html">Quetzalcoatl</a> (<a href="../../family/6100509F949660DC87BB8E4801F36D6DCD96D8B3/">8</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>53.90 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.9.156.101">45.9.156.101</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/bg/">
+				<img src="../../static/images/cc/bg.png"
+				     title="Bulgaria"
+				     alt="Bulgaria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-04-04/">2025-04-04</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/E8336F50EF1EE89B27C688D10CC512FF966CF083.html">Quetzalcoatl</a> (<a href="../../family/E8336F50EF1EE89B27C688D10CC512FF966CF083/">8</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>52.69 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.95.169.110">45.95.169.110</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hr/">
+				<img src="../../static/images/cc/hr.png"
+				     title="Croatia"
+				     alt="Croatia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-02-21/">2025-02-21</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="Aramis">
+		    <a href="../../relay/16E9879EF1173397EFBACE3AE562A6FF36BAFE56.html">Aramis</a> (<a href="../../family/16E9879EF1173397EFBACE3AE562A6FF36BAFE56/">8</a>)
+		    </td>
+<td>
+			    <a href="../../contact/890794f4716fffcc30c3b846a16788e3/" title="torix-relays.org">torix-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/890794f4716fffcc30c3b846a16788e3/" 
+				title="email:torix[]protonmail.com url:https://torix-relays.org proof:uri-rsa hoster:Maxko ciissversion:2" class="contact-text">email:torix[]protonmail.com url:https://torix-relays.org proof:uri-rsa hoster:Maxko ciissversion:2</a>
+			</td>
+<td>52.57 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.95.169.14">45.95.169.14</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hr/">
+				<img src="../../static/images/cc/hr.png"
+				     title="Croatia"
+				     alt="Croatia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-04-06/">2025-04-06</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="Aramis">
+		    <a href="../../relay/6853CAECF82123A8668A50C8E68E0EFD17CB0A6D.html">Aramis</a> (<a href="../../family/6853CAECF82123A8668A50C8E68E0EFD17CB0A6D/">8</a>)
+		    </td>
+<td>
+			    <a href="../../contact/890794f4716fffcc30c3b846a16788e3/" title="torix-relays.org">torix-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/890794f4716fffcc30c3b846a16788e3/" 
+				title="email:torix[]protonmail.com url:https://torix-relays.org proof:uri-rsa hoster:Maxko ciissversion:2" class="contact-text">email:torix[]protonmail.com url:https://torix-relays.org proof:uri-rsa hoster:Maxko ciissversion:2</a>
+			</td>
+<td>52.38 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.95.169.14">45.95.169.14</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hr/">
+				<img src="../../static/images/cc/hr.png"
+				     title="Croatia"
+				     alt="Croatia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-04-06/">2025-04-06</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="Aramis">
+		    <a href="../../relay/E0CD87D069C1B92FB0174D343753AA3C8E291A2B.html">Aramis</a> (<a href="../../family/E0CD87D069C1B92FB0174D343753AA3C8E291A2B/">8</a>)
+		    </td>
+<td>
+			    <a href="../../contact/890794f4716fffcc30c3b846a16788e3/" title="torix-relays.org">torix-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/890794f4716fffcc30c3b846a16788e3/" 
+				title="email:torix[]protonmail.com url:https://torix-relays.org proof:uri-rsa hoster:Maxko ciissversion:2" class="contact-text">email:torix[]protonmail.com url:https://torix-relays.org proof:uri-rsa hoster:Maxko ciissversion:2</a>
+			</td>
+<td>52.37 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.95.169.14">45.95.169.14</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hr/">
+				<img src="../../static/images/cc/hr.png"
+				     title="Croatia"
+				     alt="Croatia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-04-06/">2025-04-06</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="Aramis">
+		    <a href="../../relay/0474C1C25706BF27A773AF411446DF603A344079.html">Aramis</a> (<a href="../../family/0474C1C25706BF27A773AF411446DF603A344079/">8</a>)
+		    </td>
+<td>
+			    <a href="../../contact/890794f4716fffcc30c3b846a16788e3/" title="torix-relays.org">torix-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/890794f4716fffcc30c3b846a16788e3/" 
+				title="email:torix[]protonmail.com url:https://torix-relays.org proof:uri-rsa hoster:Maxko ciissversion:2" class="contact-text">email:torix[]protonmail.com url:https://torix-relays.org proof:uri-rsa hoster:Maxko ciissversion:2</a>
+			</td>
+<td>51.46 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.95.169.14">45.95.169.14</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hr/">
+				<img src="../../static/images/cc/hr.png"
+				     title="Croatia"
+				     alt="Croatia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-04-06/">2025-04-06</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="Aramis">
+		    <a href="../../relay/E984A06F2A2577C46BCB8C808B923369C9130A2A.html">Aramis</a> (<a href="../../family/E984A06F2A2577C46BCB8C808B923369C9130A2A/">8</a>)
+		    </td>
+<td>
+			    <a href="../../contact/890794f4716fffcc30c3b846a16788e3/" title="torix-relays.org">torix-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/890794f4716fffcc30c3b846a16788e3/" 
+				title="email:torix[]protonmail.com url:https://torix-relays.org proof:uri-rsa hoster:Maxko ciissversion:2" class="contact-text">email:torix[]protonmail.com url:https://torix-relays.org proof:uri-rsa hoster:Maxko ciissversion:2</a>
+			</td>
+<td>49.76 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.95.169.14">45.95.169.14</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hr/">
+				<img src="../../static/images/cc/hr.png"
+				     title="Croatia"
+				     alt="Croatia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-04-06/">2025-04-06</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/EFCF3FF7A14BE2A077A202707B73233483A88328.html">Quetzalcoatl</a> (<a href="../../family/EFCF3FF7A14BE2A077A202707B73233483A88328/">24</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>49.12 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.9.168.103">45.9.168.103</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hu/">
+				<img src="../../static/images/cc/hu.png"
+				     title="Hungary"
+				     alt="Hungary">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-02-26/">2025-02-26</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/6956BA44CC553C4A9CF2D0E50634CDD0CA990869.html">Quetzalcoatl</a> (<a href="../../family/6956BA44CC553C4A9CF2D0E50634CDD0CA990869/">8</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>47.83 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.9.156.101">45.9.156.101</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/bg/">
+				<img src="../../static/images/cc/bg.png"
+				     title="Bulgaria"
+				     alt="Bulgaria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-04-04/">2025-04-04</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/919EBE30E4AAD0ECB9936EEE362DC21B8A848744.html">Quetzalcoatl</a> (<a href="../../family/919EBE30E4AAD0ECB9936EEE362DC21B8A848744/">24</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>45.09 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.9.168.103">45.9.168.103</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hu/">
+				<img src="../../static/images/cc/hu.png"
+				     title="Hungary"
+				     alt="Hungary">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-02-26/">2025-02-26</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/D0B20DAE466B00A4722C32EB64426562CE2F4481.html">Quetzalcoatl</a> (<a href="../../family/D0B20DAE466B00A4722C32EB64426562CE2F4481/">8</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>44.55 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.9.156.101">45.9.156.101</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/bg/">
+				<img src="../../static/images/cc/bg.png"
+				     title="Bulgaria"
+				     alt="Bulgaria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-04-04/">2025-04-04</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/72AA4CF891689332D9473A4E0140F83DB2210548.html">Quetzalcoatl</a> (<a href="../../family/72AA4CF891689332D9473A4E0140F83DB2210548/">332</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>44.01 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.9.168.103">45.9.168.103</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hu/">
+				<img src="../../static/images/cc/hu.png"
+				     title="Hungary"
+				     alt="Hungary">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2022-05-23/">2022-05-23</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/A15676F5F0F2BA7B1CA54446DDB46BEE6F699A95.html">Quetzalcoatl</a> (<a href="../../family/A15676F5F0F2BA7B1CA54446DDB46BEE6F699A95/">316</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>42.92 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.9.156.101">45.9.156.101</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/bg/">
+				<img src="../../static/images/cc/bg.png"
+				     title="Bulgaria"
+				     alt="Bulgaria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-08-06/">2021-08-06</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/AB7366925C446424E7EE33179BEAB4B12D8696B6.html">Quetzalcoatl</a> (<a href="../../family/AB7366925C446424E7EE33179BEAB4B12D8696B6/">316</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>42.28 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.9.156.101">45.9.156.101</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/bg/">
+				<img src="../../static/images/cc/bg.png"
+				     title="Bulgaria"
+				     alt="Bulgaria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-08-06/">2021-08-06</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/E492BA484812A7FED594F2852473876779617E16.html">Quetzalcoatl</a> (<a href="../../family/E492BA484812A7FED594F2852473876779617E16/">8</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>41.74 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.9.156.101">45.9.156.101</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/bg/">
+				<img src="../../static/images/cc/bg.png"
+				     title="Bulgaria"
+				     alt="Bulgaria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-04-04/">2025-04-04</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="Camaro">
+		    <a href="../../relay/7B5F3C1CCFE93A052168F4080C213E1952F56E8C.html">Camaro</a> (<a href="../../family/7B5F3C1CCFE93A052168F4080C213E1952F56E8C/">2</a>)
+		    </td>
+<td>none</td>
+<td title="none">
+			    none
+			</td>
+<td>41.49 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.95.169.41">45.95.169.41</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hr/">
+				<img src="../../static/images/cc/hr.png"
+				     title="Croatia"
+				     alt="Croatia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-03-10/">2025-03-10</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/923532118EB15D4EE65421FC0D1241DFF1C100B8.html">Quetzalcoatl</a> (<a href="../../family/923532118EB15D4EE65421FC0D1241DFF1C100B8/">8</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>40.40 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.9.156.101">45.9.156.101</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/bg/">
+				<img src="../../static/images/cc/bg.png"
+				     title="Bulgaria"
+				     alt="Bulgaria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-04-04/">2025-04-04</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/0C478FFD86187DB4C690B84718CCD09165BEB73D.html">Quetzalcoatl</a> (<a href="../../family/0C478FFD86187DB4C690B84718CCD09165BEB73D/">24</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>40.32 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.9.168.103">45.9.168.103</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hu/">
+				<img src="../../static/images/cc/hu.png"
+				     title="Hungary"
+				     alt="Hungary">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-02-26/">2025-02-26</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/ABA87745075558CFC2247FA318A1E729285D06A3.html">Quetzalcoatl</a> (<a href="../../family/ABA87745075558CFC2247FA318A1E729285D06A3/">24</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>39.64 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.9.168.103">45.9.168.103</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hu/">
+				<img src="../../static/images/cc/hu.png"
+				     title="Hungary"
+				     alt="Hungary">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-02-26/">2025-02-26</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="MAXKO">
+			<a href="../../relay/E236F07D76472C914B09B8BA52930EED3555E6AF.html">MAXKO</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/72357a65da2d2d101ce9da7efe7935e6/" 
+				title="abuse(at)maxko(dot)org url:maxko-hosting.com" class="contact-text">abuse(at)maxko(dot)org url:maxko-hosting.com</a>
+			</td>
+<td>37.49 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.95.169.252">45.95.169.252</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hr/">
+				<img src="../../static/images/cc/hr.png"
+				     title="Croatia"
+				     alt="Croatia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/badexit/">
+				<img src="../../static/images/flags/badexit.png"
+				     title="BadExit"
+				     alt="BadExit">
+			    </a>
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2022-07-02/">2022-07-02</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/ED2B8E669D68E095297591C0EE921A77298A0B25.html">Quetzalcoatl</a> (<a href="../../family/ED2B8E669D68E095297591C0EE921A77298A0B25/">24</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>37.46 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.9.168.103">45.9.168.103</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hu/">
+				<img src="../../static/images/cc/hu.png"
+				     title="Hungary"
+				     alt="Hungary">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-02-26/">2025-02-26</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/9BFD0A218BC8D13DB672A673F83D7D0753592B10.html">Quetzalcoatl</a> (<a href="../../family/9BFD0A218BC8D13DB672A673F83D7D0753592B10/">24</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>35.01 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.9.168.103">45.9.168.103</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hu/">
+				<img src="../../static/images/cc/hu.png"
+				     title="Hungary"
+				     alt="Hungary">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-02-26/">2025-02-26</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/70602F1F199830FB4667467FA162681ED478A4C2.html">Quetzalcoatl</a> (<a href="../../family/70602F1F199830FB4667467FA162681ED478A4C2/">8</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>34.29 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.9.156.101">45.9.156.101</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/bg/">
+				<img src="../../static/images/cc/bg.png"
+				     title="Bulgaria"
+				     alt="Bulgaria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-04-04/">2025-04-04</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/8D971E4D4DAA0BFF1F84C189A2F88F3D9ECC0BC1.html">Quetzalcoatl</a> (<a href="../../family/8D971E4D4DAA0BFF1F84C189A2F88F3D9ECC0BC1/">24</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>33.13 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.9.168.103">45.9.168.103</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hu/">
+				<img src="../../static/images/cc/hu.png"
+				     title="Hungary"
+				     alt="Hungary">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-02-26/">2025-02-26</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="fatfingers">
+			<a href="../../relay/56FD801B12E237915EAE1702971184CFC6E969C3.html">fatfingers</a>
+		    </td>
+<td>none</td>
+<td title="none">
+			    none
+			</td>
+<td>11.34 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.95.169.164">45.95.169.164</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hr/">
+				<img src="../../static/images/cc/hr.png"
+				     title="Croatia"
+				     alt="Croatia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-02-03/">2024-02-03</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="CascadianTor">
+			<a href="../../relay/BEE3CCA6ED16CDBF3D707FBF967D6866903832BE.html">CascadianTor</a>
+		    </td>
+<td>none</td>
+<td title="none">
+			    none
+			</td>
+<td>1.08 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.9.168.192">45.9.168.192</a>
+		</td>
+<td>AS211619</td>
+<td>
+			<a href="https://bgp.tools/AS211619"
+			   title="MAXKO d.o.o.">MAXKO d.o.o.</a>
+		    </td>
+<td>
+			    <a href="../../country/hu/">
+				<img src="../../static/images/cc/hu.png"
+				     title="Hungary"
+				     alt="Hungary">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-05-26/">2025-05-26</a>
+		    </td>
+</tr>
+</tbody>
+</table>
+        </div>
+    </body>
+        <footer class="page-footer font-small">
+            <div class="footer-copyright text-center text-muted">
+                <p>
+                    Generated by a <a href="https://github.com/1aeo/allium">1aeo modified fork of allium</a>, based on original <a href="https://git.jordan.im/allium/">allium</a>, on Thu, 05 Jun 2025 17:58:10 GMT. Source data from <a href="https://onionoo.torproject.org/">Tor Project onionoo</a>.
+                </p>
+            </div>
+        </footer>
+    </html>

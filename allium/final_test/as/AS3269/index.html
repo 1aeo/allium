@@ -1,0 +1,1011 @@
+    <!DOCTYPE html>
+    <html lang="en">
+        <head>
+            <title>
+Tor Relays :: Telecom Italia S.p.A. (AS3269)            </title>
+            <meta name="description"
+                  content="Javascript-free Tor metrics generated from a 30 minute API request.">
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <link rel="stylesheet" href="../../static/css/bootstrap.min.css">
+            <!--source: metrics.torproject.org-->
+            <style>
+                .circle {
+                    display: inline-block;
+                    vertical-align: middle;
+                    background: #999999;
+                    width: 7px;
+                    height: 7px;
+                    -moz-border-radius: 50%;
+                    -webkit-border-radius: 50%;
+                    border-radius: 50%;
+                }
+
+                .circle-online {
+                    background: #25d918;
+                }
+
+                .circle-offline {
+                    background: #ff1515;
+                }
+
+                .verified-hostname {
+                    color: #FE9F30;
+                }
+
+                .verified-hostname {
+                    color: #68b030;
+                }
+
+                .unverified-hostname {
+                    color: #FE9F30;
+                }
+
+                /* Dynamic text truncation for contact information */
+                .contact-text {
+                    display: inline-block;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    max-width: 20vw;  /* Use viewport width for responsive sizing */
+                }
+
+                /* Table styles */
+                .table {
+                    width: 100%;
+                    margin-bottom: 1rem;
+                }
+
+                /* Precise alignment for multi-value columns using monospace */
+                .bw-header, .cw-header, .rc-header, /* rc = relay count */
+                .bw-data, .cw-data, .rc-data {
+                    font-family: Consolas, "Courier New", monospace;
+                    white-space: nowrap;
+                    text-align: center;
+                    letter-spacing: 0.05em; /* Slight spacing for readability */
+                }
+
+                /* Container breakpoint */
+                @media (min-width: 1400px) {
+                    .container {
+                        width: 95%;
+                        max-width: none;
+                        padding-right: 15px;
+                        padding-left: 15px;
+                        margin-right: auto;
+                        margin-left: auto;
+                    }
+                }
+
+                /* CSS-only navbar collapse using checkbox hack */
+                .navbar-toggle {
+                    display: none;
+                    background-color: transparent;
+                    background-image: none;
+                    border: 1px solid #ddd;
+                    border-radius: 4px;
+                    padding: 9px 10px;
+                    margin-top: 8px;
+                    margin-right: 15px;
+                    margin-bottom: 8px;
+                    cursor: pointer;
+                    float: right;
+                }
+
+                .navbar-toggle:hover,
+                .navbar-toggle:focus {
+                    background-color: #ddd;
+                }
+
+                .navbar-toggle .icon-bar {
+                    display: block;
+                    width: 22px;
+                    height: 2px;
+                    background-color: #888;
+                    border-radius: 1px;
+                    margin: 4px 0;
+                }
+
+                .navbar-brand {
+                    float: left;
+                    height: 50px;
+                    padding: 15px;
+                    font-size: 18px;
+                    line-height: 20px;
+                    font-weight: bold;
+                }
+
+                /* Desktop: show navigation horizontally */
+                @media (min-width: 768px) {
+                    .navbar-collapse {
+                        display: block !important;
+                        height: auto !important;
+                        overflow: visible !important;
+                    }
+                    
+                    .nav.navbar-nav {
+                        float: left;
+                        margin: 0;
+                    }
+                    
+                    .nav.navbar-nav > li {
+                        float: left;
+                    }
+                    
+                    .nav.navbar-nav > li > a {
+                        padding-top: 15px;
+                        padding-bottom: 15px;
+                        color: #777;
+                        text-decoration: none;
+                        padding-left: 15px;
+                        padding-right: 15px;
+                    }
+                    
+                    .nav.navbar-nav > li.active > a,
+                    .nav.navbar-nav > li > a:hover,
+                    .nav.navbar-nav > li > a:focus {
+                        color: #333;
+                        background-color: #e7e7e7;
+                    }
+                    
+                    .navbar-brand {
+                        display: none;
+                    }
+                }
+
+                /* Mobile: hide navigation by default, show hamburger */
+                @media (max-width: 767px) {
+                    .navbar-toggle {
+                        display: block;
+                    }
+                    
+                    .navbar-collapse {
+                        display: none;
+                        clear: both;
+                        width: 100%;
+                        margin-top: 50px;
+                        border-top: 1px solid #e7e7e7;
+                        padding-top: 10px;
+                    }
+                    
+                    /* When checkbox is checked, show the menu */
+                    .navbar-toggle-checkbox:checked ~ .navbar-header + .navbar-collapse {
+                        display: block;
+                    }
+                    
+                    .nav.navbar-nav > li {
+                        float: none;
+                    }
+                    
+                    .nav.navbar-nav > li > a {
+                        display: block;
+                        padding: 12px 20px;
+                        color: #777;
+                        text-decoration: none;
+                        border-bottom: 1px solid #e7e7e7;
+                    }
+                    
+                    .nav.navbar-nav > li:last-child > a {
+                        border-bottom: none;
+                    }
+                    
+                    .nav.navbar-nav > li.active > a,
+                    .nav.navbar-nav > li > a:hover,
+                    .nav.navbar-nav > li > a:focus {
+                        color: #333;
+                        background-color: #f5f5f5;
+                    }
+                }
+            </style>
+        </head>
+    <body>
+        <div class="container">
+<h2>
+<a href="../../">Home</a> :: Telecom Italia S.p.A. (AS3269)</h2>
+
+<p>
+AS3269 is responsible for ~549.24 Mbit/s of bandwidth (BW) (98.93 Mbit/s guard, 450.31 Mbit/s middle) and 0.05% consensus weight (CW) (0.01% guard, 0.29% middle), with
+    2 guard relays,    11 middle relays.</p>
+
+<p class="text-muted" style="margin-bottom: 15px;">
+<small>Last updated: Thu, 05 Jun 2025 17:58:10 GMT. Refreshed every 30 minutes from the Tor directory authorities via <a href="https://onionoo.torproject.org/">Tor Project's onionoo API</a>.</small>
+</p>
+
+<table class="table table-condensed">
+<tr>
+    <th></th>
+    <th>Nickname</th>
+    <th><a href="https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/" target="_blank" title="Autonomous Relay Operator Identifier - unverified">AROI</a></th>
+    <th>Contact</th>
+    <th>BW</th>
+    <th class="visible-md visible-lg">IP Address</th>
+    <th>AS Number</th>
+    <th>AS Name</th>
+    <th>Country</th>
+    <th>Platform</th>
+    <th class="visible-md visible-lg">Flags</th>
+    <th class="visible-md visible-lg">First Seen</th>
+</tr>
+<tbody>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="Gargantua">
+			<a href="../../relay/36FD1196BDCF2ABF5A9533DCCADD2FD2433544B1.html">Gargantua</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/fc137bffa40bdd7d7c12af12a34710a7/" 
+				title="uvune &lt;uvune AT insicuri dot net&gt;" class="contact-text">uvune &lt;uvune AT insicuri dot net&gt;</a>
+			</td>
+<td>151.39 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/79.17.151.147">79.17.151.147</a>
+		</td>
+<td>AS3269</td>
+<td>
+			<a href="https://bgp.tools/AS3269"
+			   title="Telecom Italia S.p.A.">Telecom Italia S.p.A.</a>
+		    </td>
+<td>
+			    <a href="../../country/it/">
+				<img src="../../static/images/cc/it.png"
+				     title="Italy"
+				     alt="Italy">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-08-10/">2024-08-10</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="liberTORian">
+			<a href="../../relay/729C827A1A1E5DEB310A3BA5EDE2EE2120CCADB4.html">liberTORian</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/9d2b2abdd0f86dbe46b622703e87df95/" 
+				title="Shady Trickster shadytrickster@cock.li" class="contact-text">Shady Trickster shadytrickster@cock.li</a>
+			</td>
+<td>85.33 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/82.50.113.220">82.50.113.220</a>
+		</td>
+<td>AS3269</td>
+<td>
+			<a href="https://bgp.tools/AS3269"
+			   title="Telecom Italia S.p.A.">Telecom Italia S.p.A.</a>
+		    </td>
+<td>
+			    <a href="../../country/it/">
+				<img src="../../static/images/cc/it.png"
+				     title="Italy"
+				     alt="Italy">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-01-22/">2024-01-22</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="middleIsenguard">
+			<a href="../../relay/02654B8B9803775860CDF2C7F7109FF68A1349AA.html">middleIsenguard</a>
+		    </td>
+<td>none</td>
+<td title="none">
+			    none
+			</td>
+<td>79.90 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/79.51.239.161">79.51.239.161</a>
+		</td>
+<td>AS3269</td>
+<td>
+			<a href="https://bgp.tools/AS3269"
+			   title="Telecom Italia S.p.A.">Telecom Italia S.p.A.</a>
+		    </td>
+<td>
+			    <a href="../../country/it/">
+				<img src="../../static/images/cc/it.png"
+				     title="Italy"
+				     alt="Italy">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2022-02-28/">2022-02-28</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="FreeZion">
+			<a href="../../relay/94F367A130296C9EB92BE32E25AAEB7F227DE0D6.html">FreeZion</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/6dbd12b4111a066a067f1f379ad4c87b/" 
+				title="echo &#34;4BCE E03F A613 F101 36F7  0C3A EEA3 165D 3927 8AD0&#34; | rev ; echo xup TOD rtuwls TA kkg4v0f33sz | tr zsfvgklwutrpx frdmaliseupnt | rev" class="contact-text">echo &#34;4BCE E03F A613 F101 36F7  0C3A EEA3 165D 3927 8AD0&#34; | rev ; echo xup TOD rtuwls TA kkg4v0f33sz | tr zsfvgklwutrpx frdmaliseupnt | rev</a>
+			</td>
+<td>79.16 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/79.41.109.173">79.41.109.173</a>
+		</td>
+<td>AS3269</td>
+<td>
+			<a href="https://bgp.tools/AS3269"
+			   title="Telecom Italia S.p.A.">Telecom Italia S.p.A.</a>
+		    </td>
+<td>
+			    <a href="../../country/it/">
+				<img src="../../static/images/cc/it.png"
+				     title="Italy"
+				     alt="Italy">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2019-02-18/">2019-02-18</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="relayditor">
+			<a href="../../relay/6866134EC4714E6C4CC9D578C29F8734627E253D.html">relayditor</a>
+		    </td>
+<td>none</td>
+<td title="none">
+			    none
+			</td>
+<td>50.40 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/87.14.1.148">87.14.1.148</a>
+		</td>
+<td>AS3269</td>
+<td>
+			<a href="https://bgp.tools/AS3269"
+			   title="Telecom Italia S.p.A.">Telecom Italia S.p.A.</a>
+		    </td>
+<td>
+			    <a href="../../country/it/">
+				<img src="../../static/images/cc/it.png"
+				     title="Italy"
+				     alt="Italy">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2023-06-05/">2023-06-05</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="EnjoyFreedom">
+			<a href="../../relay/B0C2AC493F8806920FEA00429533292309EEC39F.html">EnjoyFreedom</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/2c20240aac3367e28e488bc46ce74060/" 
+				title="0x6EE6A3CB856843C0CBBD5BA413ED656CAFBC258B carchecks_oobal &lt;carchecks_oobal AT simplelogin dot com&gt;" class="contact-text">0x6EE6A3CB856843C0CBBD5BA413ED656CAFBC258B carchecks_oobal &lt;carchecks_oobal AT simplelogin dot com&gt;</a>
+			</td>
+<td>48.53 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/95.246.245.46">95.246.245.46</a>
+		</td>
+<td>AS3269</td>
+<td>
+			<a href="https://bgp.tools/AS3269"
+			   title="Telecom Italia S.p.A.">Telecom Italia S.p.A.</a>
+		    </td>
+<td>
+			    <a href="../../country/it/">
+				<img src="../../static/images/cc/it.png"
+				     title="Italy"
+				     alt="Italy">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2022-08-31/">2022-08-31</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="abeterelay">
+			<a href="../../relay/D8F4E8BC6293F8AB46C37C27642F5FCA593CA89A.html">abeterelay</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/b703451d4d60396562ea2f4ec1fda3fc/" 
+				title="abeterelay@icloud.com" class="contact-text">abeterelay@icloud.com</a>
+			</td>
+<td>21.98 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/95.252.226.188">95.252.226.188</a>
+		</td>
+<td>AS3269</td>
+<td>
+			<a href="https://bgp.tools/AS3269"
+			   title="Telecom Italia S.p.A.">Telecom Italia S.p.A.</a>
+		    </td>
+<td>
+			    <a href="../../country/it/">
+				<img src="../../static/images/cc/it.png"
+				     title="Italy"
+				     alt="Italy">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-02-27/">2025-02-27</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="alphator">
+			<a href="../../relay/C6CBD55867144CF7E79563D3D59E89BED7925927.html">alphator</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/09a710df8d64d6a59dd8df7fb6f5336e/" 
+				title="benedictlxix@vatican.va" class="contact-text">benedictlxix@vatican.va</a>
+			</td>
+<td>11.73 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/95.248.221.87">95.248.221.87</a>
+		</td>
+<td>AS3269</td>
+<td>
+			<a href="https://bgp.tools/AS3269"
+			   title="Telecom Italia S.p.A.">Telecom Italia S.p.A.</a>
+		    </td>
+<td>
+			    <a href="../../country/it/">
+				<img src="../../static/images/cc/it.png"
+				     title="Italy"
+				     alt="Italy">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-11-11/">2024-11-11</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="Unnamed">
+			<a href="../../relay/042FE97AC141322809AD2862BE08F88705D4AADF.html">Unnamed</a>
+		    </td>
+<td>none</td>
+<td title="none">
+			    none
+			</td>
+<td>9.04 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/79.12.122.131">79.12.122.131</a>
+		</td>
+<td>AS3269</td>
+<td>
+			<a href="https://bgp.tools/AS3269"
+			   title="Telecom Italia S.p.A.">Telecom Italia S.p.A.</a>
+		    </td>
+<td>
+			    <a href="../../country/it/">
+				<img src="../../static/images/cc/it.png"
+				     title="Italy"
+				     alt="Italy">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2023-03-21/">2023-03-21</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="torototela">
+			<a href="../../relay/A4E74410D83705EEFF24BC265DE2B2FF39BDA56E.html">torototela</a>
+		    </td>
+<td>
+			    <a href="../../contact/6aab3efe116736166db0e33d38e9abdd/" title="slash.dynu.com">slash.dynu.com</a>
+			</td>
+<td>
+			    <a href="../../contact/6aab3efe116736166db0e33d38e9abdd/" 
+				title="https://keyserver1.pgp.com/vkd/DownloadKey.event?keyid=0x1FD1F681710CF330 url:slash.dynu.com proof:uri-rsa ciissversion:2" class="contact-text">https://keyserver1.pgp.com/vkd/DownloadKey.event?keyid=0x1FD1F681710CF330 url:slash.dynu.com proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>7.05 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/82.52.13.190">82.52.13.190</a>
+		</td>
+<td>AS3269</td>
+<td>
+			<a href="https://bgp.tools/AS3269"
+			   title="Telecom Italia S.p.A.">Telecom Italia S.p.A.</a>
+		    </td>
+<td>
+			    <a href="../../country/it/">
+				<img src="../../static/images/cc/it.png"
+				     title="Italy"
+				     alt="Italy">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2019-02-18/">2019-02-18</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="TORkatRelay">
+			<a href="../../relay/01CA521D1593A7C1613EB6041BB7DB0B22296D4E.html">TORkatRelay</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/0f7b40b46f16399be0d98fcd20754529/" 
+				title="TORkat    9l0ammz05 (AT) mozmail (DOT) com" class="contact-text">TORkat    9l0ammz05 (AT) mozmail (DOT) com</a>
+			</td>
+<td>2.88 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/212.171.133.36">212.171.133.36</a>
+		</td>
+<td>AS3269</td>
+<td>
+			<a href="https://bgp.tools/AS3269"
+			   title="Telecom Italia S.p.A.">Telecom Italia S.p.A.</a>
+		    </td>
+<td>
+			    <a href="../../country/it/">
+				<img src="../../static/images/cc/it.png"
+				     title="Italy"
+				     alt="Italy">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-05-28/">2025-05-28</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="cavecanemRelay">
+			<a href="../../relay/C8DE7ACF319D51BAD11E6DFDE467E704F23DE94E.html">cavecanemRelay</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/fa8f5b5d4704521f2fc10ee8fe9e3d2e/" 
+				title="CaveCanem &lt;cave.cavem@proton.me&gt;" class="contact-text">CaveCanem &lt;cave.cavem@proton.me&gt;</a>
+			</td>
+<td>1.78 Mbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/95.247.146.97">95.247.146.97</a>
+		</td>
+<td>AS3269</td>
+<td>
+			<a href="https://bgp.tools/AS3269"
+			   title="Telecom Italia S.p.A.">Telecom Italia S.p.A.</a>
+		    </td>
+<td>
+			    <a href="../../country/it/">
+				<img src="../../static/images/cc/it.png"
+				     title="Italy"
+				     alt="Italy">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-01-25/">2025-01-25</a>
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="femboyhoneypot">
+			<a href="../../relay/27A157DC46996DEDAE685A0FF20E5C1CC7FFCC84.html">femboyhoneypot</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/72ec5b13347ed9bab3fce75a2cd9fa3c/" 
+				title="Fwame &lt;tor [([AT])] deflame.xyz&gt;" class="contact-text">Fwame &lt;tor [([AT])] deflame.xyz&gt;</a>
+			</td>
+<td>81.92 Kbit/s</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/79.13.135.129">79.13.135.129</a>
+		</td>
+<td>AS3269</td>
+<td>
+			<a href="https://bgp.tools/AS3269"
+			   title="Telecom Italia S.p.A.">Telecom Italia S.p.A.</a>
+		    </td>
+<td>
+			    <a href="../../country/it/">
+				<img src="../../static/images/cc/it.png"
+				     title="Italy"
+				     alt="Italy">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-03-02/">2025-03-02</a>
+		    </td>
+</tr>
+</tbody>
+</table>
+        </div>
+    </body>
+        <footer class="page-footer font-small">
+            <div class="footer-copyright text-center text-muted">
+                <p>
+                    Generated by a <a href="https://github.com/1aeo/allium">1aeo modified fork of allium</a>, based on original <a href="https://git.jordan.im/allium/">allium</a>, on Thu, 05 Jun 2025 17:58:10 GMT. Source data from <a href="https://onionoo.torproject.org/">Tor Project onionoo</a>.
+                </p>
+            </div>
+        </footer>
+    </html>
