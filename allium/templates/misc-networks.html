@@ -18,7 +18,26 @@
 
     <ul style="margin-bottom: 15px;">
         <li><strong>Networks</strong>: {{ relays.json['sorted']['as']|length }} Autonomous Systems (ASes) hosting relays currently active</li>
-        <li><strong>Network Totals</strong>: {{ relays.json['network_totals']['guard_count'] }} Guard, {{ relays.json['network_totals']['middle_count'] }} Middle, {{ relays.json['network_totals']['exit_count'] }} Exit for {{ relays.json['network_totals']['total_relays'] }} Total Relays</li>
+        <li><strong>Network Relays</strong>: Total: {{ relays.json['network_totals']['total_relays'] }}
+            <ul style="margin: 5px 0; padding-left: 20px;">
+                <li><strong>Primary Role</strong> (Main role with Exit priority, Exit > Guard > Middle): 
+                    Guard: {{ relays.json['network_totals']['primary']['guard'] }} | 
+                    Middle: {{ relays.json['network_totals']['primary']['middle'] }} | 
+                    Exit: {{ relays.json['network_totals']['primary']['exit'] }}
+                </li>
+                <li><strong>Role Categories</strong> (Separate categories for all role combinations, adding Guard+Exit): 
+                    Guard: {{ relays.json['network_totals']['categories']['guard_only'] }} | 
+                    Middle: {{ relays.json['network_totals']['categories']['middle'] }} | 
+                    Exit: {{ relays.json['network_totals']['categories']['exit_only'] }} | 
+                    Guard+Exit: {{ relays.json['network_totals']['categories']['guard_exit'] }}
+                </li>
+                <li><strong>All Roles</strong> (Multi-role relays counted by every role they perform): 
+                    Guard: {{ relays.json['network_totals']['all']['guard'] }} | 
+                    Middle: {{ relays.json['network_totals']['all']['middle'] }} | 
+                    Exit: {{ relays.json['network_totals']['all']['exit'] }}
+                </li>
+            </ul>
+        </li>
         <li><strong>Infrastructure Dependency</strong>: {% set as_list = relays.json['sorted']['as'].values()|list %}{% if as_list %}{% set largest_as = as_list|max(attribute='consensus_weight_fraction') %}{{ "%.1f"|format((largest_as.consensus_weight_fraction|default(0)) * 100) }}% hosted by largest AS{% else %}0% hosted by largest AS{% endif %} | {% set sorted_as = as_list|sort(attribute='consensus_weight_fraction', reverse=true) %}{% set top_3_weight = sorted_as[:3]|sum(attribute='consensus_weight_fraction') %}{{ "%.1f"|format((top_3_weight|default(0)) * 100) }}% in top 3 ASes | {% set single_relay_count = 0 %}{% for as_data in as_list %}{% set total_relays = (as_data.guard_count|default(0)) + (as_data.middle_count|default(0)) + (as_data.exit_count|default(0)) %}{% if total_relays == 1 %}{% set single_relay_count = single_relay_count + 1 %}{% endif %}{% endfor %}{{ single_relay_count }} networks host single relays only</li>
         <li><strong>Sorted by</strong>: {{ sorted_by_label|replace('_', ' ') }}</li>
         <li><strong>Key</strong>: BW = Bandwidth, CW = Consensus Weight, AS = Autonomous System (network provider)</li>

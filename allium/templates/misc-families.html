@@ -18,7 +18,26 @@
 
     <ul style="margin-bottom: 15px;">
         <li><strong>Families</strong>: {{ relays.json['sorted']['family']|length }} groups of relays with shared operators, families with 2+ members</li>
-        <li><strong>Network Totals</strong>: {{ relays.json['network_totals']['guard_count'] }} Guard, {{ relays.json['network_totals']['middle_count'] }} Middle, {{ relays.json['network_totals']['exit_count'] }} Exit for {{ relays.json['network_totals']['total_relays'] }} Total Relays</li>
+        <li><strong>Network Relays</strong>: Total: {{ relays.json['network_totals']['total_relays'] }}
+            <ul style="margin: 5px 0; padding-left: 20px;">
+                <li><strong>Primary Role</strong> (Main role with Exit priority, Exit > Guard > Middle): 
+                    Guard: {{ relays.json['network_totals']['primary']['guard'] }} | 
+                    Middle: {{ relays.json['network_totals']['primary']['middle'] }} | 
+                    Exit: {{ relays.json['network_totals']['primary']['exit'] }}
+                </li>
+                <li><strong>Role Categories</strong> (Separate categories for all role combinations, adding Guard+Exit): 
+                    Guard: {{ relays.json['network_totals']['categories']['guard_only'] }} | 
+                    Middle: {{ relays.json['network_totals']['categories']['middle'] }} | 
+                    Exit: {{ relays.json['network_totals']['categories']['exit_only'] }} | 
+                    Guard+Exit: {{ relays.json['network_totals']['categories']['guard_exit'] }}
+                </li>
+                <li><strong>All Roles</strong> (Multi-role relays counted by every role they perform): 
+                    Guard: {{ relays.json['network_totals']['all']['guard'] }} | 
+                    Middle: {{ relays.json['network_totals']['all']['middle'] }} | 
+                    Exit: {{ relays.json['network_totals']['all']['exit'] }}
+                </li>
+            </ul>
+        </li>
         <li><strong>Centralization Risk</strong>: {{ centralization_percentage }}% of all relays in families | Largest family: {{ largest_family_size }} relays | {{ large_family_count }} families have 10+ relays</li>
         <li><strong>Sorted by</strong>: {{ sorted_by_label|replace('_', ' ') }}</li>
         <li><strong>Key</strong>: BW = Bandwidth, CW = Consensus Weight, AS = Autonomous System (network provider)</li>

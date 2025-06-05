@@ -177,50 +177,88 @@ class Relays:
 
     def _calculate_network_totals(self):
         """
-        Calculate comprehensive network totals once for all misc page templates.
-        Replaces duplicate calculations across family statistics and template aggregations.
+        Calculate network totals using three different relay counting methodologies:
+        - Primary: Each relay counted once, Exit prioritized over Guard > Middle
+        - Categories: Each relay counted once with separate Guard+Exit category  
+        - All: Count relays in multiple roles (multi-role relays increment multiple counters)
         
-        Uses exclusive categorization: Exit OR Guard OR Middle (Exit takes precedence)
-        
-        Returns:
-            tuple: (total_guard_cw, total_middle_cw, total_exit_cw) for consensus weight fractions
+        Returns consensus weight totals for backward compatibility.
+        Caches all three count types in self.json['network_totals'].
         """
-        # Single iteration through all relays
-        total_relays = len(self.json['relays'])
+        # Initialize all three counting methods
+        primary_counts = {"guard": 0, "middle": 0, "exit": 0, "total": 0}
+        categories_counts = {"guard_only": 0, "middle": 0, "exit_only": 0, "guard_exit": 0, "total": 0}
+        all_counts = {"guard": 0, "middle": 0, "exit": 0, "total": 0}
         
-        # Consensus Weight totals (for fractions)
+        # Consensus weight totals (for backward compatibility)
         total_guard_cw = 0
         total_middle_cw = 0  
         total_exit_cw = 0
         
-        # Relay Count totals (for display)
-        guard_count = 0
-        middle_count = 0
-        exit_count = 0
-        
         for relay in self.json['relays']:
-            cw = relay.get("consensus_weight", 0)
+            flags = relay.get('flags', [])
+            consensus_weight = relay.get('consensus_weight', 0)
             
-            # Exclusive categorization: Exit OR Guard OR Middle
-            if "Exit" in relay["flags"]:
-                total_exit_cw += cw
-                exit_count += 1
-            elif "Guard" in relay["flags"]:
-                total_guard_cw += cw  
-                guard_count += 1
+            is_guard = 'Guard' in flags
+            is_exit = 'Exit' in flags
+            
+            # Consensus weight calculations (existing logic - matches primary role assignment)
+            if is_exit:
+                total_exit_cw += consensus_weight
+            elif is_guard:
+                total_guard_cw += consensus_weight
             else:
-                total_middle_cw += cw
-                middle_count += 1
+                total_middle_cw += consensus_weight
+                
+            # Primary Role counting (Exit > Guard > Middle priority)
+            if is_exit:
+                primary_counts["exit"] += 1
+            elif is_guard:
+                primary_counts["guard"] += 1
+            else:
+                primary_counts["middle"] += 1
+                
+            # Role Categories counting (four mutually exclusive categories)
+            if is_guard and is_exit:
+                categories_counts["guard_exit"] += 1
+            elif is_guard and not is_exit:
+                categories_counts["guard_only"] += 1
+            elif is_exit and not is_guard:
+                categories_counts["exit_only"] += 1
+            else:
+                categories_counts["middle"] += 1
+                
+            # All Roles counting (multi-role relays increment multiple counters)
+            if is_guard:
+                all_counts["guard"] += 1
+            if is_exit:
+                all_counts["exit"] += 1
+            if not is_guard and not is_exit:
+                all_counts["middle"] += 1
         
-        # Cache in single location for all misc page templates
+        # Set totals
+        total_relays = len(self.json['relays'])
+        primary_counts["total"] = total_relays
+        categories_counts["total"] = total_relays
+        all_counts["total"] = total_relays
+        
+        # Cache all counting methods for template access
         self.json['network_totals'] = {
+            # Backward compatibility (primary counts)
+            'guard_count': primary_counts["guard"],
+            'middle_count': primary_counts["middle"], 
+            'exit_count': primary_counts["exit"],
             'total_relays': total_relays,
-            'guard_count': guard_count,
-            'middle_count': middle_count,
-            'exit_count': exit_count,
-            'total_guard_cw': total_guard_cw,
-            'total_middle_cw': total_middle_cw,
-            'total_exit_cw': total_exit_cw
+            
+            # New: All three counting methods
+            'primary': primary_counts,
+            'categories': categories_counts,
+            'all': all_counts,
+            
+            # Consensus weights (unchanged)
+            'guard_consensus_weight': total_guard_cw,
+            'middle_consensus_weight': total_middle_cw,
+            'exit_consensus_weight': total_exit_cw
         }
         
         return total_guard_cw, total_middle_cw, total_exit_cw
