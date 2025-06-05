@@ -146,11 +146,6 @@ if __name__ == "__main__":
             sorted_by=v,
         )
 
-    # directory authorities page
-    RELAY_SET.write_misc(
-        template="misc-authorities.html",
-        path="misc/authorities.html"
-    )
     if args.progress:
         print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] Progress: Generated 6 miscellaneous sorted pages")
     # onionoo keys used to generate pages by unique value; e.g. AS43350
