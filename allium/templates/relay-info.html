@@ -224,6 +224,15 @@ Network Participation (Consensus Weight | Guard | Middle | Exit)
 </dd>
 
 <dt>
+City | Region | Country
+</dt>
+<dd>
+<span title="City name of the location of this relay as found by a geolocation database. Omitted if the relay location could not be found or if the database does not contain city information.">{% if relay['city_name'] -%}{{ relay['city_name']|escape }}{% else -%}unknown{% endif -%}</span> | 
+<span title="Region name of the location of this relay as found by a geolocation database. Omitted if the relay location could not be found or if the database does not contain region information.">{% if relay['region_name'] -%}{{ relay['region_name']|escape }}{% else -%}unknown{% endif -%}</span> | 
+<span title="Country name of the location of this relay as found by a geolocation database based on the relay's IP address. Omitted if the relay location could not be found.">{% if relay['country_name'] -%}{{ relay['country_name']|escape }}{% else -%}unknown{% endif -%}</span>
+</dd>
+
+<dt>
 Country
 </dt>
 <dd>
@@ -236,6 +245,13 @@ alt="{{ relay['country_name']|escape }}">
 {% else -%}
 unknown
 {% endif -%}
+</dd>
+<dt>
+Latitude, Longitude
+</dt>
+<dd>
+<span title="Latitude of the location of this relay as found by a geolocation database based on the relay's IP address. Omitted if the relay location could not be found.">{% if relay['latitude'] is not none -%}{{ relay['latitude']|escape }}{% else -%}unknown{% endif -%}</span>, 
+<span title="Longitude of the location of this relay as found by a geolocation database based on the relay's IP address. Omitted if the relay location could not be found.">{% if relay['longitude'] is not none -%}{{ relay['longitude']|escape }}{% else -%}unknown{% endif -%}</span>
 </dd>
 <dt>
 Autonomous System (AS Number | AS Name)
