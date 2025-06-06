@@ -239,6 +239,16 @@ Network Participation (Consensus Weight | Guard | Middle | Exit)
 <span title="Probability of this relay to be selected for the middle position. This probability is calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so that this probability can only be an approximation.">{% if relay['middle_probability'] -%}{{ "%.2f"|format(relay['middle_probability'] * 100) }}%{% else -%}N/A{% endif -%}</span> | 
 <span title="Probability of this relay to be selected for the exit position. This probability is calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so that this probability can only be an approximation.">{% if relay['exit_probability'] -%}{{ "%.2f"|format(relay['exit_probability'] * 100) }}%{% else -%}N/A{% endif -%}</span>
 </dd>
+<dt title="Boolean field saying whether the consensus weight of this relay is based on a threshold of 3 or more measurements by Tor bandwidth authorities. Omitted if the network status consensus containing this relay does not contain measurement information.">
+Network Participation Measured by >= 3 Bandwidth Authorities
+</dt>
+<dd>
+{% if relay['measured'] is not none -%}
+{% if relay['measured'] -%}Yes{% else -%}No{% endif -%}
+{% else -%}
+unknown
+{% endif -%}
+</dd>
 
 <dt>
 {% if relay['city_name'] or relay['region_name'] -%}City | Region | Country{% else -%}Country{% endif -%}
