@@ -36,6 +36,9 @@
                     Middle: {{ relays.json['network_totals']['all']['middle'] }} | 
                     Exit: {{ relays.json['network_totals']['all']['exit'] }}
                 </li>
+                <li><strong><span title="Boolean field saying whether the consensus weight of this relay is based on a threshold of 3 or more measurements by Tor bandwidth authorities. Omitted if the network status consensus containing this relay does not contain measurement information.">Bandwidth Measured</span></strong>: 
+                    {{ relays.json['network_totals']['measured_relays'] }} relays, {{ relays.json['network_totals']['measured_percentage'] }}% from overall relays
+                </li>
             </ul>
         </li>
         <li><strong>Software Diversity</strong>: {% set platform_list = relays.json['sorted']['platform'].values()|list %}{% set linux_count = 0 %}{% set windows_count = 0 %}{% set bsd_count = 0 %}{% for platform_data in platform_list %}{% if 'linux' in platform_data.platform|lower %}{% set linux_count = linux_count + (platform_data.consensus_weight_fraction|default(0)) %}{% elif 'windows' in platform_data.platform|lower %}{% set windows_count = windows_count + (platform_data.consensus_weight_fraction|default(0)) %}{% elif 'bsd' in platform_data.platform|lower %}{% set bsd_count = bsd_count + (platform_data.consensus_weight_fraction|default(0)) %}{% endif %}{% endfor %}{{ "%.1f"|format(linux_count * 100) }}% Linux | {{ "%.1f"|format(windows_count * 100) }}% Windows | {{ "%.1f"|format(bsd_count * 100) }}% BSD variants</li>
