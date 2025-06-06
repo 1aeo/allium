@@ -834,7 +834,13 @@ class Relays:
         if os.path.exists(output_path):
             rmtree(output_path)
 
-        for v in self.json["sorted"][k]:
+        # Sort first_seen pages by date to show oldest dates first
+        if k == "first_seen":
+            sorted_values = sorted(self.json["sorted"][k].keys())
+        else:
+            sorted_values = self.json["sorted"][k].keys()
+        
+        for v in sorted_values:
             i = self.json["sorted"][k][v]
             members = []
 
