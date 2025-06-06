@@ -4,10 +4,10 @@
 	Tor Relays :: {{ relay['nickname'] }}
 {% endblock -%}
 {% block body -%}
-{{ navigation('all', is_misc_page=false) }}
 <div id="content">
-<h2>
-Relay "{{ relay['nickname'] }}" | 
+<h1 class="display-4">Relay "{{ relay['nickname'] }}"</h1>
+{{ navigation('all', is_misc_page=false, is_relay_page=true) }}
+<h4>
 {% if relay['effective_family']|length > 1 -%}
 <a href="{{ path_prefix }}family/{{ relay['fingerprint']|escape }}/">Family: {{ relay['effective_family']|length }} relays</a>
 {% else -%}
@@ -24,7 +24,7 @@ AS: unknown
 Country: unknown
 {% endif -%} | 
 <a href="{{ path_prefix }}platform/{{ relay['platform']|escape }}/">{{ relay['platform']|escape }}</a>
-</h2>
+</h4>
 <p>Last fetch was at {{ relays.timestamp }}.</p>
 <div class="row">
 <div class="col-md-6">
