@@ -273,7 +273,7 @@ Platform
 relay['platform'] }}</a>
 </dd>
 <dt>
-Version Information (Current Version | Recommended | Status)
+Version (Running | Recommended | Status)
 </dt>
 <dd>
 <span title="Tor software version without leading 'Tor' as reported by the directory authorities in the 'v' line of the consensus. Omitted if either the directory authorities or the relay did not report which version the relay runs or if the relay runs an alternative Tor implementation.">{% if relay['version'] -%}{{ relay['version']|escape }}{% else -%}unknown{% endif -%}</span> | 
