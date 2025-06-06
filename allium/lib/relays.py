@@ -321,6 +321,7 @@ class Relays:
                 "middle_consensus_weight": 0,
                 "exit_consensus_weight": 0,
                 "unique_as_set": set(),  # Track unique AS numbers for families
+                "measured_count": 0,  # Track measured relays for families and contacts
             }
 
         bw = relay["observed_bandwidth"]
@@ -376,6 +377,10 @@ class Relays:
                     # Use the first family member as the family identifier
                     family_id = relay["effective_family"][0]
                     self.json["sorted"][k][v]["unique_family_set"].add(family_id)
+            if k == "family" or k == "contact":
+                # Count measured relays
+                if relay.get("measured"):
+                    self.json["sorted"][k][v]["measured_count"] += 1 
             
             self.json["sorted"][k][v]["contact"] = relay.get("contact", "")
             self.json["sorted"][k][v]["contact_md5"] = relay.get("contact_md5", "")
