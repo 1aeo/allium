@@ -209,12 +209,19 @@ class Relays:
         total_middle_cw = 0  
         total_exit_cw = 0
         
+        # Bandwidth measured tracking
+        measured_relays = 0
+        
         for relay in self.json['relays']:
             flags = relay.get('flags', [])
             consensus_weight = relay.get('consensus_weight', 0)
             
             is_guard = 'Guard' in flags
             is_exit = 'Exit' in flags
+            
+            # Count relays measured by >= 3 bandwidth authorities
+            if relay.get('measured') is True:
+                measured_relays += 1
             
             # Consensus weight calculations (existing logic - matches primary role assignment)
             if is_exit:
@@ -268,6 +275,10 @@ class Relays:
             'primary': primary_counts,
             'categories': categories_counts,
             'all': all_counts,
+            
+            # Bandwidth measured statistics
+            'measured_relays': measured_relays,
+            'measured_percentage': round((measured_relays / total_relays * 100), 1) if total_relays > 0 else 0.0,
             
             # Consensus weights (unchanged)
             'guard_consensus_weight': total_guard_cw,

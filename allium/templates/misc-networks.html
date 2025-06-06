@@ -36,6 +36,9 @@
                     Middle: {{ relays.json['network_totals']['all']['middle'] }} | 
                     Exit: {{ relays.json['network_totals']['all']['exit'] }}
                 </li>
+                <li><strong><span title="Boolean field saying whether the consensus weight of this relay is based on a threshold of 3 or more measurements by Tor bandwidth authorities. Omitted if the network status consensus containing this relay does not contain measurement information.">Bandwidth Measured</span></strong>: 
+                    {{ relays.json['network_totals']['measured_relays'] }} relays, {{ relays.json['network_totals']['measured_percentage'] }}% from overall relays
+                </li>
             </ul>
         </li>
         <li><strong>Infrastructure Dependency</strong>: {% set as_list = relays.json['sorted']['as'].values()|list %}{% if as_list %}{% set largest_as = as_list|max(attribute='consensus_weight_fraction') %}{{ "%.1f"|format((largest_as.consensus_weight_fraction|default(0)) * 100) }}% hosted by largest AS{% else %}0% hosted by largest AS{% endif %} | {% set sorted_as = as_list|sort(attribute='consensus_weight_fraction', reverse=true) %}{% set top_3_weight = sorted_as[:3]|sum(attribute='consensus_weight_fraction') %}{{ "%.1f"|format((top_3_weight|default(0)) * 100) }}% in top 3 ASes | {% set single_relay_count = 0 %}{% for as_data in as_list %}{% set total_relays = (as_data.guard_count|default(0)) + (as_data.middle_count|default(0)) + (as_data.exit_count|default(0)) %}{% if total_relays == 1 %}{% set single_relay_count = single_relay_count + 1 %}{% endif %}{% endfor %}{{ single_relay_count }} networks host single relays only</li>
