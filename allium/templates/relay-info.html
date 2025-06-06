@@ -233,6 +233,12 @@ First Seen
 <dd>
 <a href="{{ path_prefix }}first_seen/{{ relay['first_seen'].split(' ', 1)[0]|escape }}/">{{ relay['first_seen']|escape }}</a>
 </dd>
+<dt title="UTC timestamp when this relay was last seen in a network status consensus.">
+Last Seen
+</dt>
+<dd>
+{{ relay['last_seen']|escape }}
+</dd>
 <dt title="UTC timestamp when this relay was last (re-)started. Missing if router descriptor containing this information cannot be found.">
 Last Restarted
 </dt>
