@@ -272,7 +272,7 @@ alt="{{ relay['country_name']|escape }}">
 unknown
 {% endif -%}
 </dd>
-{% if relay['latitude'] is not none and relay['longitude'] is not none -%}
+{% if relay['latitude'] and relay['longitude'] and relay['latitude'] != 0 and relay['longitude'] != 0 -%}
 <dt>
 Latitude, Longitude
 </dt>
