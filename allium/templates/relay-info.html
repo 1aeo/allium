@@ -305,6 +305,40 @@ Platform
 <a href='{{ path_prefix }}platform/{{ relay['platform']|escape }}/'>{{
 relay['platform'] }}</a>
 </dd>
+<dt title="Tor software version without leading 'Tor' as reported by the directory authorities in the 'v' line of the consensus. Omitted if either the directory authorities or the relay did not report which version the relay runs or if the relay runs an alternative Tor implementation.">
+Version
+</dt>
+<dd>
+{% if relay['version'] -%}
+{{ relay['version']|escape }}
+{% else -%}
+unknown
+{% endif -%}
+</dd>
+<dt title="Boolean field saying whether the Tor software version of this relay is recommended by the directory authorities or not. Uses the relay version in the consensus. Omitted if either the directory authorities did not recommend versions, or the relay did not report which version it runs.">
+Recommended Version
+</dt>
+<dd>
+{% if relay['recommended_version'] is not none -%}
+{% if relay['recommended_version'] -%}
+Yes
+{% else -%}
+No
+{% endif -%}
+{% else -%}
+unknown
+{% endif -%}
+</dd>
+<dt title="Status of the Tor software version of this relay based on the versions recommended by the directory authorities. Possible version statuses are: 'recommended' if a version is listed as recommended; 'experimental' if a version is newer than every recommended version; 'obsolete' if a version is older than every recommended version; 'new in series' if a version has other recommended versions with the same first three components, and the version is newer than all such recommended versions, but it is not newer than every recommended version; 'unrecommended' if none of the above conditions hold. Omitted if either the directory authorities did not recommend versions, or the relay did not report which version it runs.">
+Version Status
+</dt>
+<dd>
+{% if relay['version_status'] -%}
+{{ relay['version_status']|escape }}
+{% else -%}
+unknown
+{% endif -%}
+</dd>
 </dl>
 </div>
 </div>
