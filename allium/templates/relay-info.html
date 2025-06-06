@@ -37,6 +37,13 @@ Nickname
 </dd>
 
 <dt>
+Fingerprint
+</dt>
+<dd>
+<pre>{{ relay['fingerprint']|escape }}</pre>
+</dd>
+
+<dt>
 AROI <a href="https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/" target="_blank" title="Autonomous Relay Operator Identifier - unverified">(?)</a>
 </dt>
 {% if relay['aroi_domain'] and relay['aroi_domain'] != 'none' -%}
@@ -61,58 +68,6 @@ relay['contact']|escape }}</a>
 <a href="{{ path_prefix }}contact/{{ relay['contact_md5'] }}">none</a>
 </dd>
 {% endif -%}
-<dt title="IP address and TCP port where this relay accepts onion-routing connections, with hostname when available">
-OR Address
-</dt>
-<dd>
-{% if relay['verified_host_names'] -%}
-{% for hostname in relay['verified_host_names'] -%}
-<span class="verified-hostname" title="verified hostname">{{ hostname|escape }}</span>{% if not loop.last %}, {% endif %}
-{% endfor %} | {% for address in relay['or_addresses'] -%}{{ address }}{% if not loop.last %}, {% endif %}{% endfor -%}
-{% elif relay['unverified_host_names'] -%}
-{% for hostname in relay['unverified_host_names'] -%}
-<span class="unverified-hostname" title="unverified hostname">{{ hostname|escape }}</span>{% if not loop.last %}, {% endif %}
-{% endfor %} | {% for address in relay['or_addresses'] -%}{{ address }}{% if not loop.last %}, {% endif %}{% endfor -%}
-{% else -%}
-{% for address in relay['or_addresses'] -%}{{ address }}{% if not loop.last %}, {% endif %}{% endfor -%}
-{% endif -%}
-</dd>
-<dt>
-Exit Address
-</dt>
-{% if relay['exit_address'] -%}
-<dd>
-{{ relay['exit_address']|escape }}
-</dd>
-{% else -%}
-<dd>
-none
-</dd>
-{% endif -%}
-<dt>
-Dir Address
-</dt>
-{% if relay['dir_address'] -%}
-<dd>
-<a href="http://{{ relay['dir_address']|escape }}">{{
-relay['dir_address']|escape }}</a>
-</dd>
-{% else -%}
-<dd>
-none
-</dd>
-{% endif -%}
-<dt title="Bandwidth details: Observed capacity | Advertised capability | Rate limit | Burst limit">
-Bandwidth (Observed | Advertised | Rate | Burst)
-</dt>
-{% set obs_unit = relays._determine_unit(relay['observed_bandwidth']) -%}
-{% set obs_bandwidth = relays._format_bandwidth_with_unit(relay['observed_bandwidth'], obs_unit) -%}
-<dd>
-<span title="Observed: {{ obs_bandwidth }} {{ obs_unit }}">{{ obs_bandwidth }} {{ obs_unit }}</span> | 
-<span title="Advertised: {% if relay['advertised_bandwidth'] -%}{% set adv_unit = relays._determine_unit(relay['advertised_bandwidth']) -%}{% set adv_bandwidth = relays._format_bandwidth_with_unit(relay['advertised_bandwidth'], adv_unit) -%}{{ adv_bandwidth }} {{ adv_unit }}{% else -%}unknown{% endif -%}">{% if relay['advertised_bandwidth'] -%}{% set adv_unit = relays._determine_unit(relay['advertised_bandwidth']) -%}{% set adv_bandwidth = relays._format_bandwidth_with_unit(relay['advertised_bandwidth'], adv_unit) -%}{{ adv_bandwidth }} {{ adv_unit }}{% else -%}unknown{% endif -%}</span> | 
-<span title="Rate: {% if relay['bandwidth_rate'] -%}{% set rate_unit = relays._determine_unit(relay['bandwidth_rate']) -%}{% set rate_bandwidth = relays._format_bandwidth_with_unit(relay['bandwidth_rate'], rate_unit) -%}{{ rate_bandwidth }} {{ rate_unit }}{% else -%}unknown{% endif -%}">{% if relay['bandwidth_rate'] -%}{% set rate_unit = relays._determine_unit(relay['bandwidth_rate']) -%}{% set rate_bandwidth = relays._format_bandwidth_with_unit(relay['bandwidth_rate'], rate_unit) -%}{{ rate_bandwidth }} {{ rate_unit }}{% else -%}unknown{% endif -%}</span> | 
-<span title="Burst: {% if relay['bandwidth_burst'] -%}{% set burst_unit = relays._determine_unit(relay['bandwidth_burst']) -%}{% set burst_bandwidth = relays._format_bandwidth_with_unit(relay['bandwidth_burst'], burst_unit) -%}{{ burst_bandwidth }} {{ burst_unit }}{% else -%}unknown{% endif -%}">{% if relay['bandwidth_burst'] -%}{% set burst_unit = relays._determine_unit(relay['bandwidth_burst']) -%}{% set burst_bandwidth = relays._format_bandwidth_with_unit(relay['bandwidth_burst'], burst_unit) -%}{{ burst_bandwidth }} {{ burst_unit }}{% else -%}unknown{% endif -%}</span>
-</dd>
 <dt>
 IPv4 Exit Policy Summary
 </dt>
@@ -190,12 +145,47 @@ Alleged Family {% if relay['alleged_family'] and relay['alleged_family']|length 
 </div>
 <div class="col-md-6">
 <dl>
-<dt>
-Fingerprint
+<dt title="IP address and TCP port where this relay accepts onion-routing connections, with hostname when available">
+OR Address
 </dt>
 <dd>
-<pre>{{ relay['fingerprint']|escape }}</pre>
+{% if relay['verified_host_names'] -%}
+{% for hostname in relay['verified_host_names'] -%}
+<span class="verified-hostname" title="verified hostname">{{ hostname|escape }}</span>{% if not loop.last %}, {% endif %}
+{% endfor %} | {% for address in relay['or_addresses'] -%}{{ address }}{% if not loop.last %}, {% endif %}{% endfor -%}
+{% elif relay['unverified_host_names'] -%}
+{% for hostname in relay['unverified_host_names'] -%}
+<span class="unverified-hostname" title="unverified hostname">{{ hostname|escape }}</span>{% if not loop.last %}, {% endif %}
+{% endfor %} | {% for address in relay['or_addresses'] -%}{{ address }}{% if not loop.last %}, {% endif %}{% endfor -%}
+{% else -%}
+{% for address in relay['or_addresses'] -%}{{ address }}{% if not loop.last %}, {% endif %}{% endfor -%}
+{% endif -%}
 </dd>
+<dt>
+Exit Address
+</dt>
+{% if relay['exit_address'] -%}
+<dd>
+{{ relay['exit_address']|escape }}
+</dd>
+{% else -%}
+<dd>
+none
+</dd>
+{% endif -%}
+<dt>
+Dir Address
+</dt>
+{% if relay['dir_address'] -%}
+<dd>
+<a href="http://{{ relay['dir_address']|escape }}">{{
+relay['dir_address']|escape }}</a>
+</dd>
+{% else -%}
+<dd>
+none
+</dd>
+{% endif -%}
 <dt>
 Flags: {{ relay['flags']|reject('equalto', 'StaleDesc')|list|length }}
 </dt>
@@ -209,6 +199,28 @@ alt="{{ flag|escape }}">
 </a> {{ flag|escape }}
 {% endif -%}
 {% endfor -%}
+</dd>
+
+<dt title="Bandwidth details: Observed capacity | Advertised capability | Rate limit | Burst limit">
+Bandwidth (Observed | Advertised | Rate | Burst)
+</dt>
+{% set obs_unit = relays._determine_unit(relay['observed_bandwidth']) -%}
+{% set obs_bandwidth = relays._format_bandwidth_with_unit(relay['observed_bandwidth'], obs_unit) -%}
+<dd>
+<span title="Observed: {{ obs_bandwidth }} {{ obs_unit }}">{{ obs_bandwidth }} {{ obs_unit }}</span> | 
+<span title="Advertised: {% if relay['advertised_bandwidth'] -%}{% set adv_unit = relays._determine_unit(relay['advertised_bandwidth']) -%}{% set adv_bandwidth = relays._format_bandwidth_with_unit(relay['advertised_bandwidth'], adv_unit) -%}{{ adv_bandwidth }} {{ adv_unit }}{% else -%}unknown{% endif -%}">{% if relay['advertised_bandwidth'] -%}{% set adv_unit = relays._determine_unit(relay['advertised_bandwidth']) -%}{% set adv_bandwidth = relays._format_bandwidth_with_unit(relay['advertised_bandwidth'], adv_unit) -%}{{ adv_bandwidth }} {{ adv_unit }}{% else -%}unknown{% endif -%}</span> | 
+<span title="Rate: {% if relay['bandwidth_rate'] -%}{% set rate_unit = relays._determine_unit(relay['bandwidth_rate']) -%}{% set rate_bandwidth = relays._format_bandwidth_with_unit(relay['bandwidth_rate'], rate_unit) -%}{{ rate_bandwidth }} {{ rate_unit }}{% else -%}unknown{% endif -%}">{% if relay['bandwidth_rate'] -%}{% set rate_unit = relays._determine_unit(relay['bandwidth_rate']) -%}{% set rate_bandwidth = relays._format_bandwidth_with_unit(relay['bandwidth_rate'], rate_unit) -%}{{ rate_bandwidth }} {{ rate_unit }}{% else -%}unknown{% endif -%}</span> | 
+<span title="Burst: {% if relay['bandwidth_burst'] -%}{% set burst_unit = relays._determine_unit(relay['bandwidth_burst']) -%}{% set burst_bandwidth = relays._format_bandwidth_with_unit(relay['bandwidth_burst'], burst_unit) -%}{{ burst_bandwidth }} {{ burst_unit }}{% else -%}unknown{% endif -%}">{% if relay['bandwidth_burst'] -%}{% set burst_unit = relays._determine_unit(relay['bandwidth_burst']) -%}{% set burst_bandwidth = relays._format_bandwidth_with_unit(relay['bandwidth_burst'], burst_unit) -%}{{ burst_bandwidth }} {{ burst_unit }}{% else -%}unknown{% endif -%}</span>
+</dd>
+
+<dt>
+Network Participation (Consensus Weight | Guard | Middle | Exit)
+</dt>
+<dd>
+<span title="Fraction of this relay's consensus weight compared to the sum of all consensus weights in the network. This fraction is a very rough approximation of the probability of this relay to be selected by clients.">{% if relay['consensus_weight_fraction'] -%}{{ "%.2f"|format(relay['consensus_weight_fraction'] * 100) }}%{% else -%}N/A{% endif -%}</span> | 
+<span title="Probability of this relay to be selected for the guard position. This probability is calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so that this probability can only be an approximation.">{% if relay['guard_probability'] -%}{{ "%.2f"|format(relay['guard_probability'] * 100) }}%{% else -%}N/A{% endif -%}</span> | 
+<span title="Probability of this relay to be selected for the middle position. This probability is calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so that this probability can only be an approximation.">{% if relay['middle_probability'] -%}{{ "%.2f"|format(relay['middle_probability'] * 100) }}%{% else -%}N/A{% endif -%}</span> | 
+<span title="Probability of this relay to be selected for the exit position. This probability is calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so that this probability can only be an approximation.">{% if relay['exit_probability'] -%}{{ "%.2f"|format(relay['exit_probability'] * 100) }}%{% else -%}N/A{% endif -%}</span>
 </dd>
 
 <dt>
@@ -260,15 +272,6 @@ Last Changed Address or Port
 {% else -%}
 unknown
 {% endif -%}
-</dd>
-<dt>
-Network Participation (Consensus Weight | Guard | Middle | Exit)
-</dt>
-<dd>
-<span title="Fraction of this relay's consensus weight compared to the sum of all consensus weights in the network. This fraction is a very rough approximation of the probability of this relay to be selected by clients.">{% if relay['consensus_weight_fraction'] -%}{{ "%.2f"|format(relay['consensus_weight_fraction'] * 100) }}%{% else -%}N/A{% endif -%}</span> | 
-<span title="Probability of this relay to be selected for the guard position. This probability is calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so that this probability can only be an approximation.">{% if relay['guard_probability'] -%}{{ "%.2f"|format(relay['guard_probability'] * 100) }}%{% else -%}N/A{% endif -%}</span> | 
-<span title="Probability of this relay to be selected for the middle position. This probability is calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so that this probability can only be an approximation.">{% if relay['middle_probability'] -%}{{ "%.2f"|format(relay['middle_probability'] * 100) }}%{% else -%}N/A{% endif -%}</span> | 
-<span title="Probability of this relay to be selected for the exit position. This probability is calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so that this probability can only be an approximation.">{% if relay['exit_probability'] -%}{{ "%.2f"|format(relay['exit_probability'] * 100) }}%{% else -%}N/A{% endif -%}</span>
 </dd>
 <dt>
 Platform (Short | Long)
