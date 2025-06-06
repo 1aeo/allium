@@ -76,49 +76,16 @@ Exit Address
 none
 </dd>
 {% endif -%}
-<dt title="Bandwidth estimate in bytes per second of the capacity this relay can handle. The relay remembers the maximum bandwidth sustained output over any ten second period in the past day, and another sustained input. The observed_bandwidth value is the lesser of these two numbers. Missing if router descriptor containing this information cannot be found.">
-Observed Bandwidth
+<dt title="Bandwidth details: Observed capacity | Advertised capability | Rate limit | Burst limit">
+Bandwidth (Obs|Adv|Rate|Burst)
 </dt>
 {% set obs_unit = relays._determine_unit(relay['observed_bandwidth']) -%}
 {% set obs_bandwidth = relays._format_bandwidth_with_unit(relay['observed_bandwidth'], obs_unit) -%}
 <dd>
-{{ obs_bandwidth }} {{ obs_unit }}
-</dd>
-<dt title="Bandwidth in bytes per second that this relay is willing and capable to provide. This bandwidth value is the minimum of bandwidth_rate, bandwidth_burst, and observed_bandwidth. Missing if router descriptor containing this information cannot be found.">
-Advertised Bandwidth
-</dt>
-<dd>
-{% if relay['advertised_bandwidth'] -%}
-{% set adv_unit = relays._determine_unit(relay['advertised_bandwidth']) -%}
-{% set adv_bandwidth = relays._format_bandwidth_with_unit(relay['advertised_bandwidth'], adv_unit) -%}
-{{ adv_bandwidth }} {{ adv_unit }}
-{% else -%}
-unknown
-{% endif -%}
-</dd>
-<dt title="Average bandwidth in bytes per second that this relay is willing to sustain over long periods. Missing if router descriptor containing this information cannot be found.">
-Bandwidth Rate
-</dt>
-<dd>
-{% if relay['bandwidth_rate'] -%}
-{% set rate_unit = relays._determine_unit(relay['bandwidth_rate']) -%}
-{% set rate_bandwidth = relays._format_bandwidth_with_unit(relay['bandwidth_rate'], rate_unit) -%}
-{{ rate_bandwidth }} {{ rate_unit }}
-{% else -%}
-unknown
-{% endif -%}
-</dd>
-<dt title="Bandwidth in bytes per second that this relay is willing to sustain in very short intervals. Missing if router descriptor containing this information cannot be found.">
-Bandwidth Burst
-</dt>
-<dd>
-{% if relay['bandwidth_burst'] -%}
-{% set burst_unit = relays._determine_unit(relay['bandwidth_burst']) -%}
-{% set burst_bandwidth = relays._format_bandwidth_with_unit(relay['bandwidth_burst'], burst_unit) -%}
-{{ burst_bandwidth }} {{ burst_unit }}
-{% else -%}
-unknown
-{% endif -%}
+<code title="Observed: {{ obs_bandwidth }} {{ obs_unit }}">{{ obs_bandwidth }} {{ obs_unit }}</code> | 
+<code title="Advertised: {% if relay['advertised_bandwidth'] -%}{% set adv_unit = relays._determine_unit(relay['advertised_bandwidth']) -%}{% set adv_bandwidth = relays._format_bandwidth_with_unit(relay['advertised_bandwidth'], adv_unit) -%}{{ adv_bandwidth }} {{ adv_unit }}{% else -%}unknown{% endif -%}">{% if relay['advertised_bandwidth'] -%}{% set adv_unit = relays._determine_unit(relay['advertised_bandwidth']) -%}{% set adv_bandwidth = relays._format_bandwidth_with_unit(relay['advertised_bandwidth'], adv_unit) -%}{{ adv_bandwidth }} {{ adv_unit }}{% else -%}unknown{% endif -%}</code> | 
+<code title="Rate: {% if relay['bandwidth_rate'] -%}{% set rate_unit = relays._determine_unit(relay['bandwidth_rate']) -%}{% set rate_bandwidth = relays._format_bandwidth_with_unit(relay['bandwidth_rate'], rate_unit) -%}{{ rate_bandwidth }} {{ rate_unit }}{% else -%}unknown{% endif -%}">{% if relay['bandwidth_rate'] -%}{% set rate_unit = relays._determine_unit(relay['bandwidth_rate']) -%}{% set rate_bandwidth = relays._format_bandwidth_with_unit(relay['bandwidth_rate'], rate_unit) -%}{{ rate_bandwidth }} {{ rate_unit }}{% else -%}unknown{% endif -%}</code> | 
+<code title="Burst: {% if relay['bandwidth_burst'] -%}{% set burst_unit = relays._determine_unit(relay['bandwidth_burst']) -%}{% set burst_bandwidth = relays._format_bandwidth_with_unit(relay['bandwidth_burst'], burst_unit) -%}{{ burst_bandwidth }} {{ burst_unit }}{% else -%}unknown{% endif -%}">{% if relay['bandwidth_burst'] -%}{% set burst_unit = relays._determine_unit(relay['bandwidth_burst']) -%}{% set burst_bandwidth = relays._format_bandwidth_with_unit(relay['bandwidth_burst'], burst_unit) -%}{{ burst_bandwidth }} {{ burst_unit }}{% else -%}unknown{% endif -%}</code>
 </dd>
 <dt>
 IPv4 Exit Policy Summary
