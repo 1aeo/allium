@@ -1,11 +1,29 @@
 {% extends "skeleton.html" -%}
+{% from "macros.html" import navigation %}
 {% block title -%}
 	Tor Relays :: {{ relay['nickname'] }}
 {% endblock -%}
 {% block body -%}
+{{ navigation('relays', is_misc_page=false) }}
 <div id="content">
 <h2>
-<a href="{{ path_prefix }}">Home</a> :: Relay "{{ relay['nickname'] }}"
+<a href="{{ path_prefix }}">Home</a> :: Relay "{{ relay['nickname'] }}" | 
+{% if relay['effective_family']|length > 1 -%}
+<a href="{{ path_prefix }}family/{{ relay['fingerprint']|escape }}/">Family: {{ relay['effective_family']|length }} relays</a>
+{% else -%}
+Family: {{ relay['effective_family']|length }} relay
+{% endif -%} | 
+{% if relay['as'] -%}
+<a href="{{ path_prefix }}as/{{ relay['as']|escape }}/">{{ relay['as']|escape }}</a>
+{% else -%}
+AS: unknown
+{% endif -%} | 
+{% if relay['country'] -%}
+<a href="{{ path_prefix }}country/{{ relay['country']|escape }}/">{{ relay['country_name']|escape }}</a>
+{% else -%}
+Country: unknown
+{% endif -%} | 
+<a href="{{ path_prefix }}platform/{{ relay['platform']|escape }}/">{{ relay['platform']|escape }}</a>
 </h2>
 <p>Last fetch was at {{ relays.timestamp }}.</p>
 <div class="row">
