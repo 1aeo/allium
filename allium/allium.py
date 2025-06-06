@@ -11,12 +11,53 @@ Default output directory: ./www
 
 import argparse
 import os
+import resource
 import sys
 import time
 from shutil import copytree
 from lib.relays import Relays
 
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
+
+def get_memory_usage():
+    """
+    Get current memory usage using Python's built-in resource module and /proc/self/status.
+    Returns formatted string with current RSS (physical) and peak memory usage.
+    
+    Returns:
+        str: Formatted memory usage string like "RSS: 45.2MB, Peak: 123.4MB"
+    """
+    try:
+        # Get peak memory from resource module
+        usage = resource.getrusage(resource.RUSAGE_SELF)
+        peak_kb = usage.ru_maxrss
+        if sys.platform == 'darwin':  # macOS reports in bytes
+            peak_kb = peak_kb / 1024
+        
+        # Get current RSS from /proc/self/status (Linux specific)
+        current_rss_kb = None
+        try:
+            with open('/proc/self/status', 'r') as f:
+                for line in f:
+                    if line.startswith('VmRSS:'):
+                        # Extract RSS value in KB
+                        current_rss_kb = int(line.split()[1])
+                        break
+        except (FileNotFoundError, PermissionError, ValueError):
+            # Fall back to showing only peak if /proc/self/status is unavailable
+            current_rss_kb = peak_kb
+        
+        # Format to MB with 1 decimal place
+        current_mb = (current_rss_kb or peak_kb) / 1024
+        peak_mb = peak_kb / 1024
+        
+        if current_rss_kb and current_rss_kb != peak_kb:
+            return f"RSS: {current_mb:.1f}MB, Peak: {peak_mb:.1f}MB"
+        else:
+            # If current RSS unavailable or same as peak, just show peak
+            return f"Peak RSS: {peak_mb:.1f}MB"
+    except Exception as e:
+        return f"Memory: unavailable ({e})"
 
 def ensure_output_directory(output_dir):
     """
@@ -81,29 +122,29 @@ if __name__ == "__main__":
     total_steps = 18
 
     if args.progress:
-        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] Progress: Starting allium static site generation...")
+        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Starting allium static site generation...")
 
     # Fail fast - ensure output directory exists before expensive processing
     if args.progress:
-        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] Progress: Creating output directory...")
+        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Creating output directory...")
     ensure_output_directory(args.output_dir)
     if args.progress:
-        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] Progress: Output directory ready at {args.output_dir}")
+        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Output directory ready at {args.output_dir}")
 
     # object containing onionoo data and processing routines
     if args.progress:
-        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] Progress: Initializing relay data from onionoo...")
+        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Initializing relay data from onionoo...")
     RELAY_SET = Relays(args.output_dir, args.onionoo_url, args.bandwidth_units == 'bits')
     if RELAY_SET.json == None:
         sys.exit(0)
     if args.progress:
-        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] Progress: Loaded relay data from onionoo - found {len(RELAY_SET.json.get('relays', []))} relays")
+        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Loaded relay data from onionoo - found {len(RELAY_SET.json.get('relays', []))} relays")
 
     # Output directory already created early via ensure_output_directory() - skip redundant creation
 
     # index and "all" HTML relay sets; index set limited to 500 relays
     if args.progress:
-        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] Progress: Generating index page...")
+        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Generating index page...")
     RELAY_SET.write_misc(
         template="index.html",
         path="index.html",
@@ -111,13 +152,13 @@ if __name__ == "__main__":
         is_index=True,
     )
     if args.progress:
-        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] Progress: Generated index page with top 500 relays")
+        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Generated index page with top 500 relays")
 
     if args.progress:
-        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] Progress: Generating all relays page...")
+        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Generating all relays page...")
     RELAY_SET.write_misc(template="all.html", path="misc/all.html")
     if args.progress:
-        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] Progress: Generated all relays page")
+        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Generated all relays page")
 
     # miscellaneous page filename suffixes and sorted-by keys
     misc_pages = {
@@ -141,7 +182,7 @@ if __name__ == "__main__":
 
     # miscellaneous-sorted (per misc_pages k/v) HTML pages
     if args.progress:
-        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] Progress: Generating miscellaneous sorted pages...")
+        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Generating miscellaneous sorted pages...")
     for k, v in misc_pages.items():
         RELAY_SET.write_misc(
             template="misc-families.html",
@@ -170,7 +211,7 @@ if __name__ == "__main__":
         )
 
     if args.progress:
-        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] Progress: Generated 6 miscellaneous sorted pages")
+        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Generated 6 miscellaneous sorted pages")
     # onionoo keys used to generate pages by unique value; e.g. AS43350
     keys = [
         "as",
@@ -183,32 +224,32 @@ if __name__ == "__main__":
     ]
 
     if args.progress:
-        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] Progress: Generating pages by unique values...")
+        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Generating pages by unique values...")
     for i, k in enumerate(keys):
         RELAY_SET.write_pages_by_key(k)
     if args.progress:
-        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] Progress: Generated pages for {len(keys)} unique value types")
+        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Generated pages for {len(keys)} unique value types")
 
     # per-relay info pages
     if args.progress:
-        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] Progress: Generating individual relay info pages...")
+        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Generating individual relay info pages...")
     RELAY_SET.write_relay_info()
     if args.progress:
-        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] Progress: Generated individual pages for {len(RELAY_SET.json.get('relays', []))} relays")
+        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Generated individual pages for {len(RELAY_SET.json.get('relays', []))} relays")
 
     # copy static directory and its contents if it doesn't exist
     if args.progress:
-        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] Progress: Copying static files...")
+        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Copying static files...")
     if not os.path.exists(os.path.join(args.output_dir, "static")):
         copytree(
             os.path.join(ABS_PATH, "static"),
             os.path.join(args.output_dir, "static"),
         )
         if args.progress:
-            print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] Progress: Copied static files to output directory")
+            print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Copied static files to output directory")
     else:
         if args.progress:
-            print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] Progress: Static files already exist, skipping copy")
+            print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Static files already exist, skipping copy")
 
     if args.progress:
-        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] Progress: Allium static site generation completed successfully!")
+        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Allium static site generation completed successfully!")
