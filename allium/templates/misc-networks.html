@@ -3,11 +3,11 @@
 {% set sorted_by_label = sorted_by.split(',')[0].split('.')[1] -%}
 {% block title -%}
     Relay Radar :: AS Networks By {{ sorted_by_label|replace('_',
-    ' ')|title }}
+    ' ')|replace('bandwidth', 'observed bandwidth')|title }}
 {% endblock -%}
 {% block body -%}
     <h2>
-        AS Networks by {{ sorted_by_label|replace('_', ' ')|title }}
+        AS Networks by {{ sorted_by_label|replace('_', ' ')|replace('bandwidth', 'observed bandwidth')|title }}
     </h2>
     
     {{ navigation('networks', is_misc_page=true) }}
@@ -39,8 +39,8 @@
             </ul>
         </li>
         <li><strong>Infrastructure Dependency</strong>: {% set as_list = relays.json['sorted']['as'].values()|list %}{% if as_list %}{% set largest_as = as_list|max(attribute='consensus_weight_fraction') %}{{ "%.1f"|format((largest_as.consensus_weight_fraction|default(0)) * 100) }}% hosted by largest AS{% else %}0% hosted by largest AS{% endif %} | {% set sorted_as = as_list|sort(attribute='consensus_weight_fraction', reverse=true) %}{% set top_3_weight = sorted_as[:3]|sum(attribute='consensus_weight_fraction') %}{{ "%.1f"|format((top_3_weight|default(0)) * 100) }}% in top 3 ASes | {% set single_relay_count = 0 %}{% for as_data in as_list %}{% set total_relays = (as_data.guard_count|default(0)) + (as_data.middle_count|default(0)) + (as_data.exit_count|default(0)) %}{% if total_relays == 1 %}{% set single_relay_count = single_relay_count + 1 %}{% endif %}{% endfor %}{{ single_relay_count }} networks host single relays only</li>
-        <li><strong>Sorted by</strong>: {{ sorted_by_label|replace('_', ' ') }}</li>
-        <li><strong>Key</strong>: BW = Bandwidth, CW = Consensus Weight, AS = Autonomous System (network provider)</li>
+        <li><strong>Sorted by</strong>: {{ sorted_by_label|replace('_', ' ')|replace('bandwidth', 'observed bandwidth') }}</li>
+        <li><strong>Key</strong>: BW = Observed Bandwidth, CW = Consensus Weight, AS = Autonomous System (network provider)</li>
     </ul>
     
     <p class="text-muted" style="margin-bottom: 15px;">
@@ -53,15 +53,15 @@
             <th>AS Name</th>
             <th>Country</th>
             {% if sorted_by_label == 'bandwidth' -%}
-                <th class="text-center bw-header" title="Bandwidth">Overall / <a href="networks-by-guard-bandwidth.html">Guard</a> / <a href="networks-by-middle-bandwidth.html">Middle</a> / <a href="networks-by-exit-bandwidth.html">Exit</a> BW</th>
+                <th class="text-center bw-header" title="Observed Bandwidth: An estimate of the capacity this relay can handle. The relay remembers the max bandwidth sustained output over any ten second period in the past 5 days, and another sustained input. The 'observed' value is the lesser of these two numbers.">Overall / <a href="networks-by-guard-bandwidth.html">Guard</a> / <a href="networks-by-middle-bandwidth.html">Middle</a> / <a href="networks-by-exit-bandwidth.html">Exit</a> BW</th>
             {% elif sorted_by_label == 'guard_bandwidth' -%}
-                <th class="text-center bw-header" title="Bandwidth"><a href="networks-by-overall-bandwidth.html">Overall</a> / Guard / <a href="networks-by-middle-bandwidth.html">Middle</a> / <a href="networks-by-exit-bandwidth.html">Exit</a> BW</th>
+                <th class="text-center bw-header" title="Observed Bandwidth: An estimate of the capacity this relay can handle. The relay remembers the max bandwidth sustained output over any ten second period in the past 5 days, and another sustained input. The 'observed' value is the lesser of these two numbers."><a href="networks-by-overall-bandwidth.html">Overall</a> / Guard / <a href="networks-by-middle-bandwidth.html">Middle</a> / <a href="networks-by-exit-bandwidth.html">Exit</a> BW</th>
             {% elif sorted_by_label == 'middle_bandwidth' -%}
-                <th class="text-center bw-header" title="Bandwidth"><a href="networks-by-overall-bandwidth.html">Overall</a> / <a href="networks-by-guard-bandwidth.html">Guard</a> / Middle / <a href="networks-by-exit-bandwidth.html">Exit</a> BW</th>
+                <th class="text-center bw-header" title="Observed Bandwidth: An estimate of the capacity this relay can handle. The relay remembers the max bandwidth sustained output over any ten second period in the past 5 days, and another sustained input. The 'observed' value is the lesser of these two numbers."><a href="networks-by-overall-bandwidth.html">Overall</a> / <a href="networks-by-guard-bandwidth.html">Guard</a> / Middle / <a href="networks-by-exit-bandwidth.html">Exit</a> BW</th>
             {% elif sorted_by_label == 'exit_bandwidth' -%}
-                <th class="text-center bw-header" title="Bandwidth"><a href="networks-by-overall-bandwidth.html">Overall</a> / <a href="networks-by-guard-bandwidth.html">Guard</a> / <a href="networks-by-middle-bandwidth.html">Middle</a> / Exit BW</th>
+                <th class="text-center bw-header" title="Observed Bandwidth: An estimate of the capacity this relay can handle. The relay remembers the max bandwidth sustained output over any ten second period in the past 5 days, and another sustained input. The 'observed' value is the lesser of these two numbers."><a href="networks-by-overall-bandwidth.html">Overall</a> / <a href="networks-by-guard-bandwidth.html">Guard</a> / <a href="networks-by-middle-bandwidth.html">Middle</a> / Exit BW</th>
             {% else -%}
-                <th class="text-center bw-header" title="Bandwidth"><a href="networks-by-overall-bandwidth.html">Overall</a> / <a href="networks-by-guard-bandwidth.html">Guard</a> / <a href="networks-by-middle-bandwidth.html">Middle</a> / <a href="networks-by-exit-bandwidth.html">Exit</a> BW</th>
+                <th class="text-center bw-header" title="Observed Bandwidth: An estimate of the capacity this relay can handle. The relay remembers the max bandwidth sustained output over any ten second period in the past 5 days, and another sustained input. The 'observed' value is the lesser of these two numbers."><a href="networks-by-overall-bandwidth.html">Overall</a> / <a href="networks-by-guard-bandwidth.html">Guard</a> / <a href="networks-by-middle-bandwidth.html">Middle</a> / <a href="networks-by-exit-bandwidth.html">Exit</a> BW</th>
             {% endif -%}
             {% if sorted_by_label == 'consensus_weight_fraction' -%}
                 <th class="text-center cw-header" title="Consensus Weight"><a href="networks-by-consensus-weight.html">Overall</a> / <a href="networks-by-guard-consensus-weight.html">Guard</a> / <a href="networks-by-middle-consensus-weight.html">Middle</a> / <a href="networks-by-exit-consensus-weight.html">Exit</a> CW</th>

@@ -3,11 +3,11 @@
 {% set sorted_by_label = sorted_by.split(',')[0].split('.')[1] -%}
 {% block title -%}
     Relay Radar :: Countries By {{ sorted_by_label|replace('_',
-    ' ')|title }}
+    ' ')|replace('bandwidth', 'observed bandwidth')|title }}
 {% endblock -%}
 {% block body -%}
     <h2>
-        Countries by {{ sorted_by_label|replace('_', ' ')|title }}
+        Countries by {{ sorted_by_label|replace('_', ' ')|replace('bandwidth', 'observed bandwidth')|title }}
     </h2>
     
     {{ navigation('countries', is_misc_page=true) }}
@@ -39,8 +39,8 @@
             </ul>
         </li>
         <li><strong>Geographic Diversity</strong>: {% set country_list = relays.json['sorted']['country'].values()|list %}{% set sorted_countries = country_list|sort(attribute='consensus_weight_fraction', reverse=true) %}{% set top_3_weight = sorted_countries[:3]|sum(attribute='consensus_weight_fraction') %}{{ "%.1f"|format(top_3_weight * 100) }}% in top 3 countries | {% set significant_countries = country_list|selectattr('consensus_weight_fraction', 'gt', 0.01)|list|length %}{{ significant_countries }} countries have >1% of network | {% set five_eyes_countries = ['us', 'gb', 'ca', 'au', 'nz', 'US', 'GB', 'CA', 'AU', 'NZ'] %}{% for country_code, country_data in relays.json['sorted']['country'].items() %}{% if country_code|lower in ['us', 'gb', 'ca', 'au', 'nz'] %}{% set five_eyes_weight = (five_eyes_weight|default(0)) + country_data.consensus_weight_fraction %}{% endif %}{% endfor %}{{ "%.1f"|format((five_eyes_weight|default(0)) * 100) }}% in Five Eyes countries</li>
-        <li><strong>Sorted by</strong>: {{ sorted_by_label|replace('_', ' ') }}</li>
-        <li><strong>Key</strong>: BW = Bandwidth, CW = Consensus Weight, AS = Autonomous System (network provider)</li>
+        <li><strong>Sorted by</strong>: {{ sorted_by_label|replace('_', ' ')|replace('bandwidth', 'observed bandwidth') }}</li>
+        <li><strong>Key</strong>: BW = Observed Bandwidth, CW = Consensus Weight, AS = Autonomous System (network provider)</li>
     </ul>
     
     <p class="text-muted" style="margin-bottom: 15px;">
@@ -51,15 +51,15 @@
         <tr>
             <th>Country</th>
             {% if sorted_by_label == 'bandwidth' -%}
-                <th class="text-center bw-header" title="Bandwidth">Overall / <a href="countries-by-guard-bandwidth.html">Guard</a> / <a href="countries-by-middle-bandwidth.html">Middle</a> / <a href="countries-by-exit-bandwidth.html">Exit</a> BW</th>
+                <th class="text-center bw-header" title="Observed Bandwidth: An estimate of the capacity this relay can handle. The relay remembers the max bandwidth sustained output over any ten second period in the past 5 days, and another sustained input. The 'observed' value is the lesser of these two numbers.">Overall / <a href="countries-by-guard-bandwidth.html">Guard</a> / <a href="countries-by-middle-bandwidth.html">Middle</a> / <a href="countries-by-exit-bandwidth.html">Exit</a> BW</th>
             {% elif sorted_by_label == 'guard_bandwidth' -%}
-                <th class="text-center bw-header" title="Bandwidth"><a href="countries-by-overall-bandwidth.html">Overall</a> / Guard / <a href="countries-by-middle-bandwidth.html">Middle</a> / <a href="countries-by-exit-bandwidth.html">Exit</a> BW</th>
+                <th class="text-center bw-header" title="Observed Bandwidth: An estimate of the capacity this relay can handle. The relay remembers the max bandwidth sustained output over any ten second period in the past 5 days, and another sustained input. The 'observed' value is the lesser of these two numbers."><a href="countries-by-overall-bandwidth.html">Overall</a> / Guard / <a href="countries-by-middle-bandwidth.html">Middle</a> / <a href="countries-by-exit-bandwidth.html">Exit</a> BW</th>
             {% elif sorted_by_label == 'middle_bandwidth' -%}
-                <th class="text-center bw-header" title="Bandwidth"><a href="countries-by-overall-bandwidth.html">Overall</a> / <a href="countries-by-guard-bandwidth.html">Guard</a> / Middle / <a href="countries-by-exit-bandwidth.html">Exit</a> BW</th>
+                <th class="text-center bw-header" title="Observed Bandwidth: An estimate of the capacity this relay can handle. The relay remembers the max bandwidth sustained output over any ten second period in the past 5 days, and another sustained input. The 'observed' value is the lesser of these two numbers."><a href="countries-by-overall-bandwidth.html">Overall</a> / <a href="countries-by-guard-bandwidth.html">Guard</a> / Middle / <a href="countries-by-exit-bandwidth.html">Exit</a> BW</th>
             {% elif sorted_by_label == 'exit_bandwidth' -%}
-                <th class="text-center bw-header" title="Bandwidth"><a href="countries-by-overall-bandwidth.html">Overall</a> / <a href="countries-by-guard-bandwidth.html">Guard</a> / <a href="countries-by-middle-bandwidth.html">Middle</a> / Exit BW</th>
+                <th class="text-center bw-header" title="Observed Bandwidth: An estimate of the capacity this relay can handle. The relay remembers the max bandwidth sustained output over any ten second period in the past 5 days, and another sustained input. The 'observed' value is the lesser of these two numbers."><a href="countries-by-overall-bandwidth.html">Overall</a> / <a href="countries-by-guard-bandwidth.html">Guard</a> / <a href="countries-by-middle-bandwidth.html">Middle</a> / Exit BW</th>
             {% else -%}
-                <th class="text-center bw-header" title="Bandwidth"><a href="countries-by-overall-bandwidth.html">Overall</a> / <a href="countries-by-guard-bandwidth.html">Guard</a> / <a href="countries-by-middle-bandwidth.html">Middle</a> / <a href="countries-by-exit-bandwidth.html">Exit</a> BW</th>
+                <th class="text-center bw-header" title="Observed Bandwidth: An estimate of the capacity this relay can handle. The relay remembers the max bandwidth sustained output over any ten second period in the past 5 days, and another sustained input. The 'observed' value is the lesser of these two numbers."><a href="countries-by-overall-bandwidth.html">Overall</a> / <a href="countries-by-guard-bandwidth.html">Guard</a> / <a href="countries-by-middle-bandwidth.html">Middle</a> / <a href="countries-by-exit-bandwidth.html">Exit</a> BW</th>
             {% endif -%}
             {% if sorted_by_label == 'consensus_weight_fraction' -%}
                 <th class="text-center cw-header" title="Consensus Weight"><a href="countries-by-consensus-weight.html">Overall</a> / <a href="countries-by-guard-consensus-weight.html">Guard</a> / <a href="countries-by-middle-consensus-weight.html">Middle</a> / <a href="countries-by-exit-consensus-weight.html">Exit</a> CW</th>

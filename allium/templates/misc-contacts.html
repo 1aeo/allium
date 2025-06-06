@@ -3,11 +3,11 @@
 {% set sorted_by_label = sorted_by.split(',')[0].split('.')[1] -%}
 {% block title -%}
     Relay Radar :: Contacts By {{ sorted_by_label|replace('_',
-    ' ')|title }}
+    ' ')|replace('bandwidth', 'observed bandwidth')|title }}
 {% endblock -%}
 {% block body -%}
     <h2>
-        Contacts by {{ sorted_by_label|replace('_', ' ')|title }}
+        Contacts by {{ sorted_by_label|replace('_', ' ')|replace('bandwidth', 'observed bandwidth')|title }}
     </h2>
     
     {{ navigation('contacts', is_misc_page=true) }}
@@ -39,8 +39,8 @@
             </ul>
         </li>
         <li><strong>Operator Concentration</strong>: {% set contact_list = relays.json['sorted']['contact'].values()|list %}{% if contact_list %}{% set largest_operator = contact_list|max(attribute='consensus_weight_fraction') %}{{ "%.1f"|format((largest_operator.consensus_weight_fraction|default(0)) * 100) }}% controlled by largest operator{% else %}0% controlled by largest operator{% endif %} | {% set sorted_contacts = contact_list|sort(attribute='consensus_weight_fraction', reverse=true) %}{% set top_10_weight = sorted_contacts[:10]|sum(attribute='consensus_weight_fraction') %}{{ "%.1f"|format((top_10_weight|default(0)) * 100) }}% controlled by top 10 operators | {% set total_relays = relays.json['relays']|length %}{% set contact_relay_count = contact_list|sum(attribute='guard_count') + contact_list|sum(attribute='middle_count') + contact_list|sum(attribute='exit_count') %}{% if total_relays > 0 %}{% set no_contact_relays = total_relays - contact_relay_count %}{{ "%.1f"|format((no_contact_relays / total_relays) * 100) }}% have no contact info{% else %}0% have no contact info{% endif %}</li>
-        <li><strong>Sorted by</strong>: {{ sorted_by_label|replace('_', ' ') }}</li>
-        <li><strong>Key</strong>: BW = Bandwidth, CW = Consensus Weight, AS = Autonomous System (network provider)</li>
+        <li><strong>Sorted by</strong>: {{ sorted_by_label|replace('_', ' ')|replace('bandwidth', 'observed bandwidth') }}</li>
+        <li><strong>Key</strong>: BW = Observed Bandwidth, CW = Consensus Weight, AS = Autonomous System (network provider)</li>
     </ul>
     
     <p class="text-muted" style="margin-bottom: 15px;">
@@ -51,15 +51,15 @@
         <tr>
             <th title="Grouped by contact information. Shows AROI domain (when available) and contact hash identifier. Hover for full contact info.">Contact and AROI</th>
             {% if sorted_by_label == 'bandwidth' -%}
-                <th class="text-center bw-header" title="Bandwidth">Overall / <a href="contacts-by-guard-bandwidth.html">Guard</a> / <a href="contacts-by-middle-bandwidth.html">Middle</a> / <a href="contacts-by-exit-bandwidth.html">Exit</a> BW</th>
+                <th class="text-center bw-header" title="Observed Bandwidth: An estimate of the capacity this relay can handle. The relay remembers the max bandwidth sustained output over any ten second period in the past 5 days, and another sustained input. The 'observed' value is the lesser of these two numbers.">Overall / <a href="contacts-by-guard-bandwidth.html">Guard</a> / <a href="contacts-by-middle-bandwidth.html">Middle</a> / <a href="contacts-by-exit-bandwidth.html">Exit</a> BW</th>
             {% elif sorted_by_label == 'guard_bandwidth' -%}
-                <th class="text-center bw-header" title="Bandwidth"><a href="contacts-by-overall-bandwidth.html">Overall</a> / Guard / <a href="contacts-by-middle-bandwidth.html">Middle</a> / <a href="contacts-by-exit-bandwidth.html">Exit</a> BW</th>
+                <th class="text-center bw-header" title="Observed Bandwidth: An estimate of the capacity this relay can handle. The relay remembers the max bandwidth sustained output over any ten second period in the past 5 days, and another sustained input. The 'observed' value is the lesser of these two numbers."><a href="contacts-by-overall-bandwidth.html">Overall</a> / Guard / <a href="contacts-by-middle-bandwidth.html">Middle</a> / <a href="contacts-by-exit-bandwidth.html">Exit</a> BW</th>
             {% elif sorted_by_label == 'middle_bandwidth' -%}
-                <th class="text-center bw-header" title="Bandwidth"><a href="contacts-by-overall-bandwidth.html">Overall</a> / <a href="contacts-by-guard-bandwidth.html">Guard</a> / Middle / <a href="contacts-by-exit-bandwidth.html">Exit</a> BW</th>
+                <th class="text-center bw-header" title="Observed Bandwidth: An estimate of the capacity this relay can handle. The relay remembers the max bandwidth sustained output over any ten second period in the past 5 days, and another sustained input. The 'observed' value is the lesser of these two numbers."><a href="contacts-by-overall-bandwidth.html">Overall</a> / <a href="contacts-by-guard-bandwidth.html">Guard</a> / Middle / <a href="contacts-by-exit-bandwidth.html">Exit</a> BW</th>
             {% elif sorted_by_label == 'exit_bandwidth' -%}
-                <th class="text-center bw-header" title="Bandwidth"><a href="contacts-by-overall-bandwidth.html">Overall</a> / <a href="contacts-by-guard-bandwidth.html">Guard</a> / <a href="contacts-by-middle-bandwidth.html">Middle</a> / Exit BW</th>
+                <th class="text-center bw-header" title="Observed Bandwidth: An estimate of the capacity this relay can handle. The relay remembers the max bandwidth sustained output over any ten second period in the past 5 days, and another sustained input. The 'observed' value is the lesser of these two numbers."><a href="contacts-by-overall-bandwidth.html">Overall</a> / <a href="contacts-by-guard-bandwidth.html">Guard</a> / <a href="contacts-by-middle-bandwidth.html">Middle</a> / Exit BW</th>
             {% else -%}
-                <th class="text-center bw-header" title="Bandwidth"><a href="contacts-by-overall-bandwidth.html">Overall</a> / <a href="contacts-by-guard-bandwidth.html">Guard</a> / <a href="contacts-by-middle-bandwidth.html">Middle</a> / <a href="contacts-by-exit-bandwidth.html">Exit</a> BW</th>
+                <th class="text-center bw-header" title="Observed Bandwidth: An estimate of the capacity this relay can handle. The relay remembers the max bandwidth sustained output over any ten second period in the past 5 days, and another sustained input. The 'observed' value is the lesser of these two numbers."><a href="contacts-by-overall-bandwidth.html">Overall</a> / <a href="contacts-by-guard-bandwidth.html">Guard</a> / <a href="contacts-by-middle-bandwidth.html">Middle</a> / <a href="contacts-by-exit-bandwidth.html">Exit</a> BW</th>
             {% endif -%}
             {% if sorted_by_label == 'consensus_weight_fraction' -%}
                 <th class="text-center cw-header" title="Consensus Weight"><a href="contacts-by-consensus-weight.html">Overall</a> / <a href="contacts-by-guard-consensus-weight.html">Guard</a> / <a href="contacts-by-middle-consensus-weight.html">Middle</a> / <a href="contacts-by-exit-consensus-weight.html">Exit</a> CW</th>
