@@ -4,7 +4,7 @@
 	Tor Relays :: {{ relay['nickname'] }}
 {% endblock -%}
 {% block body -%}
-{{ navigation('relays', is_misc_page=false) }}
+{{ navigation('all', is_misc_page=false) }}
 <div id="content">
 <h2>
 <a href="{{ path_prefix }}">Home</a> :: Relay "{{ relay['nickname'] }}" | 
