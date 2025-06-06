@@ -7,7 +7,7 @@
 {{ navigation('all', is_misc_page=false) }}
 <div id="content">
 <h2>
-<a href="{{ path_prefix }}">Home</a> :: Relay "{{ relay['nickname'] }}" | 
+Relay "{{ relay['nickname'] }}" | 
 {% if relay['effective_family']|length > 1 -%}
 <a href="{{ path_prefix }}family/{{ relay['fingerprint']|escape }}/">Family: {{ relay['effective_family']|length }} relays</a>
 {% else -%}
