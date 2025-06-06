@@ -196,10 +196,22 @@ class Relays:
         """
         for relay in self.json["relays"]:
             if relay.get("platform"):
-                relay["platform"] = (
-                    relay["platform"].split(" on ", 1)[1].split(" ")[0]
-                )
-                relay["platform"] = relay["platform"].split("/")[-1]  # GNU/*
+                # Store the original platform information
+                relay["platform_raw"] = relay["platform"]
+                
+                # Apply trimming to the platform field with error handling
+                try:
+                    # Try the standard format: "Tor x.x.x on Platform"
+                    parts = relay["platform"].split(" on ", 1)
+                    if len(parts) >= 2:
+                        relay["platform"] = parts[1].split(" ")[0]
+                        relay["platform"] = relay["platform"].split("/")[-1]  # GNU/*
+                    else:
+                        # Fallback: use the original platform string
+                        relay["platform"] = relay["platform_raw"]
+                except (IndexError, AttributeError):
+                    # Fallback: use the original platform string
+                    relay["platform"] = relay["platform_raw"]
 
     def _fix_missing_observed_bandwidth(self):
         """
