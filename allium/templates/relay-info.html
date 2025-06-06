@@ -208,24 +208,19 @@ unknown
 {% endif -%}
 </dd>
 <dt>
-AS Number
+Autonomous System (AS Number | AS Name)
 </dt>
 <dd>
 {% if relay['as'] -%}
-<a href='{{ path_prefix }}as/{{ relay['as']|escape }}/'>{{ relay['as']|escape
-}}</a>
+<a href='{{ path_prefix }}as/{{ relay['as']|escape }}/' title="AS Number">{{ relay['as']|escape }}</a>
 {% else -%}
-unknown
-{% endif -%}
-<dt>
-AS Name
-</dt>
-<dd>
-{% if relay['as_name'] -%}
-{{ relay['as_name']|escape }} (<a href='https://bgp.tools/{{ relay['as']|escape }}'>BGP</a>)
+<span title="AS Number">unknown</span>
+{% endif -%} | {% if relay['as_name'] -%}
+<span title="AS Name">{{ relay['as_name']|escape }}</span> (<a href='https://bgp.tools/{{ relay['as']|escape }}'>BGP.tools</a>)
 {% else -%}
-unknown
+<span title="AS Name">unknown</span>
 {% endif -%}
+</dd>
 <dt>
 First Seen
 </dt>
