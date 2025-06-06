@@ -125,12 +125,12 @@ Exit Policy
 </pre>
 </dd>
 {% if relay['effective_family']|length > 1 -%}
-<dt>
-Effective Family Members (<a href="{{ path_prefix }}family/{{ relay['fingerprint']|escape }}/">view</a>)
+<dt title="Array of fingerprints of relays that are in an effective, mutual family relationship with this relay. These relays are part of this relay's family and they consider this relay to be part of their family. Always contains the relay's own fingerprint. Omitted if the descriptor containing this information cannot be found.">
+Effective Family Members: {{ relay['effective_family']|length }} (<a href="{{ path_prefix }}family/{{ relay['fingerprint']|escape }}/">View</a>)
 </dt>
 {% else -%}
-<dt>
-Effective Family Members
+<dt title="Array of fingerprints of relays that are in an effective, mutual family relationship with this relay. These relays are part of this relay's family and they consider this relay to be part of their family. Always contains the relay's own fingerprint. Omitted if the descriptor containing this information cannot be found.">
+Effective Family Member: {{ relay['effective_family']|length }}
 </dt>
 {% endif -%}
 <dd>
@@ -143,8 +143,8 @@ Effective Family Members
 {% endfor -%}
 </pre>
 </dd>
-<dt>
-Alleged Family Members
+<dt title="Array of fingerprints of relays that are not in an effective, mutual family relationship with this relay. These relays are part of this relay's family but they don't consider this relay to be part of their family. Omitted if empty or if descriptor containing this information cannot be found.">
+Alleged Family {% if relay['alleged_family'] and relay['alleged_family']|length == 1 -%}Member{% else -%}Members{% endif -%}: {% if relay['alleged_family'] -%}{{ relay['alleged_family']|length }}{% else -%}0{% endif -%}
 </dt>
 <dd>
 {% if relay['alleged_family'] -%}
