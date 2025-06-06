@@ -73,9 +73,15 @@ class Relays:
         unnecessary classification which could affect sorting
 
         e.g. "Tor 0.3.4.9 on Linux" -> "Linux"
+        
+        Also preserve the original platform information as platform_raw for display
         """
         for relay in self.json["relays"]:
             if relay.get("platform"):
+                # Store the original platform information
+                relay["platform_raw"] = relay["platform"]
+                
+                # Apply trimming to the platform field
                 relay["platform"] = (
                     relay["platform"].split(" on ", 1)[1].split(" ")[0]
                 )

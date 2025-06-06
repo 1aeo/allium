@@ -253,11 +253,10 @@ Network Participation (Consensus Weight | Guard | Middle | Exit)
 <span title="Probability of this relay to be selected for the exit position. This probability is calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so that this probability can only be an approximation.">{% if relay['exit_probability'] -%}{{ "%.2f"|format(relay['exit_probability'] * 100) }}%{% else -%}N/A{% endif -%}</span>
 </dd>
 <dt>
-Platform
+Platform (Short | Long)
 </dt>
 <dd>
-<a href='{{ path_prefix }}platform/{{ relay['platform']|escape }}/'>{{
-relay['platform'] }}</a>
+<a href='{{ path_prefix }}platform/{{ relay['platform']|escape }}/' title="Simplified platform identifier for categorization">{{ relay['platform']|escape }}</a> | <span title="Complete platform information as reported by relay">{% if relay['platform_raw'] -%}{{ relay['platform_raw']|escape }}{% else -%}{{ relay['platform']|escape }}{% endif -%}</span>
 </dd>
 <dt>
 Version (Running | Recommended | Status)
