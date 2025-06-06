@@ -37,7 +37,7 @@ class Relays:
         self.timestamp = self._write_timestamp()
 
         self._fix_missing_observed_bandwidth()
-        self._sort_by_bandwidth()
+        self._sort_by_observed_bandwidth()
         self._trim_platform()
         self._add_hashed_contact()
         self._process_aroi_contacts()  # Process AROI display info first
@@ -165,7 +165,7 @@ class Relays:
             # Hash the original contact info
             self.json["relays"][idx]["contact_md5"] = hashlib.md5(contact.encode("utf-8")).hexdigest()
 
-    def _sort_by_bandwidth(self):
+    def _sort_by_observed_bandwidth(self):
         """
         Sort full JSON list by highest observed_bandwidth, retain this order
         during subsequent sorting (country, AS, etc)
