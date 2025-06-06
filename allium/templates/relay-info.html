@@ -77,7 +77,7 @@ none
 </dd>
 {% endif -%}
 <dt title="Bandwidth details: Observed capacity | Advertised capability | Rate limit | Burst limit">
-Bandwidth (Obs|Adv|Rate|Burst)
+Bandwidth (Observed | Advertised | Rate | Burst)
 </dt>
 {% set obs_unit = relays._determine_unit(relay['observed_bandwidth']) -%}
 {% set obs_bandwidth = relays._format_bandwidth_with_unit(relay['observed_bandwidth'], obs_unit) -%}
