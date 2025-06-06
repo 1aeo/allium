@@ -258,12 +258,14 @@ Last Changed Address or Port
 unknown
 {% endif -%}
 </dd>
-<dt title="Consensus weight is a relay's relative share of Tor network bandwidth, based on its advertised bandwidth and uptime.">
-CW
+<dt>
+Network Participation (Consensus Weight | Guard | Middle | Exit)
 </dt>
 <dd>
-{{ relay['consensus_weight_fraction']|escape }} ({{
-relay['consensus_weight']|escape }})
+<span title="Fraction of this relay's consensus weight compared to the sum of all consensus weights in the network. This fraction is a very rough approximation of the probability of this relay to be selected by clients.">{% if relay['consensus_weight_fraction'] -%}{{ "%.2f"|format(relay['consensus_weight_fraction'] * 100) }}%{% else -%}N/A{% endif -%}</span> | 
+<span title="Probability of this relay to be selected for the guard position. This probability is calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so that this probability can only be an approximation.">{% if relay['guard_probability'] -%}{{ "%.2f"|format(relay['guard_probability'] * 100) }}%{% else -%}N/A{% endif -%}</span> | 
+<span title="Probability of this relay to be selected for the middle position. This probability is calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so that this probability can only be an approximation.">{% if relay['middle_probability'] -%}{{ "%.2f"|format(relay['middle_probability'] * 100) }}%{% else -%}N/A{% endif -%}</span> | 
+<span title="Probability of this relay to be selected for the exit position. This probability is calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so that this probability can only be an approximation.">{% if relay['exit_probability'] -%}{{ "%.2f"|format(relay['exit_probability'] * 100) }}%{% else -%}N/A{% endif -%}</span>
 </dd>
 <dt>
 Platform
