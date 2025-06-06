@@ -711,6 +711,69 @@ class Relays:
         value = bandwidth_bytes / divisor
         return f"{value:.2f}"
 
+    def _format_time_ago(self, timestamp_str):
+        """Format timestamp as multi-unit time ago (e.g., '2y 3m 2w ago')"""
+        from datetime import datetime, timezone
+        
+        try:
+            # Parse the timestamp string
+            timestamp = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
+            timestamp = timestamp.replace(tzinfo=timezone.utc)
+            now = datetime.now(timezone.utc)
+            
+            # Calculate time difference
+            diff = now - timestamp
+            total_seconds = int(diff.total_seconds())
+            
+            if total_seconds < 0:
+                return "in the future"
+            
+            # Time unit calculations
+            years = total_seconds // (365 * 24 * 3600)
+            remainder = total_seconds % (365 * 24 * 3600)
+            
+            months = remainder // (30 * 24 * 3600)
+            remainder = remainder % (30 * 24 * 3600)
+            
+            weeks = remainder // (7 * 24 * 3600)
+            remainder = remainder % (7 * 24 * 3600)
+            
+            days = remainder // (24 * 3600)
+            remainder = remainder % (24 * 3600)
+            
+            hours = remainder // 3600
+            remainder = remainder % 3600
+            
+            minutes = remainder // 60
+            seconds = remainder % 60
+            
+            # Build the result with up to 3 largest units
+            parts = []
+            units = [
+                (years, 'y'),
+                (months, 'mo'),
+                (weeks, 'w'),
+                (days, 'd'),
+                (hours, 'h'),
+                (minutes, 'm'),
+                (seconds, 's')
+            ]
+            
+            # Take the 3 largest non-zero units
+            for value, unit in units:
+                if value > 0:
+                    parts.append(f"{value}{unit}")
+                if len(parts) == 3:
+                    break
+            
+            if not parts:
+                return "just now"
+            
+            return " ".join(parts) + " ago"
+            
+        except (ValueError, TypeError):
+            return "unknown"
+
 
 
     def write_pages_by_key(self, k):
