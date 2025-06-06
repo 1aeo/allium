@@ -141,6 +141,23 @@ Alleged Family {% if relay['alleged_family'] and relay['alleged_family']|length 
 {% endif -%}
 </pre>
 </dd>
+<dt title="Array of fingerprints of relays that consider this relay to be part of their family but that are not part of this relay's family. Omitted if empty or if descriptor containing this information cannot be found.">
+Indirect Family {% if relay['indirect_family'] and relay['indirect_family']|length == 1 -%}Member{% else -%}Members{% endif -%}: {% if relay['indirect_family'] -%}{{ relay['indirect_family']|length }}{% else -%}0{% endif -%}
+</dt>
+<dd>
+{% if relay['indirect_family'] -%}
+<pre class="pre-scrollable">{% for i_relay in relay['indirect_family'] -%}
+{% if relay['indirect_family']|length > 1 -%}
+<a href="{{ i_relay|escape }}.html">{{ i_relay|escape }}</a>
+{% else -%}
+{{ i_relay|escape }}
+{% endif -%}
+{% endfor -%}
+{% else -%}
+<pre class="pre-scrollable">none
+{% endif -%}
+</pre>
+</dd>
 </dl>
 </div>
 <div class="col-md-6">
