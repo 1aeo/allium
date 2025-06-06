@@ -179,7 +179,7 @@ Fingerprint
 <pre>{{ relay['fingerprint']|escape }}</pre>
 </dd>
 <dt>
-Flags
+Flags: {{ relay['flags']|reject('equalto', 'StaleDesc')|list|length }}
 </dt>
 <dd>
 {% for flag in relay['flags'] -%}
