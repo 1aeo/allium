@@ -225,7 +225,7 @@ Autonomous System (AS Number | AS Name)
 Seen (First | Last)
 </dt>
 <dd>
-<a href="{{ path_prefix }}first_seen/{{ relay['first_seen'].split(' ', 1)[0]|escape }}/">{{ relays._format_time_ago(relay['first_seen']) }}</a> ({{ relay['first_seen']|escape }}) | {{ relays._format_time_ago(relay['last_seen']) }} ({{ relay['last_seen']|escape }})
+<a href="{{ path_prefix }}first_seen/{{ relay['first_seen'].split(' ', 1)[0]|escape }}/">{{ relays._format_time_ago(relay['first_seen']) }} ({{ relay['first_seen']|escape }})</a> | {{ relays._format_time_ago(relay['last_seen']) }} ({{ relay['last_seen']|escape }})
 </dd>
 <dt title="UTC timestamp when this relay was last (re-)started. Missing if router descriptor containing this information cannot be found.">
 Last Restarted
