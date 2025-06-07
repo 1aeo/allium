@@ -41,7 +41,7 @@
                 </li>
             </ul>
         </li>
-        <li><strong>Geographic Diversity</strong>: {% set country_list = relays.json['sorted']['country'].values()|list %}{% set sorted_countries = country_list|sort(attribute='consensus_weight_fraction', reverse=true) %}{% set top_3_weight = sorted_countries[:3]|sum(attribute='consensus_weight_fraction') %}{{ "%.1f"|format(top_3_weight * 100) }}% in top 3 countries | {% set significant_countries = country_list|selectattr('consensus_weight_fraction', 'gt', 0.01)|list|length %}{{ significant_countries }} countries have >1% of network | {% set five_eyes_countries = ['us', 'gb', 'ca', 'au', 'nz', 'US', 'GB', 'CA', 'AU', 'NZ'] %}{% for country_code, country_data in relays.json['sorted']['country'].items() %}{% if country_code|lower in ['us', 'gb', 'ca', 'au', 'nz'] %}{% set five_eyes_weight = (five_eyes_weight|default(0)) + country_data.consensus_weight_fraction %}{% endif %}{% endfor %}{{ "%.1f"|format((five_eyes_weight|default(0)) * 100) }}% in Five Eyes countries</li>
+        <li><strong>Geographic Diversity</strong>: {{ relays.json.smart_context.concentration_patterns.template_optimized.countries_top_3_percentage }}% in top 3 countries | {{ relays.json.smart_context.concentration_patterns.template_optimized.countries_significant_count }} countries have >1% of network | {{ relays.json.smart_context.concentration_patterns.template_optimized.countries_five_eyes_percentage }}% in Five Eyes countries</li>
         <li><strong>Sorted by</strong>: {{ sorted_by_label|replace('_', ' ')|replace('bandwidth', 'observed bandwidth') }}</li>
         <li><strong>Key</strong>: BW = Observed Bandwidth, CW = Consensus Weight, AS = Autonomous System (network provider)</li>
     </ul>
