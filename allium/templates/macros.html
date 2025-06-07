@@ -29,6 +29,10 @@
                 <li style="display: inline;"> > <a href="{{ path_prefix }}as/{{ page_data.as_number }}/" style="color: #337ab7; text-decoration: none;">{{ page_data.as_number }}</a></li>
             {% endif %}
             <li style="display: inline; color: #777;"> > {{ page_data.nickname }}</li>
+        {% elif page_type == 'home' and page_data %}
+            <li style="display: inline; color: #777;"> > {{ page_data.page_name }}</li>
+        {% elif page_type == 'misc_listing' and page_data %}
+            <li style="display: inline; color: #777;"> > {{ page_data.page_name }}</li>
         {% endif %}
     </ol>
 </nav>
