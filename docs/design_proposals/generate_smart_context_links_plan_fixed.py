@@ -1,7 +1,24 @@
-# Smart Context Links Complete Implementation Plan
+#!/usr/bin/env python3
+"""
+Smart Context Links Implementation Plan Generator - Fixed Version
+
+Generates a comprehensive design proposal for implementing the complete
+Smart Context Links system based on gap analysis and 4-phase development plan.
+"""
+
+import os
+from datetime import datetime
+
+def generate_smart_context_links_plan():
+    """Generate the complete Smart Context Links implementation plan"""
+    
+    # Use string concatenation to avoid f-string conflicts with Jinja2 syntax
+    date_str = datetime.now().strftime('%Y-%m-%d')
+    
+    content = """# Smart Context Links Complete Implementation Plan
 
 **Version**: 2.0  
-**Date**: 2025-06-07  
+**Date**: """ + date_str + """  
 **Status**: Implementation Ready  
 **Author**: Development Team  
 
@@ -184,7 +201,7 @@ This document outlines the complete implementation plan for Smart Context Links 
 ```python
 # ADDITION: lib/intelligence_engine.py
 def _layer3_contextual_significance(self):
-    """Layer 3: Calculate relative importance and network position"""
+    \"\"\"Layer 3: Calculate relative importance and network position\"\"\"
     template_values = {}
     
     # Calculate relay significance percentiles
@@ -216,7 +233,7 @@ def _layer3_contextual_significance(self):
     return {'template_optimized': template_values}
 
 def _get_significance_tier(self, percentile):
-    """Categorize relay significance"""
+    \"\"\"Categorize relay significance\"\"\"
     if percentile >= 95: return 'TOP_5'
     elif percentile >= 90: return 'TOP_10'
     elif percentile >= 75: return 'TOP_25'
@@ -236,7 +253,7 @@ def _get_significance_tier(self, percentile):
 ```python
 # ADDITION: lib/intelligence_engine.py
 def _layer4_smart_suggestions(self, page_type, current_data):
-    """Layer 4: Generate intelligent content suggestions"""
+    \"\"\"Layer 4: Generate intelligent content suggestions\"\"\"
     suggestions = []
     
     if page_type == 'as_detail':
@@ -312,13 +329,13 @@ def _layer4_smart_suggestions(self, page_type, current_data):
 ```python
 # NEW: lib/url_router.py
 class SmartContextRouter:
-    """Handle smart context URL parameters and filtering"""
+    \"\"\"Handle smart context URL parameters and filtering\"\"\"
     
     def __init__(self, relays_data):
         self.relays_data = relays_data
         
     def parse_context_params(self, url_params):
-        """Parse smart context URL parameters"""
+        \"\"\"Parse smart context URL parameters\"\"\"
         context = {}
         
         # Filter parameters
@@ -336,7 +353,7 @@ class SmartContextRouter:
         return context
     
     def apply_context_filtering(self, base_data, context):
-        """Apply contextual filtering to data"""
+        \"\"\"Apply contextual filtering to data\"\"\"
         filtered_data = base_data.copy()
         
         if 'filters' in context:
@@ -454,13 +471,13 @@ class SmartContextRouter:
 ```python
 # NEW: lib/similarity_analysis.py
 class SimilarityAnalyzer:
-    """Analyze similarities between network entities"""
+    \"\"\"Analyze similarities between network entities\"\"\"
     
     def __init__(self, relays_data):
         self.relays_data = relays_data
         
     def find_similar_networks(self, target_as, similarity_type='geographic'):
-        """Find networks similar to target AS"""
+        \"\"\"Find networks similar to target AS\"\"\"
         target_data = self.relays_data['sorted']['as'].get(target_as, {})
         similar_networks = []
         
@@ -556,22 +573,22 @@ class SimilarityAnalyzer:
 ```python
 # NEW: lib/analysis/base_analyzer.py
 class BaseAnalyzer:
-    """Base class for all intelligence analyzers"""
+    \"\"\"Base class for all intelligence analyzers\"\"\"
     
     def __init__(self, relays_data):
         self.relays_data = relays_data
         
     def supports_page_type(self, page_type):
-        """Override in subclasses to specify supported page types"""
+        \"\"\"Override in subclasses to specify supported page types\"\"\"
         return True
         
     def analyze(self, page_data, context=None):
-        """Override in subclasses to provide analysis"""
+        \"\"\"Override in subclasses to provide analysis\"\"\"
         raise NotImplementedError
 
 # Enhanced Intelligence Engine with modular analyzers
 class IntelligenceEngine:
-    """Enhanced modular intelligence engine"""
+    \"\"\"Enhanced modular intelligence engine\"\"\"
     
     def __init__(self, relays_data):
         self.relays_data = relays_data
@@ -587,7 +604,7 @@ class IntelligenceEngine:
         }
     
     def analyze_page_context(self, page_type, page_data, context=None):
-        """Generate comprehensive intelligence for specific page context"""
+        \"\"\"Generate comprehensive intelligence for specific page context\"\"\"
         intelligence = {}
         
         for analyzer_name, analyzer in self.analyzers.items():
@@ -655,14 +672,14 @@ Enhanced Page with Smart Features
 ```python
 # NEW: lib/intelligence_cache.py
 class IntelligenceCache:
-    """Cache intelligence results for performance"""
+    \"\"\"Cache intelligence results for performance\"\"\"
     
     def __init__(self, ttl=1800):  # 30 minute TTL
         self.cache = {}
         self.ttl = ttl
         
     def get_cached_analysis(self, cache_key):
-        """Get cached analysis result"""
+        \"\"\"Get cached analysis result\"\"\"
         if cache_key in self.cache:
             cached_data, timestamp = self.cache[cache_key]
             if time.time() - timestamp < self.ttl:
@@ -672,7 +689,7 @@ class IntelligenceCache:
         return None
         
     def cache_analysis(self, cache_key, analysis_result):
-        """Cache analysis result"""
+        \"\"\"Cache analysis result\"\"\"
         self.cache[cache_key] = (analysis_result, time.time())
 ```
 
@@ -849,6 +866,32 @@ showing <span class="diversity-good">good diversification</span>.
 ---
 
 **Document Status**: Implementation Ready  
-**Last Updated**: 2025-06-07  
+**Last Updated**: """ + date_str + """  
 **Estimated Completion**: 10 weeks from start date  
 **Total Effort**: ~400-500 development hours across 4 phases
+"""
+
+    return content
+
+def write_plan_to_file():
+    """Write the implementation plan to a markdown file"""
+    
+    # Ensure the directory exists
+    os.makedirs('docs/design_proposals', exist_ok=True)
+    
+    # Generate the content
+    content = generate_smart_context_links_plan()
+    
+    # Write to file
+    filename = 'docs/design_proposals/smart_context_links_implementation_plan.md'
+    with open(filename, 'w', encoding='utf-8') as f:
+        f.write(content)
+    
+    print(f"✅ Smart Context Links Implementation Plan written to: {filename}")
+    print(f"📄 Document size: {len(content):,} characters")
+    print(f"📊 Estimated read time: ~{len(content.split()) // 200} minutes")
+    
+    return filename
+
+if __name__ == "__main__":
+    write_plan_to_file() 
