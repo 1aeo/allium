@@ -932,7 +932,7 @@ class Relays:
             if not relay["fingerprint"].isalnum():
                 continue
             rendered = template.render(
-                relay=relay, path_prefix="../../", relays=self
+                relay=relay, path_prefix="../", relays=self
             )
             with open(
                 os.path.join(output_path, "%s.html" % relay["fingerprint"]),
