@@ -1,4 +1,44 @@
-{% macro navigation(active_section, is_misc_page=true, is_relay_page=false) -%}
+{% macro breadcrumbs(page_type, page_data=none, path_prefix="") -%}
+<nav aria-label="breadcrumb" style="margin-bottom: 10px;">
+    <ol class="breadcrumb" style="background: none; padding: 0; margin: 0; font-size: 0.9em; list-style: none;">
+        <li style="display: inline;"><a href="{{ path_prefix }}index.html" style="color: #337ab7; text-decoration: none;">Home</a></li>
+        {% if page_type == 'as_detail' and page_data %}
+            <li style="display: inline;"> > <a href="{{ path_prefix }}misc/networks-by-bandwidth.html" style="color: #337ab7; text-decoration: none;">Browse by Network</a></li>
+            <li style="display: inline; color: #777;"> > {{ page_data.as_number }}</li>
+        {% elif page_type == 'contact_detail' and page_data %}
+            <li style="display: inline;"> > <a href="{{ path_prefix }}misc/contacts-by-bandwidth.html" style="color: #337ab7; text-decoration: none;">Browse by Contact</a></li>
+            <li style="display: inline; color: #777;"> > {% if page_data.aroi_domain and page_data.aroi_domain != 'none' %}{{ page_data.aroi_domain }}{% else %}{{ page_data.contact_hash[:8] }}{% endif %}</li>
+        {% elif page_type == 'country_detail' and page_data %}
+            <li style="display: inline;"> > <a href="{{ path_prefix }}misc/countries-by-bandwidth.html" style="color: #337ab7; text-decoration: none;">Browse by Country</a></li>
+            <li style="display: inline; color: #777;"> > {{ page_data.country_name }}</li>
+        {% elif page_type == 'family_detail' and page_data %}
+            <li style="display: inline;"> > <a href="{{ path_prefix }}misc/families-by-bandwidth.html" style="color: #337ab7; text-decoration: none;">Browse by Family</a></li>
+            <li style="display: inline; color: #777;"> > {% if page_data.aroi_domain and page_data.aroi_domain != 'none' %}{{ page_data.aroi_domain }}{% else %}{{ page_data.family_hash[:8] }}{% endif %}</li>
+        {% elif page_type == 'platform_detail' and page_data %}
+            <li style="display: inline;"> > <a href="{{ path_prefix }}misc/platforms-by-bandwidth.html" style="color: #337ab7; text-decoration: none;">Browse by Platform</a></li>
+            <li style="display: inline; color: #777;"> > {{ page_data.platform_name }}</li>
+        {% elif page_type == 'first_seen_detail' and page_data %}
+            <li style="display: inline;"> > <a href="{{ path_prefix }}misc/all.html" style="color: #337ab7; text-decoration: none;">All Relays</a></li>
+            <li style="display: inline; color: #777;"> > First Seen {{ page_data.date }}</li>
+        {% elif page_type == 'flag_detail' and page_data %}
+            <li style="display: inline;"> > <a href="{{ path_prefix }}misc/all.html" style="color: #337ab7; text-decoration: none;">All Relays</a></li>
+            <li style="display: inline; color: #777;"> > {{ page_data.flag_name|title }} Relays</li>
+        {% elif page_type == 'relay_detail' and page_data %}
+            <li style="display: inline;"> > <a href="{{ path_prefix }}misc/networks-by-bandwidth.html" style="color: #337ab7; text-decoration: none;">Browse by Network</a></li>
+            {% if page_data.as_number %}
+                <li style="display: inline;"> > <a href="{{ path_prefix }}as/{{ page_data.as_number }}/" style="color: #337ab7; text-decoration: none;">{{ page_data.as_number }}</a></li>
+            {% endif %}
+            <li style="display: inline; color: #777;"> > {{ page_data.nickname }}</li>
+        {% endif %}
+    </ol>
+</nav>
+{%- endmacro %}
+
+{% macro navigation(active_section, is_misc_page=true, is_relay_page=false, breadcrumb_type=none, breadcrumb_data=none) -%}
+    {% if breadcrumb_type and breadcrumb_data %}
+        {{ breadcrumbs(breadcrumb_type, breadcrumb_data, 
+           "../../" if is_relay_page else ("../../" if not is_misc_page else "../")) }}
+    {% endif %}
     <nav class="navbar navbar-default" style="margin-bottom: 20px;">
         <div class="container-fluid">
             <!-- CSS-only hamburger toggle using checkbox hack -->
@@ -22,7 +62,7 @@
                         {% elif is_misc_page %}
                             <a href="contacts-by-bandwidth.html">By AROI / Contact</a>
                         {% else %}
-                            <a href="misc/contacts-by-bandwidth.html">By AROI / Contact</a>
+                            <a href="../../misc/contacts-by-bandwidth.html">By AROI / Contact</a>
                         {% endif %}
                     </li>
                     <li class="{% if active_section == 'families' %}active{% endif %}">
@@ -31,7 +71,7 @@
                         {% elif is_misc_page %}
                             <a href="families-by-bandwidth.html">By Family</a>
                         {% else %}
-                            <a href="misc/families-by-bandwidth.html">By Family</a>
+                            <a href="../../misc/families-by-bandwidth.html">By Family</a>
                         {% endif %}
                     </li>
                     <li class="{% if active_section == 'networks' %}active{% endif %}">
@@ -40,7 +80,7 @@
                         {% elif is_misc_page %}
                             <a href="networks-by-bandwidth.html">By Network</a>
                         {% else %}
-                            <a href="misc/networks-by-bandwidth.html">By Network</a>
+                            <a href="../../misc/networks-by-bandwidth.html">By Network</a>
                         {% endif %}
                     </li>
                     <li class="{% if active_section == 'countries' %}active{% endif %}">
@@ -49,7 +89,7 @@
                         {% elif is_misc_page %}
                             <a href="countries-by-bandwidth.html">By Country</a>
                         {% else %}
-                            <a href="misc/countries-by-bandwidth.html">By Country</a>
+                            <a href="../../misc/countries-by-bandwidth.html">By Country</a>
                         {% endif %}
                     </li>
                     <li class="{% if active_section == 'platforms' %}active{% endif %}">
@@ -58,7 +98,7 @@
                         {% elif is_misc_page %}
                             <a href="platforms-by-bandwidth.html">By Platform</a>
                         {% else %}
-                            <a href="misc/platforms-by-bandwidth.html">By Platform</a>
+                            <a href="../../misc/platforms-by-bandwidth.html">By Platform</a>
                         {% endif %}
                     </li>
                     <li class="{% if active_section == 'top500' %}active{% endif %}">
@@ -67,7 +107,7 @@
                         {% elif is_misc_page %}
                             <a href="../index.html">Top 500 Relays</a>
                         {% else %}
-                            <a href="index.html">Top 500 Relays</a>
+                            <a href="../../index.html">Top 500 Relays</a>
                         {% endif %}
                     </li>
                     <li class="{% if active_section == 'all' %}active{% endif %}">
@@ -76,7 +116,7 @@
                         {% elif is_misc_page %}
                             <a href="all.html">All Relays</a>
                         {% else %}
-                            <a href="misc/all.html">All Relays</a>
+                            <a href="../../misc/all.html">All Relays</a>
                         {% endif %}
                     </li>
                 </ul>

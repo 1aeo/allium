@@ -1,8 +1,13 @@
 {% extends "relay-list.html" %}
+{% from "macros.html" import navigation %}
 {% block title %}Tor Relays :: Family {{ value|escape }}{% endblock %}
 {% block header %}
     <a href="../../">Home</a> :: Family <code>{{ value|escape }}</code>
 {% endblock %}
+{% block navigation -%}
+{% set family_hash = value %}
+{{ navigation('families', is_misc_page=false, is_relay_page=false, breadcrumb_type='family_detail', breadcrumb_data={'family_hash': family_hash, 'aroi_domain': 'none'}) }}
+{% endblock -%}
 {% block description %}
     Relays with effective family member
     <code> {{ value|escape }}</code> are responsible for ~{{ bandwidth }} {{ bandwidth_unit }} of bandwidth (BW)
