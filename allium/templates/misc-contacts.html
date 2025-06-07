@@ -7,10 +7,10 @@
 {% endblock -%}
 {% block body -%}
     <h2>
-        Contacts by {{ sorted_by_label|replace('_', ' ')|replace('bandwidth', 'observed bandwidth')|title }}
+        Browse by Contact
     </h2>
     
-    {{ navigation('contacts', is_misc_page=true) }}
+    {{ navigation('contacts', is_misc_page=true, breadcrumb_type='misc_listing', breadcrumb_data={'page_name': 'Browse by Contact'}, path_prefix=path_prefix) }}
     
     <p>
         Relay operators grouped by contact info - shows network diversity and operator influence across the Tor network.

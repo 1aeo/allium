@@ -1,4 +1,5 @@
 {% extends "relay-list.html" %}
+{% from "macros.html" import navigation %}
 {% set country_orig = relays.json['relay_subset'][0]['country_name']|escape %}
 {% set country_abbr = relays.json['relay_subset'][0]['country']|escape %}
 {% if country_orig in sp_countries %}
@@ -6,8 +7,11 @@
 {% else %}
     {% set country_name = country_orig %}
 {% endif %}
-{% block title %}Tor Relays :: {{ country_orig }}{% endblock %}
-{% block header %}<a href="../../">Home</a> :: {{ country_name }}{% endblock %}
+{% block title %}Tor Relays :: {{ country_name }}{% endblock %}
+{% block header %}View {{ country_name }} Details{% endblock %}
+{% block navigation -%}
+{{ navigation('countries', is_misc_page=false, is_relay_page=false, breadcrumb_type='country_detail', breadcrumb_data={'country_name': country_name, 'country_abbr': country_abbr}, path_prefix=path_prefix) }}
+{% endblock -%}
 {% block description %}
     {{ country_name }} ({{ country_abbr }}) is responsible
     for ~{{ bandwidth }} {{ bandwidth_unit }} of bandwidth (BW)
