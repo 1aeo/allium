@@ -1,7 +1,8 @@
 {% extends "relay-list.html" %}
 {% from "macros.html" import navigation %}
-{% block title %}Tor Relays :: {{ value }}{% endblock %}
-{% block header %}<a href="../../">Home</a> :: {{ value }}{% endblock %}
+{% set first_seen_date = relays.json['relay_subset'][0]['first_seen'].split(' ', 1)[0]|escape %}
+{% block title %}Tor Relays :: First Seen {{ first_seen_date }}{% endblock %}
+{% block header %}View First Seen {{ first_seen_date }} Details{% endblock %}
 {% block navigation -%}
 {{ navigation('misc', is_misc_page=false, is_relay_page=false, breadcrumb_type='first_seen_detail', breadcrumb_data={'date': value}) }}
 {% endblock -%}

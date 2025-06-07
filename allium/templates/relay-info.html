@@ -5,6 +5,7 @@
 {% endblock -%}
 {% block body -%}
 <div id="content">
+<h2>View Relay "{{ relay['nickname'] }}"</h2>
 <h1 class="display-4">Relay "{{ relay['nickname'] }}"</h1>
 {% set relay_data = {'nickname': relay['nickname'], 'fingerprint': relay['fingerprint'], 'as_number': relay['as']} %}
 {{ navigation('all', is_misc_page=false, is_relay_page=true, breadcrumb_type='relay_detail', breadcrumb_data=relay_data) }}

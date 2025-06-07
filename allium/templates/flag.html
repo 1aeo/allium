@@ -1,7 +1,8 @@
 {% extends "relay-list.html" %}
 {% from "macros.html" import navigation %}
-{% block title %}Tor Relays :: {{ value|escape }} Relays{% endblock %}
-{% block header %}<a href="../../">Home</a> :: {{ value|escape }} Relays{% endblock %}
+{% set flag_name = flag|title %}
+{% block title %}Tor Relays :: {{ flag_name }} Flag{% endblock %}
+{% block header %}View {{ flag_name }} Flag Details{% endblock %}
 {% block navigation -%}
 {{ navigation('misc', is_misc_page=false, is_relay_page=false, breadcrumb_type='flag_detail', breadcrumb_data={'flag_name': value}) }}
 {% endblock -%}
