@@ -7,8 +7,8 @@
 {% else %}
     {% set country_name = country_orig %}
 {% endif %}
-{% block title %}Tor Relays :: {{ country_orig }}{% endblock %}
-{% block header %}<a href="../../">Home</a> :: {{ country_name }}{% endblock %}
+{% block title %}Tor Relays :: {{ country_name }}{% endblock %}
+{% block header %}View {{ country_name }} Details{% endblock %}
 {% block navigation -%}
 {{ navigation('countries', is_misc_page=false, is_relay_page=false, breadcrumb_type='country_detail', breadcrumb_data={'country_name': country_name, 'country_abbr': country_abbr}) }}
 {% endblock -%}
