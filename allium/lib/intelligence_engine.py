@@ -45,10 +45,8 @@ class IntelligenceEngine:
                 'efficiency_ratio': '0.00'
             }},
             'infrastructure_dependency': {'template_optimized': {
-                'hostname_coverage': '0.0', 'unique_versions': 0, 'critical_as_count': 0, 'critical_as_list': [],
-                'concentration_risk_level': 'UNKNOWN', 'concentration_risk_tooltip': 'Risk assessment unavailable',
-                'synchronization_risk': 'UNKNOWN', 'sync_risk_tooltip': 'Sync risk assessment unavailable',
-                'dns_coverage_explanation': 'No data available'
+                'unique_versions': 0, 'critical_as_count': 0, 'critical_as_list': [],
+                'synchronization_risk': 'UNKNOWN', 'sync_risk_tooltip': 'Sync risk assessment unavailable'
             }},
             'geographic_clustering': {'template_optimized': {
                 'five_eyes_percentage': '0.0', 'fourteen_eyes_percentage': '0.0',
@@ -207,26 +205,8 @@ class IntelligenceEngine:
         return {'template_optimized': template_values}
     
     def _layer10_infrastructure_dependency(self):
-        """Layer 10: Complete infrastructure analysis with single points of failure"""
+        """Layer 10: Infrastructure dependency analysis focusing on critical ASes and version synchronization"""
         template_values = {}
-        
-        # DNS hostname coverage analysis
-        hostname_count = 0
-        ip_only_count = 0
-        for relay in self.relays:
-            or_addresses = relay.get('or_addresses', [])
-            if or_addresses:
-                first_address = or_addresses[0]
-                # Check if it's a hostname (contains letters) vs IP (numbers/dots/colons only)
-                if any(c.isalpha() for c in first_address):
-                    hostname_count += 1
-                else:
-                    ip_only_count += 1
-        
-        total_relays = len(self.relays)
-        hostname_percentage = (hostname_count / total_relays * 100) if total_relays > 0 else 0
-        template_values['hostname_coverage'] = f"{hostname_percentage:.1f}"
-        template_values['dns_coverage_explanation'] = f"{hostname_count} relays use hostnames, {ip_only_count} use IP addresses only"
         
         # Version diversity
         versions = set(relay.get('version', 'Unknown') for relay in self.relays)
@@ -245,27 +225,6 @@ class IntelligenceEngine:
         
         template_values['critical_as_count'] = len(critical_as_list)
         template_values['critical_as_list'] = critical_as_names
-        
-        # Concentration risk level with detailed explanation
-        if 'as' in self.sorted_data:
-            networks = list(self.sorted_data['as'].values())
-            if networks:
-                largest_as_weight = max(n.get('consensus_weight_fraction', 0) for n in networks)
-                if largest_as_weight > 0.15:
-                    template_values['concentration_risk_level'] = 'HIGH'
-                    template_values['concentration_risk_tooltip'] = f'Highest AS controls {largest_as_weight*100:.1f}% of network (>15% is high risk)'
-                elif largest_as_weight > 0.10:
-                    template_values['concentration_risk_level'] = 'MEDIUM'
-                    template_values['concentration_risk_tooltip'] = f'Highest AS controls {largest_as_weight*100:.1f}% of network (10-15% is medium risk)'
-                else:
-                    template_values['concentration_risk_level'] = 'LOW'
-                    template_values['concentration_risk_tooltip'] = f'Highest AS controls {largest_as_weight*100:.1f}% of network (<10% is low risk)'
-            else:
-                template_values['concentration_risk_level'] = 'UNKNOWN'
-                template_values['concentration_risk_tooltip'] = 'No AS data available for risk assessment'
-        else:
-            template_values['concentration_risk_level'] = 'UNKNOWN'
-            template_values['concentration_risk_tooltip'] = 'No AS data available for risk assessment'
         
         # Version synchronization risk with explanation
         version_count = len(versions)

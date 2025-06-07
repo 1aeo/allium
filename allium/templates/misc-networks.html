@@ -41,15 +41,11 @@
                 </li>
             </ul>
         </li>
-        <li><strong>Infrastructure Dependency</strong>: {{ relays.json.smart_context.concentration_patterns.template_optimized.networks_largest_percentage }}% hosted by largest AS | {{ relays.json.smart_context.concentration_patterns.template_optimized.networks_top_3_percentage }}% in top 3 ASes | {{ relays.json.smart_context.concentration_patterns.template_optimized.networks_single_relay_count }} networks host single relays only</li>
-<li><strong>Infrastructure Vulnerabilities</strong>: 
+        <li><strong>Infrastructure Dependency</strong>: 
+    <span title="Top 3 ASes control {{ relays.json.smart_context.concentration_patterns.template_optimized.networks_top_3_percentage }}% of network capacity. Critical ASes (>5% control each) identified: {% if relays.json.smart_context.infrastructure_dependency.template_optimized.critical_as_list %}{{ relays.json.smart_context.infrastructure_dependency.template_optimized.critical_as_list|join(', ') }}{% else %}none{% endif %}">{{ relays.json.smart_context.concentration_patterns.template_optimized.networks_top_3_percentage }}% in top 3 ASes, {{ relays.json.smart_context.infrastructure_dependency.template_optimized.critical_as_count }} critical 
     {% if relays.json.smart_context.infrastructure_dependency.template_optimized.critical_as_list %}
-        {{ relays.json.smart_context.infrastructure_dependency.template_optimized.critical_as_count }} critical ASes ({{ relays.json.smart_context.infrastructure_dependency.template_optimized.critical_as_list|join(', ') }}) | 
-    {% else %}
-        {{ relays.json.smart_context.infrastructure_dependency.template_optimized.critical_as_count }} critical ASes | 
-    {% endif %}
-    <span title="{{ relays.json.smart_context.infrastructure_dependency.template_optimized.concentration_risk_tooltip }}">{{ relays.json.smart_context.infrastructure_dependency.template_optimized.concentration_risk_level }} hosting risk</span> | 
-    <span title="{{ relays.json.smart_context.infrastructure_dependency.template_optimized.dns_coverage_explanation }}">DNS coverage: {{ relays.json.smart_context.infrastructure_dependency.template_optimized.hostname_coverage }}%</span>
+        ({{ relays.json.smart_context.infrastructure_dependency.template_optimized.critical_as_list|join(', ') }})
+    {% endif %}</span> | {{ relays.json.smart_context.concentration_patterns.template_optimized.networks_single_relay_count }} networks host single relays only
 </li>
 <li><strong>Version Synchronization</strong>: <span title="{{ relays.json.smart_context.infrastructure_dependency.template_optimized.sync_risk_tooltip }}">{{ relays.json.smart_context.infrastructure_dependency.template_optimized.synchronization_risk }} sync risk</span> | {{ relays.json.smart_context.infrastructure_dependency.template_optimized.unique_versions }} unique Tor versions detected</li>
         <li><strong>Sorted by</strong>: {{ sorted_by_label|replace('_', ' ')|replace('bandwidth', 'observed bandwidth') }}</li>
