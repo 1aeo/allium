@@ -10,7 +10,7 @@
         Browse by Contact
     </h2>
     
-    {{ navigation('contacts', is_misc_page=true, breadcrumb_type='misc_listing', breadcrumb_data={'page_name': 'Browse by Contact'}, path_prefix=path_prefix) }}
+    {{ navigation('contacts', breadcrumb_type='misc_listing', breadcrumb_data={'page_name': 'Browse by Contact'}, page_ctx=page_ctx) }}
     
     <p>
         Relay operators grouped by contact info - shows network diversity and operator influence across the Tor network.
@@ -121,11 +121,11 @@
                     {% set exit_bw = relays._format_bandwidth_with_unit(v['exit_bandwidth'], obs_unit) -%}
                     <td>
                         {% if v['aroi_domain'] and v['aroi_domain'] != 'none' -%}
-                            <a href="{{ path_prefix }}contact/{{ k|escape }}/" title="Contact: {{ v['contact']|escape }}" style="text-decoration: underline;">{{ v['aroi_domain']|escape }}</a>
+                            <a href="{{ page_ctx.path_prefix }}contact/{{ k|escape }}/" title="Contact: {{ v['contact']|escape }}" style="text-decoration: underline;">{{ v['aroi_domain']|escape }}</a>
                         {% elif v['contact'] and v['contact'] != '' -%}
-                            <a href="{{ path_prefix }}contact/{{ k|escape }}/" title="Contact: {{ v['contact']|escape }}" style="text-decoration: underline;" class="contact-text">{{ v['contact']|truncate(30)|escape }}</a>
+                            <a href="{{ page_ctx.path_prefix }}contact/{{ k|escape }}/" title="Contact: {{ v['contact']|escape }}" style="text-decoration: underline;" class="contact-text">{{ v['contact']|truncate(30)|escape }}</a>
                         {% else -%}
-                            <a href="{{ path_prefix }}contact/{{ k|escape }}/" title="No contact info" style="text-decoration: underline;">none</a>
+                            <a href="{{ page_ctx.path_prefix }}contact/{{ k|escape }}/" title="No contact info" style="text-decoration: underline;">none</a>
                         {% endif -%}
                     </td>
                     <td class="text-center bw-data">{{ obs_bandwidth }} / {{ guard_bw }} / {{ middle_bw }} / {{ exit_bw }} {{ obs_unit }}</td>
@@ -138,7 +138,7 @@
                     <td>{{ v['relays']|length }} / {{ v['measured_count'] }}</td>
                     <td>{{ v['unique_as_count'] }}</td>
                     <td>
-                        <a href="{{ path_prefix }}first_seen/{{ v['first_seen'].split(' ', 1)[0]|escape }}">{{ v['first_seen'].split(' ', 1)[0]|escape }}</a>
+                        <a href="{{ page_ctx.path_prefix }}first_seen/{{ v['first_seen'].split(' ', 1)[0]|escape }}">{{ v['first_seen'].split(' ', 1)[0]|escape }}</a>
                     </td>
                 </tr>
             {% endfor -%}

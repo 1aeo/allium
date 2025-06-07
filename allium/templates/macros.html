@@ -38,9 +38,9 @@
 </nav>
 {%- endmacro %}
 
-{% macro navigation(active_section, is_misc_page=true, is_relay_page=false, is_index_page=false, breadcrumb_type=none, breadcrumb_data=none, path_prefix="") -%}
+{% macro navigation(active_section, is_misc_page=true, is_relay_page=false, is_index_page=false, breadcrumb_type=none, breadcrumb_data=none, page_ctx={'path_prefix': ''}) -%}
     {% if breadcrumb_type and breadcrumb_data %}
-        {{ breadcrumbs(breadcrumb_type, breadcrumb_data, path_prefix) }}
+        {{ breadcrumbs(breadcrumb_type, breadcrumb_data, page_ctx.path_prefix) }}
     {% endif %}
     <nav class="navbar navbar-default" style="margin-bottom: 20px;">
         <div class="container-fluid">
@@ -60,25 +60,25 @@
             <div class="navbar-collapse" id="main-navbar">
                 <ul class="nav navbar-nav">
                     <li class="{% if active_section == 'contacts' %}active{% endif %}">
-                        <a href="{{ path_prefix }}misc/contacts-by-bandwidth.html">By AROI / Contact</a>
+                        <a href="{{ page_ctx.path_prefix }}misc/contacts-by-bandwidth.html">By AROI / Contact</a>
                     </li>
                     <li class="{% if active_section == 'families' %}active{% endif %}">
-                        <a href="{{ path_prefix }}misc/families-by-bandwidth.html">By Family</a>
+                        <a href="{{ page_ctx.path_prefix }}misc/families-by-bandwidth.html">By Family</a>
                     </li>
                     <li class="{% if active_section == 'networks' %}active{% endif %}">
-                        <a href="{{ path_prefix }}misc/networks-by-bandwidth.html">By Network</a>
+                        <a href="{{ page_ctx.path_prefix }}misc/networks-by-bandwidth.html">By Network</a>
                     </li>
                     <li class="{% if active_section == 'countries' %}active{% endif %}">
-                        <a href="{{ path_prefix }}misc/countries-by-bandwidth.html">By Country</a>
+                        <a href="{{ page_ctx.path_prefix }}misc/countries-by-bandwidth.html">By Country</a>
                     </li>
                     <li class="{% if active_section == 'platforms' %}active{% endif %}">
-                        <a href="{{ path_prefix }}misc/platforms-by-bandwidth.html">By Platform</a>
+                        <a href="{{ page_ctx.path_prefix }}misc/platforms-by-bandwidth.html">By Platform</a>
                     </li>
                     <li class="{% if active_section == 'top500' %}active{% endif %}">
-                        <a href="{{ path_prefix }}index.html">Top 500 Relays</a>
+                        <a href="{{ page_ctx.path_prefix }}index.html">Top 500 Relays</a>
                     </li>
                     <li class="{% if active_section == 'all' %}active{% endif %}">
-                        <a href="{{ path_prefix }}misc/all.html">All Relays</a>
+                        <a href="{{ page_ctx.path_prefix }}misc/all.html">All Relays</a>
                     </li>
                 </ul>
             </div>
