@@ -55,24 +55,24 @@
 	    {% endif -%}
 	    {% if relay['effective_family']|length > 1 -%}
 		<td title="{{ relay['nickname_escaped'] }}">
-		    <a href="{{ path_prefix }}relay/{{ relay['fingerprint_escaped'] }}.html">{{ relay['nickname_truncated_8'] }}</a> (<a href="{{ path_prefix }}family/{{ relay['fingerprint_escaped'] }}/">{{ relay['effective_family']| length }}</a>)
+		    <a href="{{ page_ctx.path_prefix }}relay/{{ relay['fingerprint_escaped'] }}.html">{{ relay['nickname_truncated_8'] }}</a> (<a href="{{ page_ctx.path_prefix }}family/{{ relay['fingerprint_escaped'] }}/">{{ relay['effective_family']| length }}</a>)
 		    </td>
 		{% else -%}
 		    <td title="{{ relay['nickname_escaped'] }}">
-			<a href="{{ path_prefix }}relay/{{ relay['fingerprint_escaped'] }}.html">{{ relay['nickname_truncated_10'] }}</a>
+			<a href="{{ page_ctx.path_prefix }}relay/{{ relay['fingerprint_escaped'] }}.html">{{ relay['nickname_truncated_10'] }}</a>
 		    </td>
 		{% endif -%}
 		{% if key != 'contact' -%}
 		    {% if relay['aroi_domain'] and relay['aroi_domain'] != 'none' -%}
 			<td>
-			    <a href="{{ path_prefix }}contact/{{ relay['contact_md5'] }}/" title="{{ relay['aroi_domain_escaped'] }}">{{ relay['aroi_domain_escaped'] }}</a>
+			    <a href="{{ page_ctx.path_prefix }}contact/{{ relay['contact_md5'] }}/" title="{{ relay['aroi_domain_escaped'] }}">{{ relay['aroi_domain_escaped'] }}</a>
 			</td>
 		    {% else -%}
 			<td>none</td>
 		    {% endif -%}
 		    {% if relay['contact'] -%}
 			<td>
-			    <a href="{{ path_prefix }}contact/{{ relay['contact_md5'] }}/" 
+			    <a href="{{ page_ctx.path_prefix }}contact/{{ relay['contact_md5'] }}/" 
 				title="{{ relay['contact_escaped'] }}" class="contact-text">{{ relay['contact_escaped'] }}</a>
 			</td>
 		    {% else -%}
@@ -97,7 +97,7 @@
 		{% if relay['as'] -%}
 		    {% if key != 'as' -%}
 			<td>
-			    <a href="{{ path_prefix }}as/{{ relay['as_escaped'] }}/">{{ relay['as_escaped'] }}</a>
+			    <a href="{{ page_ctx.path_prefix }}as/{{ relay['as_escaped'] }}/">{{ relay['as_escaped'] }}</a>
 			</td>
 		    {% else -%}
 			<td>{{ relay['as_escaped'] }}</td>
@@ -116,17 +116,17 @@
 		{% if relay['country'] -%}
 		    {% if key != 'country' -%}
 			<td>
-			    <a href="{{ path_prefix }}country/{{ relay['country_escaped'] }}/">
-				<img src="{{ path_prefix }}static/images/cc/{{ relay['country_escaped'] }}.png"
+			    <a href="{{ page_ctx.path_prefix }}country/{{ relay['country_escaped'] }}/">
+				<img src="{{ page_ctx.path_prefix }}static/images/cc/{{ relay['country_escaped'] }}.png"
 				     title="{{ relay['country_name_escaped'] }}"
 				     alt="{{ relay['country_name_escaped'] }}">
 			    </a>
 			</td>
 		    {% else -%}
 			<td>
-			    				<img src="{{ path_prefix }}static/images/cc/{{ relay['country_escaped'] }}.png"
-				     title="{{ relay['country_name_escaped'] }}"
-				     alt="{{ relay['country_name_escaped'] }}">
+			    <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ relay['country_escaped'] }}.png"
+				 title="{{ relay['country_name_escaped'] }}"
+				 alt="{{ relay['country_name_escaped'] }}">
 			</td>
 		    {% endif -%}
 		{% else -%}
@@ -134,15 +134,15 @@
 		{% endif -%}
 		{% if key != 'platform' -%}
 		    <td>
-			<a href="{{ path_prefix }}platform/{{ relay['platform_escaped'] }}/">{{ relay['platform_truncated_10'] }}</a>
+			<a href="{{ page_ctx.path_prefix }}platform/{{ relay['platform_escaped'] }}/">{{ relay['platform_truncated_10'] }}</a>
 		    </td>
 		{% else -%}
 		    <td>{{ relay['platform_truncated_10'] }}</td>
 		{% endif -%}
 		<td class="visible-md visible-lg">
 		    {% for flag in relay['flags_escaped'] -%}
-			<a href="{{ path_prefix }}flag/{{ flag.lower }}/">
-			    <img src="{{ path_prefix }}static/images/flags/{{ flag.lower }}.png"
+			<a href="{{ page_ctx.path_prefix }}flag/{{ flag.lower }}/">
+			    <img src="{{ page_ctx.path_prefix }}static/images/flags/{{ flag.lower }}.png"
 				 title="{{ flag.name }}"
 				 alt="{{ flag.name }}">
 			</a>
@@ -150,7 +150,7 @@
 		</td>
 		{% if key != 'first_seen' -%}
 		    <td class="visible-md visible-lg">
-			<a href="{{ path_prefix }}first_seen/{{ relay['first_seen_date_escaped'] }}/">{{ relay['first_seen_date_escaped'] }}</a>
+			<a href="{{ page_ctx.path_prefix }}first_seen/{{ relay['first_seen_date_escaped'] }}/">{{ relay['first_seen_date_escaped'] }}</a>
 		    </td>
 		{% else -%}
 		    <td class="visible-md visible-lg">
