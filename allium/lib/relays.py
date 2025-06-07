@@ -648,7 +648,10 @@ class Relays:
 
     def _generate_smart_context(self):
         """Generate smart context intelligence analysis"""
-        from .intelligence_engine import IntelligenceEngine
+        try:
+            from intelligence_engine import IntelligenceEngine
+        except ImportError:
+            from .intelligence_engine import IntelligenceEngine
         
         print("[Intelligence] Starting Tier 1 analysis...")
         engine = IntelligenceEngine(self.json)
