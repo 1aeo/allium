@@ -1,4 +1,5 @@
 {% extends "relay-list.html" %}
+{% from "macros.html" import navigation %}
 {% set contact_hash = relays.json['relay_subset'][0]['contact_md5'] %}
 {% if relays.json['relay_subset'][0]['contact'] %}
     {% set contact = relays.json['relay_subset'][0]['contact']|escape %}
@@ -7,7 +8,18 @@
 {% endif %}
 {% block title %}Tor Relays :: Contact {{ contact_hash }}{% endblock %}
 {% block header %}
-    <a href="../../">Home</a> :: Contact {{ contact_hash }}{% endblock %}
+    {% if relays.json['relay_subset'][0]['aroi_domain'] and relays.json['relay_subset'][0]['aroi_domain'] != 'none' -%}
+        View Contact {{ relays.json['relay_subset'][0]['aroi_domain']|escape }} Details
+    {% elif contact != 'none' -%}
+        View Contact {{ contact }} Details
+    {% else -%}
+        View Contact {{ contact_hash }} Details
+    {% endif -%}
+{% endblock %}
+{% block navigation -%}
+{% set aroi_domain = relays.json['relay_subset'][0]['aroi_domain'] if relays.json['relay_subset'][0]['aroi_domain'] else 'none' %}
+{{ navigation('contacts', is_misc_page=false, is_relay_page=false, breadcrumb_type='contact_detail', breadcrumb_data={'contact_hash': contact_hash, 'contact': contact, 'aroi_domain': aroi_domain}, path_prefix=path_prefix) }}
+{% endblock -%}
     {% block description %}
         {% if relays.json['sorted']['contact'][value]['aroi_domain'] and relays.json['sorted']['contact'][value]['aroi_domain'] != 'none' -%}
             AROI {{ relays.json['sorted']['contact'][value]['aroi_domain'] }} with contact info {{ relays.json['sorted']['contact'][value]['contact'] }}

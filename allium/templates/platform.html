@@ -1,7 +1,11 @@
 {% extends "relay-list.html" %}
-{% set platform = relays.json['relay_subset'][0]['platform']|escape %}
-{% block title %}Tor Relays :: {{ platform }}{% endblock %}
-{% block header %}<a href="../../">Home</a> :: {{ platform }}{% endblock %}
+{% from "macros.html" import navigation %}
+{% set platform_name = relays.json['relay_subset'][0]['platform']|escape %}
+{% block title %}Tor Relays :: {{ platform_name }}{% endblock %}
+{% block header %}View Platform {{ platform_name }} Details{% endblock %}
+{% block navigation -%}
+{{ navigation('platforms', is_misc_page=false, is_relay_page=false, breadcrumb_type='platform_detail', breadcrumb_data={'platform_name': platform_name}, path_prefix=path_prefix) }}
+{% endblock -%}
 {% block description %}
     Platform {{ value }} is responsible for ~{{ bandwidth }}
     {{ bandwidth_unit }} of bandwidth (BW)
