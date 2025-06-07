@@ -307,8 +307,13 @@ class IntelligenceEngine:
         template_values['guard_capacity_percentage'] = f"{guard_weight * 100:.1f}"
         template_values['exit_capacity_percentage'] = f"{exit_weight * 100:.1f}"
         
-        # Exit capacity status
+        # Guard capacity status and tooltip
+        template_values['guard_capacity_status'] = 'HIGH' if guard_weight > 0.6 else 'MEDIUM' if guard_weight > 0.4 else 'LOW'
+        template_values['guard_capacity_tooltip'] = f'Guard capacity indicates availability of relays that can serve as entry points to the Tor network. Thresholds: HIGH >60%, MEDIUM 40-60%, LOW ≤40%. Current: {guard_weight * 100:.1f}%'
+        
+        # Exit capacity status and tooltip
         template_values['exit_capacity_status'] = 'HIGH' if exit_weight > 0.2 else 'MEDIUM' if exit_weight > 0.1 else 'LOW'
+        template_values['exit_capacity_tooltip'] = f'Exit capacity indicates availability of relays that can serve as exit points from the Tor network. Thresholds: HIGH >20%, MEDIUM 10-20%, LOW ≤10%. Current: {exit_weight * 100:.1f}%'
         
         return {'template_optimized': template_values}
     
