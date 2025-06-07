@@ -47,7 +47,7 @@
         ({{ relays.json.smart_context.infrastructure_dependency.template_optimized.critical_as_list|join(', ') }})
     {% endif %}</span> | {{ relays.json.smart_context.concentration_patterns.template_optimized.networks_single_relay_count }} networks host single relays only
 </li>
-<li><strong>Version Synchronization</strong>: <span title="{{ relays.json.smart_context.infrastructure_dependency.template_optimized.sync_risk_tooltip }}">{{ relays.json.smart_context.infrastructure_dependency.template_optimized.synchronization_risk }} sync risk</span> | {{ relays.json.smart_context.infrastructure_dependency.template_optimized.unique_versions }} unique Tor versions detected</li>
+
         <li><strong>Sorted by</strong>: {{ sorted_by_label|replace('_', ' ')|replace('bandwidth', 'observed bandwidth') }}</li>
         <li><strong>Key</strong>: BW = Observed Bandwidth, CW = Consensus Weight, AS = Autonomous System (network provider)</li>
     </ul>
