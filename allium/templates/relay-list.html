@@ -116,17 +116,17 @@
 		{% if relay['country'] -%}
 		    {% if key != 'country' -%}
 			<td>
-			    <a href="{{ path_prefix }}country/{{ relay['country']|escape }}/">
-				<img src="{{ path_prefix }}static/images/cc/{{ relay['country']|escape }}.png"
-				     title="{{ relay['country_name']|escape }}"
-				     alt="{{ relay['country_name']|escape }}">
+			    <a href="{{ path_prefix }}country/{{ relay['country_escaped'] }}/">
+				<img src="{{ path_prefix }}static/images/cc/{{ relay['country_escaped'] }}.png"
+				     title="{{ relay['country_name_escaped'] }}"
+				     alt="{{ relay['country_name_escaped'] }}">
 			    </a>
 			</td>
 		    {% else -%}
 			<td>
-			    <img src="{{ path_prefix }}static/images/cc/{{ relay['country']|escape }}.png"
-				 title="{{ relay['country_name']|escape }}"
-				 alt="{{ relay['country_name']|escape }}">
+			    				<img src="{{ path_prefix }}static/images/cc/{{ relay['country_escaped'] }}.png"
+				     title="{{ relay['country_name_escaped'] }}"
+				     alt="{{ relay['country_name_escaped'] }}">
 			</td>
 		    {% endif -%}
 		{% else -%}
@@ -134,33 +134,27 @@
 		{% endif -%}
 		{% if key != 'platform' -%}
 		    <td>
-			<a href="{{ path_prefix }}platform/{{ relay['platform']|escape }}/">{{
-			relay['platform']|truncate(length=10)|escape }}</a>
+			<a href="{{ path_prefix }}platform/{{ relay['platform_escaped'] }}/">{{ relay['platform_truncated_10'] }}</a>
 		    </td>
 		{% else -%}
-		    <td>{{ relay['platform']|truncate(length=10)|escape }}</td>
+		    <td>{{ relay['platform_truncated_10'] }}</td>
 		{% endif -%}
 		<td class="visible-md visible-lg">
-		    {% for flag in relay['flags'] -%}
-			{% if flag != 'StaleDesc' -%}
-			    <a href="{{ path_prefix }}flag/{{ flag.lower()|escape }}/">
-				<img src="{{ path_prefix }}static/images/flags/{{ flag.lower()|escape }}.png"
-				     title="{{ flag|escape }}"
-				     alt="{{ flag|escape }}">
-			    </a>
-			{% endif -%}
-		    {% endfor
-		    -%}
+		    {% for flag in relay['flags_escaped'] -%}
+			<a href="{{ path_prefix }}flag/{{ flag.lower }}/">
+			    <img src="{{ path_prefix }}static/images/flags/{{ flag.lower }}.png"
+				 title="{{ flag.name }}"
+				 alt="{{ flag.name }}">
+			</a>
+		    {% endfor -%}
 		</td>
 		{% if key != 'first_seen' -%}
 		    <td class="visible-md visible-lg">
-			<a href="{{ path_prefix }}first_seen/{{ relay['first_seen'].split(' ', 1)[0]|escape }}/">{{
-			relay['first_seen'].split(' ', 1)[0]|escape }}</a>
+			<a href="{{ path_prefix }}first_seen/{{ relay['first_seen_date_escaped'] }}/">{{ relay['first_seen_date_escaped'] }}</a>
 		    </td>
 		{% else -%}
 		    <td class="visible-md visible-lg">
-			{{ relay['first_seen'].split(' ', 1)[0]|escape
-			}}
+			{{ relay['first_seen_date_escaped'] }}
 		    </td>
 		{% endif -%}
 	    </tr>
