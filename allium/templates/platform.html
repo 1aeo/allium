@@ -4,7 +4,7 @@
 {% block title %}Tor Relays :: {{ platform_name }}{% endblock %}
 {% block header %}View Platform {{ platform_name }} Details{% endblock %}
 {% block navigation -%}
-{{ navigation('platforms', breadcrumb_type='platform_detail', breadcrumb_data={'platform_name': platform_name}, page_ctx=page_ctx) }}
+{{ navigation('platforms', page_ctx) }}
 {% endblock -%}
 {% block description %}
     Platform {{ value }} is responsible for ~{{ bandwidth }}

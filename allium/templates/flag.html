@@ -4,7 +4,7 @@
 {% block title %}Tor Relays :: {{ flag_name }} Flag{% endblock %}
 {% block header %}View {{ flag_name }} Flag Details{% endblock %}
 {% block navigation -%}
-{{ navigation('misc', breadcrumb_type='flag_detail', breadcrumb_data={'flag_name': value}, page_ctx=page_ctx) }}
+{{ navigation('misc', page_ctx) }}
 {% endblock -%}
 {% block description %}
     Relays with the {{ value }} flag are responsible for ~{{ bandwidth }}

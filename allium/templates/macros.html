@@ -38,9 +38,9 @@
 </nav>
 {%- endmacro %}
 
-{% macro navigation(active_section, is_misc_page=true, is_relay_page=false, is_index_page=false, breadcrumb_type=none, breadcrumb_data=none, page_ctx={'path_prefix': ''}) -%}
-    {% if breadcrumb_type and breadcrumb_data %}
-        {{ breadcrumbs(breadcrumb_type, breadcrumb_data, page_ctx.path_prefix) }}
+{% macro navigation(active_section, page_ctx={'path_prefix': ''}) -%}
+    {% if page_ctx.breadcrumb_type and page_ctx.breadcrumb_data %}
+        {{ breadcrumbs(page_ctx.breadcrumb_type, page_ctx.breadcrumb_data, page_ctx.path_prefix) }}
     {% endif %}
     <nav class="navbar navbar-default" style="margin-bottom: 20px;">
         <div class="container-fluid">
