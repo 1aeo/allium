@@ -11,7 +11,7 @@
     {% endif -%}
 {% endblock %}
 {% block navigation -%}
-{{ navigation('families', breadcrumb_type='family_detail', breadcrumb_data={'family_hash': family_hash, 'aroi_domain': 'none'}, page_ctx=page_ctx) }}
+{{ navigation('families', page_ctx) }}
 {% endblock -%}
 {% block description %}
     Relays with effective family member
