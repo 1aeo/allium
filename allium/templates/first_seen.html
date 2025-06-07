@@ -4,7 +4,7 @@
 {% block title %}Tor Relays :: First Seen {{ first_seen_date }}{% endblock %}
 {% block header %}View First Seen {{ first_seen_date }} Details{% endblock %}
 {% block navigation -%}
-{{ navigation('misc', breadcrumb_type='first_seen_detail', breadcrumb_data={'date': value}, page_ctx=page_ctx) }}
+{{ navigation('misc', page_ctx) }}
 {% endblock -%}
 {% block description %}
     Relays started on {{ value }} are responsible for ~{{
