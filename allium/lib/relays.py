@@ -810,6 +810,23 @@ class Relays:
 
 
 
+    def get_detail_page_context(self, category, value):
+        """Generate page context with correct breadcrumb data for detail pages"""
+        # Import here to avoid circular imports
+        from allium import get_page_context
+        
+        mapping = {
+            'as': ('as_detail', {'as_number': value}),
+            'contact': ('contact_detail', {'contact_hash': value}),
+            'country': ('country_detail', {'country_name': value}),
+            'family': ('family_detail', {'family_hash': value}),
+            'platform': ('platform_detail', {'platform_name': value}),
+            'first_seen': ('first_seen_detail', {'date': value}),
+            'flag': ('flag_detail', {'flag_name': value}),
+        }
+        breadcrumb_type, breadcrumb_data = mapping.get(category, (f"{category}_detail", {}))
+        return get_page_context('detail', breadcrumb_type, breadcrumb_data)
+
     def write_pages_by_key(self, k):
         """
         Render and write sorted HTML relay listings to disk
@@ -881,7 +898,9 @@ class Relays:
             middle_bandwidth = self._format_bandwidth_with_unit(i["middle_bandwidth"], bandwidth_unit)
             exit_bandwidth = self._format_bandwidth_with_unit(i["exit_bandwidth"], bandwidth_unit)
                 
-            page_ctx = {'path_prefix': '../../'}
+            # Generate page context with correct breadcrumb data
+            page_ctx = self.get_detail_page_context(k, v)
+            
             rendered = template.render(
                 relays=self,
                 bandwidth=bandwidth,
@@ -936,7 +955,15 @@ class Relays:
         for relay in relay_list:
             if not relay["fingerprint"].isalnum():
                 continue
-            page_ctx = {'path_prefix': '../../'}
+            # Import here to avoid circular imports
+            from allium import get_page_context
+            
+            page_ctx = get_page_context('detail', 'relay_detail', {
+                'nickname': relay.get('nickname', relay.get('fingerprint', 'Unknown')),
+                'fingerprint': relay.get('fingerprint', 'Unknown'),
+                'as_number': relay.get('as', '')
+            })
+            
             rendered = template.render(
                 relay=relay, page_ctx=page_ctx, relays=self
             )

@@ -3,7 +3,7 @@
 {% block title %}Relay Radar :: All Relays{% endblock %}
 {% block header %}Browse All Relays{% endblock %}
 {% block navigation %}
-    {{ navigation('all', breadcrumb_type='misc_listing', breadcrumb_data={'page_name': 'All Relays'}, page_ctx=page_ctx) }}
+    {{ navigation('all', page_ctx) }}
 {% endblock %}
 {% block description %}
     Complete listing of all {{ relay_count }} known relays in the Tor network. For a more manageable view, see the <a href="../index.html">top 500 relays</a>.

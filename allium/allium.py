@@ -79,14 +79,21 @@ def ensure_output_directory(output_dir):
         print(f"Error: Failed to create output directory '{output_dir}': {e}")
         sys.exit(1)
 
-def get_page_context(page_type):
-    """Get page context with path_prefix for different page types"""
+def get_page_context(page_type, breadcrumb_type=None, breadcrumb_data=None):
+    """Get page context with path_prefix and breadcrumb info for different page types"""
     contexts = {
         'index': {'path_prefix': './'},
         'misc': {'path_prefix': '../'},
         'detail': {'path_prefix': '../../'}
     }
-    return contexts.get(page_type, contexts['misc'])
+    ctx = contexts.get(page_type, contexts['misc']).copy()
+    
+    # Add breadcrumb information if provided
+    if breadcrumb_type:
+        ctx['breadcrumb_type'] = breadcrumb_type
+        ctx['breadcrumb_data'] = breadcrumb_data or {}
+    
+    return ctx
 
 if __name__ == "__main__":
     desc = "allium: generate static tor relay metrics and statistics"
@@ -154,7 +161,7 @@ if __name__ == "__main__":
     # index and "all" HTML relay sets; index set limited to 500 relays
     if args.progress:
         print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Generating index page...")
-    page_ctx = get_page_context('index')
+    page_ctx = get_page_context('index', 'home')
     RELAY_SET.write_misc(
         template="index.html",
         path="index.html",
@@ -166,7 +173,7 @@ if __name__ == "__main__":
 
     if args.progress:
         print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Generating all relays page...")
-    page_ctx = get_page_context('misc')
+    page_ctx = get_page_context('misc', 'misc_listing', {'page_name': 'All Relays'})
     RELAY_SET.write_misc(template="all.html", path="misc/all.html", page_ctx=page_ctx)
     if args.progress:
         print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Generated all relays page")
@@ -194,37 +201,41 @@ if __name__ == "__main__":
     # miscellaneous-sorted (per misc_pages k/v) HTML pages
     if args.progress:
         print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Generating miscellaneous sorted pages...")
-    page_ctx = get_page_context('misc')
     for k, v in misc_pages.items():
+        families_ctx = get_page_context('misc', 'misc_listing', {'page_name': 'Browse by Family'})
         RELAY_SET.write_misc(
             template="misc-families.html",
             path="misc/families-{}.html".format(k),
             sorted_by=v,
-            page_ctx=page_ctx,
+            page_ctx=families_ctx,
         )
+        networks_ctx = get_page_context('misc', 'misc_listing', {'page_name': 'Browse by Network'})
         RELAY_SET.write_misc(
             template="misc-networks.html",
             path="misc/networks-{}.html".format(k),
             sorted_by=v,
-            page_ctx=page_ctx,
+            page_ctx=networks_ctx,
         )
+        contacts_ctx = get_page_context('misc', 'misc_listing', {'page_name': 'Browse by Contact'})
         RELAY_SET.write_misc(
             template="misc-contacts.html",
             path="misc/contacts-{}.html".format(k),
             sorted_by=v,
-            page_ctx=page_ctx,
+            page_ctx=contacts_ctx,
         )
+        countries_ctx = get_page_context('misc', 'misc_listing', {'page_name': 'Browse by Country'})
         RELAY_SET.write_misc(
             template="misc-countries.html",
             path="misc/countries-{}.html".format(k),
             sorted_by=v,
-            page_ctx=page_ctx,
+            page_ctx=countries_ctx,
         )
+        platforms_ctx = get_page_context('misc', 'misc_listing', {'page_name': 'Browse by Platform'})
         RELAY_SET.write_misc(
             template="misc-platforms.html",
             path="misc/platforms-{}.html".format(k),
             sorted_by=v,
-            page_ctx=page_ctx,
+            page_ctx=platforms_ctx,
         )
 
     if args.progress:

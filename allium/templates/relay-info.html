@@ -7,7 +7,7 @@
 <div id="content">
 <h2>View Relay "{{ relay['nickname'] }}"</h2>
 {% set relay_data = {'nickname': relay['nickname'], 'fingerprint': relay['fingerprint'], 'as_number': relay['as']} %}
-{{ navigation('all', breadcrumb_type='relay_detail', breadcrumb_data=relay_data, page_ctx=page_ctx) }}
+{{ navigation('all', page_ctx) }}
 <h4>
 {% if relay['effective_family']|length > 1 -%}
 <a href="{{ page_ctx.path_prefix }}family/{{ relay['fingerprint']|escape }}/">Family: {{ relay['effective_family']|length }} relays</a>
