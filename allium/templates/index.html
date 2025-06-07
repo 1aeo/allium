@@ -4,7 +4,7 @@
     Explore Top 500 Relays
 {% endblock %}
 {% block navigation %}
-    {{ navigation('top500', is_misc_page=false, is_index_page=true, path_prefix=path_prefix) }}
+    {{ navigation('top500', page_ctx=page_ctx) }}
 {% endblock %}
 {% block description %}
     Browse and analyze Tor network relays by different categories.

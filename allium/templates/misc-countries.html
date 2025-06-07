@@ -10,7 +10,7 @@
         Browse by Country
     </h2>
     
-    {{ navigation('countries', is_misc_page=true, breadcrumb_type='misc_listing', breadcrumb_data={'page_name': 'Browse by Country'}, path_prefix=path_prefix) }}
+    {{ navigation('countries', breadcrumb_type='misc_listing', breadcrumb_data={'page_name': 'Browse by Country'}, page_ctx=page_ctx) }}
     
     <p>
         Geographic distribution of Tor infrastructure - shows regional network capacity and political risk factors.
@@ -126,8 +126,8 @@
                     {% set middle_bw = relays._format_bandwidth_with_unit(v['middle_bandwidth'], obs_unit) -%}
                     {% set exit_bw = relays._format_bandwidth_with_unit(v['exit_bandwidth'], obs_unit) -%}
                     <td>
-                        <a href="{{ path_prefix }}country/{{ k|escape }}/">
-                            <img src="{{ path_prefix }}static/images/cc/{{ k|escape }}.png"
+                        <a href="{{ page_ctx.path_prefix }}country/{{ k|escape }}/">
+                            <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ k|escape }}.png"
                                  title="{{ v['country_name']|escape }}"
                                  alt="{{ v['country_name']|escape }}">
                             {{ v['country_name']|escape }}

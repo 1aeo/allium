@@ -10,7 +10,7 @@
         Browse by Platform
     </h2>
     
-    {{ navigation('platforms', is_misc_page=true, breadcrumb_type='misc_listing', breadcrumb_data={'page_name': 'Browse by Platform'}, path_prefix=path_prefix) }}
+    {{ navigation('platforms', breadcrumb_type='misc_listing', breadcrumb_data={'page_name': 'Browse by Platform'}, page_ctx=page_ctx) }}
     
     <p>
         Operating systems running Tor relays - shows software diversity and potential vulnerability patterns.
@@ -126,7 +126,7 @@
                     {% set middle_bw = relays._format_bandwidth_with_unit(v['middle_bandwidth'], obs_unit) -%}
                     {% set exit_bw = relays._format_bandwidth_with_unit(v['exit_bandwidth'], obs_unit) -%}
                     <td>
-                        <a href="{{ path_prefix }}platform/{{ k|escape }}/">{{ k|escape }}</a>
+                        <a href="{{ page_ctx.path_prefix }}platform/{{ k|escape }}/">{{ k|escape }}</a>
                     </td>
                     {% if v['bandwidth'] == 0 -%}
                         <td class="text-center bw-data">0 / 0 / 0 / 0 {{ obs_unit }}</td>
