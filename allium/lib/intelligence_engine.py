@@ -45,19 +45,22 @@ class IntelligenceEngine:
                 'efficiency_ratio': '0.00'
             }},
             'infrastructure_dependency': {'template_optimized': {
-                'hostname_coverage': '0.0', 'unique_versions': 0, 'critical_as_count': 0,
-                'concentration_risk_level': 'UNKNOWN', 'synchronization_risk': 'UNKNOWN'
+                'hostname_coverage': '0.0', 'unique_versions': 0, 'critical_as_count': 0, 'critical_as_list': [],
+                'concentration_risk_level': 'UNKNOWN', 'concentration_risk_tooltip': 'Risk assessment unavailable',
+                'synchronization_risk': 'UNKNOWN', 'sync_risk_tooltip': 'Sync risk assessment unavailable',
+                'dns_coverage_explanation': 'No data available'
             }},
             'geographic_clustering': {'template_optimized': {
                 'five_eyes_percentage': '0.0', 'fourteen_eyes_percentage': '0.0',
                 'five_eyes_influence': '0.0', 'fourteen_eyes_influence': '0.0',
-                'overall_risk_level': 'UNKNOWN', 'concentration_hhi_interpretation': 'UNKNOWN',
-                'regional_hhi': '0.000'
+                'concentration_hhi_interpretation': 'UNKNOWN', 'regional_hhi': '0.000',
+                'hhi_tooltip': 'HHI measurement unavailable', 'top_3_regions': 'No data',
+                'regional_concentration_tooltip': 'Regional analysis unavailable'
             }},
             'capacity_distribution': {'template_optimized': {
                 'gini_coefficient': '0.000', 'diversity_status': 'UNKNOWN',
                 'exit_capacity_status': 'UNKNOWN', 'guard_capacity_percentage': '0.0',
-                'exit_capacity_percentage': '0.0'
+                'exit_capacity_percentage': '0.0', 'gini_tooltip': 'Gini coefficient calculation unavailable'
             }}
         }
     
@@ -204,55 +207,82 @@ class IntelligenceEngine:
         return {'template_optimized': template_values}
     
     def _layer10_infrastructure_dependency(self):
-        """Layer 10: Complete infrastructure analysis"""
+        """Layer 10: Complete infrastructure analysis with single points of failure"""
         template_values = {}
         
-        # DNS hostname coverage
-        hostname_count = sum(1 for relay in self.relays 
-                           if relay.get('or_addresses', [''])[0] and 
-                           not relay.get('or_addresses', [''])[0].replace('.', '').replace(':', '').isdigit())
-        template_values['hostname_coverage'] = f"{(hostname_count / len(self.relays) * 100):.1f}" if self.relays else '0.0'
+        # DNS hostname coverage analysis
+        hostname_count = 0
+        ip_only_count = 0
+        for relay in self.relays:
+            or_addresses = relay.get('or_addresses', [])
+            if or_addresses:
+                first_address = or_addresses[0]
+                # Check if it's a hostname (contains letters) vs IP (numbers/dots/colons only)
+                if any(c.isalpha() for c in first_address):
+                    hostname_count += 1
+                else:
+                    ip_only_count += 1
+        
+        total_relays = len(self.relays)
+        hostname_percentage = (hostname_count / total_relays * 100) if total_relays > 0 else 0
+        template_values['hostname_coverage'] = f"{hostname_percentage:.1f}"
+        template_values['dns_coverage_explanation'] = f"{hostname_count} relays use hostnames, {ip_only_count} use IP addresses only"
         
         # Version diversity
         versions = set(relay.get('version', 'Unknown') for relay in self.relays)
         template_values['unique_versions'] = len(versions)
         
-        # Critical ASes analysis (ASes with >5% of network)
-        critical_as_count = 0
+        # Critical ASes analysis (ASes with >5% of network) and single points of failure
+        critical_as_list = []
+        critical_as_names = []
         if 'as' in self.sorted_data:
-            for as_data in self.sorted_data['as'].values():
-                if as_data.get('consensus_weight_fraction', 0) > 0.05:
-                    critical_as_count += 1
-        template_values['critical_as_count'] = critical_as_count
+            for as_number, as_data in self.sorted_data['as'].items():
+                weight_fraction = as_data.get('consensus_weight_fraction', 0)
+                if weight_fraction > 0.05:  # >5% threshold
+                    as_name = as_data.get('as_name', f'AS{as_number}')
+                    critical_as_list.append(as_number)
+                    critical_as_names.append(f"AS{as_number} ({as_name[:30]}{'...' if len(as_name) > 30 else ''})")
         
-        # Concentration risk level based on largest AS
+        template_values['critical_as_count'] = len(critical_as_list)
+        template_values['critical_as_list'] = critical_as_names
+        
+        # Concentration risk level with detailed explanation
         if 'as' in self.sorted_data:
             networks = list(self.sorted_data['as'].values())
             if networks:
                 largest_as_weight = max(n.get('consensus_weight_fraction', 0) for n in networks)
                 if largest_as_weight > 0.15:
                     template_values['concentration_risk_level'] = 'HIGH'
+                    template_values['concentration_risk_tooltip'] = f'Highest AS controls {largest_as_weight*100:.1f}% of network (>15% is high risk)'
                 elif largest_as_weight > 0.10:
                     template_values['concentration_risk_level'] = 'MEDIUM'
+                    template_values['concentration_risk_tooltip'] = f'Highest AS controls {largest_as_weight*100:.1f}% of network (10-15% is medium risk)'
                 else:
                     template_values['concentration_risk_level'] = 'LOW'
+                    template_values['concentration_risk_tooltip'] = f'Highest AS controls {largest_as_weight*100:.1f}% of network (<10% is low risk)'
             else:
                 template_values['concentration_risk_level'] = 'UNKNOWN'
+                template_values['concentration_risk_tooltip'] = 'No AS data available for risk assessment'
         else:
             template_values['concentration_risk_level'] = 'UNKNOWN'
+            template_values['concentration_risk_tooltip'] = 'No AS data available for risk assessment'
         
-        # Version synchronization risk
-        if len(versions) <= 3:
+        # Version synchronization risk with explanation
+        version_count = len(versions)
+        if version_count <= 3:
             template_values['synchronization_risk'] = 'HIGH'
-        elif len(versions) <= 6:
+            template_values['sync_risk_tooltip'] = f'Only {version_count} Tor versions detected - high risk of coordinated updates/vulnerabilities'
+        elif version_count <= 6:
             template_values['synchronization_risk'] = 'MEDIUM'
+            template_values['sync_risk_tooltip'] = f'{version_count} Tor versions detected - moderate diversity, some coordination risk'
         else:
             template_values['synchronization_risk'] = 'LOW'
+            template_values['sync_risk_tooltip'] = f'{version_count} Tor versions detected - good diversity, low coordination risk'
         
         return {'template_optimized': template_values}
     
     def _layer11_geographic_clustering(self):
-        """Layer 11: Complete geographic analysis"""
+        """Layer 11: Complete geographic analysis with enhanced regional details"""
         template_values = {}
         
         # Five/Fourteen Eyes analysis
@@ -272,18 +302,11 @@ class IntelligenceEngine:
         template_values['five_eyes_influence'] = f"{five_eyes_weight * 100:.1f}"
         template_values['fourteen_eyes_influence'] = f"{fourteen_eyes_weight * 100:.1f}"
         
-        # Overall risk assessment
-        if five_eyes_weight > 0.25:
-            template_values['overall_risk_level'] = 'HIGH'
-        elif fourteen_eyes_weight > 0.40:
-            template_values['overall_risk_level'] = 'MEDIUM'
-        else:
-            template_values['overall_risk_level'] = 'LOW'
-        
-        # Regional HHI calculation
-        regional_hhi = self._calculate_regional_hhi()
+        # Regional HHI calculation with top 3 regions
+        regional_hhi, regional_stats = self._calculate_regional_hhi_detailed()
         template_values['regional_hhi'] = f"{regional_hhi:.3f}"
         
+        # HHI interpretation and tooltip
         if regional_hhi > 0.25:
             template_values['concentration_hhi_interpretation'] = 'HIGH'
         elif regional_hhi > 0.15:
@@ -291,21 +314,32 @@ class IntelligenceEngine:
         else:
             template_values['concentration_hhi_interpretation'] = 'LOW'
         
+        # Enhanced tooltips and top regions
+        template_values['hhi_tooltip'] = f'Herfindahl-Hirschman Index measures concentration: 0=perfect distribution, 1=complete concentration. Current HHI: {regional_hhi:.3f}'
+        template_values['regional_concentration_tooltip'] = 'Regional distribution of Tor network capacity by geographic regions'
+        
+        # Top 3 regions by weight
+        top_regions = sorted(regional_stats.items(), key=lambda x: x[1], reverse=True)[:3]
+        top_3_text = ', '.join([f"{region.title().replace('_', ' ')}: {weight*100:.1f}%" for region, weight in top_regions if weight > 0])
+        template_values['top_3_regions'] = top_3_text if top_3_text else 'Insufficient data'
+        
         return {'template_optimized': template_values}
     
     def _layer13_capacity_distribution(self):
-        """Layer 13: Complete capacity analysis"""
+        """Layer 13: Complete capacity analysis with Gini explanation"""
         template_values = {}
         
-        # Gini coefficient
+        # Gini coefficient with enhanced tooltip
         weights = [relay.get('consensus_weight_fraction', 0) for relay in self.relays if relay.get('consensus_weight_fraction', 0) > 0]
         if weights:
             gini = self._calculate_gini_coefficient(sorted(weights))
             template_values['gini_coefficient'] = f"{gini:.3f}"
             template_values['diversity_status'] = 'HIGH' if gini > 0.6 else 'MEDIUM' if gini > 0.4 else 'LOW'
+            template_values['gini_tooltip'] = f'Gini coefficient measures inequality: 0=perfect equality, 1=complete inequality. Current: {gini:.3f} indicates {"high" if gini > 0.6 else "medium" if gini > 0.4 else "low"} capacity concentration among relays'
         else:
             template_values['gini_coefficient'] = '0.000'
             template_values['diversity_status'] = 'UNKNOWN'
+            template_values['gini_tooltip'] = 'Gini coefficient measures wealth inequality - unable to calculate due to insufficient data'
         
         # Role-specific capacity percentages
         guard_weight = sum(relay.get('consensus_weight_fraction', 0) for relay in self.relays if 'Guard' in relay.get('flags', []))
@@ -332,16 +366,17 @@ class IntelligenceEngine:
         gini_sum = sum((2 * (i + 1) - n - 1) * value for i, value in enumerate(sorted_values))
         return gini_sum / (n * total)
     
-    def _calculate_regional_hhi(self):
-        """Calculate regional HHI for geographic concentration"""
+    def _calculate_regional_hhi_detailed(self):
+        """Calculate regional HHI with detailed regional statistics"""
         if 'country' not in self.sorted_data:
-            return 0.0
+            return 0.0, {}
         
-        # Simple regional mapping
+        # Regional mapping
         regions = {
-            'north_america': {'us', 'ca'},
-            'europe': {'de', 'fr', 'gb', 'nl', 'it', 'es', 'se', 'no', 'dk', 'fi'},
-            'asia_pacific': {'jp', 'au', 'nz', 'kr', 'sg', 'hk'},
+            'north_america': {'us', 'ca', 'mx'},
+            'europe': {'de', 'fr', 'gb', 'nl', 'it', 'es', 'se', 'no', 'dk', 'fi', 'ch', 'at', 'be', 'ie', 'pt'},
+            'asia_pacific': {'jp', 'au', 'nz', 'kr', 'sg', 'hk', 'tw', 'th', 'my', 'ph'},
+            'eastern_europe': {'ru', 'ua', 'pl', 'cz', 'hu', 'ro', 'bg', 'sk', 'hr', 'si', 'ee', 'lv', 'lt'},
             'other': set()
         }
         
@@ -361,4 +396,5 @@ class IntelligenceEngine:
                 regional_weights['other'] += weight
         
         # Calculate HHI
-        return sum(weight ** 2 for weight in regional_weights.values()) 
+        hhi = sum(weight ** 2 for weight in regional_weights.values())
+        return hhi, regional_weights 
