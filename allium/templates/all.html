@@ -10,5 +10,6 @@
     <strong>Network Status:</strong> {{ relays.json.smart_context.basic_relationships.template_optimized.total_countries }} countries, 
     {{ relays.json.smart_context.basic_relationships.template_optimized.total_networks }} networks, 
     <span title="{{ relays.json.smart_context.capacity_distribution.template_optimized.gini_tooltip }}">{{ relays.json.smart_context.capacity_distribution.template_optimized.diversity_status }} capacity distribution</span>, 
+    <span title="{{ relays.json.smart_context.capacity_distribution.template_optimized.guard_capacity_tooltip }}">{{ relays.json.smart_context.capacity_distribution.template_optimized.guard_capacity_status }} guard capacity ({{ relays.json.smart_context.capacity_distribution.template_optimized.guard_capacity_percentage }}%)</span>, 
     <span title="{{ relays.json.smart_context.capacity_distribution.template_optimized.exit_capacity_tooltip }}">{{ relays.json.smart_context.capacity_distribution.template_optimized.exit_capacity_status }} exit capacity ({{ relays.json.smart_context.capacity_distribution.template_optimized.exit_capacity_percentage }}%)</span>.
 {% endblock %}
