@@ -249,7 +249,12 @@ Network Participation Measured by >= 3 Bandwidth Authorities
 {% else -%}
 unknown
 {% endif -%}
+{% if relay['fingerprint'] in relays.json.smart_context.performance_correlation.template_optimized.underutilized_fingerprints %}
+<br><small class="text-warning">⚠️ Underutilized: High bandwidth but low consensus weight</small>
+{% endif %}
 </dd>
+
+
 
 <dt>
 {% if relay['city_name'] or relay['region_name'] -%}City | Region | Country{% else -%}Country{% endif -%}

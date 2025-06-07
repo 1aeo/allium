@@ -41,7 +41,7 @@
                 </li>
             </ul>
         </li>
-        <li><strong>Software Diversity</strong>: {% set platform_list = relays.json['sorted']['platform'].values()|list %}{% set linux_count = 0 %}{% set windows_count = 0 %}{% set bsd_count = 0 %}{% for platform_data in platform_list %}{% if 'linux' in platform_data.platform|lower %}{% set linux_count = linux_count + (platform_data.consensus_weight_fraction|default(0)) %}{% elif 'windows' in platform_data.platform|lower %}{% set windows_count = windows_count + (platform_data.consensus_weight_fraction|default(0)) %}{% elif 'bsd' in platform_data.platform|lower %}{% set bsd_count = bsd_count + (platform_data.consensus_weight_fraction|default(0)) %}{% endif %}{% endfor %}{{ "%.1f"|format(linux_count * 100) }}% Linux | {{ "%.1f"|format(windows_count * 100) }}% Windows | {{ "%.1f"|format(bsd_count * 100) }}% BSD variants</li>
+        <li><strong>Software Diversity</strong>: {{ relays.json.smart_context.concentration_patterns.template_optimized.platforms_linux_percentage }}% Linux | {{ relays.json.smart_context.concentration_patterns.template_optimized.platforms_windows_percentage }}% Windows | {{ relays.json.smart_context.concentration_patterns.template_optimized.platforms_bsd_percentage }}% BSD variants</li>
         <li><strong>Sorted by</strong>: {{ sorted_by_label|replace('_', ' ')|replace('bandwidth', 'observed bandwidth') }}</li>
         <li><strong>Key</strong>: BW = Observed Bandwidth, CW = Consensus Weight, AS = Autonomous System (network provider)</li>
     </ul>

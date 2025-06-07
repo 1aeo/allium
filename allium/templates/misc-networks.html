@@ -41,7 +41,13 @@
                 </li>
             </ul>
         </li>
-        <li><strong>Infrastructure Dependency</strong>: {% set as_list = relays.json['sorted']['as'].values()|list %}{% if as_list %}{% set largest_as = as_list|max(attribute='consensus_weight_fraction') %}{{ "%.1f"|format((largest_as.consensus_weight_fraction|default(0)) * 100) }}% hosted by largest AS{% else %}0% hosted by largest AS{% endif %} | {% set sorted_as = as_list|sort(attribute='consensus_weight_fraction', reverse=true) %}{% set top_3_weight = sorted_as[:3]|sum(attribute='consensus_weight_fraction') %}{{ "%.1f"|format((top_3_weight|default(0)) * 100) }}% in top 3 ASes | {% set single_relay_count = 0 %}{% for as_data in as_list %}{% set total_relays = (as_data.guard_count|default(0)) + (as_data.middle_count|default(0)) + (as_data.exit_count|default(0)) %}{% if total_relays == 1 %}{% set single_relay_count = single_relay_count + 1 %}{% endif %}{% endfor %}{{ single_relay_count }} networks host single relays only</li>
+        <li><strong>Infrastructure Dependency</strong>: 
+    <span title="Top 3 ASes control {{ relays.json.smart_context.concentration_patterns.template_optimized.networks_top_3_percentage }}% of network capacity. Critical ASes (>5% control each) identified: {% if relays.json.smart_context.infrastructure_dependency.template_optimized.critical_as_list %}{{ relays.json.smart_context.infrastructure_dependency.template_optimized.critical_as_list|join(', ') }}{% else %}none{% endif %}">{{ relays.json.smart_context.concentration_patterns.template_optimized.networks_top_3_percentage }}% in top 3 ASes, {{ relays.json.smart_context.infrastructure_dependency.template_optimized.critical_as_count }} critical 
+    {% if relays.json.smart_context.infrastructure_dependency.template_optimized.critical_as_list %}
+        ({{ relays.json.smart_context.infrastructure_dependency.template_optimized.critical_as_list|join(', ') }})
+    {% endif %}</span> | {{ relays.json.smart_context.concentration_patterns.template_optimized.networks_single_relay_count }} networks host single relays only
+</li>
+
         <li><strong>Sorted by</strong>: {{ sorted_by_label|replace('_', ' ')|replace('bandwidth', 'observed bandwidth') }}</li>
         <li><strong>Key</strong>: BW = Observed Bandwidth, CW = Consensus Weight, AS = Autonomous System (network provider)</li>
     </ul>

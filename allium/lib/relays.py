@@ -42,6 +42,7 @@ class Relays:
         self._add_hashed_contact()
         self._process_aroi_contacts()  # Process AROI display info first
         self._categorize()  # Then build categories with processed relay objects
+        self._generate_smart_context()  # Generate intelligence analysis
 
     def _fetch_onionoo_details(self):
         """
@@ -644,6 +645,18 @@ class Relays:
                             del data["unique_family_set"]
                         else:
                             data["unique_family_count"] = 0
+
+    def _generate_smart_context(self):
+        """Generate smart context intelligence analysis"""
+        try:
+            from intelligence_engine import IntelligenceEngine
+        except ImportError:
+            from .intelligence_engine import IntelligenceEngine
+        
+        print("[Intelligence] Starting Tier 1 analysis...")
+        engine = IntelligenceEngine(self.json)
+        self.json['smart_context'] = engine.analyze_all_layers()
+        print("[Intelligence] Tier 1 analysis complete")
 
     def create_output_dir(self):
         """
