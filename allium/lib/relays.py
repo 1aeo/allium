@@ -822,8 +822,19 @@ class Relays:
         Args:
             k: onionoo key to sort by (as, country, platform...)
         """
+        import time
+        method_start = time.time()
+        
+        # Track timing for different operations
+        setup_time = 0
+        directory_time = 0  
+        template_time = 0
+        write_time = 0
+        
+        op_start = time.time()
         template = ENV.get_template(k + ".html")
         output_path = os.path.join(self.output_dir, k)
+        setup_time += time.time() - op_start
 
         # the "royal the" must be gramatically recognized
         the_prefixed = [
@@ -847,29 +858,105 @@ class Relays:
             "Ukraine",
         ]
 
+        op_start = time.time()
         if os.path.exists(output_path):
             rmtree(output_path)
+        directory_time += time.time() - op_start
 
         # Sort first_seen pages by date to show oldest dates first
+        op_start = time.time()
         if k == "first_seen":
             sorted_values = sorted(self.json["sorted"][k].keys())
         else:
             sorted_values = self.json["sorted"][k].keys()
+        setup_time += time.time() - op_start
         
+        page_count = 0
         for v in sorted_values:
+            page_count += 1
             i = self.json["sorted"][k][v]
+            
+            # Time member collection
+            op_start = time.time()
             members = []
-
             for m_relay in i["relays"]:
                 members.append(self.json["relays"][m_relay])
+            
+            # Python String Operations Optimization: Pre-compute all expensive string operations
+            # that are performed inside Jinja2 templates to reduce template processing time
+            preprocessed_members = []
+            for relay in members:
+                # Pre-compute bandwidth formatting
+                obs_bandwidth = relay.get('observed_bandwidth', 0)
+                obs_unit = self._determine_unit(obs_bandwidth)
+                obs_bandwidth_formatted = self._format_bandwidth_with_unit(obs_bandwidth, obs_unit)
+                
+                # Pre-compute all HTML escaping and string operations
+                import html
+                preprocessed_relay = dict(relay)  # Copy original relay data
+                
+                # Pre-escape all strings that get escaped in templates
+                preprocessed_relay['nickname_escaped'] = html.escape(relay.get('nickname', ''))
+                preprocessed_relay['fingerprint_escaped'] = html.escape(relay.get('fingerprint', ''))
+                preprocessed_relay['contact_escaped'] = html.escape(relay.get('contact', '')) if relay.get('contact') else ''
+                preprocessed_relay['aroi_domain_escaped'] = html.escape(relay.get('aroi_domain', '')) if relay.get('aroi_domain') else ''
+                preprocessed_relay['as_escaped'] = html.escape(str(relay.get('as', ''))) if relay.get('as') else ''
+                preprocessed_relay['as_name_escaped'] = html.escape(relay.get('as_name', '')) if relay.get('as_name') else ''
+                preprocessed_relay['country_escaped'] = html.escape(relay.get('country', '')) if relay.get('country') else ''
+                preprocessed_relay['country_name_escaped'] = html.escape(relay.get('country_name', '')) if relay.get('country_name') else ''
+                preprocessed_relay['platform_escaped'] = html.escape(relay.get('platform', '')) if relay.get('platform') else ''
+                
+                # Pre-compute truncated versions
+                preprocessed_relay['nickname_truncated_8'] = html.escape(relay.get('nickname', '')[:8])
+                preprocessed_relay['nickname_truncated_10'] = html.escape(relay.get('nickname', '')[:10])
+                preprocessed_relay['as_name_truncated_20'] = html.escape(relay.get('as_name', '')[:20]) if relay.get('as_name') else ''
+                preprocessed_relay['platform_truncated_10'] = html.escape(relay.get('platform', '')[:10]) if relay.get('platform') else ''
+                
+                # Pre-compute string splits
+                if relay.get('or_addresses') and len(relay['or_addresses']) > 0:
+                    ip_address = relay['or_addresses'][0].split(':', 1)[0]
+                    preprocessed_relay['ip_address_escaped'] = html.escape(ip_address)
+                else:
+                    preprocessed_relay['ip_address_escaped'] = ''
+                
+                if relay.get('first_seen'):
+                    first_seen_date = relay['first_seen'].split(' ', 1)[0]
+                    preprocessed_relay['first_seen_date_escaped'] = html.escape(first_seen_date)
+                else:
+                    preprocessed_relay['first_seen_date_escaped'] = ''
+                
+                # Pre-compute bandwidth data
+                preprocessed_relay['obs_bandwidth_formatted'] = obs_bandwidth_formatted
+                preprocessed_relay['obs_unit'] = obs_unit
+                
+                # Pre-compute flag data (escaped flag names for templates)
+                if relay.get('flags'):
+                    preprocessed_relay['flags_escaped'] = []
+                    for flag in relay['flags']:
+                        if flag != 'StaleDesc':
+                            preprocessed_relay['flags_escaped'].append({
+                                'name': html.escape(flag),
+                                'lower': html.escape(flag.lower())
+                            })
+                else:
+                    preprocessed_relay['flags_escaped'] = []
+                
+                preprocessed_members.append(preprocessed_relay)
+                
+            self.json["relay_subset"] = preprocessed_members
+            setup_time += time.time() - op_start
+
+            # Time directory operations
+            op_start = time.time()
             if k == "flag":
                 dir_path = os.path.join(output_path, v.lower())
             else:
                 dir_path = os.path.join(output_path, v)
-
             os.makedirs(dir_path)
-            self.json["relay_subset"] = members
+            directory_time += time.time() - op_start
             
+            # Time template preparation and rendering
+            op_start = time.time()
             bandwidth_unit = self._determine_unit(i["bandwidth"])
             # Format all bandwidth values using the same unit
             bandwidth = self._format_bandwidth_with_unit(i["bandwidth"], bandwidth_unit)
@@ -910,11 +997,23 @@ class Relays:
                     "has_typed_relays": i["guard_count"] > 0 or i["middle_count"] > 0 or i["exit_count"] > 0}
                    if k == "family" else {})
             )
+            template_time += time.time() - op_start
 
+            # Time file writing
+            op_start = time.time()
             with open(
                 os.path.join(dir_path, "index.html"), "w", encoding="utf8"
             ) as html:
                 html.write(rendered)
+            write_time += time.time() - op_start
+        
+        # Print detailed timing breakdown for this key
+        total_time = time.time() - method_start
+        print(f"  ├─ Key '{k}' breakdown: {total_time:.2f}s total for {page_count} pages")
+        print(f"  │  ├─ Setup/Data: {setup_time:.2f}s ({setup_time/total_time*100:.1f}%)")
+        print(f"  │  ├─ Directories: {directory_time:.2f}s ({directory_time/total_time*100:.1f}%)")  
+        print(f"  │  ├─ Templates: {template_time:.2f}s ({template_time/total_time*100:.1f}%)")
+        print(f"  │  └─ File I/O: {write_time:.2f}s ({write_time/total_time*100:.1f}%)")
 
     def write_relay_info(self):
         """

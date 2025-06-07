@@ -44,8 +44,6 @@
     {% endif -%}
     {% for relay in relay_list -%}
 	<tr>
-	    {% set obs_unit = relays._determine_unit(relay['observed_bandwidth']) -%}
-	    {% set obs_bandwidth = relays._format_bandwidth_with_unit(relay['observed_bandwidth'], obs_unit) -%}
 	    {% if relay['running'] -%}
 		<td>
 		    <span class="circle circle-online" title="This relay is online"></span>
@@ -56,21 +54,18 @@
 		</td>
 	    {% endif -%}
 	    {% if relay['effective_family']|length > 1 -%}
-		<td title="{{ relay['nickname']|escape }}">
-		    <a href="{{ path_prefix }}relay/{{ relay['fingerprint']|escape }}.html">{{ relay['nickname']|truncate(8)|escape
-			}}</a> (<a href="{{ path_prefix }}family/{{ relay['fingerprint']|escape }}/">{{
-			relay['effective_family']| length }}</a>)
+		<td title="{{ relay['nickname_escaped'] }}">
+		    <a href="{{ path_prefix }}relay/{{ relay['fingerprint_escaped'] }}.html">{{ relay['nickname_truncated_8'] }}</a> (<a href="{{ path_prefix }}family/{{ relay['fingerprint_escaped'] }}/">{{ relay['effective_family']| length }}</a>)
 		    </td>
 		{% else -%}
-		    <td title="{{ relay['nickname']|escape }}">
-			<a href="{{ path_prefix }}relay/{{ relay['fingerprint']|escape }}.html">{{ relay['nickname']|truncate(10)|escape
-			}}</a>
+		    <td title="{{ relay['nickname_escaped'] }}">
+			<a href="{{ path_prefix }}relay/{{ relay['fingerprint_escaped'] }}.html">{{ relay['nickname_truncated_10'] }}</a>
 		    </td>
 		{% endif -%}
 		{% if key != 'contact' -%}
 		    {% if relay['aroi_domain'] and relay['aroi_domain'] != 'none' -%}
 			<td>
-			    <a href="{{ path_prefix }}contact/{{ relay['contact_md5'] }}/" title="{{ relay['aroi_domain']|escape }}">{{ relay['aroi_domain']|escape }}</a>
+			    <a href="{{ path_prefix }}contact/{{ relay['contact_md5'] }}/" title="{{ relay['aroi_domain_escaped'] }}">{{ relay['aroi_domain_escaped'] }}</a>
 			</td>
 		    {% else -%}
 			<td>none</td>
@@ -78,7 +73,7 @@
 		    {% if relay['contact'] -%}
 			<td>
 			    <a href="{{ path_prefix }}contact/{{ relay['contact_md5'] }}/" 
-				title="{{ relay['contact']|escape }}" class="contact-text">{{ relay['contact']|escape }}</a>
+				title="{{ relay['contact_escaped'] }}" class="contact-text">{{ relay['contact_escaped'] }}</a>
 			</td>
 		    {% else -%}
 			<td title="none">
@@ -87,36 +82,33 @@
 		    {% endif -%}
 		{% else -%}
 		    {% if relay['aroi_domain'] and relay['aroi_domain'] != 'none' -%}
-			<td>{{ relay['aroi_domain']|escape }}</td>
+			<td>{{ relay['aroi_domain_escaped'] }}</td>
 		    {% else -%}
 			<td>none</td>
 		    {% endif -%}
-		    <td title="{{ relay['contact']|escape }}">
-			<span class="contact-text">{{ relay['contact']|escape }}</span>
+		    <td title="{{ relay['contact_escaped'] }}">
+			<span class="contact-text">{{ relay['contact_escaped'] }}</span>
 		    </td>
 		{% endif -%}
-		<td>{{ obs_bandwidth }} {{ obs_unit }}</td>
+		<td>{{ relay['obs_bandwidth_formatted'] }} {{ relay['obs_unit'] }}</td>
 		<td class="visible-md visible-lg">
-		    <a href="https://bgp.tools/prefix/{{ relay['or_addresses'][0].split(':', 1)[0]|escape }}">{{
-		    relay['or_addresses'][0].split(':', 1)[0]|escape }}</a>
+		    <a href="https://bgp.tools/prefix/{{ relay['ip_address_escaped'] }}">{{ relay['ip_address_escaped'] }}</a>
 		</td>
 		{% if relay['as'] -%}
 		    {% if key != 'as' -%}
 			<td>
-			    <a href="{{ path_prefix }}as/{{ relay['as']|escape }}/">{{
-			    relay['as']|escape }}</a>
+			    <a href="{{ path_prefix }}as/{{ relay['as_escaped'] }}/">{{ relay['as_escaped'] }}</a>
 			</td>
 		    {% else -%}
-			<td>{{ relay['as']|escape }}</td>
+			<td>{{ relay['as_escaped'] }}</td>
 		    {% endif -%}
 		{% else -%}
 		    <td>Unknown</td>
 		{% endif -%}
 		{% if relay['as_name'] -%}
 		    <td>
-			<a href="https://bgp.tools/{{ relay['as']|escape }}"
-			   title="{{ relay['as_name']|escape }}">{{
-			relay['as_name']|escape|truncate(length=20) }}</a>
+			<a href="https://bgp.tools/{{ relay['as_escaped'] }}"
+			   title="{{ relay['as_name_escaped'] }}">{{ relay['as_name_truncated_20'] }}</a>
 		    </td>
 		{% else -%}
 		    <td>Unknown</td>
