@@ -655,7 +655,7 @@ class Relays:
         self,
         template,
         path,
-        path_prefix="../",
+        page_ctx=None,
         sorted_by=None,
         reverse=True,
         is_index=False,
@@ -677,13 +677,17 @@ class Relays:
         template = ENV.get_template(template)
         self.json["relay_subset"] = self.json["relays"]
         
+        # Handle page context and path prefix
+        if page_ctx is None:
+            page_ctx = {'path_prefix': '../'}  # default fallback
+        
         # Pre-compute family statistics for misc-families templates
         template_vars = {
             "relays": self,
             "sorted_by": sorted_by,
             "reverse": reverse,
             "is_index": is_index,
-            "path_prefix": path_prefix,
+            "page_ctx": page_ctx,
         }
         
         if template.name == "misc-families.html":
@@ -877,6 +881,7 @@ class Relays:
             middle_bandwidth = self._format_bandwidth_with_unit(i["middle_bandwidth"], bandwidth_unit)
             exit_bandwidth = self._format_bandwidth_with_unit(i["exit_bandwidth"], bandwidth_unit)
                 
+            page_ctx = {'path_prefix': '../../'}
             rendered = template.render(
                 relays=self,
                 bandwidth=bandwidth,
@@ -892,7 +897,7 @@ class Relays:
                 guard_count=i["guard_count"],
                 middle_count=i["middle_count"],
                 is_index=False,
-                path_prefix="../../",
+                page_ctx=page_ctx,
                 key=k,
                 value=v,
                 sp_countries=the_prefixed,
@@ -931,11 +936,17 @@ class Relays:
         for relay in relay_list:
             if not relay["fingerprint"].isalnum():
                 continue
+            page_ctx = {'path_prefix': '../../'}
             rendered = template.render(
-                relay=relay, path_prefix="../", relays=self
+                relay=relay, page_ctx=page_ctx, relays=self
             )
+            
+            # Create directory structure: relay/FINGERPRINT/index.html (depth 2)
+            relay_dir = os.path.join(output_path, relay["fingerprint"])
+            os.makedirs(relay_dir)
+            
             with open(
-                os.path.join(output_path, "%s.html" % relay["fingerprint"]),
+                os.path.join(relay_dir, "index.html"),
                 "w",
                 encoding="utf8",
             ) as html:
