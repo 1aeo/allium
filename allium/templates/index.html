@@ -7,5 +7,8 @@
     {{ navigation('top500', page_ctx) }}
 {% endblock %}
 {% block description %}
-    Browse and analyze Tor network relays by different categories.
+    Browse and analyze Tor network relays by different categories. 
+    <strong>Network Status:</strong> {{ relays.json.smart_context.basic_relationships.template_optimized.total_countries }} countries, 
+    {{ relays.json.smart_context.basic_relationships.template_optimized.total_networks }} networks, 
+    {{ relays.json.smart_context.capacity_distribution.template_optimized.diversity_status }} capacity distribution.
 {% endblock %}

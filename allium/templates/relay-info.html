@@ -249,6 +249,20 @@ Network Participation Measured by >= 3 Bandwidth Authorities
 {% else -%}
 unknown
 {% endif -%}
+{% if relay['fingerprint'] in relays.json.smart_context.performance_correlation.template_optimized.underutilized_fingerprints %}
+<br><small class="text-warning">⚠️ Underutilized: High bandwidth but low consensus weight</small>
+{% endif %}
+</dd>
+
+<dt>
+Network Performance Context
+</dt>
+<dd>
+<small class="text-muted">
+Network average measured: {{ relays.json.smart_context.performance_correlation.template_optimized.measured_percentage }}% | 
+Bandwidth efficiency: {{ relays.json.smart_context.performance_correlation.template_optimized.efficiency_ratio }} | 
+Network underutilized: {{ relays.json.smart_context.performance_correlation.template_optimized.underutilized_count }} relays
+</small>
 </dd>
 
 <dt>

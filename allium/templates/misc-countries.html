@@ -42,6 +42,8 @@
             </ul>
         </li>
         <li><strong>Geographic Diversity</strong>: {{ relays.json.smart_context.concentration_patterns.template_optimized.countries_top_3_percentage }}% in top 3 countries | {{ relays.json.smart_context.concentration_patterns.template_optimized.countries_significant_count }} countries have >1% of network | {{ relays.json.smart_context.concentration_patterns.template_optimized.countries_five_eyes_percentage }}% in Five Eyes countries</li>
+<li><strong>Jurisdiction Analysis</strong>: {{ relays.json.smart_context.geographic_clustering.template_optimized.five_eyes_influence }}% Five Eyes influence | {{ relays.json.smart_context.geographic_clustering.template_optimized.fourteen_eyes_influence }}% Fourteen Eyes | Overall risk: {{ relays.json.smart_context.geographic_clustering.template_optimized.overall_risk_level }}</li>
+<li><strong>Regional Clustering</strong>: {{ relays.json.smart_context.geographic_clustering.template_optimized.concentration_hhi_interpretation }} regional concentration (HHI: {{ relays.json.smart_context.geographic_clustering.template_optimized.regional_hhi }})</li>
         <li><strong>Sorted by</strong>: {{ sorted_by_label|replace('_', ' ')|replace('bandwidth', 'observed bandwidth') }}</li>
         <li><strong>Key</strong>: BW = Observed Bandwidth, CW = Consensus Weight, AS = Autonomous System (network provider)</li>
     </ul>
