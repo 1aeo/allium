@@ -131,12 +131,8 @@ def _calculate_aroi_leaderboards(relays_instance):
             if bandwidth_gb > 0:
                 efficiency_ratio = (total_consensus_weight * 100) / bandwidth_gb
         
-        # Exit Authority - consensus weight of exit relays only (new calculation)
-        exit_consensus_weight = 0.0
-        for relay in operator_relays:
-            if relay.get('exit', False):  # Only count exit relays
-                relay_cw = relay.get('consensus_weight_fraction', 0.0)
-                exit_consensus_weight += relay_cw
+        # Exit Authority - reuse existing calculation from relays.py
+        exit_consensus_weight = contact_data.get('exit_consensus_weight_fraction', 0.0)
         
         # Store operator data (mix of existing + new calculations)
         aroi_operators[operator_key] = {
