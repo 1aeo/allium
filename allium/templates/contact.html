@@ -20,18 +20,32 @@
 {% set aroi_domain = relays.json['relay_subset'][0]['aroi_domain'] if relays.json['relay_subset'][0]['aroi_domain'] else 'none' %}
 {{ navigation('contacts', page_ctx) }}
 {% endblock -%}
-{% block description %}{% if relays.json['sorted']['contact'][value]['aroi_domain'] and relays.json['sorted']['contact'][value]['aroi_domain'] != 'none' -%}AROI {{ relays.json['sorted']['contact'][value]['aroi_domain'] }}{% else -%}ContactInfo {{ relays.json['sorted']['contact'][value]['contact'] }}{% endif %} summary:
+{% block description %}Contact {{ contact_hash }} summary:
 {{ detail_summary(bandwidth, bandwidth_unit, guard_bandwidth, middle_bandwidth, exit_bandwidth, consensus_weight_fraction, guard_consensus_weight_fraction, middle_consensus_weight_fraction, exit_consensus_weight_fraction, guard_count, middle_count, exit_count, relays.json['relay_subset']|length) }}
 
-{% if relays.json.smart_context %}
-<div class="intelligence-section" style="margin-top: 15px;">
-    <h4>Operator Intelligence</h4>
-    <ul style="list-style-type: disc; padding-left: 20px;">
-        <li><strong><span title="Network diversity shows infrastructure distribution across different autonomous systems">Portfolio Diversity</span>:</strong> {{ relays.json['sorted']['contact'][value]['unique_as_count'] }} network{{ 's' if relays.json['sorted']['contact'][value]['unique_as_count'] != 1 else '' }}</li>
-        <li><strong><span title="Shows this operator's influence relative to other Tor operators">Network Influence</span>:</strong> {{ "%.2f%%"|format(relays.json['sorted']['contact'][value]['consensus_weight_fraction'] * 100) }} of network consensus weight
-            {% if relays.json['sorted']['contact'][value]['consensus_weight_fraction'] >= (relays.json.smart_context.concentration_patterns.template_optimized.contacts_largest_percentage|float / 100) %}(largest operator){% endif %}</li>
-        <li><strong><span title="Measurement status indicates relay reliability and performance verification">Measurement Status</span>:</strong> {{ relays.json['sorted']['contact'][value]['measured_count'] }}/{{ relays.json['relay_subset']|length }} relays measured by authorities</li>
+{# Contact Intelligence Phase 1 + Phase 2 - using pre-calculated data from intelligence engine #}
+{% if relays.json.smart_context and relays.json.smart_context.contact_intelligence and relays.json.smart_context.contact_intelligence.template_optimized.get(contact_hash) %}
+{% set contact_intel = relays.json.smart_context.contact_intelligence.template_optimized[contact_hash] %}
+<div class="intelligence-section" style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-left: 4px solid #007bff;">
+    <h4 style="margin-top: 0; color: #495057;">Operator Intelligence</h4>
+    
+    <ul style="list-style-type: disc; padding-left: 20px; margin-bottom: 15px;">
+        <li><strong><span title="Network diversity shows infrastructure distribution across different autonomous systems">Portfolio Diversity</span>:</strong> {{ contact_intel.portfolio_diversity }}</li>
+        <li><strong><span title="Shows this operator's influence relative to other Tor operators">Network Influence</span>:</strong> {{ contact_intel.network_influence }}</li>
+        <li><strong><span title="Measurement status indicates relay reliability and performance verification">Measurement Status</span>:</strong> {{ contact_intel.measurement_status }}</li>
+    </ul>
+    
+    <h5 style="margin-top: 15px; margin-bottom: 10px; color: #495057;">Advanced Analytics</h5>
+    <ul style="list-style-type: disc; padding-left: 20px; margin-bottom: 0;">
+        <li><strong>Geographic Risk:</strong> {{ contact_intel.geographic_countries }} {{ "country" if contact_intel.geographic_countries == 1 else "countries" }} - {{ contact_intel.geographic_risk }}</li>
+        
+        <li><strong>Performance Insights:</strong> {{ contact_intel.performance_underutilized }} underutilized relays - {{ contact_intel.performance_status }}</li>
+        
+        <li><strong>Infrastructure Analysis:</strong> {{ contact_intel.infrastructure_platforms }} {{ "platform" if contact_intel.infrastructure_platforms == 1 else "platforms" }}, {{ contact_intel.infrastructure_versions }} {{ "version" if contact_intel.infrastructure_versions == 1 else "versions" }} - {{ contact_intel.infrastructure_risk }}</li>
+        
+        <li><strong>Network Position:</strong> {{ contact_intel.strategy }}</li>
+        
+        <li><strong>Operational Maturity:</strong> {{ contact_intel.maturity }}</li>
     </ul>
 </div>
-{% endif %}
-{% endblock %}
+{% endif %}{% endblock %}
