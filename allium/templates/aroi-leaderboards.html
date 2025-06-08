@@ -131,7 +131,7 @@
                     {% if relays.json.aroi_leaderboards.leaderboards.most_diverse %}
                         {% set champion = relays.json.aroi_leaderboards.leaderboards.most_diverse[0] %}
                         <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" style="text-decoration: underline; color: inherit;">{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key }}</a></strong></h4>
-                        <p>{{ champion.diversity_score }} diversity</p>
+                        <p><span title="Diversity Score: Geographic (countries × 2.0) + Platform (OS types × 1.5) + Network (unique ASNs × 1.0)">{{ champion.diversity_score }} diversity</span></p>
                         <small>{{ champion.country_count }} countries</small>
                     {% endif %}
                 </div>
@@ -413,7 +413,7 @@
                             {% elif entry.rank == 3 %}Regional Builder
                             {% endif %}
                         </td>
-                        <td>{{ entry.country_count }} countries, {{ entry.diversity_score }} diversity</td>
+                        <td>{{ entry.country_count }} countries, <span title="Diversity Score: Geographic (countries × 2.0) + Platform (OS types × 1.5) + Network (unique ASNs × 1.0)">{{ entry.diversity_score }} diversity</span></td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -958,7 +958,7 @@
                             <td>{{ entry.total_relays }}</td>
                             <td>
                                 <strong>
-                                {% if category_key == 'most_diverse' %}{{ entry.diversity_score }}
+                                {% if category_key == 'most_diverse' %}<span title="Diversity Score: Geographic (countries × 2.0) + Platform (OS types × 1.5) + Network (unique ASNs × 1.0)">{{ entry.diversity_score }}</span>
                                 {% elif category_key == 'platform_diversity' %}{{ entry.non_linux_count }} non-Linux
                                 {% elif category_key == 'bsd_operators' %}{{ entry.bsd_count }} BSD
                                 {% elif category_key == 'non_eu_leaders' %}{{ entry.non_eu_count }} non-EU
@@ -1028,6 +1028,15 @@
                 </ul>
             </div>
         </div>
+        
+        <h4>🌈 Diversity Champion Scoring:</h4>
+        <p><strong>Diversity Score Calculation:</strong> The diversity score uses a weighted formula to measure geographic, platform, and network diversity:</p>
+        <ul>
+            <li><strong>Geographic Component:</strong> Number of countries × 2.0 (highest weight for global presence)</li>
+            <li><strong>Platform Component:</strong> Number of operating systems × 1.5 (promotes OS diversity beyond Linux)</li>
+            <li><strong>Network Component:</strong> Number of unique ASNs × 1.0 (prevents concentration on single networks)</li>
+        </ul>
+        <p><em>Example:</em> An operator with relays in 5 countries, 3 operating systems, and 8 unique ASNs would score: (5 × 2.0) + (3 × 1.5) + (8 × 1.0) = 10.0 + 4.5 + 8.0 = <strong>22.5 diversity points</strong>.</p>
         
         <p><strong>Data Sources:</strong> Live data from the Tor directory authorities via the Onionoo API, updated every 30 minutes. Rankings reflect current network status and operator contributions.</p>
     </div>
