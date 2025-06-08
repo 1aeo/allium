@@ -30,7 +30,7 @@
     <h4 style="margin-top: 0; color: #495057;">Operator Intelligence</h4>
     
     <ul style="list-style-type: disc; padding-left: 20px; margin-bottom: 0;">
-        <li><strong><span title="Network diversity measures infrastructure distribution across different autonomous systems (AS). Higher diversity reduces single points of failure and improves network resilience.">Network Diversity</span>:</strong> {{ contact_intel.portfolio_diversity }}</li>
+        <li><strong><span title="Network diversity measures infrastructure distribution across different autonomous systems (AS). Risk levels: 1 network = high risk (single point of failure), 2-3 networks = medium risk (limited redundancy), 4+ networks = low risk (good resilience). Higher diversity reduces single points of failure and improves network resilience.">Network Diversity</span>:</strong> {{ contact_intel.portfolio_diversity }}</li>
         
         <li><strong><span title="Geographic diversity assesses country distribution risk. Single country: high censorship/legal risk. 2 countries: moderate concentration risk. 3+ countries: good diversification for network resilience.">Geographic Diversity</span>:</strong> {{ contact_intel.geographic_countries }} {{ "country" if contact_intel.geographic_countries == 1 else "countries" }} - {{ contact_intel.geographic_risk }}</li>
         
