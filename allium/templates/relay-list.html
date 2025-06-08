@@ -28,7 +28,7 @@
     <th><a href="https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/" target="_blank" title="Autonomous Relay Operator Identifier - unverified">AROI</a></th>
     <th>Contact</th>
     <th>BW</th>
-    {% if key == 'as' or key == 'contact' -%}
+    {% if key and not is_index -%}
     <th title="Bandwidth measured by >=3 bandwidth authorities">BW Measured</th>
     {% endif -%}
     <th class="visible-md visible-lg">IP Address</th>
@@ -38,7 +38,7 @@
     <th>Platform</th>
     <th class="visible-md visible-lg">Flags</th>
     <th class="visible-md visible-lg">First Seen</th>
-    {% if key == 'as' or key == 'contact' -%}
+    {% if key and not is_index -%}
     <th class="visible-md visible-lg">Last Restarted</th>
     {% endif -%}
 </tr>
@@ -102,7 +102,7 @@
 		    </td>
 		{% endif -%}
 		<td>{{ obs_bandwidth }} {{ obs_unit }}</td>
-		{% if key == 'as' or key == 'contact' -%}
+		{% if key and not is_index -%}
 		    <td title=">=3 bandwidth authorities have measured">
 		        {% if relay['measured'] is not none -%}
 		            {% if relay['measured'] -%}Yes{% else -%}No{% endif -%}
@@ -186,7 +186,7 @@
 			}}
 		    </td>
 		{% endif -%}
-		{% if key == 'as' or key == 'contact' -%}
+		{% if key and not is_index -%}
 		    <td class="visible-md visible-lg" title="{% if relay['last_restarted'] -%}{{ relay['last_restarted'].split(' ', 1)[0]|escape }}{% else -%}unknown{% endif -%}">
 		        {% if relay['last_restarted'] -%}
 		            {{ relays._format_time_ago(relay['last_restarted']) }}
