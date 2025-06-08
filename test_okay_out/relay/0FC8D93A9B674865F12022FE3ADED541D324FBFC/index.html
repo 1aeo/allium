@@ -1,0 +1,618 @@
+    <!DOCTYPE html>
+    <html lang="en">
+        <head>
+            <title>
+Tor Relays :: r0cket07i3
+            </title>
+            <meta name="description"
+                  content="Javascript-free Tor metrics generated from a 30 minute API request.">
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <link rel="stylesheet" href="../../static/css/bootstrap.min.css">
+            <!--source: metrics.torproject.org-->
+            <style>
+                .circle {
+                    display: inline-block;
+                    vertical-align: middle;
+                    background: #999999;
+                    width: 7px;
+                    height: 7px;
+                    -moz-border-radius: 50%;
+                    -webkit-border-radius: 50%;
+                    border-radius: 50%;
+                }
+
+                .circle-online {
+                    background: #25d918;
+                }
+
+                .circle-offline {
+                    background: #ff1515;
+                }
+
+                .verified-hostname {
+                    color: #FE9F30;
+                }
+
+                .verified-hostname {
+                    color: #68b030;
+                }
+
+                .unverified-hostname {
+                    color: #FE9F30;
+                }
+
+                /* Dynamic text truncation for contact information */
+                .contact-text {
+                    display: inline-block;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    max-width: 20vw;  /* Use viewport width for responsive sizing */
+                }
+
+                /* Table styles */
+                .table {
+                    width: 100%;
+                    margin-bottom: 1rem;
+                }
+
+                /* Precise alignment for multi-value columns using monospace */
+                .bw-header, .cw-header, .rc-header, /* rc = relay count */
+                .bw-data, .cw-data, .rc-data {
+                    font-family: Consolas, "Courier New", monospace;
+                    white-space: nowrap;
+                    text-align: center;
+                    letter-spacing: 0.05em; /* Slight spacing for readability */
+                }
+
+                /* Container breakpoint */
+                @media (min-width: 1400px) {
+                    .container {
+                        width: 95%;
+                        max-width: none;
+                        padding-right: 15px;
+                        padding-left: 15px;
+                        margin-right: auto;
+                        margin-left: auto;
+                    }
+                }
+
+                /* CSS-only navbar collapse using checkbox hack */
+                .navbar-toggle {
+                    display: none;
+                    background-color: transparent;
+                    background-image: none;
+                    border: 1px solid #ddd;
+                    border-radius: 4px;
+                    padding: 9px 10px;
+                    margin-top: 8px;
+                    margin-right: 15px;
+                    margin-bottom: 8px;
+                    cursor: pointer;
+                    float: right;
+                }
+
+                .navbar-toggle:hover,
+                .navbar-toggle:focus {
+                    background-color: #ddd;
+                }
+
+                .navbar-toggle .icon-bar {
+                    display: block;
+                    width: 22px;
+                    height: 2px;
+                    background-color: #888;
+                    border-radius: 1px;
+                    margin: 4px 0;
+                }
+
+                .navbar-brand {
+                    float: left;
+                    height: 50px;
+                    padding: 15px;
+                    font-size: 18px;
+                    line-height: 20px;
+                    font-weight: bold;
+                }
+
+                /* Desktop: show navigation horizontally */
+                @media (min-width: 768px) {
+                    .navbar-collapse {
+                        display: block !important;
+                        height: auto !important;
+                        overflow: visible !important;
+                    }
+                    
+                    .nav.navbar-nav {
+                        float: left;
+                        margin: 0;
+                    }
+                    
+                    .nav.navbar-nav > li {
+                        float: left;
+                    }
+                    
+                    .nav.navbar-nav > li > a {
+                        padding-top: 15px;
+                        padding-bottom: 15px;
+                        color: #777;
+                        text-decoration: none;
+                        padding-left: 15px;
+                        padding-right: 15px;
+                    }
+                    
+                    .nav.navbar-nav > li.active > a,
+                    .nav.navbar-nav > li > a:hover,
+                    .nav.navbar-nav > li > a:focus {
+                        color: #333;
+                        background-color: #e7e7e7;
+                    }
+                    
+                    .navbar-brand {
+                        display: none;
+                    }
+                }
+
+                /* Mobile: hide navigation by default, show hamburger */
+                @media (max-width: 767px) {
+                    .navbar-toggle {
+                        display: block;
+                    }
+                    
+                    .navbar-collapse {
+                        display: none;
+                        clear: both;
+                        width: 100%;
+                        margin-top: 50px;
+                        border-top: 1px solid #e7e7e7;
+                        padding-top: 10px;
+                    }
+                    
+                    /* When checkbox is checked, show the menu */
+                    .navbar-toggle-checkbox:checked ~ .navbar-header + .navbar-collapse {
+                        display: block;
+                    }
+                    
+                    .nav.navbar-nav > li {
+                        float: none;
+                    }
+                    
+                    .nav.navbar-nav > li > a {
+                        display: block;
+                        padding: 12px 20px;
+                        color: #777;
+                        text-decoration: none;
+                        border-bottom: 1px solid #e7e7e7;
+                    }
+                    
+                    .nav.navbar-nav > li:last-child > a {
+                        border-bottom: none;
+                    }
+                    
+                    .nav.navbar-nav > li.active > a,
+                    .nav.navbar-nav > li > a:hover,
+                    .nav.navbar-nav > li > a:focus {
+                        color: #333;
+                        background-color: #f5f5f5;
+                    }
+                }
+            </style>
+        </head>
+    <body>
+        <div class="container">
+<div id="content">
+<h2>View Relay "r0cket07i3"</h2>
+        <nav aria-label="breadcrumb" style="margin-bottom: 10px;">
+    <ol class="breadcrumb" style="background: none; padding: 0; margin: 0; font-size: 0.9em; list-style: none;">
+        <li style="display: inline;"><a href="../../index.html" style="color: #337ab7; text-decoration: none;">Home</a></li>
+            <li style="display: inline;"> > <a href="../../misc/networks-by-bandwidth.html" style="color: #337ab7; text-decoration: none;">Browse by Network</a></li>
+                <li style="display: inline;"> > <a href="../../as/AS214503/" style="color: #337ab7; text-decoration: none;">AS214503</a></li>
+            <li style="display: inline; color: #777;"> > r0cket07i3</li>
+    </ol>
+</nav>
+    <nav class="navbar navbar-default" style="margin-bottom: 20px;">
+        <div class="container-fluid">
+            <!-- CSS-only hamburger toggle using checkbox hack -->
+            <input type="checkbox" id="navbar-toggle" class="navbar-toggle-checkbox" style="display: none;">
+            
+            <div class="navbar-header">
+                <label for="navbar-toggle" class="navbar-toggle" role="button" aria-label="Toggle navigation">
+                    <span class="sr-only">Toggle navigation</span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </label>
+                <span class="navbar-brand visible-xs">Browse Categories</span>
+            </div>
+            
+            <div class="navbar-collapse" id="main-navbar">
+                <ul class="nav navbar-nav">
+                    <li class="">
+                        <a href="../../misc/contacts-by-bandwidth.html">By AROI / Contact</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/families-by-bandwidth.html">By Family</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/networks-by-bandwidth.html">By Network</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/countries-by-bandwidth.html">By Country</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/platforms-by-bandwidth.html">By Platform</a>
+                    </li>
+                    <li class="">
+                        <a href="../../index.html">Top 500 Relays</a>
+                    </li>
+                    <li class="active">
+                        <a href="../../misc/all.html">All Relays</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+<h4>
+<a href="../../family/0FC8D93A9B674865F12022FE3ADED541D324FBFC/">Family: 120 relays</a>
+| 
+<a href="../../as/AS214503/">AS214503</a>
+| 
+<a href="../../country/se/">Sweden</a>
+| 
+<a href="../../platform/Linux/">Linux</a>
+</h4>
+<p>Last fetch was at Sun, 08 Jun 2025 05:31:28 GMT.</p>
+<div class="row">
+<div class="col-md-6">
+<dl>
+<dt>
+Nickname
+</dt>
+<dd>
+r0cket07i3
+</dd>
+
+<dt>
+Fingerprint
+</dt>
+<dd>
+<code>0FC8D93A9B674865F12022FE3ADED541D324FBFC</code>
+</dd>
+
+<dt>
+AROI <a href="https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/" target="_blank" title="Autonomous Relay Operator Identifier - unverified">(?)</a>
+</dt>
+<dd>
+<a href="../../contact/43647da1c15e660ea47085af1bf9d702/">tor.r0cket.net</a>
+</dd>
+<dt>
+Contact
+</dt>
+<dd>
+<a href="../../contact/43647da1c15e660ea47085af1bf9d702/">email:tor[]r0cket.net url:https://tor.r0cket.net/ proof:uri-rsa abuse:abuse[]r0cket.net hoster:r0cket.cloud uplinkbw:10000 memory:32768 cpu:16 virtualization:kvm donationurl:https://tor.r0cket.net/ offlinemasterkey:n sandbox:y os:ubuntu/24.04 tls:openssl aesni:y autoupdate:y confmgmt:terraform dnslocation:sameas dnsqname:y dnssec:y ciissversion:2 trafficacct:unmetered</a>
+</dd>
+<dt>
+IPv4 Exit Policy Summary
+</dt>
+<dd>
+<pre class="pre-scrollable">reject: 
+  25
+  465
+  587
+  2525
+</pre>
+</dd>
+<dt>
+IPv6 Exit Policy Summary
+</dt>
+<dd>
+<pre class="pre-scrollable">reject: 
+  25
+  465
+  587
+  2525
+</pre>
+</dd>
+<dt>
+Exit Policy
+</dt>
+<dd>
+<pre class="pre-scrollable">reject 0.0.0.0/8:*
+reject 169.254.0.0/16:*
+reject 127.0.0.0/8:*
+reject 192.168.0.0/16:*
+reject 10.0.0.0/8:*
+reject 172.16.0.0/12:*
+reject 45.84.107.74:*
+reject *:25
+reject *:465
+reject *:587
+reject *:2525
+accept *:*
+</pre>
+</dd>
+<dt title="Array of fingerprints of relays that are in an effective, mutual family relationship with this relay. These relays are part of this relay's family and they consider this relay to be part of their family. Always contains the relay's own fingerprint. Omitted if the descriptor containing this information cannot be found.">
+Effective Family Members: 120 (<a href="../../family/0FC8D93A9B674865F12022FE3ADED541D324FBFC/">View</a>)
+</dt>
+<dd>
+<pre class="pre-scrollable"><a href="005A2425FAD0E62F9E83DB2C052DB8F75ADF0885.html">005A2425FAD0E62F9E83DB2C052DB8F75ADF0885</a>
+<a href="06E48BA174A19C2225F8F6EF733D5E58E4D20348.html">06E48BA174A19C2225F8F6EF733D5E58E4D20348</a>
+<a href="0AF0BA36BB1D55C8C66C2441F96286F43ADEA164.html">0AF0BA36BB1D55C8C66C2441F96286F43ADEA164</a>
+<a href="0DCFEE3D83FEE9AB7AF9B8C17F2F3B605FF90AE4.html">0DCFEE3D83FEE9AB7AF9B8C17F2F3B605FF90AE4</a>
+<a href="0EDE69DCC3AB5E341B8676DC84746604A990579F.html">0EDE69DCC3AB5E341B8676DC84746604A990579F</a>
+<a href="0FC8D93A9B674865F12022FE3ADED541D324FBFC.html">0FC8D93A9B674865F12022FE3ADED541D324FBFC</a>
+<a href="10E1D592B53C7F880FB5FC1F705E786AC3EEC0AD.html">10E1D592B53C7F880FB5FC1F705E786AC3EEC0AD</a>
+<a href="1554F2D7E1C77D5D555A8CB3D6AFE4F80425A549.html">1554F2D7E1C77D5D555A8CB3D6AFE4F80425A549</a>
+<a href="1B626CD12EC5D970AF3FB088352DD387B6D6DC92.html">1B626CD12EC5D970AF3FB088352DD387B6D6DC92</a>
+<a href="1D1ED142F2B65FC97BEFCFA7DC208FFF7E0FC52C.html">1D1ED142F2B65FC97BEFCFA7DC208FFF7E0FC52C</a>
+<a href="1F202E8FA3998E30B597512E6863B6D062A31849.html">1F202E8FA3998E30B597512E6863B6D062A31849</a>
+<a href="1F4C302B353D3393F79329BDC9CE8AE5138A93FC.html">1F4C302B353D3393F79329BDC9CE8AE5138A93FC</a>
+<a href="1F8D8FD528E19545E5CE8BA05B2492CC439FAD2C.html">1F8D8FD528E19545E5CE8BA05B2492CC439FAD2C</a>
+<a href="1FB340AF949D796701A4908170F42D757546DE1A.html">1FB340AF949D796701A4908170F42D757546DE1A</a>
+<a href="20A2D0A0C53B6A461C6D97889DAAC47894A78F64.html">20A2D0A0C53B6A461C6D97889DAAC47894A78F64</a>
+<a href="2310076653AEECCDCC18BECBC4CD04459E370D0B.html">2310076653AEECCDCC18BECBC4CD04459E370D0B</a>
+<a href="24281B5D0B8A29FE64BBD94E95CC06197995FEA0.html">24281B5D0B8A29FE64BBD94E95CC06197995FEA0</a>
+<a href="251945FE33233646D1AA109A0858E087DDA64CD7.html">251945FE33233646D1AA109A0858E087DDA64CD7</a>
+<a href="25DA4B01C4E8FC5F683A62B203E23E1DCD514EEF.html">25DA4B01C4E8FC5F683A62B203E23E1DCD514EEF</a>
+<a href="287A1C40B818DF6C45E8496CDE5026F11563CF10.html">287A1C40B818DF6C45E8496CDE5026F11563CF10</a>
+<a href="2C4A879D954A8A85D62BA57DF8AF6A25D0D7DCF6.html">2C4A879D954A8A85D62BA57DF8AF6A25D0D7DCF6</a>
+<a href="2C653B48D74CC845F6E26083CD18B818F6F93F2A.html">2C653B48D74CC845F6E26083CD18B818F6F93F2A</a>
+<a href="2CDC87A96B4580C435AD7FCDF635498E921D5D62.html">2CDC87A96B4580C435AD7FCDF635498E921D5D62</a>
+<a href="313759D2840984823598604F6FFE5145E38B920D.html">313759D2840984823598604F6FFE5145E38B920D</a>
+<a href="31917AFC85EE34F85CAAF9CCCA56B90F2D4B1BA4.html">31917AFC85EE34F85CAAF9CCCA56B90F2D4B1BA4</a>
+<a href="341107C7E1231224299914B9406F7CF5676115C1.html">341107C7E1231224299914B9406F7CF5676115C1</a>
+<a href="341274D4EF27B9C91B9961DCF14E5B3B2B8C9400.html">341274D4EF27B9C91B9961DCF14E5B3B2B8C9400</a>
+<a href="34A8DB1B8A5DEBF5A9E6754F42221C112950E517.html">34A8DB1B8A5DEBF5A9E6754F42221C112950E517</a>
+<a href="3529C2892571E24A856F207E6FBF218E39C99F0D.html">3529C2892571E24A856F207E6FBF218E39C99F0D</a>
+<a href="35A3DA43E5EC3C04358302F3320C9E8BA4F9A82F.html">35A3DA43E5EC3C04358302F3320C9E8BA4F9A82F</a>
+<a href="370B11DDF7BD68A79A8D40157F129844EE828ECA.html">370B11DDF7BD68A79A8D40157F129844EE828ECA</a>
+<a href="3B2DC4A8D60284670E242F5D64D5C1EEEEB07E2F.html">3B2DC4A8D60284670E242F5D64D5C1EEEEB07E2F</a>
+<a href="3BEF092A1CC6838757CA7BD9ABFAF3B3B4238F99.html">3BEF092A1CC6838757CA7BD9ABFAF3B3B4238F99</a>
+<a href="3FD6329B8C06F1ED7B9AB1E51C1E781774614ACB.html">3FD6329B8C06F1ED7B9AB1E51C1E781774614ACB</a>
+<a href="40593490E5CABB03939182088BAB7CA44DBC2C23.html">40593490E5CABB03939182088BAB7CA44DBC2C23</a>
+<a href="422D1A5628BD829D150E82F8289EB538B3712348.html">422D1A5628BD829D150E82F8289EB538B3712348</a>
+<a href="43028376723E3E726F9EAE86A086D8889BE64E3D.html">43028376723E3E726F9EAE86A086D8889BE64E3D</a>
+<a href="4335589669E83ECBFD9BA73E9A99C16856B9E1D9.html">4335589669E83ECBFD9BA73E9A99C16856B9E1D9</a>
+<a href="44097A370F6B0B2B1755CD024B79674AAA71CFC7.html">44097A370F6B0B2B1755CD024B79674AAA71CFC7</a>
+<a href="458F08B4175FFF0805E11AD9684B57557A48BBB1.html">458F08B4175FFF0805E11AD9684B57557A48BBB1</a>
+<a href="50CAEB3BA0AABE4AD2A12BD99CB7185C502A4178.html">50CAEB3BA0AABE4AD2A12BD99CB7185C502A4178</a>
+<a href="5108528A8CB04BEC34E9B5AC7BF980DBE20BE4B2.html">5108528A8CB04BEC34E9B5AC7BF980DBE20BE4B2</a>
+<a href="5E50AEE8C52E1B955092B2746B84802DC4A0BE9D.html">5E50AEE8C52E1B955092B2746B84802DC4A0BE9D</a>
+<a href="5EEE760B789E9840C3A5BB6C6A1A1F5D3721EB1D.html">5EEE760B789E9840C3A5BB6C6A1A1F5D3721EB1D</a>
+<a href="5F93857784776B9CF22260FF6BF82ACB72E43A38.html">5F93857784776B9CF22260FF6BF82ACB72E43A38</a>
+<a href="60E0D9EC8AEA065A4C45F0E0DB12587F1B616972.html">60E0D9EC8AEA065A4C45F0E0DB12587F1B616972</a>
+<a href="61D5F5E8EC8F4F489168C76514ECD5B308C2D223.html">61D5F5E8EC8F4F489168C76514ECD5B308C2D223</a>
+<a href="6A14DC623BEBA4F894F5474D893A7655D313D714.html">6A14DC623BEBA4F894F5474D893A7655D313D714</a>
+<a href="6B980F46B01121CFB87BD54E3E780062A6E7C7ED.html">6B980F46B01121CFB87BD54E3E780062A6E7C7ED</a>
+<a href="6D63A9F2765FCAC32CC738D2B80C600BEAB6A0A9.html">6D63A9F2765FCAC32CC738D2B80C600BEAB6A0A9</a>
+<a href="6FC1596C9A3F2E8ABC44C819D327AAC039580511.html">6FC1596C9A3F2E8ABC44C819D327AAC039580511</a>
+<a href="77B9369AE0D561D3214A1248EEB1AF6778BBB9B8.html">77B9369AE0D561D3214A1248EEB1AF6778BBB9B8</a>
+<a href="79B578BF5C02517EDCC1FB9C00F72B0FDB03BFCB.html">79B578BF5C02517EDCC1FB9C00F72B0FDB03BFCB</a>
+<a href="7A08DE16C89A10190DDDB63179F83F235276E181.html">7A08DE16C89A10190DDDB63179F83F235276E181</a>
+<a href="7C1F9EECC2DE7C86FB924C333B727CA31C35FD81.html">7C1F9EECC2DE7C86FB924C333B727CA31C35FD81</a>
+<a href="7E98E3AD98D7AD4D707E82D4A596A12F78A701F7.html">7E98E3AD98D7AD4D707E82D4A596A12F78A701F7</a>
+<a href="7F24D28387CE8A397091897C5B9FE6F08638BDA3.html">7F24D28387CE8A397091897C5B9FE6F08638BDA3</a>
+<a href="80213FCD4B53DB7048FB9FBB20D138041CE5C94E.html">80213FCD4B53DB7048FB9FBB20D138041CE5C94E</a>
+<a href="824899A509A02BAFA438A205BD034BC31686F024.html">824899A509A02BAFA438A205BD034BC31686F024</a>
+<a href="82A242A8D9B66AB2B09A88B52FCE3653959C1846.html">82A242A8D9B66AB2B09A88B52FCE3653959C1846</a>
+<a href="838CA077BF260EF564442499CC60037EC0502684.html">838CA077BF260EF564442499CC60037EC0502684</a>
+<a href="84889484776134DB1CB94BD6DA6F16D75056B59E.html">84889484776134DB1CB94BD6DA6F16D75056B59E</a>
+<a href="8596B27AE2C4CFBB55617B0AAA2C431275484CEE.html">8596B27AE2C4CFBB55617B0AAA2C431275484CEE</a>
+<a href="86AE8C7F01A48B16F4C194F2EC8D781224260AB6.html">86AE8C7F01A48B16F4C194F2EC8D781224260AB6</a>
+<a href="873B505D739D5777A20D118FBE5B8CD6B182D674.html">873B505D739D5777A20D118FBE5B8CD6B182D674</a>
+<a href="8B9F7EE7D856C3A94D041ECB24ECE059BCF717CB.html">8B9F7EE7D856C3A94D041ECB24ECE059BCF717CB</a>
+<a href="8D87D8F9DC34A628459A2148AD6AC0BB3AB0AA08.html">8D87D8F9DC34A628459A2148AD6AC0BB3AB0AA08</a>
+<a href="8F22F5F09E5249096B98EF389D9040FEF1D61F82.html">8F22F5F09E5249096B98EF389D9040FEF1D61F82</a>
+<a href="906887EFA736C5EFDD6DBAC00222E65AB18D98F1.html">906887EFA736C5EFDD6DBAC00222E65AB18D98F1</a>
+<a href="9C41CC6BBC7B36D6A944910D7F3145F3C5E84DD8.html">9C41CC6BBC7B36D6A944910D7F3145F3C5E84DD8</a>
+<a href="9E34FB0C8E937ED8CFCE0E47793B970C731954F8.html">9E34FB0C8E937ED8CFCE0E47793B970C731954F8</a>
+<a href="A145DF21981626EF868F9BE79946A68ED4CF4275.html">A145DF21981626EF868F9BE79946A68ED4CF4275</a>
+<a href="A157A997167AFFFD85D5F23D69AD3B2252F87255.html">A157A997167AFFFD85D5F23D69AD3B2252F87255</a>
+<a href="A39009A4B0205407B6912D2765A3707E5DCAB167.html">A39009A4B0205407B6912D2765A3707E5DCAB167</a>
+<a href="A4E8E0EA463FB60368F6CACB5D7555BBCCECAE0B.html">A4E8E0EA463FB60368F6CACB5D7555BBCCECAE0B</a>
+<a href="A6FD2A6E2AA3CAC3C6F15C264445E4C3B27B31DC.html">A6FD2A6E2AA3CAC3C6F15C264445E4C3B27B31DC</a>
+<a href="A783199953F8BBC25E6846C570AE3B85AC137531.html">A783199953F8BBC25E6846C570AE3B85AC137531</a>
+<a href="A9E4FE092277F352792F228F80080E71F7E83217.html">A9E4FE092277F352792F228F80080E71F7E83217</a>
+<a href="ABA91B9807962E04546DD3EDE7FEC56BE7580EA8.html">ABA91B9807962E04546DD3EDE7FEC56BE7580EA8</a>
+<a href="B4B2CBECBA12E2DB17CF729408084C8D7F650C50.html">B4B2CBECBA12E2DB17CF729408084C8D7F650C50</a>
+<a href="B6BF608B96247C71D79504F0C57F0175ECAFCB07.html">B6BF608B96247C71D79504F0C57F0175ECAFCB07</a>
+<a href="B8E5872B4101F0963E6E74762CBCBC7C3FD75F14.html">B8E5872B4101F0963E6E74762CBCBC7C3FD75F14</a>
+<a href="B930C1DDE3587A15CFFD1525EE317F7CF0AB3DDF.html">B930C1DDE3587A15CFFD1525EE317F7CF0AB3DDF</a>
+<a href="BB8D8F90A8F9349D2BDBF6ED7FBA2A61AFF3FAE8.html">BB8D8F90A8F9349D2BDBF6ED7FBA2A61AFF3FAE8</a>
+<a href="BEEEB7DEEA0F25901BCCAF9087984AECB0BC02E3.html">BEEEB7DEEA0F25901BCCAF9087984AECB0BC02E3</a>
+<a href="C01DD3A08EB602006D65DE6EA5787FE5E405CC1D.html">C01DD3A08EB602006D65DE6EA5787FE5E405CC1D</a>
+<a href="C081C6D5D1F398F677717042ADF131784855B9FC.html">C081C6D5D1F398F677717042ADF131784855B9FC</a>
+<a href="C1503B455C1F5613A22FDE2EAA90A6EA87C45D0F.html">C1503B455C1F5613A22FDE2EAA90A6EA87C45D0F</a>
+<a href="C361BD39D27C0E9B4BEFA823131C8D4BB1DBFD06.html">C361BD39D27C0E9B4BEFA823131C8D4BB1DBFD06</a>
+<a href="C42FF9E0D0CE6B5D83E27C35026D14E402572AE6.html">C42FF9E0D0CE6B5D83E27C35026D14E402572AE6</a>
+<a href="C4F960FE82653470B0D2DB9040E32433D3403568.html">C4F960FE82653470B0D2DB9040E32433D3403568</a>
+<a href="C82ED32EE2994AD29CB002982FC76C2CED61AD48.html">C82ED32EE2994AD29CB002982FC76C2CED61AD48</a>
+<a href="C831AE85CF9D7C49EF826A3AC1DDD33955CE2F08.html">C831AE85CF9D7C49EF826A3AC1DDD33955CE2F08</a>
+<a href="C8751E119536469668073F0769B84F30A98325E2.html">C8751E119536469668073F0769B84F30A98325E2</a>
+<a href="C9CC8B881E2D7E8C44B895CA841C194621907603.html">C9CC8B881E2D7E8C44B895CA841C194621907603</a>
+<a href="C9FA9F991415E359F6048D064C8315EC2214E12B.html">C9FA9F991415E359F6048D064C8315EC2214E12B</a>
+<a href="CC0EB5E62E75E138283C233DAEBAA3615E1DC894.html">CC0EB5E62E75E138283C233DAEBAA3615E1DC894</a>
+<a href="CDA71E2FAEE3F0A33DA344E254AF5E30A8926F88.html">CDA71E2FAEE3F0A33DA344E254AF5E30A8926F88</a>
+<a href="CEE050C6C15EC1194A7B02A27DE61BA3E0013671.html">CEE050C6C15EC1194A7B02A27DE61BA3E0013671</a>
+<a href="CF92CC8CB0DA3A2D9B9E259039C10406C7A8674F.html">CF92CC8CB0DA3A2D9B9E259039C10406C7A8674F</a>
+<a href="CFAFB2E0CBB00E067B83E3216AD49EF338E045E3.html">CFAFB2E0CBB00E067B83E3216AD49EF338E045E3</a>
+<a href="D2998E71DA02D4D34E281D0FD6476DCAB55A9F72.html">D2998E71DA02D4D34E281D0FD6476DCAB55A9F72</a>
+<a href="D3F4C340BFED534DA786A0680E247D3E900D8443.html">D3F4C340BFED534DA786A0680E247D3E900D8443</a>
+<a href="D5B1CBABBD2EAB9091EBE2CCEA763ABA964BB409.html">D5B1CBABBD2EAB9091EBE2CCEA763ABA964BB409</a>
+<a href="D80F923E3F04A69485446AA7F70D55FD745E9086.html">D80F923E3F04A69485446AA7F70D55FD745E9086</a>
+<a href="D9D87002BB41C46D61F2AFA88659191D624F5CAB.html">D9D87002BB41C46D61F2AFA88659191D624F5CAB</a>
+<a href="E05CA1227A004F7FDF0CD3E4CDF3687FE6512D09.html">E05CA1227A004F7FDF0CD3E4CDF3687FE6512D09</a>
+<a href="E091147BFC9C8150E52847C723986A80F3D5A3FF.html">E091147BFC9C8150E52847C723986A80F3D5A3FF</a>
+<a href="E1E1BE210AA9DFFB5DAF1557D5A32DE8E207DED9.html">E1E1BE210AA9DFFB5DAF1557D5A32DE8E207DED9</a>
+<a href="E59C2A8C9856D9F5CB77D62571AE801BA6C5A84A.html">E59C2A8C9856D9F5CB77D62571AE801BA6C5A84A</a>
+<a href="E7494042A47B2CA9BE5C7E28DC525ADBE219D5F1.html">E7494042A47B2CA9BE5C7E28DC525ADBE219D5F1</a>
+<a href="EB2B3B37A823624BF0920506BB2A4358B24744B8.html">EB2B3B37A823624BF0920506BB2A4358B24744B8</a>
+<a href="ED2E34869CCCBCE9321DEBBB957507A85A155CEF.html">ED2E34869CCCBCE9321DEBBB957507A85A155CEF</a>
+<a href="F200BBDD80CF3A5FEE7D5B4C7FE0F4812E4C9EA1.html">F200BBDD80CF3A5FEE7D5B4C7FE0F4812E4C9EA1</a>
+<a href="F5DCCCC88B895796F343735EF2C6212ED3796896.html">F5DCCCC88B895796F343735EF2C6212ED3796896</a>
+<a href="FA0814F75180304911C1C21C65357E528B8EE97B.html">FA0814F75180304911C1C21C65357E528B8EE97B</a>
+<a href="FB94DB874581C6ABC51E5EA5A408878BE0643E7C.html">FB94DB874581C6ABC51E5EA5A408878BE0643E7C</a>
+<a href="FD702CB7BCC838E25E88CA27D107F5FB996ECF73.html">FD702CB7BCC838E25E88CA27D107F5FB996ECF73</a>
+<a href="FE05EB2AAB27A6992118DACB9799FCBE056C56A9.html">FE05EB2AAB27A6992118DACB9799FCBE056C56A9</a>
+<a href="FF1F19704D7050D9E53EF5E5330ACFE61AB5196E.html">FF1F19704D7050D9E53EF5E5330ACFE61AB5196E</a>
+</pre>
+</dd>
+<dt title="Array of fingerprints of relays that are not in an effective, mutual family relationship with this relay. These relays are part of this relay's family but they don't consider this relay to be part of their family. Omitted if empty or if descriptor containing this information cannot be found.">
+Alleged Family Members: 0</dt>
+<dd>
+<pre class="pre-scrollable">none
+</pre>
+</dd>
+<dt title="Array of fingerprints of relays that consider this relay to be part of their family but that are not part of this relay's family. Omitted if empty or if descriptor containing this information cannot be found.">
+Indirect Family Members: 0</dt>
+<dd>
+<pre class="pre-scrollable">none
+</pre>
+</dd>
+</dl>
+</div>
+<div class="col-md-6">
+<dl>
+<dt title="IP address and TCP port where this relay accepts onion-routing connections, with hostname when available">
+OR Address
+</dt>
+<dd>
+<span class="verified-hostname" title="verified hostname">exit-07.tor.r0cket.net</span> | 45.84.107.74:989, [2a0d:bbc7:0:1::36c]:989</dd>
+<dt>
+Exit Address
+</dt>
+<dd>
+none
+</dd>
+<dt>
+Dir Address
+</dt>
+<dd>
+none
+</dd>
+<dt>
+Flags: 5
+</dt>
+<dd>
+<a href="../../flag/exit/">
+<img src="../../static/images/flags/exit.png"
+title="Exit"
+alt="Exit">
+</a> Exit
+<a href="../../flag/fast/">
+<img src="../../static/images/flags/fast.png"
+title="Fast"
+alt="Fast">
+</a> Fast
+<a href="../../flag/running/">
+<img src="../../static/images/flags/running.png"
+title="Running"
+alt="Running">
+</a> Running
+<a href="../../flag/stable/">
+<img src="../../static/images/flags/stable.png"
+title="Stable"
+alt="Stable">
+</a> Stable
+<a href="../../flag/valid/">
+<img src="../../static/images/flags/valid.png"
+title="Valid"
+alt="Valid">
+</a> Valid
+</dd>
+
+<dt title="Bandwidth details: Observed capacity | Advertised capability | Rate limit | Burst limit">
+Bandwidth (Observed | Advertised | Rate | Burst)
+</dt>
+<dd>
+<span title="Observed: 172.32 Mbit/s">172.32 Mbit/s</span> | 
+<span title="Advertised: 172.32 Mbit/s">172.32 Mbit/s</span> | 
+<span title="Rate: 8.59 Gbit/s">8.59 Gbit/s</span> | 
+<span title="Burst: 10.74 Gbit/s">10.74 Gbit/s</span>
+</dd>
+
+<dt>
+Network Participation (Consensus Weight | Guard | Middle | Exit)
+</dt>
+<dd>
+<span title="Fraction of this relay's consensus weight compared to the sum of all consensus weights in the network. This fraction is a very rough approximation of the probability of this relay to be selected by clients.">0.02%</span> | 
+<span title="Probability of this relay to be selected for the guard position. This probability is calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so that this probability can only be an approximation.">N/A</span> | 
+<span title="Probability of this relay to be selected for the middle position. This probability is calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so that this probability can only be an approximation.">N/A</span> | 
+<span title="Probability of this relay to be selected for the exit position. This probability is calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so that this probability can only be an approximation.">0.06%</span>
+</dd>
+<dt title="Boolean field saying whether the consensus weight of this relay is based on a threshold of 3 or more measurements by Tor bandwidth authorities. Omitted if the network status consensus containing this relay does not contain measurement information.">
+Network Participation Measured by >= 3 Bandwidth Authorities
+</dt>
+<dd>
+Yes</dd>
+
+
+
+<dt>
+Country</dt>
+<dd>
+<a href="../../country/se/">
+<img src="../../static/images/cc/se.png"
+title="Sweden"
+alt="Sweden">
+</a> <span title="Country name of the location of this relay as found by a geolocation database based on the relay's IP address. Omitted if the relay location could not be found.">Sweden</span>
+</dd>
+<dt>
+Autonomous System (AS Number | AS Name)
+</dt>
+<dd>
+<a href='../../as/AS214503/' title="AS Number">AS214503</a>
+| <span title="AS Name">QuxLabs AB</span> (<a href='https://bgp.tools/AS214503'>BGP.tools</a>)
+</dd>
+<dt>
+Seen (First | Last)
+</dt>
+<dd>
+<a href="../../first_seen/2025-01-19/">4mo 2w 5d ago (2025-01-19 14:00:00)</a> | 1h 32m 26s ago (2025-06-08 04:00:00)
+</dd>
+<dt title="UTC timestamp when this relay was last (re-)started. Missing if router descriptor containing this information cannot be found.">
+Last Restarted
+</dt>
+<dd>
+3w 1d 23h ago (2025-05-16 06:14:35)
+</dd>
+<dt title="UTC timestamp when this relay last stopped announcing an IPv4 or IPv6 address or TCP port where it previously accepted onion-routing or directory connections. This timestamp can serve as indicator whether this relay would be a suitable fallback directory.">
+Last Changed Address or Port
+</dt>
+<dd>
+2025-01-19 14:00:00
+</dd>
+<dt title="Boolean field saying whether this relay indicated that it is hibernating in its last known server descriptor. This information may be helpful to decide whether a relay that is not running anymore has reached its accounting limit and has not dropped out due to a technical problem. Omitted if the last known server descriptor of this relay does not contain hibernation information or if no such descriptor is known.">
+Hibernating
+</dt>
+<dd>
+No</dd>
+<dt>
+Platform (Short | Long)
+</dt>
+<dd>
+<a href='../../platform/Linux/' title="Simplified platform identifier for categorization">Linux</a> | <span title="Complete platform information as reported by relay">Tor 0.4.8.16 on Linux</span>
+</dd>
+<dt>
+Version (Running | Recommended | Status)
+</dt>
+<dd>
+<span title="Tor software version without leading 'Tor' as reported by the directory authorities in the 'v' line of the consensus. Omitted if either the directory authorities or the relay did not report which version the relay runs or if the relay runs an alternative Tor implementation.">0.4.8.16</span> | 
+<span title="Boolean field saying whether the Tor software version of this relay is recommended by the directory authorities or not. Uses the relay version in the consensus. Omitted if either the directory authorities did not recommend versions, or the relay did not report which version it runs.">Yes</span> | 
+<span title="Status of the Tor software version of this relay based on the versions recommended by the directory authorities. Possible version statuses are: 'recommended' if a version is listed as recommended; 'experimental' if a version is newer than every recommended version; 'obsolete' if a version is older than every recommended version; 'new in series' if a version has other recommended versions with the same first three components, and the version is newer than all such recommended versions, but it is not newer than every recommended version; 'unrecommended' if none of the above conditions hold. Omitted if either the directory authorities did not recommend versions, or the relay did not report which version it runs.">recommended</span>
+</dd>
+</dl>
+</div>
+</div>
+</div>
+        </div>
+    </body>
+        <footer class="page-footer font-small">
+            <div class="footer-copyright text-center text-muted">
+                <p>
+                    Generated by a <a href="https://github.com/1aeo/allium">1aeo modified fork of allium</a>, based on original <a href="https://git.jordan.im/allium/">allium</a>, on Sun, 08 Jun 2025 05:31:28 GMT. Source data from <a href="https://onionoo.torproject.org/">Tor Project onionoo</a>.
+                </p>
+            </div>
+        </footer>
+    </html>
