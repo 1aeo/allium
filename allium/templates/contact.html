@@ -31,7 +31,6 @@
     
     <ul style="list-style-type: disc; padding-left: 20px; margin-bottom: 15px;">
         <li><strong><span title="Network diversity shows infrastructure distribution across different autonomous systems">Portfolio Diversity</span>:</strong> {{ contact_intel.portfolio_diversity }}</li>
-        <li><strong><span title="Shows this operator's influence relative to other Tor operators">Network Influence</span>:</strong> {{ contact_intel.network_influence }}</li>
         <li><strong><span title="Measurement status indicates relay reliability and performance verification">Measurement Status</span>:</strong> {{ contact_intel.measurement_status }}</li>
     </ul>
     
@@ -42,8 +41,6 @@
         <li><strong>Performance Insights:</strong> {{ contact_intel.performance_underutilized }} underutilized relays - {{ contact_intel.performance_status }}</li>
         
         <li><strong>Infrastructure Analysis:</strong> {{ contact_intel.infrastructure_platforms }} {{ "platform" if contact_intel.infrastructure_platforms == 1 else "platforms" }}, {{ contact_intel.infrastructure_versions }} {{ "version" if contact_intel.infrastructure_versions == 1 else "versions" }} - {{ contact_intel.infrastructure_risk }}</li>
-        
-        <li><strong>Network Position:</strong> {{ contact_intel.strategy }}</li>
         
         <li><strong>Operational Maturity:</strong> {{ contact_intel.maturity }}</li>
     </ul>
