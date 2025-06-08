@@ -444,18 +444,18 @@ class IntelligenceEngine:
                 
                 # PHASE 1 FEATURES (moved from template to Python)
                 
-                # 1. Network Diversity (with risk assessment)
+                # 1. Network Diversity (with consistent rating)
                 unique_as_count = contact_data.get('unique_as_count', 0)
                 
-                # Determine network diversity risk level
+                # Determine network diversity rating
                 if unique_as_count == 1:
-                    network_risk = "high risk"
+                    network_rating = "Poor"
                 elif unique_as_count <= 3:
-                    network_risk = "medium risk"
+                    network_rating = "Good"
                 else:
-                    network_risk = "low risk"
+                    network_rating = "Great"
                 
-                portfolio_diversity = f"{unique_as_count} network{'s' if unique_as_count != 1 else ''} - {network_risk}"
+                portfolio_diversity = f"{network_rating}, {unique_as_count} network{'s' if unique_as_count != 1 else ''}"
                 
 
                 
@@ -466,17 +466,19 @@ class IntelligenceEngine:
                 
                 # PHASE 2 FEATURES (advanced analytics)
                 
-                # 4. Geographic Diversity Assessment (with risk levels)
+                # 4. Geographic Diversity Assessment (with consistent rating)
                 countries = set(relay.get('country') for relay in contact_relays if relay.get('country'))
                 country_count = len(countries)
                 
-                # Determine geographic diversity risk level
+                # Determine geographic diversity rating
                 if country_count == 1:
-                    geo_risk = "high legal/censorship risk"
+                    geo_rating = "Poor"
                 elif country_count <= 3:
-                    geo_risk = "medium risk"
+                    geo_rating = "Good"
                 else:
-                    geo_risk = "low risk"
+                    geo_rating = "Great"
+                
+                geo_risk = f"{geo_rating}, {country_count} countr{'y' if country_count == 1 else 'ies'}"
                 
                 # 5. Performance Insights
                 contact_fingerprints = [relay.get('fingerprint') for relay in contact_relays if relay.get('fingerprint')]
@@ -495,18 +497,21 @@ class IntelligenceEngine:
                 else:
                     perf_status = "no data"
                 
-                # 6. Infrastructure Analysis
+                # 6. Infrastructure Diversity Analysis (with consistent rating)
                 platforms = set(relay.get('platform') for relay in contact_relays if relay.get('platform'))
                 versions = set(relay.get('version') for relay in contact_relays if relay.get('version'))
                 platform_count = len(platforms)
                 version_count = len(versions)
                 
+                # Determine infrastructure diversity rating
                 if platform_count == 1 and version_count == 1:
-                    infra_risk = "high sync risk"
+                    infra_rating = "Poor"
                 elif platform_count <= 2 or version_count <= 2:
-                    infra_risk = "moderate diversity"
+                    infra_rating = "Good"
                 else:
-                    infra_risk = "good diversity"
+                    infra_rating = "Great"
+                
+                infra_risk = f"{infra_rating}, {platform_count} platform{'s' if platform_count != 1 else ''}, {version_count} version{'s' if version_count != 1 else ''}"
                 
 
                 

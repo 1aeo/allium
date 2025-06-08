@@ -1,0 +1,521 @@
+    <!DOCTYPE html>
+    <html lang="en">
+        <head>
+            <title>
+Tor Relays :: enceladus03
+            </title>
+            <meta name="description"
+                  content="Javascript-free Tor metrics generated from a 30 minute API request.">
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <link rel="stylesheet" href="../../static/css/bootstrap.min.css">
+            <!--source: metrics.torproject.org-->
+            <style>
+                .circle {
+                    display: inline-block;
+                    vertical-align: middle;
+                    background: #999999;
+                    width: 7px;
+                    height: 7px;
+                    -moz-border-radius: 50%;
+                    -webkit-border-radius: 50%;
+                    border-radius: 50%;
+                }
+
+                .circle-online {
+                    background: #25d918;
+                }
+
+                .circle-offline {
+                    background: #ff1515;
+                }
+
+                .verified-hostname {
+                    color: #FE9F30;
+                }
+
+                .verified-hostname {
+                    color: #68b030;
+                }
+
+                .unverified-hostname {
+                    color: #FE9F30;
+                }
+
+                /* Dynamic text truncation for contact information */
+                .contact-text {
+                    display: inline-block;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    max-width: 20vw;  /* Use viewport width for responsive sizing */
+                }
+
+                /* Table styles */
+                .table {
+                    width: 100%;
+                    margin-bottom: 1rem;
+                }
+
+                /* Precise alignment for multi-value columns using monospace */
+                .bw-header, .cw-header, .rc-header, /* rc = relay count */
+                .bw-data, .cw-data, .rc-data {
+                    font-family: Consolas, "Courier New", monospace;
+                    white-space: nowrap;
+                    text-align: center;
+                    letter-spacing: 0.05em; /* Slight spacing for readability */
+                }
+
+                /* Container breakpoint */
+                @media (min-width: 1400px) {
+                    .container {
+                        width: 95%;
+                        max-width: none;
+                        padding-right: 15px;
+                        padding-left: 15px;
+                        margin-right: auto;
+                        margin-left: auto;
+                    }
+                }
+
+                /* CSS-only navbar collapse using checkbox hack */
+                .navbar-toggle {
+                    display: none;
+                    background-color: transparent;
+                    background-image: none;
+                    border: 1px solid #ddd;
+                    border-radius: 4px;
+                    padding: 9px 10px;
+                    margin-top: 8px;
+                    margin-right: 15px;
+                    margin-bottom: 8px;
+                    cursor: pointer;
+                    float: right;
+                }
+
+                .navbar-toggle:hover,
+                .navbar-toggle:focus {
+                    background-color: #ddd;
+                }
+
+                .navbar-toggle .icon-bar {
+                    display: block;
+                    width: 22px;
+                    height: 2px;
+                    background-color: #888;
+                    border-radius: 1px;
+                    margin: 4px 0;
+                }
+
+                .navbar-brand {
+                    float: left;
+                    height: 50px;
+                    padding: 15px;
+                    font-size: 18px;
+                    line-height: 20px;
+                    font-weight: bold;
+                }
+
+                /* Desktop: show navigation horizontally */
+                @media (min-width: 768px) {
+                    .navbar-collapse {
+                        display: block !important;
+                        height: auto !important;
+                        overflow: visible !important;
+                    }
+                    
+                    .nav.navbar-nav {
+                        float: left;
+                        margin: 0;
+                    }
+                    
+                    .nav.navbar-nav > li {
+                        float: left;
+                    }
+                    
+                    .nav.navbar-nav > li > a {
+                        padding-top: 15px;
+                        padding-bottom: 15px;
+                        color: #777;
+                        text-decoration: none;
+                        padding-left: 15px;
+                        padding-right: 15px;
+                    }
+                    
+                    .nav.navbar-nav > li.active > a,
+                    .nav.navbar-nav > li > a:hover,
+                    .nav.navbar-nav > li > a:focus {
+                        color: #333;
+                        background-color: #e7e7e7;
+                    }
+                    
+                    .navbar-brand {
+                        display: none;
+                    }
+                }
+
+                /* Mobile: hide navigation by default, show hamburger */
+                @media (max-width: 767px) {
+                    .navbar-toggle {
+                        display: block;
+                    }
+                    
+                    .navbar-collapse {
+                        display: none;
+                        clear: both;
+                        width: 100%;
+                        margin-top: 50px;
+                        border-top: 1px solid #e7e7e7;
+                        padding-top: 10px;
+                    }
+                    
+                    /* When checkbox is checked, show the menu */
+                    .navbar-toggle-checkbox:checked ~ .navbar-header + .navbar-collapse {
+                        display: block;
+                    }
+                    
+                    .nav.navbar-nav > li {
+                        float: none;
+                    }
+                    
+                    .nav.navbar-nav > li > a {
+                        display: block;
+                        padding: 12px 20px;
+                        color: #777;
+                        text-decoration: none;
+                        border-bottom: 1px solid #e7e7e7;
+                    }
+                    
+                    .nav.navbar-nav > li:last-child > a {
+                        border-bottom: none;
+                    }
+                    
+                    .nav.navbar-nav > li.active > a,
+                    .nav.navbar-nav > li > a:hover,
+                    .nav.navbar-nav > li > a:focus {
+                        color: #333;
+                        background-color: #f5f5f5;
+                    }
+                }
+            </style>
+        </head>
+    <body>
+        <div class="container">
+<div id="content">
+<h2>View Relay "enceladus03"</h2>
+        <nav aria-label="breadcrumb" style="margin-bottom: 10px;">
+    <ol class="breadcrumb" style="background: none; padding: 0; margin: 0; font-size: 0.9em; list-style: none;">
+        <li style="display: inline;"><a href="../../index.html" style="color: #337ab7; text-decoration: none;">Home</a></li>
+            <li style="display: inline;"> > <a href="../../misc/networks-by-bandwidth.html" style="color: #337ab7; text-decoration: none;">Browse by Network</a></li>
+                <li style="display: inline;"> > <a href="../../as/AS51167/" style="color: #337ab7; text-decoration: none;">AS51167</a></li>
+            <li style="display: inline; color: #777;"> > enceladus03</li>
+    </ol>
+</nav>
+    <nav class="navbar navbar-default" style="margin-bottom: 20px;">
+        <div class="container-fluid">
+            <!-- CSS-only hamburger toggle using checkbox hack -->
+            <input type="checkbox" id="navbar-toggle" class="navbar-toggle-checkbox" style="display: none;">
+            
+            <div class="navbar-header">
+                <label for="navbar-toggle" class="navbar-toggle" role="button" aria-label="Toggle navigation">
+                    <span class="sr-only">Toggle navigation</span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </label>
+                <span class="navbar-brand visible-xs">Browse Categories</span>
+            </div>
+            
+            <div class="navbar-collapse" id="main-navbar">
+                <ul class="nav navbar-nav">
+                    <li class="">
+                        <a href="../../misc/contacts-by-bandwidth.html">By AROI / Contact</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/families-by-bandwidth.html">By Family</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/networks-by-bandwidth.html">By Network</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/countries-by-bandwidth.html">By Country</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/platforms-by-bandwidth.html">By Platform</a>
+                    </li>
+                    <li class="">
+                        <a href="../../index.html">Top 500 Relays</a>
+                    </li>
+                    <li class="active">
+                        <a href="../../misc/all.html">All Relays</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+<h4>
+<a href="../../family/20D9D2A69FBE8B3454F6286059F6BD95E74EFD9D/">Family: 20 relays</a>
+| 
+<a href="../../as/AS51167/">AS51167</a>
+| 
+<a href="../../country/de/">Germany</a>
+| 
+<a href="../../platform/Linux/">Linux</a>
+</h4>
+<p>Last fetch was at Sun, 08 Jun 2025 05:24:38 GMT.</p>
+<div class="row">
+<div class="col-md-6">
+<dl>
+<dt>
+Nickname
+</dt>
+<dd>
+enceladus03
+</dd>
+
+<dt>
+Fingerprint
+</dt>
+<dd>
+<code>20D9D2A69FBE8B3454F6286059F6BD95E74EFD9D</code>
+</dd>
+
+<dt>
+AROI <a href="https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/" target="_blank" title="Autonomous Relay Operator Identifier - unverified">(?)</a>
+</dt>
+<dd>
+<a href="../../contact/076ade9cd2260cb16c893070fe0c361a/">artikel5ev.de</a>
+</dd>
+<dt>
+Contact
+</dt>
+<dd>
+<a href="../../contact/076ade9cd2260cb16c893070fe0c361a/">email:abuse[]artikel5ev.de url:https://artikel5ev.de proof:uri-rsa ciissversion:2</a>
+</dd>
+<dt>
+IPv4 Exit Policy Summary
+</dt>
+<dd>
+<pre class="pre-scrollable">reject: 
+  1-65535
+</pre>
+</dd>
+<dt>
+IPv6 Exit Policy Summary
+</dt>
+<dd>
+<pre>none</pre>
+</dd>
+<dt>
+Exit Policy
+</dt>
+<dd>
+<pre class="pre-scrollable">reject *:*
+</pre>
+</dd>
+<dt title="Array of fingerprints of relays that are in an effective, mutual family relationship with this relay. These relays are part of this relay's family and they consider this relay to be part of their family. Always contains the relay's own fingerprint. Omitted if the descriptor containing this information cannot be found.">
+Effective Family Members: 20 (<a href="../../family/20D9D2A69FBE8B3454F6286059F6BD95E74EFD9D/">View</a>)
+</dt>
+<dd>
+<pre class="pre-scrollable"><a href="0BC8BA32CC3CB0F598E0C92778F7C0946DFBCE91.html">0BC8BA32CC3CB0F598E0C92778F7C0946DFBCE91</a>
+<a href="166264168E8CCCBB2444ADE0F0A22E4E6DDEF6FD.html">166264168E8CCCBB2444ADE0F0A22E4E6DDEF6FD</a>
+<a href="195712E96FD1C1B18D14D09E9E4E7A6416E23B2C.html">195712E96FD1C1B18D14D09E9E4E7A6416E23B2C</a>
+<a href="1AA683E036EA10AA6E078D40498CC7234F6424B9.html">1AA683E036EA10AA6E078D40498CC7234F6424B9</a>
+<a href="20D9D2A69FBE8B3454F6286059F6BD95E74EFD9D.html">20D9D2A69FBE8B3454F6286059F6BD95E74EFD9D</a>
+<a href="26C28F29B611DF4DE23ACF5D9DC1EB4895EF5E8B.html">26C28F29B611DF4DE23ACF5D9DC1EB4895EF5E8B</a>
+<a href="282CAAF0E11DAD47DD73D553DC20B51099A257BB.html">282CAAF0E11DAD47DD73D553DC20B51099A257BB</a>
+<a href="4B170481AC4C3EC3603B9F4443C2E24B929D0429.html">4B170481AC4C3EC3603B9F4443C2E24B929D0429</a>
+<a href="4D0DF468DC816F8096702C2DA2C6FD67561F81C8.html">4D0DF468DC816F8096702C2DA2C6FD67561F81C8</a>
+<a href="780D50DCCD7F3C831E5E750F41866497C1263F76.html">780D50DCCD7F3C831E5E750F41866497C1263F76</a>
+<a href="89C7E852CC2FA537ED78775ADC3BEA24672B4154.html">89C7E852CC2FA537ED78775ADC3BEA24672B4154</a>
+<a href="AF7094B62864DE941DCD88A2F0DBAFECF3997E47.html">AF7094B62864DE941DCD88A2F0DBAFECF3997E47</a>
+<a href="B1F926DA3895A89AF288623F5A4F913979299C53.html">B1F926DA3895A89AF288623F5A4F913979299C53</a>
+<a href="C36C76992198329C0D8F34E01D092BF2ACE0B6B0.html">C36C76992198329C0D8F34E01D092BF2ACE0B6B0</a>
+<a href="CE5EF4FB644544DB2F430A60CC6EB86FD7E29BA6.html">CE5EF4FB644544DB2F430A60CC6EB86FD7E29BA6</a>
+<a href="D4CA7FD04DABF6E2CB679426F5AA3205B640D147.html">D4CA7FD04DABF6E2CB679426F5AA3205B640D147</a>
+<a href="DC2191663DD4BAECB34F949CCAC3FDA004CE5BCE.html">DC2191663DD4BAECB34F949CCAC3FDA004CE5BCE</a>
+<a href="E22694E83DA7BCF30DDAF5780EEF394CD0370CC4.html">E22694E83DA7BCF30DDAF5780EEF394CD0370CC4</a>
+<a href="F3B2CC8C2AB331150E096DD1DB8810E4A43F399D.html">F3B2CC8C2AB331150E096DD1DB8810E4A43F399D</a>
+<a href="FC077C25B8DBB3132D397D7DF03C92BFC14C9D76.html">FC077C25B8DBB3132D397D7DF03C92BFC14C9D76</a>
+</pre>
+</dd>
+<dt title="Array of fingerprints of relays that are not in an effective, mutual family relationship with this relay. These relays are part of this relay's family but they don't consider this relay to be part of their family. Omitted if empty or if descriptor containing this information cannot be found.">
+Alleged Family Members: 15</dt>
+<dd>
+<pre class="pre-scrollable"><a href="0040A5B04C7E309D37CBE7EDB2B72D3E15D057C1.html">0040A5B04C7E309D37CBE7EDB2B72D3E15D057C1</a>
+<a href="22404A3E87F2D7FE2FC6359FDE71B6DC2D6E730F.html">22404A3E87F2D7FE2FC6359FDE71B6DC2D6E730F</a>
+<a href="486740353B905AA4731F82C0B4CC25821A62C6E3.html">486740353B905AA4731F82C0B4CC25821A62C6E3</a>
+<a href="4C25542B7649FC0472EDBF77521EA578F9AF5155.html">4C25542B7649FC0472EDBF77521EA578F9AF5155</a>
+<a href="571BE7435DC9D660BB5EE0A37650E2421007BAEC.html">571BE7435DC9D660BB5EE0A37650E2421007BAEC</a>
+<a href="7B700C0C207EBD0002E00F499BE265519AC3C25A.html">7B700C0C207EBD0002E00F499BE265519AC3C25A</a>
+<a href="846B3EAAF0C07FF72FC79AEBB11FA3ADC58F240F.html">846B3EAAF0C07FF72FC79AEBB11FA3ADC58F240F</a>
+<a href="868A253C330F40FBE435D9320849397F85823E86.html">868A253C330F40FBE435D9320849397F85823E86</a>
+<a href="93C1E9D5E5FFACA0E902DA0367968E3EF31EB946.html">93C1E9D5E5FFACA0E902DA0367968E3EF31EB946</a>
+<a href="A60697FF383EEEE2E88505DD4E305C07BF326B11.html">A60697FF383EEEE2E88505DD4E305C07BF326B11</a>
+<a href="A690C6AA8102C027D297AF3401BFE16918CCF7A6.html">A690C6AA8102C027D297AF3401BFE16918CCF7A6</a>
+<a href="A6AA94B4007A0E2919B2DA8ECF2CFA3CA1761A13.html">A6AA94B4007A0E2919B2DA8ECF2CFA3CA1761A13</a>
+<a href="BFC6E7F298D581344DFCE95BB7EE9EDE1FC0745B.html">BFC6E7F298D581344DFCE95BB7EE9EDE1FC0745B</a>
+<a href="E6D4332BF40FDEE7814F2DBC926650EF8032B643.html">E6D4332BF40FDEE7814F2DBC926650EF8032B643</a>
+<a href="ED5B6014D4C5C914086B0615207A186EEF4459A1.html">ED5B6014D4C5C914086B0615207A186EEF4459A1</a>
+</pre>
+</dd>
+<dt title="Array of fingerprints of relays that consider this relay to be part of their family but that are not part of this relay's family. Omitted if empty or if descriptor containing this information cannot be found.">
+Indirect Family Members: 4</dt>
+<dd>
+<pre class="pre-scrollable"><a href="51562252B9CF3120FAC9CF124391697296050E74.html">51562252B9CF3120FAC9CF124391697296050E74</a>
+<a href="88C8F99559FEEB7C29E2EB196AACD734390D6289.html">88C8F99559FEEB7C29E2EB196AACD734390D6289</a>
+<a href="9DEB16841863A939257160445052C606ECA46D25.html">9DEB16841863A939257160445052C606ECA46D25</a>
+<a href="E8018E2C62E982758DBC173E3FEE26C917B353B1.html">E8018E2C62E982758DBC173E3FEE26C917B353B1</a>
+</pre>
+</dd>
+</dl>
+</div>
+<div class="col-md-6">
+<dl>
+<dt title="IP address and TCP port where this relay accepts onion-routing connections, with hostname when available">
+OR Address
+</dt>
+<dd>
+<span class="verified-hostname" title="verified hostname">vmd64281.contaboserver.net</span> | 161.97.142.15:9001, [2a02:c206:3006:4281::1]:9001</dd>
+<dt>
+Exit Address
+</dt>
+<dd>
+none
+</dd>
+<dt>
+Dir Address
+</dt>
+<dd>
+none
+</dd>
+<dt>
+Flags: 6
+</dt>
+<dd>
+<a href="../../flag/fast/">
+<img src="../../static/images/flags/fast.png"
+title="Fast"
+alt="Fast">
+</a> Fast
+<a href="../../flag/guard/">
+<img src="../../static/images/flags/guard.png"
+title="Guard"
+alt="Guard">
+</a> Guard
+<a href="../../flag/running/">
+<img src="../../static/images/flags/running.png"
+title="Running"
+alt="Running">
+</a> Running
+<a href="../../flag/stable/">
+<img src="../../static/images/flags/stable.png"
+title="Stable"
+alt="Stable">
+</a> Stable
+<a href="../../flag/v2dir/">
+<img src="../../static/images/flags/v2dir.png"
+title="V2Dir"
+alt="V2Dir">
+</a> V2Dir
+<a href="../../flag/valid/">
+<img src="../../static/images/flags/valid.png"
+title="Valid"
+alt="Valid">
+</a> Valid
+</dd>
+
+<dt title="Bandwidth details: Observed capacity | Advertised capability | Rate limit | Burst limit">
+Bandwidth (Observed | Advertised | Rate | Burst)
+</dt>
+<dd>
+<span title="Observed: 83.98 Mbit/s">83.98 Mbit/s</span> | 
+<span title="Advertised: 83.98 Mbit/s">83.98 Mbit/s</span> | 
+<span title="Rate: 8.59 Gbit/s">8.59 Gbit/s</span> | 
+<span title="Burst: 8.59 Gbit/s">8.59 Gbit/s</span>
+</dd>
+
+<dt>
+Network Participation (Consensus Weight | Guard | Middle | Exit)
+</dt>
+<dd>
+<span title="Fraction of this relay's consensus weight compared to the sum of all consensus weights in the network. This fraction is a very rough approximation of the probability of this relay to be selected by clients.">0.01%</span> | 
+<span title="Probability of this relay to be selected for the guard position. This probability is calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so that this probability can only be an approximation.">0.01%</span> | 
+<span title="Probability of this relay to be selected for the middle position. This probability is calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so that this probability can only be an approximation.">0.01%</span> | 
+<span title="Probability of this relay to be selected for the exit position. This probability is calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so that this probability can only be an approximation.">N/A</span>
+</dd>
+<dt title="Boolean field saying whether the consensus weight of this relay is based on a threshold of 3 or more measurements by Tor bandwidth authorities. Omitted if the network status consensus containing this relay does not contain measurement information.">
+Network Participation Measured by >= 3 Bandwidth Authorities
+</dt>
+<dd>
+Yes</dd>
+
+
+
+<dt>
+Country</dt>
+<dd>
+<a href="../../country/de/">
+<img src="../../static/images/cc/de.png"
+title="Germany"
+alt="Germany">
+</a> <span title="Country name of the location of this relay as found by a geolocation database based on the relay's IP address. Omitted if the relay location could not be found.">Germany</span>
+</dd>
+<dt>
+Autonomous System (AS Number | AS Name)
+</dt>
+<dd>
+<a href='../../as/AS51167/' title="AS Number">AS51167</a>
+| <span title="AS Name">Contabo GmbH</span> (<a href='https://bgp.tools/AS51167'>BGP.tools</a>)
+</dd>
+<dt>
+Seen (First | Last)
+</dt>
+<dd>
+<a href="../../first_seen/2023-04-08/">2y 2mo 2d ago (2023-04-08 00:00:00)</a> | 1h 25m 38s ago (2025-06-08 04:00:00)
+</dd>
+<dt title="UTC timestamp when this relay was last (re-)started. Missing if router descriptor containing this information cannot be found.">
+Last Restarted
+</dt>
+<dd>
+4h 12m 14s ago (2025-06-08 01:13:24)
+</dd>
+<dt title="UTC timestamp when this relay last stopped announcing an IPv4 or IPv6 address or TCP port where it previously accepted onion-routing or directory connections. This timestamp can serve as indicator whether this relay would be a suitable fallback directory.">
+Last Changed Address or Port
+</dt>
+<dd>
+2024-01-29 19:00:00
+</dd>
+<dt title="Boolean field saying whether this relay indicated that it is hibernating in its last known server descriptor. This information may be helpful to decide whether a relay that is not running anymore has reached its accounting limit and has not dropped out due to a technical problem. Omitted if the last known server descriptor of this relay does not contain hibernation information or if no such descriptor is known.">
+Hibernating
+</dt>
+<dd>
+No</dd>
+<dt>
+Platform (Short | Long)
+</dt>
+<dd>
+<a href='../../platform/Linux/' title="Simplified platform identifier for categorization">Linux</a> | <span title="Complete platform information as reported by relay">Tor 0.4.8.11 on Linux</span>
+</dd>
+<dt>
+Version (Running | Recommended | Status)
+</dt>
+<dd>
+<span title="Tor software version without leading 'Tor' as reported by the directory authorities in the 'v' line of the consensus. Omitted if either the directory authorities or the relay did not report which version the relay runs or if the relay runs an alternative Tor implementation.">0.4.8.11</span> | 
+<span title="Boolean field saying whether the Tor software version of this relay is recommended by the directory authorities or not. Uses the relay version in the consensus. Omitted if either the directory authorities did not recommend versions, or the relay did not report which version it runs.">Yes</span> | 
+<span title="Status of the Tor software version of this relay based on the versions recommended by the directory authorities. Possible version statuses are: 'recommended' if a version is listed as recommended; 'experimental' if a version is newer than every recommended version; 'obsolete' if a version is older than every recommended version; 'new in series' if a version has other recommended versions with the same first three components, and the version is newer than all such recommended versions, but it is not newer than every recommended version; 'unrecommended' if none of the above conditions hold. Omitted if either the directory authorities did not recommend versions, or the relay did not report which version it runs.">recommended</span>
+</dd>
+</dl>
+</div>
+</div>
+</div>
+        </div>
+    </body>
+        <footer class="page-footer font-small">
+            <div class="footer-copyright text-center text-muted">
+                <p>
+                    Generated by a <a href="https://github.com/1aeo/allium">1aeo modified fork of allium</a>, based on original <a href="https://git.jordan.im/allium/">allium</a>, on Sun, 08 Jun 2025 05:24:38 GMT. Source data from <a href="https://onionoo.torproject.org/">Tor Project onionoo</a>.
+                </p>
+            </div>
+        </footer>
+    </html>

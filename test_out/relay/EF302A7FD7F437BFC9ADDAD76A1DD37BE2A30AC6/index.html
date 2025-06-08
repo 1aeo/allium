@@ -1,0 +1,490 @@
+    <!DOCTYPE html>
+    <html lang="en">
+        <head>
+            <title>
+Tor Relays :: eupherious
+            </title>
+            <meta name="description"
+                  content="Javascript-free Tor metrics generated from a 30 minute API request.">
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <link rel="stylesheet" href="../../static/css/bootstrap.min.css">
+            <!--source: metrics.torproject.org-->
+            <style>
+                .circle {
+                    display: inline-block;
+                    vertical-align: middle;
+                    background: #999999;
+                    width: 7px;
+                    height: 7px;
+                    -moz-border-radius: 50%;
+                    -webkit-border-radius: 50%;
+                    border-radius: 50%;
+                }
+
+                .circle-online {
+                    background: #25d918;
+                }
+
+                .circle-offline {
+                    background: #ff1515;
+                }
+
+                .verified-hostname {
+                    color: #FE9F30;
+                }
+
+                .verified-hostname {
+                    color: #68b030;
+                }
+
+                .unverified-hostname {
+                    color: #FE9F30;
+                }
+
+                /* Dynamic text truncation for contact information */
+                .contact-text {
+                    display: inline-block;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    max-width: 20vw;  /* Use viewport width for responsive sizing */
+                }
+
+                /* Table styles */
+                .table {
+                    width: 100%;
+                    margin-bottom: 1rem;
+                }
+
+                /* Precise alignment for multi-value columns using monospace */
+                .bw-header, .cw-header, .rc-header, /* rc = relay count */
+                .bw-data, .cw-data, .rc-data {
+                    font-family: Consolas, "Courier New", monospace;
+                    white-space: nowrap;
+                    text-align: center;
+                    letter-spacing: 0.05em; /* Slight spacing for readability */
+                }
+
+                /* Container breakpoint */
+                @media (min-width: 1400px) {
+                    .container {
+                        width: 95%;
+                        max-width: none;
+                        padding-right: 15px;
+                        padding-left: 15px;
+                        margin-right: auto;
+                        margin-left: auto;
+                    }
+                }
+
+                /* CSS-only navbar collapse using checkbox hack */
+                .navbar-toggle {
+                    display: none;
+                    background-color: transparent;
+                    background-image: none;
+                    border: 1px solid #ddd;
+                    border-radius: 4px;
+                    padding: 9px 10px;
+                    margin-top: 8px;
+                    margin-right: 15px;
+                    margin-bottom: 8px;
+                    cursor: pointer;
+                    float: right;
+                }
+
+                .navbar-toggle:hover,
+                .navbar-toggle:focus {
+                    background-color: #ddd;
+                }
+
+                .navbar-toggle .icon-bar {
+                    display: block;
+                    width: 22px;
+                    height: 2px;
+                    background-color: #888;
+                    border-radius: 1px;
+                    margin: 4px 0;
+                }
+
+                .navbar-brand {
+                    float: left;
+                    height: 50px;
+                    padding: 15px;
+                    font-size: 18px;
+                    line-height: 20px;
+                    font-weight: bold;
+                }
+
+                /* Desktop: show navigation horizontally */
+                @media (min-width: 768px) {
+                    .navbar-collapse {
+                        display: block !important;
+                        height: auto !important;
+                        overflow: visible !important;
+                    }
+                    
+                    .nav.navbar-nav {
+                        float: left;
+                        margin: 0;
+                    }
+                    
+                    .nav.navbar-nav > li {
+                        float: left;
+                    }
+                    
+                    .nav.navbar-nav > li > a {
+                        padding-top: 15px;
+                        padding-bottom: 15px;
+                        color: #777;
+                        text-decoration: none;
+                        padding-left: 15px;
+                        padding-right: 15px;
+                    }
+                    
+                    .nav.navbar-nav > li.active > a,
+                    .nav.navbar-nav > li > a:hover,
+                    .nav.navbar-nav > li > a:focus {
+                        color: #333;
+                        background-color: #e7e7e7;
+                    }
+                    
+                    .navbar-brand {
+                        display: none;
+                    }
+                }
+
+                /* Mobile: hide navigation by default, show hamburger */
+                @media (max-width: 767px) {
+                    .navbar-toggle {
+                        display: block;
+                    }
+                    
+                    .navbar-collapse {
+                        display: none;
+                        clear: both;
+                        width: 100%;
+                        margin-top: 50px;
+                        border-top: 1px solid #e7e7e7;
+                        padding-top: 10px;
+                    }
+                    
+                    /* When checkbox is checked, show the menu */
+                    .navbar-toggle-checkbox:checked ~ .navbar-header + .navbar-collapse {
+                        display: block;
+                    }
+                    
+                    .nav.navbar-nav > li {
+                        float: none;
+                    }
+                    
+                    .nav.navbar-nav > li > a {
+                        display: block;
+                        padding: 12px 20px;
+                        color: #777;
+                        text-decoration: none;
+                        border-bottom: 1px solid #e7e7e7;
+                    }
+                    
+                    .nav.navbar-nav > li:last-child > a {
+                        border-bottom: none;
+                    }
+                    
+                    .nav.navbar-nav > li.active > a,
+                    .nav.navbar-nav > li > a:hover,
+                    .nav.navbar-nav > li > a:focus {
+                        color: #333;
+                        background-color: #f5f5f5;
+                    }
+                }
+            </style>
+        </head>
+    <body>
+        <div class="container">
+<div id="content">
+<h2>View Relay "eupherious"</h2>
+        <nav aria-label="breadcrumb" style="margin-bottom: 10px;">
+    <ol class="breadcrumb" style="background: none; padding: 0; margin: 0; font-size: 0.9em; list-style: none;">
+        <li style="display: inline;"><a href="../../index.html" style="color: #337ab7; text-decoration: none;">Home</a></li>
+            <li style="display: inline;"> > <a href="../../misc/networks-by-bandwidth.html" style="color: #337ab7; text-decoration: none;">Browse by Network</a></li>
+                <li style="display: inline;"> > <a href="../../as/AS3164/" style="color: #337ab7; text-decoration: none;">AS3164</a></li>
+            <li style="display: inline; color: #777;"> > eupherious</li>
+    </ol>
+</nav>
+    <nav class="navbar navbar-default" style="margin-bottom: 20px;">
+        <div class="container-fluid">
+            <!-- CSS-only hamburger toggle using checkbox hack -->
+            <input type="checkbox" id="navbar-toggle" class="navbar-toggle-checkbox" style="display: none;">
+            
+            <div class="navbar-header">
+                <label for="navbar-toggle" class="navbar-toggle" role="button" aria-label="Toggle navigation">
+                    <span class="sr-only">Toggle navigation</span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </label>
+                <span class="navbar-brand visible-xs">Browse Categories</span>
+            </div>
+            
+            <div class="navbar-collapse" id="main-navbar">
+                <ul class="nav navbar-nav">
+                    <li class="">
+                        <a href="../../misc/contacts-by-bandwidth.html">By AROI / Contact</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/families-by-bandwidth.html">By Family</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/networks-by-bandwidth.html">By Network</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/countries-by-bandwidth.html">By Country</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/platforms-by-bandwidth.html">By Platform</a>
+                    </li>
+                    <li class="">
+                        <a href="../../index.html">Top 500 Relays</a>
+                    </li>
+                    <li class="active">
+                        <a href="../../misc/all.html">All Relays</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+<h4>
+Family: 1 relay
+| 
+<a href="../../as/AS3164/">AS3164</a>
+| 
+<a href="../../country/ro/">Romania</a>
+| 
+<a href="../../platform/Linux/">Linux</a>
+</h4>
+<p>Last fetch was at Sun, 08 Jun 2025 05:24:38 GMT.</p>
+<div class="row">
+<div class="col-md-6">
+<dl>
+<dt>
+Nickname
+</dt>
+<dd>
+eupherious
+</dd>
+
+<dt>
+Fingerprint
+</dt>
+<dd>
+<code>EF302A7FD7F437BFC9ADDAD76A1DD37BE2A30AC6</code>
+</dd>
+
+<dt>
+AROI <a href="https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/" target="_blank" title="Autonomous Relay Operator Identifier - unverified">(?)</a>
+</dt>
+<dd>
+none
+</dd>
+<dt>
+Contact
+</dt>
+<dd>
+<a href="../../contact/1d23f97d3d328aa45e1837fcbb6a9167/">clonewarvet4339@gmail.com</a>
+</dd>
+<dt>
+IPv4 Exit Policy Summary
+</dt>
+<dd>
+<pre class="pre-scrollable">reject: 
+  1-65535
+</pre>
+</dd>
+<dt>
+IPv6 Exit Policy Summary
+</dt>
+<dd>
+<pre>none</pre>
+</dd>
+<dt>
+Exit Policy
+</dt>
+<dd>
+<pre class="pre-scrollable">reject *:*
+</pre>
+</dd>
+<dt title="Array of fingerprints of relays that are in an effective, mutual family relationship with this relay. These relays are part of this relay's family and they consider this relay to be part of their family. Always contains the relay's own fingerprint. Omitted if the descriptor containing this information cannot be found.">
+Effective Family Member: 1
+</dt>
+<dd>
+<pre class="pre-scrollable">EF302A7FD7F437BFC9ADDAD76A1DD37BE2A30AC6
+</pre>
+</dd>
+<dt title="Array of fingerprints of relays that are not in an effective, mutual family relationship with this relay. These relays are part of this relay's family but they don't consider this relay to be part of their family. Omitted if empty or if descriptor containing this information cannot be found.">
+Alleged Family Members: 0</dt>
+<dd>
+<pre class="pre-scrollable">none
+</pre>
+</dd>
+<dt title="Array of fingerprints of relays that consider this relay to be part of their family but that are not part of this relay's family. Omitted if empty or if descriptor containing this information cannot be found.">
+Indirect Family Members: 0</dt>
+<dd>
+<pre class="pre-scrollable">none
+</pre>
+</dd>
+</dl>
+</div>
+<div class="col-md-6">
+<dl>
+<dt title="IP address and TCP port where this relay accepts onion-routing connections, with hostname when available">
+OR Address
+</dt>
+<dd>
+94.176.2.52:9001</dd>
+<dt>
+Exit Address
+</dt>
+<dd>
+none
+</dd>
+<dt>
+Dir Address
+</dt>
+<dd>
+none
+</dd>
+<dt>
+Flags: 7
+</dt>
+<dd>
+<a href="../../flag/fast/">
+<img src="../../static/images/flags/fast.png"
+title="Fast"
+alt="Fast">
+</a> Fast
+<a href="../../flag/guard/">
+<img src="../../static/images/flags/guard.png"
+title="Guard"
+alt="Guard">
+</a> Guard
+<a href="../../flag/hsdir/">
+<img src="../../static/images/flags/hsdir.png"
+title="HSDir"
+alt="HSDir">
+</a> HSDir
+<a href="../../flag/running/">
+<img src="../../static/images/flags/running.png"
+title="Running"
+alt="Running">
+</a> Running
+<a href="../../flag/stable/">
+<img src="../../static/images/flags/stable.png"
+title="Stable"
+alt="Stable">
+</a> Stable
+<a href="../../flag/v2dir/">
+<img src="../../static/images/flags/v2dir.png"
+title="V2Dir"
+alt="V2Dir">
+</a> V2Dir
+<a href="../../flag/valid/">
+<img src="../../static/images/flags/valid.png"
+title="Valid"
+alt="Valid">
+</a> Valid
+</dd>
+
+<dt title="Bandwidth details: Observed capacity | Advertised capability | Rate limit | Burst limit">
+Bandwidth (Observed | Advertised | Rate | Burst)
+</dt>
+<dd>
+<span title="Observed: 87.77 Mbit/s">87.77 Mbit/s</span> | 
+<span title="Advertised: 83.89 Mbit/s">83.89 Mbit/s</span> | 
+<span title="Rate: 83.89 Mbit/s">83.89 Mbit/s</span> | 
+<span title="Burst: 167.77 Mbit/s">167.77 Mbit/s</span>
+</dd>
+
+<dt>
+Network Participation (Consensus Weight | Guard | Middle | Exit)
+</dt>
+<dd>
+<span title="Fraction of this relay's consensus weight compared to the sum of all consensus weights in the network. This fraction is a very rough approximation of the probability of this relay to be selected by clients.">0.01%</span> | 
+<span title="Probability of this relay to be selected for the guard position. This probability is calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so that this probability can only be an approximation.">0.01%</span> | 
+<span title="Probability of this relay to be selected for the middle position. This probability is calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so that this probability can only be an approximation.">0.01%</span> | 
+<span title="Probability of this relay to be selected for the exit position. This probability is calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so that this probability can only be an approximation.">N/A</span>
+</dd>
+<dt title="Boolean field saying whether the consensus weight of this relay is based on a threshold of 3 or more measurements by Tor bandwidth authorities. Omitted if the network status consensus containing this relay does not contain measurement information.">
+Network Participation Measured by >= 3 Bandwidth Authorities
+</dt>
+<dd>
+Yes</dd>
+
+
+
+<dt>
+Country</dt>
+<dd>
+<a href="../../country/ro/">
+<img src="../../static/images/cc/ro.png"
+title="Romania"
+alt="Romania">
+</a> <span title="Country name of the location of this relay as found by a geolocation database based on the relay's IP address. Omitted if the relay location could not be found.">Romania</span>
+</dd>
+<dt>
+Autonomous System (AS Number | AS Name)
+</dt>
+<dd>
+<a href='../../as/AS3164/' title="AS Number">AS3164</a>
+| <span title="AS Name">Astimp IT Solution SRL</span> (<a href='https://bgp.tools/AS3164'>BGP.tools</a>)
+</dd>
+<dt>
+Seen (First | Last)
+</dt>
+<dd>
+<a href="../../first_seen/2025-03-28/">2mo 1w 5d ago (2025-03-28 00:00:00)</a> | 1h 25m 38s ago (2025-06-08 04:00:00)
+</dd>
+<dt title="UTC timestamp when this relay was last (re-)started. Missing if router descriptor containing this information cannot be found.">
+Last Restarted
+</dt>
+<dd>
+1mo 2w 4d ago (2025-04-21 02:22:22)
+</dd>
+<dt title="UTC timestamp when this relay last stopped announcing an IPv4 or IPv6 address or TCP port where it previously accepted onion-routing or directory connections. This timestamp can serve as indicator whether this relay would be a suitable fallback directory.">
+Last Changed Address or Port
+</dt>
+<dd>
+2025-03-28 00:00:00
+</dd>
+<dt title="Boolean field saying whether this relay indicated that it is hibernating in its last known server descriptor. This information may be helpful to decide whether a relay that is not running anymore has reached its accounting limit and has not dropped out due to a technical problem. Omitted if the last known server descriptor of this relay does not contain hibernation information or if no such descriptor is known.">
+Hibernating
+</dt>
+<dd>
+No</dd>
+<dt>
+Platform (Short | Long)
+</dt>
+<dd>
+<a href='../../platform/Linux/' title="Simplified platform identifier for categorization">Linux</a> | <span title="Complete platform information as reported by relay">Tor 0.4.8.16 on Linux</span>
+</dd>
+<dt>
+Version (Running | Recommended | Status)
+</dt>
+<dd>
+<span title="Tor software version without leading 'Tor' as reported by the directory authorities in the 'v' line of the consensus. Omitted if either the directory authorities or the relay did not report which version the relay runs or if the relay runs an alternative Tor implementation.">0.4.8.16</span> | 
+<span title="Boolean field saying whether the Tor software version of this relay is recommended by the directory authorities or not. Uses the relay version in the consensus. Omitted if either the directory authorities did not recommend versions, or the relay did not report which version it runs.">Yes</span> | 
+<span title="Status of the Tor software version of this relay based on the versions recommended by the directory authorities. Possible version statuses are: 'recommended' if a version is listed as recommended; 'experimental' if a version is newer than every recommended version; 'obsolete' if a version is older than every recommended version; 'new in series' if a version has other recommended versions with the same first three components, and the version is newer than all such recommended versions, but it is not newer than every recommended version; 'unrecommended' if none of the above conditions hold. Omitted if either the directory authorities did not recommend versions, or the relay did not report which version it runs.">recommended</span>
+</dd>
+</dl>
+</div>
+</div>
+</div>
+        </div>
+    </body>
+        <footer class="page-footer font-small">
+            <div class="footer-copyright text-center text-muted">
+                <p>
+                    Generated by a <a href="https://github.com/1aeo/allium">1aeo modified fork of allium</a>, based on original <a href="https://git.jordan.im/allium/">allium</a>, on Sun, 08 Jun 2025 05:24:38 GMT. Source data from <a href="https://onionoo.torproject.org/">Tor Project onionoo</a>.
+                </p>
+            </div>
+        </footer>
+    </html>
