@@ -391,14 +391,10 @@ class IntelligenceEngine:
         if 'country' not in self.sorted_data:
             return 0.0, {}
         
-        # Regional mapping
-        regions = {
-            'north_america': {'us', 'ca', 'mx'},
-            'europe': {'de', 'fr', 'gb', 'nl', 'it', 'es', 'se', 'no', 'dk', 'fi', 'ch', 'at', 'be', 'ie', 'pt'},
-            'asia_pacific': {'jp', 'au', 'nz', 'kr', 'sg', 'hk', 'tw', 'th', 'my', 'ph'},
-            'eastern_europe': {'ru', 'ua', 'pl', 'cz', 'hu', 'ro', 'bg', 'sk', 'hr', 'si', 'ee', 'lv', 'lt'},
-            'other': set()
-        }
+        # Regional mapping (using centralized definitions)
+        from .country_utils import get_standard_regions
+        regions = get_standard_regions()
+        regions['other'] = set()  # Add 'other' category for unmatched countries
         
         regional_weights = {region: 0.0 for region in regions.keys()}
         
