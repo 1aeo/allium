@@ -102,12 +102,30 @@
         {%- if exit_count > 0 %}, and <span title="Percentage of exit consensus weight for exit position selection">{{ "%.2f%%"|format(exit_consensus_weight_fraction * 100) }} exit</span>{% endif -%}
         )
         {%- endif %}</li>
-    <li><strong><span title="Total number of relays and their functional role distribution across the Tor network">Relay Count</span>:</strong> {{ total_relays }} total
-        {%- if guard_count > 0 or middle_count > 0 or exit_count > 0 %} 
-        (<span title="Number of relays operating as guards, protecting client entry into Tor network">{{ guard_count }} guard{% if guard_count != 1 %}s{% endif %}</span>
-        {%- if middle_count > 0 %}, <span title="Number of relays operating as middle nodes, providing circuit routing">{{ middle_count }} middle{% if middle_count != 1 %}s{% endif %}</span>{% endif -%}
-        {%- if exit_count > 0 %}, <span title="Number of relays operating as exits, allowing traffic to leave the Tor network">{{ exit_count }} exit{% if exit_count != 1 %}s{% endif %}</span>{% endif -%}
-        )
-        {%- endif %}</li>
+    <li><strong><span title="Network position indicates the strategic role distribution of relays. Labels: Guard-focused (>60% guard), Exit-focused (>40% exit), Multi-role (both guard and exit >20%), Balanced (mixed roles), Guard-only (100% guard), Exit-only (100% exit), Middle-only (100% middle)">Network Position</span>:</strong> 
+        {%- set total_roles = guard_count + middle_count + exit_count -%}
+        {%- if total_roles > 0 -%}
+            {%- set guard_pct = (guard_count / total_roles * 100)|round(0)|int -%}
+            {%- set middle_pct = (middle_count / total_roles * 100)|round(0)|int -%}
+            {%- set exit_pct = (exit_count / total_roles * 100)|round(0)|int -%}
+            {%- if guard_count == total_roles -%}
+                guard-only, {{ guard_pct }}% guard
+            {%- elif exit_count == total_roles -%}
+                exit-only, {{ exit_pct }}% exit
+            {%- elif middle_count == total_roles -%}
+                middle-only, {{ middle_pct }}% middle
+            {%- elif guard_pct > 60 -%}
+                guard-focused, {{ guard_pct }}% guard, {{ middle_pct }}% middle, {{ exit_pct }}% exit
+            {%- elif exit_pct > 40 -%}
+                exit-focused, {{ guard_pct }}% guard, {{ middle_pct }}% middle, {{ exit_pct }}% exit
+            {%- elif guard_pct > 20 and exit_pct > 20 -%}
+                multi-role, {{ guard_pct }}% guard, {{ middle_pct }}% middle, {{ exit_pct }}% exit
+            {%- else -%}
+                balanced, {{ guard_pct }}% guard, {{ middle_pct }}% middle, {{ exit_pct }}% exit
+            {%- endif -%}
+            ({{ total_relays }} total relays, {{ guard_count }} guard{% if guard_count != 1 %}s{% endif %}, {{ middle_count }} middle{% if middle_count != 1 %}s{% endif %}, {{ exit_count }} exit{% if exit_count != 1 %}s{% endif %})
+        {%- else -%}
+            no role data ({{ total_relays }} total relays)
+        {%- endif -%}</li>
 </ul>
 {%- endmacro %} 
