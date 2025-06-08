@@ -3,6 +3,7 @@ File: aroileaders.py
 
 AROI (Authenticated Relay Operator Identifier) Leaderboard calculations
 Processes operator rankings based on Onionoo API data grouped by contact information
+Reuses existing contact calculations and only computes new metrics not already available
 """
 
 import hashlib
@@ -14,8 +15,8 @@ def _calculate_aroi_leaderboards(relays_instance):
     """
     Calculate AROI operator leaderboards using current live relay data.
     
-    Leverages existing contact-based aggregation from relays.py to generate
-    11 core ranking categories with efficient preprocessing for template rendering.
+    Leverages existing contact-based aggregations from relays.py to minimize
+    duplicate calculations. Only computes new metrics not already available.
     
     Args:
         relays_instance: Relays object with processed json data including sorted contacts
@@ -59,59 +60,60 @@ def _calculate_aroi_leaderboards(relays_instance):
         else:
             operator_key = f"contact_{contact_hash[:8]}"
         
-        # Collect relay data for this operator
-        operator_relays = [all_relays[i] for i in relay_indices]
-        
-        # Calculate comprehensive operator metrics
+        # === USE EXISTING CALCULATIONS (NO DUPLICATION) ===
+        # All basic metrics are already computed in contact_data
         total_bandwidth = contact_data.get('bandwidth', 0)
         total_consensus_weight = contact_data.get('consensus_weight_fraction', 0.0)
         guard_count = contact_data.get('guard_count', 0)
         exit_count = contact_data.get('exit_count', 0)
         middle_count = contact_data.get('middle_count', 0)
-        total_relays = len(operator_relays)
         unique_as_count = contact_data.get('unique_as_count', 0)
         measured_count = contact_data.get('measured_count', 0)
         first_seen = contact_data.get('first_seen', '')
+        total_relays = len(relay_indices)  # Use existing relay list length
         
-        # Calculate geographic and platform diversity
+        # === CALCULATE ONLY NEW METRICS NOT ALREADY AVAILABLE ===
+        # Get relay data for new calculations only
+        operator_relays = [all_relays[i] for i in relay_indices]
+        
+        # Geographic and platform diversity (minimal calculation)
         countries = set(relay.get('country', '') for relay in operator_relays if relay.get('country'))
         platforms = set(relay.get('platform', '') for relay in operator_relays if relay.get('platform'))
         
-        # Non-Linux platform detection
-        non_linux_relays = [relay for relay in operator_relays 
-                          if relay.get('platform') and not relay.get('platform', '').startswith('Linux')]
+        # Specialized platform/geographic counts (new calculations)
+        non_linux_count = sum(1 for relay in operator_relays 
+                             if relay.get('platform') and not relay.get('platform', '').startswith('Linux'))
         
-        # BSD platform detection  
-        bsd_relays = [relay for relay in operator_relays
-                     if relay.get('platform') and any(bsd in relay.get('platform', '') 
-                     for bsd in ['BSD', 'FreeBSD', 'OpenBSD', 'NetBSD', 'DragonFly'])]
+        bsd_count = sum(1 for relay in operator_relays
+                       if relay.get('platform') and any(bsd in relay.get('platform', '') 
+                       for bsd in ['BSD', 'FreeBSD', 'OpenBSD', 'NetBSD', 'DragonFly']))
         
-        # Non-EU country detection (simplified)
+        # Non-EU country detection (new calculation)
         eu_countries = {'AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 
                        'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 
                        'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE'}
-        non_eu_relays = [relay for relay in operator_relays 
-                        if relay.get('country') and relay.get('country').upper() not in eu_countries]
+        non_eu_count = sum(1 for relay in operator_relays 
+                          if relay.get('country') and relay.get('country').upper() not in eu_countries)
         
-        # Rare/frontier countries (simplified list)
+        # Rare/frontier countries (new calculation)
         rare_countries = {'MN', 'TN', 'UY', 'KZ', 'MD', 'LK', 'MK', 'MT', 'EE', 'LV'}
-        rare_country_relays = [relay for relay in operator_relays
-                              if relay.get('country') and relay.get('country').upper() in rare_countries]
+        rare_country_count = sum(1 for relay in operator_relays
+                                if relay.get('country') and relay.get('country').upper() in rare_countries)
         
-        # Calculate diversity score (simplified version)
+        # Diversity score (new calculation - weighted scoring)
         diversity_score = 0.0
         if countries:
             diversity_score += len(countries) * 2.0  # Geographic component
         if platforms:
             diversity_score += len(platforms) * 1.5  # Platform component  
         if unique_as_count:
-            diversity_score += unique_as_count * 1.0  # Network component
+            diversity_score += unique_as_count * 1.0  # Network component (reuse existing)
         
-        # Calculate uptime approximation (from running status)
+        # Uptime approximation (new calculation - from running status)
         running_relays = sum(1 for relay in operator_relays if relay.get('running', False))
         uptime_percentage = (running_relays / total_relays * 100) if total_relays > 0 else 0.0
         
-        # Calculate efficiency ratio (consensus weight to bandwidth)
+        # Efficiency ratio (new calculation - consensus weight to bandwidth)
         efficiency_ratio = 0.0
         if total_bandwidth > 0:
             # Convert bandwidth to approximate consensus weight scale for ratio
@@ -119,8 +121,9 @@ def _calculate_aroi_leaderboards(relays_instance):
             if bandwidth_gb > 0:
                 efficiency_ratio = (total_consensus_weight * 100) / bandwidth_gb
         
-        # Store operator data
+        # Store operator data (mix of existing + new calculations)
         aroi_operators[operator_key] = {
+            # === EXISTING CALCULATIONS (REUSED) ===
             'aroi_domain': aroi_domain,
             'contact_hash': contact_hash,
             'contact_info': contact_info,
@@ -132,107 +135,111 @@ def _calculate_aroi_leaderboards(relays_instance):
             'middle_count': middle_count,
             'measured_count': measured_count,
             'unique_as_count': unique_as_count,
+            'first_seen': first_seen,
+            
+            # === NEW CALCULATIONS (ONLY WHAT'S NEEDED) ===
             'countries': list(countries),
             'country_count': len(countries),
             'platforms': list(platforms),
             'platform_count': len(platforms),
-            'non_linux_count': len(non_linux_relays),
-            'bsd_count': len(bsd_relays),
-            'non_eu_count': len(non_eu_relays),
-            'rare_country_count': len(rare_country_relays),
+            'non_linux_count': non_linux_count,
+            'bsd_count': bsd_count,
+            'non_eu_count': non_eu_count,
+            'rare_country_count': rare_country_count,
             'diversity_score': diversity_score,
             'uptime_percentage': uptime_percentage,
             'efficiency_ratio': efficiency_ratio,
-            'first_seen': first_seen,
+            
+            # Keep minimal relay data for potential future use
             'relays': operator_relays
         }
     
     # Generate 11 core leaderboard categories
     leaderboards = {}
     
-    # 1. Bandwidth Contributed
+    # 1. Bandwidth Contributed (use existing calculation)
     leaderboards['bandwidth'] = sorted(
         aroi_operators.items(),
         key=lambda x: x[1]['total_bandwidth'],
         reverse=True
     )[:50]  # Top 50 for each category
     
-    # 2. Consensus Weight
+    # 2. Consensus Weight (use existing calculation)
     leaderboards['consensus_weight'] = sorted(
         aroi_operators.items(),
         key=lambda x: x[1]['total_consensus_weight'],
         reverse=True
     )[:50]
     
-    # 3. Exit Operators
+    # 3. Exit Operators (use existing calculation)
     leaderboards['exit_operators'] = sorted(
         aroi_operators.items(),
         key=lambda x: x[1]['exit_count'],
         reverse=True
     )[:50]
     
-    # 4. Guard Operators
+    # 4. Guard Operators (use existing calculation)
     leaderboards['guard_operators'] = sorted(
         aroi_operators.items(),
         key=lambda x: x[1]['guard_count'],
         reverse=True
     )[:50]
     
-    # 5. Most Diverse Operators
+    # 5. Most Diverse Operators (new calculation)
     leaderboards['most_diverse'] = sorted(
         aroi_operators.items(),
         key=lambda x: x[1]['diversity_score'],
         reverse=True
     )[:50]
     
-    # 6. Platform Diversity (Non-Linux Heroes)
+    # 6. Platform Diversity - Non-Linux Heroes (new calculation)
     leaderboards['platform_diversity'] = sorted(
         aroi_operators.items(),
         key=lambda x: x[1]['non_linux_count'],
         reverse=True
     )[:50]
     
-    # 7. Technical Leaders (BSD Operators)
+    # 7. Technical Leaders - BSD Operators (new calculation)
     leaderboards['bsd_operators'] = sorted(
         aroi_operators.items(),
         key=lambda x: x[1]['bsd_count'],
         reverse=True
     )[:50]
     
-    # 8. Geographic Champions (Non-EU Leaders)
+    # 8. Geographic Champions - Non-EU Leaders (new calculation)
     leaderboards['non_eu_leaders'] = sorted(
         aroi_operators.items(),
         key=lambda x: x[1]['non_eu_count'],
         reverse=True
     )[:50]
     
-    # 9. Frontier Builders (Rare Countries)
+    # 9. Frontier Builders - Rare Countries (new calculation)
     leaderboards['frontier_builders'] = sorted(
         aroi_operators.items(),
         key=lambda x: x[1]['rare_country_count'],
         reverse=True
     )[:50]
     
-    # 10. Network Veterans (Most Reliable) 
+    # 10. Network Veterans - Most Reliable (new calculation)
     leaderboards['network_veterans'] = sorted(
         aroi_operators.items(),
         key=lambda x: x[1]['uptime_percentage'],
         reverse=True
     )[:50]
     
-    # 11. Efficiency Champions
+    # 11. Efficiency Champions (new calculation)
     leaderboards['efficiency_champions'] = sorted(
         aroi_operators.items(),
         key=lambda x: x[1]['efficiency_ratio'],
         reverse=True
     )[:50]
     
-    # Format data for template rendering with bandwidth units
+    # Format data for template rendering with bandwidth units (reuse existing formatters)
     formatted_leaderboards = {}
     for category, data in leaderboards.items():
         formatted_data = []
         for rank, (operator_key, metrics) in enumerate(data, 1):
-            # Format bandwidth using existing relay formatting methods
+            # Use existing bandwidth formatting methods
             bandwidth_unit = relays_instance._determine_unit(metrics['total_bandwidth'])
             formatted_bandwidth = relays_instance._format_bandwidth_with_unit(
                 metrics['total_bandwidth'], bandwidth_unit
@@ -270,12 +277,12 @@ def _calculate_aroi_leaderboards(relays_instance):
         
         formatted_leaderboards[category] = formatted_data
     
-    # Generate summary statistics
+    # Generate summary statistics (reuse existing calculations)
     total_operators = len(aroi_operators)
     total_bandwidth_all = sum(op['total_bandwidth'] for op in aroi_operators.values())
     total_cw_all = sum(op['total_consensus_weight'] for op in aroi_operators.values())
     
-    # Format summary bandwidth with unit
+    # Format summary bandwidth with unit (reuse existing formatters)
     summary_bandwidth_unit = relays_instance._determine_unit(total_bandwidth_all)
     summary_bandwidth_value = relays_instance._format_bandwidth_with_unit(
         total_bandwidth_all, summary_bandwidth_unit
