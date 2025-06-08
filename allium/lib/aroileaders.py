@@ -254,6 +254,11 @@ def _calculate_aroi_leaderboards(relays_instance):
                 metrics['total_bandwidth'], bandwidth_unit
             )
             
+            # Calculate geographic achievement for non_eu_leaders category
+            geographic_achievement = ""
+            if category == 'non_eu_leaders':
+                geographic_achievement = _calculate_geographic_achievement(metrics['countries'])
+            
             formatted_entry = {
                 'rank': rank,
                 'operator_key': operator_key,
@@ -280,7 +285,8 @@ def _calculate_aroi_leaderboards(relays_instance):
                 'diversity_score': f"{metrics['diversity_score']:.1f}",
                 'uptime_percentage': f"{metrics['uptime_percentage']:.1f}%",
                 'efficiency_ratio': f"{metrics['efficiency_ratio']:.1f}x",
-                'first_seen_date': metrics['first_seen'].split(' ')[0] if metrics['first_seen'] else 'Unknown'
+                'first_seen_date': metrics['first_seen'].split(' ')[0] if metrics['first_seen'] else 'Unknown',
+                'geographic_achievement': geographic_achievement  # Add dynamic achievement
             }
             formatted_data.append(formatted_entry)
         
@@ -321,4 +327,79 @@ def _calculate_aroi_leaderboards(relays_instance):
         'leaderboards': formatted_leaderboards,
         'summary': summary_stats,
         'raw_operators': aroi_operators  # For potential future use
-    } 
+    }
+
+def _calculate_geographic_achievement(countries):
+    """Calculate dynamic geographic achievement based on operator's country distribution"""
+    
+    # Regional mapping (from intelligence_engine.py)
+    regions = {
+        'north_america': {'us', 'ca', 'mx'},
+        'europe': {'de', 'fr', 'gb', 'nl', 'it', 'es', 'se', 'no', 'dk', 'fi', 'ch', 'at', 'be', 'ie', 'pt'},
+        'asia_pacific': {'jp', 'au', 'nz', 'kr', 'sg', 'hk', 'tw', 'th', 'my', 'ph'},
+        'eastern_europe': {'ru', 'ua', 'pl', 'cz', 'hu', 'ro', 'bg', 'sk', 'hr', 'si', 'ee', 'lv', 'lt'},
+    }
+    
+    # Count countries per region
+    regional_presence = {region: 0 for region in regions.keys()}
+    regional_presence['other'] = 0
+    
+    for country in countries:
+        country_lower = country.lower()
+        assigned = False
+        
+        for region, region_countries in regions.items():
+            if country_lower in region_countries:
+                regional_presence[region] += 1
+                assigned = True
+                break
+        
+        if not assigned:
+            regional_presence['other'] += 1
+    
+    # Determine achievement based on distribution
+    total_countries = len(countries)
+    active_regions = sum(1 for count in regional_presence.values() if count > 0)
+    dominant_region = max(regional_presence.items(), key=lambda x: x[1])
+    
+    # Multi-continental operators (3+ regions)
+    if active_regions >= 3:
+        if total_countries >= 8:
+            return "Global Emperor"
+        else:
+            return "Multi-Continental Champion"
+    
+    # Single region dominance
+    elif dominant_region[1] > 0:
+        region_name = dominant_region[0]
+        country_count = dominant_region[1]
+        
+        # Region-specific titles based on country count
+        if region_name == 'north_america':
+            if country_count >= 3:
+                return "North America Emperor"
+            else:
+                return "North America Champion"
+        elif region_name == 'europe':
+            if country_count >= 5:
+                return "Europe Emperor"
+            else:
+                return "Europe Champion"
+        elif region_name == 'asia_pacific':
+            if country_count >= 4:
+                return "Asia-Pacific Emperor"
+            else:
+                return "Asia-Pacific Champion"
+        elif region_name == 'eastern_europe':
+            if country_count >= 3:
+                return "Eastern Europe Emperor"
+            else:
+                return "Eastern Europe Champion"
+        elif region_name == 'other':
+            if country_count >= 3:
+                return "Frontier Emperor"
+            else:
+                return "Frontier Pioneer"
+    
+    # Fallback
+    return "Regional Specialist" 
