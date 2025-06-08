@@ -135,7 +135,7 @@ if __name__ == "__main__":
 
     start_time = time.time()
     progress_step = 0
-    total_steps = 18
+    total_steps = 20
 
     if args.progress:
         print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Starting allium static site generation...")
@@ -177,6 +177,14 @@ if __name__ == "__main__":
     RELAY_SET.write_misc(template="all.html", path="misc/all.html", page_ctx=page_ctx)
     if args.progress:
         print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Generated all relays page")
+
+    # AROI leaderboards page
+    if args.progress:
+        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Generating AROI leaderboards page...")
+    aroi_ctx = get_page_context('misc', 'misc_listing', {'page_name': 'AROI Champions Dashboard'})
+    RELAY_SET.write_misc(template="aroi-leaderboards.html", path="misc/aroi-leaderboards.html", page_ctx=aroi_ctx)
+    if args.progress:
+        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Generated AROI leaderboards page")
 
     # miscellaneous page filename suffixes and sorted-by keys
     misc_pages = {
