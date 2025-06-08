@@ -1,57 +1,10 @@
 {% extends "relay-list.html" %}
-{% from "macros.html" import navigation %}
+{% from "macros.html" import navigation, detail_summary %}
 {% set platform_name = relays.json['relay_subset'][0]['platform']|escape %}
 {% block title %}Tor Relays :: {{ platform_name }}{% endblock %}
 {% block header %}View Platform {{ platform_name }} Details{% endblock %}
 {% block navigation -%}
 {{ navigation('platforms', page_ctx) }}
 {% endblock -%}
-{% block description %}
-    Platform {{ value }} is responsible for ~{{ bandwidth }}
-    {{ bandwidth_unit }} of bandwidth (BW)
-    {%- if guard_count > 0 or middle_count > 0 or exit_count > 0 %} (
-        {%- if guard_count > 0 -%}
-            {{ guard_bandwidth }} {{ bandwidth_unit }} guard
-            {%- if middle_count > 0 or exit_count > 0 %}, {% endif -%}
-        {%- endif -%}
-        {%- if middle_count > 0 -%}
-            {{ middle_bandwidth }} {{ bandwidth_unit }} middle
-            {%- if exit_count > 0 %}, {% endif -%}
-        {%- endif -%}
-        {%- if exit_count > 0 -%}
-            {{ exit_bandwidth }} {{ bandwidth_unit }} exit
-        {%- endif -%}
-    )
-    {%- endif %} and {{ "%.2f%%"|format(consensus_weight_fraction * 100) }} consensus weight (CW)
-    {%- if guard_count > 0 or middle_count > 0 or exit_count > 0 %} (
-        {%- if guard_count > 0 -%}
-            {{ "%.2f%%"|format(guard_consensus_weight_fraction * 100) }} guard
-            {%- if middle_count > 0 or exit_count > 0 %}, {% endif -%}
-        {%- endif -%}
-        {%- if middle_count > 0 -%}
-            {{ "%.2f%%"|format(middle_consensus_weight_fraction * 100) }} middle
-            {%- if exit_count > 0 %}, {% endif -%}
-        {%- endif -%}
-        {%- if exit_count > 0 -%}
-            {{ "%.2f%%"|format(exit_consensus_weight_fraction * 100) }} exit
-        {%- endif -%}
-    )
-    {%- endif %}, with
-    {% if guard_count > 0 %}
-        {{ guard_count }} guard relay
-        {%- if guard_count > 1 -%}s{%- endif -%}
-        {% if middle_count > 0 or exit_count > 0 %},{% endif %}
-    {% endif %}
-    {% if middle_count > 0 %}
-        {{ middle_count }} middle relay
-        {%- if middle_count > 1 -%}s{%- endif -%}
-        {% if exit_count > 0 %}
-            and
-        {% endif %}
-    {% endif %}
-    {% if exit_count > 0 %}
-        {{ exit_count }} exit relay
-        {%- if exit_count > 1 -%}s{%- endif -%}
-    {%- endif -%}
-    .
-{% endblock %}
+{% block description %}Platform {{ value }} summary:
+{{ detail_summary(bandwidth, bandwidth_unit, guard_bandwidth, middle_bandwidth, exit_bandwidth, consensus_weight_fraction, guard_consensus_weight_fraction, middle_consensus_weight_fraction, exit_consensus_weight_fraction, guard_count, middle_count, exit_count, relays.json['relay_subset']|length) }}{% endblock %}
