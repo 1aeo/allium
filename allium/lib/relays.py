@@ -26,10 +26,11 @@ ENV = Environment(
 class Relays:
     """Relay class consisting of processing routines and onionoo data"""
 
-    def __init__(self, output_dir, onionoo_url, use_bits=False):
+    def __init__(self, output_dir, onionoo_url, use_bits=False, progress=False):
         self.output_dir = output_dir
         self.onionoo_url = onionoo_url
         self.use_bits = use_bits
+        self.progress = progress
         self.ts_file = os.path.join(os.path.dirname(ABS_PATH), "timestamp")
         self.json = self._fetch_onionoo_details()
         if self.json == None:
@@ -653,10 +654,12 @@ class Relays:
         except ImportError:
             from .intelligence_engine import IntelligenceEngine
         
-        print("[Intelligence] Starting Tier 1 analysis...")
+        if self.progress:
+            print("[Intelligence] Starting Tier 1 analysis...")
         engine = IntelligenceEngine(self.json)
         self.json['smart_context'] = engine.analyze_all_layers()
-        print("[Intelligence] Tier 1 analysis complete")
+        if self.progress:
+            print("[Intelligence] Tier 1 analysis complete")
 
     def create_output_dir(self):
         """
