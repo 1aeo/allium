@@ -472,6 +472,9 @@ class IntelligenceEngine:
                 contact_fingerprints = [relay.get('fingerprint') for relay in contact_relays if relay.get('fingerprint')]
                 underutilized_count = sum(1 for fp in contact_fingerprints if fp in underutilized_fingerprints)
                 
+                # Get top 2 underutilized relay fingerprints for this contact
+                contact_underutilized_fps = [fp for fp in contact_fingerprints if fp in underutilized_fingerprints][:2]
+                
                 if total_relays > 0:
                     if underutilized_count == 0:
                         perf_status = "optimal efficiency"
@@ -521,6 +524,7 @@ class IntelligenceEngine:
                     'geographic_countries': country_count,
                     'geographic_risk': geo_risk,
                     'performance_underutilized': underutilized_count,
+                    'performance_underutilized_fps': contact_underutilized_fps,
                     'performance_status': perf_status,
                     'infrastructure_platforms': platform_count,
                     'infrastructure_versions': version_count,

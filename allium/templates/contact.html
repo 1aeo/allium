@@ -29,20 +29,18 @@
 <div class="intelligence-section" style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-left: 4px solid #007bff;">
     <h4 style="margin-top: 0; color: #495057;">Operator Intelligence</h4>
     
-    <ul style="list-style-type: disc; padding-left: 20px; margin-bottom: 15px;">
-        <li><strong><span title="Network diversity shows infrastructure distribution across different autonomous systems">Portfolio Diversity</span>:</strong> {{ contact_intel.portfolio_diversity }}</li>
-        <li><strong><span title="Measurement status indicates relay reliability and performance verification">Measurement Status</span>:</strong> {{ contact_intel.measurement_status }}</li>
-    </ul>
-    
-    <h5 style="margin-top: 15px; margin-bottom: 10px; color: #495057;">Advanced Analytics</h5>
     <ul style="list-style-type: disc; padding-left: 20px; margin-bottom: 0;">
-        <li><strong>Geographic Risk:</strong> {{ contact_intel.geographic_countries }} {{ "country" if contact_intel.geographic_countries == 1 else "countries" }} - {{ contact_intel.geographic_risk }}</li>
+        <li><strong><span title="Network diversity measures infrastructure distribution across different autonomous systems (AS). Higher diversity reduces single points of failure and improves network resilience.">Network Diversity</span>:</strong> {{ contact_intel.portfolio_diversity }}</li>
         
-        <li><strong>Performance Insights:</strong> {{ contact_intel.performance_underutilized }} underutilized relays - {{ contact_intel.performance_status }}</li>
+        <li><strong><span title="Geographic diversity assesses country distribution risk. Single country: high censorship/legal risk. 2 countries: moderate concentration risk. 3+ countries: good diversification for network resilience.">Geographic Diversity</span>:</strong> {{ contact_intel.geographic_countries }} {{ "country" if contact_intel.geographic_countries == 1 else "countries" }} - {{ contact_intel.geographic_risk }}</li>
         
-        <li><strong>Infrastructure Analysis:</strong> {{ contact_intel.infrastructure_platforms }} {{ "platform" if contact_intel.infrastructure_platforms == 1 else "platforms" }}, {{ contact_intel.infrastructure_versions }} {{ "version" if contact_intel.infrastructure_versions == 1 else "versions" }} - {{ contact_intel.infrastructure_risk }}</li>
+        <li><strong><span title="Infrastructure diversity analyzes platform and version distribution. All same platform/version: high synchronization risk. Mixed platforms/versions: better security through diversity.">Infrastructure Diversity</span>:</strong> {{ contact_intel.infrastructure_platforms }} {{ "platform" if contact_intel.infrastructure_platforms == 1 else "platforms" }}, {{ contact_intel.infrastructure_versions }} {{ "version" if contact_intel.infrastructure_versions == 1 else "versions" }} - {{ contact_intel.infrastructure_risk }}</li>
         
-        <li><strong>Operational Maturity:</strong> {{ contact_intel.maturity }}</li>
+        <li><strong><span title="Bandwidth measurements show how many relays are measured by directory authorities for consensus weight calculation. Measured relays contribute more effectively to the network.">Bandwidth Measurements</span>:</strong> {{ contact_intel.measurement_status }}</li>
+        
+        <li><strong><span title="Performance insights identify underutilized relays with high bandwidth (>10MB/s) but low consensus weight (<0.05% of bandwidth). These relays may need configuration optimization or better connectivity.">Performance Insights</span>:</strong> {{ contact_intel.performance_underutilized }} underutilized relays - {{ contact_intel.performance_status }}{% if contact_intel.performance_underutilized_fps %} ({% for fp in contact_intel.performance_underutilized_fps %}{{ fp[:8] }}{% if not loop.last %}, {% endif %}{% endfor %}){% endif %}</li>
+        
+        <li><strong><span title="Operational maturity tracks deployment timeline and expansion patterns. Shows operator experience and growth strategy over time.">Operational Maturity</span>:</strong> {{ contact_intel.maturity }}</li>
     </ul>
 </div>
 {% endif %}{% endblock %}
