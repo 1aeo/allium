@@ -527,25 +527,19 @@
                                 </span>
                             {% else %}
                                 <span class="badge badge-default">{{ entry.rank }}</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if entry.aroi_domain and entry.aroi_domain != 'none' %}
-                                <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" title="Contact: {{ entry.contact_info|escape }}" style="text-decoration: underline;">
-                                    <strong>{{ entry.aroi_domain|escape }}</strong>
-                                </a>
-                            {% elif entry.contact_info %}
-                                <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" title="Contact: {{ entry.contact_info|escape }}" style="text-decoration: underline;" class="contact-text">
-                                    {{ entry.contact_info|truncate(20)|escape }}
-                                </a>
-                            {% else %}
-                                <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" style="text-decoration: underline;">
-                                    <em>{{ entry.operator_key|escape }}</em>
-                                </a>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <span title="Total: {{ entry.total_relays }} | Measured: {{ entry.measured_count }}">
+                                        {% endif %}
+        </td>
+        <td>
+            <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" title="Contact: {{ entry.contact_info|escape }}" style="text-decoration: underline;">
+                {% if entry.aroi_domain and entry.aroi_domain != 'none' %}
+                    <strong>{{ entry.aroi_domain|escape }}</strong>
+                {% else %}
+                    <strong>{{ entry.operator_key|escape }}</strong>
+                {% endif %}
+            </a>
+        </td>
+        <td>
+            <span title="Total: {{ entry.total_relays }} | Measured: {{ entry.measured_count }}">
                                 {{ entry.total_relays }}
                                 {% if entry.measured_count > 0 %}
                                     <small class="text-muted">({{ entry.measured_count }} measured)</small>
@@ -621,22 +615,16 @@
                                 <span class="badge badge-default">{{ entry.rank }}</span>
                             {% endif %}
                         </td>
-                        <td>
-                            {% if entry.aroi_domain and entry.aroi_domain != 'none' %}
-                                <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" title="Contact: {{ entry.contact_info|escape }}" style="text-decoration: underline;">
-                                    <strong>{{ entry.aroi_domain|escape }}</strong>
-                                </a>
-                            {% elif entry.contact_info %}
-                                <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" title="Contact: {{ entry.contact_info|escape }}" style="text-decoration: underline;" class="contact-text">
-                                    {{ entry.contact_info|truncate(20)|escape }}
-                                </a>
-                            {% else %}
-                                <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" style="text-decoration: underline;">
-                                    <em>{{ entry.operator_key|escape }}</em>
-                                </a>
-                            {% endif %}
-                        </td>
-                        <td>{{ entry.total_relays }}</td>
+                                <td>
+            <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" title="Contact: {{ entry.contact_info|escape }}" style="text-decoration: underline;">
+                {% if entry.aroi_domain and entry.aroi_domain != 'none' %}
+                    <strong>{{ entry.aroi_domain|escape }}</strong>
+                {% else %}
+                    <strong>{{ entry.operator_key|escape }}</strong>
+                {% endif %}
+            </a>
+        </td>
+        <td>{{ entry.total_relays }}</td>
                         <td>
                             <span class="text-nowrap"><strong>{{ entry.total_consensus_weight_pct }}</strong></span>
                         </td>
@@ -695,7 +683,7 @@
                                 </a>
                             {% else %}
                                 <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" style="text-decoration: underline;">
-                                    <em>{{ entry.operator_key|escape }}</em>
+                                    <strong>{{ entry.operator_key|escape }}</strong>
                                 </a>
                             {% endif %}
                         </td>
@@ -750,7 +738,7 @@
                                 </a>
                             {% else %}
                                 <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" style="text-decoration: underline;">
-                                    <em>{{ entry.operator_key|escape }}</em>
+                                    <strong>{{ entry.operator_key|escape }}</strong>
                                 </a>
                             {% endif %}
                         </td>
@@ -812,7 +800,7 @@
                                     </a>
                                 {% else %}
                                     <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" style="text-decoration: underline;">
-                                        <em>{{ entry.operator_key|escape }}</em>
+                                        <strong>{{ entry.operator_key|escape }}</strong>
                                     </a>
                                 {% endif %}
                             </td>
