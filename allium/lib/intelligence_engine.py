@@ -332,6 +332,60 @@ class IntelligenceEngine:
         gini_sum = sum((2 * (i + 1) - n - 1) * value for i, value in enumerate(sorted_values))
         return gini_sum / (n * total)
     
+    def _calculate_network_position(self, guard_count, middle_count, exit_count, total_relays):
+        """Calculate network position strategic label and formatted string"""
+        total_roles = guard_count + middle_count + exit_count
+        
+        if total_roles <= 0:
+            return {
+                'label': 'no role data',
+                'formatted_string': f'no role data ({total_relays} total relays)'
+            }
+        
+        # Calculate percentages
+        guard_pct = int(round(guard_count / total_roles * 100))
+        middle_pct = int(round(middle_count / total_roles * 100))
+        exit_pct = int(round(exit_count / total_roles * 100))
+        
+        # Determine strategic label using the same logic as template
+        if guard_count == total_roles:
+            label = 'guard-only'
+            percentage_breakdown = f'{guard_pct}% guard'
+        elif exit_count == total_roles:
+            label = 'exit-only'
+            percentage_breakdown = f'{exit_pct}% exit'
+        elif middle_count == total_roles:
+            label = 'middle-only'
+            percentage_breakdown = f'{middle_pct}% middle'
+        elif guard_pct > 60:
+            label = 'guard-focused'
+            percentage_breakdown = f'{guard_pct}% guard, {middle_pct}% middle, {exit_pct}% exit'
+        elif exit_pct > 40:
+            label = 'exit-focused'
+            percentage_breakdown = f'{guard_pct}% guard, {middle_pct}% middle, {exit_pct}% exit'
+        elif guard_pct > 20 and exit_pct > 20:
+            label = 'multi-role'
+            percentage_breakdown = f'{guard_pct}% guard, {middle_pct}% middle, {exit_pct}% exit'
+        else:
+            label = 'balanced'
+            percentage_breakdown = f'{guard_pct}% guard, {middle_pct}% middle, {exit_pct}% exit'
+        
+        # Create relay count description with proper pluralization
+        guard_desc = f'{guard_count} guard{"s" if guard_count != 1 else ""}'
+        middle_desc = f'{middle_count} middle{"s" if middle_count != 1 else ""}'
+        exit_desc = f'{exit_count} exit{"s" if exit_count != 1 else ""}'
+        
+        formatted_string = f'{label}, {percentage_breakdown} ({total_relays} total relays, {guard_desc}, {middle_desc}, {exit_desc})'
+        
+        return {
+            'label': label,
+            'percentage_breakdown': percentage_breakdown,
+            'formatted_string': formatted_string,
+            'guard_percentage': guard_pct,
+            'middle_percentage': middle_pct,
+            'exit_percentage': exit_pct
+        }
+    
     def _calculate_regional_hhi_detailed(self):
         """Calculate regional HHI with detailed regional statistics"""
         if 'country' not in self.sorted_data:

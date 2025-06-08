@@ -913,6 +913,14 @@ class Relays:
             guard_bandwidth = self._format_bandwidth_with_unit(i["guard_bandwidth"], bandwidth_unit)
             middle_bandwidth = self._format_bandwidth_with_unit(i["middle_bandwidth"], bandwidth_unit)
             exit_bandwidth = self._format_bandwidth_with_unit(i["exit_bandwidth"], bandwidth_unit)
+            
+            # Calculate network position using intelligence engine
+            from allium.lib.intelligence_engine import IntelligenceEngine
+            intelligence = IntelligenceEngine({})  # Empty intelligence engine just for utility method
+            total_relays = len(members)
+            network_position = intelligence._calculate_network_position(
+                i["guard_count"], i["middle_count"], i["exit_count"], total_relays
+            )
                 
             # Generate page context with correct breadcrumb data
             page_ctx = self.get_detail_page_context(k, v)
@@ -931,6 +939,7 @@ class Relays:
                 exit_count=i["exit_count"],
                 guard_count=i["guard_count"],
                 middle_count=i["middle_count"],
+                network_position=network_position,  # Pre-computed network position
                 is_index=False,
                 page_ctx=page_ctx,
                 key=k,
