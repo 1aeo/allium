@@ -1,0 +1,3141 @@
+    <!DOCTYPE html>
+    <html lang="en">
+        <head>
+            <title>
+Tor Relays :: First Seen 2023-05-30            </title>
+            <meta name="description"
+                  content="Javascript-free Tor metrics generated from a 30 minute API request.">
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <link rel="stylesheet" href="../../static/css/bootstrap.min.css">
+            <!--source: metrics.torproject.org-->
+            <style>
+                .circle {
+                    display: inline-block;
+                    vertical-align: middle;
+                    background: #999999;
+                    width: 7px;
+                    height: 7px;
+                    -moz-border-radius: 50%;
+                    -webkit-border-radius: 50%;
+                    border-radius: 50%;
+                }
+
+                .circle-online {
+                    background: #25d918;
+                }
+
+                .circle-offline {
+                    background: #ff1515;
+                }
+
+                .verified-hostname {
+                    color: #FE9F30;
+                }
+
+                .verified-hostname {
+                    color: #68b030;
+                }
+
+                .unverified-hostname {
+                    color: #FE9F30;
+                }
+
+                /* Dynamic text truncation for contact information */
+                .contact-text {
+                    display: inline-block;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    max-width: 20vw;  /* Use viewport width for responsive sizing */
+                }
+
+                /* Table styles */
+                .table {
+                    width: 100%;
+                    margin-bottom: 1rem;
+                }
+
+                /* Precise alignment for multi-value columns using monospace */
+                .bw-header, .cw-header, .rc-header, /* rc = relay count */
+                .bw-data, .cw-data, .rc-data {
+                    font-family: Consolas, "Courier New", monospace;
+                    white-space: nowrap;
+                    text-align: center;
+                    letter-spacing: 0.05em; /* Slight spacing for readability */
+                }
+
+                /* Container breakpoint */
+                @media (min-width: 1400px) {
+                    .container {
+                        width: 95%;
+                        max-width: none;
+                        padding-right: 15px;
+                        padding-left: 15px;
+                        margin-right: auto;
+                        margin-left: auto;
+                    }
+                }
+
+                /* AROI Leaderboards - Consolidated CSS Components */
+                
+                /* Section Spacing */
+                .aroi-section {
+                    margin-bottom: 40px;
+                }
+                
+                .aroi-subsection {
+                    margin-bottom: 30px;
+                }
+                
+                .aroi-champion-badge {
+                    margin-bottom: 20px;
+                }
+                
+                /* Top 3 Summary Tables */
+                .aroi-top3-table thead th:nth-child(1) {
+                    width: 30%;
+                }
+                
+                .aroi-top3-table thead th:nth-child(2) {
+                    width: 25%;
+                }
+                
+                .aroi-top3-table thead th:nth-child(3) {
+                    width: 45%;
+                }
+                
+                /* Complete Rankings Tables - Common patterns */
+                .aroi-rankings-table thead th:nth-child(1) {
+                    width: 5%;  /* Rank */
+                }
+                
+                .aroi-rankings-table thead th:nth-child(2) {
+                    width: 25%; /* Operator */
+                }
+                
+                /* Standard bandwidth/consensus table layout */
+                .aroi-standard-table thead th:nth-child(3) {
+                    width: 8%;  /* Relays */
+                }
+                
+                .aroi-standard-table thead th:nth-child(4) {
+                    width: 15%; /* Bandwidth */
+                }
+                
+                .aroi-standard-table thead th:nth-child(5) {
+                    width: 12%; /* Consensus Weight */
+                }
+                
+                .aroi-standard-table thead th:nth-child(6) {
+                    width: 15%; /* Guard/Exit Count */
+                }
+                
+                .aroi-standard-table thead th:nth-child(7) {
+                    width: 10%; /* Countries */
+                }
+                
+                .aroi-standard-table thead th:nth-child(8) {
+                    width: 10%; /* Platforms/Efficiency/Other */
+                }
+                
+                /* Specialized table for Exit/Guard operators */
+                .aroi-specialized-table thead th:nth-child(3) {
+                    width: 10%; /* Specific Relays (Exit/Guard) */
+                }
+                
+                .aroi-specialized-table thead th:nth-child(4) {
+                    width: 8%;  /* Total Relays */
+                }
+                
+                .aroi-specialized-table thead th:nth-child(5) {
+                    width: 15%; /* Bandwidth */
+                }
+                
+                .aroi-specialized-table thead th:nth-child(6) {
+                    width: 12%; /* Consensus Weight */
+                }
+                
+                .aroi-specialized-table thead th:nth-child(7) {
+                    width: 10%; /* Countries */
+                }
+                
+                .aroi-specialized-table thead th:nth-child(8) {
+                    width: 15%; /* Cross Reference (Guard/Exit Count) */
+                }
+                
+                /* Diversity/Category table layout */
+                .aroi-category-table thead th:nth-child(3) {
+                    width: 8%;  /* Relays */
+                }
+                
+                .aroi-category-table thead th:nth-child(4) {
+                    width: 15%; /* Key Metric */
+                }
+                
+                .aroi-category-table thead th:nth-child(5) {
+                    width: 12%; /* Bandwidth */
+                }
+                
+                .aroi-category-table thead th:nth-child(6) {
+                    width: 10%; /* Countries */
+                }
+                
+                .aroi-category-table thead th:nth-child(7) {
+                    width: 10%; /* Platforms */
+                }
+                
+                .aroi-category-table thead th:nth-child(8) {
+                    width: 15%; /* Specialization */
+                }
+
+                /* AROI Champion Badge Styles */
+                .aroi-champion-platinum {
+                    background: linear-gradient(45deg, #FFD700, #FFA500);
+                    color: #000;
+                }
+                
+                .aroi-champion-network {
+                    background: linear-gradient(45deg, #f7b731, #fc4a1a);
+                    color: #fff;
+                }
+                
+                .aroi-champion-exit {
+                    background: linear-gradient(45deg, #FF6B6B, #FF8E53);
+                    color: #fff;
+                }
+                
+                .aroi-champion-guard {
+                    background: linear-gradient(45deg, #4ECDC4, #44A08D);
+                    color: #fff;
+                }
+                
+                .aroi-champion-diversity {
+                    background: linear-gradient(45deg, #A8E6CF, #56AB2F);
+                    color: #000;
+                }
+                
+                .aroi-champion-platform {
+                    background: linear-gradient(45deg, #74b9ff, #0984e3);
+                    color: #fff;
+                }
+                
+                .aroi-champion-bsd {
+                    background: linear-gradient(45deg, #667eea, #764ba2);
+                    color: #fff;
+                }
+                
+                .aroi-champion-global {
+                    background: linear-gradient(45deg, #00b894, #00a085);
+                    color: #fff;
+                }
+                
+                .aroi-champion-frontier {
+                    background: linear-gradient(45deg, #ffecd2, #fcb69f);
+                    color: #000;
+                }
+                
+                .aroi-champion-reliability {
+                    background: linear-gradient(45deg, #a8edea, #fed6e3);
+                    color: #000;
+                }
+                
+                .aroi-champion-efficiency {
+                    background: linear-gradient(45deg, #f093fb, #f5576c);
+                    color: #fff;
+                }
+
+                /* AROI Ranking Badge Styles */
+                .aroi-rank-gold {
+                    background-color: #FFD700;
+                }
+                
+                .aroi-rank-silver {
+                    background-color: #C0C0C0;
+                }
+                
+                .aroi-rank-bronze {
+                    background-color: #CD7F32;
+                }
+
+                /* AROI Link Styles */
+                .aroi-underline-link {
+                    text-decoration: underline;
+                    color: inherit;
+                }
+                
+                .aroi-contact-link {
+                    text-decoration: underline;
+                }
+
+                /* AROI Layout Styles */
+                .aroi-center-text {
+                    text-align: center;
+                }
+                
+                .aroi-flex-nav {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 10px;
+                }
+                
+                .aroi-nav-spacing {
+                    margin-bottom: 20px;
+                }
+                
+                .aroi-nav-spacing h4 {
+                    margin-top: 5px;
+                }
+                
+                .aroi-primary-nav {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 15px;
+                    margin-bottom: 15px;
+                    justify-content: center;
+                }
+                
+                .aroi-category-nav {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 8px;
+                    padding-top: 15px;
+                    border-top: 1px solid #ddd;
+                    justify-content: center;
+                }
+                
+                .aroi-nav-separator {
+                    border-top: 1px solid #ddd;
+                    margin: 15px 0;
+                }
+                
+                .aroi-top-margin {
+                    margin-top: 10px;
+                }
+                
+                .aroi-header-spacing {
+                    margin-top: 0;
+                }
+                
+                .aroi-fixed-nav {
+                    position: fixed;
+                    bottom: 20px;
+                    right: 20px;
+                    z-index: 1000;
+                }
+                
+                .aroi-footer-section {
+                    margin-top: 50px;
+                    border-top: 2px solid #ccc;
+                    padding-top: 30px;
+                }
+
+                /* CSS-only navbar collapse using checkbox hack */
+                .navbar-toggle {
+                    display: none;
+                    background-color: transparent;
+                    background-image: none;
+                    border: 1px solid #ddd;
+                    border-radius: 4px;
+                    padding: 9px 10px;
+                    margin-top: 8px;
+                    margin-right: 15px;
+                    margin-bottom: 8px;
+                    cursor: pointer;
+                    float: right;
+                }
+
+                .navbar-toggle:hover,
+                .navbar-toggle:focus {
+                    background-color: #ddd;
+                }
+
+                .navbar-toggle .icon-bar {
+                    display: block;
+                    width: 22px;
+                    height: 2px;
+                    background-color: #888;
+                    border-radius: 1px;
+                    margin: 4px 0;
+                }
+
+                .navbar-brand {
+                    float: left;
+                    height: 50px;
+                    padding: 15px;
+                    font-size: 18px;
+                    line-height: 20px;
+                    font-weight: bold;
+                }
+
+                /* Desktop: show navigation horizontally */
+                @media (min-width: 768px) {
+                    .navbar-collapse {
+                        display: block !important;
+                        height: auto !important;
+                        overflow: visible !important;
+                    }
+                    
+                    .nav.navbar-nav {
+                        float: left;
+                        margin: 0;
+                    }
+                    
+                    .nav.navbar-nav > li {
+                        float: left;
+                    }
+                    
+                    .nav.navbar-nav > li > a {
+                        padding-top: 15px;
+                        padding-bottom: 15px;
+                        color: #777;
+                        text-decoration: none;
+                        padding-left: 15px;
+                        padding-right: 15px;
+                    }
+                    
+                    .nav.navbar-nav > li.active > a,
+                    .nav.navbar-nav > li > a:hover,
+                    .nav.navbar-nav > li > a:focus {
+                        color: #333;
+                        background-color: #e7e7e7;
+                    }
+                    
+                    .navbar-brand {
+                        display: none;
+                    }
+                }
+
+                /* Mobile: hide navigation by default, show hamburger */
+                @media (max-width: 767px) {
+                    .navbar-toggle {
+                        display: block;
+                    }
+                    
+                    .navbar-collapse {
+                        display: none;
+                        clear: both;
+                        width: 100%;
+                        margin-top: 50px;
+                        border-top: 1px solid #e7e7e7;
+                        padding-top: 10px;
+                    }
+                    
+                    /* When checkbox is checked, show the menu */
+                    .navbar-toggle-checkbox:checked ~ .navbar-header + .navbar-collapse {
+                        display: block;
+                    }
+                    
+                    .nav.navbar-nav > li {
+                        float: none;
+                    }
+                    
+                    .nav.navbar-nav > li > a {
+                        display: block;
+                        padding: 12px 20px;
+                        color: #777;
+                        text-decoration: none;
+                        border-bottom: 1px solid #e7e7e7;
+                    }
+                    
+                    .nav.navbar-nav > li:last-child > a {
+                        border-bottom: none;
+                    }
+                    
+                    .nav.navbar-nav > li.active > a,
+                    .nav.navbar-nav > li > a:hover,
+                    .nav.navbar-nav > li > a:focus {
+                        color: #333;
+                        background-color: #f5f5f5;
+                    }
+                }
+            </style>
+        </head>
+    <body>
+        <div class="container">
+<h2>
+View First Seen 2023-05-30 Details</h2>
+
+        <nav aria-label="breadcrumb" style="margin-bottom: 10px;">
+    <ol class="breadcrumb" style="background: none; padding: 0; margin: 0; font-size: 0.9em; list-style: none;">
+        <li style="display: inline;"><a href="../../index.html" style="color: #337ab7; text-decoration: none;">Home</a></li>
+            <li style="display: inline;"> > <a href="../../misc/all.html" style="color: #337ab7; text-decoration: none;">All Relays</a></li>
+            <li style="display: inline; color: #777;"> > First Seen 2023-05-30</li>
+    </ol>
+</nav>
+    <nav class="navbar navbar-default" style="margin-bottom: 20px;">
+        <div class="container-fluid">
+            <!-- CSS-only hamburger toggle using checkbox hack -->
+            <input type="checkbox" id="navbar-toggle" class="navbar-toggle-checkbox" style="display: none;">
+            
+            <div class="navbar-header">
+                <label for="navbar-toggle" class="navbar-toggle" role="button" aria-label="Toggle navigation">
+                    <span class="sr-only">Toggle navigation</span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </label>
+                <span class="navbar-brand visible-xs">Browse Categories</span>
+            </div>
+            
+            <div class="navbar-collapse" id="main-navbar">
+                <ul class="nav navbar-nav">
+                    <li class="">
+                        <a href="../../misc/aroi-leaderboards.html">Operator Champions</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/contacts-by-bandwidth.html">Operator / Contact</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/families-by-bandwidth.html">By Family</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/networks-by-bandwidth.html">By Network</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/countries-by-bandwidth.html">By Country</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/platforms-by-bandwidth.html">By Platform</a>
+                    </li>
+                    <li class="">
+                        <a href="../../index.html">Top 500 Relays</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/all.html">All Relays</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+<p>
+Relays started on 2023-05-30 summary:
+<ul style="list-style-type: disc; padding-left: 20px; margin-bottom: 15px;">
+    <li><strong><span title="Observed bandwidth represents the estimated capacity this group can handle, combining total, guard, middle, and exit bandwidth contributions">Bandwidth</span>:</strong> ~7.10 Gbit/s 
+        (<span title="Bandwidth dedicated to guard relay operations">0.00 Gbit/s guard</span>, <span title="Bandwidth dedicated to middle relay operations">0.06 Gbit/s middle</span>, <span title="Bandwidth dedicated to exit relay operations">7.03 Gbit/s exit</span>)</li>
+    <li><strong><span title="Network influence represents the percentage of overall consensus weight, indicating relative importance in the Tor network across guard, middle, and exit positions">Network Influence</span>:</strong> 0.92% of overall consensus weight 
+        (<span title="Percentage of guard consensus weight for entry position selection">0.00% guard</span>, <span title="Percentage of middle consensus weight for routing position selection">0.03% middle</span>, and <span title="Percentage of exit consensus weight for exit position selection">2.51% exit</span>)</li>
+    <li><strong><span title="Network position indicates the strategic role distribution of relays. Labels: Guard-focused (>60% guard), Exit-focused (>40% exit), Multi-role (both guard and exit >20%), Balanced (mixed roles), Guard-only (100% guard), Exit-only (100% exit), Middle-only (100% middle)">Network Position</span>:</strong> exit-focused, 0% guard, 11% middle, 89% exit (36 total relays, 0 guards, 4 middles, 32 exits)</li>
+</ul></p>
+
+<p class="text-muted" style="margin-bottom: 15px;">
+<small>Last updated: Sun, 08 Jun 2025 21:46:50 GMT. Refreshed every 30 minutes from the Tor directory authorities via <a href="https://onionoo.torproject.org/">Tor Project's onionoo API</a>.</small>
+</p>
+
+<table class="table table-condensed">
+<tr>
+    <th></th>
+    <th>Nickname</th>
+    <th><a href="https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/" target="_blank" title="Autonomous Relay Operator Identifier - unverified">AROI</a></th>
+    <th>Contact</th>
+    <th>BW</th>
+<th title="Bandwidth measured by >=3 bandwidth authorities">BW Measured</th>
+<th class="visible-md visible-lg">IP Address</th>
+    <th>AS Number</th>
+    <th>AS Name</th>
+    <th>Country</th>
+    <th>Platform</th>
+    <th class="visible-md visible-lg">Flags</th>
+    <th class="visible-md visible-lg">First Seen</th>
+<th class="visible-md visible-lg">Last Restarted</th>
+</tr>
+<tbody>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="artikel10ber127">
+		    <a href="../../relay/8C582D20C1362A37CB8B8321A5D745578FE01977/">artikel10ber127</a> (<a href="../../family/8C582D20C1362A37CB8B8321A5D745578FE01977/">128</a>)
+		    </td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" title="artikel10.org">artikel10.org</a>
+			</td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" 
+				title="Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2" class="contact-text">Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>271.38 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/185.220.101.0">185.220.101.0</a>
+		</td>
+<td>
+			    <a href="../../as/AS60729/">AS60729</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS60729"
+			   title="Stiftung Erneuerbare Freiheit">Stiftung...</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2023-05-30
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-08">
+10h 56m 38s ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="artikel10ber113">
+		    <a href="../../relay/1DC1A8B7A5F9E67BF75A144E496203F87E2EBC27/">artikel10ber113</a> (<a href="../../family/1DC1A8B7A5F9E67BF75A144E496203F87E2EBC27/">128</a>)
+		    </td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" title="artikel10.org">artikel10.org</a>
+			</td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" 
+				title="Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2" class="contact-text">Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>261.64 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/185.220.101.29">185.220.101.29</a>
+		</td>
+<td>
+			    <a href="../../as/AS60729/">AS60729</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS60729"
+			   title="Stiftung Erneuerbare Freiheit">Stiftung...</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2023-05-30
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-08">
+11h 8m 51s ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="artikel10ber110">
+		    <a href="../../relay/74AD0C82407490B63AAE2C1295102D8D58C4E257/">artikel10ber110</a> (<a href="../../family/74AD0C82407490B63AAE2C1295102D8D58C4E257/">128</a>)
+		    </td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" title="artikel10.org">artikel10.org</a>
+			</td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" 
+				title="Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2" class="contact-text">Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>260.41 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/185.220.101.28">185.220.101.28</a>
+		</td>
+<td>
+			    <a href="../../as/AS60729/">AS60729</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS60729"
+			   title="Stiftung Erneuerbare Freiheit">Stiftung...</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2023-05-30
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-08">
+11h 11m 18s ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="artikel10ber115">
+		    <a href="../../relay/85D5976EAA9EEDC43737209A80678A245145F806/">artikel10ber115</a> (<a href="../../family/85D5976EAA9EEDC43737209A80678A245145F806/">128</a>)
+		    </td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" title="artikel10.org">artikel10.org</a>
+			</td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" 
+				title="Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2" class="contact-text">Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>257.59 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/185.220.101.29">185.220.101.29</a>
+		</td>
+<td>
+			    <a href="../../as/AS60729/">AS60729</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS60729"
+			   title="Stiftung Erneuerbare Freiheit">Stiftung...</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2023-05-30
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-08">
+11h 7m 13s ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="artikel10ber116">
+		    <a href="../../relay/FFD0B949D0676F1076BB248FE40065D2DA465509/">artikel10ber116</a> (<a href="../../family/FFD0B949D0676F1076BB248FE40065D2DA465509/">128</a>)
+		    </td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" title="artikel10.org">artikel10.org</a>
+			</td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" 
+				title="Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2" class="contact-text">Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>253.95 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/185.220.101.29">185.220.101.29</a>
+		</td>
+<td>
+			    <a href="../../as/AS60729/">AS60729</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS60729"
+			   title="Stiftung Erneuerbare Freiheit">Stiftung...</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2023-05-30
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-08">
+11h 6m 24s ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="artikel10ber114">
+		    <a href="../../relay/4ED4F531FD9B3E3E33575CE306556414B43E3ED1/">artikel10ber114</a> (<a href="../../family/4ED4F531FD9B3E3E33575CE306556414B43E3ED1/">128</a>)
+		    </td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" title="artikel10.org">artikel10.org</a>
+			</td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" 
+				title="Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2" class="contact-text">Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>253.30 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/185.220.101.29">185.220.101.29</a>
+		</td>
+<td>
+			    <a href="../../as/AS60729/">AS60729</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS60729"
+			   title="Stiftung Erneuerbare Freiheit">Stiftung...</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2023-05-30
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-08">
+11h 8m 2s ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="artikel10ber126">
+		    <a href="../../relay/532ED1DD4894C0B9B99C251BF67597B849DAFDF2/">artikel10ber126</a> (<a href="../../family/532ED1DD4894C0B9B99C251BF67597B849DAFDF2/">128</a>)
+		    </td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" title="artikel10.org">artikel10.org</a>
+			</td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" 
+				title="Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2" class="contact-text">Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>253.08 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/185.220.101.0">185.220.101.0</a>
+		</td>
+<td>
+			    <a href="../../as/AS60729/">AS60729</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS60729"
+			   title="Stiftung Erneuerbare Freiheit">Stiftung...</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2023-05-30
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-08">
+10h 57m 27s ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="artikel10ber107">
+		    <a href="../../relay/640229C5A85098B58ADD25626E27817AC8AF0F9A/">artikel10ber107</a> (<a href="../../family/640229C5A85098B58ADD25626E27817AC8AF0F9A/">128</a>)
+		    </td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" title="artikel10.org">artikel10.org</a>
+			</td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" 
+				title="Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2" class="contact-text">Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>247.41 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/185.220.101.27">185.220.101.27</a>
+		</td>
+<td>
+			    <a href="../../as/AS60729/">AS60729</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS60729"
+			   title="Stiftung Erneuerbare Freiheit">Stiftung...</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2023-05-30
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-08">
+11h 14m 35s ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="artikel10ber98">
+		    <a href="../../relay/559DE2A218F498B54EDDAA9F2BEFF424F6C39EA8/">artikel10ber98</a> (<a href="../../family/559DE2A218F498B54EDDAA9F2BEFF424F6C39EA8/">128</a>)
+		    </td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" title="artikel10.org">artikel10.org</a>
+			</td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" 
+				title="Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2" class="contact-text">Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>245.19 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/185.220.101.25">185.220.101.25</a>
+		</td>
+<td>
+			    <a href="../../as/AS60729/">AS60729</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS60729"
+			   title="Stiftung Erneuerbare Freiheit">Stiftung...</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2023-05-30
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-08">
+9h 46m 46s ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="artikel10ber109">
+		    <a href="../../relay/FA9D9A834DB984C533E9D3806F032038F98224D4/">artikel10ber109</a> (<a href="../../family/FA9D9A834DB984C533E9D3806F032038F98224D4/">128</a>)
+		    </td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" title="artikel10.org">artikel10.org</a>
+			</td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" 
+				title="Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2" class="contact-text">Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>241.71 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/185.220.101.28">185.220.101.28</a>
+		</td>
+<td>
+			    <a href="../../as/AS60729/">AS60729</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS60729"
+			   title="Stiftung Erneuerbare Freiheit">Stiftung...</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2023-05-30
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-08">
+11h 12m 56s ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="artikel10ber108">
+		    <a href="../../relay/A8511103790DE0ED5DEF8A81E80B837D34EAEB08/">artikel10ber108</a> (<a href="../../family/A8511103790DE0ED5DEF8A81E80B837D34EAEB08/">128</a>)
+		    </td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" title="artikel10.org">artikel10.org</a>
+			</td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" 
+				title="Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2" class="contact-text">Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>240.54 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/185.220.101.27">185.220.101.27</a>
+		</td>
+<td>
+			    <a href="../../as/AS60729/">AS60729</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS60729"
+			   title="Stiftung Erneuerbare Freiheit">Stiftung...</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2023-05-30
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-08">
+11h 13m 46s ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="artikel10ber128">
+		    <a href="../../relay/5DF0DE3CAF65C26522296F876C3E33F50C719642/">artikel10ber128</a> (<a href="../../family/5DF0DE3CAF65C26522296F876C3E33F50C719642/">128</a>)
+		    </td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" title="artikel10.org">artikel10.org</a>
+			</td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" 
+				title="Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2" class="contact-text">Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>240.34 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/185.220.101.0">185.220.101.0</a>
+		</td>
+<td>
+			    <a href="../../as/AS60729/">AS60729</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS60729"
+			   title="Stiftung Erneuerbare Freiheit">Stiftung...</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2023-05-30
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-08">
+10h 55m 49s ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="artikel10ber99">
+		    <a href="../../relay/2E89E8B67B273E6B3F26545FC28278E0F0744817/">artikel10ber99</a> (<a href="../../family/2E89E8B67B273E6B3F26545FC28278E0F0744817/">128</a>)
+		    </td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" title="artikel10.org">artikel10.org</a>
+			</td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" 
+				title="Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2" class="contact-text">Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>236.39 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/185.220.101.25">185.220.101.25</a>
+		</td>
+<td>
+			    <a href="../../as/AS60729/">AS60729</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS60729"
+			   title="Stiftung Erneuerbare Freiheit">Stiftung...</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2023-05-30
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-08">
+9h 45m 58s ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="artikel10ber106">
+		    <a href="../../relay/DBFA8A337F1DB425658D698AD7388D052971C580/">artikel10ber106</a> (<a href="../../family/DBFA8A337F1DB425658D698AD7388D052971C580/">128</a>)
+		    </td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" title="artikel10.org">artikel10.org</a>
+			</td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" 
+				title="Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2" class="contact-text">Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>236.27 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/185.220.101.27">185.220.101.27</a>
+		</td>
+<td>
+			    <a href="../../as/AS60729/">AS60729</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS60729"
+			   title="Stiftung Erneuerbare Freiheit">Stiftung...</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2023-05-30
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-08">
+11h 15m 24s ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="artikel10ber117">
+		    <a href="../../relay/E9C06AA2527714F75EBF254D680F9F0A13C6C0A4/">artikel10ber117</a> (<a href="../../family/E9C06AA2527714F75EBF254D680F9F0A13C6C0A4/">128</a>)
+		    </td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" title="artikel10.org">artikel10.org</a>
+			</td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" 
+				title="Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2" class="contact-text">Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>234.27 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/185.220.101.30">185.220.101.30</a>
+		</td>
+<td>
+			    <a href="../../as/AS60729/">AS60729</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS60729"
+			   title="Stiftung Erneuerbare Freiheit">Stiftung...</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2023-05-30
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-08">
+11h 5m 35s ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="artikel10ber120">
+		    <a href="../../relay/BA8721EC8D02494383D2F162F1E2D0C1C90AA0E9/">artikel10ber120</a> (<a href="../../family/BA8721EC8D02494383D2F162F1E2D0C1C90AA0E9/">128</a>)
+		    </td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" title="artikel10.org">artikel10.org</a>
+			</td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" 
+				title="Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2" class="contact-text">Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>233.76 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/185.220.101.30">185.220.101.30</a>
+		</td>
+<td>
+			    <a href="../../as/AS60729/">AS60729</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS60729"
+			   title="Stiftung Erneuerbare Freiheit">Stiftung...</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2023-05-30
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-08">
+11h 2m 18s ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="artikel10ber111">
+		    <a href="../../relay/5C615D159EBBF02FD8CD07E63B08C6F8E10DDE13/">artikel10ber111</a> (<a href="../../family/5C615D159EBBF02FD8CD07E63B08C6F8E10DDE13/">128</a>)
+		    </td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" title="artikel10.org">artikel10.org</a>
+			</td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" 
+				title="Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2" class="contact-text">Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>227.35 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/185.220.101.28">185.220.101.28</a>
+		</td>
+<td>
+			    <a href="../../as/AS60729/">AS60729</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS60729"
+			   title="Stiftung Erneuerbare Freiheit">Stiftung...</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2023-05-30
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-08">
+11h 10m 29s ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="artikel10ber125">
+		    <a href="../../relay/9E6310CF67A32012E01EF18B82AB642BF6EB2BC9/">artikel10ber125</a> (<a href="../../family/9E6310CF67A32012E01EF18B82AB642BF6EB2BC9/">128</a>)
+		    </td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" title="artikel10.org">artikel10.org</a>
+			</td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" 
+				title="Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2" class="contact-text">Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>227.30 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/185.220.101.0">185.220.101.0</a>
+		</td>
+<td>
+			    <a href="../../as/AS60729/">AS60729</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS60729"
+			   title="Stiftung Erneuerbare Freiheit">Stiftung...</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2023-05-30
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-08">
+10h 58m 15s ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="artikel10ber124">
+		    <a href="../../relay/B035C78C7274F21F8B6F2E41FB381C9C9A73C17A/">artikel10ber124</a> (<a href="../../family/B035C78C7274F21F8B6F2E41FB381C9C9A73C17A/">128</a>)
+		    </td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" title="artikel10.org">artikel10.org</a>
+			</td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" 
+				title="Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2" class="contact-text">Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>225.81 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/185.220.101.31">185.220.101.31</a>
+		</td>
+<td>
+			    <a href="../../as/AS60729/">AS60729</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS60729"
+			   title="Stiftung Erneuerbare Freiheit">Stiftung...</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2023-05-30
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-08">
+10h 59m 3s ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="artikel10ber118">
+		    <a href="../../relay/8CFE118973025E9E9ADB50EE6566569DD47699F1/">artikel10ber118</a> (<a href="../../family/8CFE118973025E9E9ADB50EE6566569DD47699F1/">128</a>)
+		    </td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" title="artikel10.org">artikel10.org</a>
+			</td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" 
+				title="Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2" class="contact-text">Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>223.73 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/185.220.101.30">185.220.101.30</a>
+		</td>
+<td>
+			    <a href="../../as/AS60729/">AS60729</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS60729"
+			   title="Stiftung Erneuerbare Freiheit">Stiftung...</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2023-05-30
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-08">
+11h 4m 45s ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="artikel10ber97">
+		    <a href="../../relay/FE47CACA53BA10081DE464014DB4C8FC0A1F8C5C/">artikel10ber97</a> (<a href="../../family/FE47CACA53BA10081DE464014DB4C8FC0A1F8C5C/">128</a>)
+		    </td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" title="artikel10.org">artikel10.org</a>
+			</td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" 
+				title="Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2" class="contact-text">Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>223.58 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/185.220.101.25">185.220.101.25</a>
+		</td>
+<td>
+			    <a href="../../as/AS60729/">AS60729</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS60729"
+			   title="Stiftung Erneuerbare Freiheit">Stiftung...</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2023-05-30
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-08">
+9h 47m 33s ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="artikel10ber102">
+		    <a href="../../relay/5F88F977B6DEB1258197737916F6D93BBAB84F24/">artikel10ber102</a> (<a href="../../family/5F88F977B6DEB1258197737916F6D93BBAB84F24/">128</a>)
+		    </td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" title="artikel10.org">artikel10.org</a>
+			</td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" 
+				title="Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2" class="contact-text">Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>217.72 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/185.220.101.26">185.220.101.26</a>
+		</td>
+<td>
+			    <a href="../../as/AS60729/">AS60729</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS60729"
+			   title="Stiftung Erneuerbare Freiheit">Stiftung...</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2023-05-30
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-08">
+11h 18m 39s ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="artikel10ber103">
+		    <a href="../../relay/C088D8AF0ABBB6D37A704A6AD08E137723D0AB94/">artikel10ber103</a> (<a href="../../family/C088D8AF0ABBB6D37A704A6AD08E137723D0AB94/">128</a>)
+		    </td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" title="artikel10.org">artikel10.org</a>
+			</td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" 
+				title="Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2" class="contact-text">Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>215.53 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/185.220.101.26">185.220.101.26</a>
+		</td>
+<td>
+			    <a href="../../as/AS60729/">AS60729</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS60729"
+			   title="Stiftung Erneuerbare Freiheit">Stiftung...</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2023-05-30
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-08">
+11h 17m 49s ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="artikel10ber112">
+		    <a href="../../relay/1FF2AE9C9BD4A0C129582D62CA77A1EE86A0389E/">artikel10ber112</a> (<a href="../../family/1FF2AE9C9BD4A0C129582D62CA77A1EE86A0389E/">128</a>)
+		    </td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" title="artikel10.org">artikel10.org</a>
+			</td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" 
+				title="Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2" class="contact-text">Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>214.90 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/185.220.101.28">185.220.101.28</a>
+		</td>
+<td>
+			    <a href="../../as/AS60729/">AS60729</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS60729"
+			   title="Stiftung Erneuerbare Freiheit">Stiftung...</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2023-05-30
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-08">
+11h 9m 40s ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="artikel10ber105">
+		    <a href="../../relay/A3A907E3335E5F7325C8197AD9F581C3F46C5FB7/">artikel10ber105</a> (<a href="../../family/A3A907E3335E5F7325C8197AD9F581C3F46C5FB7/">128</a>)
+		    </td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" title="artikel10.org">artikel10.org</a>
+			</td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" 
+				title="Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2" class="contact-text">Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>211.57 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/185.220.101.27">185.220.101.27</a>
+		</td>
+<td>
+			    <a href="../../as/AS60729/">AS60729</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS60729"
+			   title="Stiftung Erneuerbare Freiheit">Stiftung...</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2023-05-30
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-08">
+11h 16m 12s ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="artikel10ber100">
+		    <a href="../../relay/66B8C933E2DBBEC4642BBCD64D7B7003A4608C6C/">artikel10ber100</a> (<a href="../../family/66B8C933E2DBBEC4642BBCD64D7B7003A4608C6C/">128</a>)
+		    </td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" title="artikel10.org">artikel10.org</a>
+			</td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" 
+				title="Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2" class="contact-text">Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>208.05 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/185.220.101.25">185.220.101.25</a>
+		</td>
+<td>
+			    <a href="../../as/AS60729/">AS60729</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS60729"
+			   title="Stiftung Erneuerbare Freiheit">Stiftung...</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2023-05-30
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-08">
+11h 20m 16s ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="artikel10ber104">
+		    <a href="../../relay/D11A59E952775B7A5D6F23FADF80B95149E35B42/">artikel10ber104</a> (<a href="../../family/D11A59E952775B7A5D6F23FADF80B95149E35B42/">128</a>)
+		    </td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" title="artikel10.org">artikel10.org</a>
+			</td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" 
+				title="Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2" class="contact-text">Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>193.03 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/185.220.101.26">185.220.101.26</a>
+		</td>
+<td>
+			    <a href="../../as/AS60729/">AS60729</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS60729"
+			   title="Stiftung Erneuerbare Freiheit">Stiftung...</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2023-05-30
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-08">
+11h 17m 1s ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="artikel10ber122">
+		    <a href="../../relay/664CDBAAE51CCE0A79C011EB5B765B71687AAE34/">artikel10ber122</a> (<a href="../../family/664CDBAAE51CCE0A79C011EB5B765B71687AAE34/">128</a>)
+		    </td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" title="artikel10.org">artikel10.org</a>
+			</td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" 
+				title="Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2" class="contact-text">Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>192.14 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/185.220.101.31">185.220.101.31</a>
+		</td>
+<td>
+			    <a href="../../as/AS60729/">AS60729</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS60729"
+			   title="Stiftung Erneuerbare Freiheit">Stiftung...</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2023-05-30
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-08">
+11h 40s ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="artikel10ber123">
+		    <a href="../../relay/17B1EF851058E14233ECD9E5922FF6316834FDA6/">artikel10ber123</a> (<a href="../../family/17B1EF851058E14233ECD9E5922FF6316834FDA6/">128</a>)
+		    </td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" title="artikel10.org">artikel10.org</a>
+			</td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" 
+				title="Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2" class="contact-text">Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>191.64 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/185.220.101.31">185.220.101.31</a>
+		</td>
+<td>
+			    <a href="../../as/AS60729/">AS60729</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS60729"
+			   title="Stiftung Erneuerbare Freiheit">Stiftung...</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2023-05-30
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-08">
+10h 59m 52s ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="artikel10ber101">
+		    <a href="../../relay/DA8C5E4FA4599137C2664E472A2CFC81B4869719/">artikel10ber101</a> (<a href="../../family/DA8C5E4FA4599137C2664E472A2CFC81B4869719/">128</a>)
+		    </td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" title="artikel10.org">artikel10.org</a>
+			</td>
+<td>
+			    <a href="../../contact/f9007b70b8ed39bf23b3ae9fcb52fb1f/" 
+				title="Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2" class="contact-text">Artikel10 url:artikel10.org email:info[]artikel10.org abuse:abuse[]artikel10.org gpg:401C81D432FBAD2CEEB0FA145A7563B99D808815 proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>175.47 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/185.220.101.26">185.220.101.26</a>
+		</td>
+<td>
+			    <a href="../../as/AS60729/">AS60729</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS60729"
+			   title="Stiftung Erneuerbare Freiheit">Stiftung...</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2023-05-30
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-08">
+11h 19m 27s ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/CFDF585ED77E11933D3F53ACAA3441D443E5D8EB/">Quetzalcoatl</a> (<a href="../../family/CFDF585ED77E11933D3F53ACAA3441D443E5D8EB/">368</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>60.41 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/185.241.208.115">185.241.208.115</a>
+		</td>
+<td>
+			    <a href="../../as/AS210558/">AS210558</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS210558"
+			   title="1337 Services GmbH">1337 Services GmbH</a>
+		    </td>
+<td>
+			    <a href="../../country/pl/">
+				<img src="../../static/images/cc/pl.png"
+				     title="Poland"
+				     alt="Poland">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2023-05-30
+		    </td>
+<td class="visible-md visible-lg" title="2025-04-11">
+1mo 4w 13h ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="Quetzalcoatl">
+		    <a href="../../relay/81E31E75408D0804BF217AF2BC74307C2239AB3B/">Quetzalcoatl</a> (<a href="../../family/81E31E75408D0804BF217AF2BC74307C2239AB3B/">368</a>)
+		    </td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" title="quetzalcoatl-relays.org">quetzalcoatl-relays.org</a>
+			</td>
+<td>
+			    <a href="../../contact/b32573fcfbc780a4b9ef03425f676400/" 
+				title="email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2" class="contact-text">email:Quetzalcoatl_relays[]proton.me url:https://quetzalcoatl-relays.org proof:uri-rsa hoster:rdp.sh donationurl:https://quetzalcoatl-relays.org/#support-us btc:bc1qc5f3fvr5ftnj70gaj2q68dhg0mne0s85c7ql43 eth:0x53Ad3Ce5004A6710ee425f365F6b469CDBDB5f06 xmr:45TefH4UZFDZAkxLM6ktBhHfZ9r8cFG8T5F7fiCziV1fS21KKsbkBQmZNk5VSbPD991MAXLsH2f9nSMpsiHsDoZA6PYgHUn ciissversion:2</a>
+			</td>
+<td>58.80 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/185.241.208.115">185.241.208.115</a>
+		</td>
+<td>
+			    <a href="../../as/AS210558/">AS210558</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS210558"
+			   title="1337 Services GmbH">1337 Services GmbH</a>
+		    </td>
+<td>
+			    <a href="../../country/pl/">
+				<img src="../../static/images/cc/pl.png"
+				     title="Poland"
+				     alt="Poland">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/exit/">
+				<img src="../../static/images/flags/exit.png"
+				     title="Exit"
+				     alt="Exit">
+			    </a>
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2023-05-30
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-03">
+1mo 6d 3h ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="letsdoitUK">
+		    <a href="../../relay/FCCAF3D362AC7CA3310DA5EBA44A7F03909B2BC1/">letsdoitUK</a> (<a href="../../family/FCCAF3D362AC7CA3310DA5EBA44A7F03909B2BC1/">4</a>)
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/30d9410d4b4873cca706844aaca85375/" 
+				title="letsdoit &lt;letsdoit@gmx-topmail.de&gt;" class="contact-text">letsdoit &lt;letsdoit@gmx-topmail.de&gt;</a>
+			</td>
+<td>32.56 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/77.68.67.193">77.68.67.193</a>
+		</td>
+<td>
+			    <a href="../../as/AS8560/">AS8560</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS8560"
+			   title="IONOS SE">IONOS SE</a>
+		    </td>
+<td>
+			    <a href="../../country/gb/">
+				<img src="../../static/images/cc/gb.png"
+				     title="United Kingdom of Great Britain and Northern Ireland"
+				     alt="United Kingdom of Great Britain and Northern Ireland">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2023-05-30
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-11">
+4w 3h 59s ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="BOB123">
+			<a href="../../relay/6909C78D3928234C4CDC6B9788B3BDC86D0346E6/">BOB123</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/794b3dcd904507037153e7a537d1a06c/" 
+				title="noatgml@gmail.com" class="contact-text">noatgml@gmail.com</a>
+			</td>
+<td>11.03 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/18.222.193.228">18.222.193.228</a>
+		</td>
+<td>
+			    <a href="../../as/AS16509/">AS16509</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS16509"
+			   title="Amazon.com, Inc.">Amazon.com, Inc.</a>
+		    </td>
+<td>
+			    <a href="../../country/us/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2023-05-30
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-31">
+1w 1d 1h ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="sherlock">
+			<a href="../../relay/CA45E797C2C29FD47FB3CD8BF5B51634A6B8861D/">sherlock</a>
+		    </td>
+<td>none</td>
+<td title="none">
+			    none
+			</td>
+<td>10.99 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/18.118.173.86">18.118.173.86</a>
+		</td>
+<td>
+			    <a href="../../as/AS16509/">AS16509</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS16509"
+			   title="Amazon.com, Inc.">Amazon.com, Inc.</a>
+		    </td>
+<td>
+			    <a href="../../country/us/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2023-05-30
+		    </td>
+<td class="visible-md visible-lg" title="2025-02-10">
+3mo 4w 13h ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="YeJunPeacemist">
+			<a href="../../relay/A0F3E38944F091194535E15065C9A88887B113A8/">YeJunPeacemist</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/b10601fbe35b5bbefacdd828b31bd975/" 
+				title="ReplaceNumberWith3095 &lt;fhnumber-toryejunpeacemist@yahoo.com&gt;" class="contact-text">ReplaceNumberWith3095 &lt;fhnumber-toryejunpeacemist@yahoo.com&gt;</a>
+			</td>
+<td>7.72 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/51.75.71.108">51.75.71.108</a>
+		</td>
+<td>
+			    <a href="../../as/AS16276/">AS16276</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS16276"
+			   title="OVH SAS">OVH SAS</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2023-05-30
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-03">
+5d 5h 47m ago
+</td>
+</tr>
+</tbody>
+</table>
+        </div>
+    </body>
+        <footer class="page-footer font-small">
+            <div class="footer-copyright text-center text-muted">
+                <p>
+                    Generated by a <a href="https://github.com/1aeo/allium">1aeo modified fork of allium</a>, based on original <a href="https://git.jordan.im/allium/">allium</a>, on Sun, 08 Jun 2025 21:46:50 GMT. Source data from <a href="https://onionoo.torproject.org/">Tor Project onionoo</a>.
+                </p>
+            </div>
+        </footer>
+    </html>
