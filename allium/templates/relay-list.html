@@ -84,7 +84,7 @@
 		    {% if relay['contact'] -%}
 			<td>
 			    <a href="{{ page_ctx.path_prefix }}contact/{{ relay['contact_md5'] }}/" 
-				title="{{ relay['contact']|escape }}" class="contact-text">{{ relay['contact']|escape }}</a>
+				title="{{ relay['contact_escaped'] }}" class="contact-text">{{ relay['contact_escaped'] }}</a>
 			</td>
 		    {% else -%}
 			<td title="none">
@@ -97,8 +97,8 @@
 		    {% else -%}
 			<td>none</td>
 		    {% endif -%}
-		    <td title="{{ relay['contact']|escape }}">
-			<span class="contact-text">{{ relay['contact']|escape }}</span>
+		    <td title="{{ relay['contact_escaped'] }}">
+			<span class="contact-text">{{ relay['contact_escaped'] }}</span>
 		    </td>
 		{% endif -%}
 		<td>{{ obs_bandwidth }} {{ obs_unit }}</td>
@@ -166,10 +166,11 @@
 		<td class="visible-md visible-lg">
 		    {% for flag in relay['flags'] -%}
 			{% if flag != 'StaleDesc' -%}
-			    <a href="{{ page_ctx.path_prefix }}flag/{{ flag.lower()|escape }}/">
-				<img src="{{ page_ctx.path_prefix }}static/images/flags/{{ flag.lower()|escape }}.png"
-				     title="{{ flag|escape }}"
-				     alt="{{ flag|escape }}">
+			    {% set flag_idx = loop.index0 -%}
+			    <a href="{{ page_ctx.path_prefix }}flag/{{ relay['flags_lower_escaped'][flag_idx] }}/">
+				<img src="{{ page_ctx.path_prefix }}static/images/flags/{{ relay['flags_lower_escaped'][flag_idx] }}.png"
+				     title="{{ relay['flags_escaped'][flag_idx] }}"
+				     alt="{{ relay['flags_escaped'][flag_idx] }}">
 			    </a>
 			{% endif -%}
 		    {% endfor
@@ -177,7 +178,7 @@
 		</td>
 		{% if key != 'first_seen' -%}
 		    <td class="visible-md visible-lg">
-			<a href="{{ page_ctx.path_prefix }}first_seen/{{ relay['first_seen'].split(' ', 1)[0]|escape }}/">{{
+			<a href="{{ page_ctx.path_prefix }}first_seen/{{ relay['first_seen_date_escaped'] }}/">{{
 			relay['first_seen'].split(' ', 1)[0]|escape }}</a>
 		    </td>
 		{% else -%}
