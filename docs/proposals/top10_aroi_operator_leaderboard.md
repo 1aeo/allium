@@ -43,7 +43,7 @@
 | Operator | Achievement | Performance |
 |----------|-------------|-------------|
 | **🥇 appliedprivacy.net** | Guard Commander | 31 active guard relays |
-| **🥈 dfri.se** | Guard Captain | 28 active guard relays |
+| **🥈 guard-specialists.org** | Guard Captain | 28 active guard relays |
 | **🥉 torservers.net** | Guard Leader | 26 active guard relays |
 
 #### **🌍 Diversity Champions**
@@ -52,6 +52,55 @@
 | **🥇 globaltor.network** | World Explorer | 6 continents, 9.4 diversity |
 | **🥈 bsdtornetwork.org** | Platform Pioneer | 3 BSD types, 8.9 diversity |
 | **🥉 southernhemisphere.tor** | Regional Builder | 7 countries, 8.7 diversity |
+
+#### **⚖️ Consensus Weight Leaders**
+| Operator | Achievement | Performance |
+|----------|-------------|-------------|
+| **🥇 torservers.net** | Weight King | 12.4% total consensus weight |
+| **🥈 quintex.com** | Weight Warrior | 9.8% total consensus weight |
+| **🥉 appliedprivacy.net** | Weight Hero | 7.2% total consensus weight |
+
+#### **💻 Platform Diversity Heroes**
+| Operator | Achievement | Performance |
+|----------|-------------|-------------|
+| **🥇 bsdtornetwork.org** | Multi-BSD Master | 67 non-Linux relays, 234.7 MB/s |
+| **🥈 windowstornet.com** | Windows Champion | 42 Windows relays, 187.3 MB/s |
+| **🥉 freebsd-tor.net** | FreeBSD Leader | 34 FreeBSD relays, 156.4 MB/s |
+
+#### **🔧 Technical BSD Leaders**
+| Operator | Achievement | Performance |
+|----------|-------------|-------------|
+| **🥇 freebsd-tor.net** | BSD Performance King | 34 FreeBSD relays, 156.4 MB/s |
+| **🥈 bsd-masters.org** | Security Hardening Hero | 23 mixed BSD, 98.7 MB/s |
+| **🥉 openbsd-heroes.net** | Security Champion | 28 OpenBSD relays, 87.3 MB/s |
+
+#### **🌏 Geographic Expansion Leaders**
+| Operator | Achievement | Performance |
+|----------|-------------|-------------|
+| **🥇 tokyo-tor.jp** | Asia-Pacific King | 8 relays in Japan, 45.3 MB/s |
+| **🥈 aussietornet.au** | Oceania Champion | 7 relays in Australia, 38.7 MB/s |
+| **🥉 canadiannodes.ca** | North America Hero | 12 relays in Canada, 34.2 MB/s |
+
+#### **🏴‍☠️ Frontier Pioneers**
+| Operator | Achievement | Performance |
+|----------|-------------|-------------|
+| **🥇 mongolian-tor.mn** | Ultimate Pioneer | Mongolia exclusive, 3 relays, 9.8 rarity |
+| **🥈 tunisian-tor.tn** | African Trailblazer | Tunisia leader, 2 relays, 9.6 rarity |
+| **🥉 uruguay-tor.uy** | South American Explorer | Uruguay pioneer, 4 relays, 9.4 rarity |
+
+#### **💎 Reliability Masters**
+| Operator | Achievement | Performance |
+|----------|-------------|-------------|
+| **🥇 veteran-tor.org** | Uptime King | 99.94% current uptime, 15 relays |
+| **🥈 stalwart-tor.net** | Stability Champion | 99.87% current uptime, 12 relays |
+| **🥉 old-faithful.net** | Consistency Hero | 99.82% current uptime, 9 relays |
+
+#### **⚡ Efficiency Experts**
+| Operator | Achievement | Performance |
+|----------|-------------|-------------|
+| **🥇 optimal-tor.net** | Efficiency King | 3.2x CW/BW ratio, 2.4% consensus weight |
+| **🥈 efficient-relays.com** | Optimization Champion | 2.9x CW/BW ratio, 2.1% consensus weight |
+| **🥉 smart-routing.org** | Performance Hero | 2.7x CW/BW ratio, 1.8% consensus weight |
 
 ---
 
