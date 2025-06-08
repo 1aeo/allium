@@ -54,11 +54,20 @@ def _calculate_aroi_leaderboards(relays_instance):
         if aroi_domain == 'none' and not contact_info:
             continue
             
-        # Use AROI domain as key if available, otherwise use contact hash
+        # Use AROI domain as key if available, otherwise use first 10 chars of contact_info
         if aroi_domain and aroi_domain != 'none':
             operator_key = aroi_domain
         else:
-            operator_key = f"contact_{contact_hash[:8]}"
+            # Use first 10 characters of contact info for better readability
+            if contact_info and len(contact_info.strip()) > 0:
+                clean_contact = contact_info.strip()
+                if len(clean_contact) > 10:
+                    operator_key = clean_contact[:10] + '...'
+                else:
+                    operator_key = clean_contact
+            else:
+                # Fallback to contact hash only if no contact info available
+                operator_key = f"contact_{contact_hash[:8]}"
         
         # === USE EXISTING CALCULATIONS (NO DUPLICATION) ===
         # All basic metrics are already computed in contact_data
