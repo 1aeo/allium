@@ -28,12 +28,18 @@
     <th><a href="https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/" target="_blank" title="Autonomous Relay Operator Identifier - unverified">AROI</a></th>
     <th>Contact</th>
     <th>BW</th>
+    {% if key == 'as' -%}
+    <th title="Bandwidth measured by >=3 bandwidth authorities">BW Measured</th>
+    {% endif -%}
     <th class="visible-md visible-lg">IP Address</th>
     <th>AS Number</th>
     <th>AS Name</th>
     <th>Country</th>
     <th>Platform</th>
     <th class="visible-md visible-lg">Flags</th>
+    {% if key == 'as' -%}
+    <th class="visible-md visible-lg">Uptime</th>
+    {% endif -%}
     <th class="visible-md visible-lg">First Seen</th>
 </tr>
 <tbody>
@@ -96,6 +102,15 @@
 		    </td>
 		{% endif -%}
 		<td>{{ obs_bandwidth }} {{ obs_unit }}</td>
+		{% if key == 'as' -%}
+		    <td title=">=3 bandwidth authorities have measured">
+		        {% if relay['measured'] is not none -%}
+		            {% if relay['measured'] -%}Yes{% else -%}No{% endif -%}
+		        {% else -%}
+		            unknown
+		        {% endif -%}
+		    </td>
+		{% endif -%}
 		<td class="visible-md visible-lg">
 		    <a href="https://bgp.tools/prefix/{{ relay['or_addresses'][0].split(':', 1)[0]|escape }}">{{
 		    relay['or_addresses'][0].split(':', 1)[0]|escape }}</a>
@@ -160,6 +175,11 @@
 		    {% endfor
 		    -%}
 		</td>
+		{% if key == 'as' -%}
+		    <td class="visible-md visible-lg">
+		        {{ relays._format_time_ago(relay['first_seen']) }}
+		    </td>
+		{% endif -%}
 		{% if key != 'first_seen' -%}
 		    <td class="visible-md visible-lg">
 			<a href="{{ page_ctx.path_prefix }}first_seen/{{ relay['first_seen'].split(' ', 1)[0]|escape }}/">{{
