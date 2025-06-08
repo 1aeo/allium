@@ -221,7 +221,7 @@
                     {% if relays.json.aroi_leaderboards.leaderboards.efficiency_champions %}
                         {% set champion = relays.json.aroi_leaderboards.leaderboards.efficiency_champions[0] %}
                         <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" style="text-decoration: underline; color: inherit;">{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key }}</a></strong></h4>
-                        <p>{{ champion.efficiency_ratio }}</p>
+                        <p><span title="Efficiency Ratio: (Consensus Weight % × 100) ÷ Bandwidth GB/s - measures network authority per bandwidth contributed">{{ champion.efficiency_ratio }}</span></p>
                         <small>{{ champion.total_consensus_weight_pct }} authority</small>
                     {% endif %}
                 </div>
@@ -635,7 +635,7 @@
                             {% elif entry.rank == 3 %}Performance Hero
                             {% endif %}
                         </td>
-                        <td>{{ entry.efficiency_ratio }} CW/BW ratio, {{ entry.total_consensus_weight_pct }} consensus weight</td>
+                        <td><span title="Efficiency Ratio: (Consensus Weight % × 100) ÷ Bandwidth GB/s - measures network authority per bandwidth contributed">{{ entry.efficiency_ratio }} CW/BW ratio</span>, {{ entry.total_consensus_weight_pct }} consensus weight</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -790,7 +790,7 @@
                             </span>
                         </td>
                         <td>{{ entry.country_count }}</td>
-                        <td>{{ entry.efficiency_ratio }}</td>
+                        <td><span title="Efficiency Ratio: (Consensus Weight % × 100) ÷ Bandwidth GB/s - measures network authority per bandwidth contributed">{{ entry.efficiency_ratio }}</span></td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -964,7 +964,7 @@
                                 {% elif category_key == 'non_eu_leaders' %}{{ entry.non_eu_count }} non-EU
                                 {% elif category_key == 'frontier_builders' %}{{ entry.rare_country_count }} rare
                                 {% elif category_key == 'network_veterans' %}{{ entry.uptime_percentage }}
-                                {% elif category_key == 'efficiency_champions' %}{{ entry.efficiency_ratio }}
+                                {% elif category_key == 'efficiency_champions' %}<span title="Efficiency Ratio: (Consensus Weight % × 100) ÷ Bandwidth GB/s - measures network authority per bandwidth contributed">{{ entry.efficiency_ratio }}</span>
                                 {% endif %}
                                 </strong>
                             </td>
@@ -1037,6 +1037,15 @@
             <li><strong>Network Component:</strong> Number of unique ASNs × 1.0 (prevents concentration on single networks)</li>
         </ul>
         <p><em>Example:</em> An operator with relays in 5 countries, 3 operating systems, and 8 unique ASNs would score: (5 × 2.0) + (3 × 1.5) + (8 × 1.0) = 10.0 + 4.5 + 8.0 = <strong>22.5 diversity points</strong>.</p>
+        
+        <h4>⚡ Efficiency Champion Scoring:</h4>
+        <p><strong>Efficiency Ratio Calculation:</strong> The efficiency ratio measures network authority per bandwidth contributed using the formula:</p>
+        <ul>
+            <li><strong>Formula:</strong> (Consensus Weight % × 100) ÷ Bandwidth in GB/s</li>
+            <li><strong>Purpose:</strong> Identifies operators who achieve high network influence with optimal bandwidth usage</li>
+            <li><strong>Interpretation:</strong> Higher ratios indicate more efficient relay operations and better network positioning</li>
+        </ul>
+        <p><em>Example:</em> An operator with 2.5% consensus weight and 1.0 GB/s bandwidth would score: (2.5 × 100) ÷ 1.0 = <strong>250.0x efficiency ratio</strong>.</p>
         
         <p><strong>Data Sources:</strong> Live data from the Tor directory authorities via the Onionoo API, updated every 30 minutes. Rankings reflect current network status and operator contributions.</p>
     </div>
