@@ -915,7 +915,7 @@ class Relays:
             exit_bandwidth = self._format_bandwidth_with_unit(i["exit_bandwidth"], bandwidth_unit)
             
             # Calculate network position using intelligence engine
-            from allium.lib.intelligence_engine import IntelligenceEngine
+            from .intelligence_engine import IntelligenceEngine
             intelligence = IntelligenceEngine({})  # Empty intelligence engine just for utility method
             total_relays = len(members)
             network_position = intelligence._calculate_network_position(
