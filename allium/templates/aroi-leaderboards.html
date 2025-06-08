@@ -340,194 +340,265 @@
         {% endif %}
     </div>
 
-        <!-- Consensus Weight Leaders -->
-        <div class="col-md-6" style="margin-bottom: 30px;">
-            <div class="panel panel-warning">
-                <div class="panel-heading">
-                    <h3 class="panel-title">⚖️ Consensus Weight Leaders</h3>
-                </div>
-                <div class="panel-body">
-                    {% if relays.json.aroi_leaderboards.leaderboards.consensus_weight %}
-                        {% for entry in relays.json.aroi_leaderboards.leaderboards.consensus_weight[:3] %}
-                        <div class="row" style="margin-bottom: 10px; {% if entry.rank == 1 %}background-color: #FFD700; color: #000;{% elif entry.rank == 2 %}background-color: #C0C0C0; color: #000;{% elif entry.rank == 3 %}background-color: #CD7F32; color: #fff;{% endif %} padding: 10px; border-radius: 5px;">
-                            <div class="col-xs-2 text-center">
+    <!-- Consensus Weight Leaders -->
+    <div style="margin-bottom: 30px;">
+        <h4>⚖️ Consensus Weight Leaders</h4>
+        {% if relays.json.aroi_leaderboards.leaderboards.consensus_weight %}
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th style="width: 30%;">Operator</th>
+                        <th style="width: 25%;">Achievement</th>
+                        <th style="width: 45%;">Performance</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in relays.json.aroi_leaderboards.leaderboards.consensus_weight[:3] %}
+                    <tr>
+                        <td>
+                            <strong>
                                 {% if entry.rank == 1 %}🥇{% elif entry.rank == 2 %}🥈{% elif entry.rank == 3 %}🥉{% endif %}
-                            </div>
-                            <div class="col-xs-6">
-                                <strong>{{ entry.aroi_domain if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key }}</strong>
-                            </div>
-                            <div class="col-xs-4 text-right">
-                                <strong>{{ entry.total_consensus_weight_pct }}</strong><br>
-                                <small>{{ entry.total_relays }} relays</small>
-                            </div>
-                        </div>
-                        {% endfor %}
-                    {% endif %}
-                </div>
-            </div>
+                                {{ entry.aroi_domain if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key }}
+                            </strong>
+                        </td>
+                        <td>
+                            {% if entry.rank == 1 %}Weight King
+                            {% elif entry.rank == 2 %}Weight Warrior
+                            {% elif entry.rank == 3 %}Weight Hero
+                            {% endif %}
+                        </td>
+                        <td>{{ entry.total_consensus_weight_pct }} total consensus weight</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
+        {% endif %}
+    </div>
 
-        <!-- Platform Diversity Heroes -->
-        <div class="col-md-6" style="margin-bottom: 30px;">
-            <div class="panel panel-primary">
-                <div class="panel-heading">
-                    <h3 class="panel-title">💻 Platform Diversity Heroes</h3>
-                </div>
-                <div class="panel-body">
-                    {% if relays.json.aroi_leaderboards.leaderboards.platform_diversity %}
-                        {% for entry in relays.json.aroi_leaderboards.leaderboards.platform_diversity[:3] %}
-                        <div class="row" style="margin-bottom: 10px; {% if entry.rank == 1 %}background-color: #FFD700; color: #000;{% elif entry.rank == 2 %}background-color: #C0C0C0; color: #000;{% elif entry.rank == 3 %}background-color: #CD7F32; color: #fff;{% endif %} padding: 10px; border-radius: 5px;">
-                            <div class="col-xs-2 text-center">
+    <!-- Platform Diversity Heroes -->
+    <div style="margin-bottom: 30px;">
+        <h4>💻 Platform Diversity Heroes</h4>
+        {% if relays.json.aroi_leaderboards.leaderboards.platform_diversity %}
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th style="width: 30%;">Operator</th>
+                        <th style="width: 25%;">Achievement</th>
+                        <th style="width: 45%;">Performance</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in relays.json.aroi_leaderboards.leaderboards.platform_diversity[:3] %}
+                    <tr>
+                        <td>
+                            <strong>
                                 {% if entry.rank == 1 %}🥇{% elif entry.rank == 2 %}🥈{% elif entry.rank == 3 %}🥉{% endif %}
-                            </div>
-                            <div class="col-xs-6">
-                                <strong>{{ entry.aroi_domain if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key }}</strong>
-                            </div>
-                            <div class="col-xs-4 text-right">
-                                <strong>{{ entry.non_linux_count }} non-Linux</strong><br>
-                                <small>{{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</small>
-                            </div>
-                        </div>
-                        {% endfor %}
-                    {% endif %}
-                </div>
-            </div>
+                                {{ entry.aroi_domain if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key }}
+                            </strong>
+                        </td>
+                        <td>
+                            {% if entry.rank == 1 %}Multi-BSD Master
+                            {% elif entry.rank == 2 %}Windows Champion
+                            {% elif entry.rank == 3 %}FreeBSD Leader
+                            {% endif %}
+                        </td>
+                        <td>{{ entry.non_linux_count }} non-Linux relays, {{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
+        {% endif %}
+    </div>
 
-        <!-- Technical BSD Leaders -->
-        <div class="col-md-6" style="margin-bottom: 30px;">
-            <div class="panel panel-default">
-                <div class="panel-heading">
-                    <h3 class="panel-title">🔧 Technical BSD Leaders</h3>
-                </div>
-                <div class="panel-body">
-                    {% if relays.json.aroi_leaderboards.leaderboards.bsd_operators %}
-                        {% for entry in relays.json.aroi_leaderboards.leaderboards.bsd_operators[:3] %}
-                        <div class="row" style="margin-bottom: 10px; {% if entry.rank == 1 %}background-color: #FFD700; color: #000;{% elif entry.rank == 2 %}background-color: #C0C0C0; color: #000;{% elif entry.rank == 3 %}background-color: #CD7F32; color: #fff;{% endif %} padding: 10px; border-radius: 5px;">
-                            <div class="col-xs-2 text-center">
+    <!-- Technical BSD Leaders -->
+    <div style="margin-bottom: 30px;">
+        <h4>🔧 Technical BSD Leaders</h4>
+        {% if relays.json.aroi_leaderboards.leaderboards.bsd_operators %}
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th style="width: 30%;">Operator</th>
+                        <th style="width: 25%;">Achievement</th>
+                        <th style="width: 45%;">Performance</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in relays.json.aroi_leaderboards.leaderboards.bsd_operators[:3] %}
+                    <tr>
+                        <td>
+                            <strong>
                                 {% if entry.rank == 1 %}🥇{% elif entry.rank == 2 %}🥈{% elif entry.rank == 3 %}🥉{% endif %}
-                            </div>
-                            <div class="col-xs-6">
-                                <strong>{{ entry.aroi_domain if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key }}</strong>
-                            </div>
-                            <div class="col-xs-4 text-right">
-                                <strong>{{ entry.bsd_count }} BSD</strong><br>
-                                <small>{{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</small>
-                            </div>
-                        </div>
-                        {% endfor %}
-                    {% endif %}
-                </div>
-            </div>
+                                {{ entry.aroi_domain if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key }}
+                            </strong>
+                        </td>
+                        <td>
+                            {% if entry.rank == 1 %}BSD Performance King
+                            {% elif entry.rank == 2 %}Security Hardening Hero
+                            {% elif entry.rank == 3 %}Security Champion
+                            {% endif %}
+                        </td>
+                        <td>{{ entry.bsd_count }} BSD relays, {{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
+        {% endif %}
+    </div>
 
-        <!-- Geographic Expansion Leaders -->
-        <div class="col-md-6" style="margin-bottom: 30px;">
-            <div class="panel panel-info">
-                <div class="panel-heading">
-                    <h3 class="panel-title">🌏 Geographic Expansion Leaders</h3>
-                </div>
-                <div class="panel-body">
-                    {% if relays.json.aroi_leaderboards.leaderboards.non_eu_leaders %}
-                        {% for entry in relays.json.aroi_leaderboards.leaderboards.non_eu_leaders[:3] %}
-                        <div class="row" style="margin-bottom: 10px; {% if entry.rank == 1 %}background-color: #FFD700; color: #000;{% elif entry.rank == 2 %}background-color: #C0C0C0; color: #000;{% elif entry.rank == 3 %}background-color: #CD7F32; color: #fff;{% endif %} padding: 10px; border-radius: 5px;">
-                            <div class="col-xs-2 text-center">
+    <!-- Geographic Expansion Leaders -->
+    <div style="margin-bottom: 30px;">
+        <h4>🌏 Geographic Expansion Leaders</h4>
+        {% if relays.json.aroi_leaderboards.leaderboards.non_eu_leaders %}
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th style="width: 30%;">Operator</th>
+                        <th style="width: 25%;">Achievement</th>
+                        <th style="width: 45%;">Performance</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in relays.json.aroi_leaderboards.leaderboards.non_eu_leaders[:3] %}
+                    <tr>
+                        <td>
+                            <strong>
                                 {% if entry.rank == 1 %}🥇{% elif entry.rank == 2 %}🥈{% elif entry.rank == 3 %}🥉{% endif %}
-                            </div>
-                            <div class="col-xs-6">
-                                <strong>{{ entry.aroi_domain if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key }}</strong>
-                            </div>
-                            <div class="col-xs-4 text-right">
-                                <strong>{{ entry.primary_country }}</strong><br>
-                                <small>{{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</small>
-                            </div>
-                        </div>
-                        {% endfor %}
-                    {% endif %}
-                </div>
-            </div>
+                                {{ entry.aroi_domain if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key }}
+                            </strong>
+                        </td>
+                        <td>
+                            {% if entry.rank == 1 %}Asia-Pacific King
+                            {% elif entry.rank == 2 %}Oceania Champion
+                            {% elif entry.rank == 3 %}North America Hero
+                            {% endif %}
+                        </td>
+                        <td>{{ entry.primary_country }}, {{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
+        {% endif %}
+    </div>
 
-        <!-- Frontier Pioneers -->
-        <div class="col-md-6" style="margin-bottom: 30px;">
-            <div class="panel panel-default">
-                <div class="panel-heading">
-                    <h3 class="panel-title">🏴‍☠️ Frontier Pioneers</h3>
-                </div>
-                <div class="panel-body">
-                    {% if relays.json.aroi_leaderboards.leaderboards.frontier_builders %}
-                        {% for entry in relays.json.aroi_leaderboards.leaderboards.frontier_builders[:3] %}
-                        <div class="row" style="margin-bottom: 10px; {% if entry.rank == 1 %}background-color: #FFD700; color: #000;{% elif entry.rank == 2 %}background-color: #C0C0C0; color: #000;{% elif entry.rank == 3 %}background-color: #CD7F32; color: #fff;{% endif %} padding: 10px; border-radius: 5px;">
-                            <div class="col-xs-2 text-center">
+    <!-- Frontier Pioneers -->
+    <div style="margin-bottom: 30px;">
+        <h4>🏴‍☠️ Frontier Pioneers</h4>
+        {% if relays.json.aroi_leaderboards.leaderboards.frontier_builders %}
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th style="width: 30%;">Operator</th>
+                        <th style="width: 25%;">Achievement</th>
+                        <th style="width: 45%;">Performance</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in relays.json.aroi_leaderboards.leaderboards.frontier_builders[:3] %}
+                    <tr>
+                        <td>
+                            <strong>
                                 {% if entry.rank == 1 %}🥇{% elif entry.rank == 2 %}🥈{% elif entry.rank == 3 %}🥉{% endif %}
-                            </div>
-                            <div class="col-xs-6">
-                                <strong>{{ entry.aroi_domain if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key }}</strong>
-                            </div>
-                            <div class="col-xs-4 text-right">
-                                <strong>{{ entry.rare_country }}</strong><br>
-                                <small>{{ entry.rarity_score }} rarity</small>
-                            </div>
-                        </div>
-                        {% endfor %}
-                    {% endif %}
-                </div>
-            </div>
+                                {{ entry.aroi_domain if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key }}
+                            </strong>
+                        </td>
+                        <td>
+                            {% if entry.rank == 1 %}Ultimate Pioneer
+                            {% elif entry.rank == 2 %}African Trailblazer
+                            {% elif entry.rank == 3 %}South American Explorer
+                            {% endif %}
+                        </td>
+                        <td>{{ entry.rare_country }} exclusive, {{ entry.rarity_score }} rarity</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
+        {% endif %}
+    </div>
 
-        <!-- Reliability Masters -->
-        <div class="col-md-6" style="margin-bottom: 30px;">
-            <div class="panel panel-success">
-                <div class="panel-heading">
-                    <h3 class="panel-title">💎 Reliability Masters</h3>
-                </div>
-                <div class="panel-body">
-                    {% if relays.json.aroi_leaderboards.leaderboards.network_veterans %}
-                        {% for entry in relays.json.aroi_leaderboards.leaderboards.network_veterans[:3] %}
-                        <div class="row" style="margin-bottom: 10px; {% if entry.rank == 1 %}background-color: #FFD700; color: #000;{% elif entry.rank == 2 %}background-color: #C0C0C0; color: #000;{% elif entry.rank == 3 %}background-color: #CD7F32; color: #fff;{% endif %} padding: 10px; border-radius: 5px;">
-                            <div class="col-xs-2 text-center">
+    <!-- Reliability Masters -->
+    <div style="margin-bottom: 30px;">
+        <h4>💎 Reliability Masters</h4>
+        {% if relays.json.aroi_leaderboards.leaderboards.network_veterans %}
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th style="width: 30%;">Operator</th>
+                        <th style="width: 25%;">Achievement</th>
+                        <th style="width: 45%;">Performance</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in relays.json.aroi_leaderboards.leaderboards.network_veterans[:3] %}
+                    <tr>
+                        <td>
+                            <strong>
                                 {% if entry.rank == 1 %}🥇{% elif entry.rank == 2 %}🥈{% elif entry.rank == 3 %}🥉{% endif %}
-                            </div>
-                            <div class="col-xs-6">
-                                <strong>{{ entry.aroi_domain if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key }}</strong>
-                            </div>
-                            <div class="col-xs-4 text-right">
-                                <strong>{{ entry.uptime_percentage }}</strong><br>
-                                <small>{{ entry.total_relays }} relays</small>
-                            </div>
-                        </div>
-                        {% endfor %}
-                    {% endif %}
-                </div>
-            </div>
+                                {{ entry.aroi_domain if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key }}
+                            </strong>
+                        </td>
+                        <td>
+                            {% if entry.rank == 1 %}Uptime King
+                            {% elif entry.rank == 2 %}Stability Champion
+                            {% elif entry.rank == 3 %}Consistency Hero
+                            {% endif %}
+                        </td>
+                        <td>{{ entry.uptime_percentage }} current uptime, {{ entry.total_relays }} relays</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
+        {% endif %}
+    </div>
 
-        <!-- Efficiency Experts -->
-        <div class="col-md-6" style="margin-bottom: 30px;">
-            <div class="panel panel-warning">
-                <div class="panel-heading">
-                    <h3 class="panel-title">⚡ Efficiency Experts</h3>
-                </div>
-                <div class="panel-body">
-                    {% if relays.json.aroi_leaderboards.leaderboards.efficiency_champions %}
-                        {% for entry in relays.json.aroi_leaderboards.leaderboards.efficiency_champions[:3] %}
-                        <div class="row" style="margin-bottom: 10px; {% if entry.rank == 1 %}background-color: #FFD700; color: #000;{% elif entry.rank == 2 %}background-color: #C0C0C0; color: #000;{% elif entry.rank == 3 %}background-color: #CD7F32; color: #fff;{% endif %} padding: 10px; border-radius: 5px;">
-                            <div class="col-xs-2 text-center">
+    <!-- Efficiency Experts -->
+    <div style="margin-bottom: 30px;">
+        <h4>⚡ Efficiency Experts</h4>
+        {% if relays.json.aroi_leaderboards.leaderboards.efficiency_champions %}
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th style="width: 30%;">Operator</th>
+                        <th style="width: 25%;">Achievement</th>
+                        <th style="width: 45%;">Performance</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in relays.json.aroi_leaderboards.leaderboards.efficiency_champions[:3] %}
+                    <tr>
+                        <td>
+                            <strong>
                                 {% if entry.rank == 1 %}🥇{% elif entry.rank == 2 %}🥈{% elif entry.rank == 3 %}🥉{% endif %}
-                            </div>
-                            <div class="col-xs-6">
-                                <strong>{{ entry.aroi_domain if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key }}</strong>
-                            </div>
-                            <div class="col-xs-4 text-right">
-                                <strong>{{ entry.efficiency_ratio }}</strong><br>
-                                <small>{{ entry.total_consensus_weight_pct }}</small>
-                            </div>
-                        </div>
-                        {% endfor %}
-                    {% endif %}
-                </div>
-            </div>
+                                {{ entry.aroi_domain if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key }}
+                            </strong>
+                        </td>
+                        <td>
+                            {% if entry.rank == 1 %}Efficiency King
+                            {% elif entry.rank == 2 %}Optimization Champion
+                            {% elif entry.rank == 3 %}Performance Hero
+                            {% endif %}
+                        </td>
+                        <td>{{ entry.efficiency_ratio }} CW/BW ratio, {{ entry.total_consensus_weight_pct }} consensus weight</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
+        {% endif %}
+    </div>
+
     </div>
 </section>
 
