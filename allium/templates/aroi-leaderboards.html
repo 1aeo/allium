@@ -70,7 +70,7 @@
                     <h3 style="margin-top: 0;">🥇 Platinum Bandwidth</h3>
                     {% if relays.json.aroi_leaderboards.leaderboards.bandwidth %}
                         {% set champion = relays.json.aroi_leaderboards.leaderboards.bandwidth[0] %}
-                        <h4><strong>{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key[:15] + '...' if champion.operator_key|length > 15 else champion.operator_key }}</strong></h4>
+                        <h4><strong>{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.contact_info[:10] + '...' if champion.contact_info and champion.contact_info|length > 10 else champion.contact_info if champion.contact_info else champion.operator_key[:10] + '...' if champion.operator_key|length > 10 else champion.operator_key }}</strong></h4>
                         <p>{{ champion.total_bandwidth }} {{ champion.bandwidth_unit }}</p>
                         <small>{{ champion.total_relays }} relays</small>
                     {% endif %}
@@ -85,7 +85,7 @@
                     <h3 style="margin-top: 0;">🚪 Exit Gate Keeper</h3>
                     {% if relays.json.aroi_leaderboards.leaderboards.exit_operators %}
                         {% set champion = relays.json.aroi_leaderboards.leaderboards.exit_operators[0] %}
-                        <h4><strong>{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key[:15] + '...' if champion.operator_key|length > 15 else champion.operator_key }}</strong></h4>
+                        <h4><strong>{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.contact_info[:10] + '...' if champion.contact_info and champion.contact_info|length > 10 else champion.contact_info if champion.contact_info else champion.operator_key[:10] + '...' if champion.operator_key|length > 10 else champion.operator_key }}</strong></h4>
                         <p>{{ champion.exit_count }} exit relays</p>
                         <small>{{ champion.total_relays }} total relays</small>
                     {% endif %}
@@ -100,7 +100,7 @@
                     <h3 style="margin-top: 0;">🛡️ Guard Champion</h3>
                     {% if relays.json.aroi_leaderboards.leaderboards.guard_operators %}
                         {% set champion = relays.json.aroi_leaderboards.leaderboards.guard_operators[0] %}
-                        <h4><strong>{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key[:15] + '...' if champion.operator_key|length > 15 else champion.operator_key }}</strong></h4>
+                        <h4><strong>{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.contact_info[:10] + '...' if champion.contact_info and champion.contact_info|length > 10 else champion.contact_info if champion.contact_info else champion.operator_key[:10] + '...' if champion.operator_key|length > 10 else champion.operator_key }}</strong></h4>
                         <p>{{ champion.guard_count }} guard relays</p>
                         <small>{{ champion.total_relays }} total relays</small>
                     {% endif %}
@@ -115,7 +115,7 @@
                     <h3 style="margin-top: 0;">🌍 Globe Trotter</h3>
                     {% if relays.json.aroi_leaderboards.leaderboards.most_diverse %}
                         {% set champion = relays.json.aroi_leaderboards.leaderboards.most_diverse[0] %}
-                        <h4><strong>{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key[:15] + '...' if champion.operator_key|length > 15 else champion.operator_key }}</strong></h4>
+                        <h4><strong>{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.contact_info[:10] + '...' if champion.contact_info and champion.contact_info|length > 10 else champion.contact_info if champion.contact_info else champion.operator_key[:10] + '...' if champion.operator_key|length > 10 else champion.operator_key }}</strong></h4>
                         <p>{{ champion.diversity_score }} diversity</p>
                         <small>{{ champion.country_count }} countries</small>
                     {% endif %}
@@ -130,7 +130,7 @@
                     <h3 style="margin-top: 0;">🔧 BSD Master</h3>
                     {% if relays.json.aroi_leaderboards.leaderboards.bsd_operators %}
                         {% set champion = relays.json.aroi_leaderboards.leaderboards.bsd_operators[0] %}
-                        <h4><strong>{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key[:15] + '...' if champion.operator_key|length > 15 else champion.operator_key }}</strong></h4>
+                        <h4><strong>{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.contact_info[:10] + '...' if champion.contact_info and champion.contact_info|length > 10 else champion.contact_info if champion.contact_info else champion.operator_key[:10] + '...' if champion.operator_key|length > 10 else champion.operator_key }}</strong></h4>
                         <p>{{ champion.bsd_count }} BSD relays</p>
                         <small>{{ champion.total_relays }} total relays</small>
                     {% endif %}
@@ -145,7 +145,7 @@
                     <h3 style="margin-top: 0;">⚡ Efficiency Expert</h3>
                     {% if relays.json.aroi_leaderboards.leaderboards.efficiency_champions %}
                         {% set champion = relays.json.aroi_leaderboards.leaderboards.efficiency_champions[0] %}
-                        <h4><strong>{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key[:15] + '...' if champion.operator_key|length > 15 else champion.operator_key }}</strong></h4>
+                        <h4><strong>{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.contact_info[:10] + '...' if champion.contact_info and champion.contact_info|length > 10 else champion.contact_info if champion.contact_info else champion.operator_key[:10] + '...' if champion.operator_key|length > 10 else champion.operator_key }}</strong></h4>
                         <p>{{ champion.efficiency_ratio }}</p>
                         <small>{{ champion.total_consensus_weight_pct }} consensus weight</small>
                     {% endif %}
@@ -160,7 +160,7 @@
                     <h3 style="margin-top: 0;">🏴‍☠️ Frontier Pioneer</h3>
                     {% if relays.json.aroi_leaderboards.leaderboards.frontier_builders %}
                         {% set champion = relays.json.aroi_leaderboards.leaderboards.frontier_builders[0] %}
-                        <h4><strong>{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key[:15] + '...' if champion.operator_key|length > 15 else champion.operator_key }}</strong></h4>
+                        <h4><strong>{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.contact_info[:10] + '...' if champion.contact_info and champion.contact_info|length > 10 else champion.contact_info if champion.contact_info else champion.operator_key[:10] + '...' if champion.operator_key|length > 10 else champion.operator_key }}</strong></h4>
                         <p>{{ champion.rare_country_count }} rare countries</p>
                         <small>{{ champion.total_relays }} total relays</small>
                     {% endif %}
@@ -175,7 +175,7 @@
                     <h3 style="margin-top: 0;">💎 Diamond Stability</h3>
                     {% if relays.json.aroi_leaderboards.leaderboards.network_veterans %}
                         {% set champion = relays.json.aroi_leaderboards.leaderboards.network_veterans[0] %}
-                        <h4><strong>{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key[:15] + '...' if champion.operator_key|length > 15 else champion.operator_key }}</strong></h4>
+                        <h4><strong>{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.contact_info[:10] + '...' if champion.contact_info and champion.contact_info|length > 10 else champion.contact_info if champion.contact_info else champion.operator_key[:10] + '...' if champion.operator_key|length > 10 else champion.operator_key }}</strong></h4>
                         <p>{{ champion.uptime_percentage }}</p>
                         <small>{{ champion.total_relays }} total relays</small>
                     {% endif %}
