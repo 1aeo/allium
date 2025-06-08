@@ -37,10 +37,10 @@
     <th>Country</th>
     <th>Platform</th>
     <th class="visible-md visible-lg">Flags</th>
-    {% if key == 'as' -%}
-    <th class="visible-md visible-lg">Uptime</th>
-    {% endif -%}
     <th class="visible-md visible-lg">First Seen</th>
+    {% if key == 'as' -%}
+    <th class="visible-md visible-lg">Last Restarted</th>
+    {% endif -%}
 </tr>
 <tbody>
     {% if is_index -%}
@@ -175,11 +175,6 @@
 		    {% endfor
 		    -%}
 		</td>
-		{% if key == 'as' -%}
-		    <td class="visible-md visible-lg">
-		        {{ relays._format_time_ago(relay['first_seen']) }}
-		    </td>
-		{% endif -%}
 		{% if key != 'first_seen' -%}
 		    <td class="visible-md visible-lg">
 			<a href="{{ page_ctx.path_prefix }}first_seen/{{ relay['first_seen'].split(' ', 1)[0]|escape }}/">{{
@@ -189,6 +184,15 @@
 		    <td class="visible-md visible-lg">
 			{{ relay['first_seen'].split(' ', 1)[0]|escape
 			}}
+		    </td>
+		{% endif -%}
+		{% if key == 'as' -%}
+		    <td class="visible-md visible-lg" title="{% if relay['last_restarted'] -%}{{ relay['last_restarted'].split(' ', 1)[0]|escape }}{% else -%}unknown{% endif -%}">
+		        {% if relay['last_restarted'] -%}
+		            {{ relays._format_time_ago(relay['last_restarted']) }}
+		        {% else -%}
+		            unknown
+		        {% endif -%}
 		    </td>
 		{% endif -%}
 	    </tr>

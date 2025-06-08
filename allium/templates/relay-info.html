@@ -311,7 +311,11 @@ Seen (First | Last)
 Last Restarted
 </dt>
 <dd>
-{{ relay['last_restarted']|escape }}
+{% if relay['last_restarted'] -%}
+{{ relays._format_time_ago(relay['last_restarted']) }} ({{ relay['last_restarted']|escape }})
+{% else -%}
+unknown
+{% endif -%}
 </dd>
 <dt title="UTC timestamp when this relay last stopped announcing an IPv4 or IPv6 address or TCP port where it previously accepted onion-routing or directory connections. This timestamp can serve as indicator whether this relay would be a suitable fallback directory.">
 Last Changed Address or Port
