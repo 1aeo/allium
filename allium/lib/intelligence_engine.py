@@ -444,9 +444,18 @@ class IntelligenceEngine:
                 
                 # PHASE 1 FEATURES (moved from template to Python)
                 
-                # 1. Portfolio Diversity
+                # 1. Network Diversity (with risk assessment)
                 unique_as_count = contact_data.get('unique_as_count', 0)
-                portfolio_diversity = f"{unique_as_count} network{'s' if unique_as_count != 1 else ''}"
+                
+                # Determine network diversity risk level
+                if unique_as_count == 1:
+                    network_risk = "high risk"
+                elif unique_as_count <= 3:
+                    network_risk = "medium risk"
+                else:
+                    network_risk = "low risk"
+                
+                portfolio_diversity = f"{unique_as_count} network{'s' if unique_as_count != 1 else ''} - {network_risk}"
                 
 
                 
