@@ -47,13 +47,17 @@ def _calculate_aroi_leaderboards(relays_instance):
         aroi_domain = first_relay.get('aroi_domain', 'none')
         contact_info = first_relay.get('contact', '')
         
+        # Skip operators without contact information (AROI requires contact info)
+        if not contact_info or contact_info.strip() == '':
+            continue
+        if aroi_domain == 'none' and not contact_info:
+            continue
+            
         # Use AROI domain as key if available, otherwise use contact hash
         if aroi_domain and aroi_domain != 'none':
             operator_key = aroi_domain
-        elif contact_info:
-            operator_key = f"contact_{contact_hash[:8]}"
         else:
-            operator_key = f"none_{contact_hash[:8]}"
+            operator_key = f"contact_{contact_hash[:8]}"
         
         # Collect relay data for this operator
         operator_relays = [all_relays[i] for i in relay_indices]
