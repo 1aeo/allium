@@ -21,4 +21,17 @@
 {{ navigation('contacts', page_ctx) }}
 {% endblock -%}
 {% block description %}{% if relays.json['sorted']['contact'][value]['aroi_domain'] and relays.json['sorted']['contact'][value]['aroi_domain'] != 'none' -%}AROI {{ relays.json['sorted']['contact'][value]['aroi_domain'] }}{% else -%}ContactInfo {{ relays.json['sorted']['contact'][value]['contact'] }}{% endif %} summary:
-{{ detail_summary(bandwidth, bandwidth_unit, guard_bandwidth, middle_bandwidth, exit_bandwidth, consensus_weight_fraction, guard_consensus_weight_fraction, middle_consensus_weight_fraction, exit_consensus_weight_fraction, guard_count, middle_count, exit_count, relays.json['relay_subset']|length) }}{% endblock %}
+{{ detail_summary(bandwidth, bandwidth_unit, guard_bandwidth, middle_bandwidth, exit_bandwidth, consensus_weight_fraction, guard_consensus_weight_fraction, middle_consensus_weight_fraction, exit_consensus_weight_fraction, guard_count, middle_count, exit_count, relays.json['relay_subset']|length) }}
+
+{% if relays.json.smart_context %}
+<div class="intelligence-section" style="margin-top: 15px;">
+    <h4>Operator Intelligence</h4>
+    <ul style="list-style-type: disc; padding-left: 20px;">
+        <li><strong><span title="Network diversity shows infrastructure distribution across different autonomous systems">Portfolio Diversity</span>:</strong> {{ relays.json['sorted']['contact'][value]['unique_as_count'] }} network{{ 's' if relays.json['sorted']['contact'][value]['unique_as_count'] != 1 else '' }}</li>
+        <li><strong><span title="Shows this operator's influence relative to other Tor operators">Network Influence</span>:</strong> {{ "%.2f%%"|format(relays.json['sorted']['contact'][value]['consensus_weight_fraction'] * 100) }} of network consensus weight
+            {% if relays.json['sorted']['contact'][value]['consensus_weight_fraction'] >= (relays.json.smart_context.concentration_patterns.template_optimized.contacts_largest_percentage|float / 100) %}(largest operator){% endif %}</li>
+        <li><strong><span title="Measurement status indicates relay reliability and performance verification">Measurement Status</span>:</strong> {{ relays.json['sorted']['contact'][value]['measured_count'] }}/{{ relays.json['relay_subset']|length }} relays measured by authorities</li>
+    </ul>
+</div>
+{% endif %}
+{% endblock %}
