@@ -431,13 +431,7 @@ class IntelligenceEngine:
             if bandwidth > 10000000 and consensus_weight < bandwidth * 0.0000005:  # Same criteria as layer 7
                 underutilized_fingerprints.add(relay.get('fingerprint', ''))
         
-        # Get largest operator info for network influence comparison
-        largest_operator_weight = 0
-        if 'contact' in self.sorted_data:
-            contacts = list(self.sorted_data['contact'].values())
-            if contacts:
-                largest_operator = max(contacts, key=lambda x: x.get('consensus_weight_fraction', 0))
-                largest_operator_weight = largest_operator.get('consensus_weight_fraction', 0)
+
         
         # Process each contact
         if 'contact' in self.sorted_data:
@@ -450,17 +444,20 @@ class IntelligenceEngine:
                 
                 # PHASE 1 FEATURES (moved from template to Python)
                 
-                # 1. Portfolio Diversity
+                # 1. Network Diversity (with consistent rating)
                 unique_as_count = contact_data.get('unique_as_count', 0)
-                portfolio_diversity = f"{unique_as_count} network{'s' if unique_as_count != 1 else ''}"
                 
-                # 2. Network Influence  
-                consensus_weight_fraction = contact_data.get('consensus_weight_fraction', 0)
-                network_influence_percentage = f"{consensus_weight_fraction * 100:.2f}%"
-                is_largest_operator = consensus_weight_fraction >= largest_operator_weight and largest_operator_weight > 0
-                network_influence = f"{network_influence_percentage} of network consensus weight"
-                if is_largest_operator:
-                    network_influence += " (largest operator)"
+                # Determine network diversity rating
+                if unique_as_count == 1:
+                    network_rating = "Poor"
+                elif unique_as_count <= 3:
+                    network_rating = "Good"
+                else:
+                    network_rating = "Great"
+                
+                portfolio_diversity = f"{network_rating}, {unique_as_count} network{'s' if unique_as_count != 1 else ''}"
+                
+
                 
                 # 3. Measurement Status
                 measured_count = contact_data.get('measured_count', 0)
@@ -469,20 +466,26 @@ class IntelligenceEngine:
                 
                 # PHASE 2 FEATURES (advanced analytics)
                 
-                # 4. Geographic Risk Assessment
+                # 4. Geographic Diversity Assessment (with consistent rating)
                 countries = set(relay.get('country') for relay in contact_relays if relay.get('country'))
                 country_count = len(countries)
                 
+                # Determine geographic diversity rating
                 if country_count == 1:
-                    geo_risk = "single country risk"
-                elif country_count <= 2:
-                    geo_risk = "geographic concentration risk"
+                    geo_rating = "Poor"
+                elif country_count <= 3:
+                    geo_rating = "Good"
                 else:
-                    geo_risk = "good diversification"
+                    geo_rating = "Great"
+                
+                geo_risk = f"{geo_rating}, {country_count} countr{'y' if country_count == 1 else 'ies'}"
                 
                 # 5. Performance Insights
                 contact_fingerprints = [relay.get('fingerprint') for relay in contact_relays if relay.get('fingerprint')]
                 underutilized_count = sum(1 for fp in contact_fingerprints if fp in underutilized_fingerprints)
+                
+                # Get top 2 underutilized relay fingerprints for this contact
+                contact_underutilized_fps = [fp for fp in contact_fingerprints if fp in underutilized_fingerprints][:2]
                 
                 if total_relays > 0:
                     if underutilized_count == 0:
@@ -494,38 +497,23 @@ class IntelligenceEngine:
                 else:
                     perf_status = "no data"
                 
-                # 6. Infrastructure Analysis
+                # 6. Infrastructure Diversity Analysis (with consistent rating)
                 platforms = set(relay.get('platform') for relay in contact_relays if relay.get('platform'))
                 versions = set(relay.get('version') for relay in contact_relays if relay.get('version'))
                 platform_count = len(platforms)
                 version_count = len(versions)
                 
+                # Determine infrastructure diversity rating
                 if platform_count == 1 and version_count == 1:
-                    infra_risk = "high sync risk"
+                    infra_rating = "Poor"
                 elif platform_count <= 2 or version_count <= 2:
-                    infra_risk = "moderate diversity"
+                    infra_rating = "Good"
                 else:
-                    infra_risk = "good diversity"
+                    infra_rating = "Great"
                 
-                # 7. Network Position Analysis
-                guard_count = contact_data.get('guard_count', 0)
-                middle_count = contact_data.get('middle_count', 0)
-                exit_count = contact_data.get('exit_count', 0)
-                total_relay_roles = guard_count + middle_count + exit_count
+                infra_risk = f"{infra_rating}, {platform_count} platform{'s' if platform_count != 1 else ''}, {version_count} version{'s' if version_count != 1 else ''}"
                 
-                if total_relay_roles > 0:
-                    if exit_count > 0 and guard_count > 0:
-                        strategy = f"Multi-role strategy ({exit_count} exit, {guard_count} guard)"
-                    elif exit_count > total_relay_roles * 0.5:
-                        exit_percentage = int(exit_count / total_relay_roles * 100)
-                        strategy = f"Exit-focused ({exit_percentage}% exit)"
-                    elif guard_count > total_relay_roles * 0.5:
-                        guard_percentage = int(guard_count / total_relay_roles * 100)
-                        strategy = f"Guard-focused ({guard_percentage}% guard)"
-                    else:
-                        strategy = "Balanced approach"
-                else:
-                    strategy = "No role data"
+
                 
                 # 8. Operational Maturity
                 first_seen_dates = [relay.get('first_seen') for relay in contact_relays if relay.get('first_seen')]
@@ -545,18 +533,17 @@ class IntelligenceEngine:
                 contact_intelligence[contact_hash] = {
                     # Phase 1: Foundation metrics (moved from template)
                     'portfolio_diversity': portfolio_diversity,
-                    'network_influence': network_influence,
                     'measurement_status': measurement_status,
                     
                     # Phase 2: Advanced analytics
                     'geographic_countries': country_count,
                     'geographic_risk': geo_risk,
                     'performance_underutilized': underutilized_count,
+                    'performance_underutilized_fps': contact_underutilized_fps,
                     'performance_status': perf_status,
                     'infrastructure_platforms': platform_count,
                     'infrastructure_versions': version_count,
                     'infrastructure_risk': infra_risk,
-                    'strategy': strategy,
                     'maturity': maturity
                 }
         
