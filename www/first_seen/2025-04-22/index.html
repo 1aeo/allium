@@ -1,0 +1,2537 @@
+    <!DOCTYPE html>
+    <html lang="en">
+        <head>
+            <title>
+Tor Relays :: First Seen 2025-04-22            </title>
+            <meta name="description"
+                  content="Javascript-free Tor metrics generated from a 30 minute API request.">
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <link rel="stylesheet" href="../../static/css/bootstrap.min.css">
+            <!--source: metrics.torproject.org-->
+            <style>
+                .circle {
+                    display: inline-block;
+                    vertical-align: middle;
+                    background: #999999;
+                    width: 7px;
+                    height: 7px;
+                    -moz-border-radius: 50%;
+                    -webkit-border-radius: 50%;
+                    border-radius: 50%;
+                }
+
+                .circle-online {
+                    background: #25d918;
+                }
+
+                .circle-offline {
+                    background: #ff1515;
+                }
+
+                .verified-hostname {
+                    color: #FE9F30;
+                }
+
+                .verified-hostname {
+                    color: #68b030;
+                }
+
+                .unverified-hostname {
+                    color: #FE9F30;
+                }
+
+                /* Dynamic text truncation for contact information */
+                .contact-text {
+                    display: inline-block;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    max-width: 20vw;  /* Use viewport width for responsive sizing */
+                }
+
+                /* Table styles */
+                .table {
+                    width: 100%;
+                    margin-bottom: 1rem;
+                }
+
+                /* Precise alignment for multi-value columns using monospace */
+                .bw-header, .cw-header, .rc-header, /* rc = relay count */
+                .bw-data, .cw-data, .rc-data {
+                    font-family: Consolas, "Courier New", monospace;
+                    white-space: nowrap;
+                    text-align: center;
+                    letter-spacing: 0.05em; /* Slight spacing for readability */
+                }
+
+                /* Container breakpoint */
+                @media (min-width: 1400px) {
+                    .container {
+                        width: 95%;
+                        max-width: none;
+                        padding-right: 15px;
+                        padding-left: 15px;
+                        margin-right: auto;
+                        margin-left: auto;
+                    }
+                }
+
+                /* AROI Leaderboards - Consolidated CSS Components */
+                
+                /* Section Spacing */
+                .aroi-section {
+                    margin-bottom: 40px;
+                }
+                
+                .aroi-subsection {
+                    margin-bottom: 30px;
+                }
+                
+                .aroi-champion-badge {
+                    margin-bottom: 20px;
+                }
+                
+                /* Top 3 Summary Tables */
+                .aroi-top3-table thead th:nth-child(1) {
+                    width: 30%;
+                }
+                
+                .aroi-top3-table thead th:nth-child(2) {
+                    width: 25%;
+                }
+                
+                .aroi-top3-table thead th:nth-child(3) {
+                    width: 45%;
+                }
+                
+                /* Complete Rankings Tables - Common patterns */
+                .aroi-rankings-table thead th:nth-child(1) {
+                    width: 5%;  /* Rank */
+                }
+                
+                .aroi-rankings-table thead th:nth-child(2) {
+                    width: 25%; /* Operator */
+                }
+                
+                /* Standard bandwidth/consensus table layout */
+                .aroi-standard-table thead th:nth-child(3) {
+                    width: 8%;  /* Relays */
+                }
+                
+                .aroi-standard-table thead th:nth-child(4) {
+                    width: 15%; /* Bandwidth */
+                }
+                
+                .aroi-standard-table thead th:nth-child(5) {
+                    width: 12%; /* Consensus Weight */
+                }
+                
+                .aroi-standard-table thead th:nth-child(6) {
+                    width: 15%; /* Guard/Exit Count */
+                }
+                
+                .aroi-standard-table thead th:nth-child(7) {
+                    width: 10%; /* Countries */
+                }
+                
+                .aroi-standard-table thead th:nth-child(8) {
+                    width: 10%; /* Platforms/Efficiency/Other */
+                }
+                
+                /* Specialized table for Exit/Guard operators */
+                .aroi-specialized-table thead th:nth-child(3) {
+                    width: 10%; /* Specific Relays (Exit/Guard) */
+                }
+                
+                .aroi-specialized-table thead th:nth-child(4) {
+                    width: 8%;  /* Total Relays */
+                }
+                
+                .aroi-specialized-table thead th:nth-child(5) {
+                    width: 15%; /* Bandwidth */
+                }
+                
+                .aroi-specialized-table thead th:nth-child(6) {
+                    width: 12%; /* Consensus Weight */
+                }
+                
+                .aroi-specialized-table thead th:nth-child(7) {
+                    width: 10%; /* Countries */
+                }
+                
+                .aroi-specialized-table thead th:nth-child(8) {
+                    width: 15%; /* Cross Reference (Guard/Exit Count) */
+                }
+                
+                /* Diversity/Category table layout */
+                .aroi-category-table thead th:nth-child(3) {
+                    width: 8%;  /* Relays */
+                }
+                
+                .aroi-category-table thead th:nth-child(4) {
+                    width: 15%; /* Key Metric */
+                }
+                
+                .aroi-category-table thead th:nth-child(5) {
+                    width: 12%; /* Bandwidth */
+                }
+                
+                .aroi-category-table thead th:nth-child(6) {
+                    width: 10%; /* Countries */
+                }
+                
+                .aroi-category-table thead th:nth-child(7) {
+                    width: 10%; /* Platforms */
+                }
+                
+                .aroi-category-table thead th:nth-child(8) {
+                    width: 15%; /* Specialization */
+                }
+
+                /* AROI Champion Badge Styles */
+                .aroi-champion-platinum {
+                    background: linear-gradient(45deg, #FFD700, #FFA500);
+                    color: #000;
+                }
+                
+                .aroi-champion-network {
+                    background: linear-gradient(45deg, #f7b731, #fc4a1a);
+                    color: #fff;
+                }
+                
+                .aroi-champion-exit {
+                    background: linear-gradient(45deg, #FF6B6B, #FF8E53);
+                    color: #fff;
+                }
+                
+                .aroi-champion-guard {
+                    background: linear-gradient(45deg, #4ECDC4, #44A08D);
+                    color: #fff;
+                }
+                
+                .aroi-champion-diversity {
+                    background: linear-gradient(45deg, #A8E6CF, #56AB2F);
+                    color: #000;
+                }
+                
+                .aroi-champion-platform {
+                    background: linear-gradient(45deg, #74b9ff, #0984e3);
+                    color: #fff;
+                }
+                
+                .aroi-champion-bsd {
+                    background: linear-gradient(45deg, #667eea, #764ba2);
+                    color: #fff;
+                }
+                
+                .aroi-champion-global {
+                    background: linear-gradient(45deg, #00b894, #00a085);
+                    color: #fff;
+                }
+                
+                .aroi-champion-frontier {
+                    background: linear-gradient(45deg, #ffecd2, #fcb69f);
+                    color: #000;
+                }
+                
+                .aroi-champion-reliability {
+                    background: linear-gradient(45deg, #a8edea, #fed6e3);
+                    color: #000;
+                }
+                
+                .aroi-champion-efficiency {
+                    background: linear-gradient(45deg, #f093fb, #f5576c);
+                    color: #fff;
+                }
+
+                /* AROI Ranking Badge Styles */
+                .aroi-rank-gold {
+                    background-color: #FFD700;
+                }
+                
+                .aroi-rank-silver {
+                    background-color: #C0C0C0;
+                }
+                
+                .aroi-rank-bronze {
+                    background-color: #CD7F32;
+                }
+
+                /* AROI Link Styles */
+                .aroi-underline-link {
+                    text-decoration: underline;
+                    color: inherit;
+                }
+                
+                .aroi-contact-link {
+                    text-decoration: underline;
+                }
+
+                /* AROI Layout Styles */
+                .aroi-center-text {
+                    text-align: center;
+                }
+                
+                .aroi-flex-nav {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 10px;
+                }
+                
+                .aroi-nav-spacing {
+                    margin-bottom: 20px;
+                }
+                
+                .aroi-nav-spacing h4 {
+                    margin-top: 5px;
+                }
+                
+                .aroi-primary-nav {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 15px;
+                    margin-bottom: 15px;
+                    justify-content: center;
+                }
+                
+                .aroi-category-nav {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 8px;
+                    padding-top: 15px;
+                    border-top: 1px solid #ddd;
+                    justify-content: center;
+                }
+                
+                .aroi-nav-separator {
+                    border-top: 1px solid #ddd;
+                    margin: 15px 0;
+                }
+                
+                .aroi-top-margin {
+                    margin-top: 10px;
+                }
+                
+                .aroi-header-spacing {
+                    margin-top: 0;
+                }
+                
+                .aroi-fixed-nav {
+                    position: fixed;
+                    bottom: 20px;
+                    right: 20px;
+                    z-index: 1000;
+                }
+                
+                .aroi-footer-section {
+                    margin-top: 50px;
+                    border-top: 2px solid #ccc;
+                    padding-top: 30px;
+                }
+
+                /* CSS-only navbar collapse using checkbox hack */
+                .navbar-toggle {
+                    display: none;
+                    background-color: transparent;
+                    background-image: none;
+                    border: 1px solid #ddd;
+                    border-radius: 4px;
+                    padding: 9px 10px;
+                    margin-top: 8px;
+                    margin-right: 15px;
+                    margin-bottom: 8px;
+                    cursor: pointer;
+                    float: right;
+                }
+
+                .navbar-toggle:hover,
+                .navbar-toggle:focus {
+                    background-color: #ddd;
+                }
+
+                .navbar-toggle .icon-bar {
+                    display: block;
+                    width: 22px;
+                    height: 2px;
+                    background-color: #888;
+                    border-radius: 1px;
+                    margin: 4px 0;
+                }
+
+                .navbar-brand {
+                    float: left;
+                    height: 50px;
+                    padding: 15px;
+                    font-size: 18px;
+                    line-height: 20px;
+                    font-weight: bold;
+                }
+
+                /* Desktop: show navigation horizontally */
+                @media (min-width: 768px) {
+                    .navbar-collapse {
+                        display: block !important;
+                        height: auto !important;
+                        overflow: visible !important;
+                    }
+                    
+                    .nav.navbar-nav {
+                        float: left;
+                        margin: 0;
+                    }
+                    
+                    .nav.navbar-nav > li {
+                        float: left;
+                    }
+                    
+                    .nav.navbar-nav > li > a {
+                        padding-top: 15px;
+                        padding-bottom: 15px;
+                        color: #777;
+                        text-decoration: none;
+                        padding-left: 15px;
+                        padding-right: 15px;
+                    }
+                    
+                    .nav.navbar-nav > li.active > a,
+                    .nav.navbar-nav > li > a:hover,
+                    .nav.navbar-nav > li > a:focus {
+                        color: #333;
+                        background-color: #e7e7e7;
+                    }
+                    
+                    .navbar-brand {
+                        display: none;
+                    }
+                }
+
+                /* Mobile: hide navigation by default, show hamburger */
+                @media (max-width: 767px) {
+                    .navbar-toggle {
+                        display: block;
+                    }
+                    
+                    .navbar-collapse {
+                        display: none;
+                        clear: both;
+                        width: 100%;
+                        margin-top: 50px;
+                        border-top: 1px solid #e7e7e7;
+                        padding-top: 10px;
+                    }
+                    
+                    /* When checkbox is checked, show the menu */
+                    .navbar-toggle-checkbox:checked ~ .navbar-header + .navbar-collapse {
+                        display: block;
+                    }
+                    
+                    .nav.navbar-nav > li {
+                        float: none;
+                    }
+                    
+                    .nav.navbar-nav > li > a {
+                        display: block;
+                        padding: 12px 20px;
+                        color: #777;
+                        text-decoration: none;
+                        border-bottom: 1px solid #e7e7e7;
+                    }
+                    
+                    .nav.navbar-nav > li:last-child > a {
+                        border-bottom: none;
+                    }
+                    
+                    .nav.navbar-nav > li.active > a,
+                    .nav.navbar-nav > li > a:hover,
+                    .nav.navbar-nav > li > a:focus {
+                        color: #333;
+                        background-color: #f5f5f5;
+                    }
+                }
+            </style>
+        </head>
+    <body>
+        <div class="container">
+<h2>
+View First Seen 2025-04-22 Details</h2>
+
+        <nav aria-label="breadcrumb" style="margin-bottom: 10px;">
+    <ol class="breadcrumb" style="background: none; padding: 0; margin: 0; font-size: 0.9em; list-style: none;">
+        <li style="display: inline;"><a href="../../index.html" style="color: #337ab7; text-decoration: none;">Home</a></li>
+            <li style="display: inline;"> > <a href="../../misc/all.html" style="color: #337ab7; text-decoration: none;">All Relays</a></li>
+            <li style="display: inline; color: #777;"> > First Seen 2025-04-22</li>
+    </ol>
+</nav>
+    <nav class="navbar navbar-default" style="margin-bottom: 20px;">
+        <div class="container-fluid">
+            <!-- CSS-only hamburger toggle using checkbox hack -->
+            <input type="checkbox" id="navbar-toggle" class="navbar-toggle-checkbox" style="display: none;">
+            
+            <div class="navbar-header">
+                <label for="navbar-toggle" class="navbar-toggle" role="button" aria-label="Toggle navigation">
+                    <span class="sr-only">Toggle navigation</span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </label>
+                <span class="navbar-brand visible-xs">Browse Categories</span>
+            </div>
+            
+            <div class="navbar-collapse" id="main-navbar">
+                <ul class="nav navbar-nav">
+                    <li class="">
+                        <a href="../../misc/aroi-leaderboards.html">Operator Champions</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/contacts-by-bandwidth.html">Operator / Contact</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/families-by-bandwidth.html">By Family</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/networks-by-bandwidth.html">By Network</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/countries-by-bandwidth.html">By Country</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/platforms-by-bandwidth.html">By Platform</a>
+                    </li>
+                    <li class="">
+                        <a href="../../index.html">Top 500 Relays</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/all.html">All Relays</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+<p>
+Relays started on 2025-04-22 summary:
+<ul style="list-style-type: disc; padding-left: 20px; margin-bottom: 15px;">
+    <li><strong><span title="Observed bandwidth represents the estimated capacity this group can handle, combining total, guard, middle, and exit bandwidth contributions">Bandwidth</span>:</strong> ~3.77 Gbit/s 
+        (<span title="Bandwidth dedicated to guard relay operations">2.01 Gbit/s guard</span>, <span title="Bandwidth dedicated to middle relay operations">1.76 Gbit/s middle</span>)</li>
+    <li><strong><span title="Network influence represents the percentage of overall consensus weight, indicating relative importance in the Tor network across guard, middle, and exit positions">Network Influence</span>:</strong> 0.34% of overall consensus weight 
+        (<span title="Percentage of guard consensus weight for entry position selection">0.35% guard</span>, <span title="Percentage of middle consensus weight for routing position selection">1.12% middle</span>)</li>
+    <li><strong><span title="Network position indicates the strategic role distribution of relays. Labels: Guard-focused (>60% guard), Exit-focused (>40% exit), Multi-role (both guard and exit >20%), Balanced (mixed roles), Guard-only (100% guard), Exit-only (100% exit), Middle-only (100% middle)">Network Position</span>:</strong> balanced, 48% guard, 52% middle, 0% exit (27 total relays, 13 guards, 14 middles, 0 exits)</li>
+</ul></p>
+
+<p class="text-muted" style="margin-bottom: 15px;">
+<small>Last updated: Sun, 08 Jun 2025 21:46:50 GMT. Refreshed every 30 minutes from the Tor directory authorities via <a href="https://onionoo.torproject.org/">Tor Project's onionoo API</a>.</small>
+</p>
+
+<table class="table table-condensed">
+<tr>
+    <th></th>
+    <th>Nickname</th>
+    <th><a href="https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/" target="_blank" title="Autonomous Relay Operator Identifier - unverified">AROI</a></th>
+    <th>Contact</th>
+    <th>BW</th>
+<th title="Bandwidth measured by >=3 bandwidth authorities">BW Measured</th>
+<th class="visible-md visible-lg">IP Address</th>
+    <th>AS Number</th>
+    <th>AS Name</th>
+    <th>Country</th>
+    <th>Platform</th>
+    <th class="visible-md visible-lg">Flags</th>
+    <th class="visible-md visible-lg">First Seen</th>
+<th class="visible-md visible-lg">Last Restarted</th>
+</tr>
+<tbody>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="memcpy4">
+			<a href="../../relay/7D15E51CC8AE6167EBDDC595CFA255E5667D881A/">memcpy4</a>
+		    </td>
+<td>
+			    <a href="../../contact/478a057e922672fc9b8ff4220f4619f9/" title="memcpy.io">memcpy.io</a>
+			</td>
+<td>
+			    <a href="../../contact/478a057e922672fc9b8ff4220f4619f9/" 
+				title="email:tor[]memcpy.io url:http://memcpy.io proof:uri-rsa abuse:tor[]memcpy.io pgp:5EB426794D2AB10BBE5D0C90FC974D585706DA43 matrix:@robertfoss:matrix.org hoster:Hetzner cost:35USD uplinkbw:2000 autoupdate:y ciissversion:2 trafficacct:unmetered" class="contact-text">email:tor[]memcpy.io url:http://memcpy.io proof:uri-rsa abuse:tor[]memcpy.io pgp:5EB426794D2AB10BBE5D0C90FC974D585706DA43 matrix:@robertfoss:matrix.org hoster:Hetzner cost:35USD uplinkbw:2000 autoupdate:y ciissversion:2 trafficacct:unmetered</a>
+			</td>
+<td>616.53 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/95.217.104.226">95.217.104.226</a>
+		</td>
+<td>
+			    <a href="../../as/AS24940/">AS24940</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS24940"
+			   title="Hetzner Online GmbH">Hetzner Online GmbH</a>
+		    </td>
+<td>
+			    <a href="../../country/fi/">
+				<img src="../../static/images/cc/fi.png"
+				     title="Finland"
+				     alt="Finland">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2025-04-22
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-19">
+2w 6d 5h ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="TorNode05">
+		    <a href="../../relay/54625FCF74D8311F3175349A1F879A0A298D5CA8/">TorNode05</a> (<a href="../../family/54625FCF74D8311F3175349A1F879A0A298D5CA8/">5</a>)
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/c74123414a3c67e747548d9e0997b016/" 
+				title="mRtjR4JX6pgJ@protonmail.ch" class="contact-text">mRtjR4JX6pgJ@protonmail.ch</a>
+			</td>
+<td>309.98 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/185.194.143.87">185.194.143.87</a>
+		</td>
+<td>
+			    <a href="../../as/AS197540/">AS197540</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS197540"
+			   title="netcup GmbH">netcup GmbH</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2025-04-22
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-01">
+1w 11h 57m ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="prsv">
+		    <a href="../../relay/7BCB0C611E08D5B4C246B3413CEF4C1D53301F6B/">prsv</a> (<a href="../../family/7BCB0C611E08D5B4C246B3413CEF4C1D53301F6B/">304</a>)
+		    </td>
+<td>
+			    <a href="../../contact/65a4a24bfc53c4c6c0d312ce29ab7883/" title="prsv.ch">prsv.ch</a>
+			</td>
+<td>
+			    <a href="../../contact/65a4a24bfc53c4c6c0d312ce29ab7883/" 
+				title="email:admin[]prsv.ch url:https://prsv.ch/ proof:uri-rsa ciissversion:2" class="contact-text">email:admin[]prsv.ch url:https://prsv.ch/ proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>240.40 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.145.164.86">45.145.164.86</a>
+		</td>
+<td>
+			    <a href="../../as/AS207992/">AS207992</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS207992"
+			   title="FEELB SARL">FEELB SARL</a>
+		    </td>
+<td>
+			    <a href="../../country/fr/">
+				<img src="../../static/images/cc/fr.png"
+				     title="France"
+				     alt="France">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2025-04-22
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-03">
+5d 16h 43m ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="prsv">
+		    <a href="../../relay/0189052E1CD8BD73B2AF6084C99619B8ED73DD55/">prsv</a> (<a href="../../family/0189052E1CD8BD73B2AF6084C99619B8ED73DD55/">304</a>)
+		    </td>
+<td>
+			    <a href="../../contact/65a4a24bfc53c4c6c0d312ce29ab7883/" title="prsv.ch">prsv.ch</a>
+			</td>
+<td>
+			    <a href="../../contact/65a4a24bfc53c4c6c0d312ce29ab7883/" 
+				title="email:admin[]prsv.ch url:https://prsv.ch/ proof:uri-rsa ciissversion:2" class="contact-text">email:admin[]prsv.ch url:https://prsv.ch/ proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>233.97 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.145.164.86">45.145.164.86</a>
+		</td>
+<td>
+			    <a href="../../as/AS207992/">AS207992</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS207992"
+			   title="FEELB SARL">FEELB SARL</a>
+		    </td>
+<td>
+			    <a href="../../country/fr/">
+				<img src="../../static/images/cc/fr.png"
+				     title="France"
+				     alt="France">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2025-04-22
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-03">
+5d 16h 42m ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="TorNode04">
+		    <a href="../../relay/026F3D3E1FCEBEE056FBE3B3EB02449B913128D8/">TorNode04</a> (<a href="../../family/026F3D3E1FCEBEE056FBE3B3EB02449B913128D8/">5</a>)
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/c74123414a3c67e747548d9e0997b016/" 
+				title="mRtjR4JX6pgJ@protonmail.ch" class="contact-text">mRtjR4JX6pgJ@protonmail.ch</a>
+			</td>
+<td>210.18 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/46.38.250.227">46.38.250.227</a>
+		</td>
+<td>
+			    <a href="../../as/AS197540/">AS197540</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS197540"
+			   title="netcup GmbH">netcup GmbH</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2025-04-22
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-01">
+1w 11h 57m ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="prsv">
+		    <a href="../../relay/2DA0EE2C52F6BACC86A3381ADB9DFF0C71E9F4DE/">prsv</a> (<a href="../../family/2DA0EE2C52F6BACC86A3381ADB9DFF0C71E9F4DE/">304</a>)
+		    </td>
+<td>
+			    <a href="../../contact/65a4a24bfc53c4c6c0d312ce29ab7883/" title="prsv.ch">prsv.ch</a>
+			</td>
+<td>
+			    <a href="../../contact/65a4a24bfc53c4c6c0d312ce29ab7883/" 
+				title="email:admin[]prsv.ch url:https://prsv.ch/ proof:uri-rsa ciissversion:2" class="contact-text">email:admin[]prsv.ch url:https://prsv.ch/ proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>194.44 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/94.141.123.170">94.141.123.170</a>
+		</td>
+<td>
+			    <a href="../../as/AS213887/">AS213887</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS213887"
+			   title="WAIcore Ltd">WAIcore Ltd</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2025-04-22
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-08">
+10h 27m 26s ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="gabouleHelper1">
+			<a href="../../relay/8508B824827023431DC4EADF6B366CED467D3259/">gabouleHelper1</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/79b62bb2c413a93c15913c322e39ced6/" 
+				title="relayoperator@gaboule.com" class="contact-text">relayoperator@gaboule.com</a>
+			</td>
+<td>194.40 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/193.251.38.130">193.251.38.130</a>
+		</td>
+<td>
+			    <a href="../../as/AS3215/">AS3215</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS3215"
+			   title="Orange S.A.">Orange S.A.</a>
+		    </td>
+<td>
+			    <a href="../../country/fr/">
+				<img src="../../static/images/cc/fr.png"
+				     title="France"
+				     alt="France">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2025-04-22
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-08">
+12h 20m 24s ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="prsv">
+		    <a href="../../relay/F1BDB008E90B271E7A1F92497A0F9BACCF9181A0/">prsv</a> (<a href="../../family/F1BDB008E90B271E7A1F92497A0F9BACCF9181A0/">304</a>)
+		    </td>
+<td>
+			    <a href="../../contact/65a4a24bfc53c4c6c0d312ce29ab7883/" title="prsv.ch">prsv.ch</a>
+			</td>
+<td>
+			    <a href="../../contact/65a4a24bfc53c4c6c0d312ce29ab7883/" 
+				title="email:admin[]prsv.ch url:https://prsv.ch/ proof:uri-rsa ciissversion:2" class="contact-text">email:admin[]prsv.ch url:https://prsv.ch/ proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>176.28 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/94.141.123.170">94.141.123.170</a>
+		</td>
+<td>
+			    <a href="../../as/AS213887/">AS213887</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS213887"
+			   title="WAIcore Ltd">WAIcore Ltd</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2025-04-22
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-08">
+15h 27m 41s ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="prsv">
+		    <a href="../../relay/04F74AFAA48E4AA86CB5D391FFE1F89A810DA8C7/">prsv</a> (<a href="../../family/04F74AFAA48E4AA86CB5D391FFE1F89A810DA8C7/">304</a>)
+		    </td>
+<td>
+			    <a href="../../contact/65a4a24bfc53c4c6c0d312ce29ab7883/" title="prsv.ch">prsv.ch</a>
+			</td>
+<td>
+			    <a href="../../contact/65a4a24bfc53c4c6c0d312ce29ab7883/" 
+				title="email:admin[]prsv.ch url:https://prsv.ch/ proof:uri-rsa ciissversion:2" class="contact-text">email:admin[]prsv.ch url:https://prsv.ch/ proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>175.81 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/94.141.123.170">94.141.123.170</a>
+		</td>
+<td>
+			    <a href="../../as/AS213887/">AS213887</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS213887"
+			   title="WAIcore Ltd">WAIcore Ltd</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2025-04-22
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-08">
+3h 33m 28s ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="prsv">
+		    <a href="../../relay/235D6BFC044A873120D6D6C03B3D72EF24DD9A69/">prsv</a> (<a href="../../family/235D6BFC044A873120D6D6C03B3D72EF24DD9A69/">304</a>)
+		    </td>
+<td>
+			    <a href="../../contact/65a4a24bfc53c4c6c0d312ce29ab7883/" title="prsv.ch">prsv.ch</a>
+			</td>
+<td>
+			    <a href="../../contact/65a4a24bfc53c4c6c0d312ce29ab7883/" 
+				title="email:admin[]prsv.ch url:https://prsv.ch/ proof:uri-rsa ciissversion:2" class="contact-text">email:admin[]prsv.ch url:https://prsv.ch/ proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>168.60 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/194.9.172.32">194.9.172.32</a>
+		</td>
+<td>
+			    <a href="../../as/AS207992/">AS207992</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS207992"
+			   title="FEELB SARL">FEELB SARL</a>
+		    </td>
+<td>
+			    <a href="../../country/fr/">
+				<img src="../../static/images/cc/fr.png"
+				     title="France"
+				     alt="France">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/FreeBSD/">FreeBSD</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2025-04-22
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-04">
+4d 18h 5m ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="prsv">
+		    <a href="../../relay/76A75B79153E5370E902EFB54A8309BCB6A0EA01/">prsv</a> (<a href="../../family/76A75B79153E5370E902EFB54A8309BCB6A0EA01/">304</a>)
+		    </td>
+<td>
+			    <a href="../../contact/65a4a24bfc53c4c6c0d312ce29ab7883/" title="prsv.ch">prsv.ch</a>
+			</td>
+<td>
+			    <a href="../../contact/65a4a24bfc53c4c6c0d312ce29ab7883/" 
+				title="email:admin[]prsv.ch url:https://prsv.ch/ proof:uri-rsa ciissversion:2" class="contact-text">email:admin[]prsv.ch url:https://prsv.ch/ proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>166.84 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/94.141.123.170">94.141.123.170</a>
+		</td>
+<td>
+			    <a href="../../as/AS213887/">AS213887</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS213887"
+			   title="WAIcore Ltd">WAIcore Ltd</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2025-04-22
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-08">
+12h 46m 39s ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="prsv">
+		    <a href="../../relay/D54904648358783BF2FCEE1D23C17BDA68E6A04A/">prsv</a> (<a href="../../family/D54904648358783BF2FCEE1D23C17BDA68E6A04A/">304</a>)
+		    </td>
+<td>
+			    <a href="../../contact/65a4a24bfc53c4c6c0d312ce29ab7883/" title="prsv.ch">prsv.ch</a>
+			</td>
+<td>
+			    <a href="../../contact/65a4a24bfc53c4c6c0d312ce29ab7883/" 
+				title="email:admin[]prsv.ch url:https://prsv.ch/ proof:uri-rsa ciissversion:2" class="contact-text">email:admin[]prsv.ch url:https://prsv.ch/ proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>165.22 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/194.9.172.32">194.9.172.32</a>
+		</td>
+<td>
+			    <a href="../../as/AS207992/">AS207992</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS207992"
+			   title="FEELB SARL">FEELB SARL</a>
+		    </td>
+<td>
+			    <a href="../../country/fr/">
+				<img src="../../static/images/cc/fr.png"
+				     title="France"
+				     alt="France">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/FreeBSD/">FreeBSD</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2025-04-22
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-04">
+4d 18h 5m ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="prsv">
+		    <a href="../../relay/860103EAA6C6C32C61848FADB3E63E2DBB2395F8/">prsv</a> (<a href="../../family/860103EAA6C6C32C61848FADB3E63E2DBB2395F8/">304</a>)
+		    </td>
+<td>
+			    <a href="../../contact/65a4a24bfc53c4c6c0d312ce29ab7883/" title="prsv.ch">prsv.ch</a>
+			</td>
+<td>
+			    <a href="../../contact/65a4a24bfc53c4c6c0d312ce29ab7883/" 
+				title="email:admin[]prsv.ch url:https://prsv.ch/ proof:uri-rsa ciissversion:2" class="contact-text">email:admin[]prsv.ch url:https://prsv.ch/ proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>140.67 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/94.141.123.170">94.141.123.170</a>
+		</td>
+<td>
+			    <a href="../../as/AS213887/">AS213887</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS213887"
+			   title="WAIcore Ltd">WAIcore Ltd</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2025-04-22
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-08">
+7h 31m 7s ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="prsv">
+		    <a href="../../relay/89F0102AF42547F6BC1512024CB520BC1CFEB318/">prsv</a> (<a href="../../family/89F0102AF42547F6BC1512024CB520BC1CFEB318/">304</a>)
+		    </td>
+<td>
+			    <a href="../../contact/65a4a24bfc53c4c6c0d312ce29ab7883/" title="prsv.ch">prsv.ch</a>
+			</td>
+<td>
+			    <a href="../../contact/65a4a24bfc53c4c6c0d312ce29ab7883/" 
+				title="email:admin[]prsv.ch url:https://prsv.ch/ proof:uri-rsa ciissversion:2" class="contact-text">email:admin[]prsv.ch url:https://prsv.ch/ proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>138.51 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/94.141.123.170">94.141.123.170</a>
+		</td>
+<td>
+			    <a href="../../as/AS213887/">AS213887</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS213887"
+			   title="WAIcore Ltd">WAIcore Ltd</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2025-04-22
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-07">
+1d 9h 56m ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="dankRelay">
+			<a href="../../relay/0943D89B4BE9AFC26FB87DEA224CC27B0B14D919/">dankRelay</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/5052bf4d75747ec9d9bc3d44b8872935/" 
+				title="akacha@cock.li" class="contact-text">akacha@cock.li</a>
+			</td>
+<td>114.91 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/162.225.60.139">162.225.60.139</a>
+		</td>
+<td>
+			    <a href="../../as/AS7018/">AS7018</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS7018"
+			   title="AT&amp;T Enterprises, LLC">AT&amp;T Enterprises, LLC</a>
+		    </td>
+<td>
+			    <a href="../../country/us/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2025-04-22
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-08">
+18h 19m 9s ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="Spychacz21">
+			<a href="../../relay/F1B3939A9173F3AFBD4B4A8DC3EB35519034A7FF/">Spychacz21</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/840556449132d334c403954ca45ff5bb/" 
+				title="&lt;2D8A BF6A 9417 4500 A208  C31A 6B8D AEDB CB04 0631&gt; jakub AT jkogut DOT pl" class="contact-text">&lt;2D8A BF6A 9417 4500 A208  C31A 6B8D AEDB CB04 0631&gt; jakub AT jkogut DOT pl</a>
+			</td>
+<td>95.00 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/79.189.125.171">79.189.125.171</a>
+		</td>
+<td>
+			    <a href="../../as/AS5617/">AS5617</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS5617"
+			   title="Orange Polska Spolka Akcyjna">Orange Polska...</a>
+		    </td>
+<td>
+			    <a href="../../country/pl/">
+				<img src="../../static/images/cc/pl.png"
+				     title="Poland"
+				     alt="Poland">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2025-04-22
+		    </td>
+<td class="visible-md visible-lg" title="2025-04-23">
+1mo 2w 2d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="prsv">
+		    <a href="../../relay/30732D4065AF80BC17F9D7BBB9A4AF1F97509556/">prsv</a> (<a href="../../family/30732D4065AF80BC17F9D7BBB9A4AF1F97509556/">304</a>)
+		    </td>
+<td>
+			    <a href="../../contact/65a4a24bfc53c4c6c0d312ce29ab7883/" title="prsv.ch">prsv.ch</a>
+			</td>
+<td>
+			    <a href="../../contact/65a4a24bfc53c4c6c0d312ce29ab7883/" 
+				title="email:admin[]prsv.ch url:https://prsv.ch/ proof:uri-rsa ciissversion:2" class="contact-text">email:admin[]prsv.ch url:https://prsv.ch/ proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>93.95 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/163.5.121.250">163.5.121.250</a>
+		</td>
+<td>
+			    <a href="../../as/AS207992/">AS207992</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS207992"
+			   title="FEELB SARL">FEELB SARL</a>
+		    </td>
+<td>
+			    <a href="../../country/fr/">
+				<img src="../../static/images/cc/fr.png"
+				     title="France"
+				     alt="France">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2025-04-22
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-05">
+3d 21h 9m ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="WelcomeToNewWorld">
+			<a href="../../relay/86233EA0409C2115D9746A70AC53B8E77FB2306B/">WelcomeToNewWorld</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/fbe05f06303a2f3d913e0de08a2939fa/" 
+				title="dei8eichahfo@incel.email" class="contact-text">dei8eichahfo@incel.email</a>
+			</td>
+<td>83.23 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/86.54.42.232">86.54.42.232</a>
+		</td>
+<td>
+			    <a href="../../as/AS42624/">AS42624</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS42624"
+			   title="Global-Data System IT Corporation">Global-Data...</a>
+		    </td>
+<td>
+			    <a href="../../country/nl/">
+				<img src="../../static/images/cc/nl.png"
+				     title="Netherlands"
+				     alt="Netherlands">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2025-04-22
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-02">
+5d 23h 20m ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="prsv">
+		    <a href="../../relay/429B4AE2D9DC9CE053B3A9F5324E7B5DADA70B6F/">prsv</a> (<a href="../../family/429B4AE2D9DC9CE053B3A9F5324E7B5DADA70B6F/">304</a>)
+		    </td>
+<td>
+			    <a href="../../contact/65a4a24bfc53c4c6c0d312ce29ab7883/" title="prsv.ch">prsv.ch</a>
+			</td>
+<td>
+			    <a href="../../contact/65a4a24bfc53c4c6c0d312ce29ab7883/" 
+				title="email:admin[]prsv.ch url:https://prsv.ch/ proof:uri-rsa ciissversion:2" class="contact-text">email:admin[]prsv.ch url:https://prsv.ch/ proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>70.59 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/163.5.121.250">163.5.121.250</a>
+		</td>
+<td>
+			    <a href="../../as/AS207992/">AS207992</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS207992"
+			   title="FEELB SARL">FEELB SARL</a>
+		    </td>
+<td>
+			    <a href="../../country/fr/">
+				<img src="../../static/images/cc/fr.png"
+				     title="France"
+				     alt="France">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2025-04-22
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-05">
+3d 21h 9m ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="nyonyonyo">
+			<a href="../../relay/13490C44008E50284F216215479F4C7F7717AD8C/">nyonyonyo</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/55513629b60fd0b23dbe0a3a6f9a9cf5/" 
+				title="p at centraworks dot net" class="contact-text">p at centraworks dot net</a>
+			</td>
+<td>63.20 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/163.220.236.41">163.220.236.41</a>
+		</td>
+<td>
+			    <a href="../../as/AS63770/">AS63770</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS63770"
+			   title="Industrial Cyber Security Center of Excellence">Industrial Cyber...</a>
+		    </td>
+<td>
+			    <a href="../../country/jp/">
+				<img src="../../static/images/cc/jp.png"
+				     title="Japan"
+				     alt="Japan">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2025-04-22
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-27">
+1w 5d 19h ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="nyonyonyo">
+			<a href="../../relay/02D46DFA8A4B6EA2F73636682949958E405BB9EC/">nyonyonyo</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/55513629b60fd0b23dbe0a3a6f9a9cf5/" 
+				title="p at centraworks dot net" class="contact-text">p at centraworks dot net</a>
+			</td>
+<td>31.89 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/163.220.236.40">163.220.236.40</a>
+		</td>
+<td>
+			    <a href="../../as/AS63770/">AS63770</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS63770"
+			   title="Industrial Cyber Security Center of Excellence">Industrial Cyber...</a>
+		    </td>
+<td>
+			    <a href="../../country/jp/">
+				<img src="../../static/images/cc/jp.png"
+				     title="Japan"
+				     alt="Japan">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2025-04-22
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-27">
+1w 5d 19h ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="crypta">
+			<a href="../../relay/BDDCAF7165D67E364CEE86F81606D1DE952560CF/">crypta</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/9397f9fd67799c4d1064adf8af628660/" 
+				title="sec@3am.cx" class="contact-text">sec@3am.cx</a>
+			</td>
+<td>18.06 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/107.152.46.63">107.152.46.63</a>
+		</td>
+<td>
+			    <a href="../../as/AS11878/">AS11878</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS11878"
+			   title="tzulo, inc.">tzulo, inc.</a>
+		    </td>
+<td>
+			    <a href="../../country/us/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2025-04-22
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-06">
+1d 23h 19m ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="kronix">
+			<a href="../../relay/98ABE1FF1DBBEC1FD46B7A408F5CA2994708B890/">kronix</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/9397f9fd67799c4d1064adf8af628660/" 
+				title="sec@3am.cx" class="contact-text">sec@3am.cx</a>
+			</td>
+<td>17.79 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/107.152.35.187">107.152.35.187</a>
+		</td>
+<td>
+			    <a href="../../as/AS11878/">AS11878</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS11878"
+			   title="tzulo, inc.">tzulo, inc.</a>
+		    </td>
+<td>
+			    <a href="../../country/us/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2025-04-22
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-06">
+1d 23h 20m ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="gasworks">
+			<a href="../../relay/66B70FAD6BC81D8D9D3D680B888D9D89FA7F23EF/">gasworks</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/9397f9fd67799c4d1064adf8af628660/" 
+				title="sec@3am.cx" class="contact-text">sec@3am.cx</a>
+			</td>
+<td>17.06 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/75.127.13.29">75.127.13.29</a>
+		</td>
+<td>
+			    <a href="../../as/AS36352/">AS36352</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS36352"
+			   title="HostPapa">HostPapa</a>
+		    </td>
+<td>
+			    <a href="../../country/us/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2025-04-22
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-06">
+1d 23h 13m ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="thrifty">
+			<a href="../../relay/21D4D2417BB4F7AE6CAEEE883A50643AEEC4A721/">thrifty</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/9397f9fd67799c4d1064adf8af628660/" 
+				title="sec@3am.cx" class="contact-text">sec@3am.cx</a>
+			</td>
+<td>16.88 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/50.114.206.73">50.114.206.73</a>
+		</td>
+<td>
+			    <a href="../../as/AS62564/">AS62564</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS62564"
+			   title="LINVEO, LLC">LINVEO, LLC</a>
+		    </td>
+<td>
+			    <a href="../../country/us/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2025-04-22
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-06">
+1d 23h 16m ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="refreeze">
+			<a href="../../relay/3B85ADA3C921F2596B38EEDE0A536E5821A2AF3B/">refreeze</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/9397f9fd67799c4d1064adf8af628660/" 
+				title="sec@3am.cx" class="contact-text">sec@3am.cx</a>
+			</td>
+<td>16.72 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/50.114.206.77">50.114.206.77</a>
+		</td>
+<td>
+			    <a href="../../as/AS62564/">AS62564</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS62564"
+			   title="LINVEO, LLC">LINVEO, LLC</a>
+		    </td>
+<td>
+			    <a href="../../country/us/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2025-04-22
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-06">
+1d 23h 16m ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="Unnamed">
+			<a href="../../relay/28810E6DE7BF3496221466B41E71D8E243055C48/">Unnamed</a>
+		    </td>
+<td>none</td>
+<td title="none">
+			    none
+			</td>
+<td>886.29 Kbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/109.183.26.233">109.183.26.233</a>
+		</td>
+<td>
+			    <a href="../../as/AS12767/">AS12767</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS12767"
+			   title="T-Mobile Czech Republic a.s.">T-Mobile Czech...</a>
+		    </td>
+<td>
+			    <a href="../../country/cz/">
+				<img src="../../static/images/cc/cz.png"
+				     title="Czechia"
+				     alt="Czechia">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			2025-04-22
+		    </td>
+<td class="visible-md visible-lg" title="2025-04-22">
+1mo 2w 3d ago
+</td>
+</tr>
+</tbody>
+</table>
+        </div>
+    </body>
+        <footer class="page-footer font-small">
+            <div class="footer-copyright text-center text-muted">
+                <p>
+                    Generated by a <a href="https://github.com/1aeo/allium">1aeo modified fork of allium</a>, based on original <a href="https://git.jordan.im/allium/">allium</a>, on Sun, 08 Jun 2025 21:46:50 GMT. Source data from <a href="https://onionoo.torproject.org/">Tor Project onionoo</a>.
+                </p>
+            </div>
+        </footer>
+    </html>

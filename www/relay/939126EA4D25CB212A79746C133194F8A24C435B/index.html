@@ -1,0 +1,794 @@
+    <!DOCTYPE html>
+    <html lang="en">
+        <head>
+            <title>
+Tor Relays :: F3Netze
+            </title>
+            <meta name="description"
+                  content="Javascript-free Tor metrics generated from a 30 minute API request.">
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <link rel="stylesheet" href="../../static/css/bootstrap.min.css">
+            <!--source: metrics.torproject.org-->
+            <style>
+                .circle {
+                    display: inline-block;
+                    vertical-align: middle;
+                    background: #999999;
+                    width: 7px;
+                    height: 7px;
+                    -moz-border-radius: 50%;
+                    -webkit-border-radius: 50%;
+                    border-radius: 50%;
+                }
+
+                .circle-online {
+                    background: #25d918;
+                }
+
+                .circle-offline {
+                    background: #ff1515;
+                }
+
+                .verified-hostname {
+                    color: #FE9F30;
+                }
+
+                .verified-hostname {
+                    color: #68b030;
+                }
+
+                .unverified-hostname {
+                    color: #FE9F30;
+                }
+
+                /* Dynamic text truncation for contact information */
+                .contact-text {
+                    display: inline-block;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    max-width: 20vw;  /* Use viewport width for responsive sizing */
+                }
+
+                /* Table styles */
+                .table {
+                    width: 100%;
+                    margin-bottom: 1rem;
+                }
+
+                /* Precise alignment for multi-value columns using monospace */
+                .bw-header, .cw-header, .rc-header, /* rc = relay count */
+                .bw-data, .cw-data, .rc-data {
+                    font-family: Consolas, "Courier New", monospace;
+                    white-space: nowrap;
+                    text-align: center;
+                    letter-spacing: 0.05em; /* Slight spacing for readability */
+                }
+
+                /* Container breakpoint */
+                @media (min-width: 1400px) {
+                    .container {
+                        width: 95%;
+                        max-width: none;
+                        padding-right: 15px;
+                        padding-left: 15px;
+                        margin-right: auto;
+                        margin-left: auto;
+                    }
+                }
+
+                /* AROI Leaderboards - Consolidated CSS Components */
+                
+                /* Section Spacing */
+                .aroi-section {
+                    margin-bottom: 40px;
+                }
+                
+                .aroi-subsection {
+                    margin-bottom: 30px;
+                }
+                
+                .aroi-champion-badge {
+                    margin-bottom: 20px;
+                }
+                
+                /* Top 3 Summary Tables */
+                .aroi-top3-table thead th:nth-child(1) {
+                    width: 30%;
+                }
+                
+                .aroi-top3-table thead th:nth-child(2) {
+                    width: 25%;
+                }
+                
+                .aroi-top3-table thead th:nth-child(3) {
+                    width: 45%;
+                }
+                
+                /* Complete Rankings Tables - Common patterns */
+                .aroi-rankings-table thead th:nth-child(1) {
+                    width: 5%;  /* Rank */
+                }
+                
+                .aroi-rankings-table thead th:nth-child(2) {
+                    width: 25%; /* Operator */
+                }
+                
+                /* Standard bandwidth/consensus table layout */
+                .aroi-standard-table thead th:nth-child(3) {
+                    width: 8%;  /* Relays */
+                }
+                
+                .aroi-standard-table thead th:nth-child(4) {
+                    width: 15%; /* Bandwidth */
+                }
+                
+                .aroi-standard-table thead th:nth-child(5) {
+                    width: 12%; /* Consensus Weight */
+                }
+                
+                .aroi-standard-table thead th:nth-child(6) {
+                    width: 15%; /* Guard/Exit Count */
+                }
+                
+                .aroi-standard-table thead th:nth-child(7) {
+                    width: 10%; /* Countries */
+                }
+                
+                .aroi-standard-table thead th:nth-child(8) {
+                    width: 10%; /* Platforms/Efficiency/Other */
+                }
+                
+                /* Specialized table for Exit/Guard operators */
+                .aroi-specialized-table thead th:nth-child(3) {
+                    width: 10%; /* Specific Relays (Exit/Guard) */
+                }
+                
+                .aroi-specialized-table thead th:nth-child(4) {
+                    width: 8%;  /* Total Relays */
+                }
+                
+                .aroi-specialized-table thead th:nth-child(5) {
+                    width: 15%; /* Bandwidth */
+                }
+                
+                .aroi-specialized-table thead th:nth-child(6) {
+                    width: 12%; /* Consensus Weight */
+                }
+                
+                .aroi-specialized-table thead th:nth-child(7) {
+                    width: 10%; /* Countries */
+                }
+                
+                .aroi-specialized-table thead th:nth-child(8) {
+                    width: 15%; /* Cross Reference (Guard/Exit Count) */
+                }
+                
+                /* Diversity/Category table layout */
+                .aroi-category-table thead th:nth-child(3) {
+                    width: 8%;  /* Relays */
+                }
+                
+                .aroi-category-table thead th:nth-child(4) {
+                    width: 15%; /* Key Metric */
+                }
+                
+                .aroi-category-table thead th:nth-child(5) {
+                    width: 12%; /* Bandwidth */
+                }
+                
+                .aroi-category-table thead th:nth-child(6) {
+                    width: 10%; /* Countries */
+                }
+                
+                .aroi-category-table thead th:nth-child(7) {
+                    width: 10%; /* Platforms */
+                }
+                
+                .aroi-category-table thead th:nth-child(8) {
+                    width: 15%; /* Specialization */
+                }
+
+                /* AROI Champion Badge Styles */
+                .aroi-champion-platinum {
+                    background: linear-gradient(45deg, #FFD700, #FFA500);
+                    color: #000;
+                }
+                
+                .aroi-champion-network {
+                    background: linear-gradient(45deg, #f7b731, #fc4a1a);
+                    color: #fff;
+                }
+                
+                .aroi-champion-exit {
+                    background: linear-gradient(45deg, #FF6B6B, #FF8E53);
+                    color: #fff;
+                }
+                
+                .aroi-champion-guard {
+                    background: linear-gradient(45deg, #4ECDC4, #44A08D);
+                    color: #fff;
+                }
+                
+                .aroi-champion-diversity {
+                    background: linear-gradient(45deg, #A8E6CF, #56AB2F);
+                    color: #000;
+                }
+                
+                .aroi-champion-platform {
+                    background: linear-gradient(45deg, #74b9ff, #0984e3);
+                    color: #fff;
+                }
+                
+                .aroi-champion-bsd {
+                    background: linear-gradient(45deg, #667eea, #764ba2);
+                    color: #fff;
+                }
+                
+                .aroi-champion-global {
+                    background: linear-gradient(45deg, #00b894, #00a085);
+                    color: #fff;
+                }
+                
+                .aroi-champion-frontier {
+                    background: linear-gradient(45deg, #ffecd2, #fcb69f);
+                    color: #000;
+                }
+                
+                .aroi-champion-reliability {
+                    background: linear-gradient(45deg, #a8edea, #fed6e3);
+                    color: #000;
+                }
+                
+                .aroi-champion-efficiency {
+                    background: linear-gradient(45deg, #f093fb, #f5576c);
+                    color: #fff;
+                }
+
+                /* AROI Ranking Badge Styles */
+                .aroi-rank-gold {
+                    background-color: #FFD700;
+                }
+                
+                .aroi-rank-silver {
+                    background-color: #C0C0C0;
+                }
+                
+                .aroi-rank-bronze {
+                    background-color: #CD7F32;
+                }
+
+                /* AROI Link Styles */
+                .aroi-underline-link {
+                    text-decoration: underline;
+                    color: inherit;
+                }
+                
+                .aroi-contact-link {
+                    text-decoration: underline;
+                }
+
+                /* AROI Layout Styles */
+                .aroi-center-text {
+                    text-align: center;
+                }
+                
+                .aroi-flex-nav {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 10px;
+                }
+                
+                .aroi-nav-spacing {
+                    margin-bottom: 20px;
+                }
+                
+                .aroi-nav-spacing h4 {
+                    margin-top: 5px;
+                }
+                
+                .aroi-primary-nav {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 15px;
+                    margin-bottom: 15px;
+                    justify-content: center;
+                }
+                
+                .aroi-category-nav {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 8px;
+                    padding-top: 15px;
+                    border-top: 1px solid #ddd;
+                    justify-content: center;
+                }
+                
+                .aroi-nav-separator {
+                    border-top: 1px solid #ddd;
+                    margin: 15px 0;
+                }
+                
+                .aroi-top-margin {
+                    margin-top: 10px;
+                }
+                
+                .aroi-header-spacing {
+                    margin-top: 0;
+                }
+                
+                .aroi-fixed-nav {
+                    position: fixed;
+                    bottom: 20px;
+                    right: 20px;
+                    z-index: 1000;
+                }
+                
+                .aroi-footer-section {
+                    margin-top: 50px;
+                    border-top: 2px solid #ccc;
+                    padding-top: 30px;
+                }
+
+                /* CSS-only navbar collapse using checkbox hack */
+                .navbar-toggle {
+                    display: none;
+                    background-color: transparent;
+                    background-image: none;
+                    border: 1px solid #ddd;
+                    border-radius: 4px;
+                    padding: 9px 10px;
+                    margin-top: 8px;
+                    margin-right: 15px;
+                    margin-bottom: 8px;
+                    cursor: pointer;
+                    float: right;
+                }
+
+                .navbar-toggle:hover,
+                .navbar-toggle:focus {
+                    background-color: #ddd;
+                }
+
+                .navbar-toggle .icon-bar {
+                    display: block;
+                    width: 22px;
+                    height: 2px;
+                    background-color: #888;
+                    border-radius: 1px;
+                    margin: 4px 0;
+                }
+
+                .navbar-brand {
+                    float: left;
+                    height: 50px;
+                    padding: 15px;
+                    font-size: 18px;
+                    line-height: 20px;
+                    font-weight: bold;
+                }
+
+                /* Desktop: show navigation horizontally */
+                @media (min-width: 768px) {
+                    .navbar-collapse {
+                        display: block !important;
+                        height: auto !important;
+                        overflow: visible !important;
+                    }
+                    
+                    .nav.navbar-nav {
+                        float: left;
+                        margin: 0;
+                    }
+                    
+                    .nav.navbar-nav > li {
+                        float: left;
+                    }
+                    
+                    .nav.navbar-nav > li > a {
+                        padding-top: 15px;
+                        padding-bottom: 15px;
+                        color: #777;
+                        text-decoration: none;
+                        padding-left: 15px;
+                        padding-right: 15px;
+                    }
+                    
+                    .nav.navbar-nav > li.active > a,
+                    .nav.navbar-nav > li > a:hover,
+                    .nav.navbar-nav > li > a:focus {
+                        color: #333;
+                        background-color: #e7e7e7;
+                    }
+                    
+                    .navbar-brand {
+                        display: none;
+                    }
+                }
+
+                /* Mobile: hide navigation by default, show hamburger */
+                @media (max-width: 767px) {
+                    .navbar-toggle {
+                        display: block;
+                    }
+                    
+                    .navbar-collapse {
+                        display: none;
+                        clear: both;
+                        width: 100%;
+                        margin-top: 50px;
+                        border-top: 1px solid #e7e7e7;
+                        padding-top: 10px;
+                    }
+                    
+                    /* When checkbox is checked, show the menu */
+                    .navbar-toggle-checkbox:checked ~ .navbar-header + .navbar-collapse {
+                        display: block;
+                    }
+                    
+                    .nav.navbar-nav > li {
+                        float: none;
+                    }
+                    
+                    .nav.navbar-nav > li > a {
+                        display: block;
+                        padding: 12px 20px;
+                        color: #777;
+                        text-decoration: none;
+                        border-bottom: 1px solid #e7e7e7;
+                    }
+                    
+                    .nav.navbar-nav > li:last-child > a {
+                        border-bottom: none;
+                    }
+                    
+                    .nav.navbar-nav > li.active > a,
+                    .nav.navbar-nav > li > a:hover,
+                    .nav.navbar-nav > li > a:focus {
+                        color: #333;
+                        background-color: #f5f5f5;
+                    }
+                }
+            </style>
+        </head>
+    <body>
+        <div class="container">
+<div id="content">
+<h2>View Relay "F3Netze"</h2>
+        <nav aria-label="breadcrumb" style="margin-bottom: 10px;">
+    <ol class="breadcrumb" style="background: none; padding: 0; margin: 0; font-size: 0.9em; list-style: none;">
+        <li style="display: inline;"><a href="../../index.html" style="color: #337ab7; text-decoration: none;">Home</a></li>
+            <li style="display: inline;"> > <a href="../../misc/networks-by-bandwidth.html" style="color: #337ab7; text-decoration: none;">Browse by Network</a></li>
+                <li style="display: inline;"> > <a href="../../as/AS205100/" style="color: #337ab7; text-decoration: none;">AS205100</a></li>
+            <li style="display: inline; color: #777;"> > F3Netze</li>
+    </ol>
+</nav>
+    <nav class="navbar navbar-default" style="margin-bottom: 20px;">
+        <div class="container-fluid">
+            <!-- CSS-only hamburger toggle using checkbox hack -->
+            <input type="checkbox" id="navbar-toggle" class="navbar-toggle-checkbox" style="display: none;">
+            
+            <div class="navbar-header">
+                <label for="navbar-toggle" class="navbar-toggle" role="button" aria-label="Toggle navigation">
+                    <span class="sr-only">Toggle navigation</span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </label>
+                <span class="navbar-brand visible-xs">Browse Categories</span>
+            </div>
+            
+            <div class="navbar-collapse" id="main-navbar">
+                <ul class="nav navbar-nav">
+                    <li class="">
+                        <a href="../../misc/aroi-leaderboards.html">Operator Champions</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/contacts-by-bandwidth.html">Operator / Contact</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/families-by-bandwidth.html">By Family</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/networks-by-bandwidth.html">By Network</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/countries-by-bandwidth.html">By Country</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/platforms-by-bandwidth.html">By Platform</a>
+                    </li>
+                    <li class="">
+                        <a href="../../index.html">Top 500 Relays</a>
+                    </li>
+                    <li class="active">
+                        <a href="../../misc/all.html">All Relays</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+<h4>
+<a href="../../family/939126EA4D25CB212A79746C133194F8A24C435B/">Family: 24 relays</a>
+| 
+<a href="../../as/AS205100/">AS205100</a>
+| 
+<a href="../../country/de/">Germany</a>
+| 
+<a href="../../platform/Linux/">Linux</a>
+</h4>
+<p>Last fetch was at Sun, 08 Jun 2025 21:46:50 GMT.</p>
+<div class="row">
+<div class="col-md-6">
+<dl>
+<dt>
+Nickname
+</dt>
+<dd>
+F3Netze
+</dd>
+
+<dt>
+Fingerprint
+</dt>
+<dd>
+<code>939126EA4D25CB212A79746C133194F8A24C435B</code>
+</dd>
+
+<dt>
+AROI <a href="https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/" target="_blank" title="Autonomous Relay Operator Identifier - unverified">(?)</a>
+</dt>
+<dd>
+<a href="../../contact/751f2eda24c1df05fd0d3f0e942aa7ae/">f3netze.de</a>
+</dd>
+<dt>
+Contact
+</dt>
+<dd>
+<a href="../../contact/751f2eda24c1df05fd0d3f0e942aa7ae/">F3 Netze &lt;abuse@f3netze.de&gt; email:abuse[]f3netze.de abuse:abuse[]f3netze.de url:www.f3netze.de proof:uri-rsa uplinkbw:375 memory:31679 cpu:Ryzen_7_2700X virtualization:baremetal donationurl:https://f3netze.de/unterstuetzen/ offlinemasterkey:y sandbox:y os:Debian_GNU/Linux tls:openssl aesni:y autoupdate:y confmgmt:ansible dnslocation:sameas dnsqname:y dnssec:y dnslocalrootzone:y ciissversion:2 trafficacct:unmetered</a>
+</dd>
+<dt>
+IPv4 Exit Policy Summary
+</dt>
+<dd>
+<pre class="pre-scrollable">reject: 
+  22
+  25
+</pre>
+</dd>
+<dt>
+IPv6 Exit Policy Summary
+</dt>
+<dd>
+<pre class="pre-scrollable">reject: 
+  22
+  25
+</pre>
+</dd>
+<dt>
+Exit Policy
+</dt>
+<dd>
+<pre class="pre-scrollable">reject 0.0.0.0/8:*
+reject 169.254.0.0/16:*
+reject 127.0.0.0/8:*
+reject 192.168.0.0/16:*
+reject 10.0.0.0/8:*
+reject 172.16.0.0/12:*
+reject 185.220.100.253:*
+reject *:25
+reject *:22
+accept *:*
+</pre>
+</dd>
+<dt title="Array of fingerprints of relays that are in an effective, mutual family relationship with this relay. These relays are part of this relay's family and they consider this relay to be part of their family. Always contains the relay's own fingerprint. Omitted if the descriptor containing this information cannot be found.">
+Effective Family Members: 24 (<a href="../../family/939126EA4D25CB212A79746C133194F8A24C435B/">View</a>)
+</dt>
+<dd>
+<pre class="pre-scrollable"><a href="06EC2C1669E5A811D9640E07CED5786DA50C5737.html">06EC2C1669E5A811D9640E07CED5786DA50C5737</a>
+<a href="3C89C80E2699FB6358BBB64FDC9547AFCB5C03F7.html">3C89C80E2699FB6358BBB64FDC9547AFCB5C03F7</a>
+<a href="50AA9FEA6A3A609686276C4CF0C2A1AFB2ECCA1B.html">50AA9FEA6A3A609686276C4CF0C2A1AFB2ECCA1B</a>
+<a href="5628495D9939A8C139DD441402DE42F7012B7092.html">5628495D9939A8C139DD441402DE42F7012B7092</a>
+<a href="5E52BEA22130598F200D05C42BB66709C24E8F67.html">5E52BEA22130598F200D05C42BB66709C24E8F67</a>
+<a href="62F4994C6F3A5B3E590AEECE522591696C8DDEE2.html">62F4994C6F3A5B3E590AEECE522591696C8DDEE2</a>
+<a href="6796E53160714D908B39BCB0058CF488FF940336.html">6796E53160714D908B39BCB0058CF488FF940336</a>
+<a href="6BCB964AB74E23F8986BDA905697D3A6BE08AF28.html">6BCB964AB74E23F8986BDA905697D3A6BE08AF28</a>
+<a href="719FD0FA327F3CCBCDA0D4EA74C15EA110338942.html">719FD0FA327F3CCBCDA0D4EA74C15EA110338942</a>
+<a href="7327876AE79C997DFE311A7B15B4FA875736BBD1.html">7327876AE79C997DFE311A7B15B4FA875736BBD1</a>
+<a href="8E38B11E849336D62AB6264FBAE9B03C70F07863.html">8E38B11E849336D62AB6264FBAE9B03C70F07863</a>
+<a href="939126EA4D25CB212A79746C133194F8A24C435B.html">939126EA4D25CB212A79746C133194F8A24C435B</a>
+<a href="9454F82D47EBA0CB0C2A4BFE7966181DBF108147.html">9454F82D47EBA0CB0C2A4BFE7966181DBF108147</a>
+<a href="98F793C7320CE3C15A45353AFCC165747A40366D.html">98F793C7320CE3C15A45353AFCC165747A40366D</a>
+<a href="9971F51A3274758B5C59E1D6580ED2C13E13CBEC.html">9971F51A3274758B5C59E1D6580ED2C13E13CBEC</a>
+<a href="9973E1E9730A58FDBA9E112D2B3342D2C0D921B5.html">9973E1E9730A58FDBA9E112D2B3342D2C0D921B5</a>
+<a href="9D5A7A81BC6194555CE751F75FB196E4A3982CC5.html">9D5A7A81BC6194555CE751F75FB196E4A3982CC5</a>
+<a href="C0AEABA1B55519FE5384AA44D0312BE98216DA71.html">C0AEABA1B55519FE5384AA44D0312BE98216DA71</a>
+<a href="C0E7334A181184ABD07698D04ADC19E15E3EE184.html">C0E7334A181184ABD07698D04ADC19E15E3EE184</a>
+<a href="CD09CD7C7F8815B37210C7D1A628599C78D22D6D.html">CD09CD7C7F8815B37210C7D1A628599C78D22D6D</a>
+<a href="DF390860B5610B8E99C5A78B4099A3705CD36B17.html">DF390860B5610B8E99C5A78B4099A3705CD36B17</a>
+<a href="E8AD8C4FDC3FE152150C005BB2EAA6A0990B74DF.html">E8AD8C4FDC3FE152150C005BB2EAA6A0990B74DF</a>
+<a href="E8C8667CAF3D5148E52ECF736A7B204982F78EAA.html">E8C8667CAF3D5148E52ECF736A7B204982F78EAA</a>
+<a href="F21760E63FE2BB45629BB14FCDB0FD677485DAF8.html">F21760E63FE2BB45629BB14FCDB0FD677485DAF8</a>
+</pre>
+</dd>
+<dt title="Array of fingerprints of relays that are not in an effective, mutual family relationship with this relay. These relays are part of this relay's family but they don't consider this relay to be part of their family. Omitted if empty or if descriptor containing this information cannot be found.">
+Alleged Family Members: 8</dt>
+<dd>
+<pre class="pre-scrollable"><a href="135F2A8B32F583845F2B0E133EFD84C25026761B.html">135F2A8B32F583845F2B0E133EFD84C25026761B</a>
+<a href="47A3D00525F041F382B398BF95BC58E0EC23276B.html">47A3D00525F041F382B398BF95BC58E0EC23276B</a>
+<a href="6232FDF34FF907DC25A27327D1C05AD370FB2767.html">6232FDF34FF907DC25A27327D1C05AD370FB2767</a>
+<a href="76AB50C3EC0472A63AFB9A833A535FA6BD691478.html">76AB50C3EC0472A63AFB9A833A535FA6BD691478</a>
+<a href="887CAB501A9DB68A2C44EDF98BF50B0304EED8B6.html">887CAB501A9DB68A2C44EDF98BF50B0304EED8B6</a>
+<a href="B891CB6370CF7C51C6FB24D80947AFB7ED463D00.html">B891CB6370CF7C51C6FB24D80947AFB7ED463D00</a>
+<a href="C6ED7D37AA3CCAA586B22E0A30B395A5E582440A.html">C6ED7D37AA3CCAA586B22E0A30B395A5E582440A</a>
+<a href="CBF0CCD9D80D7A2F82E4FB61C36FB6898A4EBA50.html">CBF0CCD9D80D7A2F82E4FB61C36FB6898A4EBA50</a>
+</pre>
+</dd>
+<dt title="Array of fingerprints of relays that consider this relay to be part of their family but that are not part of this relay's family. Omitted if empty or if descriptor containing this information cannot be found.">
+Indirect Family Members: 0</dt>
+<dd>
+<pre class="pre-scrollable">none
+</pre>
+</dd>
+</dl>
+</div>
+<div class="col-md-6">
+<dl>
+<dt title="IP address and TCP port where this relay accepts onion-routing connections, with hostname when available">
+OR Address
+</dt>
+<dd>
+<span class="verified-hostname" title="verified hostname">tor-exit-2.zbau.f3netze.de</span> | 185.220.100.253:9100, [2a0b:f4c0:16c:3::1]:9100</dd>
+<dt>
+Exit Address
+</dt>
+<dd>
+none
+</dd>
+<dt>
+Dir Address
+</dt>
+<dd>
+none
+</dd>
+<dt>
+Flags: 8
+</dt>
+<dd>
+<a href="../../flag/exit/">
+<img src="../../static/images/flags/exit.png"
+title="Exit"
+alt="Exit">
+</a> Exit
+<a href="../../flag/fast/">
+<img src="../../static/images/flags/fast.png"
+title="Fast"
+alt="Fast">
+</a> Fast
+<a href="../../flag/guard/">
+<img src="../../static/images/flags/guard.png"
+title="Guard"
+alt="Guard">
+</a> Guard
+<a href="../../flag/hsdir/">
+<img src="../../static/images/flags/hsdir.png"
+title="HSDir"
+alt="HSDir">
+</a> HSDir
+<a href="../../flag/running/">
+<img src="../../static/images/flags/running.png"
+title="Running"
+alt="Running">
+</a> Running
+<a href="../../flag/stable/">
+<img src="../../static/images/flags/stable.png"
+title="Stable"
+alt="Stable">
+</a> Stable
+<a href="../../flag/v2dir/">
+<img src="../../static/images/flags/v2dir.png"
+title="V2Dir"
+alt="V2Dir">
+</a> V2Dir
+<a href="../../flag/valid/">
+<img src="../../static/images/flags/valid.png"
+title="Valid"
+alt="Valid">
+</a> Valid
+</dd>
+
+<dt title="Bandwidth details: Observed capacity | Advertised capability | Rate limit | Burst limit">
+Bandwidth (Observed | Advertised | Rate | Burst)
+</dt>
+<dd>
+<span title="Observed: 552.71 Mbit/s">552.71 Mbit/s</span> | 
+<span title="Advertised: 552.71 Mbit/s">552.71 Mbit/s</span> | 
+<span title="Rate: 8.59 Gbit/s">8.59 Gbit/s</span> | 
+<span title="Burst: 8.59 Gbit/s">8.59 Gbit/s</span>
+</dd>
+
+<dt>
+Network Participation (Consensus Weight | Guard | Middle | Exit)
+</dt>
+<dd>
+<span title="Fraction of this relay's consensus weight compared to the sum of all consensus weights in the network. This fraction is a very rough approximation of the probability of this relay to be selected by clients.">0.07%</span> | 
+<span title="Probability of this relay to be selected for the guard position. This probability is calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so that this probability can only be an approximation.">0.01%</span> | 
+<span title="Probability of this relay to be selected for the middle position. This probability is calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so that this probability can only be an approximation.">0.01%</span> | 
+<span title="Probability of this relay to be selected for the exit position. This probability is calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so that this probability can only be an approximation.">0.19%</span>
+</dd>
+<dt title="Boolean field saying whether the consensus weight of this relay is based on a threshold of 3 or more measurements by Tor bandwidth authorities. Omitted if the network status consensus containing this relay does not contain measurement information.">
+Network Participation Measured by >= 3 Bandwidth Authorities
+</dt>
+<dd>
+Yes</dd>
+
+
+
+<dt>
+Country</dt>
+<dd>
+<a href="../../country/de/">
+<img src="../../static/images/cc/de.png"
+title="Germany"
+alt="Germany">
+</a> <span title="Country name of the location of this relay as found by a geolocation database based on the relay's IP address. Omitted if the relay location could not be found.">Germany</span>
+</dd>
+<dt>
+Autonomous System (AS Number | AS Name)
+</dt>
+<dd>
+<a href='../../as/AS205100/' title="AS Number">AS205100</a>
+| <span title="AS Name">F3 Netze e.V.</span> (<a href='https://bgp.tools/AS205100'>BGP.tools</a>)
+</dd>
+<dt>
+Seen (First | Last)
+</dt>
+<dd>
+<a href="../../first_seen/2019-02-18/">6y 3mo 3w ago (2019-02-18 00:00:00)</a> | 1h 47m 46s ago (2025-06-08 20:00:00)
+</dd>
+<dt title="UTC timestamp when this relay was last (re-)started. Missing if router descriptor containing this information cannot be found.">
+Last Restarted
+</dt>
+<dd>
+3w 6d 10h ago (2025-05-12 10:56:16)
+</dd>
+<dt title="UTC timestamp when this relay last stopped announcing an IPv4 or IPv6 address or TCP port where it previously accepted onion-routing or directory connections. This timestamp can serve as indicator whether this relay would be a suitable fallback directory.">
+Last Changed Address or Port
+</dt>
+<dd>
+2024-01-29 19:00:00
+</dd>
+<dt title="Boolean field saying whether this relay indicated that it is hibernating in its last known server descriptor. This information may be helpful to decide whether a relay that is not running anymore has reached its accounting limit and has not dropped out due to a technical problem. Omitted if the last known server descriptor of this relay does not contain hibernation information or if no such descriptor is known.">
+Hibernating
+</dt>
+<dd>
+No</dd>
+<dt>
+Platform (Short | Long)
+</dt>
+<dd>
+<a href='../../platform/Linux/' title="Simplified platform identifier for categorization">Linux</a> | <span title="Complete platform information as reported by relay">Tor 0.4.8.16 on Linux</span>
+</dd>
+<dt>
+Version (Running | Recommended | Status)
+</dt>
+<dd>
+<span title="Tor software version without leading 'Tor' as reported by the directory authorities in the 'v' line of the consensus. Omitted if either the directory authorities or the relay did not report which version the relay runs or if the relay runs an alternative Tor implementation.">0.4.8.16</span> | 
+<span title="Boolean field saying whether the Tor software version of this relay is recommended by the directory authorities or not. Uses the relay version in the consensus. Omitted if either the directory authorities did not recommend versions, or the relay did not report which version it runs.">Yes</span> | 
+<span title="Status of the Tor software version of this relay based on the versions recommended by the directory authorities. Possible version statuses are: 'recommended' if a version is listed as recommended; 'experimental' if a version is newer than every recommended version; 'obsolete' if a version is older than every recommended version; 'new in series' if a version has other recommended versions with the same first three components, and the version is newer than all such recommended versions, but it is not newer than every recommended version; 'unrecommended' if none of the above conditions hold. Omitted if either the directory authorities did not recommend versions, or the relay did not report which version it runs.">recommended</span>
+</dd>
+</dl>
+</div>
+</div>
+</div>
+        </div>
+    </body>
+        <footer class="page-footer font-small">
+            <div class="footer-copyright text-center text-muted">
+                <p>
+                    Generated by a <a href="https://github.com/1aeo/allium">1aeo modified fork of allium</a>, based on original <a href="https://git.jordan.im/allium/">allium</a>, on Sun, 08 Jun 2025 21:46:50 GMT. Source data from <a href="https://onionoo.torproject.org/">Tor Project onionoo</a>.
+                </p>
+            </div>
+        </footer>
+    </html>
