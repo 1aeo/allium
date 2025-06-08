@@ -451,7 +451,7 @@ class IntelligenceEngine:
                 if unique_as_count == 1:
                     network_rating = "Poor"
                 elif unique_as_count <= 3:
-                    network_rating = "Good"
+                    network_rating = "Okay"
                 else:
                     network_rating = "Great"
                 
@@ -474,7 +474,7 @@ class IntelligenceEngine:
                 if country_count == 1:
                     geo_rating = "Poor"
                 elif country_count <= 3:
-                    geo_rating = "Good"
+                    geo_rating = "Okay"
                 else:
                     geo_rating = "Great"
                 
@@ -507,7 +507,7 @@ class IntelligenceEngine:
                 if platform_count == 1 and version_count == 1:
                     infra_rating = "Poor"
                 elif platform_count <= 2 or version_count <= 2:
-                    infra_rating = "Good"
+                    infra_rating = "Okay"
                 else:
                     infra_rating = "Great"
                 

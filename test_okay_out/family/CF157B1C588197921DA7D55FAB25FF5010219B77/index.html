@@ -1,0 +1,1870 @@
+    <!DOCTYPE html>
+    <html lang="en">
+        <head>
+            <title>
+Tor Relays :: Family family            </title>
+            <meta name="description"
+                  content="Javascript-free Tor metrics generated from a 30 minute API request.">
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <link rel="stylesheet" href="../../static/css/bootstrap.min.css">
+            <!--source: metrics.torproject.org-->
+            <style>
+                .circle {
+                    display: inline-block;
+                    vertical-align: middle;
+                    background: #999999;
+                    width: 7px;
+                    height: 7px;
+                    -moz-border-radius: 50%;
+                    -webkit-border-radius: 50%;
+                    border-radius: 50%;
+                }
+
+                .circle-online {
+                    background: #25d918;
+                }
+
+                .circle-offline {
+                    background: #ff1515;
+                }
+
+                .verified-hostname {
+                    color: #FE9F30;
+                }
+
+                .verified-hostname {
+                    color: #68b030;
+                }
+
+                .unverified-hostname {
+                    color: #FE9F30;
+                }
+
+                /* Dynamic text truncation for contact information */
+                .contact-text {
+                    display: inline-block;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    max-width: 20vw;  /* Use viewport width for responsive sizing */
+                }
+
+                /* Table styles */
+                .table {
+                    width: 100%;
+                    margin-bottom: 1rem;
+                }
+
+                /* Precise alignment for multi-value columns using monospace */
+                .bw-header, .cw-header, .rc-header, /* rc = relay count */
+                .bw-data, .cw-data, .rc-data {
+                    font-family: Consolas, "Courier New", monospace;
+                    white-space: nowrap;
+                    text-align: center;
+                    letter-spacing: 0.05em; /* Slight spacing for readability */
+                }
+
+                /* Container breakpoint */
+                @media (min-width: 1400px) {
+                    .container {
+                        width: 95%;
+                        max-width: none;
+                        padding-right: 15px;
+                        padding-left: 15px;
+                        margin-right: auto;
+                        margin-left: auto;
+                    }
+                }
+
+                /* CSS-only navbar collapse using checkbox hack */
+                .navbar-toggle {
+                    display: none;
+                    background-color: transparent;
+                    background-image: none;
+                    border: 1px solid #ddd;
+                    border-radius: 4px;
+                    padding: 9px 10px;
+                    margin-top: 8px;
+                    margin-right: 15px;
+                    margin-bottom: 8px;
+                    cursor: pointer;
+                    float: right;
+                }
+
+                .navbar-toggle:hover,
+                .navbar-toggle:focus {
+                    background-color: #ddd;
+                }
+
+                .navbar-toggle .icon-bar {
+                    display: block;
+                    width: 22px;
+                    height: 2px;
+                    background-color: #888;
+                    border-radius: 1px;
+                    margin: 4px 0;
+                }
+
+                .navbar-brand {
+                    float: left;
+                    height: 50px;
+                    padding: 15px;
+                    font-size: 18px;
+                    line-height: 20px;
+                    font-weight: bold;
+                }
+
+                /* Desktop: show navigation horizontally */
+                @media (min-width: 768px) {
+                    .navbar-collapse {
+                        display: block !important;
+                        height: auto !important;
+                        overflow: visible !important;
+                    }
+                    
+                    .nav.navbar-nav {
+                        float: left;
+                        margin: 0;
+                    }
+                    
+                    .nav.navbar-nav > li {
+                        float: left;
+                    }
+                    
+                    .nav.navbar-nav > li > a {
+                        padding-top: 15px;
+                        padding-bottom: 15px;
+                        color: #777;
+                        text-decoration: none;
+                        padding-left: 15px;
+                        padding-right: 15px;
+                    }
+                    
+                    .nav.navbar-nav > li.active > a,
+                    .nav.navbar-nav > li > a:hover,
+                    .nav.navbar-nav > li > a:focus {
+                        color: #333;
+                        background-color: #e7e7e7;
+                    }
+                    
+                    .navbar-brand {
+                        display: none;
+                    }
+                }
+
+                /* Mobile: hide navigation by default, show hamburger */
+                @media (max-width: 767px) {
+                    .navbar-toggle {
+                        display: block;
+                    }
+                    
+                    .navbar-collapse {
+                        display: none;
+                        clear: both;
+                        width: 100%;
+                        margin-top: 50px;
+                        border-top: 1px solid #e7e7e7;
+                        padding-top: 10px;
+                    }
+                    
+                    /* When checkbox is checked, show the menu */
+                    .navbar-toggle-checkbox:checked ~ .navbar-header + .navbar-collapse {
+                        display: block;
+                    }
+                    
+                    .nav.navbar-nav > li {
+                        float: none;
+                    }
+                    
+                    .nav.navbar-nav > li > a {
+                        display: block;
+                        padding: 12px 20px;
+                        color: #777;
+                        text-decoration: none;
+                        border-bottom: 1px solid #e7e7e7;
+                    }
+                    
+                    .nav.navbar-nav > li:last-child > a {
+                        border-bottom: none;
+                    }
+                    
+                    .nav.navbar-nav > li.active > a,
+                    .nav.navbar-nav > li > a:hover,
+                    .nav.navbar-nav > li > a:focus {
+                        color: #333;
+                        background-color: #f5f5f5;
+                    }
+                }
+            </style>
+        </head>
+    <body>
+        <div class="container">
+<h2>
+View Family gutter.duckdns.org Details
+</h2>
+
+        <nav aria-label="breadcrumb" style="margin-bottom: 10px;">
+    <ol class="breadcrumb" style="background: none; padding: 0; margin: 0; font-size: 0.9em; list-style: none;">
+        <li style="display: inline;"><a href="../../index.html" style="color: #337ab7; text-decoration: none;">Home</a></li>
+            <li style="display: inline;"> > <a href="../../misc/families-by-bandwidth.html" style="color: #337ab7; text-decoration: none;">Browse by Family</a></li>
+            <li style="display: inline; color: #777;"> > CF157B1C</li>
+    </ol>
+</nav>
+    <nav class="navbar navbar-default" style="margin-bottom: 20px;">
+        <div class="container-fluid">
+            <!-- CSS-only hamburger toggle using checkbox hack -->
+            <input type="checkbox" id="navbar-toggle" class="navbar-toggle-checkbox" style="display: none;">
+            
+            <div class="navbar-header">
+                <label for="navbar-toggle" class="navbar-toggle" role="button" aria-label="Toggle navigation">
+                    <span class="sr-only">Toggle navigation</span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </label>
+                <span class="navbar-brand visible-xs">Browse Categories</span>
+            </div>
+            
+            <div class="navbar-collapse" id="main-navbar">
+                <ul class="nav navbar-nav">
+                    <li class="">
+                        <a href="../../misc/contacts-by-bandwidth.html">By AROI / Contact</a>
+                    </li>
+                    <li class="active">
+                        <a href="../../misc/families-by-bandwidth.html">By Family</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/networks-by-bandwidth.html">By Network</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/countries-by-bandwidth.html">By Country</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/platforms-by-bandwidth.html">By Platform</a>
+                    </li>
+                    <li class="">
+                        <a href="../../index.html">Top 500 Relays</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/all.html">All Relays</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+<p>
+Relays with effective family member <code>CF157B1C588197921DA7D55FAB25FF5010219B77</code> summary:
+<ul style="list-style-type: disc; padding-left: 20px; margin-bottom: 15px;">
+    <li><strong><span title="Observed bandwidth represents the estimated capacity this group can handle, combining total, guard, middle, and exit bandwidth contributions">Bandwidth</span>:</strong> ~1.71 Gbit/s 
+        (<span title="Bandwidth dedicated to guard relay operations">0.92 Gbit/s guard</span>, <span title="Bandwidth dedicated to middle relay operations">0.79 Gbit/s middle</span>)</li>
+    <li><strong><span title="Network influence represents the percentage of overall consensus weight, indicating relative importance in the Tor network across guard, middle, and exit positions">Network Influence</span>:</strong> 0.22% of overall consensus weight 
+        (<span title="Percentage of guard consensus weight for entry position selection">0.13% guard</span>, <span title="Percentage of middle consensus weight for routing position selection">1.15% middle</span>)</li>
+    <li><strong><span title="Network position indicates the strategic role distribution of relays. Labels: Guard-focused (>60% guard), Exit-focused (>40% exit), Multi-role (both guard and exit >20%), Balanced (mixed roles), Guard-only (100% guard), Exit-only (100% exit), Middle-only (100% middle)">Network Position</span>:</strong> balanced, 43% guard, 57% middle, 0% exit (21 total relays, 9 guards, 12 middles, 0 exits)</li>
+</ul></p>
+
+<p class="text-muted" style="margin-bottom: 15px;">
+<small>Last updated: Sun, 08 Jun 2025 05:31:28 GMT. Refreshed every 30 minutes from the Tor directory authorities via <a href="https://onionoo.torproject.org/">Tor Project's onionoo API</a>.</small>
+</p>
+
+<table class="table table-condensed">
+<tr>
+    <th></th>
+    <th>Nickname</th>
+    <th><a href="https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/" target="_blank" title="Autonomous Relay Operator Identifier - unverified">AROI</a></th>
+    <th>Contact</th>
+    <th>BW</th>
+<th title="Bandwidth measured by >=3 bandwidth authorities">BW Measured</th>
+<th class="visible-md visible-lg">IP Address</th>
+    <th>AS Number</th>
+    <th>AS Name</th>
+    <th>Country</th>
+    <th>Platform</th>
+    <th class="visible-md visible-lg">Flags</th>
+    <th class="visible-md visible-lg">First Seen</th>
+<th class="visible-md visible-lg">Last Restarted</th>
+</tr>
+<tbody>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="iceberg">
+		    <a href="../../relay/2E167B911FB1880C987BC75F32FE980A97D6A2ED/">iceberg</a> (<a href="../../family/2E167B911FB1880C987BC75F32FE980A97D6A2ED/">21</a>)
+		    </td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" title="gutter.duckdns.org">gutter.duckdns.org</a>
+			</td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" 
+				title="email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2" class="contact-text">email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>186.86 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/185.184.70.245">185.184.70.245</a>
+		</td>
+<td>
+			    <a href="../../as/AS49683/">AS49683</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS49683"
+			   title="MASSIVEGRID LTD">MASSIVEGRID LTD</a>
+		    </td>
+<td>
+			    <a href="../../country/gb/">
+				<img src="../../static/images/cc/gb.png"
+				     title="United Kingdom of Great Britain and Northern Ireland"
+				     alt="United Kingdom of Great Britain and Northern Ireland">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-02-24/">2025-02-24</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-28">
+1w 3d 17h ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="wheat77">
+		    <a href="../../relay/BAA2630A7C6A5296DC2D9DEC66B10850D9B6E1FB/">wheat77</a> (<a href="../../family/BAA2630A7C6A5296DC2D9DEC66B10850D9B6E1FB/">21</a>)
+		    </td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" title="gutter.duckdns.org">gutter.duckdns.org</a>
+			</td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" 
+				title="email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2" class="contact-text">email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>153.52 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/104.234.124.218">104.234.124.218</a>
+		</td>
+<td>
+			    <a href="../../as/AS62564/">AS62564</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS62564"
+			   title="LINVEO, LLC">LINVEO, LLC</a>
+		    </td>
+<td>
+			    <a href="../../country/us/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-03-11/">2025-03-11</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-03-16">
+2mo 3w 2d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="stroopwafel93">
+		    <a href="../../relay/CF157B1C588197921DA7D55FAB25FF5010219B77/">stroopwafel93</a> (<a href="../../family/CF157B1C588197921DA7D55FAB25FF5010219B77/">21</a>)
+		    </td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" title="gutter.duckdns.org">gutter.duckdns.org</a>
+			</td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" 
+				title="email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2" class="contact-text">email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>148.94 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/193.142.59.181">193.142.59.181</a>
+		</td>
+<td>
+			    <a href="../../as/AS201409/">AS201409</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS201409"
+			   title="HOSTSHIELD LTD">HOSTSHIELD LTD</a>
+		    </td>
+<td>
+			    <a href="../../country/gb/">
+				<img src="../../static/images/cc/gb.png"
+				     title="United Kingdom of Great Britain and Northern Ireland"
+				     alt="United Kingdom of Great Britain and Northern Ireland">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-03-11/">2025-03-11</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-22">
+2w 2d 19h ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="stroopwafel91">
+		    <a href="../../relay/3C897345BF84E2E71A50B32F52357D485433830C/">stroopwafel91</a> (<a href="../../family/3C897345BF84E2E71A50B32F52357D485433830C/">21</a>)
+		    </td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" title="gutter.duckdns.org">gutter.duckdns.org</a>
+			</td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" 
+				title="email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2" class="contact-text">email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>148.82 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/193.142.59.181">193.142.59.181</a>
+		</td>
+<td>
+			    <a href="../../as/AS201409/">AS201409</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS201409"
+			   title="HOSTSHIELD LTD">HOSTSHIELD LTD</a>
+		    </td>
+<td>
+			    <a href="../../country/gb/">
+				<img src="../../static/images/cc/gb.png"
+				     title="United Kingdom of Great Britain and Northern Ireland"
+				     alt="United Kingdom of Great Britain and Northern Ireland">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-03-11/">2025-03-11</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-22">
+2w 2d 19h ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="stroopwafel90">
+		    <a href="../../relay/37B00DA2845F22C441414182E66E8CB83FC9CB50/">stroopwafel90</a> (<a href="../../family/37B00DA2845F22C441414182E66E8CB83FC9CB50/">21</a>)
+		    </td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" title="gutter.duckdns.org">gutter.duckdns.org</a>
+			</td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" 
+				title="email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2" class="contact-text">email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>147.91 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/193.142.59.181">193.142.59.181</a>
+		</td>
+<td>
+			    <a href="../../as/AS201409/">AS201409</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS201409"
+			   title="HOSTSHIELD LTD">HOSTSHIELD LTD</a>
+		    </td>
+<td>
+			    <a href="../../country/gb/">
+				<img src="../../static/images/cc/gb.png"
+				     title="United Kingdom of Great Britain and Northern Ireland"
+				     alt="United Kingdom of Great Britain and Northern Ireland">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-03-11/">2025-03-11</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-22">
+2w 2d 19h ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="knob56">
+		    <a href="../../relay/52C02032C38AACC74E4690837583DFFB9AA01E50/">knob56</a> (<a href="../../family/52C02032C38AACC74E4690837583DFFB9AA01E50/">21</a>)
+		    </td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" title="gutter.duckdns.org">gutter.duckdns.org</a>
+			</td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" 
+				title="email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2" class="contact-text">email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>142.31 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/85.209.51.107">85.209.51.107</a>
+		</td>
+<td>
+			    <a href="../../as/AS197540/">AS197540</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS197540"
+			   title="netcup GmbH">netcup GmbH</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-03-13/">2025-03-13</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-03-16">
+2mo 3w 2d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="stroopwafel92">
+		    <a href="../../relay/B6FE3D535E78A59DDB41FE0DE42A93C64264E0E3/">stroopwafel92</a> (<a href="../../family/B6FE3D535E78A59DDB41FE0DE42A93C64264E0E3/">21</a>)
+		    </td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" title="gutter.duckdns.org">gutter.duckdns.org</a>
+			</td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" 
+				title="email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2" class="contact-text">email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>137.21 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/193.142.59.181">193.142.59.181</a>
+		</td>
+<td>
+			    <a href="../../as/AS201409/">AS201409</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS201409"
+			   title="HOSTSHIELD LTD">HOSTSHIELD LTD</a>
+		    </td>
+<td>
+			    <a href="../../country/gb/">
+				<img src="../../static/images/cc/gb.png"
+				     title="United Kingdom of Great Britain and Northern Ireland"
+				     alt="United Kingdom of Great Britain and Northern Ireland">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-03-11/">2025-03-11</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-22">
+2w 2d 19h ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="suupiste3">
+		    <a href="../../relay/4B9ED5EB803A50D5670D8337437F88AE7B1F6BEC/">suupiste3</a> (<a href="../../family/4B9ED5EB803A50D5670D8337437F88AE7B1F6BEC/">21</a>)
+		    </td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" title="gutter.duckdns.org">gutter.duckdns.org</a>
+			</td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" 
+				title="email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2" class="contact-text">email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>115.64 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/69.174.98.59">69.174.98.59</a>
+		</td>
+<td>
+			    <a href="../../as/AS207083/">AS207083</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS207083"
+			   title="HostSlim B.V.">HostSlim B.V.</a>
+		    </td>
+<td>
+			    <a href="../../country/nl/">
+				<img src="../../static/images/cc/nl.png"
+				     title="Netherlands"
+				     alt="Netherlands">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-03-16/">2025-03-16</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-22">
+2w 2d 22h ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="einszweigsuffa">
+		    <a href="../../relay/F63B7422392CEB18CD06B943A292EA3D5962F117/">einszweigsuffa</a> (<a href="../../family/F63B7422392CEB18CD06B943A292EA3D5962F117/">21</a>)
+		    </td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" title="gutter.duckdns.org">gutter.duckdns.org</a>
+			</td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" 
+				title="email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2" class="contact-text">email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>103.81 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/194.39.207.224">194.39.207.224</a>
+		</td>
+<td>
+			    <a href="../../as/AS202401/">AS202401</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS202401"
+			   title="Webhosting24 GmbH">Webhosting24 GmbH</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-12-04/">2021-12-04</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-03-16">
+2mo 3w 2d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="asphalt26">
+		    <a href="../../relay/EC80720C41FDEA51F63F01825273961E6DBD5AC9/">asphalt26</a> (<a href="../../family/EC80720C41FDEA51F63F01825273961E6DBD5AC9/">21</a>)
+		    </td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" title="gutter.duckdns.org">gutter.duckdns.org</a>
+			</td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" 
+				title="email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2" class="contact-text">email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>68.19 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/87.229.37.78">87.229.37.78</a>
+		</td>
+<td>
+			    <a href="../../as/AS201670/">AS201670</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS201670"
+			   title="S.C. INFOTECH-GRUP S.R.L.">S.C. INFOTECH-GRUP S.R.L.</a>
+		    </td>
+<td>
+			    <a href="../../country/md/">
+				<img src="../../static/images/cc/md.png"
+				     title="Moldova, Republic of"
+				     alt="Moldova, Republic of">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-03-06/">2025-03-06</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-03-16">
+2mo 3w 2d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="werewolf822">
+		    <a href="../../relay/C99F20C4C3A04B3244EE7E7D982889C55D1DAB97/">werewolf822</a> (<a href="../../family/C99F20C4C3A04B3244EE7E7D982889C55D1DAB97/">21</a>)
+		    </td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" title="gutter.duckdns.org">gutter.duckdns.org</a>
+			</td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" 
+				title="email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2" class="contact-text">email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>62.87 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/217.156.67.65">217.156.67.65</a>
+		</td>
+<td>
+			    <a href="../../as/AS48753/">AS48753</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS48753"
+			   title="AVA HOST SRL">AVA HOST SRL</a>
+		    </td>
+<td>
+			    <a href="../../country/md/">
+				<img src="../../static/images/cc/md.png"
+				     title="Moldova, Republic of"
+				     alt="Moldova, Republic of">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-05-07/">2024-05-07</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-06">
+1mo 2d 21h ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="breaker39">
+		    <a href="../../relay/C300E4E60EB8A73ED017540B36A3C6CEEBBCD2A9/">breaker39</a> (<a href="../../family/C300E4E60EB8A73ED017540B36A3C6CEEBBCD2A9/">21</a>)
+		    </td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" title="gutter.duckdns.org">gutter.duckdns.org</a>
+			</td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" 
+				title="email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2" class="contact-text">email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>61.55 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/172.245.106.179">172.245.106.179</a>
+		</td>
+<td>
+			    <a href="../../as/AS36352/">AS36352</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS36352"
+			   title="HostPapa">HostPapa</a>
+		    </td>
+<td>
+			    <a href="../../country/us/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-02-23/">2024-02-23</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-26">
+1w 6d 18m ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="blargh01">
+		    <a href="../../relay/B1A2400F928C7BDCFCB1E0ED7330B20F1BD61445/">blargh01</a> (<a href="../../family/B1A2400F928C7BDCFCB1E0ED7330B20F1BD61445/">21</a>)
+		    </td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" title="gutter.duckdns.org">gutter.duckdns.org</a>
+			</td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" 
+				title="email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2" class="contact-text">email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>57.05 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/107.152.35.142">107.152.35.142</a>
+		</td>
+<td>
+			    <a href="../../as/AS11878/">AS11878</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS11878"
+			   title="tzulo, inc.">tzulo, inc.</a>
+		    </td>
+<td>
+			    <a href="../../country/us/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2023-02-07/">2023-02-07</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-03-16">
+2mo 3w 2d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="tornado">
+		    <a href="../../relay/77480B44F921385B2A6D151ED26DAEAFBBFC454E/">tornado</a> (<a href="../../family/77480B44F921385B2A6D151ED26DAEAFBBFC454E/">21</a>)
+		    </td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" title="gutter.duckdns.org">gutter.duckdns.org</a>
+			</td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" 
+				title="email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2" class="contact-text">email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>40.61 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/192.3.173.87">192.3.173.87</a>
+		</td>
+<td>
+			    <a href="../../as/AS36352/">AS36352</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS36352"
+			   title="HostPapa">HostPapa</a>
+		    </td>
+<td>
+			    <a href="../../country/us/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/guard/">
+				<img src="../../static/images/flags/guard.png"
+				     title="Guard"
+				     alt="Guard">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-03-18/">2024-03-18</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-06">
+1mo 2d 12h ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="orbit80">
+		    <a href="../../relay/BF17895A036CD9014E8B10525BCE5C8228426AEE/">orbit80</a> (<a href="../../family/BF17895A036CD9014E8B10525BCE5C8228426AEE/">21</a>)
+		    </td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" title="gutter.duckdns.org">gutter.duckdns.org</a>
+			</td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" 
+				title="email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2" class="contact-text">email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>38.80 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/23.26.125.197">23.26.125.197</a>
+		</td>
+<td>
+			    <a href="../../as/AS399646/">AS399646</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS399646"
+			   title="Snaju Development">Snaju Development</a>
+		    </td>
+<td>
+			    <a href="../../country/us/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-03-06/">2025-03-06</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-22">
+2w 2d 20h ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="particle7">
+		    <a href="../../relay/4ACA67B5CF01C3AA086DE2F3B725B47BDA48D5B4/">particle7</a> (<a href="../../family/4ACA67B5CF01C3AA086DE2F3B725B47BDA48D5B4/">21</a>)
+		    </td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" title="gutter.duckdns.org">gutter.duckdns.org</a>
+			</td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" 
+				title="email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2" class="contact-text">email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>37.39 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/185.44.66.137">185.44.66.137</a>
+		</td>
+<td>
+			    <a href="../../as/AS49683/">AS49683</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS49683"
+			   title="MASSIVEGRID LTD">MASSIVEGRID LTD</a>
+		    </td>
+<td>
+			    <a href="../../country/us/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-03-05/">2025-03-05</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-06-02">
+5d 20h 23m ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="briefcase4">
+		    <a href="../../relay/EBD6A865C6ACDC9B0E105F2E7C2768FA5A31E272/">briefcase4</a> (<a href="../../family/EBD6A865C6ACDC9B0E105F2E7C2768FA5A31E272/">21</a>)
+		    </td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" title="gutter.duckdns.org">gutter.duckdns.org</a>
+			</td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" 
+				title="email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2" class="contact-text">email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>27.41 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/166.1.173.49">166.1.173.49</a>
+		</td>
+<td>
+			    <a href="../../as/AS399820/">AS399820</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS399820"
+			   title="Atomic Networks LLC">Atomic Networks LLC</a>
+		    </td>
+<td>
+			    <a href="../../country/us/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-03-20/">2024-03-20</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-31">
+1w 13h 40m ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="firefly55">
+		    <a href="../../relay/C5E60B692EDEC79DE663BAFE1A3C1CC74114F58C/">firefly55</a> (<a href="../../family/C5E60B692EDEC79DE663BAFE1A3C1CC74114F58C/">21</a>)
+		    </td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" title="gutter.duckdns.org">gutter.duckdns.org</a>
+			</td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" 
+				title="email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2" class="contact-text">email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>12.02 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/77.90.19.165">77.90.19.165</a>
+		</td>
+<td>
+			    <a href="../../as/AS214902/">AS214902</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS214902"
+			   title="Philip Fjaera trading as PFWeb Solutions">Philip Fjaera...</a>
+		    </td>
+<td>
+			    <a href="../../country/de/">
+				<img src="../../static/images/cc/de.png"
+				     title="Germany"
+				     alt="Germany">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-03-16/">2025-03-16</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-03-16">
+2mo 3w 2d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="pungent6">
+		    <a href="../../relay/6D0616B14C2DF6F285A78471108ED2EA3386E4F4/">pungent6</a> (<a href="../../family/6D0616B14C2DF6F285A78471108ED2EA3386E4F4/">21</a>)
+		    </td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" title="gutter.duckdns.org">gutter.duckdns.org</a>
+			</td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" 
+				title="email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2" class="contact-text">email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>10.66 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/193.32.87.151">193.32.87.151</a>
+		</td>
+<td>
+			    <a href="../../as/AS211462/">AS211462</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS211462"
+			   title="Andrei Tiberiu Holt">Andrei Tiberiu Holt</a>
+		    </td>
+<td>
+			    <a href="../../country/ro/">
+				<img src="../../static/images/cc/ro.png"
+				     title="Romania"
+				     alt="Romania">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-02-26/">2024-02-26</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-16">
+3w 1d 22h ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="slinky20">
+		    <a href="../../relay/2A2F92C7C6F16EFCD82C2C4EC5D2C6937F32BDBE/">slinky20</a> (<a href="../../family/2A2F92C7C6F16EFCD82C2C4EC5D2C6937F32BDBE/">21</a>)
+		    </td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" title="gutter.duckdns.org">gutter.duckdns.org</a>
+			</td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" 
+				title="email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2" class="contact-text">email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>5.70 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.135.163.24">45.135.163.24</a>
+		</td>
+<td>
+			    <a href="../../as/AS400175/">AS400175</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS400175"
+			   title="Microtronix ESolutions, LLC">Microtronix...</a>
+		    </td>
+<td>
+			    <a href="../../country/us/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-03-07/">2024-03-07</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-03-25">
+2mo 2w 1d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="slinky21">
+		    <a href="../../relay/5FA905E2407995343F1175F3DAA64677424185C0/">slinky21</a> (<a href="../../family/5FA905E2407995343F1175F3DAA64677424185C0/">21</a>)
+		    </td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" title="gutter.duckdns.org">gutter.duckdns.org</a>
+			</td>
+<td>
+			    <a href="../../contact/9c2ffd7df4a222899597f4d47d10b005/" 
+				title="email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2" class="contact-text">email:einszweigsuffa@protonmail.com url:https://gutter.duckdns.org proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>5.15 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/45.135.163.24">45.135.163.24</a>
+		</td>
+<td>
+			    <a href="../../as/AS400175/">AS400175</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS400175"
+			   title="Microtronix ESolutions, LLC">Microtronix...</a>
+		    </td>
+<td>
+			    <a href="../../country/us/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-03-11/">2025-03-11</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-03-25">
+2mo 2w 1d ago
+</td>
+</tr>
+</tbody>
+</table>
+        </div>
+    </body>
+        <footer class="page-footer font-small">
+            <div class="footer-copyright text-center text-muted">
+                <p>
+                    Generated by a <a href="https://github.com/1aeo/allium">1aeo modified fork of allium</a>, based on original <a href="https://git.jordan.im/allium/">allium</a>, on Sun, 08 Jun 2025 05:31:28 GMT. Source data from <a href="https://onionoo.torproject.org/">Tor Project onionoo</a>.
+                </p>
+            </div>
+        </footer>
+    </html>

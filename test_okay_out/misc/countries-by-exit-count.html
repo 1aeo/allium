@@ -1,0 +1,1593 @@
+    <!DOCTYPE html>
+    <html lang="en">
+        <head>
+            <title>
+Relay Radar :: Countries By Exit Count
+            </title>
+            <meta name="description"
+                  content="Javascript-free Tor metrics generated from a 30 minute API request.">
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <link rel="stylesheet" href="../static/css/bootstrap.min.css">
+            <!--source: metrics.torproject.org-->
+            <style>
+                .circle {
+                    display: inline-block;
+                    vertical-align: middle;
+                    background: #999999;
+                    width: 7px;
+                    height: 7px;
+                    -moz-border-radius: 50%;
+                    -webkit-border-radius: 50%;
+                    border-radius: 50%;
+                }
+
+                .circle-online {
+                    background: #25d918;
+                }
+
+                .circle-offline {
+                    background: #ff1515;
+                }
+
+                .verified-hostname {
+                    color: #FE9F30;
+                }
+
+                .verified-hostname {
+                    color: #68b030;
+                }
+
+                .unverified-hostname {
+                    color: #FE9F30;
+                }
+
+                /* Dynamic text truncation for contact information */
+                .contact-text {
+                    display: inline-block;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    max-width: 20vw;  /* Use viewport width for responsive sizing */
+                }
+
+                /* Table styles */
+                .table {
+                    width: 100%;
+                    margin-bottom: 1rem;
+                }
+
+                /* Precise alignment for multi-value columns using monospace */
+                .bw-header, .cw-header, .rc-header, /* rc = relay count */
+                .bw-data, .cw-data, .rc-data {
+                    font-family: Consolas, "Courier New", monospace;
+                    white-space: nowrap;
+                    text-align: center;
+                    letter-spacing: 0.05em; /* Slight spacing for readability */
+                }
+
+                /* Container breakpoint */
+                @media (min-width: 1400px) {
+                    .container {
+                        width: 95%;
+                        max-width: none;
+                        padding-right: 15px;
+                        padding-left: 15px;
+                        margin-right: auto;
+                        margin-left: auto;
+                    }
+                }
+
+                /* CSS-only navbar collapse using checkbox hack */
+                .navbar-toggle {
+                    display: none;
+                    background-color: transparent;
+                    background-image: none;
+                    border: 1px solid #ddd;
+                    border-radius: 4px;
+                    padding: 9px 10px;
+                    margin-top: 8px;
+                    margin-right: 15px;
+                    margin-bottom: 8px;
+                    cursor: pointer;
+                    float: right;
+                }
+
+                .navbar-toggle:hover,
+                .navbar-toggle:focus {
+                    background-color: #ddd;
+                }
+
+                .navbar-toggle .icon-bar {
+                    display: block;
+                    width: 22px;
+                    height: 2px;
+                    background-color: #888;
+                    border-radius: 1px;
+                    margin: 4px 0;
+                }
+
+                .navbar-brand {
+                    float: left;
+                    height: 50px;
+                    padding: 15px;
+                    font-size: 18px;
+                    line-height: 20px;
+                    font-weight: bold;
+                }
+
+                /* Desktop: show navigation horizontally */
+                @media (min-width: 768px) {
+                    .navbar-collapse {
+                        display: block !important;
+                        height: auto !important;
+                        overflow: visible !important;
+                    }
+                    
+                    .nav.navbar-nav {
+                        float: left;
+                        margin: 0;
+                    }
+                    
+                    .nav.navbar-nav > li {
+                        float: left;
+                    }
+                    
+                    .nav.navbar-nav > li > a {
+                        padding-top: 15px;
+                        padding-bottom: 15px;
+                        color: #777;
+                        text-decoration: none;
+                        padding-left: 15px;
+                        padding-right: 15px;
+                    }
+                    
+                    .nav.navbar-nav > li.active > a,
+                    .nav.navbar-nav > li > a:hover,
+                    .nav.navbar-nav > li > a:focus {
+                        color: #333;
+                        background-color: #e7e7e7;
+                    }
+                    
+                    .navbar-brand {
+                        display: none;
+                    }
+                }
+
+                /* Mobile: hide navigation by default, show hamburger */
+                @media (max-width: 767px) {
+                    .navbar-toggle {
+                        display: block;
+                    }
+                    
+                    .navbar-collapse {
+                        display: none;
+                        clear: both;
+                        width: 100%;
+                        margin-top: 50px;
+                        border-top: 1px solid #e7e7e7;
+                        padding-top: 10px;
+                    }
+                    
+                    /* When checkbox is checked, show the menu */
+                    .navbar-toggle-checkbox:checked ~ .navbar-header + .navbar-collapse {
+                        display: block;
+                    }
+                    
+                    .nav.navbar-nav > li {
+                        float: none;
+                    }
+                    
+                    .nav.navbar-nav > li > a {
+                        display: block;
+                        padding: 12px 20px;
+                        color: #777;
+                        text-decoration: none;
+                        border-bottom: 1px solid #e7e7e7;
+                    }
+                    
+                    .nav.navbar-nav > li:last-child > a {
+                        border-bottom: none;
+                    }
+                    
+                    .nav.navbar-nav > li.active > a,
+                    .nav.navbar-nav > li > a:hover,
+                    .nav.navbar-nav > li > a:focus {
+                        color: #333;
+                        background-color: #f5f5f5;
+                    }
+                }
+            </style>
+        </head>
+    <body>
+        <div class="container">
+<h2>
+        Browse by Country
+    </h2>
+    
+            <nav aria-label="breadcrumb" style="margin-bottom: 10px;">
+    <ol class="breadcrumb" style="background: none; padding: 0; margin: 0; font-size: 0.9em; list-style: none;">
+        <li style="display: inline;"><a href="../index.html" style="color: #337ab7; text-decoration: none;">Home</a></li>
+            <li style="display: inline; color: #777;"> > Browse by Country</li>
+    </ol>
+</nav>
+    <nav class="navbar navbar-default" style="margin-bottom: 20px;">
+        <div class="container-fluid">
+            <!-- CSS-only hamburger toggle using checkbox hack -->
+            <input type="checkbox" id="navbar-toggle" class="navbar-toggle-checkbox" style="display: none;">
+            
+            <div class="navbar-header">
+                <label for="navbar-toggle" class="navbar-toggle" role="button" aria-label="Toggle navigation">
+                    <span class="sr-only">Toggle navigation</span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </label>
+                <span class="navbar-brand visible-xs">Browse Categories</span>
+            </div>
+            
+            <div class="navbar-collapse" id="main-navbar">
+                <ul class="nav navbar-nav">
+                    <li class="">
+                        <a href="../misc/contacts-by-bandwidth.html">By AROI / Contact</a>
+                    </li>
+                    <li class="">
+                        <a href="../misc/families-by-bandwidth.html">By Family</a>
+                    </li>
+                    <li class="">
+                        <a href="../misc/networks-by-bandwidth.html">By Network</a>
+                    </li>
+                    <li class="active">
+                        <a href="../misc/countries-by-bandwidth.html">By Country</a>
+                    </li>
+                    <li class="">
+                        <a href="../misc/platforms-by-bandwidth.html">By Platform</a>
+                    </li>
+                    <li class="">
+                        <a href="../index.html">Top 500 Relays</a>
+                    </li>
+                    <li class="">
+                        <a href="../misc/all.html">All Relays</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+    
+    <p>
+        Geographic distribution of Tor infrastructure - shows regional network capacity and political risk factors.
+    </p>
+
+    <ul style="margin-bottom: 15px;">
+        <li><strong>Countries</strong>: 79 geographic locations hosting relays currently active</li>
+        <li><strong>Network Relays</strong>: Total: 9614
+            <ul style="margin: 2px 0; padding-left: 20px;">
+                <li><strong><span title="Main role with Exit priority, Exit > Guard > Middle">Primary Role</span></strong>: 
+                    Guard: 3913 | 
+                    Middle: 2915 | 
+                    Exit: 2786
+                </li>
+                <li><strong><span title="Exclusive categories for all role combinations, adding Guard+Exit">Role Categories</span></strong>: 
+                    Guard: 3913 | 
+                    Middle: 2915 | 
+                    Exit: 1097 | 
+                    Guard+Exit: 1689
+                </li>
+                <li><strong><span title="Multi-role relays counted by every role they perform">All Roles</span></strong>: 
+                    Guard: 5602 | 
+                    Middle: 2915 | 
+                    Exit: 2786
+                </li>
+                <li><strong><span title="Boolean field saying whether the consensus weight of this relay is based on a threshold of 3 or more measurements by Tor bandwidth authorities. Omitted if the network status consensus containing this relay does not contain measurement information.">Bandwidth Measured</span></strong>: 
+                    9369 relays, 97.5% of all relays
+                </li>
+            </ul>
+        </li>
+        <li><strong>Geographic Diversity</strong>: 58.5% in top 3 countries | 14 countries have >1% of network | 12.9% in Five Eyes countries</li>
+<li><strong>Jurisdiction Analysis</strong>: 12.9% Five Eyes influence | 76.7% Fourteen Eyes</li>
+<li><strong>Regional Clustering</strong>: HIGH regional concentration (<span title="Herfindahl-Hirschman Index measures concentration: 0=perfect distribution, 1=complete concentration. Current HHI: 0.590">HHI: 0.590</span>) | <span title="Regional distribution of Tor network capacity by geographic regions">Top regions: Europe: 75.3%, Eastern Europe: 10.6%, North America: 10.3%</span></li>
+        <li><strong>Sorted by</strong>: exit count</li>
+        <li><strong>Key</strong>: BW = Observed Bandwidth, CW = Consensus Weight, AS = Autonomous System (network provider)</li>
+    </ul>
+    
+    <p class="text-muted" style="margin-bottom: 15px;">
+    <small>Last updated: Sun, 08 Jun 2025 05:31:28 GMT. Refreshed every 30 minutes from the Tor directory authorities via <a href="https://onionoo.torproject.org/">Tor Project's onionoo API</a>.</small>
+    </p>
+    
+    <table class="table table-condensed">
+        <tr>
+            <th>Country</th>
+<th class="text-center bw-header" title="Observed Bandwidth: An estimate of the capacity this relay can handle. The relay remembers the max bandwidth sustained output over any ten second period in the past 5 days, and another sustained input. The 'observed' value is the lesser of these two numbers."><a href="countries-by-overall-bandwidth.html">Overall</a> / <a href="countries-by-guard-bandwidth.html">Guard</a> / <a href="countries-by-middle-bandwidth.html">Middle</a> / <a href="countries-by-exit-bandwidth.html">Exit</a> BW</th>
+<th class="text-center cw-header" title="Consensus Weight">
+                    <a href="countries-by-consensus-weight.html">Overall</a> / <a href="countries-by-guard-consensus-weight.html">Guard</a> / <a href="countries-by-middle-consensus-weight.html">Middle</a> / <a href="countries-by-exit-consensus-weight.html">Exit</a> CW
+                </th>
+<th class="text-center rc-header">
+                    <a href="countries-by-guard-count.html">Guard</a> / <a href="countries-by-middle-count.html">Middle</a> / Exit
+                </th>
+<th title="Number of unique AROI / contact operators in this country">
+                    <a href="countries-by-unique-contact-count.html">Unique AROI / Contact</a>
+                </th>
+<th title="Number of unique effective families in this country">
+                    <a href="countries-by-unique-family-count.html">Unique Families</a>
+                </th>
+<th title="Number of different autonomous systems (networks) in this country">
+                    <a href="countries-by-unique-as-count.html">Unique AS</a>
+                </th>
+</tr>
+        <tbody>
+<tr>
+<td>
+                        <a href="../country/nl/">
+                            <img src="../static/images/cc/nl.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">161.80 / 57.02 / 17.18 / 87.61 Gbit/s</td>
+<td class="text-center cw-data">16.46% / 9.97% / 10.29% / 27.42%</td>
+<td class="text-center rc-data">266 / 234 / 480</td>
+                    <td>255</td>
+                    <td>73</td>
+                    <td>99</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/de/">
+                            <img src="../static/images/cc/de.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">344.93 / 216.99 / 43.45 / 84.49 Gbit/s</td>
+<td class="text-center cw-data">32.50% / 36.46% / 32.62% / 27.01%</td>
+<td class="text-center rc-data">981 / 624 / 418</td>
+                    <td>865</td>
+                    <td>177</td>
+                    <td>148</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/us/">
+                            <img src="../static/images/cc/us.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">189.55 / 130.03 / 29.81 / 29.71 Gbit/s</td>
+<td class="text-center cw-data">9.53% / 11.18% / 18.01% / 4.62%</td>
+<td class="text-center rc-data">969 / 703 / 383</td>
+                    <td>737</td>
+                    <td>165</td>
+                    <td>223</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/pl/">
+                            <img src="../static/images/cc/pl.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">58.90 / 26.57 / 1.62 / 30.70 Gbit/s</td>
+<td class="text-center cw-data">4.00% / 3.71% / 0.94% / 5.30%</td>
+<td class="text-center rc-data">163 / 34 / 360</td>
+                    <td>74</td>
+                    <td>36</td>
+                    <td>36</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/se/">
+                            <img src="../static/images/cc/se.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">67.49 / 18.30 / 2.64 / 46.54 Gbit/s</td>
+<td class="text-center cw-data">6.50% / 3.07% / 1.81% / 12.84%</td>
+<td class="text-center rc-data">111 / 54 / 272</td>
+                    <td>86</td>
+                    <td>28</td>
+                    <td>43</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/bg/">
+                            <img src="../static/images/cc/bg.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">8.26 / 4.08 / 1.05 / 3.13 Gbit/s</td>
+<td class="text-center cw-data">0.42% / 0.59% / 0.59% / 0.21%</td>
+<td class="text-center rc-data">34 / 15 / 165</td>
+                    <td>29</td>
+                    <td>14</td>
+                    <td>21</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/at/">
+                            <img src="../static/images/cc/at.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">27.07 / 1.92 / 4.45 / 20.70 Gbit/s</td>
+<td class="text-center cw-data">2.49% / 0.28% / 0.32% / 6.48%</td>
+<td class="text-center rc-data">18 / 74 / 107</td>
+                    <td>38</td>
+                    <td>11</td>
+                    <td>26</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/lu/">
+                            <img src="../static/images/cc/lu.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">18.87 / 2.64 / 1.01 / 15.21 Gbit/s</td>
+<td class="text-center cw-data">1.59% / 0.41% / 0.86% / 3.65%</td>
+<td class="text-center rc-data">21 / 10 / 105</td>
+                    <td>53</td>
+                    <td>20</td>
+                    <td>7</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/fr/">
+                            <img src="../static/images/cc/fr.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">54.68 / 34.81 / 11.51 / 8.35 Gbit/s</td>
+<td class="text-center cw-data">4.84% / 5.67% / 7.14% / 3.00%</td>
+<td class="text-center rc-data">196 / 100 / 75</td>
+                    <td>144</td>
+                    <td>34</td>
+                    <td>35</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/ru/">
+                            <img src="../static/images/cc/ru.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">20.06 / 6.62 / 3.39 / 10.05 Gbit/s</td>
+<td class="text-center cw-data">1.61% / 0.92% / 2.02% / 2.52%</td>
+<td class="text-center rc-data">51 / 52 / 59</td>
+                    <td>58</td>
+                    <td>35</td>
+                    <td>28</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/ro/">
+                            <img src="../static/images/cc/ro.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">14.97 / 2.33 / 7.34 / 5.31 Gbit/s</td>
+<td class="text-center cw-data">0.60% / 0.31% / 1.17% / 0.97%</td>
+<td class="text-center rc-data">25 / 65 / 56</td>
+                    <td>60</td>
+                    <td>18</td>
+                    <td>27</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/hr/">
+                            <img src="../static/images/cc/hr.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">3.23 / 0.54 / 0.27 / 2.41 Gbit/s</td>
+<td class="text-center cw-data">0.14% / 0.07% / 0.18% / 0.41%</td>
+<td class="text-center rc-data">6 / 5 / 34</td>
+                    <td>10</td>
+                    <td>6</td>
+                    <td>7</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/sg/">
+                            <img src="../static/images/cc/sg.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">3.16 / 0.82 / 0.67 / 1.66 Gbit/s</td>
+<td class="text-center cw-data">0.06% / 0.03% / 0.09% / 0.17%</td>
+<td class="text-center rc-data">17 / 32 / 33</td>
+                    <td>35</td>
+                    <td>16</td>
+                    <td>20</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/ch/">
+                            <img src="../static/images/cc/ch.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">20.98 / 15.05 / 1.54 / 4.39 Gbit/s</td>
+<td class="text-center cw-data">1.83% / 2.54% / 1.07% / 1.11%</td>
+<td class="text-center rc-data">76 / 42 / 25</td>
+                    <td>69</td>
+                    <td>23</td>
+                    <td>30</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/is/">
+                            <img src="../static/images/cc/is.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">2.14 / 0.56 / 0.23 / 1.35 Gbit/s</td>
+<td class="text-center cw-data">0.13% / 0.07% / 0.11% / 0.26%</td>
+<td class="text-center rc-data">7 / 7 / 19</td>
+                    <td>21</td>
+                    <td>4</td>
+                    <td>4</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/ua/">
+                            <img src="../static/images/cc/ua.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">10.35 / 6.13 / 2.26 / 1.96 Gbit/s</td>
+<td class="text-center cw-data">0.68% / 0.82% / 1.24% / 0.40%</td>
+<td class="text-center rc-data">47 / 23 / 18</td>
+                    <td>36</td>
+                    <td>16</td>
+                    <td>27</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/it/">
+                            <img src="../static/images/cc/it.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">11.85 / 6.71 / 2.47 / 2.67 Gbit/s</td>
+<td class="text-center cw-data">1.01% / 1.06% / 1.43% / 0.68%</td>
+<td class="text-center rc-data">37 / 44 / 17</td>
+                    <td>64</td>
+                    <td>12</td>
+                    <td>21</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/hu/">
+                            <img src="../static/images/cc/hu.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">5.35 / 3.37 / 0.67 / 1.31 Gbit/s</td>
+<td class="text-center cw-data">0.45% / 0.53% / 0.42% / 0.29%</td>
+<td class="text-center rc-data">25 / 7 / 15</td>
+                    <td>29</td>
+                    <td>13</td>
+                    <td>10</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/dk/">
+                            <img src="../static/images/cc/dk.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">8.72 / 4.87 / 0.57 / 3.27 Gbit/s</td>
+<td class="text-center cw-data">0.86% / 0.80% / 0.42% / 1.01%</td>
+<td class="text-center rc-data">23 / 9 / 14</td>
+                    <td>19</td>
+                    <td>9</td>
+                    <td>15</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/za/">
+                            <img src="../static/images/cc/za.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">1.01 / 0.05 / 0.31 / 0.64 Gbit/s</td>
+<td class="text-center cw-data">0.04% / 0.01% / 0.05% / 0.08%</td>
+<td class="text-center rc-data">1 / 21 / 14</td>
+                    <td>12</td>
+                    <td>7</td>
+                    <td>8</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/cz/">
+                            <img src="../static/images/cc/cz.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">20.46 / 17.82 / 1.73 / 0.91 Gbit/s</td>
+<td class="text-center cw-data">1.90% / 3.04% / 1.31% / 0.20%</td>
+<td class="text-center rc-data">70 / 28 / 13</td>
+                    <td>54</td>
+                    <td>18</td>
+                    <td>33</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/ca/">
+                            <img src="../static/images/cc/ca.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">17.34 / 15.00 / 1.15 / 1.18 Gbit/s</td>
+<td class="text-center cw-data">0.74% / 1.21% / 0.29% / 0.21%</td>
+<td class="text-center rc-data">155 / 67 / 13</td>
+                    <td>104</td>
+                    <td>33</td>
+                    <td>40</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/gb/">
+                            <img src="../static/images/cc/gb.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">30.00 / 21.62 / 7.30 / 1.08 Gbit/s</td>
+<td class="text-center cw-data">2.52% / 3.74% / 4.35% / 0.28%</td>
+<td class="text-center rc-data">120 / 128 / 10</td>
+                    <td>155</td>
+                    <td>41</td>
+                    <td>55</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/md/">
+                            <img src="../static/images/cc/md.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">5.62 / 3.23 / 1.52 / 0.87 Gbit/s</td>
+<td class="text-center cw-data">0.37% / 0.42% / 0.98% / 0.16%</td>
+<td class="text-center rc-data">39 / 28 / 10</td>
+                    <td>44</td>
+                    <td>19</td>
+                    <td>7</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/fi/">
+                            <img src="../static/images/cc/fi.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">51.94 / 42.56 / 8.88 / 0.50 Gbit/s</td>
+<td class="text-center cw-data">4.25% / 6.72% / 5.24% / 0.10%</td>
+<td class="text-center rc-data">165 / 81 / 6</td>
+                    <td>125</td>
+                    <td>31</td>
+                    <td>22</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/jp/">
+                            <img src="../static/images/cc/jp.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">1.99 / 0.84 / 0.93 / 0.22 Gbit/s</td>
+<td class="text-center cw-data">0.03% / 0.03% / 0.12% / 0.01%</td>
+<td class="text-center rc-data">18 / 48 / 5</td>
+                    <td>39</td>
+                    <td>11</td>
+                    <td>33</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/id/">
+                            <img src="../static/images/cc/id.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">213.07 / 0.00 / 73.75 / 139.32 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.01% / 0.01%</td>
+<td class="text-center rc-data">0 / 6 / 5</td>
+                    <td>6</td>
+                    <td>1</td>
+                    <td>4</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/no/">
+                            <img src="../static/images/cc/no.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">6.74 / 5.88 / 0.60 / 0.26 Gbit/s</td>
+<td class="text-center cw-data">0.52% / 0.85% / 0.41% / 0.04%</td>
+<td class="text-center rc-data">34 / 8 / 4</td>
+                    <td>23</td>
+                    <td>8</td>
+                    <td>16</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/au/">
+                            <img src="../static/images/cc/au.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">1.92 / 0.84 / 0.86 / 0.21 Gbit/s</td>
+<td class="text-center cw-data">0.08% / 0.12% / 0.10% / 0.01%</td>
+<td class="text-center rc-data">5 / 81 / 4</td>
+                    <td>53</td>
+                    <td>10</td>
+                    <td>25</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/kr/">
+                            <img src="../static/images/cc/kr.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">316.05 / 0.00 / 269.67 / 46.39 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.03% / 0.00%</td>
+<td class="text-center rc-data">0 / 20 / 4</td>
+                    <td>16</td>
+                    <td>2</td>
+                    <td>7</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/ae/">
+                            <img src="../static/images/cc/ae.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">378.86 / 0.00 / 25.18 / 353.67 Mbit/s</td>
+<td class="text-center cw-data">0.04% / 0.00% / 0.01% / 0.12%</td>
+<td class="text-center rc-data">0 / 2 / 3</td>
+                    <td>3</td>
+                    <td>1</td>
+                    <td>4</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/in/">
+                            <img src="../static/images/cc/in.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">988.38 / 480.99 / 169.28 / 338.11 Mbit/s</td>
+<td class="text-center cw-data">0.07% / 0.06% / 0.08% / 0.08%</td>
+<td class="text-center rc-data">7 / 4 / 3</td>
+                    <td>12</td>
+                    <td>4</td>
+                    <td>4</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/br/">
+                            <img src="../static/images/cc/br.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">632.22 / 170.67 / 272.63 / 188.92 Mbit/s</td>
+<td class="text-center cw-data">0.02% / 0.01% / 0.04% / 0.01%</td>
+<td class="text-center rc-data">3 / 27 / 3</td>
+                    <td>15</td>
+                    <td>4</td>
+                    <td>16</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/my/">
+                            <img src="../static/images/cc/my.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">447.89 / 157.06 / 211.62 / 79.22 Mbit/s</td>
+<td class="text-center cw-data">0.01% / 0.02% / 0.03% / 0.01%</td>
+<td class="text-center rc-data">3 / 17 / 3</td>
+                    <td>9</td>
+                    <td>3</td>
+                    <td>8</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/be/">
+                            <img src="../static/images/cc/be.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">4.16 / 3.33 / 0.59 / 0.24 Gbit/s</td>
+<td class="text-center cw-data">0.40% / 0.62% / 0.38% / 0.07%</td>
+<td class="text-center rc-data">14 / 14 / 2</td>
+                    <td>19</td>
+                    <td>1</td>
+                    <td>13</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/lt/">
+                            <img src="../static/images/cc/lt.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">4.67 / 4.00 / 0.42 / 0.25 Gbit/s</td>
+<td class="text-center cw-data">0.37% / 0.60% / 0.26% / 0.06%</td>
+<td class="text-center rc-data">23 / 5 / 2</td>
+                    <td>16</td>
+                    <td>4</td>
+                    <td>11</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/hk/">
+                            <img src="../static/images/cc/hk.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">911.97 / 676.45 / 117.74 / 117.79 Mbit/s</td>
+<td class="text-center cw-data">0.06% / 0.10% / 0.02% / 0.02%</td>
+<td class="text-center rc-data">6 / 9 / 2</td>
+                    <td>6</td>
+                    <td>3</td>
+                    <td>10</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/bz/">
+                            <img src="../static/images/cc/bz.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">161.85 / 0.00 / 77.83 / 84.02 Mbit/s</td>
+<td class="text-center cw-data">0.04% / 0.00% / 0.08% / 0.07%</td>
+<td class="text-center rc-data">0 / 1 / 2</td>
+                    <td>3</td>
+                    <td>1</td>
+                    <td>1</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/cl/">
+                            <img src="../static/images/cc/cl.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">237.05 / 0.00 / 188.02 / 49.03 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.02% / 0.00%</td>
+<td class="text-center rc-data">0 / 6 / 2</td>
+                    <td>6</td>
+                    <td>3</td>
+                    <td>5</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/tw/">
+                            <img src="../static/images/cc/tw.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">335.83 / 64.09 / 203.66 / 68.08 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.03% / 0.00%</td>
+<td class="text-center rc-data">1 / 13 / 2</td>
+                    <td>11</td>
+                    <td>0</td>
+                    <td>2</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/cr/">
+                            <img src="../static/images/cc/cr.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">146.34 / 27.74 / 25.17 / 93.42 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.00% / 0.01%</td>
+<td class="text-center rc-data">1 / 2 / 2</td>
+                    <td>2</td>
+                    <td>1</td>
+                    <td>2</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/cy/">
+                            <img src="../static/images/cc/cy.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">145.87 / 71.01 / 0.00 / 74.87 Mbit/s</td>
+<td class="text-center cw-data">0.01% / 0.01% / 0.00% / 0.01%</td>
+<td class="text-center rc-data">2 / 0 / 2</td>
+                    <td>4</td>
+                    <td>1</td>
+                    <td>1</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/kz/">
+                            <img src="../static/images/cc/kz.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">110.55 / 35.72 / 55.91 / 18.92 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.01% / 0.00%</td>
+<td class="text-center rc-data">1 / 2 / 2</td>
+                    <td>5</td>
+                    <td>1</td>
+                    <td>2</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/tt/">
+                            <img src="../static/images/cc/tt.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">5.74 / 0.00 / 0.00 / 5.74 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.00% / 0.00%</td>
+<td class="text-center rc-data">0 / 0 / 2</td>
+                    <td>1</td>
+                    <td>1</td>
+                    <td>1</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/pt/">
+                            <img src="../static/images/cc/pt.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">2.16 / 2.04 / 0.04 / 0.08 Gbit/s</td>
+<td class="text-center cw-data">0.18% / 0.33% / 0.00% / 0.01%</td>
+<td class="text-center rc-data">11 / 4 / 1</td>
+                    <td>8</td>
+                    <td>3</td>
+                    <td>7</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/es/">
+                            <img src="../static/images/cc/es.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">9.38 / 7.83 / 1.51 / 0.04 Gbit/s</td>
+<td class="text-center cw-data">0.69% / 1.15% / 0.81% / 0.00%</td>
+<td class="text-center rc-data">46 / 36 / 1</td>
+                    <td>56</td>
+                    <td>23</td>
+                    <td>20</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/gr/">
+                            <img src="../static/images/cc/gr.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">2.98 / 2.28 / 0.54 / 0.16 Gbit/s</td>
+<td class="text-center cw-data">0.19% / 0.28% / 0.26% / 0.03%</td>
+<td class="text-center rc-data">20 / 13 / 1</td>
+                    <td>20</td>
+                    <td>7</td>
+                    <td>12</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/ee/">
+                            <img src="../static/images/cc/ee.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">2.59 / 1.75 / 0.71 / 0.13 Gbit/s</td>
+<td class="text-center cw-data">0.19% / 0.25% / 0.45% / 0.02%</td>
+<td class="text-center rc-data">14 / 6 / 1</td>
+                    <td>9</td>
+                    <td>6</td>
+                    <td>10</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/sc/">
+                            <img src="../static/images/cc/sc.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">538.19 / 538.19 / 0.00 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.04% / 0.07% / 0.00% / 0.00%</td>
+<td class="text-center rc-data">4 / 0 / 1</td>
+                    <td>2</td>
+                    <td>1</td>
+                    <td>1</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/il/">
+                            <img src="../static/images/cc/il.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">442.79 / 246.75 / 128.62 / 67.42 Mbit/s</td>
+<td class="text-center cw-data">0.01% / 0.02% / 0.05% / 0.01%</td>
+<td class="text-center rc-data">4 / 6 / 1</td>
+                    <td>11</td>
+                    <td>2</td>
+                    <td>7</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/tr/">
+                            <img src="../static/images/cc/tr.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">646.17 / 291.23 / 266.02 / 88.92 Mbit/s</td>
+<td class="text-center cw-data">0.03% / 0.04% / 0.15% / 0.02%</td>
+<td class="text-center rc-data">5 / 6 / 1</td>
+                    <td>12</td>
+                    <td>7</td>
+                    <td>11</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/mx/">
+                            <img src="../static/images/cc/mx.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">303.32 / 96.28 / 124.44 / 82.60 Mbit/s</td>
+<td class="text-center cw-data">0.01% / 0.00% / 0.02% / 0.01%</td>
+<td class="text-center rc-data">3 / 6 / 1</td>
+                    <td>9</td>
+                    <td>2</td>
+                    <td>4</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/pe/">
+                            <img src="../static/images/cc/pe.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">64.72 / 0.00 / 10.86 / 53.86 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.00% / 0.01%</td>
+<td class="text-center rc-data">0 / 1 / 1</td>
+                    <td>2</td>
+                    <td>0</td>
+                    <td>2</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/nz/">
+                            <img src="../static/images/cc/nz.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">158.61 / 0.00 / 124.72 / 33.89 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.01% / 0.00%</td>
+<td class="text-center rc-data">0 / 10 / 1</td>
+                    <td>8</td>
+                    <td>0</td>
+                    <td>6</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/vn/">
+                            <img src="../static/images/cc/vn.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">103.07 / 0.00 / 87.38 / 15.69 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.01% / 0.00%</td>
+<td class="text-center rc-data">0 / 9 / 1</td>
+                    <td>6</td>
+                    <td>3</td>
+                    <td>7</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/al/">
+                            <img src="../static/images/cc/al.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">6.59 / 4.47 / 2.12 / 0.00 Gbit/s</td>
+<td class="text-center cw-data">0.81% / 0.99% / 2.04% / 0.00%</td>
+<td class="text-center rc-data">19 / 8 / 0</td>
+                    <td>4</td>
+                    <td>3</td>
+                    <td>2</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/am/">
+                            <img src="../static/images/cc/am.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">1.02 / 0.94 / 0.09 / 0.00 Gbit/s</td>
+<td class="text-center cw-data">0.05% / 0.09% / 0.03% / 0.00%</td>
+<td class="text-center rc-data">9 / 2 / 0</td>
+                    <td>6</td>
+                    <td>3</td>
+                    <td>4</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/ie/">
+                            <img src="../static/images/cc/ie.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">2.16 / 2.05 / 0.11 / 0.00 Gbit/s</td>
+<td class="text-center cw-data">0.21% / 0.37% / 0.09% / 0.00%</td>
+<td class="text-center rc-data">6 / 3 / 0</td>
+                    <td>5</td>
+                    <td>1</td>
+                    <td>5</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/lv/">
+                            <img src="../static/images/cc/lv.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">2.68 / 1.17 / 1.52 / 0.00 Gbit/s</td>
+<td class="text-center cw-data">0.11% / 0.15% / 0.38% / 0.00%</td>
+<td class="text-center rc-data">12 / 16 / 0</td>
+                    <td>13</td>
+                    <td>7</td>
+                    <td>8</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/ge/">
+                            <img src="../static/images/cc/ge.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">704.99 / 0.00 / 704.99 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.07% / 0.00% / 0.57% / 0.00%</td>
+<td class="text-center rc-data">0 / 3 / 0</td>
+                    <td>1</td>
+                    <td>0</td>
+                    <td>1</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/ba/">
+                            <img src="../static/images/cc/ba.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">466.35 / 466.35 / 0.00 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.03% / 0.06% / 0.00% / 0.00%</td>
+<td class="text-center rc-data">3 / 0 / 0</td>
+                    <td>2</td>
+                    <td>1</td>
+                    <td>1</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/rs/">
+                            <img src="../static/images/cc/rs.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">767.28 / 351.60 / 415.67 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.03% / 0.00% / 0.18% / 0.00%</td>
+<td class="text-center rc-data">4 / 8 / 0</td>
+                    <td>9</td>
+                    <td>2</td>
+                    <td>3</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/si/">
+                            <img src="../static/images/cc/si.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">375.62 / 183.45 / 192.17 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.03% / 0.03% / 0.12% / 0.00%</td>
+<td class="text-center rc-data">1 / 3 / 0</td>
+                    <td>4</td>
+                    <td>1</td>
+                    <td>3</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/mk/">
+                            <img src="../static/images/cc/mk.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">262.12 / 123.81 / 138.31 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.01% / 0.02% / 0.06% / 0.00%</td>
+<td class="text-center rc-data">1 / 1 / 0</td>
+                    <td>2</td>
+                    <td>1</td>
+                    <td>2</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/eu/">
+                            <img src="../static/images/cc/eu.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">209.86 / 201.23 / 8.63 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.02% / 0.04% / 0.00% / 0.00%</td>
+<td class="text-center rc-data">2 / 1 / 0</td>
+                    <td>3</td>
+                    <td>0</td>
+                    <td>2</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/az/">
+                            <img src="../static/images/cc/az.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">115.53 / 115.53 / 0.00 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.01% / 0.00% / 0.00%</td>
+<td class="text-center rc-data">1 / 0 / 0</td>
+                    <td>1</td>
+                    <td>1</td>
+                    <td>1</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/sk/">
+                            <img src="../static/images/cc/sk.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">496.93 / 298.73 / 198.21 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.04% / 0.05% / 0.12% / 0.00%</td>
+<td class="text-center rc-data">3 / 3 / 0</td>
+                    <td>3</td>
+                    <td>1</td>
+                    <td>5</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/bd/">
+                            <img src="../static/images/cc/bd.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">94.28 / 75.88 / 18.41 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.01% / 0.01% / 0.00% / 0.00%</td>
+<td class="text-center rc-data">1 / 1 / 0</td>
+                    <td>2</td>
+                    <td>1</td>
+                    <td>2</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/th/">
+                            <img src="../static/images/cc/th.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">101.94 / 0.00 / 101.94 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.01% / 0.00%</td>
+<td class="text-center rc-data">0 / 5 / 0</td>
+                    <td>5</td>
+                    <td>0</td>
+                    <td>4</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/uz/">
+                            <img src="../static/images/cc/uz.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">42.92 / 0.00 / 42.92 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.02% / 0.00%</td>
+<td class="text-center rc-data">0 / 1 / 0</td>
+                    <td>1</td>
+                    <td>1</td>
+                    <td>1</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/pr/">
+                            <img src="../static/images/cc/pr.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">90.41 / 41.54 / 48.87 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.00% / 0.00%</td>
+<td class="text-center rc-data">1 / 3 / 0</td>
+                    <td>2</td>
+                    <td>0</td>
+                    <td>3</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/kg/">
+                            <img src="../static/images/cc/kg.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">37.45 / 37.45 / 0.00 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.00% / 0.00%</td>
+<td class="text-center rc-data">1 / 0 / 0</td>
+                    <td>1</td>
+                    <td>0</td>
+                    <td>1</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/co/">
+                            <img src="../static/images/cc/co.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">25.96 / 25.96 / 0.00 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.00% / 0.00%</td>
+<td class="text-center rc-data">1 / 0 / 0</td>
+                    <td>1</td>
+                    <td>0</td>
+                    <td>1</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/ma/">
+                            <img src="../static/images/cc/ma.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">20.64 / 0.00 / 20.64 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.00% / 0.00%</td>
+<td class="text-center rc-data">0 / 2 / 0</td>
+                    <td>2</td>
+                    <td>0</td>
+                    <td>2</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/ao/">
+                            <img src="../static/images/cc/ao.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">17.07 / 0.00 / 17.07 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.00% / 0.00%</td>
+<td class="text-center rc-data">0 / 1 / 0</td>
+                    <td>1</td>
+                    <td>1</td>
+                    <td>1</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/ke/">
+                            <img src="../static/images/cc/ke.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">13.58 / 0.00 / 13.58 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.00% / 0.00%</td>
+<td class="text-center rc-data">0 / 1 / 0</td>
+                    <td>1</td>
+                    <td>1</td>
+                    <td>1</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/ph/">
+                            <img src="../static/images/cc/ph.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">12.24 / 0.00 / 12.24 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.00% / 0.00%</td>
+<td class="text-center rc-data">0 / 1 / 0</td>
+                    <td>1</td>
+                    <td>0</td>
+                    <td>1</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/ng/">
+                            <img src="../static/images/cc/ng.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">21.38 / 0.00 / 21.38 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.00% / 0.00%</td>
+<td class="text-center rc-data">0 / 2 / 0</td>
+                    <td>1</td>
+                    <td>1</td>
+                    <td>1</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/mt/">
+                            <img src="../static/images/cc/mt.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">8.05 / 0.00 / 8.05 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.00% / 0.00%</td>
+<td class="text-center rc-data">0 / 1 / 0</td>
+                    <td>1</td>
+                    <td>0</td>
+                    <td>1</td>
+                </tr>
+</tbody>
+    </table>
+        </div>
+    </body>
+        <footer class="page-footer font-small">
+            <div class="footer-copyright text-center text-muted">
+                <p>
+                    Generated by a <a href="https://github.com/1aeo/allium">1aeo modified fork of allium</a>, based on original <a href="https://git.jordan.im/allium/">allium</a>, on Sun, 08 Jun 2025 05:31:28 GMT. Source data from <a href="https://onionoo.torproject.org/">Tor Project onionoo</a>.
+                </p>
+            </div>
+        </footer>
+    </html>
