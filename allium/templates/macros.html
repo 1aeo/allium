@@ -84,4 +84,30 @@
             </div>
         </div>
     </nav>
+{%- endmacro %}
+
+{% macro detail_summary(bandwidth, bandwidth_unit, guard_bandwidth, middle_bandwidth, exit_bandwidth, consensus_weight_fraction, guard_consensus_weight_fraction, middle_consensus_weight_fraction, exit_consensus_weight_fraction, guard_count, middle_count, exit_count, total_relays) -%}
+<ul style="list-style-type: disc; padding-left: 20px; margin-bottom: 15px;">
+    <li><strong><span title="Observed bandwidth represents the estimated capacity this group can handle, combining total, guard, middle, and exit bandwidth contributions">Bandwidth</span>:</strong> ~{{ bandwidth }} {{ bandwidth_unit }}
+        {%- if guard_count > 0 or middle_count > 0 or exit_count > 0 %} 
+        (<span title="Bandwidth dedicated to guard relay operations">{{ guard_bandwidth }} {{ bandwidth_unit }} guard</span>
+        {%- if middle_count > 0 %}, <span title="Bandwidth dedicated to middle relay operations">{{ middle_bandwidth }} {{ bandwidth_unit }} middle</span>{% endif -%}
+        {%- if exit_count > 0 %}, <span title="Bandwidth dedicated to exit relay operations">{{ exit_bandwidth }} {{ bandwidth_unit }} exit</span>{% endif -%}
+        )
+        {%- endif %}</li>
+    <li><strong><span title="Consensus weight represents the probability of selection for circuit construction, distributed across guard, middle, and exit positions">Consensus Weight</span>:</strong> {{ "%.2f%%"|format(consensus_weight_fraction * 100) }}
+        {%- if guard_count > 0 or middle_count > 0 or exit_count > 0 %} 
+        (<span title="Probability of selection for guard position in circuits">{{ "%.2f%%"|format(guard_consensus_weight_fraction * 100) }} guard</span>
+        {%- if middle_count > 0 %}, <span title="Probability of selection for middle position in circuits">{{ "%.2f%%"|format(middle_consensus_weight_fraction * 100) }} middle</span>{% endif -%}
+        {%- if exit_count > 0 %}, <span title="Probability of selection for exit position in circuits">{{ "%.2f%%"|format(exit_consensus_weight_fraction * 100) }} exit</span>{% endif -%}
+        )
+        {%- endif %}</li>
+    <li><strong><span title="Total number of relays and their functional role distribution across the Tor network">Relay Count</span>:</strong> {{ total_relays }} total
+        {%- if guard_count > 0 or middle_count > 0 or exit_count > 0 %} 
+        (<span title="Number of relays operating as guards, protecting client entry into Tor network">{{ guard_count }} guard{% if guard_count != 1 %}s{% endif %}</span>
+        {%- if middle_count > 0 %}, <span title="Number of relays operating as middle nodes, providing circuit routing">{{ middle_count }} middle{% if middle_count != 1 %}s{% endif %}</span>{% endif -%}
+        {%- if exit_count > 0 %}, <span title="Number of relays operating as exits, allowing traffic to leave the Tor network">{{ exit_count }} exit{% if exit_count != 1 %}s{% endif %}</span>{% endif -%}
+        )
+        {%- endif %}</li>
+</ul>
 {%- endmacro %} 
