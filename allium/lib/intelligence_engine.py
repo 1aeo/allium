@@ -466,16 +466,17 @@ class IntelligenceEngine:
                 
                 # PHASE 2 FEATURES (advanced analytics)
                 
-                # 4. Geographic Risk Assessment
+                # 4. Geographic Diversity Assessment (with risk levels)
                 countries = set(relay.get('country') for relay in contact_relays if relay.get('country'))
                 country_count = len(countries)
                 
+                # Determine geographic diversity risk level
                 if country_count == 1:
-                    geo_risk = "single country risk"
-                elif country_count <= 2:
-                    geo_risk = "geographic concentration risk"
+                    geo_risk = "high legal/censorship risk"
+                elif country_count <= 3:
+                    geo_risk = "medium risk"
                 else:
-                    geo_risk = "good diversification"
+                    geo_risk = "low risk"
                 
                 # 5. Performance Insights
                 contact_fingerprints = [relay.get('fingerprint') for relay in contact_relays if relay.get('fingerprint')]
