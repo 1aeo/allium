@@ -95,11 +95,11 @@
         {%- if exit_count > 0 %}, <span title="Bandwidth dedicated to exit relay operations">{{ exit_bandwidth }} {{ bandwidth_unit }} exit</span>{% endif -%}
         )
         {%- endif %}</li>
-    <li><strong><span title="Consensus weight represents the probability of selection for circuit construction, distributed across guard, middle, and exit positions">Consensus Weight</span>:</strong> {{ "%.2f%%"|format(consensus_weight_fraction * 100) }}
+    <li><strong><span title="Network influence represents the percentage of overall consensus weight, indicating relative importance in the Tor network across guard, middle, and exit positions">Network Influence</span>:</strong> {{ "%.2f%%"|format(consensus_weight_fraction * 100) }} of overall consensus weight
         {%- if guard_count > 0 or middle_count > 0 or exit_count > 0 %} 
-        (<span title="Probability of selection for guard position in circuits">{{ "%.2f%%"|format(guard_consensus_weight_fraction * 100) }} guard</span>
-        {%- if middle_count > 0 %}, <span title="Probability of selection for middle position in circuits">{{ "%.2f%%"|format(middle_consensus_weight_fraction * 100) }} middle</span>{% endif -%}
-        {%- if exit_count > 0 %}, <span title="Probability of selection for exit position in circuits">{{ "%.2f%%"|format(exit_consensus_weight_fraction * 100) }} exit</span>{% endif -%}
+        (<span title="Percentage of guard consensus weight for entry position selection">{{ "%.2f%%"|format(guard_consensus_weight_fraction * 100) }} guard</span>
+        {%- if middle_count > 0 %}, <span title="Percentage of middle consensus weight for routing position selection">{{ "%.2f%%"|format(middle_consensus_weight_fraction * 100) }} middle</span>{% endif -%}
+        {%- if exit_count > 0 %}, and <span title="Percentage of exit consensus weight for exit position selection">{{ "%.2f%%"|format(exit_consensus_weight_fraction * 100) }} exit</span>{% endif -%}
         )
         {%- endif %}</li>
     <li><strong><span title="Total number of relays and their functional role distribution across the Tor network">Relay Count</span>:</strong> {{ total_relays }} total
