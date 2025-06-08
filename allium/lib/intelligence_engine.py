@@ -24,7 +24,8 @@ class IntelligenceEngine:
             'performance_correlation': self._layer7_performance_correlation(),
             'infrastructure_dependency': self._layer10_infrastructure_dependency(),
             'geographic_clustering': self._layer11_geographic_clustering(),
-            'capacity_distribution': self._layer13_capacity_distribution()
+            'capacity_distribution': self._layer13_capacity_distribution(),
+            'contact_intelligence': self._layer14_contact_intelligence()
         }
     
     def _get_empty_template_values(self):
@@ -59,7 +60,8 @@ class IntelligenceEngine:
                 'gini_coefficient': '0.000', 'diversity_status': 'UNKNOWN',
                 'exit_capacity_status': 'UNKNOWN', 'guard_capacity_percentage': '0.0',
                 'exit_capacity_percentage': '0.0', 'gini_tooltip': 'Gini coefficient calculation unavailable'
-            }}
+            }},
+            'contact_intelligence': {'template_optimized': {}}
         }
     
     def _layer1_basic_relationships(self):
@@ -361,4 +363,147 @@ class IntelligenceEngine:
         
         # Calculate HHI
         hhi = sum(weight ** 2 for weight in regional_weights.values())
-        return hhi, regional_weights 
+        return hhi, regional_weights
+
+    def _layer14_contact_intelligence(self):
+        """Layer 14: Contact-specific intelligence for Phase 1 + Phase 2 features"""
+        contact_intelligence = {}
+        
+        # Get underutilized fingerprints for performance analysis (reuse existing calculation)
+        underutilized_fingerprints = set()
+        for relay in self.relays:
+            bandwidth = relay.get('observed_bandwidth', 0)
+            consensus_weight = relay.get('consensus_weight', 0)
+            if bandwidth > 10000000 and consensus_weight < bandwidth * 0.0000005:  # Same criteria as layer 7
+                underutilized_fingerprints.add(relay.get('fingerprint', ''))
+        
+        # Get largest operator info for network influence comparison
+        largest_operator_weight = 0
+        if 'contact' in self.sorted_data:
+            contacts = list(self.sorted_data['contact'].values())
+            if contacts:
+                largest_operator = max(contacts, key=lambda x: x.get('consensus_weight_fraction', 0))
+                largest_operator_weight = largest_operator.get('consensus_weight_fraction', 0)
+        
+        # Process each contact
+        if 'contact' in self.sorted_data:
+            for contact_hash, contact_data in self.sorted_data['contact'].items():
+                # Get relays for this contact
+                contact_relays = [self.relays[idx] for idx in contact_data.get('relays', [])]
+                
+                if not contact_relays:
+                    continue
+                
+                # PHASE 1 FEATURES (moved from template to Python)
+                
+                # 1. Portfolio Diversity
+                unique_as_count = contact_data.get('unique_as_count', 0)
+                portfolio_diversity = f"{unique_as_count} network{'s' if unique_as_count != 1 else ''}"
+                
+                # 2. Network Influence  
+                consensus_weight_fraction = contact_data.get('consensus_weight_fraction', 0)
+                network_influence_percentage = f"{consensus_weight_fraction * 100:.2f}%"
+                is_largest_operator = consensus_weight_fraction >= largest_operator_weight and largest_operator_weight > 0
+                network_influence = f"{network_influence_percentage} of network consensus weight"
+                if is_largest_operator:
+                    network_influence += " (largest operator)"
+                
+                # 3. Measurement Status
+                measured_count = contact_data.get('measured_count', 0)
+                total_relays = len(contact_relays)
+                measurement_status = f"{measured_count}/{total_relays} relays measured by authorities"
+                
+                # PHASE 2 FEATURES (advanced analytics)
+                
+                # 4. Geographic Risk Assessment
+                countries = set(relay.get('country') for relay in contact_relays if relay.get('country'))
+                country_count = len(countries)
+                
+                if country_count == 1:
+                    geo_risk = "single country risk"
+                elif country_count <= 2:
+                    geo_risk = "geographic concentration risk"
+                else:
+                    geo_risk = "good diversification"
+                
+                # 5. Performance Insights
+                contact_fingerprints = [relay.get('fingerprint') for relay in contact_relays if relay.get('fingerprint')]
+                underutilized_count = sum(1 for fp in contact_fingerprints if fp in underutilized_fingerprints)
+                
+                if total_relays > 0:
+                    if underutilized_count == 0:
+                        perf_status = "optimal efficiency"
+                    elif underutilized_count == total_relays:
+                        perf_status = "needs optimization"
+                    else:
+                        perf_status = "mixed performance"
+                else:
+                    perf_status = "no data"
+                
+                # 6. Infrastructure Analysis
+                platforms = set(relay.get('platform') for relay in contact_relays if relay.get('platform'))
+                versions = set(relay.get('version') for relay in contact_relays if relay.get('version'))
+                platform_count = len(platforms)
+                version_count = len(versions)
+                
+                if platform_count == 1 and version_count == 1:
+                    infra_risk = "high sync risk"
+                elif platform_count <= 2 or version_count <= 2:
+                    infra_risk = "moderate diversity"
+                else:
+                    infra_risk = "good diversity"
+                
+                # 7. Network Position Analysis
+                guard_count = contact_data.get('guard_count', 0)
+                middle_count = contact_data.get('middle_count', 0)
+                exit_count = contact_data.get('exit_count', 0)
+                total_relay_roles = guard_count + middle_count + exit_count
+                
+                if total_relay_roles > 0:
+                    if exit_count > 0 and guard_count > 0:
+                        strategy = f"Multi-role strategy ({exit_count} exit, {guard_count} guard)"
+                    elif exit_count > total_relay_roles * 0.5:
+                        exit_percentage = int(exit_count / total_relay_roles * 100)
+                        strategy = f"Exit-focused ({exit_percentage}% exit)"
+                    elif guard_count > total_relay_roles * 0.5:
+                        guard_percentage = int(guard_count / total_relay_roles * 100)
+                        strategy = f"Guard-focused ({guard_percentage}% guard)"
+                    else:
+                        strategy = "Balanced approach"
+                else:
+                    strategy = "No role data"
+                
+                # 8. Operational Maturity
+                first_seen_dates = [relay.get('first_seen') for relay in contact_relays if relay.get('first_seen')]
+                if first_seen_dates:
+                    dates = [date.split(' ')[0] for date in first_seen_dates]
+                    oldest_date = min(dates)
+                    newest_date = max(dates)
+                    
+                    if oldest_date == newest_date:
+                        maturity = f"Operating since {oldest_date} (all deployed together)"
+                    else:
+                        maturity = f"Operating since {oldest_date} (expanded through {newest_date})"
+                else:
+                    maturity = "No timeline data"
+                
+                # Store complete intelligence for this contact (Phase 1 + Phase 2)
+                contact_intelligence[contact_hash] = {
+                    # Phase 1: Foundation metrics (moved from template)
+                    'portfolio_diversity': portfolio_diversity,
+                    'network_influence': network_influence,
+                    'measurement_status': measurement_status,
+                    
+                    # Phase 2: Advanced analytics
+                    'geographic_countries': country_count,
+                    'geographic_risk': geo_risk,
+                    'performance_underutilized': underutilized_count,
+                    'performance_status': perf_status,
+                    'infrastructure_platforms': platform_count,
+                    'infrastructure_versions': version_count,
+                    'infrastructure_risk': infra_risk,
+                    'strategy': strategy,
+                    'maturity': maturity
+                }
+        
+        return {'template_optimized': contact_intelligence} 
