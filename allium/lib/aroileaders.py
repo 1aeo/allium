@@ -131,6 +131,13 @@ def _calculate_aroi_leaderboards(relays_instance):
             if bandwidth_gb > 0:
                 efficiency_ratio = (total_consensus_weight * 100) / bandwidth_gb
         
+        # Exit Authority - consensus weight of exit relays only (new calculation)
+        exit_consensus_weight = 0.0
+        for relay in operator_relays:
+            if relay.get('exit', False):  # Only count exit relays
+                relay_cw = relay.get('consensus_weight_fraction', 0.0)
+                exit_consensus_weight += relay_cw
+        
         # Store operator data (mix of existing + new calculations)
         aroi_operators[operator_key] = {
             # === EXISTING CALCULATIONS (REUSED) ===
@@ -159,12 +166,13 @@ def _calculate_aroi_leaderboards(relays_instance):
             'diversity_score': diversity_score,
             'uptime_percentage': uptime_percentage,
             'efficiency_ratio': efficiency_ratio,
+            'exit_consensus_weight': exit_consensus_weight,
             
             # Keep minimal relay data for potential future use
             'relays': operator_relays
         }
     
-    # Generate 11 core leaderboard categories
+    # Generate 12 core leaderboard categories
     leaderboards = {}
     
     # 1. Bandwidth Contributed (use existing calculation)
@@ -181,63 +189,70 @@ def _calculate_aroi_leaderboards(relays_instance):
         reverse=True
     )[:50]
     
-    # 3. Exit Operators (use existing calculation)
+    # 3. Exit Authority Champions (new calculation)
+    leaderboards['exit_authority'] = sorted(
+        aroi_operators.items(),
+        key=lambda x: x[1]['exit_consensus_weight'],
+        reverse=True
+    )[:50]
+    
+    # 4. Exit Operators (use existing calculation)
     leaderboards['exit_operators'] = sorted(
         aroi_operators.items(),
         key=lambda x: x[1]['exit_count'],
         reverse=True
     )[:50]
     
-    # 4. Guard Operators (use existing calculation)
+    # 5. Guard Operators (use existing calculation)
     leaderboards['guard_operators'] = sorted(
         aroi_operators.items(),
         key=lambda x: x[1]['guard_count'],
         reverse=True
     )[:50]
     
-    # 5. Most Diverse Operators (new calculation)
+    # 6. Most Diverse Operators (new calculation)
     leaderboards['most_diverse'] = sorted(
         aroi_operators.items(),
         key=lambda x: x[1]['diversity_score'],
         reverse=True
     )[:50]
     
-    # 6. Platform Diversity - Non-Linux Heroes (new calculation)
+    # 7. Platform Diversity - Non-Linux Heroes (new calculation)
     leaderboards['platform_diversity'] = sorted(
         aroi_operators.items(),
         key=lambda x: x[1]['non_linux_count'],
         reverse=True
     )[:50]
     
-    # 7. Technical Leaders - BSD Operators (new calculation)
+    # 8. Technical Leaders - BSD Operators (new calculation)
     leaderboards['bsd_operators'] = sorted(
         aroi_operators.items(),
         key=lambda x: x[1]['bsd_count'],
         reverse=True
     )[:50]
     
-    # 8. Geographic Champions - Non-EU Leaders (new calculation)
+    # 9. Geographic Champions - Non-EU Leaders (new calculation)
     leaderboards['non_eu_leaders'] = sorted(
         aroi_operators.items(),
         key=lambda x: x[1]['non_eu_count'],
         reverse=True
     )[:50]
     
-    # 9. Frontier Builders - Rare Countries (new calculation)
+    # 10. Frontier Builders - Rare Countries (new calculation)
     leaderboards['frontier_builders'] = sorted(
         aroi_operators.items(),
         key=lambda x: x[1]['rare_country_count'],
         reverse=True
     )[:50]
     
-    # 10. Network Veterans - Most Reliable (new calculation)
+    # 11. Network Veterans - Most Reliable (new calculation)
     leaderboards['network_veterans'] = sorted(
         aroi_operators.items(),
         key=lambda x: x[1]['uptime_percentage'],
         reverse=True
     )[:50]
     
-    # 11. Efficiency Champions (new calculation)
+    # 12. Efficiency Champions (new calculation)
     leaderboards['efficiency_champions'] = sorted(
         aroi_operators.items(),
         key=lambda x: x[1]['efficiency_ratio'],
@@ -270,6 +285,7 @@ def _calculate_aroi_leaderboards(relays_instance):
                 'total_bandwidth': formatted_bandwidth,
                 'bandwidth_unit': bandwidth_unit,
                 'total_consensus_weight_pct': f"{metrics['total_consensus_weight'] * 100:.2f}%",
+                'exit_consensus_weight_pct': f"{metrics['exit_consensus_weight'] * 100:.2f}%",
                 'guard_count': metrics['guard_count'],
                 'exit_count': metrics['exit_count'],
                 'middle_count': metrics['middle_count'],
@@ -312,6 +328,7 @@ def _calculate_aroi_leaderboards(relays_instance):
         'categories': {
             'bandwidth': 'Bandwidth Contributed',
             'consensus_weight': 'Consensus Weight',
+            'exit_authority': 'Exit Authority Champions',
             'exit_operators': 'Exit Operators',
             'guard_operators': 'Guard Operators', 
             'most_diverse': 'Most Diverse Operators',
