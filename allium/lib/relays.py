@@ -378,7 +378,7 @@ class Relays:
                     # Use the first family member as the family identifier
                     family_id = relay["effective_family"][0]
                     self.json["sorted"][k][v]["unique_family_set"].add(family_id)
-            if k == "family" or k == "contact":
+            if k == "family" or k == "contact" or k == "as":
                 # Count measured relays
                 if relay.get("measured"):
                     self.json["sorted"][k][v]["measured_count"] += 1 
