@@ -27,6 +27,7 @@
     <div class="aroi-category-nav">
         <a href="#bandwidth" class="btn btn-sm btn-link">🚀 Bandwidth</a>
         <a href="#consensus_weight" class="btn btn-sm btn-link">⚖️ Consensus</a>
+        <a href="#exit_authority" class="btn btn-sm btn-link">🚪 Exit Authority</a>
         <a href="#exit_operators" class="btn btn-sm btn-link">🚪 Exits</a>
         <a href="#guard_operators" class="btn btn-sm btn-link">🛡️ Guards</a>
         <a href="#most_diverse" class="btn btn-sm btn-link">🌈 Diverse</a>
@@ -53,7 +54,7 @@
             <strong>Network Consensus Weight:</strong><br>{{ relays.json.aroi_leaderboards.summary.total_consensus_weight_pct }}
         </div>
         <div class="col-md-3">
-            <strong>Live Categories:</strong><br>11 competitive leaderboards
+            <strong>Live Categories:</strong><br>12 competitive leaderboards
         </div>
     </div>
     <div class="aroi-top-margin">
@@ -99,7 +100,22 @@
             </div>
         </div>
 
-        <!-- Champion Badge 3: Exit Gate Keeper -->
+        <!-- Champion Badge 3: Exit Authority Champions -->
+        <div class="col-md-3 col-sm-6 aroi-champion-badge">
+            <div class="panel panel-warning">
+                <div class="panel-body text-center aroi-champion-exit-authority">
+                    <h3 class="aroi-header-spacing">🚪 Exit Authority Champions</h3>
+                    {% if relays.json.aroi_leaderboards.leaderboards.exit_authority %}
+                        {% set champion = relays.json.aroi_leaderboards.leaderboards.exit_authority[0] %}
+                        <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key }}</a></strong></h4>
+                        <p>{{ champion.exit_consensus_weight_pct }} exit authority</p>
+                        <small>{{ champion.exit_count }} exit relays</small>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Champion Badge 4: Exit Gate Keeper -->
         <div class="col-md-3 col-sm-6 aroi-champion-badge">
             <div class="panel panel-danger">
                 <div class="panel-body text-center aroi-champion-exit">
@@ -114,7 +130,7 @@
             </div>
         </div>
 
-        <!-- Champion Badge 4: Guard Champion -->
+        <!-- Champion Badge 5: Guard Champion -->
         <div class="col-md-3 col-sm-6 aroi-champion-badge">
             <div class="panel panel-info">
                 <div class="panel-body text-center aroi-champion-guard">
@@ -129,7 +145,7 @@
             </div>
         </div>
 
-        <!-- Champion Badge 5: Globe Trotter -->
+        <!-- Champion Badge 6: Globe Trotter -->
         <div class="col-md-3 col-sm-6 aroi-champion-badge">
             <div class="panel panel-success">
                 <div class="panel-body text-center aroi-champion-diversity">
@@ -144,7 +160,7 @@
             </div>
         </div>
 
-        <!-- Champion Badge 6: Platform Diversity Hero -->
+        <!-- Champion Badge 7: Platform Diversity Hero -->
         <div class="col-md-3 col-sm-6 aroi-champion-badge">
             <div class="panel panel-info">
                 <div class="panel-body text-center aroi-champion-platform">
@@ -159,7 +175,7 @@
             </div>
         </div>
 
-        <!-- Champion Badge 7: BSD Master -->
+        <!-- Champion Badge 8: BSD Master -->
         <div class="col-md-3 col-sm-6 aroi-champion-badge">
             <div class="panel panel-default">
                 <div class="panel-body text-center aroi-champion-bsd">
@@ -174,7 +190,7 @@
             </div>
         </div>
 
-        <!-- Champion Badge 8: Global Expansion Leader -->
+        <!-- Champion Badge 9: Global Expansion Leader -->
         <div class="col-md-3 col-sm-6 aroi-champion-badge">
             <div class="panel panel-success">
                 <div class="panel-body text-center aroi-champion-global">
@@ -189,7 +205,7 @@
             </div>
         </div>
 
-        <!-- Champion Badge 9: Frontier Pioneer -->
+        <!-- Champion Badge 10: Frontier Pioneer -->
         <div class="col-md-3 col-sm-6 aroi-champion-badge">
             <div class="panel panel-default">
                 <div class="panel-body text-center aroi-champion-frontier">
@@ -204,7 +220,7 @@
             </div>
         </div>
 
-        <!-- Champion Badge 10: Reliability Master -->
+        <!-- Champion Badge 11: Reliability Master -->
         <div class="col-md-3 col-sm-6 aroi-champion-badge">
             <div class="panel panel-default">
                 <div class="panel-body text-center aroi-champion-reliability">
@@ -219,7 +235,7 @@
             </div>
         </div>
 
-        <!-- Champion Badge 11: Efficiency Expert -->
+        <!-- Champion Badge 12: Efficiency Expert -->
         <div class="col-md-3 col-sm-6 aroi-champion-badge">
             <div class="panel panel-primary">
                 <div class="panel-body text-center aroi-champion-efficiency">
@@ -241,7 +257,7 @@
 <!-- ===================================================================== -->
 <section id="podium" class="aroi-section">
     <h2>🥇 Top 3 Summary</h2>
-    <p class="lead">Elite Tier Champions - Podium winners across all 11 leaderboard categories</p>
+    <p class="lead">Elite Tier Champions - Podium winners across all 12 leaderboard categories</p>
     
     <!-- Bandwidth Titans -->
     <div class="aroi-subsection">
@@ -309,6 +325,43 @@
                             {% endif %}
                         </td>
                         <td>{{ entry.total_consensus_weight_pct }} network authority</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Exit Authority Champions -->
+    <div class="aroi-subsection">
+        <h4>🚪 Exit Authority Champions</h4>
+        {% if relays.json.aroi_leaderboards.leaderboards.exit_authority %}
+        <div class="table-responsive">
+            <table class="table table-striped aroi-top3-table">
+                <thead>
+                    <tr>
+                        <th>Operator</th>
+                        <th>Achievement</th>
+                        <th>Performance</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in relays.json.aroi_leaderboards.leaderboards.exit_authority[:3] %}
+                    <tr>
+                        <td>
+                            <strong>
+                                {% if entry.rank == 1 %}🥇{% elif entry.rank == 2 %}🥈{% elif entry.rank == 3 %}🥉{% endif %}
+                                <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" title="Contact: {{ entry.contact_info|escape }}" class="aroi-underline-link">{{ entry.aroi_domain if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key }}</a>
+                            </strong>
+                        </td>
+                        <td>
+                            {% if entry.rank == 1 %}Exit Authority King
+                            {% elif entry.rank == 2 %}Exit Authority Commander
+                            {% elif entry.rank == 3 %}Exit Authority Captain
+                            {% endif %}
+                        </td>
+                        <td>{{ entry.exit_consensus_weight_pct }} exit authority</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -800,7 +853,66 @@
         {% endif %}
     </section>
 
-    <!-- Category 3: Exit Operators -->
+    <!-- Category 3: Exit Authority Champions -->
+    <section id="exit_authority" class="aroi-section">
+        <h3>🚪 Exit Authority Champions - Top 25</h3>
+        {% if relays.json.aroi_leaderboards.leaderboards.exit_authority %}
+        <div class="table-responsive">
+            <table class="table table-striped table-condensed aroi-rankings-table aroi-standard-table">
+                <thead>
+                    <tr>
+                        <th>Rank</th>
+                        <th>Operator (AROI)</th>
+                        <th>Exit Relays</th>
+                        <th>Exit Authority</th>
+                        <th>Total Authority</th>
+                        <th>Bandwidth</th>
+                        <th>Countries</th>
+                        <th>Efficiency</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in relays.json.aroi_leaderboards.leaderboards.exit_authority[:25] %}
+                    <tr>
+                        <td>
+                            {% if entry.rank <= 3 %}
+                                <span class="badge {% if entry.rank == 1 %}aroi-rank-gold{% elif entry.rank == 2 %}aroi-rank-silver{% else %}aroi-rank-bronze{% endif %}">
+                                    {% if entry.rank == 1 %}🥇{% elif entry.rank == 2 %}🥈{% else %}🥉{% endif %} {{ entry.rank }}
+                                </span>
+                            {% else %}
+                                <span class="badge badge-default">{{ entry.rank }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" title="Contact: {{ entry.contact_info|escape }}" class="aroi-underline-link">
+                                {% if entry.aroi_domain and entry.aroi_domain != 'none' %}
+                                    <strong>{{ entry.aroi_domain|escape }}</strong>
+                                {% else %}
+                                    <strong>{{ entry.operator_key|escape }}</strong>
+                                {% endif %}
+                            </a>
+                        </td>
+                        <td>{{ entry.exit_count }}</td>
+                        <td>
+                            <span class="text-nowrap"><strong>{{ entry.exit_consensus_weight_pct }}</strong></span>
+                        </td>
+                        <td>
+                            <span class="text-nowrap">{{ entry.total_consensus_weight_pct }}</span>
+                        </td>
+                        <td>
+                            <span class="text-nowrap">{{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</span>
+                        </td>
+                        <td>{{ entry.country_count }}</td>
+                        <td><span title="Efficiency Ratio: (Consensus Weight % × 100) ÷ Bandwidth GB/s - measures network authority per bandwidth contributed">{{ entry.efficiency_ratio }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </section>
+
+    <!-- Category 4: Exit Operators -->
     <section id="exit_operators" class="aroi-section">
         <h3>🚪 Exit Operators - Top 25</h3>
         {% if relays.json.aroi_leaderboards.leaderboards.exit_operators %}
@@ -855,7 +967,7 @@
         {% endif %}
     </section>
 
-    <!-- Category 4: Guard Operators -->
+    <!-- Category 5: Guard Operators -->
     <section id="guard_operators" class="aroi-section">
         <h3>🛡️ Guard Operators - Top 25</h3>
         {% if relays.json.aroi_leaderboards.leaderboards.guard_operators %}
