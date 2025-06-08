@@ -10,6 +10,14 @@ import hashlib
 from collections import defaultdict
 import re
 
+# Import centralized country utilities
+from .country_utils import (
+    count_non_eu_countries, 
+    count_frontier_countries, 
+    calculate_diversity_score, 
+    calculate_geographic_achievement
+)
+
 
 def _calculate_aroi_leaderboards(relays_instance):
     """
@@ -97,26 +105,19 @@ def _calculate_aroi_leaderboards(relays_instance):
                        if relay.get('platform') and any(bsd in relay.get('platform', '') 
                        for bsd in ['BSD', 'FreeBSD', 'OpenBSD', 'NetBSD', 'DragonFly']))
         
-        # Non-EU country detection (new calculation)
-        eu_countries = {'AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 
-                       'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 
-                       'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE'}
-        non_eu_count = sum(1 for relay in operator_relays 
-                          if relay.get('country') and relay.get('country').upper() not in eu_countries)
+        # Non-EU country detection (using centralized utilities)
+        operator_countries = [relay.get('country') for relay in operator_relays if relay.get('country')]
+        non_eu_count = count_non_eu_countries(operator_countries, use_political=True)
         
-        # Rare/frontier countries (new calculation)
-        rare_countries = {'MN', 'TN', 'UY', 'KZ', 'MD', 'LK', 'MK', 'MT', 'EE', 'LV'}
-        rare_country_count = sum(1 for relay in operator_relays
-                                if relay.get('country') and relay.get('country').upper() in rare_countries)
+        # Rare/frontier countries (using centralized utilities)
+        rare_country_count = count_frontier_countries(operator_countries)
         
-        # Diversity score (new calculation - weighted scoring)
-        diversity_score = 0.0
-        if countries:
-            diversity_score += len(countries) * 2.0  # Geographic component
-        if platforms:
-            diversity_score += len(platforms) * 1.5  # Platform component  
-        if unique_as_count:
-            diversity_score += unique_as_count * 1.0  # Network component (reuse existing)
+        # Diversity score (using centralized calculation)
+        diversity_score = calculate_diversity_score(
+            countries=list(countries), 
+            platforms=list(platforms), 
+            unique_as_count=unique_as_count
+        )
         
         # Uptime approximation (new calculation - from running status)
         running_relays = sum(1 for relay in operator_relays if relay.get('running', False))
@@ -257,7 +258,7 @@ def _calculate_aroi_leaderboards(relays_instance):
             # Calculate geographic achievement for non_eu_leaders category
             geographic_achievement = ""
             if category == 'non_eu_leaders':
-                geographic_achievement = _calculate_geographic_achievement(metrics['countries'])
+                geographic_achievement = calculate_geographic_achievement(metrics['countries'])
             
             formatted_entry = {
                 'rank': rank,
@@ -329,77 +330,4 @@ def _calculate_aroi_leaderboards(relays_instance):
         'raw_operators': aroi_operators  # For potential future use
     }
 
-def _calculate_geographic_achievement(countries):
-    """Calculate dynamic geographic achievement based on operator's country distribution"""
-    
-    # Regional mapping (from intelligence_engine.py)
-    regions = {
-        'north_america': {'us', 'ca', 'mx'},
-        'europe': {'de', 'fr', 'gb', 'nl', 'it', 'es', 'se', 'no', 'dk', 'fi', 'ch', 'at', 'be', 'ie', 'pt'},
-        'asia_pacific': {'jp', 'au', 'nz', 'kr', 'sg', 'hk', 'tw', 'th', 'my', 'ph'},
-        'eastern_europe': {'ru', 'ua', 'pl', 'cz', 'hu', 'ro', 'bg', 'sk', 'hr', 'si', 'ee', 'lv', 'lt'},
-    }
-    
-    # Count countries per region
-    regional_presence = {region: 0 for region in regions.keys()}
-    regional_presence['other'] = 0
-    
-    for country in countries:
-        country_lower = country.lower()
-        assigned = False
-        
-        for region, region_countries in regions.items():
-            if country_lower in region_countries:
-                regional_presence[region] += 1
-                assigned = True
-                break
-        
-        if not assigned:
-            regional_presence['other'] += 1
-    
-    # Determine achievement based on distribution
-    total_countries = len(countries)
-    active_regions = sum(1 for count in regional_presence.values() if count > 0)
-    dominant_region = max(regional_presence.items(), key=lambda x: x[1])
-    
-    # Multi-continental operators (3+ regions)
-    if active_regions >= 3:
-        if total_countries >= 8:
-            return "Global Emperor"
-        else:
-            return "Multi-Continental Champion"
-    
-    # Single region dominance
-    elif dominant_region[1] > 0:
-        region_name = dominant_region[0]
-        country_count = dominant_region[1]
-        
-        # Region-specific titles based on country count
-        if region_name == 'north_america':
-            if country_count >= 3:
-                return "North America Emperor"
-            else:
-                return "North America Champion"
-        elif region_name == 'europe':
-            if country_count >= 5:
-                return "Europe Emperor"
-            else:
-                return "Europe Champion"
-        elif region_name == 'asia_pacific':
-            if country_count >= 4:
-                return "Asia-Pacific Emperor"
-            else:
-                return "Asia-Pacific Champion"
-        elif region_name == 'eastern_europe':
-            if country_count >= 3:
-                return "Eastern Europe Emperor"
-            else:
-                return "Eastern Europe Champion"
-        elif region_name == 'other':
-            if country_count >= 3:
-                return "Frontier Emperor"
-            else:
-                return "Frontier Pioneer"
-    
-    # Fallback
-    return "Regional Specialist" 
+ 
