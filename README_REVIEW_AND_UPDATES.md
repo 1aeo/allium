@@ -1,3 +1,52 @@
+# README Review and Proposed Updates
+
+## Current State Analysis
+
+The current `README` file is quite minimal (41 lines) and appears to be significantly outdated compared to the substantial improvements and new features that have been implemented in the codebase over recent weeks. 
+
+### Current README Issues:
+1. **Oversimplified description** - Describes only basic functionality
+2. **Missing new features** - No mention of AROI leaderboards, security improvements, or advanced analytics
+3. **Outdated installation instructions** - Doesn't reflect new capabilities
+4. **No security documentation** - Important given recent security fixes
+5. **Missing configuration options** - New command-line arguments not documented
+6. **No feature overview** - Doesn't showcase the rich functionality now available
+
+## Major Changes Discovered in Codebase
+
+### 1. Security Enhancements 🔒
+- **Critical XSS vulnerability fixes** implemented across all templates
+- **Jinja2 autoescape enabled globally** for comprehensive protection
+- **Comprehensive security audit** completed with detailed vulnerability assessment
+- **Template escaping standardized** throughout the application
+
+### 2. AROI Leaderboard System 🏆
+- **12 distinct leaderboard categories** for operator rankings
+- **Sophisticated operator analytics** including geographic and platform diversity
+- **Dynamic scoring algorithms** for rare countries and network contributions
+- **Professional dashboard interface** for viewing operator achievements
+
+### 3. Weighted Country Scoring System 📊
+- **Intelligent rare country classification** replacing hardcoded lists
+- **Multi-factor scoring formula** (4:3:2:1 weighted ratio)
+- **Geopolitical and regional classifications** for 150+ countries
+- **Tier-based system** (Legendary, Epic, Rare, Emerging, Common)
+
+### 4. Enhanced Application Features ⚡
+- **Progress tracking** with memory usage monitoring
+- **Bandwidth unit configuration** (bits/s vs bytes/s)
+- **Improved error handling** and directory management
+- **Breadcrumb navigation** context for better UX
+
+### 5. New Library Modules 📚
+- `aroileaders.py` - AROI leaderboard calculations and operator analytics
+- `country_utils.py` - Advanced country classification and scoring utilities  
+- `intelligence_engine.py` - Intelligence analysis capabilities
+- Enhanced `relays.py` with security fixes and new functionality
+
+## Proposed README Update
+
+```markdown
 # allium: Advanced Tor Relay Analytics & Metrics Platform
 
 A powerful, security-hardened static site generator that creates comprehensive Tor relay metrics, statistics, and operator leaderboards from Onionoo API data.
@@ -212,3 +261,19 @@ Rarity Score = (Relay Count Factor × 4) +
 ---
 
 **allium** - Empowering Tor network analysis with intelligence, security, and performance.
+```
+
+## Summary of Key Changes Needed
+
+1. **Expand feature description** to reflect new AROI leaderboards and intelligence capabilities
+2. **Add comprehensive command-line options** documentation  
+3. **Include security features** prominently given recent fixes
+4. **Document the weighted scoring system** and its intelligence
+5. **Add proper installation guide** with requirements
+6. **Include examples** of different usage scenarios
+7. **Highlight performance features** like progress tracking
+8. **Document the 12 AROI leaderboard categories**
+9. **Explain the rare country classification system**
+10. **Add contributing guidelines** for the expanded project
+
+The proposed README transforms the minimal 41-line file into a comprehensive 200+ line document that properly showcases the sophisticated analytics platform allium has become.
