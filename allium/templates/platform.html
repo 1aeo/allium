@@ -1,6 +1,6 @@
 {% extends "relay-list.html" %}
 {% from "macros.html" import navigation, detail_summary %}
-{% set platform_name = relays.json['relay_subset'][0]['platform']|escape %}
+{% set platform_name = relays.json['relay_subset'][0]['platform'] %}
 {% block title %}Tor Relays :: {{ platform_name }}{% endblock %}
 {% block header %}View Platform {{ platform_name }} Details{% endblock %}
 {% block navigation -%}

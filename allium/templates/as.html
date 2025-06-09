@@ -1,7 +1,7 @@
 {% extends "relay-list.html" %}
 {% from "macros.html" import navigation, detail_summary %}
-{% set as_number = relays.json['relay_subset'][0]['as']|escape %}
-{% set as_name = relays.json['relay_subset'][0]['as_name']|escape %}
+{% set as_number = relays.json['relay_subset'][0]['as'] %}
+{% set as_name = relays.json['relay_subset'][0]['as_name'] %}
 {% block title %}Tor Relays :: {{ as_name }} ({{ as_number }}){% endblock %}
 {% block header %}View {{ as_number }} {{ as_name }} Details{% endblock %}
 {% block navigation -%}

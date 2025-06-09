@@ -1,5 +1,7 @@
 # AROI-Leaderboard Security Audit Report: HTML Injection Vulnerabilities
 
+> **UPDATE: All vulnerabilities identified in this report have been fixed. See SECURITY_FIXES_APPLIED.md for details on the remediation.**
+
 ## Executive Summary
 
 This security audit has identified **multiple critical HTML injection (XSS) vulnerabilities** in the aroi-leaderboard codebase. These vulnerabilities arise from insufficient HTML escaping of user-controlled data received from the Onionoo API before rendering it in HTML templates.
