@@ -4,31 +4,31 @@
         <li style="display: inline;"><a href="{{ path_prefix }}index.html" style="color: #337ab7; text-decoration: none;">Home</a></li>
         {% if page_type == 'as_detail' and page_data %}
             <li style="display: inline;"> > <a href="{{ path_prefix }}misc/networks-by-bandwidth.html" style="color: #337ab7; text-decoration: none;">Browse by Network</a></li>
-            <li style="display: inline; color: #777;"> > {{ page_data.as_number }}</li>
+            <li style="display: inline; color: #777;"> > {{ page_data.as_number|escape }}</li>
         {% elif page_type == 'contact_detail' and page_data %}
             <li style="display: inline;"> > <a href="{{ path_prefix }}misc/contacts-by-bandwidth.html" style="color: #337ab7; text-decoration: none;">Browse by Contact</a></li>
-            <li style="display: inline; color: #777;"> > {% if page_data.aroi_domain and page_data.aroi_domain != 'none' %}{{ page_data.aroi_domain }}{% else %}{{ page_data.contact_hash[:8] }}{% endif %}</li>
+            <li style="display: inline; color: #777;"> > {% if page_data.aroi_domain and page_data.aroi_domain != 'none' %}{{ page_data.aroi_domain|escape }}{% else %}{{ page_data.contact_hash[:8]|escape }}{% endif %}</li>
         {% elif page_type == 'country_detail' and page_data %}
             <li style="display: inline;"> > <a href="{{ path_prefix }}misc/countries-by-bandwidth.html" style="color: #337ab7; text-decoration: none;">Browse by Country</a></li>
-            <li style="display: inline; color: #777;"> > {{ page_data.country_name }}</li>
+            <li style="display: inline; color: #777;"> > {{ page_data.country_name|escape }}</li>
         {% elif page_type == 'family_detail' and page_data %}
             <li style="display: inline;"> > <a href="{{ path_prefix }}misc/families-by-bandwidth.html" style="color: #337ab7; text-decoration: none;">Browse by Family</a></li>
-            <li style="display: inline; color: #777;"> > {% if page_data.aroi_domain and page_data.aroi_domain != 'none' %}{{ page_data.aroi_domain }}{% else %}{{ page_data.family_hash[:8] }}{% endif %}</li>
+            <li style="display: inline; color: #777;"> > {% if page_data.aroi_domain and page_data.aroi_domain != 'none' %}{{ page_data.aroi_domain|escape }}{% else %}{{ page_data.family_hash[:8]|escape }}{% endif %}</li>
         {% elif page_type == 'platform_detail' and page_data %}
             <li style="display: inline;"> > <a href="{{ path_prefix }}misc/platforms-by-bandwidth.html" style="color: #337ab7; text-decoration: none;">Browse by Platform</a></li>
-            <li style="display: inline; color: #777;"> > {{ page_data.platform_name }}</li>
+            <li style="display: inline; color: #777;"> > {{ page_data.platform_name|escape }}</li>
         {% elif page_type == 'first_seen_detail' and page_data %}
             <li style="display: inline;"> > <a href="{{ path_prefix }}misc/all.html" style="color: #337ab7; text-decoration: none;">All Relays</a></li>
-            <li style="display: inline; color: #777;"> > First Seen {{ page_data.date }}</li>
+            <li style="display: inline; color: #777;"> > First Seen {{ page_data.date|escape }}</li>
         {% elif page_type == 'flag_detail' and page_data %}
             <li style="display: inline;"> > <a href="{{ path_prefix }}misc/all.html" style="color: #337ab7; text-decoration: none;">All Relays</a></li>
-            <li style="display: inline; color: #777;"> > {{ page_data.flag_name|title }} Relays</li>
+            <li style="display: inline; color: #777;"> > {{ page_data.flag_name|title|escape }} Relays</li>
         {% elif page_type == 'relay_detail' and page_data %}
             <li style="display: inline;"> > <a href="{{ path_prefix }}misc/networks-by-bandwidth.html" style="color: #337ab7; text-decoration: none;">Browse by Network</a></li>
             {% if page_data.as_number %}
-                <li style="display: inline;"> > <a href="{{ path_prefix }}as/{{ page_data.as_number }}/" style="color: #337ab7; text-decoration: none;">{{ page_data.as_number }}</a></li>
+                <li style="display: inline;"> > <a href="{{ path_prefix }}as/{{ page_data.as_number|escape }}/" style="color: #337ab7; text-decoration: none;">{{ page_data.as_number|escape }}</a></li>
             {% endif %}
-            <li style="display: inline; color: #777;"> > {{ page_data.nickname }}</li>
+            <li style="display: inline; color: #777;"> > {{ page_data.nickname|escape }}</li>
         {% elif page_type == 'home' and page_data %}
             <li style="display: inline; color: #777;"> > {{ page_data.page_name }}</li>
         {% elif page_type == 'misc_listing' and page_data %}
