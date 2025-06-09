@@ -114,7 +114,9 @@ def _calculate_aroi_leaderboards(relays_instance):
         # Rare/frontier countries (using weighted scoring system with existing country data)
         # Leverage pre-calculated country relay counts from relays.py instead of re-scanning all_relays
         country_data = relays_instance.json.get('sorted', {}).get('country', {})
-        rare_country_count = count_frontier_countries_weighted_with_existing_data(operator_countries, country_data, len(all_relays))
+        # Use unique countries for rare country calculation (not per-relay count)
+        unique_operator_countries = list(set(operator_countries))
+        rare_country_count = count_frontier_countries_weighted_with_existing_data(unique_operator_countries, country_data, len(all_relays))
         
         # Diversity score (using centralized calculation)
         diversity_score = calculate_diversity_score(
