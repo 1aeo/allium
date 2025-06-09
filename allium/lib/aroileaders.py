@@ -13,8 +13,7 @@ import re
 # Import centralized country utilities
 from .country_utils import (
     count_non_eu_countries, 
-    count_frontier_countries, 
-    count_frontier_countries_weighted,
+    count_frontier_countries_weighted_with_existing_data,
     calculate_diversity_score, 
     calculate_geographic_achievement
 )
@@ -114,8 +113,10 @@ def _calculate_aroi_leaderboards(relays_instance):
         operator_countries = [relay.get('country') for relay in operator_relays if relay.get('country')]
         non_eu_count = count_non_eu_countries(operator_countries, use_political=True)
         
-        # Rare/frontier countries (using weighted scoring system)
-        rare_country_count = count_frontier_countries_weighted(operator_countries, all_relays)
+        # Rare/frontier countries (using weighted scoring system with existing country data)
+        # Leverage pre-calculated country relay counts from relays.py instead of re-scanning all_relays
+        country_data = relays_instance.json.get('sorted', {}).get('country', {})
+        rare_country_count = count_frontier_countries_weighted_with_existing_data(operator_countries, country_data, len(all_relays))
         
         # Diversity score (using centralized calculation)
         diversity_score = calculate_diversity_score(
