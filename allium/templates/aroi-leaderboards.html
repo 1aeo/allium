@@ -26,17 +26,17 @@
     <!-- Category Navigation Row -->
     <div class="aroi-category-nav">
         <a href="#bandwidth" class="btn btn-sm btn-link">🚀 Bandwidth</a>
-        <a href="#consensus_weight" class="btn btn-sm btn-link">⚖️ Consensus</a>
+        <a href="#consensus_weight" class="btn btn-sm btn-link">⚖️ Network Authority</a>
         <a href="#exit_authority" class="btn btn-sm btn-link">🚪 Exit Authority</a>
-        <a href="#exit_operators" class="btn btn-sm btn-link">🚪 Exits</a>
-        <a href="#guard_operators" class="btn btn-sm btn-link">🛡️ Guards</a>
-        <a href="#most_diverse" class="btn btn-sm btn-link">🌈 Diverse</a>
-        <a href="#platform_diversity" class="btn btn-sm btn-link">💻 Platform</a>
-        <a href="#bsd_operators" class="btn btn-sm btn-link">🔧 Technical</a>
-        <a href="#non_eu_leaders" class="btn btn-sm btn-link">🌍 Geographic</a>
-        <a href="#frontier_builders" class="btn btn-sm btn-link">🏴‍☠️ Frontier</a>
-        <a href="#network_veterans" class="btn btn-sm btn-link">🏆 Veterans</a>
-        <a href="#efficiency_champions" class="btn btn-sm btn-link">⚡ Efficiency</a>
+        <a href="#exit_operators" class="btn btn-sm btn-link">🚪 Exit Operators</a>
+        <a href="#guard_operators" class="btn btn-sm btn-link">🛡️ Guard Operators</a>
+        <a href="#most_diverse" class="btn btn-sm btn-link">🌈 Most Diverse</a>
+        <a href="#platform_diversity" class="btn btn-sm btn-link">💻 Platform Diversity</a>
+        <a href="#bsd_operators" class="btn btn-sm btn-link">🔧 BSD Operators</a>
+        <a href="#non_eu_leaders" class="btn btn-sm btn-link">🌍 Non-EU Leaders</a>
+        <a href="#frontier_builders" class="btn btn-sm btn-link">🏴‍☠️ Frontier Builders</a>
+        <a href="#network_veterans" class="btn btn-sm btn-link">🏆 Network Veterans</a>
+        <a href="#efficiency_champions" class="btn btn-sm btn-link">⚡ Efficiency Champions</a>
     </div>
 </nav>
 
@@ -104,7 +104,7 @@
         <div class="col-md-3 col-sm-6 aroi-champion-badge">
             <div class="panel panel-danger">
                 <div class="panel-body text-center aroi-champion-exit-authority">
-                    <h3 class="aroi-header-spacing">🚪 Exit Authority Champions</h3>
+                    <h3 class="aroi-header-spacing">🚪 Exit Authority Master</h3>
                     {% if relays.json.aroi_leaderboards.leaderboards.exit_authority %}
                         {% set champion = relays.json.aroi_leaderboards.leaderboards.exit_authority[0] %}
                         <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain|escape if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key|escape }}</a></strong></h4>
@@ -149,7 +149,7 @@
         <div class="col-md-3 col-sm-6 aroi-champion-badge">
             <div class="panel panel-success">
                 <div class="panel-body text-center aroi-champion-diversity">
-                    <h3 class="aroi-header-spacing">🌍 Globe Trotter</h3>
+                    <h3 class="aroi-header-spacing">🌈 Diversity Master</h3>
                     {% if relays.json.aroi_leaderboards.leaderboards.most_diverse %}
                         {% set champion = relays.json.aroi_leaderboards.leaderboards.most_diverse[0] %}
                         <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain|escape if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key|escape }}</a></strong></h4>
@@ -164,7 +164,7 @@
         <div class="col-md-3 col-sm-6 aroi-champion-badge">
             <div class="panel panel-info">
                 <div class="panel-body text-center aroi-champion-platform">
-                    <h3 class="aroi-header-spacing">💻 Platform Diversity Hero</h3>
+                    <h3 class="aroi-header-spacing">💻 Platform Hero</h3>
                     {% if relays.json.aroi_leaderboards.leaderboards.platform_diversity %}
                         {% set champion = relays.json.aroi_leaderboards.leaderboards.platform_diversity[0] %}
                         <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain|escape if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key|escape }}</a></strong></h4>
@@ -194,7 +194,7 @@
         <div class="col-md-3 col-sm-6 aroi-champion-badge">
             <div class="panel panel-success">
                 <div class="panel-body text-center aroi-champion-global">
-                    <h3 class="aroi-header-spacing">🌏 Global Expansion Leader</h3>
+                    <h3 class="aroi-header-spacing">🌍 Global Expansion Leader</h3>
                     {% if relays.json.aroi_leaderboards.leaderboards.non_eu_leaders %}
                         {% set champion = relays.json.aroi_leaderboards.leaderboards.non_eu_leaders[0] %}
                         <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain|escape if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key|escape }}</a></strong></h4>
