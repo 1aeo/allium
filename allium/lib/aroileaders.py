@@ -14,6 +14,7 @@ import re
 from .country_utils import (
     count_non_eu_countries, 
     count_frontier_countries, 
+    count_frontier_countries_weighted,
     calculate_diversity_score, 
     calculate_geographic_achievement
 )
@@ -60,6 +61,10 @@ def _calculate_aroi_leaderboards(relays_instance):
         if not contact_info or contact_info.strip() == '':
             continue
         if aroi_domain == 'none' and not contact_info:
+            continue
+            
+        # Additional validation: skip if contact is just whitespace or very short
+        if len(contact_info.strip()) < 3:
             continue
             
         # Use AROI domain as key if available, otherwise use first 10 chars of contact_info
@@ -109,8 +114,8 @@ def _calculate_aroi_leaderboards(relays_instance):
         operator_countries = [relay.get('country') for relay in operator_relays if relay.get('country')]
         non_eu_count = count_non_eu_countries(operator_countries, use_political=True)
         
-        # Rare/frontier countries (using centralized utilities)
-        rare_country_count = count_frontier_countries(operator_countries)
+        # Rare/frontier countries (using weighted scoring system)
+        rare_country_count = count_frontier_countries_weighted(operator_countries, all_relays)
         
         # Diversity score (using centralized calculation)
         diversity_score = calculate_diversity_score(
@@ -309,6 +314,13 @@ def _calculate_aroi_leaderboards(relays_instance):
     total_operators = len(aroi_operators)
     total_bandwidth_all = sum(op['total_bandwidth'] for op in aroi_operators.values())
     total_cw_all = sum(op['total_consensus_weight'] for op in aroi_operators.values())
+    
+    # Validation: consensus weight should be reasonable (≤ 100% of network)
+    if total_cw_all > 1.0:
+        print(f"⚠️  WARNING: AROI consensus weight sum ({total_cw_all:.3f}) exceeds 100% - check calculation logic")
+    
+    # The total_cw_all represents the fraction of network consensus weight held by AROI operators
+    # This should be displayed as the percentage of network authority they represent
     
     # Format summary bandwidth with unit (reuse existing formatters)
     summary_bandwidth_unit = relays_instance._determine_unit(total_bandwidth_all)
