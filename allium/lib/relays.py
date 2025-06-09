@@ -20,6 +20,7 @@ ENV = Environment(
     loader=FileSystemLoader(os.path.join(ABS_PATH, "../templates")),
     trim_blocks=True,
     lstrip_blocks=True,
+    autoescape=True
 )
 
 
