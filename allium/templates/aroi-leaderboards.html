@@ -32,7 +32,6 @@
         <a href="#guard_operators" class="btn btn-sm btn-link" title="Most guard relays operated, serving as entry points into the Tor network">🛡️ Guard Operators</a>
         <a href="#most_diverse" class="btn btn-sm btn-link" title="Highest combined geographic, platform, and network diversity scores across relay operations">🌈 Most Diverse</a>
         <a href="#platform_diversity" class="btn btn-sm btn-link" title="Most non-Linux relays operated, promoting operating system diversity beyond Linux dominance">💻 Platform Diversity</a>
-        <a href="#bsd_operators" class="btn btn-sm btn-link" title="Most BSD-based relays operated, showcasing technical expertise with FreeBSD, OpenBSD, and other BSD variants">🔧 BSD Operators</a>
         <a href="#non_eu_leaders" class="btn btn-sm btn-link" title="Most relays operated outside the European Union, expanding Tor's geographic reach beyond EU concentration">🌍 Non-EU Leaders</a>
         <a href="#frontier_builders" class="btn btn-sm btn-link" title="Highest rare country scores from operating relays in strategically important but underrepresented countries">🏴‍☠️ Frontier Builders</a>
         <a href="#network_veterans" class="btn btn-sm btn-link" title="Highest uptime percentages demonstrating consistent relay availability and network stability">🏆 Network Veterans</a>
@@ -54,7 +53,7 @@
             <strong><span title="Percentage of total Tor network consensus weight held by operators with contact information">Network Consensus Weight:</span></strong><br>{{ relays.json.aroi_leaderboards.summary.total_consensus_weight_pct }}
         </div>
         <div class="col-md-3">
-            <strong><span title="Number of competitive leaderboard categories tracking different aspects of operator performance and contribution">Live Categories:</span></strong><br>12 competitive leaderboards
+            <strong><span title="Number of competitive leaderboard categories tracking different aspects of operator performance and contribution">Live Categories:</span></strong><br>11 competitive leaderboards
         </div>
     </div>
     <div class="aroi-top-margin">
@@ -175,22 +174,7 @@
             </div>
         </div>
 
-        <!-- Champion Badge 8: BSD Master -->
-        <div class="col-md-3 col-sm-6 aroi-champion-badge">
-            <div class="panel panel-default">
-                <div class="panel-body text-center aroi-champion-bsd">
-                    <h3 class="aroi-header-spacing">🔧 BSD Master</h3>
-                    {% if relays.json.aroi_leaderboards.leaderboards.bsd_operators %}
-                        {% set champion = relays.json.aroi_leaderboards.leaderboards.bsd_operators[0] %}
-                        <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain|escape if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key|escape }}</a></strong></h4>
-                        <p>{{ champion.bsd_count }} BSD relays</p>
-                        <small>{{ champion.total_relays }} total relays</small>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-
-        <!-- Champion Badge 9: Global Expansion Leader -->
+        <!-- Champion Badge 8: Global Expansion Leader -->
         <div class="col-md-3 col-sm-6 aroi-champion-badge">
             <div class="panel panel-success">
                 <div class="panel-body text-center aroi-champion-global">
@@ -205,7 +189,7 @@
             </div>
         </div>
 
-        <!-- Champion Badge 10: Frontier Pioneer -->
+        <!-- Champion Badge 9: Frontier Pioneer -->
         <div class="col-md-3 col-sm-6 aroi-champion-badge">
             <div class="panel panel-default">
                 <div class="panel-body text-center aroi-champion-frontier">
@@ -220,7 +204,7 @@
             </div>
         </div>
 
-        <!-- Champion Badge 11: Reliability Master -->
+        <!-- Champion Badge 10: Reliability Master -->
         <div class="col-md-3 col-sm-6 aroi-champion-badge">
             <div class="panel panel-default">
                 <div class="panel-body text-center aroi-champion-reliability">
@@ -235,7 +219,7 @@
             </div>
         </div>
 
-        <!-- Champion Badge 12: Efficiency Expert -->
+        <!-- Champion Badge 11: Efficiency Expert -->
         <div class="col-md-3 col-sm-6 aroi-champion-badge">
             <div class="panel panel-primary">
                 <div class="panel-body text-center aroi-champion-efficiency">
@@ -510,43 +494,6 @@
                             {% endif %}
                         </td>
                         <td>{{ entry.non_linux_count }} non-Linux relays, {{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% endif %}
-    </div>
-
-    <!-- BSD Masters -->
-    <div class="aroi-subsection">
-        <h4>🔧 BSD Masters</h4>
-        {% if relays.json.aroi_leaderboards.leaderboards.bsd_operators %}
-        <div class="table-responsive">
-            <table class="table table-striped aroi-top3-table">
-                <thead>
-                    <tr>
-                        <th>Operator</th>
-                        <th>Achievement</th>
-                        <th>Performance</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for entry in relays.json.aroi_leaderboards.leaderboards.bsd_operators[:3] %}
-                    <tr>
-                        <td>
-                            <strong>
-                                {% if entry.rank == 1 %}🥇{% elif entry.rank == 2 %}🥈{% elif entry.rank == 3 %}🥉{% endif %}
-                                <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" title="Contact: {{ entry.contact_info|escape }}" class="aroi-underline-link">{{ entry.aroi_domain|escape if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key|escape }}</a>
-                            </strong>
-                        </td>
-                        <td>
-                            {% if entry.rank == 1 %}BSD Master
-                            {% elif entry.rank == 2 %}BSD Master
-                            {% elif entry.rank == 3 %}BSD Master
-                            {% endif %}
-                        </td>
-                        <td>{{ entry.bsd_count }} BSD relays, {{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -1023,13 +970,13 @@
     </section>
 
     <!-- Continue with remaining categories... -->
-    {% for category_key in ['most_diverse', 'platform_diversity', 'bsd_operators', 'non_eu_leaders', 'frontier_builders', 'network_veterans', 'efficiency_champions'] %}
+    {% for category_key in ['most_diverse', 'platform_diversity', 'non_eu_leaders', 'frontier_builders', 'network_veterans', 'efficiency_champions'] %}
         {% set category_name = relays.json.aroi_leaderboards.summary.categories[category_key] %}
         {% set category_data = relays.json.aroi_leaderboards.leaderboards[category_key] %}
         
         <section id="{{ category_key }}" class="aroi-section">
             <h3>
-                {% if category_key == 'most_diverse' %}🌈{% elif category_key == 'platform_diversity' %}💻{% elif category_key == 'bsd_operators' %}🔧{% elif category_key == 'non_eu_leaders' %}🌍{% elif category_key == 'frontier_builders' %}🏴‍☠️{% elif category_key == 'network_veterans' %}🏆{% elif category_key == 'efficiency_champions' %}⚡{% endif %} 
+                {% if category_key == 'most_diverse' %}🌈{% elif category_key == 'platform_diversity' %}💻{% elif category_key == 'non_eu_leaders' %}🌍{% elif category_key == 'frontier_builders' %}🏴‍☠️{% elif category_key == 'network_veterans' %}🏆{% elif category_key == 'efficiency_champions' %}⚡{% endif %} 
                 {{ category_name }} - Top 25
             </h3>
             {% if category_data %}
@@ -1075,7 +1022,6 @@
                                 <strong>
                                 {% if category_key == 'most_diverse' %}<span title="Diversity Score: Geographic (countries × 2.0) + Platform (OS types × 1.5) + Network (unique ASNs × 1.0)">{{ entry.diversity_score }}</span>
                                 {% elif category_key == 'platform_diversity' %}{{ entry.non_linux_count }} non-Linux
-                                {% elif category_key == 'bsd_operators' %}{{ entry.bsd_count }} BSD
                                 {% elif category_key == 'non_eu_leaders' %}{{ entry.non_eu_count }} non-EU
                                 {% elif category_key == 'frontier_builders' %}{{ entry.rare_country_count }} rare
                                 {% elif category_key == 'network_veterans' %}{{ entry.uptime_percentage }}
@@ -1089,7 +1035,6 @@
                             <td>
                                 {% if category_key == 'most_diverse' %}Geographic diversity
                                 {% elif category_key == 'platform_diversity' %}OS diversity
-                                {% elif category_key == 'bsd_operators' %}BSD expertise
                                 {% elif category_key == 'non_eu_leaders' %}Global expansion
                                 {% elif category_key == 'frontier_builders' %}Frontier presence
                                 {% elif category_key == 'network_veterans' %}High reliability
@@ -1135,7 +1080,7 @@
             </div>
             <div class="col-md-6">
                 <ul>
-                    <li><strong>🔧 BSD Masters:</strong> Technical leaders running BSD-based relays</li>
+
                     <li><strong>🌍 Non-EU Leaders:</strong> Geographic champions expanding Tor outside the EU</li>
                     <li><strong>🏴‍☠️ Frontier Builders:</strong> Operators in rare or underrepresented countries</li>
                     <li><strong>🏆 Network Veterans:</strong> Most reliable operators with highest uptime</li>
