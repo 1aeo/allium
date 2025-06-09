@@ -477,4 +477,10 @@ def get_rare_countries_weighted_with_existing_data(country_data, total_relays, m
     
     return rare_countries
 
+# === REQUIRED FOR INTELLIGENCE ENGINE ===
+
+def get_standard_regions():
+    """Return standard regional mapping required by intelligence_engine.py"""
+    return CORE_REGIONS.copy()
+
  
