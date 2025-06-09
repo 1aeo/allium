@@ -14,12 +14,14 @@ import time
 import urllib.request
 from shutil import rmtree
 from jinja2 import Environment, FileSystemLoader
+from .aroileaders import _calculate_aroi_leaderboards
 
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
 ENV = Environment(
     loader=FileSystemLoader(os.path.join(ABS_PATH, "../templates")),
     trim_blocks=True,
     lstrip_blocks=True,
+    autoescape=True  # Enable autoescape to prevent XSS vulnerabilities
 )
 
 
@@ -44,6 +46,7 @@ class Relays:
         self._process_aroi_contacts()  # Process AROI display info first
         self._preprocess_template_data()  # Pre-compute template optimization data
         self._categorize()  # Then build categories with processed relay objects
+        self._generate_aroi_leaderboards()  # Generate AROI operator leaderboards
         self._generate_smart_context()  # Generate intelligence analysis
 
     def _fetch_onionoo_details(self):
@@ -681,6 +684,19 @@ class Relays:
                             del data["unique_family_set"]
                         else:
                             data["unique_family_count"] = 0
+
+    def _generate_aroi_leaderboards(self):
+        """
+        Generate AROI operator leaderboards using the aroileaders module
+        """
+        if self.progress:
+            print("[AROI] Calculating operator leaderboards...")
+        
+        self.json['aroi_leaderboards'] = _calculate_aroi_leaderboards(self)
+        
+        if self.progress:
+            total_operators = self.json['aroi_leaderboards'].get('summary', {}).get('total_operators', 0)
+            print(f"[AROI] Generated leaderboards for {total_operators} operators")
 
     def _generate_smart_context(self):
         """Generate smart context intelligence analysis"""
