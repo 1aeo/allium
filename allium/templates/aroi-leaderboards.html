@@ -77,7 +77,7 @@
                 <h3 class="aroi-header-spacing">🥇 Platinum Bandwidth</h3>
                     {% if relays.json.aroi_leaderboards.leaderboards.bandwidth %}
                         {% set champion = relays.json.aroi_leaderboards.leaderboards.bandwidth[0] %}
-                        <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key }}</a></strong></h4>
+                        <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key|escape }}</a></strong></h4>
                         <p>{{ champion.total_bandwidth }} {{ champion.bandwidth_unit }}</p>
                         <small>{{ champion.total_relays }} relays</small>
                     {% endif %}
@@ -92,7 +92,7 @@
                     <h3 class="aroi-header-spacing">🏛️ Network Authority</h3>
                     {% if relays.json.aroi_leaderboards.leaderboards.consensus_weight %}
                         {% set champion = relays.json.aroi_leaderboards.leaderboards.consensus_weight[0] %}
-                        <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key }}</a></strong></h4>
+                        <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key|escape }}</a></strong></h4>
                         <p>{{ champion.total_consensus_weight_pct }} authority</p>
                         <small>{{ champion.total_relays }} total relays</small>
                     {% endif %}
@@ -107,7 +107,7 @@
                     <h3 class="aroi-header-spacing">🚪 Exit Authority Champions</h3>
                     {% if relays.json.aroi_leaderboards.leaderboards.exit_authority %}
                         {% set champion = relays.json.aroi_leaderboards.leaderboards.exit_authority[0] %}
-                        <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key }}</a></strong></h4>
+                        <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key|escape }}</a></strong></h4>
                         <p>{{ champion.exit_consensus_weight_pct }} exit authority</p>
                         <small>{{ champion.exit_count }} exit relays</small>
                     {% endif %}
@@ -122,7 +122,7 @@
                     <h3 class="aroi-header-spacing">🚪 Exit Gate Keeper</h3>
                     {% if relays.json.aroi_leaderboards.leaderboards.exit_operators %}
                         {% set champion = relays.json.aroi_leaderboards.leaderboards.exit_operators[0] %}
-                        <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key }}</a></strong></h4>
+                        <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key|escape }}</a></strong></h4>
                         <p>{{ champion.exit_count }} exit relays</p>
                         <small>{{ champion.total_relays }} total relays</small>
                     {% endif %}
@@ -137,7 +137,7 @@
                     <h3 class="aroi-header-spacing">🛡️ Guard Champion</h3>
                     {% if relays.json.aroi_leaderboards.leaderboards.guard_operators %}
                         {% set champion = relays.json.aroi_leaderboards.leaderboards.guard_operators[0] %}
-                        <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key }}</a></strong></h4>
+                        <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key|escape }}</a></strong></h4>
                         <p>{{ champion.guard_count }} guard relays</p>
                         <small>{{ champion.total_relays }} total relays</small>
                     {% endif %}
@@ -152,7 +152,7 @@
                     <h3 class="aroi-header-spacing">🌍 Globe Trotter</h3>
                     {% if relays.json.aroi_leaderboards.leaderboards.most_diverse %}
                         {% set champion = relays.json.aroi_leaderboards.leaderboards.most_diverse[0] %}
-                        <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key }}</a></strong></h4>
+                        <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key|escape }}</a></strong></h4>
                         <p><span title="Diversity Score: Geographic (countries × 2.0) + Platform (OS types × 1.5) + Network (unique ASNs × 1.0)">{{ champion.diversity_score }} diversity</span></p>
                         <small>{{ champion.country_count }} countries</small>
                     {% endif %}
@@ -167,7 +167,7 @@
                     <h3 class="aroi-header-spacing">💻 Platform Diversity Hero</h3>
                     {% if relays.json.aroi_leaderboards.leaderboards.platform_diversity %}
                         {% set champion = relays.json.aroi_leaderboards.leaderboards.platform_diversity[0] %}
-                        <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key }}</a></strong></h4>
+                        <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key|escape }}</a></strong></h4>
                         <p>{{ champion.non_linux_count }} non-Linux relays</p>
                         <small>{{ champion.total_relays }} total relays</small>
                     {% endif %}
@@ -182,7 +182,7 @@
                     <h3 class="aroi-header-spacing">🔧 BSD Master</h3>
                     {% if relays.json.aroi_leaderboards.leaderboards.bsd_operators %}
                         {% set champion = relays.json.aroi_leaderboards.leaderboards.bsd_operators[0] %}
-                        <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key }}</a></strong></h4>
+                        <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key|escape }}</a></strong></h4>
                         <p>{{ champion.bsd_count }} BSD relays</p>
                         <small>{{ champion.total_relays }} total relays</small>
                     {% endif %}
@@ -197,7 +197,7 @@
                     <h3 class="aroi-header-spacing">🌏 Global Expansion Leader</h3>
                     {% if relays.json.aroi_leaderboards.leaderboards.non_eu_leaders %}
                         {% set champion = relays.json.aroi_leaderboards.leaderboards.non_eu_leaders[0] %}
-                        <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key }}</a></strong></h4>
+                        <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key|escape }}</a></strong></h4>
                         <p>{{ champion.non_eu_count }} non-EU relays</p>
                         <small>{{ champion.total_relays }} total relays</small>
                     {% endif %}
@@ -212,7 +212,7 @@
                     <h3 class="aroi-header-spacing">🏴‍☠️ Frontier Pioneer</h3>
                     {% if relays.json.aroi_leaderboards.leaderboards.frontier_builders %}
                         {% set champion = relays.json.aroi_leaderboards.leaderboards.frontier_builders[0] %}
-                        <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key }}</a></strong></h4>
+                        <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key|escape }}</a></strong></h4>
                         <p>{{ champion.rare_country_count }} rare countries</p>
                         <small>{{ champion.total_relays }} total relays</small>
                     {% endif %}
@@ -227,7 +227,7 @@
                     <h3 class="aroi-header-spacing">💎 Reliability Master</h3>
                     {% if relays.json.aroi_leaderboards.leaderboards.network_veterans %}
                         {% set champion = relays.json.aroi_leaderboards.leaderboards.network_veterans[0] %}
-                        <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key }}</a></strong></h4>
+                        <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key|escape }}</a></strong></h4>
                         <p>{{ champion.uptime_percentage }}</p>
                         <small>{{ champion.total_relays }} total relays</small>
                     {% endif %}
@@ -242,7 +242,7 @@
                     <h3 class="aroi-header-spacing">⚡ Efficiency Expert</h3>
                     {% if relays.json.aroi_leaderboards.leaderboards.efficiency_champions %}
                         {% set champion = relays.json.aroi_leaderboards.leaderboards.efficiency_champions[0] %}
-                        <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key }}</a></strong></h4>
+                        <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key|escape }}</a></strong></h4>
                         <p><span title="Efficiency Ratio: (Consensus Weight % × 100) ÷ Bandwidth GB/s - measures network authority per bandwidth contributed">{{ champion.efficiency_ratio }}</span></p>
                         <small>{{ champion.total_consensus_weight_pct }} authority</small>
                     {% endif %}
@@ -278,7 +278,7 @@
                         <td>
                             <strong>
                                 {% if entry.rank == 1 %}🥇{% elif entry.rank == 2 %}🥈{% elif entry.rank == 3 %}🥉{% endif %}
-                                <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" title="Contact: {{ entry.contact_info|escape }}" class="aroi-underline-link">{{ entry.aroi_domain if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key }}</a>
+                                <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" title="Contact: {{ entry.contact_info|escape }}" class="aroi-underline-link">{{ entry.aroi_domain if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key|escape }}</a>
                             </strong>
                         </td>
                         <td>
@@ -315,7 +315,7 @@
                         <td>
                             <strong>
                                 {% if entry.rank == 1 %}🥇{% elif entry.rank == 2 %}🥈{% elif entry.rank == 3 %}🥉{% endif %}
-                                <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" title="Contact: {{ entry.contact_info|escape }}" class="aroi-underline-link">{{ entry.aroi_domain if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key }}</a>
+                                <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" title="Contact: {{ entry.contact_info|escape }}" class="aroi-underline-link">{{ entry.aroi_domain if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key|escape }}</a>
                             </strong>
                         </td>
                         <td>
@@ -352,7 +352,7 @@
                         <td>
                             <strong>
                                 {% if entry.rank == 1 %}🥇{% elif entry.rank == 2 %}🥈{% elif entry.rank == 3 %}🥉{% endif %}
-                                <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" title="Contact: {{ entry.contact_info|escape }}" class="aroi-underline-link">{{ entry.aroi_domain if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key }}</a>
+                                <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" title="Contact: {{ entry.contact_info|escape }}" class="aroi-underline-link">{{ entry.aroi_domain if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key|escape }}</a>
                             </strong>
                         </td>
                         <td>
@@ -389,7 +389,7 @@
                         <td>
                             <strong>
                                 {% if entry.rank == 1 %}🥇{% elif entry.rank == 2 %}🥈{% elif entry.rank == 3 %}🥉{% endif %}
-                                <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" title="Contact: {{ entry.contact_info|escape }}" class="aroi-underline-link">{{ entry.aroi_domain if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key }}</a>
+                                <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" title="Contact: {{ entry.contact_info|escape }}" class="aroi-underline-link">{{ entry.aroi_domain if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key|escape }}</a>
                             </strong>
                         </td>
                         <td>
@@ -426,7 +426,7 @@
                         <td>
                             <strong>
                                 {% if entry.rank == 1 %}🥇{% elif entry.rank == 2 %}🥈{% elif entry.rank == 3 %}🥉{% endif %}
-                                <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" title="Contact: {{ entry.contact_info|escape }}" class="aroi-underline-link">{{ entry.aroi_domain if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key }}</a>
+                                <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" title="Contact: {{ entry.contact_info|escape }}" class="aroi-underline-link">{{ entry.aroi_domain if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key|escape }}</a>
                             </strong>
                         </td>
                         <td>
@@ -463,7 +463,7 @@
                         <td>
                             <strong>
                                 {% if entry.rank == 1 %}🥇{% elif entry.rank == 2 %}🥈{% elif entry.rank == 3 %}🥉{% endif %}
-                                <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" title="Contact: {{ entry.contact_info|escape }}" class="aroi-underline-link">{{ entry.aroi_domain if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key }}</a>
+                                <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" title="Contact: {{ entry.contact_info|escape }}" class="aroi-underline-link">{{ entry.aroi_domain if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key|escape }}</a>
                             </strong>
                         </td>
                         <td>
@@ -500,7 +500,7 @@
                         <td>
                             <strong>
                                 {% if entry.rank == 1 %}🥇{% elif entry.rank == 2 %}🥈{% elif entry.rank == 3 %}🥉{% endif %}
-                                <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" title="Contact: {{ entry.contact_info|escape }}" class="aroi-underline-link">{{ entry.aroi_domain if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key }}</a>
+                                <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" title="Contact: {{ entry.contact_info|escape }}" class="aroi-underline-link">{{ entry.aroi_domain if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key|escape }}</a>
                             </strong>
                         </td>
                         <td>
@@ -537,7 +537,7 @@
                         <td>
                             <strong>
                                 {% if entry.rank == 1 %}🥇{% elif entry.rank == 2 %}🥈{% elif entry.rank == 3 %}🥉{% endif %}
-                                <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" title="Contact: {{ entry.contact_info|escape }}" class="aroi-underline-link">{{ entry.aroi_domain if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key }}</a>
+                                <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" title="Contact: {{ entry.contact_info|escape }}" class="aroi-underline-link">{{ entry.aroi_domain if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key|escape }}</a>
                             </strong>
                         </td>
                         <td>
@@ -574,7 +574,7 @@
                         <td>
                             <strong>
                                 {% if entry.rank == 1 %}🥇{% elif entry.rank == 2 %}🥈{% elif entry.rank == 3 %}🥉{% endif %}
-                                <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" title="Contact: {{ entry.contact_info|escape }}" class="aroi-underline-link">{{ entry.aroi_domain if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key }}</a>
+                                <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" title="Contact: {{ entry.contact_info|escape }}" class="aroi-underline-link">{{ entry.aroi_domain if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key|escape }}</a>
                             </strong>
                         </td>
                         <td>{{ entry.geographic_achievement }}</td>
@@ -606,7 +606,7 @@
                         <td>
                             <strong>
                                 {% if entry.rank == 1 %}🥇{% elif entry.rank == 2 %}🥈{% elif entry.rank == 3 %}🥉{% endif %}
-                                <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" title="Contact: {{ entry.contact_info|escape }}" class="aroi-underline-link">{{ entry.aroi_domain if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key }}</a>
+                                <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" title="Contact: {{ entry.contact_info|escape }}" class="aroi-underline-link">{{ entry.aroi_domain if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key|escape }}</a>
                             </strong>
                         </td>
                         <td>
@@ -643,7 +643,7 @@
                         <td>
                             <strong>
                                 {% if entry.rank == 1 %}🥇{% elif entry.rank == 2 %}🥈{% elif entry.rank == 3 %}🥉{% endif %}
-                                <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" title="Contact: {{ entry.contact_info|escape }}" class="aroi-underline-link">{{ entry.aroi_domain if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key }}</a>
+                                <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" title="Contact: {{ entry.contact_info|escape }}" class="aroi-underline-link">{{ entry.aroi_domain if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key|escape }}</a>
                             </strong>
                         </td>
                         <td>
@@ -680,7 +680,7 @@
                         <td>
                             <strong>
                                 {% if entry.rank == 1 %}🥇{% elif entry.rank == 2 %}🥈{% elif entry.rank == 3 %}🥉{% endif %}
-                                <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" title="Contact: {{ entry.contact_info|escape }}" class="aroi-underline-link">{{ entry.aroi_domain if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key }}</a>
+                                <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" title="Contact: {{ entry.contact_info|escape }}" class="aroi-underline-link">{{ entry.aroi_domain if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key|escape }}</a>
                             </strong>
                         </td>
                         <td>
