@@ -26,17 +26,17 @@
     <!-- Category Navigation Row -->
     <div class="aroi-category-nav">
         <a href="#bandwidth" class="btn btn-sm btn-link">🚀 Bandwidth</a>
-        <a href="#consensus_weight" class="btn btn-sm btn-link">⚖️ Network Authority</a>
-        <a href="#exit_authority" class="btn btn-sm btn-link">🚪 Exit Authority</a>
-        <a href="#exit_operators" class="btn btn-sm btn-link">🚪 Exit Operators</a>
-        <a href="#guard_operators" class="btn btn-sm btn-link">🛡️ Guard Operators</a>
-        <a href="#most_diverse" class="btn btn-sm btn-link">🌈 Most Diverse</a>
-        <a href="#platform_diversity" class="btn btn-sm btn-link">💻 Platform Diversity</a>
-        <a href="#bsd_operators" class="btn btn-sm btn-link">🔧 BSD Operators</a>
-        <a href="#non_eu_leaders" class="btn btn-sm btn-link">🌍 Non-EU Leaders</a>
-        <a href="#frontier_builders" class="btn btn-sm btn-link">🏴‍☠️ Frontier Builders</a>
-        <a href="#network_veterans" class="btn btn-sm btn-link">🏆 Network Veterans</a>
-        <a href="#efficiency_champions" class="btn btn-sm btn-link">⚡ Efficiency Champions</a>
+        <a href="#consensus_weight" class="btn btn-sm btn-link">⚖️ Consensus</a>
+        <a href="#exit_authority" class="btn btn-sm btn-link" title="Highest exit consensus weight controlling where Tor traffic exits to the internet">🚪 Exit Authority</a>
+        <a href="#exit_operators" class="btn btn-sm btn-link" title="Most exit relays operated, providing critical internet access points for Tor users">🚪 Exit Operators</a>
+        <a href="#guard_operators" class="btn btn-sm btn-link" title="Most guard relays operated, serving as entry points into the Tor network">🛡️ Guard Operators</a>
+        <a href="#most_diverse" class="btn btn-sm btn-link" title="Highest combined geographic, platform, and network diversity scores across relay operations">🌈 Most Diverse</a>
+        <a href="#platform_diversity" class="btn btn-sm btn-link" title="Most non-Linux relays operated, promoting operating system diversity beyond Linux dominance">💻 Platform Diversity</a>
+        <a href="#bsd_operators" class="btn btn-sm btn-link" title="Most BSD-based relays operated, showcasing technical expertise with FreeBSD, OpenBSD, and other BSD variants">🔧 BSD Operators</a>
+        <a href="#non_eu_leaders" class="btn btn-sm btn-link" title="Most relays operated outside the European Union, expanding Tor's geographic reach beyond EU concentration">🌍 Non-EU Leaders</a>
+        <a href="#frontier_builders" class="btn btn-sm btn-link" title="Highest rare country scores from operating relays in strategically important but underrepresented countries">🏴‍☠️ Frontier Builders</a>
+        <a href="#network_veterans" class="btn btn-sm btn-link" title="Highest uptime percentages demonstrating consistent relay availability and network stability">🏆 Network Veterans</a>
+        <a href="#efficiency_champions" class="btn btn-sm btn-link" title="Best consensus weight to bandwidth ratios, achieving maximum network authority per bandwidth contributed">⚡ Efficiency Champions</a>
     </div>
 </nav>
 
@@ -149,7 +149,7 @@
         <div class="col-md-3 col-sm-6 aroi-champion-badge">
             <div class="panel panel-success">
                 <div class="panel-body text-center aroi-champion-diversity">
-                    <h3 class="aroi-header-spacing">🌈 Diversity Master</h3>
+                    <h3 class="aroi-header-spacing">🌍 Diversity Master</h3>
                     {% if relays.json.aroi_leaderboards.leaderboards.most_diverse %}
                         {% set champion = relays.json.aroi_leaderboards.leaderboards.most_diverse[0] %}
                         <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain|escape if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key|escape }}</a></strong></h4>
@@ -194,7 +194,7 @@
         <div class="col-md-3 col-sm-6 aroi-champion-badge">
             <div class="panel panel-success">
                 <div class="panel-body text-center aroi-champion-global">
-                    <h3 class="aroi-header-spacing">🌍 Global Expansion Leader</h3>
+                    <h3 class="aroi-header-spacing">🌏 Global Expansion Leader</h3>
                     {% if relays.json.aroi_leaderboards.leaderboards.non_eu_leaders %}
                         {% set champion = relays.json.aroi_leaderboards.leaderboards.non_eu_leaders[0] %}
                         <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain|escape if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key|escape }}</a></strong></h4>
@@ -333,9 +333,9 @@
         {% endif %}
     </div>
 
-    <!-- Exit Authority Champions -->
+    <!-- Exit Authorities -->
     <div class="aroi-subsection">
-        <h4>🚪 Exit Authority Champions</h4>
+        <h4>🚪 Exit Authorities</h4>
         {% if relays.json.aroi_leaderboards.leaderboards.exit_authority %}
         <div class="table-responsive">
             <table class="table table-striped aroi-top3-table">
@@ -370,9 +370,9 @@
         {% endif %}
     </div>
 
-    <!-- Exit Specialists -->
+    <!-- Exit Gate Keepers -->
     <div class="aroi-subsection">
-        <h4>🚪 Exit Specialists</h4>
+        <h4>🚪 Exit Gate Keepers</h4>
         {% if relays.json.aroi_leaderboards.leaderboards.exit_operators %}
         <div class="table-responsive">
             <table class="table table-striped aroi-top3-table">
@@ -407,9 +407,9 @@
         {% endif %}
     </div>
 
-    <!-- Guard Experts -->
+    <!-- Guard Champions -->
     <div class="aroi-subsection">
-        <h4>🛡️ Guard Experts</h4>
+        <h4>🛡️ Guard Champions</h4>
         {% if relays.json.aroi_leaderboards.leaderboards.guard_operators %}
         <div class="table-responsive">
             <table class="table table-striped aroi-top3-table">
@@ -444,9 +444,9 @@
         {% endif %}
     </div>
 
-    <!-- Diversity Champions -->
+    <!-- Diversity Masters -->
     <div class="aroi-subsection">
-        <h4>🌍 Diversity Champions</h4>
+        <h4>🌍 Diversity Masters</h4>
         {% if relays.json.aroi_leaderboards.leaderboards.most_diverse %}
         <div class="table-responsive">
             <table class="table table-striped aroi-top3-table">
@@ -467,9 +467,9 @@
                             </strong>
                         </td>
                         <td>
-                            {% if entry.rank == 1 %}World Explorer
-                            {% elif entry.rank == 2 %}Platform Pioneer
-                            {% elif entry.rank == 3 %}Regional Builder
+                            {% if entry.rank == 1 %}Diversity Master
+                            {% elif entry.rank == 2 %}Diversity Master
+                            {% elif entry.rank == 3 %}Diversity Master
                             {% endif %}
                         </td>
                         <td>{{ entry.country_count }} countries, <span title="Diversity Score: Geographic (countries × 2.0) + Platform (OS types × 1.5) + Network (unique ASNs × 1.0)">{{ entry.diversity_score }} diversity</span></td>
@@ -481,9 +481,9 @@
         {% endif %}
     </div>
 
-    <!-- Platform Diversity Heros -->
+    <!-- Platform Heroes -->
     <div class="aroi-subsection">
-        <h4>💻 Platform Diversity Heros</h4>
+        <h4>💻 Platform Heroes</h4>
         {% if relays.json.aroi_leaderboards.leaderboards.platform_diversity %}
         <div class="table-responsive">
             <table class="table table-striped aroi-top3-table">
@@ -504,9 +504,9 @@
                             </strong>
                         </td>
                         <td>
-                            {% if entry.rank == 1 %}Multi-BSD Master
-                            {% elif entry.rank == 2 %}Windows Champion
-                            {% elif entry.rank == 3 %}FreeBSD Leader
+                            {% if entry.rank == 1 %}Platform Hero
+                            {% elif entry.rank == 2 %}Platform Hero
+                            {% elif entry.rank == 3 %}Platform Hero
                             {% endif %}
                         </td>
                         <td>{{ entry.non_linux_count }} non-Linux relays, {{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</td>
@@ -518,9 +518,9 @@
         {% endif %}
     </div>
 
-    <!-- Technical BSD Leaders -->
+    <!-- BSD Masters -->
     <div class="aroi-subsection">
-        <h4>🔧 Technical BSD Leaders</h4>
+        <h4>🔧 BSD Masters</h4>
         {% if relays.json.aroi_leaderboards.leaderboards.bsd_operators %}
         <div class="table-responsive">
             <table class="table table-striped aroi-top3-table">
@@ -541,9 +541,9 @@
                             </strong>
                         </td>
                         <td>
-                            {% if entry.rank == 1 %}BSD Performance King
-                            {% elif entry.rank == 2 %}Security Hardening Hero
-                            {% elif entry.rank == 3 %}Security Champion
+                            {% if entry.rank == 1 %}BSD Master
+                            {% elif entry.rank == 2 %}BSD Master
+                            {% elif entry.rank == 3 %}BSD Master
                             {% endif %}
                         </td>
                         <td>{{ entry.bsd_count }} BSD relays, {{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</td>
@@ -610,9 +610,9 @@
                             </strong>
                         </td>
                         <td>
-                            {% if entry.rank == 1 %}Ultimate Pioneer
-                            {% elif entry.rank == 2 %}African Trailblazer
-                            {% elif entry.rank == 3 %}South American Explorer
+                            {% if entry.rank == 1 %}Frontier Pioneer
+                            {% elif entry.rank == 2 %}Frontier Pioneer
+                            {% elif entry.rank == 3 %}Frontier Pioneer
                             {% endif %}
                         </td>
                         <td>{{ entry.rare_country }} exclusive, {{ entry.rarity_score }} rarity</td>
@@ -684,9 +684,9 @@
                             </strong>
                         </td>
                         <td>
-                            {% if entry.rank == 1 %}Efficiency King
-                            {% elif entry.rank == 2 %}Optimization Champion
-                            {% elif entry.rank == 3 %}Performance Hero
+                            {% if entry.rank == 1 %}Efficiency Expert
+                            {% elif entry.rank == 2 %}Efficiency Expert
+                            {% elif entry.rank == 3 %}Efficiency Expert
                             {% endif %}
                         </td>
                         <td><span title="Efficiency Ratio: (Consensus Weight % × 100) ÷ Bandwidth GB/s - measures network authority per bandwidth contributed">{{ entry.efficiency_ratio }} CW/BW ratio</span>, {{ entry.total_consensus_weight_pct }} consensus weight</td>
@@ -853,9 +853,9 @@
         {% endif %}
     </section>
 
-    <!-- Category 3: Exit Authority Champions -->
+    <!-- Category 3: Exit Authorities -->
     <section id="exit_authority" class="aroi-section">
-        <h3>🚪 Exit Authority Champions - Top 25</h3>
+        <h3>🚪 Exit Authorities - Top 25</h3>
         {% if relays.json.aroi_leaderboards.leaderboards.exit_authority %}
         <div class="table-responsive">
             <table class="table table-striped table-condensed aroi-rankings-table aroi-standard-table">
@@ -912,9 +912,9 @@
         {% endif %}
     </section>
 
-    <!-- Category 4: Exit Operators -->
+    <!-- Category 4: Exit Gate Keepers -->
     <section id="exit_operators" class="aroi-section">
-        <h3>🚪 Exit Operators - Top 25</h3>
+        <h3>🚪 Exit Gate Keepers - Top 25</h3>
         {% if relays.json.aroi_leaderboards.leaderboards.exit_operators %}
         <div class="table-responsive">
             <table class="table table-striped table-condensed aroi-rankings-table aroi-specialized-table">
@@ -967,9 +967,9 @@
         {% endif %}
     </section>
 
-    <!-- Category 5: Guard Operators -->
+    <!-- Category 5: Guard Champions -->
     <section id="guard_operators" class="aroi-section">
-        <h3>🛡️ Guard Operators - Top 25</h3>
+        <h3>🛡️ Guard Champions - Top 25</h3>
         {% if relays.json.aroi_leaderboards.leaderboards.guard_operators %}
         <div class="table-responsive">
             <table class="table table-striped table-condensed aroi-rankings-table aroi-specialized-table">
