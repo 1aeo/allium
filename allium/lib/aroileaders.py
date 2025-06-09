@@ -105,9 +105,7 @@ def _calculate_aroi_leaderboards(relays_instance):
         non_linux_count = sum(1 for relay in operator_relays 
                              if relay.get('platform') and not relay.get('platform', '').startswith('Linux'))
         
-        bsd_count = sum(1 for relay in operator_relays
-                       if relay.get('platform') and any(bsd in relay.get('platform', '') 
-                       for bsd in ['BSD', 'FreeBSD', 'OpenBSD', 'NetBSD', 'DragonFly']))
+
         
         # Non-EU country detection (using centralized utilities)
         operator_countries = [relay.get('country') for relay in operator_relays if relay.get('country')]
@@ -162,7 +160,6 @@ def _calculate_aroi_leaderboards(relays_instance):
             'platforms': list(platforms),
             'platform_count': len(platforms),
             'non_linux_count': non_linux_count,
-            'bsd_count': bsd_count,
             'non_eu_count': non_eu_count,
             'rare_country_count': rare_country_count,
             'diversity_score': diversity_score,
@@ -174,7 +171,7 @@ def _calculate_aroi_leaderboards(relays_instance):
             'relays': operator_relays
         }
     
-    # Generate 12 core leaderboard categories
+    # Generate 11 core leaderboard categories
     leaderboards = {}
     
     # 1. Bandwidth Contributed (use existing calculation)
@@ -226,35 +223,30 @@ def _calculate_aroi_leaderboards(relays_instance):
         reverse=True
     )[:50]
     
-    # 8. Technical Leaders - BSD Operators (new calculation)
-    leaderboards['bsd_operators'] = sorted(
-        aroi_operators.items(),
-        key=lambda x: x[1]['bsd_count'],
-        reverse=True
-    )[:50]
+
     
-    # 9. Geographic Champions - Non-EU Leaders (new calculation)
+    # 8. Geographic Champions - Non-EU Leaders (new calculation)
     leaderboards['non_eu_leaders'] = sorted(
         aroi_operators.items(),
         key=lambda x: x[1]['non_eu_count'],
         reverse=True
     )[:50]
     
-    # 10. Frontier Builders - Rare Countries (new calculation)
+    # 9. Frontier Builders - Rare Countries (new calculation)
     leaderboards['frontier_builders'] = sorted(
         aroi_operators.items(),
         key=lambda x: x[1]['rare_country_count'],
         reverse=True
     )[:50]
     
-    # 11. Network Veterans - Most Reliable (new calculation)
+    # 10. Network Veterans - Most Reliable (new calculation)
     leaderboards['network_veterans'] = sorted(
         aroi_operators.items(),
         key=lambda x: x[1]['uptime_percentage'],
         reverse=True
     )[:50]
     
-    # 12. Efficiency Champions (new calculation)
+    # 11. Efficiency Champions (new calculation)
     leaderboards['efficiency_champions'] = sorted(
         aroi_operators.items(),
         key=lambda x: x[1]['efficiency_ratio'],
@@ -298,7 +290,6 @@ def _calculate_aroi_leaderboards(relays_instance):
                 'platform_count': metrics['platform_count'],
                 'platforms': metrics['platforms'][:3],  # Top 3 platforms for display
                 'non_linux_count': metrics['non_linux_count'],
-                'bsd_count': metrics['bsd_count'],
                 'non_eu_count': metrics['non_eu_count'],
                 'rare_country_count': metrics['rare_country_count'],
                 'diversity_score': f"{metrics['diversity_score']:.1f}",
@@ -342,7 +333,7 @@ def _calculate_aroi_leaderboards(relays_instance):
             'guard_operators': 'Guard Operators', 
             'most_diverse': 'Most Diverse Operators',
             'platform_diversity': 'Platform Diversity (Non-Linux Heroes)',
-            'bsd_operators': 'Technical Leaders (BSD Operators)',
+
             'non_eu_leaders': 'Geographic Champions (Non-EU Leaders)',
             'frontier_builders': 'Frontier Builders (Rare Countries)',
             'network_veterans': 'Network Veterans (Most Reliable)',
