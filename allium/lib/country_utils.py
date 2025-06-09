@@ -263,13 +263,19 @@ def calculate_relay_count_factor(country_relay_count):
     """
     Calculate scoring factor based on relay count.
     
+    For AROI operators, we only evaluate countries where operators actually have relays,
+    so the minimum meaningful count is 1 relay.
+    
     Args:
         country_relay_count (int): Number of relays in country
         
     Returns:
-        int: Points (6 for 0 relays, 5 for 1 relay, etc., min 0)
+        int: Points (6 for 1 relay, 5 for 2 relays, etc., min 0)
     """
-    return max(6 - country_relay_count, 0)
+    if country_relay_count == 0:
+        # This shouldn't happen in AROI context, but handle gracefully
+        return 0
+    return max(7 - country_relay_count, 0)
 
 def calculate_network_percentage_factor(country_relays, total_network_relays):
     """
