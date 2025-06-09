@@ -72,10 +72,10 @@ A powerful, security-hardened static site generator that creates comprehensive T
 - **Memory-efficient processing** with real-time monitoring
 
 ### Intelligence Features 🧠
-- **Weighted rare country scoring** with geopolitical awareness
 - **Dynamic classification system** replacing hardcoded country lists
 - **Multi-factor analysis** (relay count, network %, geopolitical factors)
 - **Tier-based country rankings** (Legendary, Epic, Rare, Emerging, Common)
+- **Geopolitical awareness** in country scoring algorithms
 
 ## 📋 Usage
 
@@ -160,27 +160,7 @@ allium implements comprehensive security measures:
 - **No JavaScript dependencies** for maximum security
 - **Comprehensive security auditing** with vulnerability tracking
 
-## 🌍 Intelligence Capabilities
-
-### Weighted Country Scoring
-Countries are dynamically classified using a sophisticated scoring system:
-
-**Scoring Formula:**
-```
-Rarity Score = (Relay Count Factor × 4) + 
-               (Network Percentage Factor × 3) + 
-               (Geopolitical Factor × 2) + 
-               (Regional Factor × 1)
-```
-
-**Classifications:**
-- **Legendary (15+ points)** - Ultra-rare countries with critical strategic importance
-- **Epic (10-14 points)** - Very rare countries with high geopolitical significance  
-- **Rare (6-9 points)** - Uncommon countries worth prioritizing
-- **Emerging (3-5 points)** - Countries with potential for growth
-- **Common (0-2 points)** - Standard countries with good representation
-
-### AROI Leaderboards
+## 🌍 AROI Leaderboards
 
 Twelve specialized leaderboards track authenticated operator achievements:
 
@@ -228,6 +208,55 @@ This project is released under the **UNLICENSE** (public domain).
 - [Tor Metrics Project](https://metrics.torproject.org/) - Official tor metrics (inspiration)
 - [Onionoo API](https://onionoo.torproject.org/) - Tor relay data source
 - [Tor Project](https://www.torproject.org/) - Privacy and anonymity network
+
+## 🏅 Weighted Country Scoring System
+
+Countries are dynamically classified using a sophisticated scoring system with geopolitical awareness:
+
+### Scoring Formula
+```
+Rarity Score = (Relay Count Factor × 4) + 
+               (Network Percentage Factor × 3) + 
+               (Geopolitical Factor × 2) + 
+               (Regional Factor × 1)
+```
+
+### Factor Details
+
+**1. Relay Count Factor (Weight: 4x)**
+- 6 points: 0 relays
+- 5 points: 1 relay  
+- 4 points: 2 relays
+- 3 points: 3 relays
+- 2 points: 4 relays
+- 1 point: 5 relays
+- 0 points: 6+ relays
+
+**2. Network Percentage Factor (Weight: 3x)**
+- 6 points: <0.05% of network
+- 4 points: 0.05-0.1% of network
+- 2 points: 0.1-0.2% of network
+- 0 points: >0.2% of network
+
+**3. Geopolitical Factor (Weight: 2x)**
+- 3 points: Conflict zones (Syria, Yemen, Afghanistan, etc.)
+- 3 points: Authoritarian regimes (China, Iran, North Korea, etc.)
+- 2 points: Island nations (Malta, Cyprus, Iceland, etc.)
+- 2 points: Landlocked developing countries (Kazakhstan, Mongolia, etc.)
+- 1 point: General developing countries
+- 0 points: Developed countries
+
+**4. Regional Factor (Weight: 1x)**
+- 2 points: Underrepresented regions (Africa, Central Asia, Pacific Islands)
+- 1 point: Emerging regions (Caribbean, Central America, South Asia)
+- 0 points: Well-represented regions
+
+### Country Classifications
+- **Legendary (15+ points)** - Ultra-rare countries with critical strategic importance
+- **Epic (10-14 points)** - Very rare countries with high geopolitical significance  
+- **Rare (6-9 points)** - Uncommon countries worth prioritizing
+- **Emerging (3-5 points)** - Countries with potential for growth
+- **Common (0-2 points)** - Standard countries with good representation
 
 ---
 
