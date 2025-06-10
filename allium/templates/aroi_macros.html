@@ -8,7 +8,7 @@
                 <h3 class="aroi-header-spacing">{{ emoji }} {{ title }}</h3>
                 {% if leaderboard_data %}
                     {% set champion = leaderboard_data[0] %}
-                    <h4><strong><a href="{{ path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain|escape if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key|escape }}</a></strong></h4>
+                    <h4><strong><a href="{{ path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info_escaped }}" class="aroi-underline-link">{{ champion.display_name|escape }}</a></strong></h4>
                     <p>
                         {% if category_key == "bandwidth" %}
                             {{ champion.total_bandwidth }} {{ champion.bandwidth_unit }}
@@ -67,7 +67,7 @@
                         <td>
                             <strong>
                                 {% if entry.rank == 1 %}🥇{% elif entry.rank == 2 %}🥈{% elif entry.rank == 3 %}🥉{% endif %}
-                                <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" title="Contact: {{ entry.contact_info|escape }}" class="aroi-underline-link">{{ entry.aroi_domain|escape if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key|escape }}</a>
+                                <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" title="Contact: {{ entry.contact_info_escaped }}" class="aroi-underline-link">{{ entry.display_name|escape }}</a>
                             </strong>
                         </td>
                         <td>
@@ -127,13 +127,9 @@
 
 {# Operator Link Macro - Handles operator name/domain links with proper styling (used ~50 times) #}
 {% macro operator_link(entry, page_ctx, include_title=true, strong=true) %}
-    <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" {% if include_title %}title="Contact: {{ entry.contact_info|escape }}"{% endif %} class="aroi-underline-link">
+    <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" {% if include_title %}title="Contact: {{ entry.contact_info_escaped }}"{% endif %} class="aroi-underline-link">
         {% if strong %}<strong>{% endif %}
-        {% if entry.aroi_domain and entry.aroi_domain != 'none' %}
-            {{ entry.aroi_domain|escape }}
-        {% else %}
-            {{ entry.operator_key|escape }}
-        {% endif %}
+        {{ entry.display_name|escape }}
         {% if strong %}</strong>{% endif %}
     </a>
 {% endmacro %}
