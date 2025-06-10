@@ -172,6 +172,51 @@ def _calculate_aroi_leaderboards(relays_instance):
         # Exit Authority - reuse existing calculation from relays.py
         exit_consensus_weight = contact_data.get('exit_consensus_weight_fraction', 0.0)
         
+        # Veteran Score - earliest first seen time weighted by relay scale
+        veteran_score = 0.0
+        veteran_days = 0
+        veteran_relay_scaling_factor = 1.0
+        veteran_details = ""
+        
+        if operator_relays:
+            from datetime import datetime
+            current_date = datetime.now()
+            
+            # Find earliest first_seen date among all relays
+            earliest_first_seen = None
+            for relay in operator_relays:
+                relay_first_seen_str = relay.get('first_seen', '')
+                if relay_first_seen_str:
+                    try:
+                        relay_first_seen = datetime.strptime(relay_first_seen_str, '%Y-%m-%d %H:%M:%S')
+                        if earliest_first_seen is None or relay_first_seen < earliest_first_seen:
+                            earliest_first_seen = relay_first_seen
+                    except ValueError:
+                        continue
+            
+            if earliest_first_seen:
+                # Calculate days since earliest relay
+                veteran_days = (current_date - earliest_first_seen).days
+                
+                # Realistic scaling based on 360 max relays
+                if total_relays >= 300:      # Top tier operators (83%+ of max)
+                    veteran_relay_scaling_factor = 1.3
+                elif total_relays >= 200:    # Large operators (56%+ of max)  
+                    veteran_relay_scaling_factor = 1.25
+                elif total_relays >= 100:    # Medium-large operators (28%+ of max)
+                    veteran_relay_scaling_factor = 1.2
+                elif total_relays >= 50:     # Medium operators (14%+ of max)
+                    veteran_relay_scaling_factor = 1.15
+                elif total_relays >= 20:     # Small-medium operators (6%+ of max)
+                    veteran_relay_scaling_factor = 1.1
+                elif total_relays >= 10:     # Small operators (3%+ of max)
+                    veteran_relay_scaling_factor = 1.05
+                else:                        # Micro operators (1-9 relays)
+                    veteran_relay_scaling_factor = 1.0
+                
+                veteran_score = veteran_days * veteran_relay_scaling_factor
+                veteran_details = f"{veteran_days} days * {veteran_relay_scaling_factor} ({total_relays} relays)"
+        
         # Store operator data (mix of existing + new calculations)
         aroi_operators[operator_key] = {
             # === EXISTING CALCULATIONS (REUSED) ===
@@ -202,6 +247,10 @@ def _calculate_aroi_leaderboards(relays_instance):
             'uptime_percentage': uptime_percentage,
             'efficiency_ratio': efficiency_ratio,
             'exit_consensus_weight': exit_consensus_weight,
+            'veteran_score': veteran_score,
+            'veteran_days': veteran_days,
+            'veteran_relay_scaling_factor': veteran_relay_scaling_factor,
+            'veteran_details': veteran_details,
             
             # Keep minimal relay data for potential future use
             'relays': operator_relays
@@ -275,10 +324,10 @@ def _calculate_aroi_leaderboards(relays_instance):
         reverse=True
     )[:50]
     
-    # 10. Network Veterans - Most Reliable (new calculation)
+    # 10. Network Veterans - Earliest First Seen + Relay Scale (new calculation)
     leaderboards['network_veterans'] = sorted(
         aroi_operators.items(),
-        key=lambda x: x[1]['uptime_percentage'],
+        key=lambda x: x[1]['veteran_score'],
         reverse=True
     )[:50]
     
@@ -337,7 +386,23 @@ def _calculate_aroi_leaderboards(relays_instance):
                     rare_country_details = ", ".join(short_breakdown) + "..."
                 else:
                     rare_country_details = short_text
+            
+            # Format veteran details for network_veterans category
+            veteran_details_short = ""
+            veteran_tooltip = ""
+            if category == 'network_veterans' and metrics['veteran_details']:
+                veteran_tooltip = metrics['veteran_details']
                 
+                # Create short version (max 20 chars for table)
+                if len(veteran_tooltip) > 20:
+                    # Extract just the days and scaling factor for short display
+                    days_part = f"{metrics['veteran_days']} days * {metrics['veteran_relay_scaling_factor']}"
+                    if len(days_part) > 17:  # leave room for "..."
+                        veteran_details_short = f"{metrics['veteran_days']} days..."
+                    else:
+                        veteran_details_short = days_part + "..."
+                else:
+                    veteran_details_short = veteran_tooltip
 
             
             formatted_entry = {
@@ -369,6 +434,11 @@ def _calculate_aroi_leaderboards(relays_instance):
                 'diversity_score': f"{metrics['diversity_score']:.1f}",
                 'uptime_percentage': f"{metrics['uptime_percentage']:.1f}%",
                 'efficiency_ratio': f"{metrics['efficiency_ratio']:.1f}x",
+                'veteran_score': f"{metrics['veteran_score']:.1f}",
+                'veteran_days': metrics['veteran_days'],
+                'veteran_relay_scaling_factor': metrics['veteran_relay_scaling_factor'],
+                'veteran_details_short': veteran_details_short,
+                'veteran_tooltip': veteran_tooltip,
                 'first_seen_date': metrics['first_seen'].split(' ')[0] if metrics['first_seen'] else 'Unknown',
                 'geographic_achievement': geographic_achievement  # Add dynamic achievement
             }
@@ -410,7 +480,7 @@ def _calculate_aroi_leaderboards(relays_instance):
 
             'non_eu_leaders': 'Geographic Champions (Non-EU Leaders)',
             'frontier_builders': 'Frontier Builders (Rare Countries)',
-            'network_veterans': 'Network Veterans (Most Reliable)',
+            'network_veterans': 'Network Veterans',
             'efficiency_champions': 'Efficiency Champions'
         }
     }
