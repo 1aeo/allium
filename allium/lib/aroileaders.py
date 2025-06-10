@@ -9,6 +9,7 @@ Reuses existing contact calculations and only computes new metrics not already a
 import hashlib
 from collections import defaultdict
 import re
+import html
 
 # Import centralized country utilities
 from .country_utils import (
@@ -393,12 +394,16 @@ def _calculate_aroi_leaderboards(relays_instance):
                     veteran_details_short = veteran_tooltip
 
             
+            display_name = metrics['aroi_domain'] if metrics['aroi_domain'] and metrics['aroi_domain'] != 'none' else operator_key
+
             formatted_entry = {
                 'rank': rank,
                 'operator_key': operator_key,
+                'display_name': display_name,
                 'aroi_domain': metrics['aroi_domain'],
                 'contact_hash': metrics['contact_hash'],
                 'contact_info': metrics['contact_info'],
+                'contact_info_escaped': html.escape(metrics['contact_info']),
                 'total_relays': metrics['total_relays'],
                 'total_bandwidth': formatted_bandwidth,
                 'bandwidth_unit': bandwidth_unit,
