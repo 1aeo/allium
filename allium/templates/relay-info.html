@@ -5,7 +5,7 @@
 {% endblock -%}
 {% block body -%}
 <div id="content">
-<h2>View Relay "{{ relay['nickname']|escape }}"</h2>
+<h2>View Relay "{{ relay['nickname'] }}"</h2>
 {% set relay_data = {'nickname': relay['nickname'], 'fingerprint': relay['fingerprint'], 'as_number': relay['as']} %}
 {{ navigation('all', page_ctx) }}
 <h4>
@@ -170,13 +170,13 @@ OR Address
 {% if relay['verified_host_names'] -%}
 {% for hostname in relay['verified_host_names'] -%}
 <span class="verified-hostname" title="verified hostname">{{ hostname|escape }}</span>{% if not loop.last %}, {% endif %}
-{% endfor %} | {% for address in relay['or_addresses'] -%}{{ address|escape }}{% if not loop.last %}, {% endif %}{% endfor -%}
+{% endfor %} | {% for address in relay['or_addresses'] -%}{{ address }}{% if not loop.last %}, {% endif %}{% endfor -%}
 {% elif relay['unverified_host_names'] -%}
 {% for hostname in relay['unverified_host_names'] -%}
 <span class="unverified-hostname" title="unverified hostname">{{ hostname|escape }}</span>{% if not loop.last %}, {% endif %}
-{% endfor %} | {% for address in relay['or_addresses'] -%}{{ address|escape }}{% if not loop.last %}, {% endif %}{% endfor -%}
+{% endfor %} | {% for address in relay['or_addresses'] -%}{{ address }}{% if not loop.last %}, {% endif %}{% endfor -%}
 {% else -%}
-{% for address in relay['or_addresses'] -%}{{ address|escape }}{% if not loop.last %}, {% endif %}{% endfor -%}
+{% for address in relay['or_addresses'] -%}{{ address }}{% if not loop.last %}, {% endif %}{% endfor -%}
 {% endif -%}
 </dd>
 <dt>

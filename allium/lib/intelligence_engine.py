@@ -392,8 +392,8 @@ class IntelligenceEngine:
             return 0.0, {}
         
         # Regional mapping (using centralized definitions)
-        from .country_utils import get_standard_regions
-        regions = get_standard_regions()
+        from .country_utils import get_geographic_regions_for_analysis
+        regions = get_geographic_regions_for_analysis()
         regions['other'] = set()  # Add 'other' category for unmatched countries
         
         regional_weights = {region: 0.0 for region in regions.keys()}
