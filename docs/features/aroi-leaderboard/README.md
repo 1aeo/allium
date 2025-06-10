@@ -13,7 +13,7 @@
 - **Size**: ~19KB, comprehensive specification with examples
 
 **Key Features:**
-- 🏆 **12 Ranking Categories**: Bandwidth, consensus weight, exit/guard operators, diversity, efficiency
+- 🏆 **10 Ranking Categories**: Bandwidth, consensus weight, exit/guard operators, diversity, efficiency
 - 📊 **Live Dashboard**: Real-time leaderboard with champion badges and achievements
 - 🌍 **Geographic Analysis**: Global diversity tracking and frontier country pioneers
 - ⚡ **Performance Metrics**: Efficiency ratios, uptime tracking, and technical excellence
@@ -28,10 +28,9 @@
 - **Size**: ~7.7KB, technical analysis with implementation roadmap
 
 **Key Analysis:**
-- ✅ **Ready Categories**: 7/12 categories implementable immediately with existing data
-- ⚠️ **Calculation Required**: 3/12 categories need new algorithms but data is available
-- ❌ **New Data Needed**: 2/12 categories require additional data sources
-- 🎯 **Implementation Priority**: Tiered approach with 58% immediate deployment capability
+- ✅ **Ready Categories**: 7/10 categories implementable immediately with existing data
+- ⚠️ **Calculation Required**: 3/10 categories need new algorithms but data is available
+- 🎯 **Implementation Priority**: Tiered approach with 70% immediate deployment capability
 
 ## 🎯 System Overview
 
@@ -43,7 +42,7 @@ The AROI Leaderboard System provides:
 - **Duplicate Prevention**: Accurate operator representation without double-counting
 
 ### **Performance Ranking**
-- **Multi-Category Analysis**: 12 distinct ranking categories covering all aspects of relay operation
+- **Multi-Category Analysis**: 10 distinct ranking categories covering all aspects of relay operation
 - **Real-Time Updates**: Live ranking updates based on current network status
 - **Achievement System**: Champion badges and recognition for top performers
 
@@ -56,18 +55,16 @@ The AROI Leaderboard System provides:
 
 | Category | Status | Data Available | Implementation |
 |----------|--------|----------------|----------------|
-| **Bandwidth Leaders** | ✅ Ready | Yes | Immediate |
+| **Bandwidth Contributed** | ✅ Ready | Yes | Immediate |
 | **Consensus Weight** | ✅ Ready | Yes | Immediate |
+| **Exit Authority Champions** | ✅ Ready | Yes | Immediate |
 | **Exit Operators** | ✅ Ready | Yes | Immediate |
 | **Guard Operators** | ✅ Ready | Yes | Immediate |
+| **Most Diverse Operators** | ✅ Ready | Yes | Immediate |
 | **Platform Diversity** | ✅ Ready | Yes | Immediate |
 | **Geographic Champions** | ✅ Ready | Yes | Immediate |
-| **BSD Technical Leaders** | ✅ Ready | Yes | Immediate |
-| **Efficiency Champions** | ⚠️ Calculation | Yes | Simple Ratio |
 | **Frontier Builders** | ⚠️ Calculation | Yes | Rarity Analysis |
-| **Diversity Leaders** | ⚠️ Calculation | Yes | Multi-Factor |
-| **Network Veterans** | ❌ New Data | Partial | Uptime History |
-| **Stability Champions** | ❌ New Data | Limited | Historical Data |
+| **Network Veterans** | ⚠️ Calculation | Yes | Veteran Scoring |
 
 ## 🏁 Frontier Builders Rarity Scoring System
 
