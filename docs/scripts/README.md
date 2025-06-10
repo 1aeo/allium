@@ -4,35 +4,21 @@ This section contains development scripts, utilities, and tools used for impleme
 
 ## 📋 Scripts
 
-### [Smart Context Links Generator](smart-context-links-generator.py)
-**Generator script for smart context links system implementation**
+### **Development & Testing Scripts**
+- [`comprehensive-validation.py`](comprehensive-validation.py) - Complete validation system for AROI optimizations and functionality
+- [`memory-profiler.py`](memory-profiler.py) - Memory usage profiling for AROI leaderboard generation
+- [`performance-tester.py`](performance-tester.py) - Performance testing and benchmarking utilities
+- [`before-after-performance.py`](before-after-performance.py) - Performance comparison testing before/after optimizations
+- [`focused-country-benchmark.py`](focused-country-benchmark.py) - Targeted country processing performance benchmarks
+- [`simple-validation.py`](simple-validation.py) - Quick validation scripts for AROI implementation
+- [`validate-aroi-totals.py`](validate-aroi-totals.py) - AROI total calculations validation and verification
 
-- **Purpose**: Automated generation and implementation of smart context links functionality
-- **Language**: Python
-- **Size**: ~31KB, comprehensive generator script
-- **Audience**: Developers, system integrators, and automation engineers
+### **Security & Maintenance Scripts**
+- [`fix-html-injection-vulnerabilities.py`](fix-html-injection-vulnerabilities.py) - Automated security vulnerability fixes for HTML injection
 
-**Key Functionality:**
-- 🔗 **Link Generation**: Automated creation of context-aware navigation links
-- 🧠 **Intelligence Integration**: Deep integration with intelligence engine components
-- 📊 **Template Processing**: Dynamic template generation and optimization
-- ⚡ **Performance Optimization**: Efficient script execution and resource usage
-- 🔧 **Configuration Management**: Flexible configuration and customization options
-
-### [Tier 1 Report Generator](tier1-report-generator.py)
-**Report generation script for Tier 1 intelligence engine analysis**
-
-- **Purpose**: Automated generation of comprehensive intelligence engine reports
-- **Language**: Python  
-- **Size**: ~15KB, specialized reporting script
-- **Audience**: Technical analysts, performance engineers, and documentation teams
-
-**Key Features:**
-- 📊 **Performance Reports**: Automated generation of performance analysis reports
-- 🔍 **Data Analysis**: Comprehensive data processing and analysis capabilities
-- 📈 **Metrics Collection**: Automated collection and formatting of system metrics
-- 📋 **Documentation Generation**: Automated technical documentation creation
-- ✅ **Validation Reports**: Automated accuracy and validation reporting
+### **Legacy Development Scripts**
+- [`smart-context-links-generator.py`](smart-context-links-generator.py) - Generator script for smart context links system implementation
+- [`tier1-report-generator.py`](tier1-report-generator.py) - Report generation script for Tier 1 intelligence engine analysis
 
 ## 🎯 Script Categories
 

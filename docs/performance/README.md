@@ -4,49 +4,18 @@ This section contains performance analysis, optimization reports, and efficiency
 
 ## 📋 Documents
 
-### [AROI Leaderboard Ultra-Optimization](aroi-leaderboard-ultra-optimization.md)
-**Comprehensive optimization summary for AROI leaderboard functionality**
+### **Core Performance Reports**
+- [`aroi-leaderboard-ultra-optimization.md`](aroi-leaderboard-ultra-optimization.md) - 99.3% performance gain in AROI country processing
+- [`duplicate-merging-optimization.md`](duplicate-merging-optimization.md) - Duplicate code elimination and merging optimizations
+- [`intelligence-engine-optimization.md`](intelligence-engine-optimization.md) - Intelligence Engine Tier 1 optimization (79.5% code reduction)
+- [`jinja2-template-optimization.md`](jinja2-template-optimization.md) - Template system performance improvements (90% faster rendering)
 
-- **Purpose**: Complete analysis of ultra-optimization techniques applied to the AROI leaderboard system
-- **Content**: Performance improvements, code reduction strategies, and efficiency measurements  
-- **Audience**: Performance engineers, backend developers, and technical leads
-- **Size**: ~6.2KB, comprehensive optimization report
-
-**Key Achievements:**
-- ⚡ **99.3% Performance Gain**: Country processing optimization from 129ms to 0.87ms
-- 🧹 **Code Reduction**: Simplified codebase by removing backward compatibility layers
-- 🔄 **Zero Duplication**: Leveraged existing calculations from `relays.py` processing
-- 📊 **Memory Efficiency**: Zero additional memory overhead for country processing
-- ✅ **Production Ready**: Comprehensive validation with real-world data
-
-### [Intelligence Engine Optimization](intelligence-engine-optimization.md)
-**Intelligence Engine Tier 1 optimization results and performance analysis**
-
-- **Purpose**: Performance optimization report for the intelligence engine system
-- **Content**: Code minimization, performance metrics, and optimization strategies
-- **Audience**: System architects, performance engineers, and backend developers
-- **Size**: ~4.7KB, technical optimization analysis
-
-**Key Improvements:**
-- 📉 **79.5% Code Reduction**: From 958 lines to 196 lines
-- ⚡ **Sub-Centisecond Processing**: Complete analysis in 0.0000s
-- 🎯 **O(1) Template Access**: Eliminated O(n) Jinja2 calculations
-- ♻️ **Data Reuse**: Leverages existing sorted data structures
-- ✅ **100% Accuracy**: Validated against manual calculations
-
-### [Jinja2 Template Optimization](jinja2-template-optimization.md)
-**Template system performance improvements and optimization techniques**
-
-- **Purpose**: Analysis of Jinja2 template performance optimizations
-- **Content**: Template rendering improvements, caching strategies, and performance metrics
-- **Audience**: Frontend developers, template engineers, and performance specialists
-- **Size**: ~4.3KB, template optimization report
-
-**Key Optimizations:**
-- 🚀 **90% Faster Rendering**: Pre-computed values eliminate template calculations
-- 💾 **Memory Efficiency**: Optimized template caching and data structures
-- 🔧 **Template Simplification**: Reduced complexity through intelligent pre-processing
-- 📊 **Performance Metrics**: Detailed timing analysis and improvement measurements
+### **Performance Achievements**
+- **⚡ AROI Processing**: 99.3% improvement (129ms → 0.87ms for 100 evaluations)
+- **🧹 Code Reduction**: 79.5% reduction in intelligence engine (958 → 196 lines)  
+- **🚀 Template Rendering**: 90% faster through pre-computed optimization
+- **♻️ Zero Duplication**: Eliminated redundant calculations across components
+- **📊 Memory Efficiency**: Zero additional overhead for optimized processes
 
 ## 🎯 Optimization Philosophy
 
