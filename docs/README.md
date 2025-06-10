@@ -26,14 +26,14 @@ Welcome to the Allium project documentation. Allium generates static Tor relay m
 - **[HTML Injection Fixes](security/html-injection-fixes-summary.md)** - Security vulnerability fixes applied
 
 ### 📋 Project Information
-- **[Project Overview](../README)** - Main project README
+- **[Project Overview](../README.md)** - Main project README
 - **[License](../UNLICENSE)** - Project license information
 
 ## 🎯 Quick Start
 
 For new developers or contributors:
 
-1. **Start with**: [Project Overview](../README) to understand the allium project
+1. **Start with**: [Project Overview](../README.md) to understand the allium project
 2. **Architecture**: Review [Architecture Overview](architecture/README.md) for system design
 3. **Features**: Explore specific features in the [Features](#-features--functionality) section
 4. **Performance**: Check [Optimization Reports](performance/README.md) for performance insights
