@@ -686,19 +686,14 @@ class Relays:
 
     def _generate_aroi_leaderboards(self):
         """
-        Generate AROI operator leaderboards using the aroileaders module
+        Generate AROI operator leaderboards using pre-processed relay data.
         """
-        if self.progress:
-            print("[AROI] Calculating operator leaderboards...")
-        
         self.json['aroi_leaderboards'] = _calculate_aroi_leaderboards(self)
-        
-        if self.progress:
-            total_operators = self.json['aroi_leaderboards'].get('summary', {}).get('total_operators', 0)
-            print(f"[AROI] Generated leaderboards for {total_operators} operators")
 
     def _generate_smart_context(self):
-        """Generate smart context intelligence analysis"""
+        """
+        Generate "smart context" for family, AS, and country pages, including
+        """
         try:
             from intelligence_engine import IntelligenceEngine
         except ImportError:
