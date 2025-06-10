@@ -19,7 +19,11 @@ Welcome to the Allium project documentation. Allium generates static Tor relay m
 
 ### 🔧 Implementation & Technical
 - **[Implementation Reports](implementation/README.md)** - Feature implementation reports and technical details
-- **[Development Scripts](scripts/README.md)** - Development and reporting scripts
+- **[Development Scripts](scripts/README.md)** - Development and validation scripts
+
+### 🔒 Security & Auditing
+- **[Security Documentation](security/README.md)** - Security audit reports and vulnerability assessments
+- **[HTML Injection Fixes](security/html-injection-fixes-summary.md)** - Security vulnerability fixes applied
 
 ### 📋 Project Information
 - **[Project Overview](../README)** - Main project README
