@@ -34,7 +34,7 @@
         <a href="#platform_diversity" class="btn btn-sm btn-link" title="Most non-Linux relays operated, promoting operating system diversity beyond Linux dominance">💻 Platform Diversity</a>
         <a href="#non_eu_leaders" class="btn btn-sm btn-link" title="Most relays operated outside the European Union, expanding Tor's geographic reach beyond EU concentration">🌍 Non-EU Leaders</a>
         <a href="#frontier_builders" class="btn btn-sm btn-link" title="Highest rare country scores from operating relays in strategically important but underrepresented countries">🏴‍☠️ Frontier Builders</a>
-        <a href="#network_veterans" class="btn btn-sm btn-link" title="Highest uptime percentages demonstrating consistent relay availability and network stability">🏆 Network Veterans</a>
+        <a href="#network_veterans" class="btn btn-sm btn-link" title="Longest-serving operators with earliest relay start dates, recognizing true network pioneers">🏆 Network Veterans</a>
         <a href="#efficiency_champions" class="btn btn-sm btn-link" title="Best consensus weight to bandwidth ratios, achieving maximum network authority per bandwidth contributed">⚡ Efficiency Champions</a>
     </div>
 </nav>
@@ -204,15 +204,15 @@
             </div>
         </div>
 
-        <!-- Champion Badge 10: Reliability Master -->
+        <!-- Champion Badge 10: Network Veteran -->
         <div class="col-md-3 col-sm-6 aroi-champion-badge">
             <div class="panel panel-default">
                 <div class="panel-body text-center aroi-champion-reliability">
-                    <h3 class="aroi-header-spacing">💎 Reliability Master</h3>
+                    <h3 class="aroi-header-spacing">🏆 Network Veteran</h3>
                     {% if relays.json.aroi_leaderboards.leaderboards.network_veterans %}
                         {% set champion = relays.json.aroi_leaderboards.leaderboards.network_veterans[0] %}
                         <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain|escape if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key|escape }}</a></strong></h4>
-                        <p>{{ champion.uptime_percentage }}</p>
+                        <p>{{ champion.veteran_days }} days</p>
                         <small>{{ champion.total_relays }} total relays</small>
                     {% endif %}
                 </div>
