@@ -1,4 +1,5 @@
 {% from "macros.html" import navigation %}
+{% from "aroi_macros.html" import champion_badge, top3_table, ranking_table_row, operator_link, rank_badge %}
 {% extends "skeleton.html" -%}
 {% block title -%}
     🏆 Tor Network Operator Champion Dashboard
@@ -68,157 +69,25 @@
     <p class="lead">Elite Champion Badges - Top performers across key categories</p>
     
     <div class="row">
-        <!-- Champion Badge 1: Platinum Bandwidth -->
-        <div class="col-md-3 col-sm-6 aroi-champion-badge">
-            <div class="panel panel-warning">
-                            <div class="panel-body text-center aroi-champion-platinum">
-                <h3 class="aroi-header-spacing">🥇 Platinum Bandwidth</h3>
-                    {% if relays.json.aroi_leaderboards.leaderboards.bandwidth %}
-                        {% set champion = relays.json.aroi_leaderboards.leaderboards.bandwidth[0] %}
-                        <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain|escape if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key|escape }}</a></strong></h4>
-                        <p>{{ champion.total_bandwidth }} {{ champion.bandwidth_unit }}</p>
-                        <small>{{ champion.total_relays }} relays</small>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-
-        <!-- Champion Badge 2: Network Authority -->
-        <div class="col-md-3 col-sm-6 aroi-champion-badge">
-            <div class="panel panel-warning">
-                <div class="panel-body text-center aroi-champion-network">
-                    <h3 class="aroi-header-spacing">🏛️ Network Authority</h3>
-                    {% if relays.json.aroi_leaderboards.leaderboards.consensus_weight %}
-                        {% set champion = relays.json.aroi_leaderboards.leaderboards.consensus_weight[0] %}
-                        <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain|escape if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key|escape }}</a></strong></h4>
-                        <p>{{ champion.total_consensus_weight_pct }} authority</p>
-                        <small>{{ champion.total_relays }} total relays</small>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-
-        <!-- Champion Badge 3: Exit Authority Champions -->
-        <div class="col-md-3 col-sm-6 aroi-champion-badge">
-            <div class="panel panel-danger">
-                <div class="panel-body text-center aroi-champion-exit-authority">
-                    <h3 class="aroi-header-spacing">🚪 Exit Authority Master</h3>
-                    {% if relays.json.aroi_leaderboards.leaderboards.exit_authority %}
-                        {% set champion = relays.json.aroi_leaderboards.leaderboards.exit_authority[0] %}
-                        <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain|escape if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key|escape }}</a></strong></h4>
-                        <p>{{ champion.exit_consensus_weight_pct }} exit authority</p>
-                        <small>{{ champion.exit_count }} exit relays</small>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-
-        <!-- Champion Badge 4: Exit Gate Keeper -->
-        <div class="col-md-3 col-sm-6 aroi-champion-badge">
-            <div class="panel panel-warning">
-                <div class="panel-body text-center aroi-champion-exit">
-                    <h3 class="aroi-header-spacing">🚪 Exit Gate Keeper</h3>
-                    {% if relays.json.aroi_leaderboards.leaderboards.exit_operators %}
-                        {% set champion = relays.json.aroi_leaderboards.leaderboards.exit_operators[0] %}
-                        <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain|escape if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key|escape }}</a></strong></h4>
-                        <p>{{ champion.exit_count }} exit relays</p>
-                        <small>{{ champion.total_relays }} total relays</small>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-
-        <!-- Champion Badge 5: Guard Champion -->
-        <div class="col-md-3 col-sm-6 aroi-champion-badge">
-            <div class="panel panel-info">
-                <div class="panel-body text-center aroi-champion-guard">
-                    <h3 class="aroi-header-spacing">🛡️ Guard Champion</h3>
-                    {% if relays.json.aroi_leaderboards.leaderboards.guard_operators %}
-                        {% set champion = relays.json.aroi_leaderboards.leaderboards.guard_operators[0] %}
-                        <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain|escape if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key|escape }}</a></strong></h4>
-                        <p>{{ champion.guard_count }} guard relays</p>
-                        <small>{{ champion.total_relays }} total relays</small>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-
-        <!-- Champion Badge 6: Globe Trotter -->
-        <div class="col-md-3 col-sm-6 aroi-champion-badge">
-            <div class="panel panel-success">
-                <div class="panel-body text-center aroi-champion-diversity">
-                    <h3 class="aroi-header-spacing">🌍 Diversity Master</h3>
-                    {% if relays.json.aroi_leaderboards.leaderboards.most_diverse %}
-                        {% set champion = relays.json.aroi_leaderboards.leaderboards.most_diverse[0] %}
-                        <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain|escape if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key|escape }}</a></strong></h4>
-                        <p><span title="Diversity Score: Geographic (countries × 2.0) + Platform (OS types × 1.5) + Network (unique ASNs × 1.0)">{{ champion.diversity_score }} diversity</span></p>
-                        <small>{{ champion.country_count }} countries</small>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-
-        <!-- Champion Badge 7: Platform Diversity Hero -->
-        <div class="col-md-3 col-sm-6 aroi-champion-badge">
-            <div class="panel panel-info">
-                <div class="panel-body text-center aroi-champion-platform">
-                    <h3 class="aroi-header-spacing">💻 Platform Hero</h3>
-                    {% if relays.json.aroi_leaderboards.leaderboards.platform_diversity %}
-                        {% set champion = relays.json.aroi_leaderboards.leaderboards.platform_diversity[0] %}
-                        <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain|escape if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key|escape }}</a></strong></h4>
-                        <p>{{ champion.non_linux_count }} non-Linux relays</p>
-                        <small>{{ champion.total_relays }} total relays</small>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-
-        <!-- Champion Badge 8: Global Expansion Leader -->
-        <div class="col-md-3 col-sm-6 aroi-champion-badge">
-            <div class="panel panel-success">
-                <div class="panel-body text-center aroi-champion-global">
-                    <h3 class="aroi-header-spacing">🌏 Global Expansion Leader</h3>
-                    {% if relays.json.aroi_leaderboards.leaderboards.non_eu_leaders %}
-                        {% set champion = relays.json.aroi_leaderboards.leaderboards.non_eu_leaders[0] %}
-                        <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain|escape if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key|escape }}</a></strong></h4>
-                        <p>{{ champion.non_eu_count }} non-EU relays</p>
-                        <small>{{ champion.total_relays }} total relays</small>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-
-        <!-- Champion Badge 9: Frontier Pioneer -->
-        <div class="col-md-3 col-sm-6 aroi-champion-badge">
-            <div class="panel panel-default">
-                <div class="panel-body text-center aroi-champion-frontier">
-                    <h3 class="aroi-header-spacing">🏴‍☠️ Frontier Pioneer</h3>
-                    {% if relays.json.aroi_leaderboards.leaderboards.frontier_builders %}
-                        {% set champion = relays.json.aroi_leaderboards.leaderboards.frontier_builders[0] %}
-                        <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain|escape if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key|escape }}</a></strong></h4>
-                        <p>{{ champion.rare_country_count }} rare countries</p>
-                        <small>{{ champion.total_relays }} total relays</small>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-
-        <!-- Champion Badge 10: Network Veteran -->
-        <div class="col-md-3 col-sm-6 aroi-champion-badge">
-            <div class="panel panel-default">
-                <div class="panel-body text-center aroi-champion-reliability">
-                    <h3 class="aroi-header-spacing">🏆 Network Veteran</h3>
-                    {% if relays.json.aroi_leaderboards.leaderboards.network_veterans %}
-                        {% set champion = relays.json.aroi_leaderboards.leaderboards.network_veterans[0] %}
-                        <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain|escape if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key|escape }}</a></strong></h4>
-                        <p>{{ champion.veteran_days }} days</p>
-                        <small>{{ champion.total_relays }} total relays</small>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-
-
+        {{ champion_badge("bandwidth", relays.json.aroi_leaderboards.leaderboards.bandwidth, "Platinum Bandwidth", "🥇", "panel-warning", "aroi-champion-platinum", page_ctx.path_prefix) }}
+        
+        {{ champion_badge("consensus_weight", relays.json.aroi_leaderboards.leaderboards.consensus_weight, "Network Authority", "🏛️", "panel-warning", "aroi-champion-network", page_ctx.path_prefix) }}
+        
+        {{ champion_badge("exit_authority", relays.json.aroi_leaderboards.leaderboards.exit_authority, "Exit Authority Master", "🚪", "panel-danger", "aroi-champion-exit-authority", page_ctx.path_prefix) }}
+        
+        {{ champion_badge("exit_operators", relays.json.aroi_leaderboards.leaderboards.exit_operators, "Exit Gate Keeper", "🚪", "panel-warning", "aroi-champion-exit", page_ctx.path_prefix) }}
+        
+        {{ champion_badge("guard_operators", relays.json.aroi_leaderboards.leaderboards.guard_operators, "Guard Champion", "🛡️", "panel-info", "aroi-champion-guard", page_ctx.path_prefix) }}
+        
+        {{ champion_badge("most_diverse", relays.json.aroi_leaderboards.leaderboards.most_diverse, "Diversity Master", "🌍", "panel-success", "aroi-champion-diversity", page_ctx.path_prefix) }}
+        
+        {{ champion_badge("platform_diversity", relays.json.aroi_leaderboards.leaderboards.platform_diversity, "Platform Hero", "💻", "panel-info", "aroi-champion-platform", page_ctx.path_prefix) }}
+        
+        {{ champion_badge("non_eu_leaders", relays.json.aroi_leaderboards.leaderboards.non_eu_leaders, "Global Expansion Leader", "🌏", "panel-success", "aroi-champion-global", page_ctx.path_prefix) }}
+        
+        {{ champion_badge("frontier_builders", relays.json.aroi_leaderboards.leaderboards.frontier_builders, "Frontier Pioneer", "🏴‍☠️", "panel-default", "aroi-champion-frontier", page_ctx.path_prefix) }}
+        
+        {{ champion_badge("network_veterans", relays.json.aroi_leaderboards.leaderboards.network_veterans, "Network Veteran", "🏆", "panel-default", "aroi-champion-reliability", page_ctx.path_prefix) }}
     </div>
 </section>
 
