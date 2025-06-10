@@ -1054,32 +1054,3 @@ class Relays:
                 encoding="utf8",
             ) as html:
                 html.write(rendered)
-
-    def _finalize_unique_as_counts(self):
-        """
-        Convert unique AS sets to counts for families, contacts, countries, platforms, and networks
-        """
-        for category in ["family", "contact", "country", "platform", "as"]:
-            if category in self.json["sorted"]:
-                for data in self.json["sorted"][category].values():
-                    if "unique_as_set" in data:
-                        data["unique_as_count"] = len(data["unique_as_set"])
-                        # Remove the set to save memory and avoid JSON serialization issues
-                        del data["unique_as_set"]
-                    else:
-                        # Fallback in case unique_as_set wasn't initialized
-                        data["unique_as_count"] = 0
-                    
-                    # Handle country, platform, and network-specific unique counts
-                    if category == "country" or category == "platform" or category == "as":
-                        if "unique_contact_set" in data:
-                            data["unique_contact_count"] = len(data["unique_contact_set"])
-                            del data["unique_contact_set"]
-                        else:
-                            data["unique_contact_count"] = 0
-                            
-                        if "unique_family_set" in data:
-                            data["unique_family_count"] = len(data["unique_family_set"])
-                            del data["unique_family_set"]
-                        else:
-                            data["unique_family_count"] = 0
