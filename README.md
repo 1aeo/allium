@@ -65,7 +65,7 @@ A powerful, security-hardened static site generator that creates comprehensive T
 ### Quick Start
 ```bash
 # Clone repository
-git clone [repository-url]
+git clone https://github.com/1aeo/allium.git
 cd allium
 
 # Install dependencies
