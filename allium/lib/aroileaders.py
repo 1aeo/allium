@@ -161,13 +161,7 @@ def _calculate_aroi_leaderboards(relays_instance):
         running_relays = sum(1 for relay in operator_relays if relay.get('running', False))
         uptime_percentage = (running_relays / total_relays * 100) if total_relays > 0 else 0.0
         
-        # Efficiency ratio (new calculation - consensus weight to bandwidth)
-        efficiency_ratio = 0.0
-        if total_bandwidth > 0:
-            # Convert bandwidth to approximate consensus weight scale for ratio
-            bandwidth_gb = total_bandwidth / (1024 * 1024 * 1024)  # Convert to GB/s
-            if bandwidth_gb > 0:
-                efficiency_ratio = (total_consensus_weight * 100) / bandwidth_gb
+
         
         # Exit Authority - reuse existing calculation from relays.py
         exit_consensus_weight = contact_data.get('exit_consensus_weight_fraction', 0.0)
@@ -245,7 +239,6 @@ def _calculate_aroi_leaderboards(relays_instance):
             'rare_country_breakdown': sorted_rare_breakdown,
             'diversity_score': diversity_score,
             'uptime_percentage': uptime_percentage,
-            'efficiency_ratio': efficiency_ratio,
             'exit_consensus_weight': exit_consensus_weight,
             'veteran_score': veteran_score,
             'veteran_days': veteran_days,
@@ -331,12 +324,7 @@ def _calculate_aroi_leaderboards(relays_instance):
         reverse=True
     )[:50]
     
-    # 11. Efficiency Champions (new calculation)
-    leaderboards['efficiency_champions'] = sorted(
-        aroi_operators.items(),
-        key=lambda x: x[1]['efficiency_ratio'],
-        reverse=True
-    )[:50]
+
     
     # Format data for template rendering with bandwidth units (reuse existing formatters)
     formatted_leaderboards = {}
@@ -433,7 +421,6 @@ def _calculate_aroi_leaderboards(relays_instance):
                 'rare_country_tooltip': rare_country_tooltip,
                 'diversity_score': f"{metrics['diversity_score']:.1f}",
                 'uptime_percentage': f"{metrics['uptime_percentage']:.1f}%",
-                'efficiency_ratio': f"{metrics['efficiency_ratio']:.1f}x",
                 'veteran_score': f"{metrics['veteran_score']:.1f}",
                 'veteran_days': metrics['veteran_days'],
                 'veteran_relay_scaling_factor': metrics['veteran_relay_scaling_factor'],
@@ -480,8 +467,7 @@ def _calculate_aroi_leaderboards(relays_instance):
 
             'non_eu_leaders': 'Geographic Champions (Non-EU Leaders)',
             'frontier_builders': 'Frontier Builders (Rare Countries)',
-            'network_veterans': 'Network Veterans',
-            'efficiency_champions': 'Efficiency Champions'
+            'network_veterans': 'Network Veterans'
         }
     }
     
