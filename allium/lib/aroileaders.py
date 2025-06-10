@@ -186,7 +186,7 @@ def _calculate_aroi_leaderboards(relays_instance):
                         relay_first_seen = datetime.strptime(relay_first_seen_str, '%Y-%m-%d %H:%M:%S')
                         if earliest_first_seen is None or relay_first_seen < earliest_first_seen:
                             earliest_first_seen = relay_first_seen
-                    except ValueError:
+                    except (ValueError, TypeError):
                         continue
             
             if earliest_first_seen:
