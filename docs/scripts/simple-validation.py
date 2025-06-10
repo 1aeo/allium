@@ -31,7 +31,7 @@ def run_validation():
     start_time = time.time()
     
     try:
-        os.chdir("allium")
+        os.chdir("../../allium")
         result = subprocess.run(
             [sys.executable, "allium.py", "--out", "www_validation_test"],
             capture_output=True,

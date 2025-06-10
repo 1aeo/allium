@@ -87,7 +87,7 @@ class ComprehensiveValidator:
         
         # Run allium generation
         result = subprocess.run([
-            "python3", "allium.py", "--out", f"www_validation_{int(time.time())}"
+            "python3", "../../../allium.py", "--out", f"www_validation_{int(time.time())}"
         ], cwd="/home/tor/metrics/allium9/allium/allium", 
            capture_output=True, text=True)
         
@@ -113,7 +113,7 @@ class ComprehensiveValidator:
         
         baseline_dir = f"www_validation_baseline_{int(time.time())}"
         result = subprocess.run([
-            "python3", "allium.py", "--out", baseline_dir
+            "python3", "../../../allium.py", "--out", baseline_dir
         ], cwd="/home/tor/metrics/allium9/allium/allium", 
            capture_output=True, text=True)
         
@@ -140,7 +140,7 @@ class ComprehensiveValidator:
         
         optimized_dir = f"www_validation_optimized_{int(time.time())}"
         result = subprocess.run([
-            "python3", "allium.py", "--out", optimized_dir
+            "python3", "../../../allium.py", "--out", optimized_dir
         ], cwd="/home/tor/metrics/allium9/allium/allium",
            capture_output=True, text=True)
         

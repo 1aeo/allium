@@ -33,6 +33,8 @@ def measure_memory_with_subprocess():
     cmd = ['python3', 'allium.py', '--out', 'www_memory_test']
     print(f"📦 Running: {' '.join(cmd)}")
     
+    # Change to the allium directory
+    os.chdir("../../")
     process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     
     # Track memory usage during execution
@@ -99,7 +101,7 @@ def profile_aroi_inline():
         import_start = time.time()
         
         # Add paths
-        sys.path.insert(0, 'allium')
+        sys.path.insert(0, '../../allium')
         sys.path.insert(0, '.')
         
         # Import the main allium functionality

@@ -14,7 +14,7 @@ def benchmark_country_processing():
     print("=" * 55)
     
     # Add paths
-    sys.path.insert(0, 'allium')
+    sys.path.insert(0, '../../allium')
     sys.path.insert(0, '.')
     
     from lib.relays import Relays

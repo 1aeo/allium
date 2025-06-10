@@ -14,7 +14,7 @@ def measure_performance(test_name, output_dir):
     print("-" * 50)
     
     # Add paths
-    sys.path.insert(0, 'allium')
+    sys.path.insert(0, '../../allium')
     sys.path.insert(0, '.')
     
     from lib.relays import Relays
