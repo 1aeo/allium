@@ -571,9 +571,9 @@
         {% endif %}
     </div>
 
-    <!-- Reliability Masters -->
+    <!-- Network Veterans -->
     <div class="aroi-subsection">
-        <h4>💎 Reliability Masters</h4>
+        <h4>🏆 Network Veterans</h4>
         {% if relays.json.aroi_leaderboards.leaderboards.network_veterans %}
         <div class="table-responsive">
             <table class="table table-striped aroi-top3-table">
@@ -594,12 +594,12 @@
                             </strong>
                         </td>
                         <td>
-                            {% if entry.rank == 1 %}Uptime King
-                            {% elif entry.rank == 2 %}Stability Champion
-                            {% elif entry.rank == 3 %}Consistency Hero
+                            {% if entry.rank == 1 %}Veteran Legend
+                            {% elif entry.rank == 2 %}Veteran Champion
+                            {% elif entry.rank == 3 %}Veteran Hero
                             {% endif %}
                         </td>
-                        <td>{{ entry.uptime_percentage }} current uptime, {{ entry.total_relays }} relays</td>
+                        <td><span title="{{ entry.veteran_tooltip }}">{{ entry.veteran_days }} days * {{ entry.total_relays }} relays</span></td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -1024,7 +1024,7 @@
                                 {% elif category_key == 'platform_diversity' %}{{ entry.non_linux_count }} non-Linux
                                 {% elif category_key == 'non_eu_leaders' %}{{ entry.non_eu_count }} non-EU
                                 {% elif category_key == 'frontier_builders' %}{{ entry.rare_country_count }} rare
-                                {% elif category_key == 'network_veterans' %}{{ entry.uptime_percentage }}
+                                {% elif category_key == 'network_veterans' %}{{ entry.veteran_score }}
                                 {% elif category_key == 'efficiency_champions' %}<span title="Efficiency Ratio: (Consensus Weight % × 100) ÷ Bandwidth GB/s - measures network authority per bandwidth contributed">{{ entry.efficiency_ratio }}</span>
                                 {% endif %}
                                 </strong>
@@ -1037,7 +1037,7 @@
                                 {% elif category_key == 'platform_diversity' %}OS diversity
                                 {% elif category_key == 'non_eu_leaders' %}Global expansion
                                 {% elif category_key == 'frontier_builders' %}<span title="{{ entry.rare_country_tooltip }}">{{ entry.rare_country_details if entry.rare_country_details else 'Frontier presence' }}</span>
-                                {% elif category_key == 'network_veterans' %}High reliability
+                                {% elif category_key == 'network_veterans' %}<span title="{{ entry.veteran_tooltip }}">{{ entry.veteran_details_short if entry.veteran_details_short else 'Network longevity' }}</span>
                                 {% elif category_key == 'efficiency_champions' %}Optimal efficiency
                                 {% endif %}
                             </td>
@@ -1083,7 +1083,7 @@
 
                     <li><strong>🌍 Non-EU Leaders:</strong> Geographic champions expanding Tor outside the EU</li>
                     <li><strong>🏴‍☠️ Frontier Builders:</strong> Operators in rare or underrepresented countries</li>
-                    <li><strong>🏆 Network Veterans:</strong> Most reliable operators with highest uptime</li>
+                    <li><strong>🏆 Network Veterans:</strong> Longest-serving operators with earliest relay start dates</li>
                     <li><strong>⚡ Efficiency Champions:</strong> Best consensus weight to bandwidth ratio</li>
                 </ul>
             </div>
@@ -1117,6 +1117,18 @@
         </ul>
         <p><strong>Operator Scoring:</strong> Each operator's rare country score is the sum of points from all countries where they operate relays.</p>
         <p><em>Example:</em> An operator with 2 relays in Mongolia (44 points) and 1 relay in Malta (20 points) would score: 44 + 20 = <strong>64 total rare country points</strong>.</p>
+        
+        <h4>🏆 Network Veterans Scoring:</h4>
+        <p><strong>Veteran Score Calculation:</strong> The veteran score recognizes operators with the longest continuous service to the Tor network using earliest first seen time weighted by operational scale:</p>
+        <ul>
+            <li><strong>Primary Factor - Earliest First Seen Time:</strong> Days between earliest relay's first_seen date and current date (primary ranking factor)</li>
+            <li><strong>Secondary Factor - Relay Scale Multiplier:</strong> Tiered scaling from 1.0x to 1.3x based on total relay count (tiebreaker for similar veterans)</li>
+            <li><strong>Micro Operators (1-9 relays):</strong> 1.0x scaling factor (no bonus)</li>
+            <li><strong>Large Operators (100+ relays):</strong> 1.2x scaling factor (20% bonus for sustained commitment)</li>
+            <li><strong>Top Tier Operators (300+ relays):</strong> 1.3x scaling factor (30% bonus for major operations)</li>
+        </ul>
+        <p><strong>Veteran Formula:</strong> veteran_score = veteran_days × veteran_relay_scaling_factor</p>
+        <p><em>Example:</em> An operator running relays since 2010 (5,000 days) with 150 relays would score: 5,000 × 1.2 = <strong>6,000 veteran points</strong>, potentially beating a smaller operator from 2009 (5,453 days) who scores 5,453 × 1.0 = 5,453 points.</p>
         
         <p><strong>Data Sources:</strong> Live data from the Tor directory authorities via the Onionoo API, updated every 30 minutes. Rankings reflect current network status and operator contributions.</p>
     </div>

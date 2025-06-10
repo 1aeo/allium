@@ -192,6 +192,113 @@ The leaderboard shows operators by their actual relays in rare countries:
 
 This ensures accurate representation - operators are ranked by their **actual contribution to network diversity** in underrepresented regions, not by total relay count.
 
+## 🏆 Network Veterans Scoring System
+
+The **Network Veterans** category recognizes operators with the longest continuous service to the Tor network, emphasizing early adoption while considering operational scale.
+
+### **Scoring Algorithm**
+
+Veteran scoring uses an **earliest first seen time** approach with **relay scale weighting** implemented in `allium/lib/aroileaders.py`:
+
+```python
+# Lines 179-209
+# Find earliest first_seen date among all operator's relays
+earliest_first_seen = None
+for relay in operator_relays:
+    relay_first_seen = datetime.strptime(relay.get('first_seen'), '%Y-%m-%d %H:%M:%S')
+    if earliest_first_seen is None or relay_first_seen < earliest_first_seen:
+        earliest_first_seen = relay_first_seen
+
+# Calculate veteran score
+veteran_days = (current_date - earliest_first_seen).days
+veteran_score = veteran_days * veteran_relay_scaling_factor
+```
+
+### **Scaling Factor Calculation**
+
+Relay count determines scaling factor based on network maximums (360 max relays):
+
+```python
+# Lines 185-197
+if total_relays >= 300:      # Top tier operators (83%+ of max)
+    veteran_relay_scaling_factor = 1.3
+elif total_relays >= 200:    # Large operators (56%+ of max)  
+    veteran_relay_scaling_factor = 1.25
+elif total_relays >= 100:    # Medium-large operators (28%+ of max)
+    veteran_relay_scaling_factor = 1.2
+elif total_relays >= 50:     # Medium operators (14%+ of max)
+    veteran_relay_scaling_factor = 1.15
+elif total_relays >= 20:     # Small-medium operators (6%+ of max)
+    veteran_relay_scaling_factor = 1.1
+elif total_relays >= 10:     # Small operators (3%+ of max)
+    veteran_relay_scaling_factor = 1.05
+else:                        # Micro operators (1-9 relays)
+    veteran_relay_scaling_factor = 1.0
+```
+
+### **Scoring Criteria**
+
+#### **1. Primary Factor: Earliest First Seen Time**
+- **Purpose**: Identify true network pioneers who started operating relays earliest
+- **Calculation**: Days between earliest relay's `first_seen` date and current date
+- **Weight**: Primary ranking factor (base score)
+
+#### **2. Secondary Factor: Relay Scale Multiplier**
+- **Purpose**: Differentiate between operators with similar start dates based on commitment level
+- **Calculation**: Tiered multiplier from 1.0x to 1.3x based on total relay count
+- **Weight**: Tiebreaker factor (small influence)
+
+#### **3. Operator Perspective Benefits**
+- **Early Adoption Recognition**: Veterans with longest service get primary recognition
+- **Scale Consideration**: Among equal veterans, larger operations rank higher
+- **Commitment Weighting**: Sustained large-scale operations receive bonus points
+
+### **Real-World Examples**
+
+#### **🥇 Top Veteran (TOR Operator &lt;tor@insc.de&gt;)**
+*Operating since ~2007 with 1 relay*
+
+| Metric | Value | Calculation |
+|--------|-------|-------------|
+| **Earliest First Seen** | ~6,435 days ago | Single relay operation since 2007 |
+| **Total Relays** | 1 relay | Micro operator (1-9 relays) |
+| **Scaling Factor** | 1.0x | No scale bonus for small operations |
+| **Veteran Score** | 6,435.0 | `6,435 days × 1.0 = 6,435` |
+
+**Display:** `"6435 days * 1 relays"` with tooltip `"6435 days * 1.0 (1 relays)"`
+
+#### **🥈 Second Place Veteran**
+*Operating since ~2009 with 1 relay*
+
+| Metric | Value | Calculation |
+|--------|-------|-------------|
+| **Earliest First Seen** | ~5,453 days ago | Single relay operation since 2009 |
+| **Total Relays** | 1 relay | Micro operator (1-9 relays) |
+| **Scaling Factor** | 1.0x | No scale bonus for small operations |
+| **Veteran Score** | 5,453.0 | `5,453 days × 1.0 = 5,453` |
+
+#### **Hypothetical Large Veteran Example**
+*Operating since 2010 with 150 relays*
+
+| Metric | Value | Calculation |
+|--------|-------|-------------|
+| **Earliest First Seen** | ~5,000 days ago | Started relay operations in 2010 |
+| **Total Relays** | 150 relays | Medium-large operator (100+ relays) |
+| **Scaling Factor** | 1.2x | 20% bonus for substantial scale |
+| **Veteran Score** | 6,000.0 | `5,000 days × 1.2 = 6,000` |
+
+**Result:** Large operator with slightly later start (5,000 days) scores 6,000, beating smaller veteran (5,453 days) due to scale bonus.
+
+### **Veteran Rankings Display**
+
+The leaderboard emphasizes both veteran status and commitment level:
+
+- **Top 3 Performance**: `"6435 days * 1 relays"` (earliest time × relay count)
+- **Top 25 Specialization**: `"6435 days * 1.0..."` (calculation details, truncated)
+- **Tooltip Details**: `"6435 days * 1.0 (1 relays)"` (complete scoring breakdown)
+
+This ensures **true network pioneers** receive primary recognition while **sustained large-scale commitment** serves as meaningful tiebreaker for operators with similar veteran status.
+
 ## 🔗 Related Documentation
 
 - **[Performance](../../performance/aroi-leaderboard-ultra-optimization.md)** - Ultra-optimization implementation report
