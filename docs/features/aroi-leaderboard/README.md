@@ -69,6 +69,129 @@ The AROI Leaderboard System provides:
 | **Network Veterans** | ❌ New Data | Partial | Uptime History |
 | **Stability Champions** | ❌ New Data | Limited | Historical Data |
 
+## 🏁 Frontier Builders Rarity Scoring System
+
+The **Frontier Builders** category uses a sophisticated weighted scoring system to identify rare countries where operating Tor relays provides maximum network diversity benefit.
+
+### **Scoring Algorithm**
+
+Countries are evaluated using a **4-factor weighted formula** implemented in `allium/lib/country_utils.py`:
+
+```python
+# Lines 404-408, 447-451
+rarity_score = (
+    (relay_count_factor * 4) +           # Weight: 4x (highest priority)
+    (network_percentage_factor * 3) +    # Weight: 3x 
+    (geopolitical_factor * 2) +          # Weight: 2x
+    (regional_factor * 1)                # Weight: 1x (lowest priority)
+)
+
+# Rarity threshold decision (Lines 411, 454)
+if rarity_score >= 6:  # Default minimum score
+    country_is_rare = True
+```
+
+### **Factor Calculations**
+
+#### **1. Relay Count Factor** (Lines 262-276)
+```python
+def calculate_relay_count_factor(country_relay_count):
+    if country_relay_count == 0:
+        return 0
+    return max(7 - country_relay_count, 0)
+```
+
+**Scoring:**
+- **1 relay** = 6 points
+- **2 relays** = 5 points
+- **3 relays** = 4 points
+- **7+ relays** = 0 points
+
+#### **2. Network Percentage Factor** (Lines 278-296)
+```python
+percentage = (country_relays / total_network_relays) * 100
+
+if percentage < 0.05:    return 6  # Ultra-rare (<0.05%)
+elif percentage < 0.1:   return 4  # Very rare (0.05-0.1%)
+elif percentage < 0.2:   return 2  # Rare (0.1-0.2%)
+else:                    return 0  # Common (>0.2%)
+```
+
+#### **3. Geopolitical Factor** (Lines 298-318)
+```python
+if country_lower in GEOPOLITICAL_CLASSIFICATIONS['conflict_zones']:
+    return 3
+elif country_lower in GEOPOLITICAL_CLASSIFICATIONS['authoritarian']:
+    return 3
+elif country_lower in GEOPOLITICAL_CLASSIFICATIONS['island_nations']:
+    return 2
+elif country_lower in GEOPOLITICAL_CLASSIFICATIONS['landlocked_developing']:
+    return 2
+elif country_lower in GEOPOLITICAL_CLASSIFICATIONS['developing']:
+    return 1
+else:
+    return 0
+```
+
+#### **4. Regional Factor** (Lines 320-335)
+```python
+if country_lower in REGIONAL_CLASSIFICATIONS['underrepresented']:
+    return 2
+elif country_lower in REGIONAL_CLASSIFICATIONS['emerging']:
+    return 1
+else:
+    return 0
+```
+
+### **Rarity Classification Tiers** (Lines 346-362)
+
+```python
+def assign_rarity_tier(rarity_score):
+    if rarity_score >= 15:   return 'legendary'    # 🏆
+    elif rarity_score >= 10: return 'epic'         # ⭐
+    elif rarity_score >= 6:  return 'rare'         # 🎖️
+    elif rarity_score >= 3:  return 'emerging'     # 📍
+    else:                    return 'common'       # Standard
+```
+
+### **Real-World Examples**
+
+#### **🇦🇲 Armenia (AM) - RARE Country**
+*Network data: 4 relays out of 9,570 total*
+
+| Factor | Calculation | Points | Weighted |
+|--------|-------------|--------|----------|
+| **Relay Count** | `max(7-4, 0) = 3` | 3 | 3 × 4 = **12** |
+| **Network %** | `4/9570 = 0.04%` (ultra-rare) | 6 | 6 × 3 = **18** |
+| **Geopolitical** | Developing country | 1 | 1 × 2 = **2** |
+| **Regional** | Not classified | 0 | 0 × 1 = **0** |
+| **Total Score** | | | **32 points** |
+
+**Result:** `32 >= 6` → **Armenia qualifies as RARE** ✅
+
+#### **🇫🇷 France (FR) - COMMON Country**
+*Network data: ~800 relays out of 9,570 total*
+
+| Factor | Calculation | Points | Weighted |
+|--------|-------------|--------|----------|
+| **Relay Count** | `max(7-800, 0) = 0` | 0 | 0 × 4 = **0** |
+| **Network %** | `800/9570 = 8.4%` (common) | 0 | 0 × 3 = **0** |
+| **Geopolitical** | Major EU country | 0 | 0 × 2 = **0** |
+| **Regional** | Not underrepresented | 0 | 0 × 1 = **0** |
+| **Total Score** | | | **0 points** |
+
+**Result:** `0 < 6` → **France does NOT qualify as rare** ❌
+
+### **Frontier Builders Display**
+
+The leaderboard shows operators by their actual relays in rare countries:
+
+- **prsv.ch**: `6 relays in 6 rare countries` (6 relays in Armenia, Albania, etc.)
+- **BMTY90**: `4 relays in 4 rare countries` 
+- **your@e-mail**: `3 relays in 3 rare countries`
+
+This ensures accurate representation - operators are ranked by their **actual contribution to network diversity** in underrepresented regions, not by total relay count.
+
 ## 🔗 Related Documentation
 
 - **[Performance](../../performance/aroi-leaderboard-ultra-optimization.md)** - Ultra-optimization implementation report
