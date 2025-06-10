@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-This document analyzes the data requirements for implementing the Top 10 AROI Operator Leaderboard by comparing the proposed categories against available Onionoo API data and current allium processing capabilities.
+This document analyzes the data requirements for implementing the Top 10 AROI Operator Leaderboard by comparing the implemented categories against available Onionoo API data and current allium processing capabilities.
 
 ## Methodology
 
@@ -45,53 +45,37 @@ Analysis based on:
 - **AROI Grouping**: Can group by contact and count non-Linux platforms
 - **Implementation**: Count relays per AROI where `platform != "Linux"`
 
-#### 6. **Technical Leaders (BSD Operators)** ✅
-- **Data Available**: `platform` field with BSD variant detection
-- **Aggregation**: BSD platform detection already implemented (FreeBSD, OpenBSD, NetBSD)
-- **AROI Grouping**: Can group by contact and count BSD platforms
-- **Implementation**: Count relays per AROI where `platform` contains BSD variants
+#### 6. **Exit Authority Champions** ✅
+- **Data Available**: Exit consensus weight calculation via `exit_consensus_weight_fraction`
+- **Aggregation**: Exit authority weight already implemented in contact aggregations
+- **AROI Grouping**: Functional via contact hash grouping
+- **Implementation**: Sum exit consensus weight for all relays per AROI contact
 
-#### 7. **Geographic Champions (Non-EU Leaders)** ✅
-- **Data Available**: `country` and `country_name` fields from Onionoo
-- **Aggregation**: Country-based grouping already implemented
-- **AROI Grouping**: Can group by contact and identify primary countries
-- **Implementation**: Group by AROI contact, identify non-EU countries per operator
+#### 7. **Most Diverse Operators** ✅
+- **Data Available**: `country`, `platform`, `as` (AS number) fields available
+- **Aggregation**: Multi-factor diversity scoring already implemented
+- **AROI Grouping**: Functional via contact hash grouping
+- **Implementation**: Multi-factor diversity calculation per AROI operator
 
 ### **PARTIALLY SUPPORTED (Requires New Calculations)**
 
-#### 8. **Efficiency Champions (High CW/Bandwidth Ratio)** ⚠️
-- **Data Available**: Both `consensus_weight_fraction` and `observed_bandwidth` available
-- **Calculation Needed**: New ratio calculation (CW/BW ratio per AROI)
-- **AROI Grouping**: Functional via contact hash grouping
-- **Implementation**: Calculate efficiency ratio = total_consensus_weight / total_bandwidth per AROI
-
-#### 9. **Frontier Builders (Rare Countries)** ⚠️
+#### 8. **Frontier Builders (Rare Countries)** ⚠️
 - **Data Available**: `country` field available from Onionoo
 - **Calculation Needed**: "Rarity scoring" algorithm for countries (frequency analysis)
 - **AROI Grouping**: Functional via contact hash grouping
 - **Implementation**: Analyze country frequency across all relays, score operators in rare countries
 
-#### 10. **Most Diverse Operators** ⚠️
-- **Data Available**: `country`, `platform`, `as` (AS number) fields available
-- **Calculation Needed**: Complex diversity scoring algorithm (30% geo, 25% platform, 20% ASN, 25% underrepresented)
+#### 9. **Geographic Champions (Non-EU Leaders)** ⚠️
+- **Data Available**: `country` and `country_name` fields from Onionoo
+- **Calculation Needed**: Non-EU country identification and counting
 - **AROI Grouping**: Functional via contact hash grouping
-- **Implementation**: Multi-factor diversity calculation per AROI operator
+- **Implementation**: Group by AROI contact, identify and count non-EU countries per operator
 
-### **REQUIRES NEW DATA/CALCULATIONS**
-
-#### 11. **Network Veterans (Longest Operating)** ❌
+#### 10. **Network Veterans (Longest Operating)** ⚠️
 - **Data Available**: `first_seen` field available from Onionoo
-- **Current Issue**: Need historical data analysis or "longest operating" definition
+- **Calculation Needed**: Earliest first seen time calculation with relay scale weighting
 - **AROI Grouping**: Functional via contact hash grouping
-- **Gap**: Need to define "longest operating" vs "earliest first_seen" vs "consistent operation"
-- **Implementation**: Use `first_seen` dates per AROI, but may need uptime consistency analysis
-
-#### 12. **Diamond Stability (Highest Uptime)** ❌
-- **Data Limited**: Onionoo provides `running` status but no historical uptime percentage
-- **Missing Data**: No access to uptime history documents in current implementation
-- **AROI Grouping**: Functional via contact hash grouping
-- **Gap**: Would need Onionoo uptime documents (`/uptime` endpoint) integration
-- **Implementation**: Requires new data source or approximation using `running` status
+- **Implementation**: Use `first_seen` dates per AROI with veteran scoring algorithm
 
 ## AROI Processing Status ✅
 
@@ -109,17 +93,13 @@ Analysis based on:
 3. **Exit Operators** - Direct data available
 4. **Guard Operators** - Direct data available
 5. **Platform Diversity (Non-Linux Heroes)** - Direct data available
-6. **Technical Leaders (BSD Operators)** - Direct data available
-7. **Geographic Champions (Non-EU Leaders)** - Direct data available
+6. **Exit Authority Champions** - Direct data available
+7. **Most Diverse Operators** - Direct data available
 
 ### **Tier 2: Quick Implementation (Simple Calculations)**
-8. **Efficiency Champions** - Simple ratio calculation
-9. **Frontier Builders** - Country frequency analysis required
-10. **Most Diverse Operators** - Complex multi-factor scoring required
-
-### **Tier 3: Requires New Data Integration**
-11. **Network Veterans** - May work with `first_seen` approximation
-12. **Diamond Stability** - Requires Onionoo uptime documents integration
+8. **Frontier Builders** - Country frequency analysis required
+9. **Geographic Champions (Non-EU Leaders)** - Geographic analysis required
+10. **Network Veterans** - Veteran scoring algorithm required
 
 ## Recommendations
 
@@ -140,12 +120,11 @@ Analysis based on:
 
 ## Data Confidence Assessment
 
-- **High Confidence (Tier 1)**: 7/12 categories ready for immediate deployment
-- **Medium Confidence (Tier 2)**: 3/12 categories require calculations but data available  
-- **Low Confidence (Tier 3)**: 2/12 categories may require new data sources
+- **High Confidence (Tier 1)**: 7/10 categories ready for immediate deployment
+- **Medium Confidence (Tier 2)**: 3/10 categories require calculations but data is available
 
 ## Conclusion
 
-**58% of leaderboard categories (7/12)** can be implemented immediately with existing data and processing capabilities. The AROI operator grouping system is fully functional and ready for leaderboard implementation.
+**70% of leaderboard categories (7/10)** can be implemented immediately with existing data and processing capabilities. The AROI operator grouping system is fully functional and ready for leaderboard implementation.
 
-Priority should focus on deploying the 7 ready categories first, then iteratively adding the calculation-required categories, and finally investigating uptime data integration for completeness. 
+Priority should focus on deploying the 7 ready categories first, then iteratively adding the calculation-required categories for full implementation. 

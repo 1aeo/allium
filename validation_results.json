@@ -1,0 +1,74 @@
+{
+  "timestamp": 1749533058.5639193,
+  "success": false,
+  "summary": {
+    "passed": 5,
+    "failed": 3,
+    "warnings": 1
+  },
+  "results": [
+    {
+      "test": "baseline_generation",
+      "status": "PASS",
+      "message": "Baseline generated successfully at www_validation_baseline_1749532862",
+      "details": {}
+    },
+    {
+      "test": "optimized_generation",
+      "status": "PASS",
+      "message": "Optimized output generated successfully at www_validation_optimized_1749532926",
+      "details": {}
+    },
+    {
+      "test": "aroi_page_validation",
+      "status": "FAIL",
+      "message": "AROI leaderboards HTML files not found",
+      "details": {}
+    },
+    {
+      "test": "critical_functionality",
+      "status": "FAIL",
+      "message": "AROI leaderboards file not generated",
+      "details": {}
+    },
+    {
+      "test": "template_optimization",
+      "status": "PASS",
+      "message": "Template optimizations working: 451 lines (estimated 58.0% reduction)",
+      "details": {
+        "template_lines": 451,
+        "estimated_original": 1073,
+        "reduction_percentage": 57.968313140726934
+      }
+    },
+    {
+      "test": "country_processing_optimization",
+      "status": "WARN",
+      "message": "Country processing optimization not clearly detectable in code",
+      "details": {}
+    },
+    {
+      "test": "file_size_validation",
+      "status": "FAIL",
+      "message": "Cannot find HTML files for size comparison",
+      "details": {}
+    },
+    {
+      "test": "performance_comparison",
+      "status": "PASS",
+      "message": "Performance measurement completed: 64.22s, peak memory: 0.1MB",
+      "details": {
+        "execution_time": 64.21929359436035,
+        "peak_memory_mb": 0.06072807312011719,
+        "memory_start": 37.75,
+        "memory_end": 37.75
+      }
+    },
+    {
+      "test": "cleanup",
+      "status": "PASS",
+      "message": "Cleaned up 3 temporary directories",
+      "details": {}
+    }
+  ]
+}
