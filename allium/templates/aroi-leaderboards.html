@@ -35,7 +35,6 @@
         <a href="#non_eu_leaders" class="btn btn-sm btn-link" title="Most relays operated outside the European Union, expanding Tor's geographic reach beyond EU concentration">🌍 Non-EU Leaders</a>
         <a href="#frontier_builders" class="btn btn-sm btn-link" title="Highest rare country scores from operating relays in strategically important but underrepresented countries">🏴‍☠️ Frontier Builders</a>
         <a href="#network_veterans" class="btn btn-sm btn-link" title="Longest-serving operators with earliest relay start dates, recognizing true network pioneers">🏆 Network Veterans</a>
-        <a href="#efficiency_champions" class="btn btn-sm btn-link" title="Best consensus weight to bandwidth ratios, achieving maximum network authority per bandwidth contributed">⚡ Efficiency Champions</a>
     </div>
 </nav>
 
@@ -219,20 +218,7 @@
             </div>
         </div>
 
-        <!-- Champion Badge 11: Efficiency Expert -->
-        <div class="col-md-3 col-sm-6 aroi-champion-badge">
-            <div class="panel panel-primary">
-                <div class="panel-body text-center aroi-champion-efficiency">
-                    <h3 class="aroi-header-spacing">⚡ Efficiency Expert</h3>
-                    {% if relays.json.aroi_leaderboards.leaderboards.efficiency_champions %}
-                        {% set champion = relays.json.aroi_leaderboards.leaderboards.efficiency_champions[0] %}
-                        <h4><strong><a href="{{ page_ctx.path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain|escape if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key|escape }}</a></strong></h4>
-                        <p><span title="Efficiency Ratio: (Consensus Weight % × 100) ÷ Bandwidth GB/s - measures network authority per bandwidth contributed">{{ champion.efficiency_ratio }}</span></p>
-                        <small>{{ champion.total_consensus_weight_pct }} authority</small>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
+
     </div>
 </section>
 
@@ -608,42 +594,7 @@
         {% endif %}
     </div>
 
-    <!-- Efficiency Experts -->
-    <div class="aroi-subsection">
-        <h4>⚡ Efficiency Experts</h4>
-        {% if relays.json.aroi_leaderboards.leaderboards.efficiency_champions %}
-        <div class="table-responsive">
-            <table class="table table-striped aroi-top3-table">
-                <thead>
-                    <tr>
-                        <th>Operator</th>
-                        <th>Achievement</th>
-                        <th>Performance</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for entry in relays.json.aroi_leaderboards.leaderboards.efficiency_champions[:3] %}
-                    <tr>
-                        <td>
-                            <strong>
-                                {% if entry.rank == 1 %}🥇{% elif entry.rank == 2 %}🥈{% elif entry.rank == 3 %}🥉{% endif %}
-                                <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" title="Contact: {{ entry.contact_info|escape }}" class="aroi-underline-link">{{ entry.aroi_domain|escape if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key|escape }}</a>
-                            </strong>
-                        </td>
-                        <td>
-                            {% if entry.rank == 1 %}Efficiency Expert
-                            {% elif entry.rank == 2 %}Efficiency Expert
-                            {% elif entry.rank == 3 %}Efficiency Expert
-                            {% endif %}
-                        </td>
-                        <td><span title="Efficiency Ratio: (Consensus Weight % × 100) ÷ Bandwidth GB/s - measures network authority per bandwidth contributed">{{ entry.efficiency_ratio }} CW/BW ratio</span>, {{ entry.total_consensus_weight_pct }} consensus weight</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% endif %}
-    </div>
+
 </section>
 
 <!-- ===================================================================== -->
@@ -754,7 +705,6 @@
                         <th>Bandwidth</th>
                         <th>Guard/Exit Count</th>
                         <th>Countries</th>
-                        <th>Efficiency</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -791,7 +741,6 @@
                             </span>
                         </td>
                         <td>{{ entry.country_count }}</td>
-                        <td><span title="Efficiency Ratio: (Consensus Weight % × 100) ÷ Bandwidth GB/s - measures network authority per bandwidth contributed">{{ entry.efficiency_ratio }}</span></td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -815,7 +764,6 @@
                         <th>Total Authority</th>
                         <th>Bandwidth</th>
                         <th>Countries</th>
-                        <th>Efficiency</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -850,7 +798,6 @@
                             <span class="text-nowrap">{{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</span>
                         </td>
                         <td>{{ entry.country_count }}</td>
-                        <td><span title="Efficiency Ratio: (Consensus Weight % × 100) ÷ Bandwidth GB/s - measures network authority per bandwidth contributed">{{ entry.efficiency_ratio }}</span></td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -970,13 +917,13 @@
     </section>
 
     <!-- Continue with remaining categories... -->
-    {% for category_key in ['most_diverse', 'platform_diversity', 'non_eu_leaders', 'frontier_builders', 'network_veterans', 'efficiency_champions'] %}
+    {% for category_key in ['most_diverse', 'platform_diversity', 'non_eu_leaders', 'frontier_builders', 'network_veterans'] %}
         {% set category_name = relays.json.aroi_leaderboards.summary.categories[category_key] %}
         {% set category_data = relays.json.aroi_leaderboards.leaderboards[category_key] %}
         
         <section id="{{ category_key }}" class="aroi-section">
             <h3>
-                {% if category_key == 'most_diverse' %}🌈{% elif category_key == 'platform_diversity' %}💻{% elif category_key == 'non_eu_leaders' %}🌍{% elif category_key == 'frontier_builders' %}🏴‍☠️{% elif category_key == 'network_veterans' %}🏆{% elif category_key == 'efficiency_champions' %}⚡{% endif %} 
+                {% if category_key == 'most_diverse' %}🌈{% elif category_key == 'platform_diversity' %}💻{% elif category_key == 'non_eu_leaders' %}🌍{% elif category_key == 'frontier_builders' %}🏴‍☠️{% elif category_key == 'network_veterans' %}🏆{% endif %} 
                 {{ category_name }} - Top 25
             </h3>
             {% if category_data %}
@@ -1025,7 +972,6 @@
                                 {% elif category_key == 'non_eu_leaders' %}{{ entry.non_eu_count }} non-EU
                                 {% elif category_key == 'frontier_builders' %}{{ entry.rare_country_count }} rare
                                 {% elif category_key == 'network_veterans' %}{{ entry.veteran_score }}
-                                {% elif category_key == 'efficiency_champions' %}<span title="Efficiency Ratio: (Consensus Weight % × 100) ÷ Bandwidth GB/s - measures network authority per bandwidth contributed">{{ entry.efficiency_ratio }}</span>
                                 {% endif %}
                                 </strong>
                             </td>
@@ -1038,7 +984,6 @@
                                 {% elif category_key == 'non_eu_leaders' %}Global expansion
                                 {% elif category_key == 'frontier_builders' %}<span title="{{ entry.rare_country_tooltip }}">{{ entry.rare_country_details if entry.rare_country_details else 'Frontier presence' }}</span>
                                 {% elif category_key == 'network_veterans' %}<span title="{{ entry.veteran_tooltip }}">{{ entry.veteran_details_short if entry.veteran_details_short else 'Network longevity' }}</span>
-                                {% elif category_key == 'efficiency_champions' %}Optimal efficiency
                                 {% endif %}
                             </td>
                         </tr>
@@ -1084,7 +1029,6 @@
                     <li><strong>🌍 Non-EU Leaders:</strong> Geographic champions expanding Tor outside the EU</li>
                     <li><strong>🏴‍☠️ Frontier Builders:</strong> Operators in rare or underrepresented countries</li>
                     <li><strong>🏆 Network Veterans:</strong> Longest-serving operators with earliest relay start dates</li>
-                    <li><strong>⚡ Efficiency Champions:</strong> Best consensus weight to bandwidth ratio</li>
                 </ul>
             </div>
         </div>
@@ -1098,14 +1042,6 @@
         </ul>
         <p><em>Example:</em> An operator with relays in 5 countries, 3 operating systems, and 8 unique ASNs would score: (5 × 2.0) + (3 × 1.5) + (8 × 1.0) = 10.0 + 4.5 + 8.0 = <strong>22.5 diversity points</strong>.</p>
         
-        <h4>⚡ Efficiency Champion Scoring:</h4>
-        <p><strong>Efficiency Ratio Calculation:</strong> The efficiency ratio measures network authority per bandwidth contributed using the formula:</p>
-        <ul>
-            <li><strong>Formula:</strong> (Consensus Weight % × 100) ÷ Bandwidth in GB/s</li>
-            <li><strong>Purpose:</strong> Identifies operators who achieve high network influence with optimal bandwidth usage</li>
-            <li><strong>Interpretation:</strong> Higher ratios indicate more efficient relay operations and better network positioning</li>
-        </ul>
-        <p><em>Example:</em> An operator with 2.5% consensus weight and 1.0 GB/s bandwidth would score: (2.5 × 100) ÷ 1.0 = <strong>250.0x efficiency ratio</strong>.</p>
         
         <h4>🏴‍☠️ Frontier Builder Scoring:</h4>
         <p><strong>Rare Country Score Calculation:</strong> The rare country score sums up points from all countries where an operator runs relays using a weighted scoring system:</p>
