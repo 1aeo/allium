@@ -435,9 +435,11 @@
         <ul>
             <li><strong>Primary Factor - Earliest First Seen Time:</strong> Days between earliest relay's first_seen date and current date (primary ranking factor)</li>
             <li><strong>Secondary Factor - Relay Scale Multiplier:</strong> Tiered scaling from 1.0x to 1.3x based on total relay count (tiebreaker for similar veterans)</li>
-            <li><strong>Micro Operators (1-9 relays):</strong> 1.0x scaling factor (no bonus)</li>
-            <li><strong>Large Operators (100+ relays):</strong> 1.2x scaling factor (20% bonus for sustained commitment)</li>
-            <li><strong>Top Tier Operators (300+ relays):</strong> 1.3x scaling factor (30% bonus for major operations)</li>
+            <ul>
+                <li><strong>Micro Operators (1-9 relays):</strong> 1.0x scaling factor (no bonus)</li>
+                <li><strong>Large Operators (100+ relays):</strong> 1.2x scaling factor (20% bonus for sustained commitment)</li>
+                <li><strong>Top Tier Operators (300+ relays):</strong> 1.3x scaling factor (30% bonus for major operations)</li>
+            </ul>
         </ul>
         <p><strong>Veteran Formula:</strong> veteran_score = veteran_days × veteran_relay_scaling_factor</p>
         <p><em>Example:</em> An operator running relays since 2010 (5,000 days) with 150 relays would score: 5,000 × 1.2 = <strong>6,000 veteran points</strong>, potentially beating a smaller operator from 2009 (5,453 days) who scores 5,453 × 1.0 = 5,453 points.</p>
