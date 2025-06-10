@@ -116,7 +116,28 @@ def _calculate_aroi_leaderboards(relays_instance):
         country_data = relays_instance.json.get('sorted', {}).get('country', {})
         # Use unique countries for rare country calculation (not per-relay count)
         unique_operator_countries = list(set(operator_countries))
-        rare_country_count = count_frontier_countries_weighted_with_existing_data(unique_operator_countries, country_data, len(all_relays))
+        # Count relays in rare countries (reuse existing rare countries detection logic)
+        # Use global rare countries detection to get all rare countries in network
+        from .country_utils import get_rare_countries_weighted_with_existing_data
+        all_rare_countries = get_rare_countries_weighted_with_existing_data(country_data, len(all_relays))
+        # Filter to valid 2-letter country codes (exclude classification keys)
+        valid_rare_countries = {country for country in all_rare_countries if len(country) == 2 and country.isalpha()}
+        
+        # Find which of the operator's countries are rare
+        operator_rare_countries = set()
+        for country in unique_operator_countries:
+            if country and country.lower() in valid_rare_countries:
+                operator_rare_countries.add(country.upper())
+        
+        # Calculate rare country count by counting how many rare countries operator actually operates in
+        rare_country_count = len(operator_rare_countries)
+        
+        relays_in_rare_countries = sum(1 for relay in operator_relays 
+                                     if relay.get('country', '').upper() in operator_rare_countries)
+        
+
+        
+
         
         # Diversity score (using centralized calculation)
         diversity_score = calculate_diversity_score(
@@ -164,6 +185,7 @@ def _calculate_aroi_leaderboards(relays_instance):
             'non_linux_count': non_linux_count,
             'non_eu_count': non_eu_count,
             'rare_country_count': rare_country_count,
+            'relays_in_rare_countries': relays_in_rare_countries,
             'diversity_score': diversity_score,
             'uptime_percentage': uptime_percentage,
             'efficiency_ratio': efficiency_ratio,
@@ -294,6 +316,7 @@ def _calculate_aroi_leaderboards(relays_instance):
                 'non_linux_count': metrics['non_linux_count'],
                 'non_eu_count': metrics['non_eu_count'],
                 'rare_country_count': metrics['rare_country_count'],
+                'relays_in_rare_countries': metrics['relays_in_rare_countries'],
                 'diversity_score': f"{metrics['diversity_score']:.1f}",
                 'uptime_percentage': f"{metrics['uptime_percentage']:.1f}%",
                 'efficiency_ratio': f"{metrics['efficiency_ratio']:.1f}x",
