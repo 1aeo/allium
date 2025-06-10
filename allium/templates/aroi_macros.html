@@ -1,0 +1,156 @@
+{# AROI Leaderboard Macros - Eliminate Template Code Duplication #}
+
+{# Champion Badge Macro - Eliminate 10x duplicate champion badge blocks #}
+{% macro champion_badge(category_key, leaderboard_data, title, emoji, panel_class="panel-warning", champion_class="", path_prefix="") %}
+    <div class="col-md-3 col-sm-6 aroi-champion-badge">
+        <div class="panel {{ panel_class }}">
+            <div class="panel-body text-center {{ champion_class }}">
+                <h3 class="aroi-header-spacing">{{ emoji }} {{ title }}</h3>
+                {% if leaderboard_data %}
+                    {% set champion = leaderboard_data[0] %}
+                    <h4><strong><a href="{{ path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info|escape }}" class="aroi-underline-link">{{ champion.aroi_domain|escape if champion.aroi_domain and champion.aroi_domain != 'none' else champion.operator_key|escape }}</a></strong></h4>
+                    <p>
+                        {% if category_key == "bandwidth" %}
+                            {{ champion.total_bandwidth }} {{ champion.bandwidth_unit }}
+                        {% elif category_key == "consensus_weight" %}
+                            {{ champion.total_consensus_weight_pct }} authority
+                        {% elif category_key == "exit_authority" %}
+                            {{ champion.exit_consensus_weight_pct }} exit authority
+                        {% elif category_key == "exit_operators" %}
+                            {{ champion.exit_count }} exit relays
+                        {% elif category_key == "guard_operators" %}
+                            {{ champion.guard_count }} guard relays
+                        {% elif category_key == "most_diverse" %}
+                            <span title="Diversity Score: Geographic (countries × 2.0) + Platform (OS types × 1.5) + Network (unique ASNs × 1.0)">{{ champion.diversity_score }} diversity</span>
+                        {% elif category_key == "platform_diversity" %}
+                            {{ champion.non_linux_count }} non-Linux relays
+                        {% elif category_key == "non_eu_leaders" %}
+                            {{ champion.non_eu_count }} non-EU relays
+                        {% elif category_key == "frontier_builders" %}
+                            {{ champion.rare_country_count }} rare countries
+                        {% elif category_key == "network_veterans" %}
+                            {{ champion.veteran_days }} days
+                        {% endif %}
+                    </p>
+                    <small>
+                        {% if category_key == "exit_authority" %}
+                            {{ champion.exit_count }} exit relays
+                        {% elif category_key == "most_diverse" %}
+                            {{ champion.country_count }} countries
+                        {% else %}
+                            {{ champion.total_relays }} total relays
+                        {% endif %}
+                    </small>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+{% endmacro %}
+
+{# Top 3 Table Macro - Eliminate 10x duplicate top 3 table blocks #}
+{% macro top3_table(category_key, leaderboard_data, title, emoji, achievements, path_prefix="") %}
+    <div class="aroi-subsection">
+        <h4>{{ emoji }} {{ title }}</h4>
+        {% if leaderboard_data %}
+        <div class="table-responsive">
+            <table class="table table-striped aroi-top3-table">
+                <thead>
+                    <tr>
+                        <th>Operator</th>
+                        <th>Achievement</th>
+                        <th>Performance</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in leaderboard_data[:3] %}
+                    <tr>
+                        <td>
+                            <strong>
+                                {% if entry.rank == 1 %}🥇{% elif entry.rank == 2 %}🥈{% elif entry.rank == 3 %}🥉{% endif %}
+                                <a href="{{ path_prefix }}contact/{{ entry.contact_hash }}/" title="Contact: {{ entry.contact_info|escape }}" class="aroi-underline-link">{{ entry.aroi_domain|escape if entry.aroi_domain and entry.aroi_domain != 'none' else entry.operator_key|escape }}</a>
+                            </strong>
+                        </td>
+                        <td>
+                            {% if entry.rank == 1 %}{{ achievements[0] }}
+                            {% elif entry.rank == 2 %}{{ achievements[1] }}
+                            {% elif entry.rank == 3 %}{{ achievements[2] }}
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if category_key == "bandwidth" %}
+                                {{ entry.total_bandwidth }} {{ entry.bandwidth_unit }} across {{ entry.total_relays }} relays
+                            {% elif category_key == "consensus_weight" %}
+                                {{ entry.total_consensus_weight_pct }} network authority
+                            {% elif category_key == "exit_authority" %}
+                                {{ entry.exit_consensus_weight_pct }} exit authority
+                            {% elif category_key == "exit_operators" %}
+                                {{ entry.exit_count }} active exit relays
+                            {% elif category_key == "guard_operators" %}
+                                {{ entry.guard_count }} active guard relays
+                            {% elif category_key == "most_diverse" %}
+                                {{ entry.country_count }} countries, <span title="Diversity Score: Geographic (countries × 2.0) + Platform (OS types × 1.5) + Network (unique ASNs × 1.0)">{{ entry.diversity_score }} diversity</span>
+                            {% elif category_key == "platform_diversity" %}
+                                {{ entry.non_linux_count }} non-Linux systems
+                            {% elif category_key == "non_eu_leaders" %}
+                                {{ entry.country_count }} countries, {{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}
+                            {% elif category_key == "frontier_builders" %}
+                                <span title="{{ entry.rare_country_tooltip }}">{{ entry.rare_country_details if entry.rare_country_details else (entry.rare_country_count ~ ' rare countries') }}</span>
+                            {% elif category_key == "network_veterans" %}
+                                <span title="{{ entry.veteran_tooltip }}">{{ entry.veteran_details_short if entry.veteran_details_short else (entry.veteran_days ~ ' days') }}</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+{% endmacro %}
+
+{# Ranking Table Row Macro - Eliminate duplicate table row logic #}
+{% macro ranking_table_row(entry) %}
+    <tr>
+        <td>
+            {% if entry.rank <= 3 %}
+                <span class="badge {% if entry.rank == 1 %}aroi-rank-gold{% elif entry.rank == 2 %}aroi-rank-silver{% else %}aroi-rank-bronze{% endif %}">
+                    {% if entry.rank == 1 %}🥇{% elif entry.rank == 2 %}🥈{% else %}🥉{% endif %} {{ entry.rank }}
+                </span>
+            {% else %}
+                <span class="badge badge-default">{{ entry.rank }}</span>
+            {% endif %}
+        </td>
+        <td>
+            <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" title="Contact: {{ entry.contact_info|escape }}" class="aroi-underline-link">
+                {% if entry.aroi_domain and entry.aroi_domain != 'none' %}
+                    <strong>{{ entry.aroi_domain|escape }}</strong>
+                {% else %}
+                    <strong>{{ entry.operator_key|escape }}</strong>
+                {% endif %}
+            </a>
+        </td>
+        {{ caller() }}
+    </tr>
+{% endmacro %}
+
+{# Operator Link Macro - Eliminate duplicate operator name/link logic #}
+{% macro operator_link(entry) %}
+    <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" title="Contact: {{ entry.contact_info|escape }}" class="aroi-underline-link">
+        {% if entry.aroi_domain and entry.aroi_domain != 'none' %}
+            <strong>{{ entry.aroi_domain|escape }}</strong>
+        {% else %}
+            <strong>{{ entry.operator_key|escape }}</strong>
+        {% endif %}
+    </a>
+{% endmacro %}
+
+{# Rank Badge Macro - Eliminate duplicate rank badge logic #}
+{% macro rank_badge(rank) %}
+    {% if rank <= 3 %}
+        <span class="badge {% if rank == 1 %}aroi-rank-gold{% elif rank == 2 %}aroi-rank-silver{% else %}aroi-rank-bronze{% endif %}">
+            {% if rank == 1 %}🥇{% elif rank == 2 %}🥈{% else %}🥉{% endif %} {{ rank }}
+        </span>
+    {% else %}
+        <span class="badge badge-default">{{ rank }}</span>
+    {% endif %}
+{% endmacro %} 
