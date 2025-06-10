@@ -11,7 +11,7 @@ A powerful, security-hardened static site generator that creates comprehensive T
 - **Bandwidth and consensus weight analytics** with multiple viewing modes
 
 ### AROI Leaderboard System 🏆
-- **12 specialized leaderboards** for authenticated relay operators
+- **10 specialized leaderboards** for authenticated relay operators
 - **Operator achievement tracking** across multiple dimensions
 - **Geographic diversity scoring** with frontier country recognition
 - **Platform diversity metrics** highlighting technical leadership
@@ -84,7 +84,7 @@ cd www && python -m http.server 8000
 ### Main Pages
 - **Index page** with top 500 relays by consensus weight
 - **Complete relay listing** with all active relays
-- **AROI leaderboards** with 12 specialized categories
+- **AROI leaderboards** with 10 specialized categories
 - **Geographic analysis** with rare country intelligence
 
 ### Categorized Views
@@ -113,20 +113,18 @@ allium implements comprehensive security measures:
 
 ## 🌍 AROI Leaderboards
 
-Twelve specialized leaderboards track authenticated operator achievements:
+Ten specialized leaderboards track authenticated operator achievements:
 
 1. **Bandwidth Champions** - Total bandwidth contributed
 2. **Consensus Weight Leaders** - Network authority holders
 3. **Exit Authority Champions** - Exit traffic facilitators
-4. **Guard Network Builders** - Entry point providers
-5. **Geographic Diversity Leaders** - Multi-country operators
-6. **Platform Diversity Heroes** - Non-Linux champions
-7. **Technical Leaders** - BSD platform advocates
-8. **Frontier Builders** - Rare country pioneers
-9. **Non-EU Champions** - Geographic decentralization
-10. **Network Veterans** - Highest uptime operators
-11. **Efficiency Champions** - Optimal resource utilization
-12. **Most Diverse Operators** - Overall diversity scoring
+4. **Exit Gate Keepers** - Number of exit relays operated
+5. **Guard Champions** - Number of guard relays operated
+6. **Most Diverse Operators** - Geographic, platform, and network diversity scoring
+7. **Platform Diversity Heroes** - Non-Linux champions promoting OS diversity
+8. **Non-EU Leaders** - Geographic champions expanding Tor outside the EU
+9. **Frontier Builders** - Operators in rare or underrepresented countries
+10. **Network Veterans** - Longest-serving operators with earliest relay start dates
 
 ## 📈 Performance & Monitoring
 
