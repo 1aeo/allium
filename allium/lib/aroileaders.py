@@ -135,6 +135,17 @@ def _calculate_aroi_leaderboards(relays_instance):
         relays_in_rare_countries = sum(1 for relay in operator_relays 
                                      if relay.get('country', '').upper() in operator_rare_countries)
         
+        # Calculate breakdown of relays per rare country for tooltips and specialization
+        rare_country_breakdown = {}
+        for relay in operator_relays:
+            country = relay.get('country', '').upper()
+            if country in operator_rare_countries:
+                rare_country_breakdown[country] = rare_country_breakdown.get(country, 0) + 1
+        
+        # Sort by relay count (descending) then by country name for consistent display
+        sorted_rare_breakdown = sorted(rare_country_breakdown.items(), 
+                                     key=lambda x: (-x[1], x[0]))
+        
 
         
 
@@ -186,6 +197,7 @@ def _calculate_aroi_leaderboards(relays_instance):
             'non_eu_count': non_eu_count,
             'rare_country_count': rare_country_count,
             'relays_in_rare_countries': relays_in_rare_countries,
+            'rare_country_breakdown': sorted_rare_breakdown,
             'diversity_score': diversity_score,
             'uptime_percentage': uptime_percentage,
             'efficiency_ratio': efficiency_ratio,
@@ -293,6 +305,41 @@ def _calculate_aroi_leaderboards(relays_instance):
             if category == 'non_eu_leaders':
                 geographic_achievement = calculate_geographic_achievement(metrics['countries'])
             
+            # Format rare country breakdown for frontier_builders category
+            rare_country_details = ""
+            rare_country_tooltip = ""
+            if category == 'frontier_builders' and metrics['rare_country_breakdown']:
+                # Create full breakdown for tooltip
+                full_breakdown = []
+                short_breakdown = []
+                
+                for country, count in metrics['rare_country_breakdown']:
+                    country_name = country.lower()  # Convert back to lowercase for display
+                    detail = f"{count} relay{'s' if count != 1 else ''} in {country_name.upper()}"
+                    full_breakdown.append(detail)
+                    short_breakdown.append(detail)
+                
+                rare_country_tooltip = ", ".join(full_breakdown)
+                
+                # Create short version (max 20 chars for table)
+                short_text = ", ".join(short_breakdown)
+                if len(short_text) > 20:
+                    # Find the last complete entry that fits in 20 chars
+                    chars_used = 0
+                    for i, detail in enumerate(short_breakdown):
+                        if i > 0:
+                            chars_used += 2  # for ", "
+                        if chars_used + len(detail) <= 17:  # leave 3 chars for "..."
+                            chars_used += len(detail)
+                        else:
+                            short_breakdown = short_breakdown[:i]
+                            break
+                    rare_country_details = ", ".join(short_breakdown) + "..."
+                else:
+                    rare_country_details = short_text
+                
+
+            
             formatted_entry = {
                 'rank': rank,
                 'operator_key': operator_key,
@@ -317,6 +364,8 @@ def _calculate_aroi_leaderboards(relays_instance):
                 'non_eu_count': metrics['non_eu_count'],
                 'rare_country_count': metrics['rare_country_count'],
                 'relays_in_rare_countries': metrics['relays_in_rare_countries'],
+                'rare_country_details': rare_country_details,
+                'rare_country_tooltip': rare_country_tooltip,
                 'diversity_score': f"{metrics['diversity_score']:.1f}",
                 'uptime_percentage': f"{metrics['uptime_percentage']:.1f}%",
                 'efficiency_ratio': f"{metrics['efficiency_ratio']:.1f}x",

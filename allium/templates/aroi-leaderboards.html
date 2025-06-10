@@ -562,7 +562,7 @@
                             {% elif entry.rank == 3 %}Frontier Pioneer
                             {% endif %}
                         </td>
-                        <td>{{ entry.relays_in_rare_countries }} relays in {{ entry.rare_country_count }} rare countries</td>
+                        <td><span title="{{ entry.rare_country_tooltip }}">{{ entry.relays_in_rare_countries }} relays in {{ entry.rare_country_count }} rare countries</span></td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -1036,7 +1036,7 @@
                                 {% if category_key == 'most_diverse' %}Geographic diversity
                                 {% elif category_key == 'platform_diversity' %}OS diversity
                                 {% elif category_key == 'non_eu_leaders' %}Global expansion
-                                {% elif category_key == 'frontier_builders' %}Frontier presence
+                                {% elif category_key == 'frontier_builders' %}<span title="{{ entry.rare_country_tooltip }}">{{ entry.rare_country_details if entry.rare_country_details else 'Frontier presence' }}</span>
                                 {% elif category_key == 'network_veterans' %}High reliability
                                 {% elif category_key == 'efficiency_champions' %}Optimal efficiency
                                 {% endif %}
