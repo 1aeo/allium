@@ -210,7 +210,7 @@ def _calculate_aroi_leaderboards(relays_instance):
                     veteran_relay_scaling_factor = 1.0
                 
                 veteran_score = veteran_days * veteran_relay_scaling_factor
-                veteran_details = f"{veteran_days} days * {veteran_relay_scaling_factor} ({total_relays} relays)"
+                veteran_details = f"Online and serving traffic since first day: {veteran_days} days * {veteran_relay_scaling_factor} ({total_relays} relays)"
         
         # Store operator data (mix of existing + new calculations)
         aroi_operators[operator_key] = {
