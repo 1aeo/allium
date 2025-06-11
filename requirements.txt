@@ -1,1 +1,10 @@
 Jinja2>=2.11.2
+
+# Development and testing dependencies  
+pytest>=6.0.0
+pytest-cov>=2.10.0
+flake8>=3.8.0
+bandit>=1.7.0
+safety>=1.10.0
+djlint>=1.0.0
+memory-profiler>=0.60.0

@@ -1,3 +1,7 @@
+# Allium
+
+[![CI/CD Pipeline](https://github.com/1aeo/allium/workflows/Allium%20CI/CD%20Pipeline/badge.svg)](https://github.com/1aeo/allium/actions)
+
 # allium: Advanced Tor Relay Analytics & Metrics Platform
 
 A powerful, security-hardened static site generator that creates comprehensive Tor relay metrics, statistics, and operator leaderboards from Onionoo API data.

@@ -5,3 +5,13 @@ sandbox
 __pycache__
 timestamp
 allium/www
+
+# Testing and CI
+.pytest_cache/
+.coverage
+*.log
+coverage.xml
+.tox/
+.cache
+bandit-report.json
+safety-report.json
