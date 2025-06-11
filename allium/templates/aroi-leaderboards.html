@@ -67,25 +67,25 @@
     <p class="lead">Elite Champion Badges - Top performers across key categories</p>
     
     <div class="row">
-        {{ champion_badge("bandwidth", relays.json.aroi_leaderboards.leaderboards.bandwidth, "Platinum Bandwidth", "🥇", "panel-warning", "aroi-champion-platinum", page_ctx.path_prefix) }}
+        {{ champion_badge("bandwidth", relays.json.aroi_leaderboards.leaderboards.bandwidth, "Platinum Bandwidth", "🥇", "panel-warning", "aroi-champion-platinum", page_ctx.path_prefix, relays.use_bits) }}
         
-        {{ champion_badge("consensus_weight", relays.json.aroi_leaderboards.leaderboards.consensus_weight, "Network Authority", "🏛️", "panel-warning", "aroi-champion-network", page_ctx.path_prefix) }}
+        {{ champion_badge("consensus_weight", relays.json.aroi_leaderboards.leaderboards.consensus_weight, "Network Authority", "🏛️", "panel-warning", "aroi-champion-network", page_ctx.path_prefix, relays.use_bits) }}
         
-        {{ champion_badge("exit_authority", relays.json.aroi_leaderboards.leaderboards.exit_authority, "Exit Authority Master", "🚪", "panel-danger", "aroi-champion-exit-authority", page_ctx.path_prefix) }}
+        {{ champion_badge("exit_authority", relays.json.aroi_leaderboards.leaderboards.exit_authority, "Exit Authority Master", "🚪", "panel-danger", "aroi-champion-exit-authority", page_ctx.path_prefix, relays.use_bits) }}
         
-        {{ champion_badge("exit_operators", relays.json.aroi_leaderboards.leaderboards.exit_operators, "Exit Gate Keeper", "🚪", "panel-warning", "aroi-champion-exit", page_ctx.path_prefix) }}
+        {{ champion_badge("exit_operators", relays.json.aroi_leaderboards.leaderboards.exit_operators, "Exit Gate Keeper", "🚪", "panel-warning", "aroi-champion-exit", page_ctx.path_prefix, relays.use_bits) }}
         
-        {{ champion_badge("guard_operators", relays.json.aroi_leaderboards.leaderboards.guard_operators, "Guard Champion", "🛡️", "panel-info", "aroi-champion-guard", page_ctx.path_prefix) }}
+        {{ champion_badge("guard_operators", relays.json.aroi_leaderboards.leaderboards.guard_operators, "Guard Champion", "🛡️", "panel-info", "aroi-champion-guard", page_ctx.path_prefix, relays.use_bits) }}
         
-        {{ champion_badge("most_diverse", relays.json.aroi_leaderboards.leaderboards.most_diverse, "Diversity Master", "🌍", "panel-success", "aroi-champion-diversity", page_ctx.path_prefix) }}
+        {{ champion_badge("most_diverse", relays.json.aroi_leaderboards.leaderboards.most_diverse, "Diversity Master", "🌍", "panel-success", "aroi-champion-diversity", page_ctx.path_prefix, relays.use_bits) }}
         
-        {{ champion_badge("platform_diversity", relays.json.aroi_leaderboards.leaderboards.platform_diversity, "Platform Hero", "💻", "panel-info", "aroi-champion-platform", page_ctx.path_prefix) }}
+        {{ champion_badge("platform_diversity", relays.json.aroi_leaderboards.leaderboards.platform_diversity, "Platform Hero", "💻", "panel-info", "aroi-champion-platform", page_ctx.path_prefix, relays.use_bits) }}
         
-        {{ champion_badge("non_eu_leaders", relays.json.aroi_leaderboards.leaderboards.non_eu_leaders, "Global Expansion Leader", "🌏", "panel-success", "aroi-champion-global", page_ctx.path_prefix) }}
+        {{ champion_badge("non_eu_leaders", relays.json.aroi_leaderboards.leaderboards.non_eu_leaders, "Global Expansion Leader", "🌏", "panel-success", "aroi-champion-global", page_ctx.path_prefix, relays.use_bits) }}
         
-        {{ champion_badge("frontier_builders", relays.json.aroi_leaderboards.leaderboards.frontier_builders, "Frontier Pioneer", "🏴‍☠️", "panel-default", "aroi-champion-frontier", page_ctx.path_prefix) }}
+        {{ champion_badge("frontier_builders", relays.json.aroi_leaderboards.leaderboards.frontier_builders, "Frontier Pioneer", "🏴‍☠️", "panel-default", "aroi-champion-frontier", page_ctx.path_prefix, relays.use_bits) }}
         
-        {{ champion_badge("network_veterans", relays.json.aroi_leaderboards.leaderboards.network_veterans, "Network Veteran", "🏆", "panel-default", "aroi-champion-reliability", page_ctx.path_prefix) }}
+        {{ champion_badge("network_veterans", relays.json.aroi_leaderboards.leaderboards.network_veterans, "Network Veteran", "🏆", "panel-default", "aroi-champion-reliability", page_ctx.path_prefix, relays.use_bits) }}
     </div>
 </section>
 
@@ -97,34 +97,34 @@
     <p class="lead">Elite Tier Champions - Podium winners across key categories</p>
     
     <!-- Bandwidth Titans -->
-    {{ top3_table("Bandwidth Titans", "💪", relays.json.aroi_leaderboards.leaderboards.bandwidth, ["Bandwidth King", "Bandwidth Warrior", "Bandwidth Hero"], "bandwidth", page_ctx) }}
+    {{ top3_table("Bandwidth Titans", "💪", relays.json.aroi_leaderboards.leaderboards.bandwidth, ["Bandwidth King", "Bandwidth Warrior", "Bandwidth Hero"], "bandwidth", page_ctx, relays.use_bits) }}
 
     <!-- Network Authority Elite -->
-    {{ top3_table("Network Authority Elite", "🏛️", relays.json.aroi_leaderboards.leaderboards.consensus_weight, ["Authority Supreme", "Authority Commander", "Authority Captain"], "consensus_weight", page_ctx) }}
+    {{ top3_table("Network Authority Elite", "🏛️", relays.json.aroi_leaderboards.leaderboards.consensus_weight, ["Authority Supreme", "Authority Commander", "Authority Captain"], "consensus_weight", page_ctx, relays.use_bits) }}
 
     <!-- Exit Authorities -->
-    {{ top3_table("Exit Authorities", "🚪", relays.json.aroi_leaderboards.leaderboards.exit_authority, ["Exit Authority King", "Exit Authority Commander", "Exit Authority Captain"], "exit_authority", page_ctx) }}
+    {{ top3_table("Exit Authorities", "🚪", relays.json.aroi_leaderboards.leaderboards.exit_authority, ["Exit Authority King", "Exit Authority Commander", "Exit Authority Captain"], "exit_authority", page_ctx, relays.use_bits) }}
 
     <!-- Exit Gate Keepers -->
-    {{ top3_table("Exit Gate Keepers", "🚪", relays.json.aroi_leaderboards.leaderboards.exit_operators, ["Exit Master", "Exit Champion", "Exit Hero"], "exit_operators", page_ctx) }}
+    {{ top3_table("Exit Gate Keepers", "🚪", relays.json.aroi_leaderboards.leaderboards.exit_operators, ["Exit Master", "Exit Champion", "Exit Hero"], "exit_operators", page_ctx, relays.use_bits) }}
 
     <!-- Guard Champions -->
-    {{ top3_table("Guard Champions", "🛡️", relays.json.aroi_leaderboards.leaderboards.guard_operators, ["Guard Commander", "Guard Captain", "Guard Leader"], "guard_operators", page_ctx) }}
+    {{ top3_table("Guard Champions", "🛡️", relays.json.aroi_leaderboards.leaderboards.guard_operators, ["Guard Commander", "Guard Captain", "Guard Leader"], "guard_operators", page_ctx, relays.use_bits) }}
 
     <!-- Diversity Masters -->
-    {{ top3_table("Diversity Masters", "🌍", relays.json.aroi_leaderboards.leaderboards.most_diverse, ["Diversity Master", "Diversity Master", "Diversity Master"], "most_diverse", page_ctx) }}
+    {{ top3_table("Diversity Masters", "🌍", relays.json.aroi_leaderboards.leaderboards.most_diverse, ["Diversity Master", "Diversity Master", "Diversity Master"], "most_diverse", page_ctx, relays.use_bits) }}
 
     <!-- Platform Heroes -->
-    {{ top3_table("Platform Heroes", "💻", relays.json.aroi_leaderboards.leaderboards.platform_diversity, ["Platform Hero", "Platform Hero", "Platform Hero"], "platform_diversity", page_ctx) }}
+    {{ top3_table("Platform Heroes", "💻", relays.json.aroi_leaderboards.leaderboards.platform_diversity, ["Platform Hero", "Platform Hero", "Platform Hero"], "platform_diversity", page_ctx, relays.use_bits) }}
 
     <!-- Global Expansion Leaders -->
-    {{ top3_table("Global Expansion Leaders", "🌏", relays.json.aroi_leaderboards.leaderboards.non_eu_leaders, ["Global Pioneer", "Global Explorer", "Global Ambassador"], "non_eu_leaders", page_ctx) }}
+    {{ top3_table("Global Expansion Leaders", "🌏", relays.json.aroi_leaderboards.leaderboards.non_eu_leaders, ["Global Pioneer", "Global Explorer", "Global Ambassador"], "non_eu_leaders", page_ctx, relays.use_bits) }}
 
     <!-- Frontier Pioneers -->
-    {{ top3_table("Frontier Pioneers", "🏴‍☠️", relays.json.aroi_leaderboards.leaderboards.frontier_builders, ["Frontier Pioneer", "Frontier Pioneer", "Frontier Pioneer"], "frontier_builders", page_ctx) }}
+    {{ top3_table("Frontier Pioneers", "🏴‍☠️", relays.json.aroi_leaderboards.leaderboards.frontier_builders, ["Frontier Pioneer", "Frontier Pioneer", "Frontier Pioneer"], "frontier_builders", page_ctx, relays.use_bits) }}
 
     <!-- Network Veterans -->
-    {{ top3_table("Network Veterans", "🏆", relays.json.aroi_leaderboards.leaderboards.network_veterans, ["Veteran Legend", "Veteran Champion", "Veteran Hero"], "network_veterans", page_ctx) }}
+    {{ top3_table("Network Veterans", "🏆", relays.json.aroi_leaderboards.leaderboards.network_veterans, ["Veteran Legend", "Veteran Champion", "Veteran Hero"], "network_veterans", page_ctx, relays.use_bits) }}
 
 
 </section>
@@ -370,7 +370,7 @@
         {% set category_data = relays.json.aroi_leaderboards.leaderboards[category_key] %}
         {% set emoji = '🌈' if category_key == 'most_diverse' else '💻' if category_key == 'platform_diversity' else '🌍' if category_key == 'non_eu_leaders' else '🏴‍☠️' if category_key == 'frontier_builders' else '🏆' %}
         
-        {{ generic_ranking_table(category_key, category_name, category_data, emoji, page_ctx) }}
+        {{ generic_ranking_table(category_key, category_name, category_data, emoji, page_ctx, relays.use_bits) }}
     {% endfor %}
 </section>
 

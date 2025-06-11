@@ -1,7 +1,7 @@
 {# AROI Leaderboard Macros - Eliminate Template Code Duplication #}
 
 {# Champion Badge Macro - Eliminate 10x duplicate champion badge blocks #}
-{% macro champion_badge(category_key, leaderboard_data, title, emoji, panel_class="panel-warning", champion_class="", path_prefix="") %}
+{% macro champion_badge(category_key, leaderboard_data, title, emoji, panel_class="panel-warning", champion_class="", path_prefix="", use_bits=false) %}
     <div class="col-md-3 col-sm-6 aroi-champion-badge">
         <div class="panel {{ panel_class }}">
             <div class="panel-body text-center {{ champion_class }}">
@@ -11,7 +11,7 @@
                     <h4><strong><a href="{{ path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info_escaped }}" class="aroi-underline-link">{{ champion.display_name|escape }}</a></strong></h4>
                     <p>
                         {% if category_key == "bandwidth" %}
-                            <span title="Total observed bandwidth capacity in {% if relays.use_bits %}{{ champion.bandwidth_unit }} (bits per second){% else %}{{ champion.bandwidth_unit }} (bytes per second){% endif %}">{{ champion.total_bandwidth }} {{ champion.bandwidth_unit }}</span>
+                            <span title="Total observed bandwidth capacity in {% if use_bits %}{{ champion.bandwidth_unit }} (bits per second){% else %}{{ champion.bandwidth_unit }} (bytes per second){% endif %}">{{ champion.total_bandwidth }} {{ champion.bandwidth_unit }}</span>
                         {% elif category_key == "consensus_weight" %}
                             <span title="Network consensus weight controlling Tor routing decisions">{{ champion.total_consensus_weight_pct }} authority</span>
                         {% elif category_key == "exit_authority" %}
@@ -48,7 +48,7 @@
 {% endmacro %}
 
 {# Top 3 Table Macro - Eliminate 10x duplicate top 3 table blocks #}
-{% macro top3_table(title, emoji, leaderboard_data, achievements, performance_type, page_ctx) %}
+{% macro top3_table(title, emoji, leaderboard_data, achievements, performance_type, page_ctx, use_bits=false) %}
     <div class="aroi-subsection">
         <h4 title="Top 3 performers in {{ title.lower() }} category">{{ emoji }} {{ title }}</h4>
         {% if leaderboard_data %}
@@ -84,7 +84,7 @@
                         </td>
                         <td>
                             {% if performance_type == "bandwidth" %}
-                                <span title="Total observed bandwidth capacity in {% if relays.use_bits %}{{ entry.bandwidth_unit }} (bits per second){% else %}{{ entry.bandwidth_unit }} (bytes per second){% endif %} across all relays">{{ entry.total_bandwidth }} {{ entry.bandwidth_unit }} across {{ entry.total_relays }} relays</span>
+                                <span title="Total observed bandwidth capacity in {% if use_bits %}{{ entry.bandwidth_unit }} (bits per second){% else %}{{ entry.bandwidth_unit }} (bytes per second){% endif %} across all relays">{{ entry.total_bandwidth }} {{ entry.bandwidth_unit }} across {{ entry.total_relays }} relays</span>
                             {% elif performance_type == "consensus_weight" %}
                                 <span title="Percentage of total Tor network consensus weight controlling routing decisions">{{ entry.total_consensus_weight_pct }} network authority</span>
                             {% elif performance_type == "exit_authority" %}
@@ -137,7 +137,7 @@
 {% endmacro %}
 
 {# Generic Ranking Table Macro - For the loop-based tables with standardized columns #}
-{% macro generic_ranking_table(category_key, category_name, category_data, emoji, page_ctx) %}
+{% macro generic_ranking_table(category_key, category_name, category_data, emoji, page_ctx, use_bits=false) %}
     <section id="{{ category_key }}" class="aroi-section">
         <h3 title="Operators ranked by 
         {%- if category_key == 'most_diverse' -%}combined geographic, platform, and network diversity scores
@@ -161,7 +161,7 @@
                         {%- elif category_key == 'frontier_builders' -%}rare country score
                         {%- elif category_key == 'network_veterans' -%}veteran score calculation
                         {%- endif -%}">Key Metric</th>
-                        <th title="Total observed bandwidth capacity in {% if relays.use_bits %}bits per second{% else %}bytes per second{% endif %}">Bandwidth</th>
+                        <th title="Total observed bandwidth capacity in {% if use_bits %}bits per second{% else %}bytes per second{% endif %}">Bandwidth</th>
                         <th title="Number of countries with relay operations">Countries</th>
                         <th title="Number of different operating systems used">Platforms</th>
                         <th title="Primary operational focus or unique contribution to Tor network">Specialization</th>
@@ -183,7 +183,7 @@
                             {% endif %}
                             </strong>
                         </td>
-                        <td title="Observed bandwidth capacity in {% if relays.use_bits %}{{ entry.bandwidth_unit }} (bits per second){% else %}{{ entry.bandwidth_unit }} (bytes per second){% endif %}">{{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</td>
+                        <td title="Observed bandwidth capacity in {% if use_bits %}{{ entry.bandwidth_unit }} (bits per second){% else %}{{ entry.bandwidth_unit }} (bytes per second){% endif %}">{{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</td>
                         <td title="Geographic distribution of relay operations">{{ entry.country_count }}</td>
                         <td title="Operating system diversity across relay infrastructure">{{ entry.platform_count }}</td>
                         <td>
