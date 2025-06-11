@@ -59,7 +59,7 @@ A powerful, security-hardened static site generator that creates comprehensive T
 ## 🛠️ Installation
 
 ### Requirements
-- **Python 3.7+**
+- **Python 3.8+**
 - **Jinja2 ≥2.11.2**
 
 ### Quick Start
@@ -149,8 +149,8 @@ allium welcomes contributions in several areas:
 This project is released under the **UNLICENSE** (public domain).
 
 ### Third-Party Assets
-- **Country flags** from GoSquared ([license included](licenses/gosquared-flags-license))
-- **Relay flags** from The Tor Project ([license included](licenses/tor-flags-license))
+- **Country flags** from GoSquared (license included in UNLICENSE)
+- **Relay flags** from The Tor Project (license included in UNLICENSE)
 
 ## 🔗 References
 
