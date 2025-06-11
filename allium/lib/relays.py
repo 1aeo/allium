@@ -1001,10 +1001,40 @@ class Relays:
             k: onionoo key to sort by (as, country, platform...)
         """
         import time
+        import resource
+        import sys
+        
+        def get_memory_usage():
+            """Get current memory usage using Python's built-in resource module and /proc/self/status."""
+            try:
+                usage = resource.getrusage(resource.RUSAGE_SELF)
+                peak_kb = usage.ru_maxrss
+                if sys.platform == 'darwin':  # macOS reports in bytes
+                    peak_kb = peak_kb / 1024
+                
+                current_rss_kb = None
+                try:
+                    with open('/proc/self/status', 'r') as f:
+                        for line in f:
+                            if line.startswith('VmRSS:'):
+                                current_rss_kb = int(line.split()[1])
+                                break
+                except (FileNotFoundError, PermissionError, ValueError):
+                    current_rss_kb = peak_kb
+                
+                current_mb = (current_rss_kb or peak_kb) / 1024
+                peak_mb = peak_kb / 1024
+                
+                if current_rss_kb and current_rss_kb != peak_kb:
+                    return f"RSS: {current_mb:.1f}MB, Peak: {peak_mb:.1f}MB"
+                else:
+                    return f"Peak RSS: {peak_mb:.1f}MB"
+            except Exception as e:
+                return f"Memory: unavailable ({e})"
         
         start_time = time.time()
         if self.progress:
-            print(f"🔄 Starting {k} page generation...")
+            print(f"[{time.strftime('%H:%M:%S', time.gmtime(0))}] [{get_memory_usage()}] 🔄 Starting {k} page generation...")
         
         template = ENV.get_template(k + ".html")
         output_path = os.path.join(self.output_dir, k)
@@ -1125,13 +1155,14 @@ class Relays:
             
             # Print progress for large page sets
             if self.progress and page_count % 1000 == 0:
-                print(f"  📄 Processed {page_count} {k} pages...")
+                elapsed_time = time.time() - start_time
+                print(f"[{time.strftime('%H:%M:%S', time.gmtime(elapsed_time))}] [{get_memory_usage()}]   📄 Processed {page_count} {k} pages...")
 
         end_time = time.time()
         total_time = end_time - start_time
         
         if self.progress:
-            print(f"✅ {k} page generation complete!")
+            print(f"[{time.strftime('%H:%M:%S', time.gmtime(total_time))}] [{get_memory_usage()}] ✅ {k} page generation complete!")
             print(f"  📊 Generated {page_count} pages in {total_time:.2f}s")
             print(f"  🎨 Template render time: {render_time:.2f}s ({render_time/total_time*100:.1f}%)")
             print(f"  💾 File I/O time: {io_time:.2f}s ({io_time/total_time*100:.1f}%)")
