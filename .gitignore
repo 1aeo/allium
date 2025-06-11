@@ -5,6 +5,7 @@ sandbox
 __pycache__
 timestamp
 allium/www
+www-screenshots/
 
 # Testing and CI
 .pytest_cache/

@@ -13,35 +13,33 @@
 
 {{ navigation('aroi', page_ctx) }}
 
-<!-- Quick Navigation -->
-<nav class="well aroi-nav-spacing">
-    <h4>📍 Quick Navigation</h4>
-    
-    <!-- Primary Navigation Row -->
-    <div class="aroi-primary-nav">
-        <a href="#champions" class="btn btn-md btn-primary">🏅 Champions</a>
-        <a href="#podium" class="btn btn-md btn-info">🥇 Top 3</a>
-        <a href="#rankings" class="btn btn-md btn-success">📊 Top 25</a>
+<!-- Compact Quick Navigation -->
+<nav class="well aroi-compact-nav">
+    <!-- Primary Navigation (centered) -->
+    <div class="aroi-primary-nav-centered">
+        <a href="#champions" class="btn btn-sm btn-primary">🏅 Champions</a>
+        <a href="#podium" class="btn btn-sm btn-info">🥇 Top 3</a>
+        <a href="#rankings" class="btn btn-sm btn-success">📊 Top 25</a>
     </div>
     
-    <!-- Category Navigation Row -->
-    <div class="aroi-category-nav">
-        <a href="#bandwidth" class="btn btn-sm btn-link">🚀 Bandwidth</a>
-        <a href="#consensus_weight" class="btn btn-sm btn-link">⚖️ Consensus</a>
-        <a href="#exit_authority" class="btn btn-sm btn-link" title="Highest exit consensus weight controlling where Tor traffic exits to the internet">🚪 Exit Authority</a>
-        <a href="#exit_operators" class="btn btn-sm btn-link" title="Most exit relays operated, providing critical internet access points for Tor users">🚪 Exit Operators</a>
-        <a href="#guard_operators" class="btn btn-sm btn-link" title="Most guard relays operated, serving as entry points into the Tor network">🛡️ Guard Operators</a>
-        <a href="#most_diverse" class="btn btn-sm btn-link" title="Highest combined geographic, platform, and network diversity scores across relay operations">🌈 Most Diverse</a>
-        <a href="#platform_diversity" class="btn btn-sm btn-link" title="Most non-Linux relays operated, promoting operating system diversity beyond Linux dominance">💻 Platform Diversity</a>
-        <a href="#non_eu_leaders" class="btn btn-sm btn-link" title="Most relays operated outside the European Union, expanding Tor's geographic reach beyond EU concentration">🌍 Non-EU Leaders</a>
-        <a href="#frontier_builders" class="btn btn-sm btn-link" title="Highest rare country scores from operating relays in strategically important but underrepresented countries">🏴‍☠️ Frontier Builders</a>
-        <a href="#network_veterans" class="btn btn-sm btn-link" title="Longest-serving operators with earliest relay start dates, recognizing true network pioneers">🏆 Network Veterans</a>
+    <!-- Category Links (compact inline) -->
+    <div class="aroi-category-links-row">
+        <a href="#bandwidth" class="aroi-nav-link">🚀 Bandwidth</a>
+        <a href="#consensus_weight" class="aroi-nav-link">⚖️ Consensus</a>
+        <a href="#exit_authority" class="aroi-nav-link" title="Highest exit consensus weight controlling where Tor traffic exits to the internet">🚪 Exit Authority</a>
+        <a href="#exit_operators" class="aroi-nav-link" title="Most exit relays operated, providing critical internet access points for Tor users">🚪 Exit Operators</a>
+        <a href="#guard_operators" class="aroi-nav-link" title="Most guard relays operated, serving as entry points into the Tor network">🛡️ Guard Operators</a>
+        <a href="#most_diverse" class="aroi-nav-link" title="Highest combined geographic, platform, and network diversity scores across relay operations">🌈 Most Diverse</a>
+        <a href="#platform_diversity" class="aroi-nav-link" title="Most non-Linux relays operated, promoting operating system diversity beyond Linux dominance">💻 Platform Diversity</a>
+        <a href="#non_eu_leaders" class="aroi-nav-link" title="Most relays operated outside the European Union, expanding Tor's geographic reach beyond EU concentration">🌍 Non-EU Leaders</a>
+        <a href="#frontier_builders" class="aroi-nav-link" title="Highest rare country scores from operating relays in strategically important but underrepresented countries">🏴‍☠️ Frontier Builders</a>
+        <a href="#network_veterans" class="aroi-nav-link" title="Longest-serving operators with earliest relay start dates, recognizing true network pioneers">🏆 Network Veterans</a>
     </div>
 </nav>
 
 <!-- Summary Stats -->
-<div class="alert alert-info">
-    <h4>🌟 Current Network Overview</h4>
+<div class="alert alert-info aroi-compact-summary">
+    <h5>🌟 Current Network Overview</h5>
     <div class="row">
         <div class="col-md-3">
             <strong><span title="Total unique operators with contact information">Total Operators:</span></strong><br>{{ relays.json.aroi_leaderboards.summary.total_operators }}
@@ -56,7 +54,7 @@
             <strong><span title="Number of competitive leaderboard categories tracking different aspects of operator performance and contribution">Live Categories:</span></strong><br>11 competitive leaderboards
         </div>
     </div>
-    <div class="aroi-top-margin">
+    <div class="aroi-compact-footer">
         <small class="text-muted">Last updated: {{ relays.json.aroi_leaderboards.summary.update_timestamp }}. Data refreshed every 30 minutes from the Tor directory authorities via <a href="https://onionoo.torproject.org/">Onionoo API</a>.</small>
     </div>
 </div>
