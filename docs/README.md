@@ -2,6 +2,11 @@
 
 Welcome to the Allium project documentation. Allium generates static Tor relay metrics and statistics with a focus on performance, simplicity, and comprehensive relay analysis.
 
+## 🚀 **New User? Start Here!**
+
+- **[🚀 Getting Started Guide](GETTING_STARTED.md)** - **Perfect for first-time users!**
+- **[📚 Project Overview](../README.md)** - Main project README
+
 ## 📁 Documentation Structure
 
 ### 🏗️ Architecture & Design

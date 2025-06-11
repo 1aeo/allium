@@ -2,6 +2,25 @@
 
 A powerful, security-hardened static site generator that creates comprehensive Tor relay metrics, statistics, and operator leaderboards from Onionoo API data.
 
+## 🚀 **Quick Start (One Command)**
+
+Get up and running in under 2 minutes:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/1aeo/allium/master/setup.sh | bash
+```
+
+Or manually:
+```bash
+git clone https://github.com/1aeo/allium.git && cd allium
+pip3 install -r requirements.txt
+cd allium && python3 allium.py --progress
+cd www && python3 -m http.server 8000
+# Visit http://localhost:8000
+```
+
+**⚡ Need fresh data?** Just run: `cd allium && python3 allium.py --progress`
+
 ## 🚀 Key Features
 
 ### Core Analytics

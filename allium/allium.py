@@ -73,10 +73,14 @@ def ensure_output_directory(output_dir):
     try:
         os.makedirs(output_dir, exist_ok=True)
     except PermissionError as e:
-        print(f"Error: Permission denied creating output directory '{output_dir}': {e}")
+        print(f"❌ Error: Permission denied creating output directory '{output_dir}'")
+        print(f"💡 Try running with a different output directory:")
+        print(f"   python3 allium.py --out ~/allium-output --progress")
+        print(f"📋 Or fix permissions: chmod 755 {os.path.dirname(output_dir)}")
         sys.exit(1)
     except Exception as e:
-        print(f"Error: Failed to create output directory '{output_dir}': {e}")
+        print(f"❌ Error: Failed to create output directory '{output_dir}': {e}")
+        print(f"💡 Make sure the parent directory exists and you have write permissions")
         sys.exit(1)
 
 def get_page_context(page_type, breadcrumb_type=None, breadcrumb_data=None):
@@ -94,6 +98,27 @@ def get_page_context(page_type, breadcrumb_type=None, breadcrumb_data=None):
         ctx['breadcrumb_data'] = breadcrumb_data or {}
     
     return ctx
+
+def check_dependencies():
+    """Check if required dependencies are available."""
+    try:
+        import jinja2
+        if hasattr(jinja2, '__version__'):
+            version = jinja2.__version__
+            print(f"✅ Jinja2 {version} found")
+        else:
+            print("✅ Jinja2 found")
+    except ImportError:
+        print("❌ Error: Jinja2 not found")
+        print("💡 Install it with: pip3 install -r requirements.txt")
+        sys.exit(1)
+    
+    # Check Python version
+    import sys
+    if sys.version_info < (3, 8):
+        print(f"❌ Error: Python 3.8+ required, found {sys.version}")
+        print("💡 Please upgrade Python or use a virtual environment with Python 3.8+")
+        sys.exit(1)
 
 if __name__ == "__main__":
     desc = "allium: generate static tor relay metrics and statistics"
@@ -138,7 +163,12 @@ if __name__ == "__main__":
     total_steps = 20
 
     if args.progress:
+        print(f"🌐 Allium - Tor Relay Analytics Generator")
+        print(f"========================================")
+        check_dependencies()
         print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Starting allium static site generation...")
+    else:
+        check_dependencies()
 
     # Fail fast - ensure output directory exists before expensive processing
     if args.progress:
