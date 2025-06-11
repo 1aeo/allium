@@ -50,8 +50,6 @@
     {% endif -%}
     {% for relay in relay_list -%}
 	<tr>
-	    {% set obs_unit = relays._determine_unit(relay['observed_bandwidth']) -%}
-	    {% set obs_bandwidth = relays._format_bandwidth_with_unit(relay['observed_bandwidth'], obs_unit) -%}
 	    {% if relay['running'] -%}
 		<td>
 		    <span class="circle circle-online" title="This relay is online"></span>
@@ -62,21 +60,19 @@
 		</td>
 	    {% endif -%}
 	    {% if relay['effective_family']|length > 1 -%}
-		<td title="{{ relay['nickname']|escape }}">
-		    <a href="{{ page_ctx.path_prefix }}relay/{{ relay['fingerprint']|escape }}/">{{ relay['nickname']|truncate(14)|escape
-			}}</a> (<a href="{{ page_ctx.path_prefix }}family/{{ relay['fingerprint']|escape }}/">{{
+		<td title="{{ relay['nickname_escaped'] }}">
+		    <a href="{{ page_ctx.path_prefix }}relay/{{ relay['fingerprint']|escape }}/">{{ relay['nickname_truncated'] }}</a> (<a href="{{ page_ctx.path_prefix }}family/{{ relay['fingerprint']|escape }}/">{{
 			relay['effective_family']| length }}</a>)
 		    </td>
 		{% else -%}
-		    <td title="{{ relay['nickname']|escape }}">
-			<a href="{{ page_ctx.path_prefix }}relay/{{ relay['fingerprint']|escape }}/">{{ relay['nickname']|truncate(14)|escape
-			}}</a>
+		    <td title="{{ relay['nickname_escaped'] }}">
+			<a href="{{ page_ctx.path_prefix }}relay/{{ relay['fingerprint']|escape }}/">{{ relay['nickname_truncated'] }}</a>
 		    </td>
 		{% endif -%}
 		{% if key != 'contact' -%}
 		    {% if relay['aroi_domain'] and relay['aroi_domain'] != 'none' -%}
 			<td>
-			    <a href="{{ page_ctx.path_prefix }}contact/{{ relay['contact_md5'] }}/" title="{{ relay['aroi_domain']|escape }}">{{ relay['aroi_domain']|escape }}</a>
+			    <a href="{{ page_ctx.path_prefix }}contact/{{ relay['contact_md5'] }}/" title="{{ relay['aroi_domain_escaped'] }}">{{ relay['aroi_domain_escaped'] }}</a>
 			</td>
 		    {% else -%}
 			<td>none</td>
@@ -93,7 +89,7 @@
 		    {% endif -%}
 		{% else -%}
 		    {% if relay['aroi_domain'] and relay['aroi_domain'] != 'none' -%}
-			<td>{{ relay['aroi_domain']|escape }}</td>
+			<td>{{ relay['aroi_domain_escaped'] }}</td>
 		    {% else -%}
 			<td>none</td>
 		    {% endif -%}
@@ -101,7 +97,7 @@
 			<span class="contact-text">{{ relay['contact_escaped'] }}</span>
 		    </td>
 		{% endif -%}
-		<td>{{ obs_bandwidth }} {{ obs_unit }}</td>
+		<td>{{ relay['obs_bandwidth_with_unit'] }}</td>
 		{% if key and not is_index -%}
 		    <td title=">=3 bandwidth authorities have measured">
 		        {% if relay['measured'] is not none -%}
@@ -112,8 +108,7 @@
 		    </td>
 		{% endif -%}
 		<td class="visible-md visible-lg">
-		    <a href="https://bgp.tools/prefix/{{ relay['or_addresses'][0].split(':', 1)[0]|escape }}">{{
-		    relay['or_addresses'][0].split(':', 1)[0]|escape }}</a>
+		    <a href="https://bgp.tools/prefix/{{ relay['ip_address']|escape }}">{{ relay['ip_address']|escape }}</a>
 		</td>
 		{% if relay['as'] -%}
 		    {% if key != 'as' -%}
@@ -130,8 +125,7 @@
 		{% if relay['as_name'] -%}
 		    <td>
 			<a href="https://bgp.tools/{{ relay['as']|escape }}"
-			   title="{{ relay['as_name']|escape }}">{{
-			relay['as_name']|escape|truncate(length=20) }}</a>
+			   title="{{ relay['as_name_escaped'] }}">{{ relay['as_name_truncated'] }}</a>
 		    </td>
 		{% else -%}
 		    <td>Unknown</td>
@@ -158,11 +152,10 @@
 		{% endif -%}
 		{% if key != 'platform' -%}
 		    <td>
-			<a href="{{ page_ctx.path_prefix }}platform/{{ relay['platform']|escape }}/">{{
-			relay['platform']|truncate(length=10)|escape }}</a>
+			<a href="{{ page_ctx.path_prefix }}platform/{{ relay['platform']|escape }}/">{{ relay['platform_truncated'] }}</a>
 		    </td>
 		{% else -%}
-		    <td>{{ relay['platform']|truncate(length=10)|escape }}</td>
+		    <td>{{ relay['platform_truncated'] }}</td>
 		{% endif -%}
 		<td class="visible-md visible-lg">
 		    {% for flag in relay['flags'] -%}
@@ -179,22 +172,16 @@
 		</td>
 		{% if key != 'first_seen' -%}
 		    <td class="visible-md visible-lg">
-			<a href="{{ page_ctx.path_prefix }}first_seen/{{ relay['first_seen_date_escaped'] }}/">{{
-			relay['first_seen'].split(' ', 1)[0]|escape }}</a>
+			<a href="{{ page_ctx.path_prefix }}first_seen/{{ relay['first_seen_date_escaped'] }}/">{{ relay['first_seen_date_escaped'] }}</a>
 		    </td>
 		{% else -%}
 		    <td class="visible-md visible-lg">
-			{{ relay['first_seen'].split(' ', 1)[0]|escape
-			}}
+			{{ relay['first_seen_date_escaped'] }}
 		    </td>
 		{% endif -%}
 		{% if key and not is_index -%}
-		    <td class="visible-md visible-lg" title="{% if relay['last_restarted'] -%}{{ relay['last_restarted'].split(' ', 1)[0]|escape }}{% else -%}unknown{% endif -%}">
-		        {% if relay['last_restarted'] -%}
-		            {{ relays._format_time_ago(relay['last_restarted']) }}
-		        {% else -%}
-		            unknown
-		        {% endif -%}
+		    <td class="visible-md visible-lg" title="{{ relay['last_restarted_date']|escape }}">
+		        {{ relay['last_restarted_ago'] }}
 		    </td>
 		{% endif -%}
 	    </tr>
