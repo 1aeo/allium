@@ -160,7 +160,7 @@ if __name__ == "__main__":
 
     start_time = time.time()
     progress_step = 0
-    total_steps = 20
+    total_steps = 22  # Increased to account for 2 intelligence analysis steps
 
     if args.progress:
         print(f"🌐 Allium - Tor Relay Analytics Generator")
@@ -180,9 +180,11 @@ if __name__ == "__main__":
     # object containing onionoo data and processing routines
     if args.progress:
         print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Initializing relay data from onionoo...")
-    RELAY_SET = Relays(args.output_dir, args.onionoo_url, args.bandwidth_units == 'bits', args.progress)
+    RELAY_SET = Relays(args.output_dir, args.onionoo_url, args.bandwidth_units == 'bits', args.progress, start_time, progress_step, total_steps)
     if RELAY_SET.json == None:
         sys.exit(0)
+    # Update progress_step from the RELAY_SET object (it was incremented during intelligence analysis)
+    progress_step = RELAY_SET.progress_step
     if args.progress:
         print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Loaded relay data from onionoo - found {len(RELAY_SET.json.get('relays', []))} relays")
 

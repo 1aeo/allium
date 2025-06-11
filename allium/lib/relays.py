@@ -28,11 +28,14 @@ ENV = Environment(
 class Relays:
     """Relay class consisting of processing routines and onionoo data"""
 
-    def __init__(self, output_dir, onionoo_url, use_bits=False, progress=False):
+    def __init__(self, output_dir, onionoo_url, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=20):
         self.output_dir = output_dir
         self.onionoo_url = onionoo_url
         self.use_bits = use_bits
         self.progress = progress
+        self.start_time = start_time or time.time()
+        self.progress_step = progress_step
+        self.total_steps = total_steps
         self.ts_file = os.path.join(os.path.dirname(ABS_PATH), "timestamp")
         self.json = self._fetch_onionoo_details()
         if self.json == None:
@@ -48,6 +51,59 @@ class Relays:
         self._categorize()  # Then build categories with processed relay objects
         self._generate_aroi_leaderboards()  # Generate AROI operator leaderboards
         self._generate_smart_context()  # Generate intelligence analysis
+
+    def _log_progress(self, message, increment_step=False):
+        """
+        Helper method to log progress with consistent formatting.
+        Uses the same format as main allium.py progress tracking.
+        """
+        if self.progress:
+            if increment_step:
+                # This is being called from main allium.py context where we increment step
+                # We get the current step from the caller 
+                pass
+            
+            # Use the standard format with get_memory_usage from allium.py
+            try:
+                # Import the get_memory_usage function from allium.py
+                import sys
+                import os
+                import resource
+                
+                # Define get_memory_usage locally to maintain consistency
+                def get_memory_usage():
+                    try:
+                        usage = resource.getrusage(resource.RUSAGE_SELF)
+                        peak_kb = usage.ru_maxrss
+                        if sys.platform == 'darwin':
+                            peak_kb = peak_kb / 1024
+                        
+                        current_rss_kb = None
+                        try:
+                            with open('/proc/self/status', 'r') as f:
+                                for line in f:
+                                    if line.startswith('VmRSS:'):
+                                        current_rss_kb = int(line.split()[1])
+                                        break
+                        except (FileNotFoundError, PermissionError, ValueError):
+                            current_rss_kb = peak_kb
+                        
+                        current_mb = (current_rss_kb or peak_kb) / 1024
+                        peak_mb = peak_kb / 1024
+                        
+                        if current_rss_kb and current_rss_kb != peak_kb:
+                            return f"RSS: {current_mb:.1f}MB, Peak: {peak_mb:.1f}MB"
+                        else:
+                            return f"Peak RSS: {peak_mb:.1f}MB"
+                    except Exception as e:
+                        return f"Memory: unavailable ({e})"
+                
+                elapsed_time = time.time() - self.start_time
+                print(f"[{time.strftime('%H:%M:%S', time.gmtime(elapsed_time))}] [{self.progress_step}/{self.total_steps}] [{get_memory_usage()}] Progress: {message}")
+            except Exception:
+                # Fallback if memory usage fails
+                elapsed_time = time.time() - self.start_time
+                print(f"[{time.strftime('%H:%M:%S', time.gmtime(elapsed_time))}] [{self.progress_step}/{self.total_steps}] [Memory: N/A] Progress: {message}")
 
     def _fetch_onionoo_details(self):
         """
@@ -788,19 +844,19 @@ class Relays:
 
     def _generate_smart_context(self):
         """
-        Generate "smart context" for family, AS, and country pages, including
+        Generate smart context information using intelligence engine
         """
         try:
-            from intelligence_engine import IntelligenceEngine
+            from .intelligence_engine import IntelligenceEngine
         except ImportError:
             from .intelligence_engine import IntelligenceEngine
         
-        if self.progress:
-            print("[Intelligence] Starting Tier 1 analysis...")
+        self.progress_step += 1
+        self._log_progress("Starting Tier 1 intelligence analysis...")
         engine = IntelligenceEngine(self.json)
         self.json['smart_context'] = engine.analyze_all_layers()
-        if self.progress:
-            print("[Intelligence] Tier 1 analysis complete")
+        self.progress_step += 1
+        self._log_progress("Tier 1 intelligence analysis complete")
 
     def create_output_dir(self):
         """
@@ -992,21 +1048,11 @@ class Relays:
         while keeping Jinja2 template structure intact.
         Reducing overall compute time from 60s to 20s.
         
-        For family pages, moves expensive operations from Jinja2 to Python:
-        - Percentage calculations (consensus_weight_fraction * 100, etc.)
-        - Pluralization logic ("relay" vs "relays")
-        - Complex conditional logic for punctuation
-
-        Args:
-            k: onionoo key to sort by (as, country, platform...)
         """
-        import time
-        import resource
-        import sys
-        
         def get_memory_usage():
-            """Get current memory usage using Python's built-in resource module and /proc/self/status."""
             try:
+                import sys
+                import resource
                 usage = resource.getrusage(resource.RUSAGE_SELF)
                 peak_kb = usage.ru_maxrss
                 if sys.platform == 'darwin':  # macOS reports in bytes
@@ -1033,8 +1079,7 @@ class Relays:
                 return f"Memory: unavailable ({e})"
         
         start_time = time.time()
-        if self.progress:
-            print(f"[{time.strftime('%H:%M:%S', time.gmtime(0))}] [{get_memory_usage()}] 🔄 Starting {k} page generation...")
+        self._log_progress(f"Starting {k} page generation...")
         
         template = ENV.get_template(k + ".html")
         output_path = os.path.join(self.output_dir, k)
@@ -1154,20 +1199,20 @@ class Relays:
             page_count += 1
             
             # Print progress for large page sets
-            if self.progress and page_count % 1000 == 0:
-                elapsed_time = time.time() - start_time
-                print(f"[{time.strftime('%H:%M:%S', time.gmtime(elapsed_time))}] [{get_memory_usage()}]   📄 Processed {page_count} {k} pages...")
+            if page_count % 1000 == 0:
+                self._log_progress(f"Processed {page_count} {k} pages...")
 
         end_time = time.time()
         total_time = end_time - start_time
         
+        # Log completion and statistics with standard format
+        self._log_progress(f"{k} page generation complete - Generated {page_count} pages in {total_time:.2f}s")
         if self.progress:
-            print(f"[{time.strftime('%H:%M:%S', time.gmtime(total_time))}] [{get_memory_usage()}] ✅ {k} page generation complete!")
-            print(f"  📊 Generated {page_count} pages in {total_time:.2f}s")
-            print(f"  🎨 Template render time: {render_time:.2f}s ({render_time/total_time*100:.1f}%)")
-            print(f"  💾 File I/O time: {io_time:.2f}s ({io_time/total_time*100:.1f}%)")
+            # Additional detailed stats (not in standard format, but supporting info)
+            print(f"    🎨 Template render time: {render_time:.2f}s ({render_time/total_time*100:.1f}%)")
+            print(f"    💾 File I/O time: {io_time:.2f}s ({io_time/total_time*100:.1f}%)")
             if page_count > 0:
-                print(f"  ⚡ Average per page: {total_time/page_count*1000:.1f}ms")
+                print(f"    ⚡ Average per page: {total_time/page_count*1000:.1f}ms")
             print("---")
 
     def write_relay_info(self):
