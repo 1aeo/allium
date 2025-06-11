@@ -133,7 +133,7 @@
                     {% if v['consensus_weight_fraction'] == 0 and v['guard_consensus_weight_fraction'] == 0 and v['middle_consensus_weight_fraction'] == 0 and v['exit_consensus_weight_fraction'] == 0 -%}
                         <td class="text-center cw-data">0% / 0% / 0% / 0%</td>
                     {% else -%}
-                        <td class="text-center cw-data">{{ v['consensus_weight_percentage'] }} / {{ v['guard_consensus_weight_percentage'] }} / {{ v['middle_consensus_weight_percentage'] }} / {{ v['exit_consensus_weight_percentage'] }}</td>
+                        <td class="text-center cw-data">{{ "%.2f%%"|format(v['consensus_weight_fraction'] * 100) }} / {{ "%.2f%%"|format(v['guard_consensus_weight_fraction'] * 100) }} / {{ "%.2f%%"|format(v['middle_consensus_weight_fraction'] * 100) }} / {{ "%.2f%%"|format(v['exit_consensus_weight_fraction'] * 100) }}</td>
                     {% endif -%}
                     <td class="text-center rc-data">{{ v['guard_count'] }} / {{ v['middle_count'] }} / {{ v['exit_count'] }}</td>
                     <td>{{ v['relays']|length }} / {{ v['measured_count'] }}</td>
