@@ -792,8 +792,11 @@ class Relays:
         """
         try:
             from intelligence_engine import IntelligenceEngine
-        except ImportError:
-            from allium.lib.intelligence_engine import IntelligenceEngine
+        except (ImportError, ModuleNotFoundError):
+            try:
+                from .intelligence_engine import IntelligenceEngine
+            except (ImportError, ModuleNotFoundError):
+                from allium.lib.intelligence_engine import IntelligenceEngine
         
         if self.progress:
             print("[Intelligence] Starting Tier 1 analysis...")
@@ -972,8 +975,11 @@ class Relays:
         # Import here to avoid circular imports
         try:
             from allium import get_page_context
-        except ImportError:
-            from allium.allium import get_page_context
+        except (ImportError, ModuleNotFoundError):
+            try:
+                from ..allium import get_page_context
+            except (ImportError, ModuleNotFoundError):
+                from allium.allium import get_page_context
         
         mapping = {
             'as': ('as_detail', {'as_number': value}),
@@ -1070,8 +1076,11 @@ class Relays:
             # Calculate network position using intelligence engine
             try:
                 from intelligence_engine import IntelligenceEngine
-            except ImportError:
-                from allium.lib.intelligence_engine import IntelligenceEngine
+            except (ImportError, ModuleNotFoundError):
+                try:
+                    from .intelligence_engine import IntelligenceEngine
+                except (ImportError, ModuleNotFoundError):
+                    from allium.lib.intelligence_engine import IntelligenceEngine
             intelligence = IntelligenceEngine({})  # Empty intelligence engine just for utility method
             total_relays = len(members)
             network_position = intelligence._calculate_network_position(
@@ -1161,8 +1170,11 @@ class Relays:
             # Import here to avoid circular imports
             try:
                 from allium import get_page_context
-            except ImportError:
-                from allium.allium import get_page_context
+            except (ImportError, ModuleNotFoundError):
+                try:
+                    from ..allium import get_page_context
+                except (ImportError, ModuleNotFoundError):
+                    from allium.allium import get_page_context
             
             page_ctx = get_page_context('detail', 'relay_detail', {
                 'nickname': relay.get('nickname', relay.get('fingerprint', 'Unknown')),
