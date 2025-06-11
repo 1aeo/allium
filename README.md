@@ -124,6 +124,22 @@ cd www && python -m http.server 8000
 - **Geographic summaries** with diversity scoring
 - **Platform statistics** with technical diversity analysis
 
+## 📸 Screenshots
+
+### AROI Leaderboards Dashboard
+![AROI Leaderboards](docs/screenshots/aroi-leaderboards.png)
+*The main AROI Champions Dashboard featuring 10 specialized leaderboards for authenticated relay operators, including bandwidth champions, geographic diversity leaders, and platform diversity heroes.*
+
+### AROI Operator Profile
+![AROI Operator Profile](docs/screenshots/aroi-operator-profile.png)
+*Individual operator achievement profile showing detailed metrics, geographic diversity scoring, platform statistics, and complete relay portfolio with performance analytics.*
+
+### Family Network Analysis
+![Family Network Analysis](docs/screenshots/family-network-analysis.png)
+*Family-based relay groupings showing operator network compositions, bandwidth distributions, consensus weight analysis, and geographic diversity across relay families.*
+
+> **Note:** Screenshots are currently placeholders. See [docs/screenshots/README.md](docs/screenshots/README.md) for detailed instructions on capturing and adding the actual screenshots.
+
 ## 🔒 Security Features
 
 allium implements comprehensive security measures:
