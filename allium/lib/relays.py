@@ -1003,7 +1003,8 @@ class Relays:
         import time
         
         start_time = time.time()
-        print(f"🔄 Starting {k} page generation...")
+        if self.progress:
+            print(f"🔄 Starting {k} page generation...")
         
         template = ENV.get_template(k + ".html")
         output_path = os.path.join(self.output_dir, k)
@@ -1123,19 +1124,20 @@ class Relays:
             page_count += 1
             
             # Print progress for large page sets
-            if page_count % 1000 == 0:
+            if self.progress and page_count % 1000 == 0:
                 print(f"  📄 Processed {page_count} {k} pages...")
 
         end_time = time.time()
         total_time = end_time - start_time
         
-        print(f"✅ {k} page generation complete!")
-        print(f"  📊 Generated {page_count} pages in {total_time:.2f}s")
-        print(f"  🎨 Template render time: {render_time:.2f}s ({render_time/total_time*100:.1f}%)")
-        print(f"  💾 File I/O time: {io_time:.2f}s ({io_time/total_time*100:.1f}%)")
-        if page_count > 0:
-            print(f"  ⚡ Average per page: {total_time/page_count*1000:.1f}ms")
-        print("---")
+        if self.progress:
+            print(f"✅ {k} page generation complete!")
+            print(f"  📊 Generated {page_count} pages in {total_time:.2f}s")
+            print(f"  🎨 Template render time: {render_time:.2f}s ({render_time/total_time*100:.1f}%)")
+            print(f"  💾 File I/O time: {io_time:.2f}s ({io_time/total_time*100:.1f}%)")
+            if page_count > 0:
+                print(f"  ⚡ Average per page: {total_time/page_count*1000:.1f}ms")
+            print("---")
 
     def write_relay_info(self):
         """
