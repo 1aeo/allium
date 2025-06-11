@@ -1,0 +1,13 @@
+FAMILY PAGE SCALING ANALYSIS
+==================================================
+Size     Relays   Time       Per Relay    HTML Size   
+------------------------------------------------------------
+small    8        0.0930     11.626       41,784      
+medium   8        0.0939     11.732       41,784      
+large    27       0.0979     3.625        97,356      
+
+ACTUAL PERFORMANCE DATA:
+Total families: 5,326
+Total template render time: 97.33s
+Average per family: 18.27ms
+Pages per second: 55

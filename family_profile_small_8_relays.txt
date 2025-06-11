@@ -1,0 +1,36 @@
+FAMILY PAGE PROFILING - SMALL (8 relays)
+============================================================
+Family key: E3F16EEB32F9C0B28325891F7BAACA8EC212343D
+Relay count: 8
+Render time: 0.0930s
+Time per relay: 11.626ms
+HTML size: 41,784 bytes
+============================================================
+         215565 function calls (198245 primitive calls) in 0.093 seconds
+
+   Ordered by: cumulative time
+   List reduced from 357 to 20 due to restriction <20>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.000    0.000    0.093    0.093 /usr/lib/python3/dist-packages/jinja2/environment.py:1269(render)
+    327/1    0.000    0.000    0.093    0.093 {method 'join' of 'str' objects}
+     1471    0.000    0.000    0.093    0.000 allium/templates/family.html:4(root)
+        4    0.000    0.000    0.090    0.023 /usr/lib/python3/dist-packages/jinja2/environment.py:975(get_template)
+        4    0.000    0.000    0.090    0.023 /usr/lib/python3/dist-packages/jinja2/environment.py:950(_load_template)
+        3    0.000    0.000    0.090    0.030 /usr/lib/python3/dist-packages/jinja2/loaders.py:107(load)
+        3    0.000    0.000    0.090    0.030 /usr/lib/python3/dist-packages/jinja2/environment.py:728(compile)
+        3    0.000    0.000    0.049    0.016 /usr/lib/python3/dist-packages/jinja2/environment.py:677(_generate)
+        3    0.000    0.000    0.049    0.016 /usr/lib/python3/dist-packages/jinja2/compiler.py:101(generate)
+   5885/3    0.005    0.000    0.049    0.016 /usr/lib/python3/dist-packages/jinja2/visitor.py:35(visit)
+        3    0.000    0.000    0.049    0.016 /usr/lib/python3/dist-packages/jinja2/compiler.py:826(visit_Template)
+        3    0.000    0.000    0.036    0.012 /usr/lib/python3/dist-packages/jinja2/environment.py:613(_parse)
+        3    0.000    0.000    0.035    0.012 /usr/lib/python3/dist-packages/jinja2/parser.py:1028(parse)
+     92/3    0.001    0.000    0.032    0.011 /usr/lib/python3/dist-packages/jinja2/parser.py:979(subparse)
+    63/10    0.000    0.000    0.031    0.003 /usr/lib/python3/dist-packages/jinja2/parser.py:165(parse_statement)
+    92/12    0.000    0.000    0.030    0.003 /usr/lib/python3/dist-packages/jinja2/compiler.py:442(blockvisit)
+     89/8    0.000    0.000    0.029    0.004 /usr/lib/python3/dist-packages/jinja2/parser.py:194(parse_statements)
+    44/27    0.000    0.000    0.023    0.001 /usr/lib/python3/dist-packages/jinja2/parser.py:253(parse_if)
+3745/1811    0.001    0.000    0.020    0.000 {built-in method builtins.next}
+     1680    0.001    0.000    0.019    0.000 /usr/lib/python3/dist-packages/jinja2/lexer.py:381(__next__)
+
+

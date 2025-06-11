@@ -793,7 +793,7 @@ class Relays:
         try:
             from intelligence_engine import IntelligenceEngine
         except ImportError:
-            from .intelligence_engine import IntelligenceEngine
+            from allium.lib.intelligence_engine import IntelligenceEngine
         
         if self.progress:
             print("[Intelligence] Starting Tier 1 analysis...")
@@ -970,7 +970,7 @@ class Relays:
     def get_detail_page_context(self, category, value):
         """Generate page context with correct breadcrumb data for detail pages"""
         # Import here to avoid circular imports
-        from allium import get_page_context
+        from allium.allium import get_page_context
         
         mapping = {
             'as': ('as_detail', {'as_number': value}),
@@ -1065,7 +1065,7 @@ class Relays:
             exit_bandwidth = self._format_bandwidth_with_unit(i["exit_bandwidth"], bandwidth_unit)
             
             # Calculate network position using intelligence engine
-            from .intelligence_engine import IntelligenceEngine
+            from allium.lib.intelligence_engine import IntelligenceEngine
             intelligence = IntelligenceEngine({})  # Empty intelligence engine just for utility method
             total_relays = len(members)
             network_position = intelligence._calculate_network_position(
@@ -1153,7 +1153,7 @@ class Relays:
             if not relay["fingerprint"].isalnum():
                 continue
             # Import here to avoid circular imports
-            from allium import get_page_context
+            from allium.allium import get_page_context
             
             page_ctx = get_page_context('detail', 'relay_detail', {
                 'nickname': relay.get('nickname', relay.get('fingerprint', 'Unknown')),

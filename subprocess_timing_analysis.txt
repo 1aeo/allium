@@ -1,0 +1,4 @@
+ALLIUM SUBPROCESS TIMING ANALYSIS
+==================================================
+Total execution time: 137.49s
+
