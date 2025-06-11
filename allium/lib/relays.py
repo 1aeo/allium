@@ -179,6 +179,10 @@ class Relays:
         - HTML-escape flag strings (29.63% of template time) 
         - Lowercase flag strings (11.21% of template time)
         - Pre-split first_seen dates for display
+        - Pre-computed percentage values for relay-info pages
+        - Pre-computed bandwidth formatting
+        - Pre-computed time formatting
+        - Pre-computed address parsing
         """
         import html
         
@@ -204,6 +208,90 @@ class Relays:
             else:
                 relay["first_seen_date"] = ""
                 relay["first_seen_date_escaped"] = ""
+                
+            # Optimization 4: Pre-compute percentage values for relay-info templates
+            # This avoids expensive format operations in individual relay pages
+            if relay.get("consensus_weight_fraction") is not None:
+                relay["consensus_weight_percentage"] = f"{relay['consensus_weight_fraction'] * 100:.2f}%"
+            else:
+                relay["consensus_weight_percentage"] = "N/A"
+                
+            if relay.get("guard_probability") is not None:
+                relay["guard_probability_percentage"] = f"{relay['guard_probability'] * 100:.2f}%"
+            else:
+                relay["guard_probability_percentage"] = "N/A"
+                
+            if relay.get("middle_probability") is not None:
+                relay["middle_probability_percentage"] = f"{relay['middle_probability'] * 100:.2f}%"
+            else:
+                relay["middle_probability_percentage"] = "N/A"
+                
+            if relay.get("exit_probability") is not None:
+                relay["exit_probability_percentage"] = f"{relay['exit_probability'] * 100:.2f}%"
+            else:
+                relay["exit_probability_percentage"] = "N/A"
+                
+            # Optimization 5: Pre-compute bandwidth formatting (major relay-list.html optimization)
+            # This avoids calling _determine_unit and _format_bandwidth_with_unit in templates
+            obs_bw = relay.get("observed_bandwidth", 0)
+            obs_unit = self._determine_unit(obs_bw)
+            obs_formatted = self._format_bandwidth_with_unit(obs_bw, obs_unit)
+            relay["obs_bandwidth_formatted"] = obs_formatted
+            relay["obs_bandwidth_unit"] = obs_unit
+            relay["obs_bandwidth_with_unit"] = f"{obs_formatted} {obs_unit}"
+            
+            # Optimization 6: Pre-compute time ago formatting (expensive function calls)
+            if relay.get("last_restarted"):
+                relay["last_restarted_ago"] = self._format_time_ago(relay["last_restarted"])
+                relay["last_restarted_date"] = relay["last_restarted"].split(' ', 1)[0]
+            else:
+                relay["last_restarted_ago"] = "unknown"
+                relay["last_restarted_date"] = "unknown"
+                
+            # Optimization 7: Pre-parse IP addresses (string operations)
+            if relay.get("or_addresses") and len(relay["or_addresses"]) > 0:
+                relay["ip_address"] = relay["or_addresses"][0].split(':', 1)[0]
+            else:
+                relay["ip_address"] = "unknown"
+                
+            # Optimization 8: Pre-escape and truncate commonly used fields
+            if relay.get("nickname"):
+                relay["nickname_escaped"] = html.escape(relay["nickname"])
+                relay["nickname_truncated"] = html.escape(relay["nickname"][:14])
+            else:
+                relay["nickname_escaped"] = "Unknown"
+                relay["nickname_truncated"] = "Unknown"
+                
+            if relay.get("as_name"):
+                relay["as_name_escaped"] = html.escape(relay["as_name"])
+                relay["as_name_truncated"] = html.escape(relay["as_name"][:20])
+            else:
+                relay["as_name_escaped"] = "Unknown"
+                relay["as_name_truncated"] = "Unknown"
+                
+            if relay.get("platform"):
+                relay["platform_escaped"] = html.escape(relay["platform"])
+                relay["platform_truncated"] = html.escape(relay["platform"][:10])
+            else:
+                relay["platform_escaped"] = "Unknown"
+                relay["platform_truncated"] = "Unknown"
+                
+            # Optimization 9: Pre-escape AROI domain and other commonly used fields
+            if relay.get("aroi_domain") and relay["aroi_domain"] != "none":
+                relay["aroi_domain_escaped"] = html.escape(relay["aroi_domain"])
+            else:
+                relay["aroi_domain_escaped"] = "none"
+                
+            # Optimization 10: Pre-compute time formatting for relay-info pages
+            if relay.get("first_seen"):
+                relay["first_seen_ago"] = self._format_time_ago(relay["first_seen"])
+            else:
+                relay["first_seen_ago"] = "unknown"
+                
+            if relay.get("last_seen"):
+                relay["last_seen_ago"] = self._format_time_ago(relay["last_seen"])
+            else:
+                relay["last_seen_ago"] = "unknown"
 
     def _sort_by_observed_bandwidth(self):
         """
@@ -517,6 +605,13 @@ class Relays:
                     item["exit_consensus_weight_fraction"] = item["exit_consensus_weight"] / total_exit_cw
                 else:
                     item["exit_consensus_weight_fraction"] = 0.0
+                
+                # Pre-compute formatted percentage strings for template optimization
+                # This avoids expensive Jinja2 format operations in misc listing templates
+                item["consensus_weight_percentage"] = f"{item['consensus_weight_fraction'] * 100:.2f}%"
+                item["guard_consensus_weight_percentage"] = f"{item['guard_consensus_weight_fraction'] * 100:.2f}%"
+                item["middle_consensus_weight_percentage"] = f"{item['middle_consensus_weight_fraction'] * 100:.2f}%"
+                item["exit_consensus_weight_percentage"] = f"{item['exit_consensus_weight_fraction'] * 100:.2f}%"
 
     def _calculate_and_cache_family_statistics(self, total_guard_cw, total_middle_cw, total_exit_cw):
         """
@@ -905,6 +1000,11 @@ class Relays:
         Args:
             k: onionoo key to sort by (as, country, platform...)
         """
+        import time
+        
+        start_time = time.time()
+        print(f"🔄 Starting {k} page generation...")
+        
         template = ENV.get_template(k + ".html")
         output_path = os.path.join(self.output_dir, k)
 
@@ -939,6 +1039,10 @@ class Relays:
         else:
             sorted_values = self.json["sorted"][k].keys()
         
+        page_count = 0
+        render_time = 0
+        io_time = 0
+        
         for v in sorted_values:
             i = self.json["sorted"][k][v]
             members = []
@@ -971,6 +1075,8 @@ class Relays:
             # Generate page context with correct breadcrumb data
             page_ctx = self.get_detail_page_context(k, v)
             
+            # Time the template rendering
+            render_start = time.time()
             rendered = template.render(
                 relays=self,
                 bandwidth=bandwidth,
@@ -991,25 +1097,45 @@ class Relays:
                 key=k,
                 value=v,
                 sp_countries=the_prefixed,
-                # Family page optimizations - pre-computed values to avoid expensive Jinja2 operations
-                **({"consensus_weight_percentage": f"{i['consensus_weight_fraction'] * 100:.2f}%",
-                    "guard_consensus_weight_percentage": f"{i['guard_consensus_weight_fraction'] * 100:.2f}%",
-                    "middle_consensus_weight_percentage": f"{i['middle_consensus_weight_fraction'] * 100:.2f}%",
-                    "exit_consensus_weight_percentage": f"{i['exit_consensus_weight_fraction'] * 100:.2f}%",
-                    "guard_relay_text": "guard relay" if i["guard_count"] == 1 else "guard relays",
-                    "middle_relay_text": "middle relay" if i["middle_count"] == 1 else "middle relays",
-                    "exit_relay_text": "exit relay" if i["exit_count"] == 1 else "exit relays",
-                    "has_guard": i["guard_count"] > 0,
-                    "has_middle": i["middle_count"] > 0,
-                    "has_exit": i["exit_count"] > 0,
-                    "has_typed_relays": i["guard_count"] > 0 or i["middle_count"] > 0 or i["exit_count"] > 0}
-                   if k == "family" else {})
+                # Template optimizations - pre-computed values to avoid expensive Jinja2 operations for all page types
+                consensus_weight_percentage=f"{i['consensus_weight_fraction'] * 100:.2f}%",
+                guard_consensus_weight_percentage=f"{i['guard_consensus_weight_fraction'] * 100:.2f}%",
+                middle_consensus_weight_percentage=f"{i['middle_consensus_weight_fraction'] * 100:.2f}%",
+                exit_consensus_weight_percentage=f"{i['exit_consensus_weight_fraction'] * 100:.2f}%",
+                guard_relay_text="guard relay" if i["guard_count"] == 1 else "guard relays",
+                middle_relay_text="middle relay" if i["middle_count"] == 1 else "middle relays",
+                exit_relay_text="exit relay" if i["exit_count"] == 1 else "exit relays",
+                has_guard=i["guard_count"] > 0,
+                has_middle=i["middle_count"] > 0,
+                has_exit=i["exit_count"] > 0,
+                has_typed_relays=i["guard_count"] > 0 or i["middle_count"] > 0 or i["exit_count"] > 0
             )
+            render_time += time.time() - render_start
 
+            # Time the file I/O
+            io_start = time.time()
             with open(
                 os.path.join(dir_path, "index.html"), "w", encoding="utf8"
             ) as html:
                 html.write(rendered)
+            io_time += time.time() - io_start
+            
+            page_count += 1
+            
+            # Print progress for large page sets
+            if page_count % 1000 == 0:
+                print(f"  📄 Processed {page_count} {k} pages...")
+
+        end_time = time.time()
+        total_time = end_time - start_time
+        
+        print(f"✅ {k} page generation complete!")
+        print(f"  📊 Generated {page_count} pages in {total_time:.2f}s")
+        print(f"  🎨 Template render time: {render_time:.2f}s ({render_time/total_time*100:.1f}%)")
+        print(f"  💾 File I/O time: {io_time:.2f}s ({io_time/total_time*100:.1f}%)")
+        if page_count > 0:
+            print(f"  ⚡ Average per page: {total_time/page_count*1000:.1f}ms")
+        print("---")
 
     def write_relay_info(self):
         """
