@@ -326,18 +326,24 @@
                     white-space: nowrap;
                 }
                 
-                .aroi-inline-nav-group {
-                    display: flex;
-                    flex-wrap: wrap;
-                    gap: 8px;
-                    justify-content: center;
+                .aroi-nav-header {
+                    text-align: center;
+                    margin-bottom: 10px;
                 }
                 
-                .aroi-inline-category-nav {
+                .aroi-primary-nav-centered {
+                    display: flex;
+                    justify-content: center;
+                    gap: 8px;
+                    margin-bottom: 10px;
+                    flex-wrap: wrap;
+                }
+                
+                .aroi-category-links-row {
                     display: flex;
                     flex-wrap: wrap;
                     gap: 12px;
-                    margin-left: auto;
+                    justify-content: center;
                 }
                 
                 .aroi-nav-link {
@@ -357,14 +363,14 @@
 
                 /* Responsive adjustments for compact nav */
                 @media (max-width: 768px) {
-                    .aroi-compact-nav-row {
+                    .aroi-primary-nav-centered {
                         flex-direction: column;
-                        align-items: flex-start;
-                        gap: 10px;
+                        align-items: center;
+                        gap: 8px;
                     }
                     
-                    .aroi-inline-category-nav {
-                        margin-left: 0;
+                    .aroi-category-links-row {
+                        justify-content: center;
                     }
                     
                     .aroi-nav-link {
