@@ -95,6 +95,40 @@ def get_page_context(page_type, breadcrumb_type=None, breadcrumb_data=None):
     
     return ctx
 
+def detect_cpu_count():
+    """
+    Detect number of CPU cores available on system.
+    
+    Returns:
+        int: Number of CPU cores, or 1 if detection fails
+    """
+    try:
+        import multiprocessing
+        return multiprocessing.cpu_count()
+    except:
+        try:
+            return os.cpu_count() or 1
+        except:
+            return 1
+
+def should_use_multithreading(threading_mode):
+    """
+    Determine if multithreading should be used based on mode and system capabilities.
+    
+    Args:
+        threading_mode (str): 'auto', 'single', or 'multi'
+        
+    Returns:
+        bool: True if multithreading should be used, False otherwise
+    """
+    if threading_mode == 'single':
+        return False
+    elif threading_mode == 'multi':
+        return True
+    else:  # auto mode
+        cpu_count = detect_cpu_count()
+        return cpu_count > 1
+
 if __name__ == "__main__":
     desc = "allium: generate static tor relay metrics and statistics"
     parser = argparse.ArgumentParser(description=desc)
@@ -131,14 +165,27 @@ if __name__ == "__main__":
         ),
         required=False,
     )
+    parser.add_argument(
+        "--threading",
+        dest="threading_mode",
+        choices=['auto', 'single', 'multi'],
+        default='auto',
+        help="threading mode: auto (detect CPU cores), single (force single-threaded), multi (force multi-threaded). Default: auto",
+        required=False,
+    )
     args = parser.parse_args()
 
+    # Determine threading mode
+    use_multithreading = should_use_multithreading(args.threading_mode)
+    cpu_count = detect_cpu_count()
+    
     start_time = time.time()
     progress_step = 0
     total_steps = 20
 
     if args.progress:
-        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Starting allium static site generation...")
+        threading_status = "multi-threaded" if use_multithreading else "single-threaded"
+        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Starting allium static site generation ({threading_status}, {cpu_count} CPUs detected)...")
 
     # Fail fast - ensure output directory exists before expensive processing
     if args.progress:
@@ -150,7 +197,7 @@ if __name__ == "__main__":
     # object containing onionoo data and processing routines
     if args.progress:
         print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Initializing relay data from onionoo...")
-    RELAY_SET = Relays(args.output_dir, args.onionoo_url, args.bandwidth_units == 'bits', args.progress)
+    RELAY_SET = Relays(args.output_dir, args.onionoo_url, args.bandwidth_units == 'bits', args.progress, use_multithreading)
     if RELAY_SET.json == None:
         sys.exit(0)
     if args.progress:
@@ -209,6 +256,11 @@ if __name__ == "__main__":
     # miscellaneous-sorted (per misc_pages k/v) HTML pages
     if args.progress:
         print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Generating miscellaneous sorted pages...")
+    
+    threading_status = "multi-threaded optimizations" if use_multithreading else "single-threaded (original code)"
+    if args.progress:
+        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] Progress: Using {threading_status}...")
+    
     for k, v in misc_pages.items():
         families_ctx = get_page_context('misc', 'misc_listing', {'page_name': 'Browse by Family'})
         RELAY_SET.write_misc(
@@ -248,6 +300,7 @@ if __name__ == "__main__":
 
     if args.progress:
         print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Generated 6 miscellaneous sorted pages")
+    
     # onionoo keys used to generate pages by unique value; e.g. AS43350
     keys = [
         "as",

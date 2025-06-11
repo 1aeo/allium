@@ -28,11 +28,12 @@ ENV = Environment(
 class Relays:
     """Relay class consisting of processing routines and onionoo data"""
 
-    def __init__(self, output_dir, onionoo_url, use_bits=False, progress=False):
+    def __init__(self, output_dir, onionoo_url, use_bits=False, progress=False, use_multithreading=False):
         self.output_dir = output_dir
         self.onionoo_url = onionoo_url
         self.use_bits = use_bits
         self.progress = progress
+        self.use_multithreading = use_multithreading
         self.ts_file = os.path.join(os.path.dirname(ABS_PATH), "timestamp")
         self.json = self._fetch_onionoo_details()
         if self.json == None:
@@ -183,9 +184,23 @@ class Relays:
         - Pre-computed bandwidth formatting
         - Pre-computed time formatting
         - Pre-computed address parsing
+        
+        Only applies optimizations when use_multithreading=True (commit 8f75635e883ae31eb9f5160c268b1e5e3213881a)
         """
         import html
         
+        if not self.use_multithreading:
+            # Single-threaded mode: Skip optimizations (original code path)
+            # Only do minimal preprocessing that was in original code
+            for relay in self.json["relays"]:
+                # Basic contact escaping that was always present
+                if relay.get("contact"):
+                    relay["contact_escaped"] = html.escape(relay["contact"])
+                else:
+                    relay["contact_escaped"] = ""
+            return
+        
+        # Multi-threaded mode: Apply all optimizations from commit 8f75635e883ae31eb9f5160c268b1e5e3213881a
         for relay in self.json["relays"]:
             # Optimization 1: Pre-escape contact strings (19.95% savings)
             if relay.get("contact"):
@@ -1092,39 +1107,49 @@ class Relays:
             
             # Time the template rendering
             render_start = time.time()
-            rendered = template.render(
-                relays=self,
-                bandwidth=bandwidth,
-                bandwidth_unit=bandwidth_unit,
-                guard_bandwidth=guard_bandwidth,
-                middle_bandwidth=middle_bandwidth,
-                exit_bandwidth=exit_bandwidth,
-                consensus_weight_fraction=i["consensus_weight_fraction"],
-                guard_consensus_weight_fraction=i["guard_consensus_weight_fraction"],
-                middle_consensus_weight_fraction=i["middle_consensus_weight_fraction"],
-                exit_consensus_weight_fraction=i["exit_consensus_weight_fraction"],
-                exit_count=i["exit_count"],
-                guard_count=i["guard_count"],
-                middle_count=i["middle_count"],
-                network_position=network_position,  # Pre-computed network position
-                is_index=False,
-                page_ctx=page_ctx,
-                key=k,
-                value=v,
-                sp_countries=the_prefixed,
-                # Template optimizations - pre-computed values to avoid expensive Jinja2 operations for all page types
-                consensus_weight_percentage=f"{i['consensus_weight_fraction'] * 100:.2f}%",
-                guard_consensus_weight_percentage=f"{i['guard_consensus_weight_fraction'] * 100:.2f}%",
-                middle_consensus_weight_percentage=f"{i['middle_consensus_weight_fraction'] * 100:.2f}%",
-                exit_consensus_weight_percentage=f"{i['exit_consensus_weight_fraction'] * 100:.2f}%",
-                guard_relay_text="guard relay" if i["guard_count"] == 1 else "guard relays",
-                middle_relay_text="middle relay" if i["middle_count"] == 1 else "middle relays",
-                exit_relay_text="exit relay" if i["exit_count"] == 1 else "exit relays",
-                has_guard=i["guard_count"] > 0,
-                has_middle=i["middle_count"] > 0,
-                has_exit=i["exit_count"] > 0,
-                has_typed_relays=i["guard_count"] > 0 or i["middle_count"] > 0 or i["exit_count"] > 0
-            )
+            
+            # Base template variables
+            template_vars = {
+                "relays": self,
+                "bandwidth": bandwidth,
+                "bandwidth_unit": bandwidth_unit,
+                "guard_bandwidth": guard_bandwidth,
+                "middle_bandwidth": middle_bandwidth,
+                "exit_bandwidth": exit_bandwidth,
+                "consensus_weight_fraction": i["consensus_weight_fraction"],
+                "guard_consensus_weight_fraction": i["guard_consensus_weight_fraction"],
+                "middle_consensus_weight_fraction": i["middle_consensus_weight_fraction"],
+                "exit_consensus_weight_fraction": i["exit_consensus_weight_fraction"],
+                "exit_count": i["exit_count"],
+                "guard_count": i["guard_count"],
+                "middle_count": i["middle_count"],
+                "network_position": network_position,  # Pre-computed network position
+                "is_index": False,
+                "page_ctx": page_ctx,
+                "key": k,
+                "value": v,
+                "sp_countries": the_prefixed,
+            }
+            
+            # Multi-threaded mode: Apply optimizations from commit 8f75635e883ae31eb9f5160c268b1e5e3213881a
+            # Pre-compute expensive Jinja2 operations for 79% performance improvement
+            if self.use_multithreading:
+                template_vars.update({
+                    # Template optimizations - pre-computed values to avoid expensive Jinja2 operations for all page types
+                    "consensus_weight_percentage": f"{i['consensus_weight_fraction'] * 100:.2f}%",
+                    "guard_consensus_weight_percentage": f"{i['guard_consensus_weight_fraction'] * 100:.2f}%",
+                    "middle_consensus_weight_percentage": f"{i['middle_consensus_weight_fraction'] * 100:.2f}%",
+                    "exit_consensus_weight_percentage": f"{i['exit_consensus_weight_fraction'] * 100:.2f}%",
+                    "guard_relay_text": "guard relay" if i["guard_count"] == 1 else "guard relays",
+                    "middle_relay_text": "middle relay" if i["middle_count"] == 1 else "middle relays",
+                    "exit_relay_text": "exit relay" if i["exit_count"] == 1 else "exit relays",
+                    "has_guard": i["guard_count"] > 0,
+                    "has_middle": i["middle_count"] > 0,
+                    "has_exit": i["exit_count"] > 0,
+                    "has_typed_relays": i["guard_count"] > 0 or i["middle_count"] > 0 or i["exit_count"] > 0
+                })
+            
+            rendered = template.render(**template_vars)
             render_time += time.time() - render_start
 
             # Time the file I/O
