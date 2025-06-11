@@ -42,8 +42,8 @@
 </nav>
 
 <!-- Summary Stats -->
-<div class="alert alert-info">
-    <h4>🌟 Current Network Overview</h4>
+<div class="alert alert-info aroi-compact-summary">
+    <h5>🌟 Current Network Overview</h5>
     <div class="row">
         <div class="col-md-3">
             <strong><span title="Total unique operators with contact information">Total Operators:</span></strong><br>{{ relays.json.aroi_leaderboards.summary.total_operators }}
@@ -58,7 +58,7 @@
             <strong><span title="Number of competitive leaderboard categories tracking different aspects of operator performance and contribution">Live Categories:</span></strong><br>11 competitive leaderboards
         </div>
     </div>
-    <div class="aroi-top-margin">
+    <div class="aroi-compact-footer">
         <small class="text-muted">Last updated: {{ relays.json.aroi_leaderboards.summary.update_timestamp }}. Data refreshed every 30 minutes from the Tor directory authorities via <a href="https://onionoo.torproject.org/">Onionoo API</a>.</small>
     </div>
 </div>
