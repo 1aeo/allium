@@ -28,7 +28,7 @@ ENV = Environment(
 class Relays:
     """Relay class consisting of processing routines and onionoo data"""
 
-    def __init__(self, output_dir, onionoo_url, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=20):
+    def __init__(self, output_dir, onionoo_url, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=20, relay_data=None):
         self.output_dir = output_dir
         self.onionoo_url = onionoo_url
         self.use_bits = use_bits
@@ -37,10 +37,21 @@ class Relays:
         self.progress_step = progress_step
         self.total_steps = total_steps
         self.ts_file = os.path.join(os.path.dirname(ABS_PATH), "timestamp")
-        self.json = self._fetch_onionoo_details()
-        if self.json == None:
-            return
-        self.timestamp = self._write_timestamp()
+        
+        # Phase 1: Support both old and new initialization patterns
+        if relay_data is not None:
+            # New pattern: accept data as input (for worker coordination)
+            self.json = relay_data
+            # Generate timestamp for compatibility
+            self.timestamp = time.strftime(
+                "%a, %d %b %Y %H:%M:%S GMT", time.gmtime(time.time())
+            )
+        else:
+            # Old pattern: fetch data internally (for backwards compatibility)
+            self.json = self._fetch_onionoo_details()
+            if self.json == None:
+                return
+            self.timestamp = self._write_timestamp()
 
         self._fix_missing_observed_bandwidth()
         self._sort_by_observed_bandwidth()
