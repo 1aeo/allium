@@ -7,6 +7,10 @@ timestamp
 allium/www
 www-screenshots/
 
+# Multi-API cache and data files
+allium/data/cache/
+allium/data/state.json
+
 # Testing and CI
 .pytest_cache/
 .coverage
