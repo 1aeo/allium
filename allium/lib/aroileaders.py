@@ -205,7 +205,7 @@ def _calculate_aroi_leaderboards(relays_instance):
         
         # Sort by relay count (descending) then by country name for consistent display
         sorted_all_country_breakdown = sorted(all_country_breakdown.items(), 
-                                            key=lambda x: (-x[1], x[0]))
+                                     key=lambda x: (-x[1], x[0]))
         
 
         
@@ -459,8 +459,8 @@ def _calculate_aroi_leaderboards(relays_instance):
                 'exit_consensus_weight_pct': f"{metrics['exit_consensus_weight'] * 100:.2f}%",
                 'guard_count': metrics['guard_count'],
                 'exit_count': metrics['exit_count'],
-                'guard_percentage': f"{guard_percentage:.1f}%",
-                'exit_percentage': f"{exit_percentage:.1f}%",
+                'guard_percentage': f"{guard_percentage:.0f}%",
+                'exit_percentage': f"{exit_percentage:.0f}%",
                 'middle_count': metrics['middle_count'],
                 'measured_count': metrics['measured_count'],
                 'unique_as_count': metrics['unique_as_count'],
