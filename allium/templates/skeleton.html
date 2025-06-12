@@ -166,7 +166,7 @@
                     width: 15%; /* Cross Reference (Guard/Exit Count) */
                 }
                 
-                /* Diversity/Category table layout */
+                /* Diversity/Category table layout - Generic defaults */
                 .aroi-category-table thead th:nth-child(3) {
                     width: 8%;  /* Relays */
                 }
@@ -176,11 +176,11 @@
                 }
                 
                 .aroi-category-table thead th:nth-child(5) {
-                    width: 10%; /* Bandwidth */
+                    width: 12%; /* Bandwidth */
                 }
                 
                 .aroi-category-table thead th:nth-child(6) {
-                    width: 8%; /* Countries */
+                    width: 10%; /* Countries */
                 }
                 
                 .aroi-category-table thead th:nth-child(7) {
@@ -188,7 +188,24 @@
                 }
                 
                 .aroi-category-table thead th:nth-child(8) {
-                    width: 21%; /* Specialization - Wider for geographic breakdown details */
+                    width: 15%; /* Specialization */
+                }
+                
+                /* Geographic Champions (Non-EU Leaders) specific layout */
+                .aroi-geographic-table thead th:nth-child(3) {
+                    width: 15%; /* Non-EU Relays */
+                }
+                
+                .aroi-geographic-table thead th:nth-child(4) {
+                    width: 10%; /* Bandwidth */
+                }
+                
+                .aroi-geographic-table thead th:nth-child(5) {
+                    width: 8%; /* Countries */
+                }
+                
+                .aroi-geographic-table thead th:nth-child(6) {
+                    width: 25%; /* Specialization - Much wider for geographic breakdown details */
                 }
 
                 /* AROI Champion Badge Styles */
