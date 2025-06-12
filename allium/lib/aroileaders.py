@@ -407,7 +407,7 @@ def _calculate_aroi_leaderboards(relays_instance):
                 geographic_achievement = calculate_geographic_achievement(metrics['countries'])
                 # Reuse pre-calculated country breakdown data instead of recalculating
                 geographic_breakdown_details, geographic_breakdown_tooltip = _format_breakdown_details(
-                    metrics['all_country_breakdown'], 36
+                    metrics['all_country_breakdown'], 42
                 )
             
             # Format rare country breakdown for frontier_builders category
@@ -535,6 +535,9 @@ def _calculate_aroi_leaderboards(relays_instance):
             # Calculate percentages for guard and exit relay ratios
             guard_percentage = (metrics['guard_count'] / metrics['total_relays'] * 100) if metrics['total_relays'] > 0 else 0
             exit_percentage = (metrics['exit_count'] / metrics['total_relays'] * 100) if metrics['total_relays'] > 0 else 0
+            
+            # Calculate non-EU percentage for geographic champions
+            non_eu_percentage = (metrics['non_eu_count'] / metrics['total_relays'] * 100) if metrics['total_relays'] > 0 else 0
 
             formatted_entry = {
                 'rank': rank,
@@ -562,6 +565,7 @@ def _calculate_aroi_leaderboards(relays_instance):
                 'platforms': metrics['platforms'][:3],  # Top 3 platforms for display
                 'non_linux_count': metrics['non_linux_count'],
                 'non_eu_count': metrics['non_eu_count'],
+                'non_eu_count_with_percentage': f"{metrics['non_eu_count']} ({non_eu_percentage:.0f}%)",
                 'rare_country_count': metrics['rare_country_count'],
                 'relays_in_rare_countries': metrics['relays_in_rare_countries'],
                 'rare_country_details': rare_country_details,

@@ -159,16 +159,16 @@
                     <tr>
                         <th title="Position in {{ category_name.lower() }} leaderboard">Rank</th>
                         <th title="Authenticated Relay Operator Identifier following ContactInfo specification">Operator (AROI)</th>
-                        {% if category_key != 'platform_diversity' %}
+                        {% if category_key != 'platform_diversity' and category_key != 'non_eu_leaders' %}
                         <th title="Total number of relays operated by this operator">Relays</th>
                         {% endif %}
                         <th title="Primary ranking metric for 
                         {%- if category_key == 'most_diverse' -%}diversity score calculation
                         {%- elif category_key == 'platform_diversity' -%}non-Linux relay count
-                        {%- elif category_key == 'non_eu_leaders' -%}non-EU relay count
+                        {%- elif category_key == 'non_eu_leaders' -%}non-EU relay count with percentage
                         {%- elif category_key == 'frontier_builders' -%}rare country score
                         {%- elif category_key == 'network_veterans' -%}veteran score calculation
-                        {%- endif -%}">{% if category_key == 'platform_diversity' %}Non Linux Relays{% else %}Key Metric{% endif %}</th>
+                        {%- endif -%}">{% if category_key == 'platform_diversity' %}Non Linux Relays{% elif category_key == 'non_eu_leaders' %}Non-EU Relays{% else %}Key Metric{% endif %}</th>
                         <th title="Total observed bandwidth capacity in {% if use_bits %}bits per second{% else %}bytes per second{% endif %}">Bandwidth</th>
                         {% if category_key != 'platform_diversity' %}
                         <th title="Number of countries with relay operations">Countries</th>
@@ -188,14 +188,14 @@
                     <tr>
                         <td>{{ rank_badge(entry.rank) }}</td>
                         <td>{{ operator_link(entry, page_ctx) }}</td>
-                        {% if category_key != 'platform_diversity' %}
+                        {% if category_key != 'platform_diversity' and category_key != 'non_eu_leaders' %}
                         <td title="Active relays currently contributing to Tor network">{{ entry.total_relays }}</td>
                         {% endif %}
                         <td>
                             <strong>
                             {% if category_key == 'most_diverse' %}<span title="{{ entry.diversity_breakdown_tooltip if entry.diversity_breakdown_tooltip else 'Diversity Score: Geographic (countries × 2.0) + Platform (OS types × 1.5) + Network (unique ASNs × 1.0)' }}">{{ entry.diversity_score }}</span>
                             {% elif category_key == 'platform_diversity' %}<span title="Relays promoting operating system diversity beyond Linux dominance">{{ entry.non_linux_count }}</span>
-                            {% elif category_key == 'non_eu_leaders' %}<span title="Relays expanding Tor geographic reach beyond European Union concentration">{{ entry.non_eu_count }} non-EU</span>
+                            {% elif category_key == 'non_eu_leaders' %}<span title="Relays expanding Tor geographic reach beyond European Union concentration">{{ entry.non_eu_count_with_percentage }}</span>
                             {% elif category_key == 'frontier_builders' %}<span title="Countries with strategic importance but underrepresented in Tor network">{{ entry.rare_country_count }} rare</span>
                             {% elif category_key == 'network_veterans' %}<span title="Online and serving traffic since first day">{{ entry.veteran_score }}</span>
                             {% endif %}
