@@ -407,7 +407,7 @@ def _calculate_aroi_leaderboards(relays_instance):
                 geographic_achievement = calculate_geographic_achievement(metrics['countries'])
                 # Reuse pre-calculated country breakdown data instead of recalculating
                 geographic_breakdown_details, geographic_breakdown_tooltip = _format_breakdown_details(
-                    metrics['all_country_breakdown'], 28
+                    metrics['all_country_breakdown'], 36
                 )
             
             # Format rare country breakdown for frontier_builders category
