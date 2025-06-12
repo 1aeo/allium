@@ -952,17 +952,11 @@ class Relays:
             return divisors[unit]
         raise ValueError(f"Unknown unit: {unit}")
 
-    def _format_bandwidth_with_unit(self, bandwidth_bytes, unit):
-        """Format bandwidth using specified unit"""
+    def _format_bandwidth_with_unit(self, bandwidth_bytes, unit, decimal_places=2):
+        """Format bandwidth using specified unit with configurable decimal places"""
         divisor = self._get_divisor_for_unit(unit)
         value = bandwidth_bytes / divisor
-        return f"{value:.2f}"
-
-    def _format_bandwidth_with_unit_top10(self, bandwidth_bytes, unit):
-        """Format bandwidth using specified unit with single decimal place for top 10 pages"""
-        divisor = self._get_divisor_for_unit(unit)
-        value = bandwidth_bytes / divisor
-        return f"{value:.1f}"
+        return f"{value:.{decimal_places}f}"
 
     def _format_time_ago(self, timestamp_str):
         """Format timestamp as multi-unit time ago (e.g., '2y 3m 2w ago')"""

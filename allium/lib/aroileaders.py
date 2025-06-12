@@ -334,8 +334,8 @@ def _calculate_aroi_leaderboards(relays_instance):
         for rank, (operator_key, metrics) in enumerate(data, 1):
             # Use existing bandwidth formatting methods (top10 specific formatting)
             bandwidth_unit = relays_instance._determine_unit(metrics['total_bandwidth'])
-            formatted_bandwidth = relays_instance._format_bandwidth_with_unit_top10(
-                metrics['total_bandwidth'], bandwidth_unit
+            formatted_bandwidth = relays_instance._format_bandwidth_with_unit(
+                metrics['total_bandwidth'], bandwidth_unit, decimal_places=1
             )
             
             # Calculate geographic achievement for non_eu_leaders category
@@ -452,8 +452,8 @@ def _calculate_aroi_leaderboards(relays_instance):
     
     # Format summary bandwidth with unit (reuse existing formatters with top10 formatting)
     summary_bandwidth_unit = relays_instance._determine_unit(total_bandwidth_all)
-    summary_bandwidth_value = relays_instance._format_bandwidth_with_unit_top10(
-        total_bandwidth_all, summary_bandwidth_unit
+    summary_bandwidth_value = relays_instance._format_bandwidth_with_unit(
+        total_bandwidth_all, summary_bandwidth_unit, decimal_places=1
     )
     
     summary_stats = {
