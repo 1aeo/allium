@@ -1311,7 +1311,7 @@ class Relays:
                         'section_id': info['section'],
                         'title': info['title'],
                         'emoji': info['emoji'],
-                        'link': f"../aroi-leaderboards.html#{info['section']}",
+                        'link': f"aroi-leaderboards.html#{info['section']}",
                         'statement': f"Ranked #{entry.get('rank', 0)} in {category_name}"
                     }
                     rankings.append(ranking)
