@@ -414,6 +414,9 @@ def _calculate_aroi_leaderboards(relays_instance):
             rare_country_details = ""
             rare_country_tooltip = ""
             frontier_achievement_title = ""
+            platform_hero_title = ""
+            diversity_master_title = ""
+            
             if category == 'frontier_builders' and metrics['rare_country_breakdown']:
                 # Use helper function with custom formatter for rare countries (includes "relay/relays")
                 rare_country_details, rare_country_tooltip = _format_breakdown_details(
@@ -428,6 +431,24 @@ def _calculate_aroi_leaderboards(relays_instance):
                     frontier_achievement_title = "⭐ Frontier Master"
                 elif rank == 3:
                     frontier_achievement_title = "✨ Frontier Champion"
+            
+            # Add achievement titles for top 3 platform diversity heroes
+            if category == 'platform_diversity':
+                if rank == 1:
+                    platform_hero_title = "🏆 Platform Legend"
+                elif rank == 2:
+                    platform_hero_title = "💻 Platform Master"
+                elif rank == 3:
+                    platform_hero_title = "🖥️ Platform Champion"
+            
+            # Add achievement titles for top 3 diversity masters
+            if category == 'most_diverse':
+                if rank == 1:
+                    diversity_master_title = "🌍 Diversity Legend"
+                elif rank == 2:
+                    diversity_master_title = "🌟 Diversity Master"
+                elif rank == 3:
+                    diversity_master_title = "🌐 Diversity Champion"
             
             # Format veteran details for network_veterans category
             veteran_details_short = ""
@@ -484,6 +505,8 @@ def _calculate_aroi_leaderboards(relays_instance):
                 'rare_country_details': rare_country_details,
                 'rare_country_tooltip': rare_country_tooltip,
                 'frontier_achievement_title': frontier_achievement_title,
+                'platform_hero_title': platform_hero_title,
+                'diversity_master_title': diversity_master_title,
                 'diversity_score': f"{metrics['diversity_score']:.1f}",
                 'uptime_percentage': f"{metrics['uptime_percentage']:.1f}%",
                 'veteran_score': f"{metrics['veteran_score']:.0f}",
