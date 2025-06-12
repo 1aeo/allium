@@ -7,7 +7,40 @@ on:
     branches: [ master, main ]
 
 jobs:
-  test:
+  code-quality:
+    name: "Code Quality & Linting"
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-linting-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-linting-
+          
+    - name: Install linting dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8
+        
+    - name: Lint Python code
+      run: |
+        # Check for critical syntax errors only
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics || echo "⚠️ Critical linting issues found"
+        # Non-blocking style checks
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics || echo "⚠️ Style issues found"
+
+  unit-tests:
+    name: "Unit Tests (Python ${{ matrix.python-version }})"
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -26,23 +59,50 @@ jobs:
       uses: actions/cache@v3
       with:
         path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        key: ${{ runner.os }}-pip-tests-${{ hashFiles('**/requirements.txt') }}
         restore-keys: |
-          ${{ runner.os }}-pip-
+          ${{ runner.os }}-pip-tests-
           
-    - name: Install dependencies
+    - name: Install test dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        # Install flake8 if not already present
-        pip install flake8 || true
+        pip install pytest pytest-cov
         
-    - name: Lint Python code
+    - name: Run unit tests
       run: |
-        # Check for critical syntax errors only
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics || echo "⚠️ Critical linting issues found"
-        # Non-blocking style checks
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics || echo "⚠️ Style issues found"
+        # Run tests if they exist, otherwise skip gracefully
+        if [ -d "tests" ] && [ "$(ls -A tests)" ]; then
+          python -m pytest tests/ -v --cov=. --cov-report=xml || echo "⚠️ Some tests failed but continuing"
+        else
+          echo "⚠️ No tests found, creating minimal coverage report"
+          echo '<?xml version="1.0" ?><coverage version="6.0"><sources></sources><packages></packages></coverage>' > coverage.xml
+        fi
+        
+    - name: Upload coverage to Codecov
+      if: matrix.python-version == '3.11'
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+
+  template-validation:
+    name: "Template Syntax Validation"
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install template dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install jinja2
         
     - name: Validate Jinja2 templates
       run: |
@@ -71,23 +131,57 @@ jobs:
         except Exception as e:
             print('⚠️  Could not validate {}: {}'.format(relative_path, e))
         " \; || echo "⚠️ Template validation completed with warnings"
+
+  security-scan:
+    name: "Security Vulnerability Scan"
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
         
-    - name: Run Python tests
+    - name: Install security tools
       run: |
-        # Run tests if they exist, otherwise skip gracefully
-        if [ -d "tests" ] && [ "$(ls -A tests)" ]; then
-          python -m pytest tests/ -v --cov=. --cov-report=xml || echo "⚠️ Some tests failed but continuing"
-        else
-          echo "⚠️ No tests found, creating minimal coverage report"
-          echo '<?xml version="1.0" ?><coverage version="6.0"><sources></sources><packages></packages></coverage>' > coverage.xml
-        fi
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install bandit safety
         
-    - name: Security scan
+    - name: Run security scans
       run: |
         # Check for common security issues
         bandit -r . -f json -o bandit-report.json || true
         # Check for known vulnerabilities in dependencies
         safety check --json --output safety-report.json || true
+        
+    - name: Upload security reports
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: security-reports
+        path: |
+          bandit-report.json
+          safety-report.json
+
+  integration-tests:
+    name: "Module Integration Tests"
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
         
     - name: Test AROI leaderboard generation
       run: |
@@ -105,15 +199,8 @@ jobs:
             print('ℹ️  Module import failed, but this is expected in CI environment')
         "
         
-    - name: Upload coverage to Codecov
-      if: matrix.python-version == '3.11'
-      uses: codecov/codecov-action@v3
-      with:
-        file: ./coverage.xml
-        flags: unittests
-        name: codecov-umbrella
-        
-  template-quality:
+  template-security-audit:
+    name: "Template Security & Quality Audit"
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
@@ -151,7 +238,8 @@ jobs:
         # Lint HTML/Jinja2 templates
         djlint allium/templates/ --check --quiet || echo "⚠️  Template formatting issues found"
         
-  performance:
+  performance-benchmarks:
+    name: "Performance Benchmarks & Memory Profiling"
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
