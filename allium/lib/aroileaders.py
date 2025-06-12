@@ -400,15 +400,15 @@ def _calculate_aroi_leaderboards(relays_instance):
                 
                 rare_country_tooltip = ", ".join(full_breakdown)
                 
-                # Create short version (max 28 chars for table - extended for better display)
+                # Create short version (max 34 chars for table - extended for better display)
                 short_text = ", ".join(short_breakdown)
-                if len(short_text) > 28:
-                    # Find the last complete entry that fits in 28 chars
+                if len(short_text) > 34:
+                    # Find the last complete entry that fits in 34 chars
                     chars_used = 0
                     for i, detail in enumerate(short_breakdown):
                         if i > 0:
                             chars_used += 2  # for ", "
-                        if chars_used + len(detail) <= 25:  # leave 3 chars for "..."
+                        if chars_used + len(detail) <= 31:  # leave 3 chars for "..."
                             chars_used += len(detail)
                         else:
                             short_breakdown = short_breakdown[:i]
