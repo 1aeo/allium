@@ -238,16 +238,19 @@ jobs:
         
         echo "🔍 Validating setup results..."
         
-        # Check that key files exist
-        test -f "allium.py" || { echo "❌ allium.py not found"; exit 1; }
+        # Activate the virtual environment
+        source venv/bin/activate
+        
+        # Check that key files exist in the correct subdirectory
+        test -f "allium/allium.py" || { echo "❌ allium/allium.py not found"; exit 1; }
         test -f "requirements.txt" || { echo "❌ requirements.txt not found"; exit 1; }
-        test -d "www" || { echo "❌ www directory not created"; exit 1; }
+        test -d "allium/www" || { echo "❌ allium/www directory not created"; exit 1; }
         
         # Check that www directory has expected content
-        test -f "www/index.html" || { echo "❌ index.html not generated"; exit 1; }
+        test -f "allium/www/index.html" || { echo "❌ index.html not generated"; exit 1; }
         
         # Verify generated HTML is valid (basic check)
-        if ! grep -q "<html" www/index.html; then
+        if ! grep -q "<html" allium/www/index.html; then
           echo "❌ Generated HTML appears invalid"
           exit 1
         fi
@@ -262,7 +265,12 @@ jobs:
         
     - name: Test regeneration
       run: |
-        cd /tmp/allium-setup-test/allium/allium
+        cd /tmp/allium-setup-test/allium
+        
+        # Activate the virtual environment
+        source venv/bin/activate
+        
+        cd allium
         
         echo "🔄 Testing data regeneration..."
         
