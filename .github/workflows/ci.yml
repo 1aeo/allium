@@ -199,6 +199,81 @@ jobs:
             print('ℹ️  Module import failed, but this is expected in CI environment')
         "
         
+  setup-script-validation:
+    name: "Setup Script End-to-End Test"
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.8", "3.11"]  # Test on minimum and latest supported versions
+    
+    steps:
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+        
+    - name: Test fresh environment setup
+      run: |
+        # Create a temporary directory to simulate fresh environment
+        mkdir -p /tmp/allium-setup-test
+        cd /tmp/allium-setup-test
+        
+        echo "🧪 Testing setup.sh in fresh environment (Python ${{ matrix.python-version }})"
+        
+        # Download and run setup script
+        curl -sSL https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/setup.sh -o setup.sh
+        
+        # Make sure the script is executable
+        chmod +x setup.sh
+        
+        # Run setup script with timeout to prevent hanging
+        timeout 600 bash setup.sh || {
+          echo "❌ Setup script failed or timed out"
+          exit 1
+        }
+        
+    - name: Validate setup results
+      run: |
+        cd /tmp/allium-setup-test/allium
+        
+        echo "🔍 Validating setup results..."
+        
+        # Check that key files exist
+        test -f "allium.py" || { echo "❌ allium.py not found"; exit 1; }
+        test -f "requirements.txt" || { echo "❌ requirements.txt not found"; exit 1; }
+        test -d "www" || { echo "❌ www directory not created"; exit 1; }
+        
+        # Check that www directory has expected content
+        test -f "www/index.html" || { echo "❌ index.html not generated"; exit 1; }
+        
+        # Verify generated HTML is valid (basic check)
+        if ! grep -q "<html" www/index.html; then
+          echo "❌ Generated HTML appears invalid"
+          exit 1
+        fi
+        
+        # Check that Python can import required modules
+        python3 -c "import jinja2; print('✅ Jinja2 import successful')" || {
+          echo "❌ Jinja2 not properly installed"
+          exit 1
+        }
+        
+        echo "✅ Setup script validation completed successfully"
+        
+    - name: Test regeneration
+      run: |
+        cd /tmp/allium-setup-test/allium/allium
+        
+        echo "🔄 Testing data regeneration..."
+        
+        # Test that regeneration works
+        timeout 300 python3 allium.py --progress || {
+          echo "❌ Regeneration failed or timed out"
+          exit 1
+        }
+        
+        echo "✅ Regeneration test completed successfully"
+        
   template-security-audit:
     name: "Template Security & Quality Audit"
     runs-on: ubuntu-latest
