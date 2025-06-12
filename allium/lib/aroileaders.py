@@ -478,15 +478,13 @@ def _calculate_aroi_leaderboards(relays_instance):
                 else:
                     platform_breakdown_details = platform_breakdown_full
                 
-                # Create full tooltip with platform details and countries
+                # Create full tooltip with platform details only (countries not relevant for platform diversity)
                 platform_tooltip_parts = []
                 for platform, count in sorted_platform_breakdown:
                     platform_tooltip_parts.append(f"{count} {platform} relays")
                 platform_tooltip_text = ", ".join(platform_tooltip_parts)
                 
-                # Add countries to tooltip
-                countries_text = ", ".join(sorted(metrics['countries']))
-                platform_breakdown_tooltip = f"Platform Distribution: {platform_tooltip_text}. Countries: {countries_text}"
+                platform_breakdown_tooltip = f"Platform Distribution: {platform_tooltip_text}"
             
             # Add achievement titles for top 3 diversity masters
             diversity_breakdown_details = ""
