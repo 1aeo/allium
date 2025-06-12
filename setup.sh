@@ -16,17 +16,33 @@ if ! python3 -c "import sys; assert sys.version_info >= (3, 8)" 2>/dev/null; the
 fi
 echo "✅ Python version check passed"
 
-# Check if we're in a git repo already
-if [ -d ".git" ] && [ -f "allium.py" ]; then
-    echo "📁 Running in existing allium directory"
+# Check if we're in a git repo already or if allium.py exists in current directory
+if [ -d ".git" ] && [ -f "allium/allium.py" ]; then
+    echo "📁 Running in existing allium repository root directory"
+    ALLIUM_ROOT="."
+elif [ -d ".git" ] && [ -f "allium.py" ]; then
+    echo "📁 Running in existing allium subdirectory"
+    ALLIUM_ROOT=".."
 else
     echo "📥 Cloning allium repository..."
+    if [ -d "allium" ]; then
+        echo "⚠️  Directory 'allium' already exists. Removing it..."
+        rm -rf allium
+    fi
     git clone https://github.com/1aeo/allium.git
     cd allium
+    ALLIUM_ROOT="."
 fi
 
+echo "🔧 Setting up Python virtual environment..."
+if [ ! -d "venv" ]; then
+    python3 -m venv venv
+fi
+source venv/bin/activate
+
 echo "📦 Installing dependencies..."
-pip3 install -r requirements.txt
+pip install --upgrade pip
+pip install -r requirements.txt
 
 echo "🚀 Running first generation with progress tracking..."
 cd allium
@@ -41,7 +57,12 @@ echo "   cd www && python3 -m http.server 8000"
 echo "   Then visit: http://localhost:8000"
 echo ""
 echo "⚡ To regenerate with fresh data:"
-echo "   cd allium && python3 allium.py --progress"
+echo "   First activate the virtual environment: source venv/bin/activate"
+if [ "$ALLIUM_ROOT" = ".." ]; then
+    echo "   Then run: python3 allium.py --progress"
+else
+    echo "   Then run: cd allium && python3 allium.py --progress"
+fi
 echo ""
 echo "📚 Documentation: docs/README.md"
 echo "🔧 Configuration options: python3 allium.py --help" 
