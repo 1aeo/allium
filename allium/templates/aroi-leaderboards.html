@@ -8,7 +8,7 @@
 
 <div class="aroi-center-text aroi-subsection">
     <h1>🏆 Tor Network Operator Champion Dashboard</h1>
-    <p class="lead"><strong>Live Performance Rankings for Authenticated Relay Operator Identifiers (AROI)</strong></p>
+    <p class="lead"><strong>Meet the Heroes Powering Tor's Privacy Network - Live Performance Rankings for <span title="Authenticated Relay Operator Identifier - Operators who provide contact information following the ContactInfo specification, enabling recognition and accountability">AROI</span> Operators</strong></p>
 </div>
 
 {{ navigation('aroi', page_ctx) }}
@@ -17,29 +17,29 @@
 <nav class="well aroi-compact-nav">
     <!-- Primary Navigation (centered) -->
     <div class="aroi-primary-nav-centered">
-        <a href="#champions" class="btn btn-sm btn-primary">🏅 Champions</a>
-        <a href="#podium" class="btn btn-sm btn-info">🥇 Top 3</a>
-        <a href="#rankings" class="btn btn-sm btn-success">📊 Top 25</a>
+        <a href="#champions" class="btn btn-sm btn-primary" title="Elite performers across all competitive categories">🏅 Champions</a>
+        <a href="#podium" class="btn btn-sm btn-info" title="Podium winners with detailed achievement breakdown">🥇 Top 3</a>
+        <a href="#rankings" class="btn btn-sm btn-success" title="Full leaderboards with top 25 operators per category">📊 Top 25</a>
     </div>
     
     <!-- Category Links (compact inline) -->
     <div class="aroi-category-links-row">
-        <a href="#bandwidth" class="aroi-nav-link">🚀 Bandwidth</a>
-        <a href="#consensus_weight" class="aroi-nav-link">⚖️ Consensus</a>
-        <a href="#exit_authority" class="aroi-nav-link" title="Highest exit consensus weight controlling where Tor traffic exits to the internet">🚪 Exit Authority</a>
-        <a href="#exit_operators" class="aroi-nav-link" title="Most exit relays operated, providing critical internet access points for Tor users">🚪 Exit Operators</a>
-        <a href="#guard_operators" class="aroi-nav-link" title="Most guard relays operated, serving as entry points into the Tor network">🛡️ Guard Operators</a>
-        <a href="#most_diverse" class="aroi-nav-link" title="Highest combined geographic, platform, and network diversity scores across relay operations">🌈 Most Diverse</a>
+        <a href="#bandwidth" class="aroi-nav-link" title="Operators ranked by total observed bandwidth capacity across all relays">🚀 Bandwidth</a>
+        <a href="#consensus_weight" class="aroi-nav-link" title="Consensus Weight: The voting power each relay has in determining network routing decisions. Higher consensus weight means more influence over which relays are selected for Tor circuits">⚖️ Consensus</a>
+        <a href="#exit_authority" class="aroi-nav-link" title="Exit Authority: Control over exit consensus weight, determining which relays handle the final hop where Tor traffic exits to the regular internet">🚪 Exit Authority</a>
+        <a href="#exit_operators" class="aroi-nav-link" title="Exit Relays: Special relays that handle the final hop in Tor circuits, where encrypted traffic exits to reach regular internet destinations like websites">🚪 Exit Operators</a>
+        <a href="#guard_operators" class="aroi-nav-link" title="Guard Relays: Entry point relays that handle the first hop in Tor circuits. Your Tor client connects to guards to enter the Tor network anonymously">🛡️ Guard Operators</a>
+        <a href="#most_diverse" class="aroi-nav-link" title="Diversity Score: Calculated by combining geographic spread (countries × 2.0), platform variety (operating systems × 1.5), and network distribution (unique ASNs × 1.0) to measure operational resilience">🌈 Most Diverse</a>
         <a href="#platform_diversity" class="aroi-nav-link" title="Most non-Linux relays operated, promoting operating system diversity beyond Linux dominance">💻 Platform Diversity</a>
         <a href="#non_eu_leaders" class="aroi-nav-link" title="Most relays operated outside the European Union, expanding Tor's geographic reach beyond EU concentration">🌍 Non-EU Leaders</a>
-        <a href="#frontier_builders" class="aroi-nav-link" title="Highest rare country scores from operating relays in strategically important but underrepresented countries">🏴‍☠️ Frontier Builders</a>
-        <a href="#network_veterans" class="aroi-nav-link" title="Longest-serving operators with earliest relay start dates, recognizing true network pioneers">🏆 Network Veterans</a>
+        <a href="#frontier_builders" class="aroi-nav-link" title="Frontier Builders: Operators running relays in rare or strategically important countries that are underrepresented in the Tor network, helping expand global privacy access">🏴‍☠️ Frontier Builders</a>
+        <a href="#network_veterans" class="aroi-nav-link" title="Network Veterans: Longest-serving operators calculated by earliest relay start date multiplied by current relay scale, recognizing sustained commitment to the Tor network">🏆 Network Veterans</a>
     </div>
 </nav>
 
 <!-- Summary Stats -->
 <div class="alert alert-info aroi-compact-summary">
-    <h5>🌟 Current Network Overview</h5>
+    <h5 title="Current status overview of authenticated relay operators in the Tor network">🌟 Current Network Overview</h5>
     <div class="row">
         <div class="col-md-3">
             <strong><span title="Total unique operators with contact information">Total Operators:</span></strong><br>{{ relays.json.aroi_leaderboards.summary.total_operators }}
@@ -48,14 +48,14 @@
             <strong><span title="Aggregate observed bandwidth capacity contributed to the Tor network by all operators with contact information">Combined Bandwidth:</span></strong><br>{{ relays.json.aroi_leaderboards.summary.total_bandwidth_formatted }}
         </div>
         <div class="col-md-3">
-            <strong><span title="Percentage of total Tor network consensus weight held by operators with contact information">Network Consensus Weight:</span></strong><br>{{ relays.json.aroi_leaderboards.summary.total_consensus_weight_pct }}
+            <strong><span title="Network Consensus Weight: The percentage of total Tor network voting power held by operators with contact information. This represents their collective influence over routing decisions in the Tor network">Network Consensus Weight:</span></strong><br>{{ relays.json.aroi_leaderboards.summary.total_consensus_weight_pct }}
         </div>
         <div class="col-md-3">
-            <strong><span title="Number of competitive leaderboard categories tracking different aspects of operator performance and contribution">Live Categories:</span></strong><br>11 competitive leaderboards
+            <strong><span title="Number of competitive leaderboard categories tracking different aspects of operator performance and contribution">Live Categories:</span></strong><br>{{ relays.json.aroi_leaderboards.summary.live_categories_count }} competitive leaderboards
         </div>
     </div>
     <div class="aroi-compact-footer">
-        <small class="text-muted">Last updated: {{ relays.json.aroi_leaderboards.summary.update_timestamp }}. Data refreshed every 30 minutes from the Tor directory authorities via <a href="https://onionoo.torproject.org/">Onionoo API</a>.</small>
+        <small class="text-muted" title="Data Source: Information comes from Tor directory authorities (the servers that coordinate the Tor network) via the Onionoo API, which provides real-time relay status and performance data">Last updated: {{ relays.json.aroi_leaderboards.summary.update_timestamp }}. Data refreshed every 30 minutes from the Tor directory authorities via <a href="https://onionoo.torproject.org/" title="Onionoo API: Official Tor Project service providing real-time relay and bridge information">Onionoo API</a>.</small>
     </div>
 </div>
 
@@ -63,29 +63,29 @@
 <!-- CURRENT WORLD LEADERS (Elite Champion Badges) -->
 <!-- ===================================================================== -->
 <section id="champions" class="aroi-section">
-    <h2>🏅 Current World Leaders</h2>
+    <h2 title="Elite performers across all competitive categories">🏅 Current World Leaders</h2>
     <p class="lead">Elite Champion Badges - Top performers across key categories</p>
     
     <div class="row">
-        {{ champion_badge("bandwidth", relays.json.aroi_leaderboards.leaderboards.bandwidth, "Platinum Bandwidth", "🥇", "panel-warning", "aroi-champion-platinum", page_ctx.path_prefix) }}
+        {{ champion_badge("bandwidth", relays.json.aroi_leaderboards.leaderboards.bandwidth, "Platinum Bandwidth", "🥇", "panel-warning", "aroi-champion-platinum", page_ctx.path_prefix, relays.use_bits) }}
         
-        {{ champion_badge("consensus_weight", relays.json.aroi_leaderboards.leaderboards.consensus_weight, "Network Authority", "🏛️", "panel-warning", "aroi-champion-network", page_ctx.path_prefix) }}
+        {{ champion_badge("consensus_weight", relays.json.aroi_leaderboards.leaderboards.consensus_weight, "Network Authority", "🏛️", "panel-warning", "aroi-champion-network", page_ctx.path_prefix, relays.use_bits) }}
         
-        {{ champion_badge("exit_authority", relays.json.aroi_leaderboards.leaderboards.exit_authority, "Exit Authority Master", "🚪", "panel-danger", "aroi-champion-exit-authority", page_ctx.path_prefix) }}
+        {{ champion_badge("exit_authority", relays.json.aroi_leaderboards.leaderboards.exit_authority, "Exit Authority Master", "🚪", "panel-danger", "aroi-champion-exit-authority", page_ctx.path_prefix, relays.use_bits) }}
         
-        {{ champion_badge("exit_operators", relays.json.aroi_leaderboards.leaderboards.exit_operators, "Exit Gate Keeper", "🚪", "panel-warning", "aroi-champion-exit", page_ctx.path_prefix) }}
+        {{ champion_badge("exit_operators", relays.json.aroi_leaderboards.leaderboards.exit_operators, "Exit Gate Keeper", "🚪", "panel-warning", "aroi-champion-exit", page_ctx.path_prefix, relays.use_bits) }}
         
-        {{ champion_badge("guard_operators", relays.json.aroi_leaderboards.leaderboards.guard_operators, "Guard Champion", "🛡️", "panel-info", "aroi-champion-guard", page_ctx.path_prefix) }}
+        {{ champion_badge("guard_operators", relays.json.aroi_leaderboards.leaderboards.guard_operators, "Guard Champion", "🛡️", "panel-info", "aroi-champion-guard", page_ctx.path_prefix, relays.use_bits) }}
         
-        {{ champion_badge("most_diverse", relays.json.aroi_leaderboards.leaderboards.most_diverse, "Diversity Master", "🌍", "panel-success", "aroi-champion-diversity", page_ctx.path_prefix) }}
+        {{ champion_badge("most_diverse", relays.json.aroi_leaderboards.leaderboards.most_diverse, "Diversity Master", "🌍", "panel-success", "aroi-champion-diversity", page_ctx.path_prefix, relays.use_bits) }}
         
-        {{ champion_badge("platform_diversity", relays.json.aroi_leaderboards.leaderboards.platform_diversity, "Platform Hero", "💻", "panel-info", "aroi-champion-platform", page_ctx.path_prefix) }}
+        {{ champion_badge("platform_diversity", relays.json.aroi_leaderboards.leaderboards.platform_diversity, "Platform Hero", "💻", "panel-info", "aroi-champion-platform", page_ctx.path_prefix, relays.use_bits) }}
         
-        {{ champion_badge("non_eu_leaders", relays.json.aroi_leaderboards.leaderboards.non_eu_leaders, "Global Expansion Leader", "🌏", "panel-success", "aroi-champion-global", page_ctx.path_prefix) }}
+        {{ champion_badge("non_eu_leaders", relays.json.aroi_leaderboards.leaderboards.non_eu_leaders, "Global Expansion Leader", "🌏", "panel-success", "aroi-champion-global", page_ctx.path_prefix, relays.use_bits) }}
         
-        {{ champion_badge("frontier_builders", relays.json.aroi_leaderboards.leaderboards.frontier_builders, "Frontier Pioneer", "🏴‍☠️", "panel-default", "aroi-champion-frontier", page_ctx.path_prefix) }}
+        {{ champion_badge("frontier_builders", relays.json.aroi_leaderboards.leaderboards.frontier_builders, "Frontier Pioneer", "🏴‍☠️", "panel-default", "aroi-champion-frontier", page_ctx.path_prefix, relays.use_bits) }}
         
-        {{ champion_badge("network_veterans", relays.json.aroi_leaderboards.leaderboards.network_veterans, "Network Veteran", "🏆", "panel-default", "aroi-champion-reliability", page_ctx.path_prefix) }}
+        {{ champion_badge("network_veterans", relays.json.aroi_leaderboards.leaderboards.network_veterans, "Network Veteran", "🏆", "panel-default", "aroi-champion-reliability", page_ctx.path_prefix, relays.use_bits) }}
     </div>
 </section>
 
@@ -93,38 +93,38 @@
 <!-- TOP 3 SUMMARY (Elite Tier Champions) -->
 <!-- ===================================================================== -->
 <section id="podium" class="aroi-section">
-    <h2>🥇 Top 3 Summary</h2>
+    <h2 title="Podium winners with detailed achievement breakdown">🥇 Top 3 Summary</h2>
     <p class="lead">Elite Tier Champions - Podium winners across key categories</p>
     
     <!-- Bandwidth Titans -->
-    {{ top3_table("Bandwidth Titans", "💪", relays.json.aroi_leaderboards.leaderboards.bandwidth, ["Bandwidth King", "Bandwidth Warrior", "Bandwidth Hero"], "bandwidth", page_ctx) }}
+    {{ top3_table("Bandwidth Titans", "💪", relays.json.aroi_leaderboards.leaderboards.bandwidth, ["Bandwidth King", "Bandwidth Warrior", "Bandwidth Hero"], "bandwidth", page_ctx, relays.use_bits) }}
 
     <!-- Network Authority Elite -->
-    {{ top3_table("Network Authority Elite", "🏛️", relays.json.aroi_leaderboards.leaderboards.consensus_weight, ["Authority Supreme", "Authority Commander", "Authority Captain"], "consensus_weight", page_ctx) }}
+    {{ top3_table("Network Authority Elite", "🏛️", relays.json.aroi_leaderboards.leaderboards.consensus_weight, ["Authority Supreme", "Authority Commander", "Authority Captain"], "consensus_weight", page_ctx, relays.use_bits) }}
 
     <!-- Exit Authorities -->
-    {{ top3_table("Exit Authorities", "🚪", relays.json.aroi_leaderboards.leaderboards.exit_authority, ["Exit Authority King", "Exit Authority Commander", "Exit Authority Captain"], "exit_authority", page_ctx) }}
+    {{ top3_table("Exit Authorities", "🚪", relays.json.aroi_leaderboards.leaderboards.exit_authority, ["Exit Authority King", "Exit Authority Commander", "Exit Authority Captain"], "exit_authority", page_ctx, relays.use_bits) }}
 
     <!-- Exit Gate Keepers -->
-    {{ top3_table("Exit Gate Keepers", "🚪", relays.json.aroi_leaderboards.leaderboards.exit_operators, ["Exit Master", "Exit Champion", "Exit Hero"], "exit_operators", page_ctx) }}
+    {{ top3_table("Exit Gate Keepers", "🚪", relays.json.aroi_leaderboards.leaderboards.exit_operators, ["Exit Master", "Exit Champion", "Exit Hero"], "exit_operators", page_ctx, relays.use_bits) }}
 
     <!-- Guard Champions -->
-    {{ top3_table("Guard Champions", "🛡️", relays.json.aroi_leaderboards.leaderboards.guard_operators, ["Guard Commander", "Guard Captain", "Guard Leader"], "guard_operators", page_ctx) }}
+    {{ top3_table("Guard Champions", "🛡️", relays.json.aroi_leaderboards.leaderboards.guard_operators, ["Guard Commander", "Guard Captain", "Guard Leader"], "guard_operators", page_ctx, relays.use_bits) }}
 
     <!-- Diversity Masters -->
-    {{ top3_table("Diversity Masters", "🌍", relays.json.aroi_leaderboards.leaderboards.most_diverse, ["Diversity Master", "Diversity Master", "Diversity Master"], "most_diverse", page_ctx) }}
+    {{ top3_table("Diversity Masters", "🌍", relays.json.aroi_leaderboards.leaderboards.most_diverse, ["Diversity Master", "Diversity Master", "Diversity Master"], "most_diverse", page_ctx, relays.use_bits) }}
 
     <!-- Platform Heroes -->
-    {{ top3_table("Platform Heroes", "💻", relays.json.aroi_leaderboards.leaderboards.platform_diversity, ["Platform Hero", "Platform Hero", "Platform Hero"], "platform_diversity", page_ctx) }}
+    {{ top3_table("Platform Heroes", "💻", relays.json.aroi_leaderboards.leaderboards.platform_diversity, ["Platform Hero", "Platform Hero", "Platform Hero"], "platform_diversity", page_ctx, relays.use_bits) }}
 
     <!-- Global Expansion Leaders -->
-    {{ top3_table("Global Expansion Leaders", "🌏", relays.json.aroi_leaderboards.leaderboards.non_eu_leaders, ["Global Pioneer", "Global Explorer", "Global Ambassador"], "non_eu_leaders", page_ctx) }}
+    {{ top3_table("Global Expansion Leaders", "🌏", relays.json.aroi_leaderboards.leaderboards.non_eu_leaders, ["Global Pioneer", "Global Explorer", "Global Ambassador"], "non_eu_leaders", page_ctx, relays.use_bits) }}
 
     <!-- Frontier Pioneers -->
-    {{ top3_table("Frontier Pioneers", "🏴‍☠️", relays.json.aroi_leaderboards.leaderboards.frontier_builders, ["Frontier Pioneer", "Frontier Pioneer", "Frontier Pioneer"], "frontier_builders", page_ctx) }}
+    {{ top3_table("Frontier Pioneers", "🏴‍☠️", relays.json.aroi_leaderboards.leaderboards.frontier_builders, ["Frontier Pioneer", "Frontier Pioneer", "Frontier Pioneer"], "frontier_builders", page_ctx, relays.use_bits) }}
 
     <!-- Network Veterans -->
-    {{ top3_table("Network Veterans", "🏆", relays.json.aroi_leaderboards.leaderboards.network_veterans, ["Veteran Legend", "Veteran Champion", "Veteran Hero"], "network_veterans", page_ctx) }}
+    {{ top3_table("Network Veterans", "🏆", relays.json.aroi_leaderboards.leaderboards.network_veterans, ["Veteran Legend", "Veteran Champion", "Veteran Hero"], "network_veterans", page_ctx, relays.use_bits) }}
 
 
 </section>
@@ -133,25 +133,25 @@
 <!-- COMPLETE RANKINGS (Full Leaderboards - All Categories Stacked) -->
 <!-- ===================================================================== -->
 <section id="rankings">
-    <h2>📊 Complete Rankings</h2>
+    <h2 title="Full leaderboards with top 25 operators per category">📊 Complete Rankings</h2>
     <p class="lead">Full leaderboards with top 25 operators per category - All categories displayed for easy comparison and analysis</p>
 
     <!-- Category 1: Bandwidth Contributed -->
     <section id="bandwidth" class="aroi-section">
-        <h3>🚀 Bandwidth Contributed - Top 25</h3>
+        <h3 title="Operators ranked by total observed bandwidth capacity across all relays">🚀 Bandwidth Contributed - Top 25</h3>
         {% if relays.json.aroi_leaderboards.leaderboards.bandwidth %}
         <div class="table-responsive">
             <table class="table table-striped table-condensed aroi-rankings-table aroi-standard-table">
                 <thead>
                     <tr>
-                        <th>Rank</th>
-                        <th>Operator (AROI)</th>
-                        <th>Relays</th>
-                        <th>Bandwidth</th>
-                        <th>Consensus Weight</th>
-                        <th>Guard/Exit Count</th>
-                        <th>Countries</th>
-                        <th>Platforms</th>
+                        <th title="Position in bandwidth leaderboard based on total observed bandwidth capacity">Rank</th>
+                        <th title="Authenticated Relay Operator Identifier following ContactInfo specification">Operator (AROI)</th>
+                        <th title="Total number of relays operated with measured vs unmeasured breakdown">Relays</th>
+                        <th title="Total observed bandwidth capacity contributed to Tor network in {% if relays.use_bits %}bits per second (Mbit/s, Gbit/s, etc.){% else %}bytes per second (MB/s, GB/s, etc.){% endif %}">Bandwidth</th>
+                        <th title="Percentage of total Tor network consensus weight controlling routing decisions">Consensus Weight</th>
+                        <th title="Number of guard and exit relays providing entry/exit services">Guard/Exit Count</th>
+                        <th title="Geographic distribution of relay operations across countries">Countries</th>
+                        <th title="Operating system diversity across relay infrastructure">Platforms</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -168,10 +168,10 @@
                             </span>
                         </td>
                         <td>
-                            <span class="text-nowrap"><strong>{{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</strong></span>
+                            <span class="text-nowrap"><strong title="Observed bandwidth capacity in {% if relays.use_bits %}{{ entry.bandwidth_unit }} (bits per second){% else %}{{ entry.bandwidth_unit }} (bytes per second){% endif %}">{{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</strong></span>
                         </td>
                         <td>
-                            <span class="text-nowrap">{{ entry.total_consensus_weight_pct }}</span>
+                            <span class="text-nowrap" title="Percentage of total network authority for routing decisions">{{ entry.total_consensus_weight_pct }}</span>
                         </td>
                         <td>
                             <span title="Guard: {{ entry.guard_count }} | Exit: {{ entry.exit_count }} | Middle: {{ entry.middle_count }}">
@@ -190,7 +190,7 @@
                             <span title="Platforms: {{ entry.platforms|join(', ') }}">
                                 {{ entry.platform_count }}
                                 {% if entry.non_linux_count > 0 %}
-                                    <small class="text-success">({{ entry.non_linux_count }} non-Linux)</small>
+                                    <small class="text-success" title="Relays promoting OS diversity beyond Linux dominance">({{ entry.non_linux_count }} non-Linux)</small>
                                 {% endif %}
                             </span>
                         </td>
@@ -208,19 +208,19 @@
 
     <!-- Category 2: Network Authority Rankings -->
     <section id="consensus_weight" class="aroi-section">
-        <h3>🏛️ Network Authority Rankings - Top 25</h3>
+        <h3 title="Operators ranked by total network consensus weight percentage controlling Tor routing decisions">🏛️ Network Authority Rankings - Top 25</h3>
         {% if relays.json.aroi_leaderboards.leaderboards.consensus_weight %}
         <div class="table-responsive">
             <table class="table table-striped table-condensed aroi-rankings-table aroi-standard-table">
                 <thead>
                     <tr>
-                        <th>Rank</th>
-                        <th>Operator (AROI)</th>
-                        <th>Relays</th>
-                        <th>Network Authority</th>
-                        <th>Bandwidth</th>
-                        <th>Guard/Exit Count</th>
-                        <th>Countries</th>
+                        <th title="Position in network authority leaderboard based on consensus weight">Rank</th>
+                        <th title="Authenticated Relay Operator Identifier following ContactInfo specification">Operator (AROI)</th>
+                        <th title="Total relay count contributing to consensus weight calculation">Relays</th>
+                        <th title="Percentage of total Tor network consensus weight controlled">Network Authority</th>
+                        <th title="Total observed bandwidth capacity in {% if relays.use_bits %}bits per second{% else %}bytes per second{% endif %}">Bandwidth</th>
+                        <th title="Number of guard and exit relays providing specialized services">Guard/Exit Count</th>
+                        <th title="Number of countries with relay presence">Countries</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -228,19 +228,19 @@
                     <tr>
                         <td>{{ rank_badge(entry.rank) }}</td>
                         <td>{{ operator_link(entry, page_ctx) }}</td>
-                        <td>{{ entry.total_relays }}</td>
+                        <td title="Active relays currently contributing to Tor network">{{ entry.total_relays }}</td>
                         <td>
-                            <span class="text-nowrap"><strong>{{ entry.total_consensus_weight_pct }}</strong></span>
+                            <span class="text-nowrap"><strong title="Network consensus weight controlling Tor routing decisions">{{ entry.total_consensus_weight_pct }}</strong></span>
                         </td>
                         <td>
-                            <span class="text-nowrap">{{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</span>
+                            <span class="text-nowrap" title="Observed bandwidth capacity in {% if relays.use_bits %}{{ entry.bandwidth_unit }} (bits per second){% else %}{{ entry.bandwidth_unit }} (bytes per second){% endif %}">{{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</span>
                         </td>
                         <td>
                             <span title="Guard: {{ entry.guard_count }} | Exit: {{ entry.exit_count }}">
                                 🛡️{{ entry.guard_count }} / 🚪{{ entry.exit_count }}
                             </span>
                         </td>
-                        <td>{{ entry.country_count }}</td>
+                        <td title="Number of countries with relay operations">{{ entry.country_count }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -251,19 +251,19 @@
 
     <!-- Category 3: Exit Authorities -->
     <section id="exit_authority" class="aroi-section">
-        <h3>🚪 Exit Authorities - Top 25</h3>
+        <h3 title="Operators ranked by exit consensus weight controlling internet exit traffic">🚪 Exit Authorities - Top 25</h3>
         {% if relays.json.aroi_leaderboards.leaderboards.exit_authority %}
         <div class="table-responsive">
             <table class="table table-striped table-condensed aroi-rankings-table aroi-standard-table">
                 <thead>
                     <tr>
-                        <th>Rank</th>
-                        <th>Operator (AROI)</th>
-                        <th>Exit Relays</th>
-                        <th>Exit Authority</th>
-                        <th>Total Authority</th>
-                        <th>Bandwidth</th>
-                        <th>Countries</th>
+                        <th title="Position in exit authority leaderboard based on exit consensus weight">Rank</th>
+                        <th title="Authenticated Relay Operator Identifier following ContactInfo specification">Operator (AROI)</th>
+                        <th title="Number of relays providing exit services to internet">Exit Relays</th>
+                        <th title="Percentage of exit consensus weight controlling internet access">Exit Authority</th>
+                        <th title="Overall network consensus weight across all relay types">Total Authority</th>
+                        <th title="Total observed bandwidth capacity in {% if relays.use_bits %}bits per second{% else %}bytes per second{% endif %}">Bandwidth</th>
+                        <th title="Number of countries with relay operations">Countries</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -271,17 +271,17 @@
                     <tr>
                         <td>{{ rank_badge(entry.rank) }}</td>
                         <td>{{ operator_link(entry, page_ctx) }}</td>
-                        <td>{{ entry.exit_count }}</td>
+                        <td title="Active exit relays providing internet access">{{ entry.exit_count }}</td>
                         <td>
-                            <span class="text-nowrap"><strong>{{ entry.exit_consensus_weight_pct }}</strong></span>
+                            <span class="text-nowrap"><strong title="Control over internet exit traffic routing">{{ entry.exit_consensus_weight_pct }}</strong></span>
                         </td>
                         <td>
-                            <span class="text-nowrap">{{ entry.total_consensus_weight_pct }}</span>
+                            <span class="text-nowrap" title="Total network consensus weight across all relay types">{{ entry.total_consensus_weight_pct }}</span>
                         </td>
                         <td>
-                            <span class="text-nowrap">{{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</span>
+                            <span class="text-nowrap" title="Observed bandwidth capacity in {% if relays.use_bits %}{{ entry.bandwidth_unit }} (bits per second){% else %}{{ entry.bandwidth_unit }} (bytes per second){% endif %}">{{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</span>
                         </td>
-                        <td>{{ entry.country_count }}</td>
+                        <td title="Geographic distribution of relay operations">{{ entry.country_count }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -292,20 +292,20 @@
 
     <!-- Category 4: Exit Gate Keepers -->
     <section id="exit_operators" class="aroi-section">
-        <h3>🚪 Exit Gate Keepers - Top 25</h3>
+        <h3 title="Operators ranked by number of exit relays providing internet access points">🚪 Exit Gate Keepers - Top 25</h3>
         {% if relays.json.aroi_leaderboards.leaderboards.exit_operators %}
         <div class="table-responsive">
             <table class="table table-striped table-condensed aroi-rankings-table aroi-specialized-table">
                 <thead>
                     <tr>
-                        <th>Rank</th>
-                        <th>Operator (AROI)</th>
-                        <th>Exit Relays</th>
-                        <th>Total Relays</th>
-                        <th>Bandwidth</th>
-                        <th>Consensus Weight</th>
-                        <th>Countries</th>
-                        <th>Guard Count</th>
+                        <th title="Position in exit operators leaderboard based on exit relay count">Rank</th>
+                        <th title="Authenticated Relay Operator Identifier following ContactInfo specification">Operator (AROI)</th>
+                        <th title="Number of relays providing exit services to internet">Exit Relays</th>
+                        <th title="Combined count of all relay types operated">Total Relays</th>
+                        <th title="Total observed bandwidth capacity in {% if relays.use_bits %}bits per second{% else %}bytes per second{% endif %}">Bandwidth</th>
+                        <th title="Percentage of total network consensus weight">Consensus Weight</th>
+                        <th title="Number of countries with relay operations">Countries</th>
+                        <th title="Number of relays providing guard services">Guard Count</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -313,12 +313,12 @@
                     <tr>
                         <td>{{ rank_badge(entry.rank) }}</td>
                         <td>{{ operator_link(entry, page_ctx) }}</td>
-                        <td><strong>{{ entry.exit_count }}</strong></td>
-                        <td>{{ entry.total_relays }}</td>
-                        <td>{{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</td>
-                        <td>{{ entry.total_consensus_weight_pct }}</td>
-                        <td>{{ entry.country_count }}</td>
-                        <td>{{ entry.guard_count }}</td>
+                        <td><strong title="Active exit relays providing critical internet access points">{{ entry.exit_count }}</strong></td>
+                        <td title="All relay types operated by this operator">{{ entry.total_relays }} <small class="text-muted">({{ entry.exit_percentage }})</small></td>
+                        <td title="Observed bandwidth capacity in {% if relays.use_bits %}{{ entry.bandwidth_unit }} (bits per second){% else %}{{ entry.bandwidth_unit }} (bytes per second){% endif %}">{{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</td>
+                        <td title="Network consensus weight percentage">{{ entry.total_consensus_weight_pct }}</td>
+                        <td title="Geographic reach across countries">{{ entry.country_count }}</td>
+                        <td title="Number of guard relays providing network entry points">{{ entry.guard_count }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -329,20 +329,20 @@
 
     <!-- Category 5: Guard Champions -->
     <section id="guard_operators" class="aroi-section">
-        <h3>🛡️ Guard Champions - Top 25</h3>
+        <h3 title="Operators ranked by number of guard relays serving as network entry points">🛡️ Guard Champions - Top 25</h3>
         {% if relays.json.aroi_leaderboards.leaderboards.guard_operators %}
         <div class="table-responsive">
             <table class="table table-striped table-condensed aroi-rankings-table aroi-specialized-table">
                 <thead>
                     <tr>
-                        <th>Rank</th>
-                        <th>Operator (AROI)</th>
-                        <th>Guard Relays</th>
-                        <th>Total Relays</th>
-                        <th>Bandwidth</th>
-                        <th>Consensus Weight</th>
-                        <th>Countries</th>
-                        <th>Exit Count</th>
+                        <th title="Position in guard operators leaderboard based on guard relay count">Rank</th>
+                        <th title="Authenticated Relay Operator Identifier following ContactInfo specification">Operator (AROI)</th>
+                        <th title="Number of relays serving as entry points into the Tor network">Guard Relays</th>
+                        <th title="Combined count of all relay types operated">Total Relays</th>
+                        <th title="Total observed bandwidth capacity in {% if relays.use_bits %}bits per second{% else %}bytes per second{% endif %}">Bandwidth</th>
+                        <th title="Percentage of total network consensus weight">Consensus Weight</th>
+                        <th title="Number of countries with relay operations">Countries</th>
+                        <th title="Number of relays providing exit services">Exit Count</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -350,12 +350,12 @@
                     <tr>
                         <td>{{ rank_badge(entry.rank) }}</td>
                         <td>{{ operator_link(entry, page_ctx) }}</td>
-                        <td><strong>{{ entry.guard_count }}</strong></td>
-                        <td>{{ entry.total_relays }}</td>
-                        <td>{{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</td>
-                        <td>{{ entry.total_consensus_weight_pct }}</td>
-                        <td>{{ entry.country_count }}</td>
-                        <td>{{ entry.exit_count }}</td>
+                        <td><strong title="Active guard relays serving as critical network entry points">{{ entry.guard_count }}</strong></td>
+                        <td title="All relay types operated by this operator">{{ entry.total_relays }} <small class="text-muted">({{ entry.guard_percentage }})</small></td>
+                        <td title="Observed bandwidth capacity in {% if relays.use_bits %}{{ entry.bandwidth_unit }} (bits per second){% else %}{{ entry.bandwidth_unit }} (bytes per second){% endif %}">{{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</td>
+                        <td title="Network consensus weight percentage">{{ entry.total_consensus_weight_pct }}</td>
+                        <td title="Geographic reach across countries">{{ entry.country_count }}</td>
+                        <td title="Number of exit relays providing internet access points">{{ entry.exit_count }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -370,12 +370,12 @@
         {% set category_data = relays.json.aroi_leaderboards.leaderboards[category_key] %}
         {% set emoji = '🌈' if category_key == 'most_diverse' else '💻' if category_key == 'platform_diversity' else '🌍' if category_key == 'non_eu_leaders' else '🏴‍☠️' if category_key == 'frontier_builders' else '🏆' %}
         
-        {{ generic_ranking_table(category_key, category_name, category_data, emoji, page_ctx) }}
+        {{ generic_ranking_table(category_key, category_name, category_data, emoji, page_ctx, relays.use_bits) }}
     {% endfor %}
 </section>
 
 <!-- Floating Back to Top Button -->
-<a href="#champions" class="btn btn-primary aroi-fixed-nav">
+<a href="#champions" class="btn btn-primary aroi-fixed-nav" title="Return to top of page">
     ↑ Back to Top
 </a>
 
