@@ -433,6 +433,8 @@ def _calculate_aroi_leaderboards(relays_instance):
                     frontier_achievement_title = "✨ Frontier Champion"
             
             # Add achievement titles for top 3 platform diversity heroes
+            platform_breakdown_details = ""
+            platform_breakdown_tooltip = ""
             if category == 'platform_diversity':
                 if rank == 1:
                     platform_hero_title = "🏆 Platform Legend"
@@ -440,6 +442,40 @@ def _calculate_aroi_leaderboards(relays_instance):
                     platform_hero_title = "💻 Platform Master"
                 elif rank == 3:
                     platform_hero_title = "🖥️ Platform Champion"
+                
+                # Format platform breakdown for specialization column
+                platform_breakdown = {}
+                for relay in operator_relays:
+                    platform = relay.get('platform', 'Unknown')
+                    if platform:
+                        # Extract short platform name (before first space or version number)
+                        short_platform = platform.split()[0] if platform else 'Unknown'
+                        platform_breakdown[short_platform] = platform_breakdown.get(short_platform, 0) + 1
+                
+                # Sort by relay count (descending) then by platform name
+                sorted_platform_breakdown = sorted(platform_breakdown.items(), 
+                                                  key=lambda x: (-x[1], x[0]))
+                
+                # Create short format (max 12 chars): "Win:5,Mac:3"
+                platform_parts = []
+                for platform, count in sorted_platform_breakdown:
+                    platform_parts.append(f"{platform}:{count}")
+                
+                platform_breakdown_full = ",".join(platform_parts)
+                if len(platform_breakdown_full) > 12:
+                    platform_breakdown_details = platform_breakdown_full[:9] + "..."
+                else:
+                    platform_breakdown_details = platform_breakdown_full
+                
+                # Create full tooltip with platform details and countries
+                platform_tooltip_parts = []
+                for platform, count in sorted_platform_breakdown:
+                    platform_tooltip_parts.append(f"{count} {platform} relays")
+                platform_tooltip_text = ", ".join(platform_tooltip_parts)
+                
+                # Add countries to tooltip
+                countries_text = ", ".join(sorted(metrics['countries']))
+                platform_breakdown_tooltip = f"Platform Distribution: {platform_tooltip_text}. Countries: {countries_text}"
             
             # Add achievement titles for top 3 diversity masters
             diversity_breakdown_details = ""
@@ -523,6 +559,8 @@ def _calculate_aroi_leaderboards(relays_instance):
                 'rare_country_tooltip': rare_country_tooltip,
                 'frontier_achievement_title': frontier_achievement_title,
                 'platform_hero_title': platform_hero_title,
+                'platform_breakdown_details': platform_breakdown_details,
+                'platform_breakdown_tooltip': platform_breakdown_tooltip,
                 'diversity_master_title': diversity_master_title,
                 'diversity_breakdown_details': diversity_breakdown_details,
                 'diversity_breakdown_tooltip': diversity_breakdown_tooltip,
