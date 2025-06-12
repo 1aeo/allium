@@ -340,8 +340,49 @@ def _calculate_aroi_leaderboards(relays_instance):
             
             # Calculate geographic achievement for non_eu_leaders category
             geographic_achievement = ""
+            geographic_breakdown_details = ""
+            geographic_breakdown_tooltip = ""
             if category == 'non_eu_leaders':
                 geographic_achievement = calculate_geographic_achievement(metrics['countries'])
+                
+                # Calculate relay count per country for geographic breakdown
+                country_relay_breakdown = {}
+                for relay in metrics['relays']:
+                    country = relay.get('country', '').upper()
+                    if country:
+                        country_relay_breakdown[country] = country_relay_breakdown.get(country, 0) + 1
+                
+                # Sort by relay count (descending) then by country name
+                sorted_country_breakdown = sorted(country_relay_breakdown.items(), 
+                                                key=lambda x: (-x[1], x[0]))
+                
+                # Create full breakdown for tooltip
+                full_breakdown = []
+                short_breakdown = []
+                
+                for country, count in sorted_country_breakdown:
+                    detail = f"{count} in {country}"
+                    full_breakdown.append(detail)
+                    short_breakdown.append(detail)
+                
+                geographic_breakdown_tooltip = ", ".join(full_breakdown)
+                
+                # Create short version (max 28 chars for table)
+                short_text = ", ".join(short_breakdown)
+                if len(short_text) > 28:
+                    # Find the last complete entry that fits in 28 chars
+                    chars_used = 0
+                    for i, detail in enumerate(short_breakdown):
+                        if i > 0:
+                            chars_used += 2  # for ", "
+                        if chars_used + len(detail) <= 25:  # leave 3 chars for "..."
+                            chars_used += len(detail)
+                        else:
+                            short_breakdown = short_breakdown[:i]
+                            break
+                    geographic_breakdown_details = ", ".join(short_breakdown) + "..."
+                else:
+                    geographic_breakdown_details = short_text
             
             # Format rare country breakdown for frontier_builders category
             rare_country_details = ""
@@ -432,7 +473,9 @@ def _calculate_aroi_leaderboards(relays_instance):
                 'veteran_details_short': veteran_details_short,
                 'veteran_tooltip': veteran_tooltip,
                 'first_seen_date': metrics['first_seen'].split(' ')[0] if metrics['first_seen'] else 'Unknown',
-                'geographic_achievement': geographic_achievement  # Add dynamic achievement
+                'geographic_achievement': geographic_achievement,  # Add dynamic achievement
+                'geographic_breakdown_details': geographic_breakdown_details,  # Add geographic breakdown
+                'geographic_breakdown_tooltip': geographic_breakdown_tooltip  # Add geographic tooltip
             }
             formatted_data.append(formatted_entry)
         

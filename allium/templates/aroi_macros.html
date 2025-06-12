@@ -163,7 +163,7 @@
                         {%- endif -%}">Key Metric</th>
                         <th title="Total observed bandwidth capacity in {% if use_bits %}bits per second{% else %}bytes per second{% endif %}">Bandwidth</th>
                         <th title="Number of countries with relay operations">Countries</th>
-                        {% if category_key != 'frontier_builders' %}
+                        {% if category_key != 'frontier_builders' and category_key != 'non_eu_leaders' %}
                         <th title="Number of different operating systems used">Platforms</th>
                         {% endif %}
                         <th title="Primary operational focus or unique contribution to Tor network">Specialization</th>
@@ -187,13 +187,13 @@
                         </td>
                         <td title="Observed bandwidth capacity in {% if use_bits %}{{ entry.bandwidth_unit }} (bits per second){% else %}{{ entry.bandwidth_unit }} (bytes per second){% endif %}">{{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</td>
                         <td title="Geographic distribution of relay operations">{{ entry.country_count }}</td>
-                        {% if category_key != 'frontier_builders' %}
+                        {% if category_key != 'frontier_builders' and category_key != 'non_eu_leaders' %}
                         <td title="Operating system diversity across relay infrastructure">{{ entry.platform_count }}</td>
                         {% endif %}
                         <td>
                             {% if category_key == 'most_diverse' %}<span title="Highest combined geographic, platform, and network diversity scores">Geographic diversity</span>
                             {% elif category_key == 'platform_diversity' %}<span title="Promoting operating system diversity beyond Linux dominance">OS diversity</span>
-                            {% elif category_key == 'non_eu_leaders' %}<span title="Expanding Tor's geographic reach beyond European Union concentration">Global expansion</span>
+                            {% elif category_key == 'non_eu_leaders' %}<span title="{{ entry.geographic_breakdown_tooltip }}">{{ entry.geographic_breakdown_details if entry.geographic_breakdown_details else 'Global expansion' }}</span>
                             {% elif category_key == 'frontier_builders' %}<span title="{{ entry.rare_country_tooltip }}">{{ entry.rare_country_details if entry.rare_country_details else 'Frontier presence' }}</span>
                             {% elif category_key == 'network_veterans' %}<span title="{{ entry.veteran_tooltip }}">{{ entry.veteran_details_short if entry.veteran_details_short else 'Network longevity' }}</span>
                             {% endif %}
