@@ -16,6 +16,7 @@ import sys
 import time
 from shutil import copytree
 from lib.relays import Relays
+from lib.coordinator import create_relay_set_with_coordinator
 
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
 
@@ -179,8 +180,8 @@ if __name__ == "__main__":
 
     # object containing onionoo data and processing routines
     if args.progress:
-        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Initializing relay data from onionoo...")
-    RELAY_SET = Relays(args.output_dir, args.onionoo_url, args.bandwidth_units == 'bits', args.progress, start_time, progress_step, total_steps)
+        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Initializing relay data from onionoo (using coordinator)...")
+    RELAY_SET = create_relay_set_with_coordinator(args.output_dir, args.onionoo_url, args.bandwidth_units == 'bits', args.progress, start_time, progress_step, total_steps)
     if RELAY_SET.json == None:
         sys.exit(0)
     # Update progress_step from the RELAY_SET object (it was incremented during intelligence analysis)
