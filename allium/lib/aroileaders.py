@@ -443,13 +443,24 @@ def _calculate_aroi_leaderboards(relays_instance):
                 elif rank == 3:
                     platform_hero_title = "🖥️ Platform Champion"
                 
-                # Format platform breakdown for specialization column
+                # Format platform breakdown for specialization column (non-Linux only)
                 platform_breakdown = {}
                 for relay in operator_relays:
                     platform = relay.get('platform', 'Unknown')
-                    if platform:
+                    if platform and not platform.lower().startswith('linux'):
                         # Extract short platform name (before first space or version number)
                         short_platform = platform.split()[0] if platform else 'Unknown'
+                        # Map common platform names to shorter versions
+                        if short_platform.lower().startswith('win'):
+                            short_platform = 'Win'
+                        elif short_platform.lower().startswith('mac') or short_platform.lower().startswith('darwin'):
+                            short_platform = 'Mac'
+                        elif short_platform.lower().startswith('freebsd'):
+                            short_platform = 'FreeBSD'
+                        elif short_platform.lower().startswith('openbsd'):
+                            short_platform = 'OpenBSD'
+                        elif short_platform.lower().startswith('netbsd'):
+                            short_platform = 'NetBSD'
                         platform_breakdown[short_platform] = platform_breakdown.get(short_platform, 0) + 1
                 
                 # Sort by relay count (descending) then by platform name
