@@ -167,6 +167,35 @@ allium welcomes contributions in several areas:
 - **Performance optimizations** and memory efficiency
 - **Template improvements** and UI enhancements
 
+## 📷 Screenshots
+
+Here are some key screenshots showcasing allium's features:
+
+### AROI Leaderboard - Top 3 and Top 6 Champions
+![AROI Leaderboard Top 3 and Top 6](docs/screenshots/aroi-leaderboard-top3-top6.png)
+
+The main AROI leaderboard view showing the top 3 operators in each category and an expanded view of the top 6 champions, highlighting their achievements across bandwidth, consensus weight, and network diversity metrics.
+
+### AROI Leaderboard - Top 25 Bandwidth Champions
+![AROI Leaderboard Top 25 Bandwidth](docs/screenshots/aroi-leaderboard-top25-bandwidth.png)
+
+Detailed view of the top 25 bandwidth champions, showing authenticated relay operators who contribute the most bandwidth to the Tor network, with precise measurements and rankings.
+
+### AROI Leaderboard - Champions Badges
+![AROI Leaderboard Champions Badges](docs/screenshots/aroi-leaderboard-champions-badges.png)
+
+Achievement badge system displaying various operator accomplishments including geographic diversity, platform diversity, frontier building, and network veteran status.
+
+### Browse by Contact
+![Browse by Contact](docs/screenshots/browse-by-contact.png)
+
+Contact-based browsing interface showing relay operators grouped by their contact information, enabling easy exploration of operator families and their collective network contributions.
+
+### Browse by Contact - 1aeo Example
+![Browse by Contact 1aeo](docs/screenshots/browse-by-contact-1aeo.png.jpg)
+
+Detailed view of a specific operator's (1aeo) relay family, showing individual relay details, geographic distribution, and technical specifications across their network infrastructure.
+
 ## 📄 License
 
 This project is released under the **UNLICENSE** (public domain).
