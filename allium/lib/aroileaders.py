@@ -20,6 +20,55 @@ from .country_utils import (
 )
 
 
+def _format_breakdown_details(breakdown_items, max_chars, formatter_func=None):
+    """
+    Reusable helper function to format country/item breakdowns with truncation.
+    
+    Args:
+        breakdown_items (list): List of (country, count) tuples, pre-sorted
+        max_chars (int): Maximum characters allowed before truncation
+        formatter_func (callable): Custom function to format each (count, country) pair
+        
+    Returns:
+        tuple: (formatted_details, tooltip_text)
+    """
+    if not breakdown_items:
+        return "", ""
+    
+    # Default formatter if none provided
+    if formatter_func is None:
+        formatter_func = lambda count, country: f"{count} in {country}"
+    
+    # Create full breakdown for tooltip and short breakdown for display
+    full_breakdown = []
+    short_breakdown = []
+    
+    for country, count in breakdown_items:
+        detail = formatter_func(count, country)
+        full_breakdown.append(detail)
+        short_breakdown.append(detail)
+    
+    tooltip_text = ", ".join(full_breakdown)
+    
+    # Create short version with truncation
+    short_text = ", ".join(short_breakdown)
+    if len(short_text) > max_chars:
+        # Find the last complete entry that fits
+        chars_used = 0
+        for i, detail in enumerate(short_breakdown):
+            if i > 0:
+                chars_used += 2  # for ", "
+            if chars_used + len(detail) <= max_chars - 3:  # leave 3 chars for "..."
+                chars_used += len(detail)
+            else:
+                short_breakdown = short_breakdown[:i]
+                break
+        details_text = ", ".join(short_breakdown) + "..."
+    else:
+        details_text = short_text
+    
+    return details_text, tooltip_text
+
 def _calculate_aroi_leaderboards(relays_instance):
     """
     Calculate AROI operator leaderboards using current live relay data.
@@ -147,6 +196,17 @@ def _calculate_aroi_leaderboards(relays_instance):
         sorted_rare_breakdown = sorted(rare_country_breakdown.items(), 
                                      key=lambda x: (-x[1], x[0]))
         
+        # Calculate general country breakdown for reuse (all countries, not just rare ones)
+        all_country_breakdown = {}
+        for relay in operator_relays:
+            country = relay.get('country', '').upper()
+            if country:
+                all_country_breakdown[country] = all_country_breakdown.get(country, 0) + 1
+        
+        # Sort by relay count (descending) then by country name for consistent display
+        sorted_all_country_breakdown = sorted(all_country_breakdown.items(), 
+                                            key=lambda x: (-x[1], x[0]))
+        
 
         
 
@@ -238,6 +298,7 @@ def _calculate_aroi_leaderboards(relays_instance):
             'rare_country_count': rare_country_count,
             'relays_in_rare_countries': relays_in_rare_countries,
             'rare_country_breakdown': sorted_rare_breakdown,
+            'all_country_breakdown': sorted_all_country_breakdown,  # Reusable country breakdown
             'diversity_score': diversity_score,
             'uptime_percentage': uptime_percentage,
             'exit_consensus_weight': exit_consensus_weight,
@@ -344,78 +405,20 @@ def _calculate_aroi_leaderboards(relays_instance):
             geographic_breakdown_tooltip = ""
             if category == 'non_eu_leaders':
                 geographic_achievement = calculate_geographic_achievement(metrics['countries'])
-                
-                # Calculate relay count per country for geographic breakdown
-                country_relay_breakdown = {}
-                for relay in metrics['relays']:
-                    country = relay.get('country', '').upper()
-                    if country:
-                        country_relay_breakdown[country] = country_relay_breakdown.get(country, 0) + 1
-                
-                # Sort by relay count (descending) then by country name
-                sorted_country_breakdown = sorted(country_relay_breakdown.items(), 
-                                                key=lambda x: (-x[1], x[0]))
-                
-                # Create full breakdown for tooltip
-                full_breakdown = []
-                short_breakdown = []
-                
-                for country, count in sorted_country_breakdown:
-                    detail = f"{count} in {country}"
-                    full_breakdown.append(detail)
-                    short_breakdown.append(detail)
-                
-                geographic_breakdown_tooltip = ", ".join(full_breakdown)
-                
-                # Create short version (max 28 chars for table)
-                short_text = ", ".join(short_breakdown)
-                if len(short_text) > 28:
-                    # Find the last complete entry that fits in 28 chars
-                    chars_used = 0
-                    for i, detail in enumerate(short_breakdown):
-                        if i > 0:
-                            chars_used += 2  # for ", "
-                        if chars_used + len(detail) <= 25:  # leave 3 chars for "..."
-                            chars_used += len(detail)
-                        else:
-                            short_breakdown = short_breakdown[:i]
-                            break
-                    geographic_breakdown_details = ", ".join(short_breakdown) + "..."
-                else:
-                    geographic_breakdown_details = short_text
+                # Reuse pre-calculated country breakdown data instead of recalculating
+                geographic_breakdown_details, geographic_breakdown_tooltip = _format_breakdown_details(
+                    metrics['all_country_breakdown'], 28
+                )
             
             # Format rare country breakdown for frontier_builders category
             rare_country_details = ""
             rare_country_tooltip = ""
             if category == 'frontier_builders' and metrics['rare_country_breakdown']:
-                # Create full breakdown for tooltip
-                full_breakdown = []
-                short_breakdown = []
-                
-                for country, count in metrics['rare_country_breakdown']:
-                    country_name = country.lower()  # Convert back to lowercase for display
-                    detail = f"{count} relay{'s' if count != 1 else ''} in {country_name.upper()}"
-                    full_breakdown.append(detail)
-                    short_breakdown.append(detail)
-                
-                rare_country_tooltip = ", ".join(full_breakdown)
-                
-                # Create short version (max 34 chars for table - extended for better display)
-                short_text = ", ".join(short_breakdown)
-                if len(short_text) > 34:
-                    # Find the last complete entry that fits in 34 chars
-                    chars_used = 0
-                    for i, detail in enumerate(short_breakdown):
-                        if i > 0:
-                            chars_used += 2  # for ", "
-                        if chars_used + len(detail) <= 31:  # leave 3 chars for "..."
-                            chars_used += len(detail)
-                        else:
-                            short_breakdown = short_breakdown[:i]
-                            break
-                    rare_country_details = ", ".join(short_breakdown) + "..."
-                else:
-                    rare_country_details = short_text
+                # Use helper function with custom formatter for rare countries (includes "relay/relays")
+                rare_country_details, rare_country_tooltip = _format_breakdown_details(
+                    metrics['rare_country_breakdown'], 34,
+                    lambda count, country: f"{count} relay{'s' if count != 1 else ''} in {country}"
+                )
             
             # Format veteran details for network_veterans category
             veteran_details_short = ""
