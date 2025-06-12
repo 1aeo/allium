@@ -445,7 +445,7 @@ def _calculate_aroi_leaderboards(relays_instance):
                 
                 # Format platform breakdown for specialization column (non-Linux only)
                 platform_breakdown = {}
-                for relay in operator_relays:
+                for relay in metrics['relays']:
                     platform = relay.get('platform', 'Unknown')
                     if platform and not platform.lower().startswith('linux'):
                         # Extract short platform name (before first space or version number)
