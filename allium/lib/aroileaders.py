@@ -457,8 +457,12 @@ def _calculate_aroi_leaderboards(relays_instance):
                 platform_count = metrics['platform_count']
                 as_count = metrics['unique_as_count']
                 
-                # Create short format (max 20 chars): "5c,3os,8asn"
-                diversity_breakdown_details = f"{country_count}c,{platform_count}os,{as_count}asn"
+                # Create short format (max 20 chars): "5 Countries, 3 OS, 8 AS"
+                diversity_breakdown_full = f"{country_count} Countries, {platform_count} OS, {as_count} AS"
+                if len(diversity_breakdown_full) > 20:
+                    diversity_breakdown_details = diversity_breakdown_full[:17] + "..."
+                else:
+                    diversity_breakdown_details = diversity_breakdown_full
                 
                 # Create full tooltip with calculation details
                 diversity_breakdown_tooltip = f"Diversity Score Calculation: {country_count} countries × 2.0 + {platform_count} operating systems × 1.5 + {as_count} unique ASNs × 1.0 = {metrics['diversity_score']}"
