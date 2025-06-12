@@ -163,7 +163,9 @@
                         {%- endif -%}">Key Metric</th>
                         <th title="Total observed bandwidth capacity in {% if use_bits %}bits per second{% else %}bytes per second{% endif %}">Bandwidth</th>
                         <th title="Number of countries with relay operations">Countries</th>
+                        {% if category_key != 'frontier_builders' %}
                         <th title="Number of different operating systems used">Platforms</th>
+                        {% endif %}
                         <th title="Primary operational focus or unique contribution to Tor network">Specialization</th>
                     </tr>
                 </thead>
@@ -185,7 +187,9 @@
                         </td>
                         <td title="Observed bandwidth capacity in {% if use_bits %}{{ entry.bandwidth_unit }} (bits per second){% else %}{{ entry.bandwidth_unit }} (bytes per second){% endif %}">{{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</td>
                         <td title="Geographic distribution of relay operations">{{ entry.country_count }}</td>
+                        {% if category_key != 'frontier_builders' %}
                         <td title="Operating system diversity across relay infrastructure">{{ entry.platform_count }}</td>
+                        {% endif %}
                         <td>
                             {% if category_key == 'most_diverse' %}<span title="Highest combined geographic, platform, and network diversity scores">Geographic diversity</span>
                             {% elif category_key == 'platform_diversity' %}<span title="Promoting operating system diversity beyond Linux dominance">OS diversity</span>
