@@ -413,12 +413,21 @@ def _calculate_aroi_leaderboards(relays_instance):
             # Format rare country breakdown for frontier_builders category
             rare_country_details = ""
             rare_country_tooltip = ""
+            frontier_achievement_title = ""
             if category == 'frontier_builders' and metrics['rare_country_breakdown']:
                 # Use helper function with custom formatter for rare countries (includes "relay/relays")
                 rare_country_details, rare_country_tooltip = _format_breakdown_details(
                     metrics['rare_country_breakdown'], 34,
                     lambda count, country: f"{count} relay{'s' if count != 1 else ''} in {country}"
                 )
+                
+                # Add achievement titles for top 3 frontier builders
+                if rank == 1:
+                    frontier_achievement_title = "🌟 Frontier Legend"
+                elif rank == 2:
+                    frontier_achievement_title = "⭐ Frontier Master"
+                elif rank == 3:
+                    frontier_achievement_title = "✨ Frontier Champion"
             
             # Format veteran details for network_veterans category
             veteran_details_short = ""
@@ -474,6 +483,7 @@ def _calculate_aroi_leaderboards(relays_instance):
                 'relays_in_rare_countries': metrics['relays_in_rare_countries'],
                 'rare_country_details': rare_country_details,
                 'rare_country_tooltip': rare_country_tooltip,
+                'frontier_achievement_title': frontier_achievement_title,
                 'diversity_score': f"{metrics['diversity_score']:.1f}",
                 'uptime_percentage': f"{metrics['uptime_percentage']:.1f}%",
                 'veteran_score': f"{metrics['veteran_score']:.0f}",
