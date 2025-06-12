@@ -1021,8 +1021,6 @@ class Relays:
         except (ValueError, TypeError):
             return "unknown"
 
-
-
     def get_detail_page_context(self, category, value):
         """Generate page context with correct breadcrumb data for detail pages"""
         # Import here to avoid circular imports
@@ -1151,6 +1149,11 @@ class Relays:
             # Generate page context with correct breadcrumb data
             page_ctx = self.get_detail_page_context(k, v)
             
+            # Generate contact rankings for AROI leaderboards (only for contact pages)
+            contact_rankings = []
+            if k == "contact":
+                contact_rankings = self._generate_contact_rankings(v)
+            
             # Time the template rendering
             render_start = time.time()
             rendered = template.render(
@@ -1173,6 +1176,7 @@ class Relays:
                 key=k,
                 value=v,
                 sp_countries=the_prefixed,
+                contact_rankings=contact_rankings,  # AROI leaderboard rankings for this contact
                 # Template optimizations - pre-computed values to avoid expensive Jinja2 operations for all page types
                 consensus_weight_percentage=f"{i['consensus_weight_fraction'] * 100:.2f}%",
                 guard_consensus_weight_percentage=f"{i['guard_consensus_weight_fraction'] * 100:.2f}%",
@@ -1253,3 +1257,67 @@ class Relays:
                 encoding="utf8",
             ) as html:
                 html.write(rendered)
+
+    def _generate_contact_rankings(self, contact_hash):
+        """
+        Generate ranking statements for a contact that appears in top 25 of any AROI category.
+        Returns a list of ranking statements with hyperlinks to the operator champions page.
+        
+        Args:
+            contact_hash (str): The MD5 hash of the contact information
+            
+        Returns:
+            list: List of dictionaries with ranking information for display on contact pages
+        """
+        rankings = []
+        
+        # Check if AROI leaderboards data exists
+        if not hasattr(self, 'json') or not self.json or 'aroi_leaderboards' not in self.json:
+            return rankings
+            
+        leaderboards = self.json['aroi_leaderboards'].get('leaderboards', {})
+        categories = self.json['aroi_leaderboards'].get('summary', {}).get('categories', {})
+        
+        # Category mapping to section IDs and display names
+        category_info = {
+            'bandwidth': {'section': 'bandwidth', 'title': 'Bandwidth Champion', 'emoji': '🚀'},
+            'consensus_weight': {'section': 'consensus_weight', 'title': 'Network Authority', 'emoji': '⚖️'},
+            'exit_authority': {'section': 'exit_authority', 'title': 'Exit Authority', 'emoji': '🚪'},
+            'exit_operators': {'section': 'exit_operators', 'title': 'Exit Gate Keeper', 'emoji': '🚪'},
+            'guard_operators': {'section': 'guard_operators', 'title': 'Guard Champion', 'emoji': '🛡️'},
+            'most_diverse': {'section': 'most_diverse', 'title': 'Diversity Master', 'emoji': '🌈'},
+            'platform_diversity': {'section': 'platform_diversity', 'title': 'Platform Hero', 'emoji': '💻'},
+            'non_eu_leaders': {'section': 'non_eu_leaders', 'title': 'Non-EU Leader', 'emoji': '🌍'},
+            'frontier_builders': {'section': 'frontier_builders', 'title': 'Frontier Builder', 'emoji': '🏴‍☠️'},
+            'network_veterans': {'section': 'network_veterans', 'title': 'Network Veteran', 'emoji': '🏆'}
+        }
+        
+        # Check each category for this contact in top 25
+        for category_key, category_data in leaderboards.items():
+            if not category_data or category_key not in category_info:
+                continue
+                
+            # Look for this contact in the top 25 of this category
+            for entry in category_data[:25]:  # Only check top 25
+                if entry.get('contact_hash') == contact_hash:
+                    info = category_info[category_key]
+                    category_name = categories.get(category_key, info['title'])
+                    
+                    # Create ranking statement
+                    ranking = {
+                        'rank': entry.get('rank', 0),
+                        'category_key': category_key,
+                        'category_name': category_name,
+                        'section_id': info['section'],
+                        'title': info['title'],
+                        'emoji': info['emoji'],
+                        'link': f"../aroi-leaderboards.html#{info['section']}",
+                        'statement': f"Ranked #{entry.get('rank', 0)} in {category_name}"
+                    }
+                    rankings.append(ranking)
+                    break  # Found this contact in this category, move to next category
+        
+        # Sort rankings by rank (best ranks first)
+        rankings.sort(key=lambda x: x['rank'])
+        
+        return rankings

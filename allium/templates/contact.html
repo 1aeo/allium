@@ -23,6 +23,26 @@
 {% block description %}Contact {{ contact_hash }} summary:
 {{ detail_summary(bandwidth, bandwidth_unit, guard_bandwidth, middle_bandwidth, exit_bandwidth, consensus_weight_fraction, guard_consensus_weight_fraction, middle_consensus_weight_fraction, exit_consensus_weight_fraction, guard_count, middle_count, exit_count, relays.json['relay_subset']|length, network_position) }}
 
+{# AROI Leaderboard Rankings - Show rankings for top 25 operators in any category #}
+{% if contact_rankings %}
+<div class="aroi-rankings-section" style="margin-top: 20px; padding: 15px; background-color: #f0f8ff; border-left: 4px solid #007bff;">
+    <h4 style="margin-top: 0; color: #495057;">🏆 AROI Champion Rankings</h4>
+    
+    <p style="margin-bottom: 15px; color: #666;">This operator appears in the following <a href="{{ page_ctx.path_prefix }}misc/aroi-leaderboards.html" title="View complete AROI Champions Dashboard" style="color: #007bff; text-decoration: none; font-weight: bold;">AROI Champions Dashboard</a> categories:</p>
+    
+    <ul style="list-style-type: none; padding-left: 0; margin-bottom: 0;">
+        {% for ranking in contact_rankings %}
+        <li style="margin-bottom: 8px; padding: 8px 12px; background-color: #ffffff; border-radius: 4px; border: 1px solid #dee2e6;">
+            <a href="{{ page_ctx.path_prefix }}misc/{{ ranking.link }}" title="View {{ ranking.category_name }} leaderboard rankings" style="color: #007bff; text-decoration: none; font-weight: bold;">
+                {{ ranking.emoji }} {{ ranking.statement }}
+            </a>
+            <small style="color: #666; margin-left: 8px;">— {{ ranking.title }}</small>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
 {# Contact Intelligence Phase 1 + Phase 2 - using pre-calculated data from intelligence engine #}
 {% if relays.json.smart_context and relays.json.smart_context.contact_intelligence and relays.json.smart_context.contact_intelligence.template_optimized.get(contact_hash) %}
 {% set contact_intel = relays.json.smart_context.contact_intelligence.template_optimized[contact_hash] %}
