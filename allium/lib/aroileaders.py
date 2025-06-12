@@ -426,7 +426,7 @@ def _calculate_aroi_leaderboards(relays_instance):
                 'rare_country_tooltip': rare_country_tooltip,
                 'diversity_score': f"{metrics['diversity_score']:.1f}",
                 'uptime_percentage': f"{metrics['uptime_percentage']:.1f}%",
-                'veteran_score': f"{metrics['veteran_score']:.1f}",
+                'veteran_score': f"{metrics['veteran_score']:.0f}",
                 'veteran_days': metrics['veteran_days'],
                 'veteran_relay_scaling_factor': metrics['veteran_relay_scaling_factor'],
                 'veteran_details_short': veteran_details_short,
