@@ -84,6 +84,7 @@
                 /* Section Spacing */
                 .aroi-section {
                     margin-bottom: 40px;
+                    scroll-margin-top: 20px; /* Offset anchor links to show space above title */
                 }
                 
                 .aroi-subsection {
@@ -166,7 +167,7 @@
                     width: 15%; /* Cross Reference (Guard/Exit Count) */
                 }
                 
-                /* Diversity/Category table layout */
+                /* Diversity/Category table layout - Generic defaults */
                 .aroi-category-table thead th:nth-child(3) {
                     width: 8%;  /* Relays */
                 }
@@ -189,6 +190,53 @@
                 
                 .aroi-category-table thead th:nth-child(8) {
                     width: 15%; /* Specialization */
+                }
+                
+                /* Geographic Champions (Non-EU Leaders) specific layout */
+                .aroi-geographic-table thead th:nth-child(3) {
+                    width: 15%; /* Non-EU Relays */
+                }
+                
+                .aroi-geographic-table thead th:nth-child(4) {
+                    width: 10%; /* Bandwidth */
+                }
+                
+                .aroi-geographic-table thead th:nth-child(5) {
+                    width: 8%; /* Countries */
+                }
+                
+                .aroi-geographic-table thead th:nth-child(6) {
+                    width: 25%; /* Specialization - Much wider for geographic breakdown details */
+                }
+                
+                /* Frontier Builders (Rare Countries) specific layout */
+                .aroi-frontier-table thead th:nth-child(3) {
+                    width: 10%; /* Rare Relays - Reduced from 15% */
+                }
+                
+                .aroi-frontier-table thead th:nth-child(4) {
+                    width: 12%; /* Bandwidth */
+                }
+                
+                .aroi-frontier-table thead th:nth-child(5) {
+                    width: 10%; /* Countries */
+                }
+                
+                .aroi-frontier-table thead th:nth-child(6) {
+                    width: 23%; /* Specialization - Increased from 18% (+5% from Rare Relays column) */
+                }
+                
+                /* Platform Diversity (Non-Linux Heroes) specific layout */
+                .aroi-platform-table thead th:nth-child(3) {
+                    width: 10%; /* Non Linux Relays - Reduced from 15% */
+                }
+                
+                .aroi-platform-table thead th:nth-child(4) {
+                    width: 8%; /* Bandwidth - Reduced from 12% */
+                }
+                
+                .aroi-platform-table thead th:nth-child(5) {
+                    width: 22%; /* Specialization - Increased from 15% (+7% from reductions) */
                 }
 
                 /* AROI Champion Badge Styles */

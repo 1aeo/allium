@@ -20,6 +20,55 @@ from .country_utils import (
 )
 
 
+def _format_breakdown_details(breakdown_items, max_chars, formatter_func=None):
+    """
+    Reusable helper function to format country/item breakdowns with truncation.
+    
+    Args:
+        breakdown_items (list): List of (country, count) tuples, pre-sorted
+        max_chars (int): Maximum characters allowed before truncation
+        formatter_func (callable): Custom function to format each (count, country) pair
+        
+    Returns:
+        tuple: (formatted_details, tooltip_text)
+    """
+    if not breakdown_items:
+        return "", ""
+    
+    # Default formatter if none provided
+    if formatter_func is None:
+        formatter_func = lambda count, country: f"{count} in {country}"
+    
+    # Create full breakdown for tooltip and short breakdown for display
+    full_breakdown = []
+    short_breakdown = []
+    
+    for country, count in breakdown_items:
+        detail = formatter_func(count, country)
+        full_breakdown.append(detail)
+        short_breakdown.append(detail)
+    
+    tooltip_text = ", ".join(full_breakdown)
+    
+    # Create short version with truncation
+    short_text = ", ".join(short_breakdown)
+    if len(short_text) > max_chars:
+        # Find the last complete entry that fits
+        chars_used = 0
+        for i, detail in enumerate(short_breakdown):
+            if i > 0:
+                chars_used += 2  # for ", "
+            if chars_used + len(detail) <= max_chars - 3:  # leave 3 chars for "..."
+                chars_used += len(detail)
+            else:
+                short_breakdown = short_breakdown[:i]
+                break
+        details_text = ", ".join(short_breakdown) + "..."
+    else:
+        details_text = short_text
+    
+    return details_text, tooltip_text
+
 def _calculate_aroi_leaderboards(relays_instance):
     """
     Calculate AROI operator leaderboards using current live relay data.
@@ -75,15 +124,15 @@ def _calculate_aroi_leaderboards(relays_instance):
         if len(contact_info.strip()) < 3:
             continue
             
-        # Use AROI domain as key if available, otherwise use first 10 chars of contact_info
+        # Use AROI domain as key if available, otherwise use first 24 chars of contact_info
         if aroi_domain and aroi_domain != 'none':
             operator_key = aroi_domain
         else:
-            # Use first 16 characters of contact info for better readability
+            # Use first 24 characters of contact info for better readability (extended from 16)
             if contact_info and len(contact_info.strip()) > 0:
                 clean_contact = contact_info.strip()
-                if len(clean_contact) > 16:
-                    operator_key = clean_contact[:16] + '...'
+                if len(clean_contact) > 24:
+                    operator_key = clean_contact[:24] + '...'
                 else:
                     operator_key = clean_contact
             else:
@@ -145,6 +194,17 @@ def _calculate_aroi_leaderboards(relays_instance):
         
         # Sort by relay count (descending) then by country name for consistent display
         sorted_rare_breakdown = sorted(rare_country_breakdown.items(), 
+                                     key=lambda x: (-x[1], x[0]))
+        
+        # Calculate general country breakdown for reuse (all countries, not just rare ones)
+        all_country_breakdown = {}
+        for relay in operator_relays:
+            country = relay.get('country', '').upper()
+            if country:
+                all_country_breakdown[country] = all_country_breakdown.get(country, 0) + 1
+        
+        # Sort by relay count (descending) then by country name for consistent display
+        sorted_all_country_breakdown = sorted(all_country_breakdown.items(), 
                                      key=lambda x: (-x[1], x[0]))
         
 
@@ -210,7 +270,7 @@ def _calculate_aroi_leaderboards(relays_instance):
                     veteran_relay_scaling_factor = 1.0
                 
                 veteran_score = veteran_days * veteran_relay_scaling_factor
-                veteran_details = f"{veteran_days} days * {veteran_relay_scaling_factor} ({total_relays} relays)"
+                veteran_details = f"Online and serving traffic since first day: {veteran_days} days * {veteran_relay_scaling_factor} ({total_relays} relays)"
         
         # Store operator data (mix of existing + new calculations)
         aroi_operators[operator_key] = {
@@ -238,6 +298,7 @@ def _calculate_aroi_leaderboards(relays_instance):
             'rare_country_count': rare_country_count,
             'relays_in_rare_countries': relays_in_rare_countries,
             'rare_country_breakdown': sorted_rare_breakdown,
+            'all_country_breakdown': sorted_all_country_breakdown,  # Reusable country breakdown
             'diversity_score': diversity_score,
             'uptime_percentage': uptime_percentage,
             'exit_consensus_weight': exit_consensus_weight,
@@ -332,49 +393,124 @@ def _calculate_aroi_leaderboards(relays_instance):
     for category, data in leaderboards.items():
         formatted_data = []
         for rank, (operator_key, metrics) in enumerate(data, 1):
-            # Use existing bandwidth formatting methods
+            # Use existing bandwidth formatting methods (top10 specific formatting)
             bandwidth_unit = relays_instance._determine_unit(metrics['total_bandwidth'])
             formatted_bandwidth = relays_instance._format_bandwidth_with_unit(
-                metrics['total_bandwidth'], bandwidth_unit
+                metrics['total_bandwidth'], bandwidth_unit, decimal_places=1
             )
             
             # Calculate geographic achievement for non_eu_leaders category
             geographic_achievement = ""
+            geographic_breakdown_details = ""
+            geographic_breakdown_tooltip = ""
             if category == 'non_eu_leaders':
                 geographic_achievement = calculate_geographic_achievement(metrics['countries'])
+                # Reuse pre-calculated country breakdown data instead of recalculating
+                geographic_breakdown_details, geographic_breakdown_tooltip = _format_breakdown_details(
+                    metrics['all_country_breakdown'], 52
+                )
             
             # Format rare country breakdown for frontier_builders category
             rare_country_details = ""
             rare_country_tooltip = ""
+            frontier_achievement_title = ""
+            platform_hero_title = ""
+            diversity_master_title = ""
+            
             if category == 'frontier_builders' and metrics['rare_country_breakdown']:
-                # Create full breakdown for tooltip
-                full_breakdown = []
-                short_breakdown = []
+                # Use helper function with custom formatter for rare countries (includes "relay/relays")
+                rare_country_details, rare_country_tooltip = _format_breakdown_details(
+                    metrics['rare_country_breakdown'], 44,
+                    lambda count, country: f"{count} relay{'s' if count != 1 else ''} in {country}"
+                )
                 
-                for country, count in metrics['rare_country_breakdown']:
-                    country_name = country.lower()  # Convert back to lowercase for display
-                    detail = f"{count} relay{'s' if count != 1 else ''} in {country_name.upper()}"
-                    full_breakdown.append(detail)
-                    short_breakdown.append(detail)
+                # Add achievement titles for top 3 frontier builders
+                if rank == 1:
+                    frontier_achievement_title = "🌟 Frontier Legend"
+                elif rank == 2:
+                    frontier_achievement_title = "⭐ Frontier Master"
+                elif rank == 3:
+                    frontier_achievement_title = "✨ Frontier Champion"
+            
+            # Add achievement titles for top 3 platform diversity heroes
+            platform_breakdown_details = ""
+            platform_breakdown_tooltip = ""
+            if category == 'platform_diversity':
+                if rank == 1:
+                    platform_hero_title = "🏆 Platform Legend"
+                elif rank == 2:
+                    platform_hero_title = "💻 Platform Master"
+                elif rank == 3:
+                    platform_hero_title = "🖥️ Platform Champion"
                 
-                rare_country_tooltip = ", ".join(full_breakdown)
+                # Format platform breakdown for specialization column (non-Linux only)
+                platform_breakdown = {}
+                for relay in metrics['relays']:
+                    platform = relay.get('platform', 'Unknown')
+                    if platform and not platform.lower().startswith('linux'):
+                        # Extract short platform name (before first space or version number)
+                        short_platform = platform.split()[0] if platform else 'Unknown'
+                        # Map common platform names to shorter versions
+                        if short_platform.lower().startswith('win'):
+                            short_platform = 'Win'
+                        elif short_platform.lower().startswith('mac') or short_platform.lower().startswith('darwin'):
+                            short_platform = 'Mac'
+                        elif short_platform.lower().startswith('freebsd'):
+                            short_platform = 'FreeBSD'
+                        elif short_platform.lower().startswith('openbsd'):
+                            short_platform = 'OpenBSD'
+                        elif short_platform.lower().startswith('netbsd'):
+                            short_platform = 'NetBSD'
+                        platform_breakdown[short_platform] = platform_breakdown.get(short_platform, 0) + 1
                 
-                # Create short version (max 20 chars for table)
-                short_text = ", ".join(short_breakdown)
-                if len(short_text) > 20:
-                    # Find the last complete entry that fits in 20 chars
-                    chars_used = 0
-                    for i, detail in enumerate(short_breakdown):
-                        if i > 0:
-                            chars_used += 2  # for ", "
-                        if chars_used + len(detail) <= 17:  # leave 3 chars for "..."
-                            chars_used += len(detail)
-                        else:
-                            short_breakdown = short_breakdown[:i]
-                            break
-                    rare_country_details = ", ".join(short_breakdown) + "..."
+                # Sort by relay count (descending) then by platform name
+                sorted_platform_breakdown = sorted(platform_breakdown.items(), 
+                                                  key=lambda x: (-x[1], x[0]))
+                
+                # Create short format (max 32 chars): "Win: 5, Mac: 3, FreeBSD: 2"
+                platform_parts = []
+                for platform, count in sorted_platform_breakdown:
+                    platform_parts.append(f"{platform}: {count}")
+                
+                platform_breakdown_full = ", ".join(platform_parts)
+                if len(platform_breakdown_full) > 32:
+                    platform_breakdown_details = platform_breakdown_full[:29] + "..."
                 else:
-                    rare_country_details = short_text
+                    platform_breakdown_details = platform_breakdown_full
+                
+                # Create full tooltip with platform details only (countries not relevant for platform diversity)
+                platform_tooltip_parts = []
+                for platform, count in sorted_platform_breakdown:
+                    platform_tooltip_parts.append(f"{count} {platform} relays")
+                platform_tooltip_text = ", ".join(platform_tooltip_parts)
+                
+                platform_breakdown_tooltip = f"Platform Distribution: {platform_tooltip_text}"
+            
+            # Add achievement titles for top 3 diversity masters
+            diversity_breakdown_details = ""
+            diversity_breakdown_tooltip = ""
+            if category == 'most_diverse':
+                if rank == 1:
+                    diversity_master_title = "🌍 Diversity Legend"
+                elif rank == 2:
+                    diversity_master_title = "🌟 Diversity Master"
+                elif rank == 3:
+                    diversity_master_title = "🌐 Diversity Champion"
+                
+                # Format diversity calculation breakdown
+                country_count = metrics['country_count']
+                platform_count = metrics['platform_count']
+                as_count = metrics['unique_as_count']
+                
+                # Create short format (max 20 chars): "5 Countries, 3 OS, 8 AS"
+                diversity_breakdown_full = f"{country_count} Countries, {platform_count} OS, {as_count} AS"
+                if len(diversity_breakdown_full) > 20:
+                    diversity_breakdown_details = diversity_breakdown_full[:17] + "..."
+                else:
+                    diversity_breakdown_details = diversity_breakdown_full
+                
+                # Create full tooltip with calculation details
+                diversity_breakdown_tooltip = f"Diversity Score Calculation: {country_count} countries × 2.0 + {platform_count} operating systems × 1.5 + {as_count} unique ASNs × 1.0 = {metrics['diversity_score']}"
             
             # Format veteran details for network_veterans category
             veteran_details_short = ""
@@ -396,6 +532,13 @@ def _calculate_aroi_leaderboards(relays_instance):
             
             display_name = metrics['aroi_domain'] if metrics['aroi_domain'] and metrics['aroi_domain'] != 'none' else operator_key
 
+            # Calculate percentages for guard and exit relay ratios
+            guard_percentage = (metrics['guard_count'] / metrics['total_relays'] * 100) if metrics['total_relays'] > 0 else 0
+            exit_percentage = (metrics['exit_count'] / metrics['total_relays'] * 100) if metrics['total_relays'] > 0 else 0
+            
+            # Calculate non-EU percentage for geographic champions
+            non_eu_percentage = (metrics['non_eu_count'] / metrics['total_relays'] * 100) if metrics['total_relays'] > 0 else 0
+
             formatted_entry = {
                 'rank': rank,
                 'operator_key': operator_key,
@@ -411,6 +554,8 @@ def _calculate_aroi_leaderboards(relays_instance):
                 'exit_consensus_weight_pct': f"{metrics['exit_consensus_weight'] * 100:.2f}%",
                 'guard_count': metrics['guard_count'],
                 'exit_count': metrics['exit_count'],
+                'guard_percentage': f"{guard_percentage:.0f}%",
+                'exit_percentage': f"{exit_percentage:.0f}%",
                 'middle_count': metrics['middle_count'],
                 'measured_count': metrics['measured_count'],
                 'unique_as_count': metrics['unique_as_count'],
@@ -420,19 +565,29 @@ def _calculate_aroi_leaderboards(relays_instance):
                 'platforms': metrics['platforms'][:3],  # Top 3 platforms for display
                 'non_linux_count': metrics['non_linux_count'],
                 'non_eu_count': metrics['non_eu_count'],
+                'non_eu_count_with_percentage': f"{metrics['non_eu_count']} ({non_eu_percentage:.0f}%)",
                 'rare_country_count': metrics['rare_country_count'],
                 'relays_in_rare_countries': metrics['relays_in_rare_countries'],
                 'rare_country_details': rare_country_details,
                 'rare_country_tooltip': rare_country_tooltip,
+                'frontier_achievement_title': frontier_achievement_title,
+                'platform_hero_title': platform_hero_title,
+                'platform_breakdown_details': platform_breakdown_details,
+                'platform_breakdown_tooltip': platform_breakdown_tooltip,
+                'diversity_master_title': diversity_master_title,
+                'diversity_breakdown_details': diversity_breakdown_details,
+                'diversity_breakdown_tooltip': diversity_breakdown_tooltip,
                 'diversity_score': f"{metrics['diversity_score']:.1f}",
                 'uptime_percentage': f"{metrics['uptime_percentage']:.1f}%",
-                'veteran_score': f"{metrics['veteran_score']:.1f}",
+                'veteran_score': f"{metrics['veteran_score']:.0f}",
                 'veteran_days': metrics['veteran_days'],
                 'veteran_relay_scaling_factor': metrics['veteran_relay_scaling_factor'],
                 'veteran_details_short': veteran_details_short,
                 'veteran_tooltip': veteran_tooltip,
                 'first_seen_date': metrics['first_seen'].split(' ')[0] if metrics['first_seen'] else 'Unknown',
-                'geographic_achievement': geographic_achievement  # Add dynamic achievement
+                'geographic_achievement': geographic_achievement,  # Add dynamic achievement
+                'geographic_breakdown_details': geographic_breakdown_details,  # Add geographic breakdown
+                'geographic_breakdown_tooltip': geographic_breakdown_tooltip  # Add geographic tooltip
             }
             formatted_data.append(formatted_entry)
         
@@ -450,16 +605,17 @@ def _calculate_aroi_leaderboards(relays_instance):
     # The total_cw_all represents the fraction of network consensus weight held by AROI operators
     # This should be displayed as the percentage of network authority they represent
     
-    # Format summary bandwidth with unit (reuse existing formatters)
+    # Format summary bandwidth with unit (reuse existing formatters with top10 formatting)
     summary_bandwidth_unit = relays_instance._determine_unit(total_bandwidth_all)
     summary_bandwidth_value = relays_instance._format_bandwidth_with_unit(
-        total_bandwidth_all, summary_bandwidth_unit
+        total_bandwidth_all, summary_bandwidth_unit, decimal_places=1
     )
     
     summary_stats = {
         'total_operators': total_operators,
         'total_bandwidth_formatted': f"{summary_bandwidth_value} {summary_bandwidth_unit}",
         'total_consensus_weight_pct': f"{total_cw_all * 100:.1f}%",
+        'live_categories_count': len(formatted_leaderboards),  # Dynamic count of actual leaderboards
         'update_timestamp': relays_instance.timestamp if hasattr(relays_instance, 'timestamp') else 'Unknown',
         'categories': {
             'bandwidth': 'Bandwidth Contributed',
