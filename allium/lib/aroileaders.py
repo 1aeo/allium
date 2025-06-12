@@ -460,6 +460,7 @@ def _calculate_aroi_leaderboards(relays_instance):
         'total_operators': total_operators,
         'total_bandwidth_formatted': f"{summary_bandwidth_value} {summary_bandwidth_unit}",
         'total_consensus_weight_pct': f"{total_cw_all * 100:.1f}%",
+        'live_categories_count': len(formatted_leaderboards),  # Dynamic count of actual leaderboards
         'update_timestamp': relays_instance.timestamp if hasattr(relays_instance, 'timestamp') else 'Unknown',
         'categories': {
             'bandwidth': 'Bandwidth Contributed',
