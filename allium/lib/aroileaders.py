@@ -442,6 +442,8 @@ def _calculate_aroi_leaderboards(relays_instance):
                     platform_hero_title = "🖥️ Platform Champion"
             
             # Add achievement titles for top 3 diversity masters
+            diversity_breakdown_details = ""
+            diversity_breakdown_tooltip = ""
             if category == 'most_diverse':
                 if rank == 1:
                     diversity_master_title = "🌍 Diversity Legend"
@@ -449,6 +451,17 @@ def _calculate_aroi_leaderboards(relays_instance):
                     diversity_master_title = "🌟 Diversity Master"
                 elif rank == 3:
                     diversity_master_title = "🌐 Diversity Champion"
+                
+                # Format diversity calculation breakdown
+                country_count = metrics['country_count']
+                platform_count = metrics['platform_count']
+                as_count = metrics['unique_as_count']
+                
+                # Create short format (max 20 chars): "5c,3os,8asn"
+                diversity_breakdown_details = f"{country_count}c,{platform_count}os,{as_count}asn"
+                
+                # Create full tooltip with calculation details
+                diversity_breakdown_tooltip = f"Diversity Score Calculation: {country_count} countries × 2.0 + {platform_count} operating systems × 1.5 + {as_count} unique ASNs × 1.0 = {metrics['diversity_score']}"
             
             # Format veteran details for network_veterans category
             veteran_details_short = ""
@@ -507,6 +520,8 @@ def _calculate_aroi_leaderboards(relays_instance):
                 'frontier_achievement_title': frontier_achievement_title,
                 'platform_hero_title': platform_hero_title,
                 'diversity_master_title': diversity_master_title,
+                'diversity_breakdown_details': diversity_breakdown_details,
+                'diversity_breakdown_tooltip': diversity_breakdown_tooltip,
                 'diversity_score': f"{metrics['diversity_score']:.1f}",
                 'uptime_percentage': f"{metrics['uptime_percentage']:.1f}%",
                 'veteran_score': f"{metrics['veteran_score']:.0f}",
