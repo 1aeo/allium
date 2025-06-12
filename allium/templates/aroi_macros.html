@@ -73,6 +73,12 @@
                         <td>
                             {% if performance_type == "non_eu_leaders" %}
                                 <span title="Geographic achievement expanding Tor reach beyond European Union">{{ entry.geographic_achievement }}</span>
+                            {% elif performance_type == "most_diverse" and entry.diversity_master_title %}
+                                <span title="Dynamic achievement title for diversity mastery">{{ entry.diversity_master_title }}</span>
+                            {% elif performance_type == "platform_diversity" and entry.platform_hero_title %}
+                                <span title="Dynamic achievement title for platform diversity leadership">{{ entry.platform_hero_title }}</span>
+                            {% elif performance_type == "frontier_builders" and entry.frontier_achievement_title %}
+                                <span title="Dynamic achievement title for frontier expansion">{{ entry.frontier_achievement_title }}</span>
                             {% else %}
                                 <span title="Achievement level for rank {{ entry.rank }} in {{ performance_type.replace('_', ' ').title() }} category">
                                 {% if entry.rank == 1 %}{{ achievements[0] }}
@@ -191,7 +197,7 @@
                         <td title="Operating system diversity across relay infrastructure">{{ entry.platform_count }}</td>
                         {% endif %}
                         <td>
-                            {% if category_key == 'most_diverse' %}<span title="Highest combined geographic, platform, and network diversity scores">Geographic diversity</span>
+                            {% if category_key == 'most_diverse' %}<span title="{{ entry.diversity_breakdown_tooltip if entry.diversity_breakdown_tooltip else 'Highest combined geographic, platform, and network diversity scores' }}">{{ entry.diversity_breakdown_details if entry.diversity_breakdown_details else 'Geographic diversity' }}</span>
                             {% elif category_key == 'platform_diversity' %}<span title="Promoting operating system diversity beyond Linux dominance">OS diversity</span>
                             {% elif category_key == 'non_eu_leaders' %}<span title="{{ entry.geographic_breakdown_tooltip }}">{{ entry.geographic_breakdown_details if entry.geographic_breakdown_details else 'Global expansion' }}</span>
                             {% elif category_key == 'frontier_builders' %}<span title="{{ entry.rare_country_tooltip }}">{{ entry.rare_country_details if entry.rare_country_details else 'Frontier presence' }}</span>
