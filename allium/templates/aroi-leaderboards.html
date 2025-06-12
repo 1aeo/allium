@@ -8,7 +8,7 @@
 
 <div class="aroi-center-text aroi-subsection">
     <h1>🏆 Tor Network Operator Champion Dashboard</h1>
-    <p class="lead"><strong>Meet the Heroes Powering Tor's Privacy Network - Live Performance Rankings for AROI Operators</strong></p>
+    <p class="lead"><strong>Meet the Heroes Powering Tor's Privacy Network - Live Performance Rankings for <span title="Authenticated Relay Operator Identifier - Operators who provide contact information following the ContactInfo specification, enabling recognition and accountability">AROI</span> Operators</strong></p>
 </div>
 
 {{ navigation('aroi', page_ctx) }}
@@ -25,15 +25,15 @@
     <!-- Category Links (compact inline) -->
     <div class="aroi-category-links-row">
         <a href="#bandwidth" class="aroi-nav-link" title="Operators ranked by total observed bandwidth capacity across all relays">🚀 Bandwidth</a>
-        <a href="#consensus_weight" class="aroi-nav-link" title="Operators ranked by total network consensus weight percentage controlling Tor routing decisions">⚖️ Consensus</a>
-        <a href="#exit_authority" class="aroi-nav-link" title="Highest exit consensus weight controlling where Tor traffic exits to the internet">🚪 Exit Authority</a>
-        <a href="#exit_operators" class="aroi-nav-link" title="Most exit relays operated, providing critical internet access points for Tor users">🚪 Exit Operators</a>
-        <a href="#guard_operators" class="aroi-nav-link" title="Most guard relays operated, serving as entry points into the Tor network">🛡️ Guard Operators</a>
-        <a href="#most_diverse" class="aroi-nav-link" title="Highest combined geographic, platform, and network diversity scores across relay operations">🌈 Most Diverse</a>
+        <a href="#consensus_weight" class="aroi-nav-link" title="Consensus Weight: The voting power each relay has in determining network routing decisions. Higher consensus weight means more influence over which relays are selected for Tor circuits">⚖️ Consensus</a>
+        <a href="#exit_authority" class="aroi-nav-link" title="Exit Authority: Control over exit consensus weight, determining which relays handle the final hop where Tor traffic exits to the regular internet">🚪 Exit Authority</a>
+        <a href="#exit_operators" class="aroi-nav-link" title="Exit Relays: Special relays that handle the final hop in Tor circuits, where encrypted traffic exits to reach regular internet destinations like websites">🚪 Exit Operators</a>
+        <a href="#guard_operators" class="aroi-nav-link" title="Guard Relays: Entry point relays that handle the first hop in Tor circuits. Your Tor client connects to guards to enter the Tor network anonymously">🛡️ Guard Operators</a>
+        <a href="#most_diverse" class="aroi-nav-link" title="Diversity Score: Calculated by combining geographic spread (countries × 2.0), platform variety (operating systems × 1.5), and network distribution (unique ASNs × 1.0) to measure operational resilience">🌈 Most Diverse</a>
         <a href="#platform_diversity" class="aroi-nav-link" title="Most non-Linux relays operated, promoting operating system diversity beyond Linux dominance">💻 Platform Diversity</a>
         <a href="#non_eu_leaders" class="aroi-nav-link" title="Most relays operated outside the European Union, expanding Tor's geographic reach beyond EU concentration">🌍 Non-EU Leaders</a>
-        <a href="#frontier_builders" class="aroi-nav-link" title="Highest rare country scores from operating relays in strategically important but underrepresented countries">🏴‍☠️ Frontier Builders</a>
-        <a href="#network_veterans" class="aroi-nav-link" title="Longest-serving operators with earliest relay start dates, recognizing true network pioneers">🏆 Network Veterans</a>
+        <a href="#frontier_builders" class="aroi-nav-link" title="Frontier Builders: Operators running relays in rare or strategically important countries that are underrepresented in the Tor network, helping expand global privacy access">🏴‍☠️ Frontier Builders</a>
+        <a href="#network_veterans" class="aroi-nav-link" title="Network Veterans: Longest-serving operators calculated by earliest relay start date multiplied by current relay scale, recognizing sustained commitment to the Tor network">🏆 Network Veterans</a>
     </div>
 </nav>
 
@@ -48,14 +48,14 @@
             <strong><span title="Aggregate observed bandwidth capacity contributed to the Tor network by all operators with contact information">Combined Bandwidth:</span></strong><br>{{ relays.json.aroi_leaderboards.summary.total_bandwidth_formatted }}
         </div>
         <div class="col-md-3">
-            <strong><span title="Percentage of total Tor network consensus weight held by operators with contact information">Network Consensus Weight:</span></strong><br>{{ relays.json.aroi_leaderboards.summary.total_consensus_weight_pct }}
+            <strong><span title="Network Consensus Weight: The percentage of total Tor network voting power held by operators with contact information. This represents their collective influence over routing decisions in the Tor network">Network Consensus Weight:</span></strong><br>{{ relays.json.aroi_leaderboards.summary.total_consensus_weight_pct }}
         </div>
         <div class="col-md-3">
             <strong><span title="Number of competitive leaderboard categories tracking different aspects of operator performance and contribution">Live Categories:</span></strong><br>{{ relays.json.aroi_leaderboards.summary.live_categories_count }} competitive leaderboards
         </div>
     </div>
     <div class="aroi-compact-footer">
-        <small class="text-muted" title="Data refresh frequency and source information">Last updated: {{ relays.json.aroi_leaderboards.summary.update_timestamp }}. Data refreshed every 30 minutes from the Tor directory authorities via <a href="https://onionoo.torproject.org/">Onionoo API</a>.</small>
+        <small class="text-muted" title="Data Source: Information comes from Tor directory authorities (the servers that coordinate the Tor network) via the Onionoo API, which provides real-time relay status and performance data">Last updated: {{ relays.json.aroi_leaderboards.summary.update_timestamp }}. Data refreshed every 30 minutes from the Tor directory authorities via <a href="https://onionoo.torproject.org/" title="Onionoo API: Official Tor Project service providing real-time relay and bridge information">Onionoo API</a>.</small>
     </div>
 </div>
 
