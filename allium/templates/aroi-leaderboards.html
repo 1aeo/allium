@@ -314,7 +314,7 @@
                         <td>{{ rank_badge(entry.rank) }}</td>
                         <td>{{ operator_link(entry, page_ctx) }}</td>
                         <td><strong title="Active exit relays providing critical internet access points">{{ entry.exit_count }}</strong></td>
-                        <td title="All relay types operated by this operator">{{ entry.total_relays }}</td>
+                        <td title="All relay types operated by this operator">{{ entry.total_relays }} <small class="text-muted">({{ entry.exit_percentage }} exit)</small></td>
                         <td title="Observed bandwidth capacity in {% if relays.use_bits %}{{ entry.bandwidth_unit }} (bits per second){% else %}{{ entry.bandwidth_unit }} (bytes per second){% endif %}">{{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</td>
                         <td title="Network consensus weight percentage">{{ entry.total_consensus_weight_pct }}</td>
                         <td title="Geographic reach across countries">{{ entry.country_count }}</td>
@@ -351,7 +351,7 @@
                         <td>{{ rank_badge(entry.rank) }}</td>
                         <td>{{ operator_link(entry, page_ctx) }}</td>
                         <td><strong title="Active guard relays serving as critical network entry points">{{ entry.guard_count }}</strong></td>
-                        <td title="All relay types operated by this operator">{{ entry.total_relays }}</td>
+                        <td title="All relay types operated by this operator">{{ entry.total_relays }} <small class="text-muted">({{ entry.guard_percentage }} guard)</small></td>
                         <td title="Observed bandwidth capacity in {% if relays.use_bits %}{{ entry.bandwidth_unit }} (bits per second){% else %}{{ entry.bandwidth_unit }} (bytes per second){% endif %}">{{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</td>
                         <td title="Network consensus weight percentage">{{ entry.total_consensus_weight_pct }}</td>
                         <td title="Geographic reach across countries">{{ entry.country_count }}</td>

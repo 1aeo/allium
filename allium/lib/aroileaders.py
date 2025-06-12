@@ -440,6 +440,10 @@ def _calculate_aroi_leaderboards(relays_instance):
             
             display_name = metrics['aroi_domain'] if metrics['aroi_domain'] and metrics['aroi_domain'] != 'none' else operator_key
 
+            # Calculate percentages for guard and exit relay ratios
+            guard_percentage = (metrics['guard_count'] / metrics['total_relays'] * 100) if metrics['total_relays'] > 0 else 0
+            exit_percentage = (metrics['exit_count'] / metrics['total_relays'] * 100) if metrics['total_relays'] > 0 else 0
+
             formatted_entry = {
                 'rank': rank,
                 'operator_key': operator_key,
@@ -455,6 +459,8 @@ def _calculate_aroi_leaderboards(relays_instance):
                 'exit_consensus_weight_pct': f"{metrics['exit_consensus_weight'] * 100:.2f}%",
                 'guard_count': metrics['guard_count'],
                 'exit_count': metrics['exit_count'],
+                'guard_percentage': f"{guard_percentage:.1f}%",
+                'exit_percentage': f"{exit_percentage:.1f}%",
                 'middle_count': metrics['middle_count'],
                 'measured_count': metrics['measured_count'],
                 'unique_as_count': metrics['unique_as_count'],
