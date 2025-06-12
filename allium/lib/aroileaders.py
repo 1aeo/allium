@@ -124,15 +124,15 @@ def _calculate_aroi_leaderboards(relays_instance):
         if len(contact_info.strip()) < 3:
             continue
             
-        # Use AROI domain as key if available, otherwise use first 10 chars of contact_info
+        # Use AROI domain as key if available, otherwise use first 24 chars of contact_info
         if aroi_domain and aroi_domain != 'none':
             operator_key = aroi_domain
         else:
-            # Use first 16 characters of contact info for better readability
+            # Use first 24 characters of contact info for better readability (extended from 16)
             if contact_info and len(contact_info.strip()) > 0:
                 clean_contact = contact_info.strip()
-                if len(clean_contact) > 16:
-                    operator_key = clean_contact[:16] + '...'
+                if len(clean_contact) > 24:
+                    operator_key = clean_contact[:24] + '...'
                 else:
                     operator_key = clean_contact
             else:
@@ -420,7 +420,7 @@ def _calculate_aroi_leaderboards(relays_instance):
             if category == 'frontier_builders' and metrics['rare_country_breakdown']:
                 # Use helper function with custom formatter for rare countries (includes "relay/relays")
                 rare_country_details, rare_country_tooltip = _format_breakdown_details(
-                    metrics['rare_country_breakdown'], 34,
+                    metrics['rare_country_breakdown'], 44,
                     lambda count, country: f"{count} relay{'s' if count != 1 else ''} in {country}"
                 )
                 
