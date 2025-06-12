@@ -956,7 +956,7 @@ class Relays:
         """Format bandwidth using specified unit"""
         divisor = self._get_divisor_for_unit(unit)
         value = bandwidth_bytes / divisor
-        return f"{value:.2f}"
+        return f"{value:.1f}"
 
     def _format_time_ago(self, timestamp_str):
         """Format timestamp as multi-unit time ago (e.g., '2y 3m 2w ago')"""
