@@ -154,7 +154,7 @@
         {%- endif -%}">{{ emoji }} {{ category_name }} - Top 25</h3>
         {% if category_data %}
         <div class="table-responsive">
-            <table class="table table-striped table-condensed aroi-rankings-table {% if category_key == 'non_eu_leaders' %}aroi-geographic-table{% elif category_key == 'frontier_builders' %}aroi-frontier-table{% else %}aroi-category-table{% endif %}">
+            <table class="table table-striped table-condensed aroi-rankings-table {% if category_key == 'non_eu_leaders' %}aroi-geographic-table{% elif category_key == 'frontier_builders' %}aroi-frontier-table{% elif category_key == 'platform_diversity' %}aroi-platform-table{% else %}aroi-category-table{% endif %}">
                 <thead>
                     <tr>
                         <th title="Position in {{ category_name.lower() }} leaderboard">Rank</th>

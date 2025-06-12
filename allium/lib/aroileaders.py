@@ -467,14 +467,14 @@ def _calculate_aroi_leaderboards(relays_instance):
                 sorted_platform_breakdown = sorted(platform_breakdown.items(), 
                                                   key=lambda x: (-x[1], x[0]))
                 
-                # Create short format (max 24 chars): "Win: 5, Mac: 3"
+                # Create short format (max 32 chars): "Win: 5, Mac: 3, FreeBSD: 2"
                 platform_parts = []
                 for platform, count in sorted_platform_breakdown:
                     platform_parts.append(f"{platform}: {count}")
                 
                 platform_breakdown_full = ", ".join(platform_parts)
-                if len(platform_breakdown_full) > 24:
-                    platform_breakdown_details = platform_breakdown_full[:21] + "..."
+                if len(platform_breakdown_full) > 32:
+                    platform_breakdown_details = platform_breakdown_full[:29] + "..."
                 else:
                     platform_breakdown_details = platform_breakdown_full
                 
