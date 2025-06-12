@@ -956,6 +956,12 @@ class Relays:
         """Format bandwidth using specified unit"""
         divisor = self._get_divisor_for_unit(unit)
         value = bandwidth_bytes / divisor
+        return f"{value:.2f}"
+
+    def _format_bandwidth_with_unit_top10(self, bandwidth_bytes, unit):
+        """Format bandwidth using specified unit with single decimal place for top 10 pages"""
+        divisor = self._get_divisor_for_unit(unit)
+        value = bandwidth_bytes / divisor
         return f"{value:.1f}"
 
     def _format_time_ago(self, timestamp_str):

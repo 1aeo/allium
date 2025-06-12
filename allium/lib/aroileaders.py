@@ -332,9 +332,9 @@ def _calculate_aroi_leaderboards(relays_instance):
     for category, data in leaderboards.items():
         formatted_data = []
         for rank, (operator_key, metrics) in enumerate(data, 1):
-            # Use existing bandwidth formatting methods
+            # Use existing bandwidth formatting methods (top10 specific formatting)
             bandwidth_unit = relays_instance._determine_unit(metrics['total_bandwidth'])
-            formatted_bandwidth = relays_instance._format_bandwidth_with_unit(
+            formatted_bandwidth = relays_instance._format_bandwidth_with_unit_top10(
                 metrics['total_bandwidth'], bandwidth_unit
             )
             
@@ -450,9 +450,9 @@ def _calculate_aroi_leaderboards(relays_instance):
     # The total_cw_all represents the fraction of network consensus weight held by AROI operators
     # This should be displayed as the percentage of network authority they represent
     
-    # Format summary bandwidth with unit (reuse existing formatters)
+    # Format summary bandwidth with unit (reuse existing formatters with top10 formatting)
     summary_bandwidth_unit = relays_instance._determine_unit(total_bandwidth_all)
-    summary_bandwidth_value = relays_instance._format_bandwidth_with_unit(
+    summary_bandwidth_value = relays_instance._format_bandwidth_with_unit_top10(
         total_bandwidth_all, summary_bandwidth_unit
     )
     
