@@ -118,7 +118,7 @@ Effective Family Member: {{ relay['effective_family']|length }}
 <dd>
 <pre class="pre-scrollable">{% for e_relay in relay['effective_family'] -%}
 {% if relay['effective_family']|length > 1 -%}
-<a href="{{ e_relay|escape }}.html">{{ e_relay|escape }}</a>
+<a href="../{{ e_relay|escape }}/">{{ e_relay|escape }}</a>
 {% else -%}
 {{ e_relay|escape }}
 {% endif -%}
@@ -132,7 +132,7 @@ Alleged Family {% if relay['alleged_family'] and relay['alleged_family']|length 
 {% if relay['alleged_family'] -%}
 <pre class="pre-scrollable">{% for a_relay in relay['alleged_family'] -%}
 {% if relay['alleged_family']|length > 1 -%}
-<a href="{{ a_relay|escape }}.html">{{ a_relay|escape }}</a>
+<a href="../{{ a_relay|escape }}/">{{ a_relay|escape }}</a>
 {% else -%}
 {{ a_relay|escape }}
 {% endif -%}
@@ -149,7 +149,7 @@ Indirect Family {% if relay['indirect_family'] and relay['indirect_family']|leng
 {% if relay['indirect_family'] -%}
 <pre class="pre-scrollable">{% for i_relay in relay['indirect_family'] -%}
 {% if relay['indirect_family']|length > 1 -%}
-<a href="{{ i_relay|escape }}.html">{{ i_relay|escape }}</a>
+<a href="../{{ i_relay|escape }}/">{{ i_relay|escape }}</a>
 {% else -%}
 {{ i_relay|escape }}
 {% endif -%}
