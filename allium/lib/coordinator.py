@@ -141,12 +141,12 @@ class Coordinator:
         relay_set = Relays(
             output_dir=self.output_dir,
             onionoo_url=self.onionoo_url,
+            relay_data=relay_data,  # Required parameter
             use_bits=self.use_bits,
             progress=self.progress,
             start_time=self.start_time,
             progress_step=self.progress_step,
-            total_steps=self.total_steps,
-            relay_data=relay_data  # Use new pattern
+            total_steps=self.total_steps
         )
         
         if relay_set.json is None:
