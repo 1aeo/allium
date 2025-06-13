@@ -1,0 +1,4503 @@
+    <!DOCTYPE html>
+    <html lang="en">
+        <head>
+            <title>
+Tor Relays :: Family family            </title>
+            <meta name="description"
+                  content="Javascript-free Tor metrics generated from a 30 minute API request.">
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <link rel="stylesheet" href="../../static/css/bootstrap.min.css">
+            <!--source: metrics.torproject.org-->
+            <style>
+                .circle {
+                    display: inline-block;
+                    vertical-align: middle;
+                    background: #999999;
+                    width: 7px;
+                    height: 7px;
+                    -moz-border-radius: 50%;
+                    -webkit-border-radius: 50%;
+                    border-radius: 50%;
+                }
+
+                .circle-online {
+                    background: #25d918;
+                }
+
+                .circle-offline {
+                    background: #ff1515;
+                }
+
+                .verified-hostname {
+                    color: #FE9F30;
+                }
+
+                .verified-hostname {
+                    color: #68b030;
+                }
+
+                .unverified-hostname {
+                    color: #FE9F30;
+                }
+
+                /* Dynamic text truncation for contact information */
+                .contact-text {
+                    display: inline-block;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    max-width: 20vw;  /* Use viewport width for responsive sizing */
+                }
+
+                /* Table styles */
+                .table {
+                    width: 100%;
+                    margin-bottom: 1rem;
+                }
+
+                /* Precise alignment for multi-value columns using monospace */
+                .bw-header, .cw-header, .rc-header, /* rc = relay count */
+                .bw-data, .cw-data, .rc-data {
+                    font-family: Consolas, "Courier New", monospace;
+                    white-space: nowrap;
+                    text-align: center;
+                    letter-spacing: 0.05em; /* Slight spacing for readability */
+                }
+
+                /* Container breakpoint */
+                @media (min-width: 1400px) {
+                    .container {
+                        width: 95%;
+                        max-width: none;
+                        padding-right: 15px;
+                        padding-left: 15px;
+                        margin-right: auto;
+                        margin-left: auto;
+                    }
+                }
+
+                /* AROI Leaderboards - Consolidated CSS Components */
+                
+                /* Section Spacing */
+                .aroi-section {
+                    margin-bottom: 40px;
+                    scroll-margin-top: 20px; /* Offset anchor links to show space above title */
+                }
+                
+                .aroi-subsection {
+                    margin-bottom: 30px;
+                }
+                
+                .aroi-champion-badge {
+                    margin-bottom: 20px;
+                }
+                
+                /* Top 3 Summary Tables */
+                .aroi-top3-table thead th:nth-child(1) {
+                    width: 30%;
+                }
+                
+                .aroi-top3-table thead th:nth-child(2) {
+                    width: 25%;
+                }
+                
+                .aroi-top3-table thead th:nth-child(3) {
+                    width: 45%;
+                }
+                
+                /* Complete Rankings Tables - Common patterns */
+                .aroi-rankings-table thead th:nth-child(1) {
+                    width: 5%;  /* Rank */
+                }
+                
+                .aroi-rankings-table thead th:nth-child(2) {
+                    width: 25%; /* Operator */
+                }
+                
+                /* Standard bandwidth/consensus table layout */
+                .aroi-standard-table thead th:nth-child(3) {
+                    width: 8%;  /* Relays */
+                }
+                
+                .aroi-standard-table thead th:nth-child(4) {
+                    width: 15%; /* Bandwidth */
+                }
+                
+                .aroi-standard-table thead th:nth-child(5) {
+                    width: 12%; /* Consensus Weight */
+                }
+                
+                .aroi-standard-table thead th:nth-child(6) {
+                    width: 15%; /* Guard/Exit Count */
+                }
+                
+                .aroi-standard-table thead th:nth-child(7) {
+                    width: 10%; /* Countries */
+                }
+                
+                .aroi-standard-table thead th:nth-child(8) {
+                    width: 10%; /* Platforms/Efficiency/Other */
+                }
+                
+                /* Specialized table for Exit/Guard operators */
+                .aroi-specialized-table thead th:nth-child(3) {
+                    width: 10%; /* Specific Relays (Exit/Guard) */
+                }
+                
+                .aroi-specialized-table thead th:nth-child(4) {
+                    width: 8%;  /* Total Relays */
+                }
+                
+                .aroi-specialized-table thead th:nth-child(5) {
+                    width: 15%; /* Bandwidth */
+                }
+                
+                .aroi-specialized-table thead th:nth-child(6) {
+                    width: 12%; /* Consensus Weight */
+                }
+                
+                .aroi-specialized-table thead th:nth-child(7) {
+                    width: 10%; /* Countries */
+                }
+                
+                .aroi-specialized-table thead th:nth-child(8) {
+                    width: 15%; /* Cross Reference (Guard/Exit Count) */
+                }
+                
+                /* Diversity/Category table layout - Generic defaults */
+                .aroi-category-table thead th:nth-child(3) {
+                    width: 8%;  /* Relays */
+                }
+                
+                .aroi-category-table thead th:nth-child(4) {
+                    width: 15%; /* Key Metric */
+                }
+                
+                .aroi-category-table thead th:nth-child(5) {
+                    width: 12%; /* Bandwidth */
+                }
+                
+                .aroi-category-table thead th:nth-child(6) {
+                    width: 10%; /* Countries */
+                }
+                
+                .aroi-category-table thead th:nth-child(7) {
+                    width: 10%; /* Platforms */
+                }
+                
+                .aroi-category-table thead th:nth-child(8) {
+                    width: 15%; /* Specialization */
+                }
+                
+                /* Geographic Champions (Non-EU Leaders) specific layout */
+                .aroi-geographic-table thead th:nth-child(3) {
+                    width: 15%; /* Non-EU Relays */
+                }
+                
+                .aroi-geographic-table thead th:nth-child(4) {
+                    width: 10%; /* Bandwidth */
+                }
+                
+                .aroi-geographic-table thead th:nth-child(5) {
+                    width: 8%; /* Countries */
+                }
+                
+                .aroi-geographic-table thead th:nth-child(6) {
+                    width: 25%; /* Specialization - Much wider for geographic breakdown details */
+                }
+                
+                /* Frontier Builders (Rare Countries) specific layout */
+                .aroi-frontier-table thead th:nth-child(3) {
+                    width: 10%; /* Rare Relays - Reduced from 15% */
+                }
+                
+                .aroi-frontier-table thead th:nth-child(4) {
+                    width: 12%; /* Bandwidth */
+                }
+                
+                .aroi-frontier-table thead th:nth-child(5) {
+                    width: 10%; /* Countries */
+                }
+                
+                .aroi-frontier-table thead th:nth-child(6) {
+                    width: 23%; /* Specialization - Increased from 18% (+5% from Rare Relays column) */
+                }
+                
+                /* Platform Diversity (Non-Linux Heroes) specific layout */
+                .aroi-platform-table thead th:nth-child(3) {
+                    width: 10%; /* Non Linux Relays - Reduced from 15% */
+                }
+                
+                .aroi-platform-table thead th:nth-child(4) {
+                    width: 8%; /* Bandwidth - Reduced from 12% */
+                }
+                
+                .aroi-platform-table thead th:nth-child(5) {
+                    width: 22%; /* Specialization - Increased from 15% (+7% from reductions) */
+                }
+
+                /* AROI Champion Badge Styles */
+                .aroi-champion-platinum {
+                    background: linear-gradient(45deg, #FFD700, #FFA500);
+                    color: #000;
+                }
+                
+                .aroi-champion-network {
+                    background: linear-gradient(45deg, #f7b731, #fc4a1a);
+                    color: #fff;
+                }
+                
+                .aroi-champion-exit {
+                    background: linear-gradient(45deg, #FF6B6B, #FF8E53);
+                    color: #fff;
+                }
+                
+                .aroi-champion-guard {
+                    background: linear-gradient(45deg, #4ECDC4, #44A08D);
+                    color: #fff;
+                }
+                
+                .aroi-champion-diversity {
+                    background: linear-gradient(45deg, #A8E6CF, #56AB2F);
+                    color: #000;
+                }
+                
+                .aroi-champion-platform {
+                    background: linear-gradient(45deg, #74b9ff, #0984e3);
+                    color: #fff;
+                }
+                
+                .aroi-champion-bsd {
+                    background: linear-gradient(45deg, #667eea, #764ba2);
+                    color: #fff;
+                }
+                
+                .aroi-champion-global {
+                    background: linear-gradient(45deg, #00b894, #00a085);
+                    color: #fff;
+                }
+                
+                .aroi-champion-frontier {
+                    background: linear-gradient(45deg, #ffecd2, #fcb69f);
+                    color: #000;
+                }
+                
+                .aroi-champion-reliability {
+                    background: linear-gradient(45deg, #a8edea, #fed6e3);
+                    color: #000;
+                }
+                
+                .aroi-champion-efficiency {
+                    background: linear-gradient(45deg, #f093fb, #f5576c);
+                    color: #fff;
+                }
+
+                /* AROI Ranking Badge Styles */
+                .aroi-rank-gold {
+                    background-color: #FFD700;
+                }
+                
+                .aroi-rank-silver {
+                    background-color: #C0C0C0;
+                }
+                
+                .aroi-rank-bronze {
+                    background-color: #CD7F32;
+                }
+
+                /* AROI Link Styles */
+                .aroi-underline-link {
+                    text-decoration: underline;
+                    color: inherit;
+                }
+                
+                .aroi-contact-link {
+                    text-decoration: underline;
+                }
+
+                /* AROI Layout Styles */
+                .aroi-center-text {
+                    text-align: center;
+                }
+                
+                .aroi-flex-nav {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 10px;
+                }
+                
+                .aroi-nav-spacing {
+                    margin-bottom: 20px;
+                }
+                
+                .aroi-nav-spacing h4 {
+                    margin-top: 5px;
+                }
+                
+                .aroi-primary-nav {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 15px;
+                    margin-bottom: 15px;
+                    justify-content: center;
+                }
+                
+                .aroi-category-nav {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 8px;
+                    padding-top: 15px;
+                    border-top: 1px solid #ddd;
+                    justify-content: center;
+                }
+
+                /* Compact Navigation Styles */
+                .aroi-compact-nav {
+                    margin-bottom: 15px;
+                    padding: 10px 15px;
+                }
+                
+                .aroi-compact-nav-row {
+                    display: flex;
+                    flex-wrap: wrap;
+                    align-items: center;
+                    gap: 15px;
+                    font-size: 14px;
+                }
+                
+                .aroi-nav-label {
+                    font-weight: bold;
+                    color: #333;
+                    white-space: nowrap;
+                }
+                
+                .aroi-primary-nav-centered {
+                    display: flex;
+                    justify-content: center;
+                    gap: 8px;
+                    margin-bottom: 10px;
+                    flex-wrap: wrap;
+                }
+                
+                .aroi-category-links-row {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 12px;
+                    justify-content: center;
+                }
+                
+                .aroi-nav-link {
+                    color: #337ab7;
+                    text-decoration: none;
+                    padding: 2px 6px;
+                    border-radius: 3px;
+                    font-size: 13px;
+                    white-space: nowrap;
+                }
+                
+                .aroi-nav-link:hover {
+                    color: #23527c;
+                    background-color: #f5f5f5;
+                    text-decoration: none;
+                }
+
+                /* Responsive adjustments for compact nav */
+                @media (max-width: 768px) {
+                    .aroi-primary-nav-centered {
+                        flex-direction: column;
+                        align-items: center;
+                        gap: 8px;
+                    }
+                    
+                    .aroi-category-links-row {
+                        justify-content: center;
+                    }
+                    
+                    .aroi-nav-link {
+                        font-size: 12px;
+                    }
+                }
+                
+                .aroi-nav-separator {
+                    border-top: 1px solid #ddd;
+                    margin: 15px 0;
+                }
+                
+                .aroi-top-margin {
+                    margin-top: 10px;
+                }
+                
+                .aroi-compact-summary {
+                    margin-bottom: 8px;
+                    padding: 8px 12px;
+                }
+                
+                .aroi-compact-summary h5 {
+                    margin-top: 0;
+                    margin-bottom: 4px;
+                    font-size: 15px;
+                    line-height: 1.2;
+                }
+                
+                .aroi-compact-summary .row {
+                    margin-bottom: 2px;
+                }
+                
+                .aroi-compact-summary .col-md-3 {
+                    padding-top: 2px;
+                    padding-bottom: 2px;
+                }
+                
+                .aroi-compact-footer {
+                    margin-top: 4px;
+                    padding-top: 3px;
+                    border-top: 1px solid rgba(255,255,255,0.3);
+                }
+                
+                .aroi-compact-footer small {
+                    font-size: 11px;
+                    line-height: 1.3;
+                }
+                
+                .aroi-header-spacing {
+                    margin-top: 0;
+                }
+                
+                .aroi-fixed-nav {
+                    position: fixed;
+                    bottom: 20px;
+                    right: 20px;
+                    z-index: 1000;
+                }
+                
+                .aroi-footer-section {
+                    margin-top: 50px;
+                    border-top: 2px solid #ccc;
+                    padding-top: 30px;
+                }
+
+                /* AROI Panel Background Colors for Champion Badges */
+                .panel-danger .panel-body {
+                    background-color: #f2dede;
+                    border-color: #ebccd1;
+                }
+                
+                .panel-warning .panel-body {
+                    background-color: #fcf8e3;
+                    border-color: #faebcc;
+                }
+                
+                .panel-info .panel-body {
+                    background-color: #d9edf7;
+                    border-color: #bce8f1;
+                }
+                
+                .panel-success .panel-body {
+                    background-color: #dff0d8;
+                    border-color: #d6e9c6;
+                }
+                
+                .panel-primary .panel-body {
+                    background-color: #d9edf7;
+                    border-color: #337ab7;
+                }
+
+                /* CSS-only navbar collapse using checkbox hack */
+                .navbar-toggle {
+                    display: none;
+                    background-color: transparent;
+                    background-image: none;
+                    border: 1px solid #ddd;
+                    border-radius: 4px;
+                    padding: 9px 10px;
+                    margin-top: 8px;
+                    margin-right: 15px;
+                    margin-bottom: 8px;
+                    cursor: pointer;
+                    float: right;
+                }
+
+                .navbar-toggle:hover,
+                .navbar-toggle:focus {
+                    background-color: #ddd;
+                }
+
+                .navbar-toggle .icon-bar {
+                    display: block;
+                    width: 22px;
+                    height: 2px;
+                    background-color: #888;
+                    border-radius: 1px;
+                    margin: 4px 0;
+                }
+
+                .navbar-brand {
+                    float: left;
+                    height: 50px;
+                    padding: 15px;
+                    font-size: 18px;
+                    line-height: 20px;
+                    font-weight: bold;
+                }
+
+                /* Desktop: show navigation horizontally */
+                @media (min-width: 768px) {
+                    .navbar-collapse {
+                        display: block !important;
+                        height: auto !important;
+                        overflow: visible !important;
+                    }
+                    
+                    .nav.navbar-nav {
+                        float: left;
+                        margin: 0;
+                    }
+                    
+                    .nav.navbar-nav > li {
+                        float: left;
+                    }
+                    
+                    .nav.navbar-nav > li > a {
+                        padding-top: 15px;
+                        padding-bottom: 15px;
+                        color: #777;
+                        text-decoration: none;
+                        padding-left: 15px;
+                        padding-right: 15px;
+                    }
+                    
+                    .nav.navbar-nav > li.active > a,
+                    .nav.navbar-nav > li > a:hover,
+                    .nav.navbar-nav > li > a:focus {
+                        color: #333;
+                        background-color: #e7e7e7;
+                    }
+                    
+                    .navbar-brand {
+                        display: none;
+                    }
+                }
+
+                /* Mobile: hide navigation by default, show hamburger */
+                @media (max-width: 767px) {
+                    .navbar-toggle {
+                        display: block;
+                    }
+                    
+                    .navbar-collapse {
+                        display: none;
+                        clear: both;
+                        width: 100%;
+                        margin-top: 50px;
+                        border-top: 1px solid #e7e7e7;
+                        padding-top: 10px;
+                    }
+                    
+                    /* When checkbox is checked, show the menu */
+                    .navbar-toggle-checkbox:checked ~ .navbar-header + .navbar-collapse {
+                        display: block;
+                    }
+                    
+                    .nav.navbar-nav > li {
+                        float: none;
+                    }
+                    
+                    .nav.navbar-nav > li > a {
+                        display: block;
+                        padding: 12px 20px;
+                        color: #777;
+                        text-decoration: none;
+                        border-bottom: 1px solid #e7e7e7;
+                    }
+                    
+                    .nav.navbar-nav > li:last-child > a {
+                        border-bottom: none;
+                    }
+                    
+                    .nav.navbar-nav > li.active > a,
+                    .nav.navbar-nav > li > a:hover,
+                    .nav.navbar-nav > li > a:focus {
+                        color: #333;
+                        background-color: #f5f5f5;
+                    }
+                }
+            </style>
+        </head>
+    <body>
+        <div class="container">
+<h2>
+View Family digidow.eu Details
+</h2>
+
+        <nav aria-label="breadcrumb" style="margin-bottom: 10px;">
+    <ol class="breadcrumb" style="background: none; padding: 0; margin: 0; font-size: 0.9em; list-style: none;">
+        <li style="display: inline;"><a href="../../index.html" style="color: #337ab7; text-decoration: none;">Home</a></li>
+            <li style="display: inline;"> > <a href="../../misc/families-by-bandwidth.html" style="color: #337ab7; text-decoration: none;">Browse by Family</a></li>
+            <li style="display: inline; color: #777;"> > 23D5D821</li>
+    </ol>
+</nav>
+    <nav class="navbar navbar-default" style="margin-bottom: 20px;">
+        <div class="container-fluid">
+            <!-- CSS-only hamburger toggle using checkbox hack -->
+            <input type="checkbox" id="navbar-toggle" class="navbar-toggle-checkbox" style="display: none;">
+            
+            <div class="navbar-header">
+                <label for="navbar-toggle" class="navbar-toggle" role="button" aria-label="Toggle navigation">
+                    <span class="sr-only">Toggle navigation</span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </label>
+                <span class="navbar-brand visible-xs">Browse Categories</span>
+            </div>
+            
+            <div class="navbar-collapse" id="main-navbar">
+                <ul class="nav navbar-nav">
+                    <li class="">
+                        <a href="../../misc/aroi-leaderboards.html">Operator Champions</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/contacts-by-bandwidth.html">Operator / Contact</a>
+                    </li>
+                    <li class="active">
+                        <a href="../../misc/families-by-bandwidth.html">By Family</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/networks-by-bandwidth.html">By Network</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/countries-by-bandwidth.html">By Country</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/platforms-by-bandwidth.html">By Platform</a>
+                    </li>
+                    <li class="">
+                        <a href="../../index.html">Top 500 Relays</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/all.html">All Relays</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+<p>
+Relays with effective family member <code>23D5D8219A8EB7610AB33CFAD589FD72A844356A</code> summary:
+<ul style="list-style-type: disc; padding-left: 20px; margin-bottom: 15px;">
+    <li><strong><span title="Observed bandwidth represents the estimated capacity this group can handle, combining total, guard, middle, and exit bandwidth contributions">Bandwidth</span>:</strong> ~3.06 Gbit/s 
+        (<span title="Bandwidth dedicated to guard relay operations">0.00 Gbit/s guard</span>, <span title="Bandwidth dedicated to middle relay operations">3.06 Gbit/s middle</span>)</li>
+    <li><strong><span title="Network influence represents the percentage of overall consensus weight, indicating relative importance in the Tor network across guard, middle, and exit positions">Network Influence</span>:</strong> 0.00% of overall consensus weight 
+        (<span title="Percentage of guard consensus weight for entry position selection">0.00% guard</span>, <span title="Percentage of middle consensus weight for routing position selection">0.03% middle</span>)</li>
+    <li><strong><span title="Network position indicates the strategic role distribution of relays. Labels: Guard-focused (>60% guard), Exit-focused (>40% exit), Multi-role (both guard and exit >20%), Balanced (mixed roles), Guard-only (100% guard), Exit-only (100% exit), Middle-only (100% middle)">Network Position</span>:</strong> middle-only, 100% middle (50 total relays, 0 guards, 50 middles, 0 exits)</li>
+</ul></p>
+
+<p class="text-muted" style="margin-bottom: 15px;">
+<small>Last updated: Thu, 12 Jun 2025 16:02:55 GMT. Refreshed every 30 minutes from the Tor directory authorities via <a href="https://onionoo.torproject.org/">Tor Project's onionoo API</a>.</small>
+</p>
+
+<table class="table table-condensed">
+<tr>
+    <th></th>
+    <th>Nickname</th>
+    <th><a href="https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/" target="_blank" title="Autonomous Relay Operator Identifier - unverified">AROI</a></th>
+    <th>Contact</th>
+    <th>BW</th>
+<th title="Bandwidth measured by >=3 bandwidth authorities">BW Measured</th>
+<th class="visible-md visible-lg">IP Address</th>
+    <th>AS Number</th>
+    <th>AS Name</th>
+    <th>Country</th>
+    <th>Platform</th>
+    <th class="visible-md visible-lg">Flags</th>
+    <th class="visible-md visible-lg">First Seen</th>
+<th class="visible-md visible-lg">Last Restarted</th>
+</tr>
+<tbody>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay15at5443">
+		    <a href="../../relay/3434F6A8D29D147D901FCCD46BCA03A76F5181AD/">INSRelay15at5443</a> (<a href="../../family/3434F6A8D29D147D901FCCD46BCA03A76F5181AD/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>87.29 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.15">140.78.100.15</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay16at5443">
+		    <a href="../../relay/249C3A5ED8B1A8D21A3853EE7366F4FF966DD4FD/">INSRelay16at5443</a> (<a href="../../family/249C3A5ED8B1A8D21A3853EE7366F4FF966DD4FD/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>84.44 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.16">140.78.100.16</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay16at8443">
+		    <a href="../../relay/B9208EAD1E688E9EE43A05159ACD4638EB4DFD8A/">INSRelay16at8443</a> (<a href="../../family/B9208EAD1E688E9EE43A05159ACD4638EB4DFD8A/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>80.90 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.16">140.78.100.16</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay20at5443">
+		    <a href="../../relay/5BFFE8DAE56B1DA090BBB7BAEFC911B102D065F8/">INSRelay20at5443</a> (<a href="../../family/5BFFE8DAE56B1DA090BBB7BAEFC911B102D065F8/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>79.04 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.20">140.78.100.20</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay26at8443">
+		    <a href="../../relay/CB2EC8D80624CA6DD5092E1A794DEA488A81B50A/">INSRelay26at8443</a> (<a href="../../family/CB2EC8D80624CA6DD5092E1A794DEA488A81B50A/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>74.50 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.26">140.78.100.26</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay29at8443">
+		    <a href="../../relay/73F34CDC592584C0519988E443E6FDFBA72C790B/">INSRelay29at8443</a> (<a href="../../family/73F34CDC592584C0519988E443E6FDFBA72C790B/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>74.22 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.29">140.78.100.29</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay15at8443">
+		    <a href="../../relay/70882B116C73BE323036D824315A050EE796C445/">INSRelay15at8443</a> (<a href="../../family/70882B116C73BE323036D824315A050EE796C445/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>74.19 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.15">140.78.100.15</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay20at8443">
+		    <a href="../../relay/58CBD772422AEFA87190560C193C0E8C03BDA6BF/">INSRelay20at8443</a> (<a href="../../family/58CBD772422AEFA87190560C193C0E8C03BDA6BF/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>71.36 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.20">140.78.100.20</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay41at5443">
+		    <a href="../../relay/D6015DEF7073A550DB4E797C76A71F35D28468A2/">INSRelay41at5443</a> (<a href="../../family/D6015DEF7073A550DB4E797C76A71F35D28468A2/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>71.01 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.41">140.78.100.41</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay25at5443">
+		    <a href="../../relay/4FDEC4A52538AA91220D04FC25EE4AE2C725C2FE/">INSRelay25at5443</a> (<a href="../../family/4FDEC4A52538AA91220D04FC25EE4AE2C725C2FE/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>70.89 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.25">140.78.100.25</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay18at8443">
+		    <a href="../../relay/9D97F82F160AEF3FFD7A0AB2BFB68B691121CB11/">INSRelay18at8443</a> (<a href="../../family/9D97F82F160AEF3FFD7A0AB2BFB68B691121CB11/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>70.63 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.18">140.78.100.18</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay18at5443">
+		    <a href="../../relay/B65EBC8D596BBCAD0AF6092C733C00872959FD68/">INSRelay18at5443</a> (<a href="../../family/B65EBC8D596BBCAD0AF6092C733C00872959FD68/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>70.20 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.18">140.78.100.18</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay14at5443">
+		    <a href="../../relay/C1CA4E603F152E8C86E864F4FBF1162A3BFDF587/">INSRelay14at5443</a> (<a href="../../family/C1CA4E603F152E8C86E864F4FBF1162A3BFDF587/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>69.84 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.14">140.78.100.14</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay21at8443">
+		    <a href="../../relay/97E348CE78F9525797DA4827FCAE94C15FDFF9AA/">INSRelay21at8443</a> (<a href="../../family/97E348CE78F9525797DA4827FCAE94C15FDFF9AA/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>68.76 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.21">140.78.100.21</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay43at5443">
+		    <a href="../../relay/40B334132EB4D680AC00202E0186DBB57BFF17CE/">INSRelay43at5443</a> (<a href="../../family/40B334132EB4D680AC00202E0186DBB57BFF17CE/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>66.96 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.43">140.78.100.43</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay26at5443">
+		    <a href="../../relay/70B2D83BFCA9502E37EAF49DC685166718EADEFE/">INSRelay26at5443</a> (<a href="../../family/70B2D83BFCA9502E37EAF49DC685166718EADEFE/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>66.79 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.26">140.78.100.26</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay17at5443">
+		    <a href="../../relay/F878ACA29A644FF361D998B0724863EFC077AE17/">INSRelay17at5443</a> (<a href="../../family/F878ACA29A644FF361D998B0724863EFC077AE17/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>66.53 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.17">140.78.100.17</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay17at8443">
+		    <a href="../../relay/742425F73781A5A50932C09EEA8A5A596995217E/">INSRelay17at8443</a> (<a href="../../family/742425F73781A5A50932C09EEA8A5A596995217E/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>66.47 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.17">140.78.100.17</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay42at5443">
+		    <a href="../../relay/9D970B7FBAC353D8F6049AD4E0CEE06BBDE4E17E/">INSRelay42at5443</a> (<a href="../../family/9D970B7FBAC353D8F6049AD4E0CEE06BBDE4E17E/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>64.59 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.42">140.78.100.42</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay25at8443">
+		    <a href="../../relay/9385FF13D9E3BAB934ABCBA61EE63E10346E3673/">INSRelay25at8443</a> (<a href="../../family/9385FF13D9E3BAB934ABCBA61EE63E10346E3673/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>63.93 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.25">140.78.100.25</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay27at8443">
+		    <a href="../../relay/6569D762AC448127664750B089F80D1597ECB709/">INSRelay27at8443</a> (<a href="../../family/6569D762AC448127664750B089F80D1597ECB709/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>63.77 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.27">140.78.100.27</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay39at8443">
+		    <a href="../../relay/831F731BA469539EFBEEF609D4DEE0382BB8FC68/">INSRelay39at8443</a> (<a href="../../family/831F731BA469539EFBEEF609D4DEE0382BB8FC68/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>63.76 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.39">140.78.100.39</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay36at5443">
+		    <a href="../../relay/C0360EB664017B831FF73FE2A41A154CE264FAC4/">INSRelay36at5443</a> (<a href="../../family/C0360EB664017B831FF73FE2A41A154CE264FAC4/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>63.59 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.36">140.78.100.36</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay29at5443">
+		    <a href="../../relay/795D165D2AD5E7FFE28573924F92895D08E0170D/">INSRelay29at5443</a> (<a href="../../family/795D165D2AD5E7FFE28573924F92895D08E0170D/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>63.32 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.29">140.78.100.29</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay14at8443">
+		    <a href="../../relay/9C97939FD72EA7A301195E41DCDA907E4494A9B5/">INSRelay14at8443</a> (<a href="../../family/9C97939FD72EA7A301195E41DCDA907E4494A9B5/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>63.27 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.14">140.78.100.14</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay22at8443">
+		    <a href="../../relay/F6ECFD31A46F5174C25660E16C3C62E79974F9DD/">INSRelay22at8443</a> (<a href="../../family/F6ECFD31A46F5174C25660E16C3C62E79974F9DD/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>62.22 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.22">140.78.100.22</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay38at8443">
+		    <a href="../../relay/8AC81A91A1196C2C1CBED71C96AA204F7B0FFE00/">INSRelay38at8443</a> (<a href="../../family/8AC81A91A1196C2C1CBED71C96AA204F7B0FFE00/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>62.07 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.38">140.78.100.38</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay27at5443">
+		    <a href="../../relay/9C4CD321BFEA796CE871F186776001FBEF886427/">INSRelay27at5443</a> (<a href="../../family/9C4CD321BFEA796CE871F186776001FBEF886427/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>61.69 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.27">140.78.100.27</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay19at8443">
+		    <a href="../../relay/885C7B6EB943068B762070E276E299319E5AB08C/">INSRelay19at8443</a> (<a href="../../family/885C7B6EB943068B762070E276E299319E5AB08C/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>61.48 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.19">140.78.100.19</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay37at8443">
+		    <a href="../../relay/CFB535715442BC0E9F6AF224A794BBFA02D0B343/">INSRelay37at8443</a> (<a href="../../family/CFB535715442BC0E9F6AF224A794BBFA02D0B343/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>61.07 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.37">140.78.100.37</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay23at8443">
+		    <a href="../../relay/5B07A1CEA43BCA98A971E47611C0F0D61B18761D/">INSRelay23at8443</a> (<a href="../../family/5B07A1CEA43BCA98A971E47611C0F0D61B18761D/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>60.62 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.23">140.78.100.23</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay41at8443">
+		    <a href="../../relay/C9525872E3AA926402D8998085A409C7BBDFAE59/">INSRelay41at8443</a> (<a href="../../family/C9525872E3AA926402D8998085A409C7BBDFAE59/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>60.21 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.41">140.78.100.41</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay42at8443">
+		    <a href="../../relay/008196DC449482C73CFA9712445223917F760921/">INSRelay42at8443</a> (<a href="../../family/008196DC449482C73CFA9712445223917F760921/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>59.80 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.42">140.78.100.42</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-26/">2021-02-26</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay38at5443">
+		    <a href="../../relay/23D5D8219A8EB7610AB33CFAD589FD72A844356A/">INSRelay38at5443</a> (<a href="../../family/23D5D8219A8EB7610AB33CFAD589FD72A844356A/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>59.30 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.38">140.78.100.38</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay37at5443">
+		    <a href="../../relay/746BE16C31791C9A7D15461F734F0C017DDC55EE/">INSRelay37at5443</a> (<a href="../../family/746BE16C31791C9A7D15461F734F0C017DDC55EE/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>58.07 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.37">140.78.100.37</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay36at8443">
+		    <a href="../../relay/877AAA1DF08D902DCA667056EB6DFC4CD2B06658/">INSRelay36at8443</a> (<a href="../../family/877AAA1DF08D902DCA667056EB6DFC4CD2B06658/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>58.02 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.36">140.78.100.36</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay28at5443">
+		    <a href="../../relay/0DBA891A70AE95D4AD77593A936E6C04ABF2E7CE/">INSRelay28at5443</a> (<a href="../../family/0DBA891A70AE95D4AD77593A936E6C04ABF2E7CE/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>57.79 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.28">140.78.100.28</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-26/">2021-02-26</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay28at8443">
+		    <a href="../../relay/592AB80372DB0365F9A2357702AC97C06E5F835C/">INSRelay28at8443</a> (<a href="../../family/592AB80372DB0365F9A2357702AC97C06E5F835C/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>57.56 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.28">140.78.100.28</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay39at5443">
+		    <a href="../../relay/B97715C8A1EE72679C74480F301B11AC015B4C54/">INSRelay39at5443</a> (<a href="../../family/B97715C8A1EE72679C74480F301B11AC015B4C54/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>57.34 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.39">140.78.100.39</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay43at8443">
+		    <a href="../../relay/BC6E80744314F16054A64EE0F2302F082C929958/">INSRelay43at8443</a> (<a href="../../family/BC6E80744314F16054A64EE0F2302F082C929958/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>56.02 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.43">140.78.100.43</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay21at5443">
+		    <a href="../../relay/6E3508CB2374D411CD41FEE8ECDF70DA3A2F7A28/">INSRelay21at5443</a> (<a href="../../family/6E3508CB2374D411CD41FEE8ECDF70DA3A2F7A28/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>55.85 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.21">140.78.100.21</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay22at5443">
+		    <a href="../../relay/69D7FEF9B0026393C2FD73E897C71C102ABACA5C/">INSRelay22at5443</a> (<a href="../../family/69D7FEF9B0026393C2FD73E897C71C102ABACA5C/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>54.81 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.22">140.78.100.22</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay19at5443">
+		    <a href="../../relay/B143359560E1930347825D441AF91E737A4B9DF3/">INSRelay19at5443</a> (<a href="../../family/B143359560E1930347825D441AF91E737A4B9DF3/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>53.40 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.19">140.78.100.19</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay23at5443">
+		    <a href="../../relay/E637AA0AD4BCCDD1643ADBBD6E7BDE1B13527864/">INSRelay23at5443</a> (<a href="../../family/E637AA0AD4BCCDD1643ADBBD6E7BDE1B13527864/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>49.95 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.23">140.78.100.23</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay24at5443">
+		    <a href="../../relay/837405E32D70E1B29CE1FFE85C053E41CBF267A8/">INSRelay24at5443</a> (<a href="../../family/837405E32D70E1B29CE1FFE85C053E41CBF267A8/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>49.06 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.24">140.78.100.24</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay24at8443">
+		    <a href="../../relay/DC5BACF269EFDC7FE91356F2A98ADDAA49BD82EC/">INSRelay24at8443</a> (<a href="../../family/DC5BACF269EFDC7FE91356F2A98ADDAA49BD82EC/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>39.44 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.24">140.78.100.24</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay35at8443">
+		    <a href="../../relay/0FB07690D64CE5C22B5175183C0E59678CDF7EAB/">INSRelay35at8443</a> (<a href="../../family/0FB07690D64CE5C22B5175183C0E59678CDF7EAB/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>36.59 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.35">140.78.100.35</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-26/">2021-02-26</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay40at5443">
+		    <a href="../../relay/DE879EBAF50B900E1940A97B048293006874EA93/">INSRelay40at5443</a> (<a href="../../family/DE879EBAF50B900E1940A97B048293006874EA93/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>32.24 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.40">140.78.100.40</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay40at8443">
+		    <a href="../../relay/B8C9CA7A90A2D94406C6D9899340EB68DA4265B8/">INSRelay40at8443</a> (<a href="../../family/B8C9CA7A90A2D94406C6D9899340EB68DA4265B8/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>21.65 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.40">140.78.100.40</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="INSRelay35at5443">
+		    <a href="../../relay/F97CF76D9121AC28727C22902681A9B539ABAE99/">INSRelay35at5443</a> (<a href="../../family/F97CF76D9121AC28727C22902681A9B539ABAE99/">50</a>)
+		    </td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" title="digidow.eu">digidow.eu</a>
+			</td>
+<td>
+			    <a href="../../contact/69bca92fa3c7caf1e4ed571c04c3ab44/" 
+				title="This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2" class="contact-text">This Relay is operated as part of a research effort to measure how Onion Services are being used. Please see https://www.digidow.eu/onion-stats/ for more details. email:tobias.hoeller[]ins.jku.at url:www.digidow.eu proof:uri-rsa ciissversion:2</a>
+			</td>
+<td>17.52 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured">
+Yes</td>
+<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/140.78.100.35">140.78.100.35</a>
+		</td>
+<td>
+			    <a href="../../as/AS1205/">AS1205</a>
+			</td>
+<td>
+			<a href="https://bgp.tools/AS1205"
+			   title="University Linz">University Linz</a>
+		    </td>
+<td>
+			    <a href="../../country/at/">
+				<img src="../../static/images/cc/at.png"
+				     title="Austria"
+				     alt="Austria">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+<td class="visible-md visible-lg">
+<a href="../../flag/fast/">
+				<img src="../../static/images/flags/fast.png"
+				     title="Fast"
+				     alt="Fast">
+			    </a>
+<a href="../../flag/hsdir/">
+				<img src="../../static/images/flags/hsdir.png"
+				     title="HSDir"
+				     alt="HSDir">
+			    </a>
+<a href="../../flag/running/">
+				<img src="../../static/images/flags/running.png"
+				     title="Running"
+				     alt="Running">
+			    </a>
+<a href="../../flag/stable/">
+				<img src="../../static/images/flags/stable.png"
+				     title="Stable"
+				     alt="Stable">
+			    </a>
+<a href="../../flag/v2dir/">
+				<img src="../../static/images/flags/v2dir.png"
+				     title="V2Dir"
+				     alt="V2Dir">
+			    </a>
+<a href="../../flag/valid/">
+				<img src="../../static/images/flags/valid.png"
+				     title="Valid"
+				     alt="Valid">
+			    </a>
+</td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-02-27/">2021-02-27</a>
+		    </td>
+<td class="visible-md visible-lg" title="2025-05-02">
+1mo 1w 4d ago
+</td>
+</tr>
+</tbody>
+</table>
+        </div>
+    </body>
+        <footer class="page-footer font-small">
+            <div class="footer-copyright text-center text-muted">
+                <p>
+                    Generated by a <a href="https://github.com/1aeo/allium">1aeo modified fork of allium</a>, based on original <a href="https://git.jordan.im/allium/">allium</a>, on Thu, 12 Jun 2025 16:02:55 GMT. Source data from <a href="https://onionoo.torproject.org/">Tor Project onionoo</a>.
+                </p>
+            </div>
+        </footer>
+    </html>
