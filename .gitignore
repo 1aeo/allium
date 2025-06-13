@@ -7,6 +7,9 @@ timestamp
 allium/www
 www-screenshots/
 
+# Data files (cache, state, etc.)
+allium/data/
+
 # Testing and CI
 .pytest_cache/
 .coverage

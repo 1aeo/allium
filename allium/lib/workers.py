@@ -186,17 +186,24 @@ def _read_timestamp(api_name):
     return None
 
 
-def fetch_onionoo_details(onionoo_url="https://onionoo.torproject.org/details"):
+def fetch_onionoo_details(onionoo_url="https://onionoo.torproject.org/details", progress_logger=None):
     """
     Fetch onionoo details data (extracted from original Relays._fetch_onionoo_details)
     
     Args:
         onionoo_url: URL to fetch data from
+        progress_logger: Optional function to call for progress updates
         
     Returns:
         dict: JSON response from onionoo API
     """
     api_name = "onionoo_details"
+    
+    def log_progress(message):
+        if progress_logger:
+            progress_logger(message)
+        else:
+            print(message)
     
     try:
         # Check for conditional request timestamp
@@ -213,14 +220,14 @@ def fetch_onionoo_details(onionoo_url="https://onionoo.torproject.org/details"):
         except urllib.error.HTTPError as err:
             if err.code == 304:
                 # No update since last run - use cached data
-                print("no onionoo update since last run, using cached data...")
+                log_progress("no onionoo update since last run, using cached data...")
                 cached_data = _load_cache(api_name)
                 if cached_data:
                     _mark_ready(api_name)
                     return cached_data
                 else:
                     # No cache available, this is a problem
-                    print("no onionoo update since last run, dying peacefully...")
+                    log_progress("no onionoo update since last run, dying peacefully...")
                     sys.exit(1)
             else:
                 raise err
@@ -244,30 +251,35 @@ def fetch_onionoo_details(onionoo_url="https://onionoo.torproject.org/details"):
         
     except Exception as e:
         error_msg = f"Failed to fetch onionoo details: {str(e)}"
-        print(f"Error: {error_msg}")
+        log_progress(f"Error: {error_msg}")
         _mark_stale(api_name, error_msg)
         
         # Try to return cached data as fallback
         cached_data = _load_cache(api_name)
         if cached_data:
-            print("Using cached onionoo data as fallback")
+            log_progress("Using cached onionoo data as fallback")
             return cached_data
         else:
-            print("No cached data available, cannot continue")
+            log_progress("No cached data available, cannot continue")
             return None
 
 
-def fetch_onionoo_uptime(onionoo_url="https://onionoo.torproject.org/uptime"):
+def fetch_onionoo_uptime(onionoo_url="https://onionoo.torproject.org/uptime", progress_logger=None):
     """
     Fetch onionoo uptime data from the Tor Project's Onionoo API
     
     Args:
         onionoo_url: URL to fetch uptime data from
+        progress_logger: Optional function to call for progress updates
         
     Returns:
         dict: JSON response from onionoo uptime API
     """
     api_name = "onionoo_uptime"
+    
+    def log_progress(message):
+        if progress_logger:
+            progress_logger(message)
     
     try:
         # Check for conditional request timestamp
@@ -279,30 +291,41 @@ def fetch_onionoo_uptime(onionoo_url="https://onionoo.torproject.org/uptime"):
         else:
             conn = urllib.request.Request(onionoo_url)
 
+        log_progress("Fetching uptime data from Onionoo API...")
+
         try:
             api_response = urllib.request.urlopen(conn).read()
         except urllib.error.HTTPError as err:
             if err.code == 304:
                 # No update since last run - use cached data
-                print("no onionoo uptime update since last run, using cached data...")
+                log_progress("No onionoo uptime update since last run, using cached data...")
                 cached_data = _load_cache(api_name)
                 if cached_data:
                     _mark_ready(api_name)
                     return cached_data
                 else:
                     # No cache available, this is a problem
-                    print("no onionoo uptime update since last run and no cache, skipping uptime data...")
+                    log_progress("No onionoo uptime update since last run and no cache, skipping uptime data...")
                     # Mark as stale but don't exit - uptime is not critical
                     _mark_stale(api_name, "No cached uptime data available")
                     return None
             else:
                 raise err
 
+        log_progress("Parsing uptime JSON response...")
+
         # Parse JSON response
         data = json.loads(api_response.decode("utf-8"))
         
+        # Progress update at 1/4 completion (after parsing)
+        log_progress("Uptime data parsing complete (1/4 done)")
+        
         # Cache the data
+        log_progress("Caching uptime data...")
         _save_cache(api_name, data)
+        
+        # Progress update at 1/2 completion (after caching)
+        log_progress("Uptime data caching complete (1/2 done)")
         
         # Write timestamp for future conditional requests
         timestamp_str = time.strftime(
@@ -310,38 +333,52 @@ def fetch_onionoo_uptime(onionoo_url="https://onionoo.torproject.org/uptime"):
         )
         _write_timestamp(api_name, timestamp_str)
         
+        # Progress update at 3/4 completion (after timestamp)
+        log_progress("Uptime timestamp written (3/4 done)")
+        
         # Mark as ready
         _mark_ready(api_name)
         
-        print(f"Successfully fetched uptime data for {len(data.get('relays', []))} relays")
+        # Use consistent progress format for success message
+        relay_count = len(data.get('relays', []))
+        log_progress(f"Successfully fetched uptime data for {relay_count} relays")
         return data
         
     except Exception as e:
         error_msg = f"Failed to fetch onionoo uptime: {str(e)}"
-        print(f"Error: {error_msg}")
+        log_progress(f"Error: {error_msg}")
         _mark_stale(api_name, error_msg)
         
         # Try to return cached data as fallback
         cached_data = _load_cache(api_name)
         if cached_data:
-            print("Using cached onionoo uptime data as fallback")
+            log_progress("Using cached onionoo uptime data as fallback")
             return cached_data
         else:
-            print("No cached uptime data available, continuing without uptime data")
+            log_progress("No cached uptime data available, continuing without uptime data")
             return None
 
 
-def fetch_collector_data():
+def fetch_collector_data(progress_logger=None):
     """
     Fetch CollecTor data (placeholder for future implementation)
+    
+    Args:
+        progress_logger: Optional function to call for progress updates
     
     Returns:
         dict: Processed CollecTor data
     """
     api_name = "collector"
     
+    def log_progress(message):
+        if progress_logger:
+            progress_logger(message)
+        else:
+            print(message)
+    
     try:
-        print(f"Fetching {api_name} (placeholder implementation)")
+        log_progress(f"Fetching {api_name} (placeholder implementation)")
         
         # Placeholder implementation - will be completed in Phase 3
         empty_data = {"authorities": [], "version": "placeholder"}
@@ -352,22 +389,31 @@ def fetch_collector_data():
         
     except Exception as e:
         error_msg = f"Failed to fetch collector data: {str(e)}"
-        print(f"Error: {error_msg}")
+        log_progress(f"Error: {error_msg}")
         _mark_stale(api_name, error_msg)
         return None
 
 
-def fetch_consensus_health():
+def fetch_consensus_health(progress_logger=None):
     """
     Fetch consensus health data (placeholder for future implementation)
+    
+    Args:
+        progress_logger: Optional function to call for progress updates
     
     Returns:
         dict: Consensus health data
     """
     api_name = "consensus_health"
     
+    def log_progress(message):
+        if progress_logger:
+            progress_logger(message)
+        else:
+            print(message)
+    
     try:
-        print(f"Fetching {api_name} (placeholder implementation)")
+        log_progress(f"Fetching {api_name} (placeholder implementation)")
         
         # Placeholder implementation - will be completed in Phase 3
         empty_data = {"health_status": {}, "version": "placeholder"}
@@ -378,7 +424,7 @@ def fetch_consensus_health():
         
     except Exception as e:
         error_msg = f"Failed to fetch consensus health: {str(e)}"
-        print(f"Error: {error_msg}")
+        log_progress(f"Error: {error_msg}")
         _mark_stale(api_name, error_msg)
         return None
 
