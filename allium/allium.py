@@ -206,9 +206,23 @@ if __name__ == "__main__":
     # object containing onionoo data and processing routines
     if args.progress:
         print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Initializing relay data from onionoo (using coordinator)...")
-    RELAY_SET = create_relay_set_with_coordinator(args.output_dir, args.onionoo_details_url, args.onionoo_uptime_url, args.bandwidth_units == 'bits', args.progress, start_time, progress_step, total_steps, args.enabled_apis)
-    if RELAY_SET.json == None:
-        sys.exit(0)
+    
+    try:
+        RELAY_SET = create_relay_set_with_coordinator(args.output_dir, args.onionoo_details_url, args.onionoo_uptime_url, args.bandwidth_units == 'bits', args.progress, start_time, progress_step, total_steps, args.enabled_apis)
+        if RELAY_SET is None or RELAY_SET.json == None:
+            if args.progress:
+                print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: No onionoo data available, exiting gracefully")
+            print("⚠️  No onionoo data available - this might be due to network issues or the service being temporarily unavailable")
+            print("🔧 In CI environments, this is often a temporary issue that resolves on retry")
+            sys.exit(0)
+    except Exception as e:
+        if args.progress:
+            print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Failed to initialize relay data: {e}")
+        print(f"❌ Error: Failed to initialize relay data: {e}")
+        print("🔧 In CI environments, this might be due to network connectivity or temporary service issues")
+        print("💡 Try running the command again, or check your internet connection")
+        sys.exit(1)
+    
     # Update progress_step from the RELAY_SET object (it was incremented during intelligence analysis)
     progress_step = RELAY_SET.progress_step
     if args.progress:

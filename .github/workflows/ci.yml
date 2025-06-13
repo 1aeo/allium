@@ -220,8 +220,21 @@ jobs:
         
         echo "🧪 Testing setup.sh in fresh environment (Python ${{ matrix.python-version }})"
         
-        # Download and run setup script
-        curl -sSL https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/setup.sh -o setup.sh
+        # Download and run setup script with retry logic
+        for download_attempt in 1 2 3; do
+          echo "📥 Download attempt $download_attempt of 3..."
+          if curl -sSL --connect-timeout 30 --max-time 60 https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/setup.sh -o setup.sh; then
+            echo "✅ Setup script downloaded successfully"
+            break
+          else
+            echo "⚠️  Download attempt $download_attempt failed"
+            if [ $download_attempt -eq 3 ]; then
+              echo "❌ Failed to download setup script after 3 attempts"
+              exit 1
+            fi
+            sleep 10
+          fi
+        done
         
         # Make sure the script is executable
         chmod +x setup.sh
@@ -229,6 +242,7 @@ jobs:
         # Run setup script with timeout to prevent hanging
         timeout 600 bash setup.sh || {
           echo "❌ Setup script failed or timed out"
+          echo "🔧 This might be due to network issues or service unavailability"
           exit 1
         }
         
@@ -274,13 +288,29 @@ jobs:
         
         echo "🔄 Testing data regeneration..."
         
-        # Test that regeneration works
-        timeout 300 python3 allium.py --progress || {
-          echo "❌ Regeneration failed or timed out"
-          exit 1
-        }
-        
-        echo "✅ Regeneration test completed successfully"
+        # Test that regeneration works with retry logic for network issues
+        # Try up to 3 times to handle temporary network issues common in CI
+        for attempt in 1 2 3; do
+          echo "🔄 Attempt $attempt of 3..."
+          if timeout 300 python3 allium.py --progress; then
+            echo "✅ Regeneration test completed successfully on attempt $attempt"
+            exit 0
+          else
+            exit_code=$?
+            echo "⚠️  Attempt $attempt failed with exit code $exit_code"
+            if [ $attempt -eq 3 ]; then
+              echo "❌ All regeneration attempts failed"
+              echo "🔧 This might be due to:"
+              echo "   - Network connectivity issues with onionoo.torproject.org"
+              echo "   - Temporary service unavailability"
+              echo "   - Timeout in CI environment"
+              exit 1
+            else
+              echo "⏳ Waiting 10 seconds before retry..."
+              sleep 10
+            fi
+          fi
+        done
         
   template-security-audit:
     name: "Template Security & Quality Audit"

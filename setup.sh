@@ -46,7 +46,33 @@ pip install -r requirements.txt
 
 echo "🚀 Running first generation with progress tracking..."
 cd allium
-python3 allium.py --progress
+
+# Run with retry logic to handle network issues
+echo "🔄 Attempting to generate site (may retry on network issues)..."
+for attempt in 1 2 3; do
+    echo "🔄 Generation attempt $attempt of 3..."
+    if python3 allium.py --progress; then
+        echo "✅ Site generation completed successfully on attempt $attempt"
+        break
+    else
+        exit_code=$?
+        echo "⚠️  Attempt $attempt failed with exit code $exit_code"
+        if [ $attempt -eq 3 ]; then
+            echo "❌ All generation attempts failed"
+            echo "🔧 This might be due to:"
+            echo "   - Network connectivity issues with onionoo.torproject.org"
+            echo "   - Temporary service unavailability"
+            echo "   - System resource constraints"
+            echo ""
+            echo "💡 You can try running the generation manually later with:"
+            echo "   cd allium && source ../venv/bin/activate && python3 allium.py --progress"
+            exit 1
+        else
+            echo "⏳ Waiting 10 seconds before retry..."
+            sleep 10
+        fi
+    fi
+done
 
 echo ""
 echo "🎉 Setup complete! Your Tor metrics site is ready."
