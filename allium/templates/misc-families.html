@@ -17,7 +17,7 @@
     </p>
 
     <ul style="margin-bottom: 15px;">
-        <li><strong>Families</strong>: {{ relays.json['sorted']['family']|length }} groups of relays with shared operators, families with 2+ members</li>
+        <li><strong>Families</strong>: {{ relays.json['sorted'].get('family', {})|length }} groups of relays with shared operators, families with 2+ members</li>
         <li><strong>Network Relays</strong>: Total: {{ relays.json['network_totals']['total_relays'] }}
             <ul style="margin: 2px 0; padding-left: 20px;">
                 <li><strong><span title="Main role with Exit priority, Exit > Guard > Middle">Primary Role</span></strong>: 
@@ -133,7 +133,7 @@
         </tr>
         <tbody>
             {% set processed = dict() -%}
-            {% for k, v in relays.json['sorted']['family'].items()|sort(attribute=sorted_by,
+            {% for k, v in relays.json['sorted'].get('family', {}).items()|sort(attribute=sorted_by,
                 reverse=True) -%}
                 {% if relays.json['relay_subset'][v['relays'][0]]['fingerprint'] not in processed -%}
                     <tr>
