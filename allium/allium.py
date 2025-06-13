@@ -147,13 +147,24 @@ if __name__ == "__main__":
         required=False,
     )
     parser.add_argument(
-        "--onionoo-url",
-        dest="onionoo_url",
+        "--onionoo-details-url",
+        dest="onionoo_details_url",
         type=str,
         default="https://onionoo.torproject.org/details",
         help=(
-            "onionoo HTTP URL (default "
+            "onionoo details API HTTP URL (default "
             '"https://onionoo.torproject.org/details")'
+        ),
+        required=False,
+    )
+    parser.add_argument(
+        "--onionoo-uptime-url",
+        dest="onionoo_uptime_url",
+        type=str,
+        default="https://onionoo.torproject.org/uptime",
+        help=(
+            "onionoo uptime API HTTP URL (default "
+            '"https://onionoo.torproject.org/uptime")'
         ),
         required=False,
     )
@@ -195,7 +206,7 @@ if __name__ == "__main__":
     # object containing onionoo data and processing routines
     if args.progress:
         print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Initializing relay data from onionoo (using coordinator)...")
-    RELAY_SET = create_relay_set_with_coordinator(args.output_dir, args.onionoo_url, args.bandwidth_units == 'bits', args.progress, start_time, progress_step, total_steps, args.enabled_apis)
+    RELAY_SET = create_relay_set_with_coordinator(args.output_dir, args.onionoo_details_url, args.onionoo_uptime_url, args.bandwidth_units == 'bits', args.progress, start_time, progress_step, total_steps, args.enabled_apis)
     if RELAY_SET.json == None:
         sys.exit(0)
     # Update progress_step from the RELAY_SET object (it was incremented during intelligence analysis)
