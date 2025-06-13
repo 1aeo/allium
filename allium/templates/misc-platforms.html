@@ -17,7 +17,7 @@
     </p>
 
     <ul style="margin-bottom: 15px;">
-        <li><strong>Platforms</strong>: {{ relays.json['sorted']['platform']|length }} operating systems hosting relays currently detected</li>
+        <li><strong>Platforms</strong>: {{ relays.json['sorted'].get('platform', {})|length }} operating systems hosting relays currently detected</li>
         <li><strong>Network Relays</strong>: Total: {{ relays.json['network_totals']['total_relays'] }}
             <ul style="margin: 2px 0; padding-left: 20px;">
                 <li><strong><span title="Main role with Exit priority, Exit > Guard > Middle">Primary Role</span></strong>: 
@@ -117,7 +117,7 @@
             {% endif -%}
         </tr>
         <tbody>
-            {% for k, v in relays.json['sorted']['platform'].items()|sort(attribute=sorted_by,
+            {% for k, v in relays.json['sorted'].get('platform', {}).items()|sort(attribute=sorted_by,
                 reverse=True) -%}
                 <tr>
                     {% set obs_unit = relays._determine_unit(v['bandwidth']) -%}

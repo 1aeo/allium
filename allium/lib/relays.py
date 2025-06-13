@@ -526,6 +526,11 @@ class Relays:
         """
         self.json["sorted"] = dict()
         
+        # Initialize all expected categories to prevent template errors with small datasets
+        expected_categories = ["as", "country", "platform", "flag", "family", "first_seen", "contact"]
+        for category in expected_categories:
+            self.json["sorted"][category] = dict()
+        
         # Calculate comprehensive network totals once - replaces duplicate calculations
         total_guard_cw, total_middle_cw, total_exit_cw = self._calculate_network_totals()
 
