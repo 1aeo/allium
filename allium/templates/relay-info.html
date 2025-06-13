@@ -60,8 +60,8 @@ none
 Contact
 </dt>
 {% if relay['contact'] -%}
-<dd>
-<a href="{{ page_ctx.path_prefix }}contact/{{ relay['contact_md5'] }}/">{{
+<dd style="word-wrap: break-word; word-break: break-all; max-width: 100%; overflow-wrap: break-word;">
+<a href="{{ page_ctx.path_prefix }}contact/{{ relay['contact_md5'] }}/" style="word-wrap: break-word; word-break: break-all; overflow-wrap: break-word;">{{
 relay['contact']|escape }}</a>
 </dd>
 {% else -%}
