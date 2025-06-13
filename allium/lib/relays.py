@@ -1087,8 +1087,11 @@ class Relays:
             
             # Generate contact rankings for AROI leaderboards (only for contact pages)
             contact_rankings = []
+            operator_reliability = None
             if k == "contact":
                 contact_rankings = self._generate_contact_rankings(v)
+                # Calculate operator reliability statistics
+                operator_reliability = self._calculate_operator_reliability(v, members)
             
             # Time the template rendering
             render_start = time.time()
@@ -1113,6 +1116,7 @@ class Relays:
                 value=v,
                 sp_countries=the_prefixed,
                 contact_rankings=contact_rankings,  # AROI leaderboard rankings for this contact
+                operator_reliability=operator_reliability,  # Operator reliability statistics for contact pages
                 # Template optimizations - pre-computed values to avoid expensive Jinja2 operations for all page types
                 consensus_weight_percentage=f"{i['consensus_weight_fraction'] * 100:.2f}%",
                 guard_consensus_weight_percentage=f"{i['guard_consensus_weight_fraction'] * 100:.2f}%",
@@ -1196,64 +1200,210 @@ class Relays:
 
     def _generate_contact_rankings(self, contact_hash):
         """
-        Generate ranking statements for a contact that appears in top 25 of any AROI category.
-        Returns a list of ranking statements with hyperlinks to the operator champions page.
-        
-        Args:
-            contact_hash (str): The MD5 hash of the contact information
-            
-        Returns:
-            list: List of dictionaries with ranking information for display on contact pages
+        Generate AROI leaderboard rankings for a specific contact hash.
+        Returns list of ranking achievements for display on contact pages.
         """
+        if not hasattr(self, 'json') or not self.json.get('aroi_leaderboards'):
+            return []
+        
+        leaderboards = self.json['aroi_leaderboards'].get('leaderboards', {})
         rankings = []
         
-        # Check if AROI leaderboards data exists
-        if not hasattr(self, 'json') or not self.json or 'aroi_leaderboards' not in self.json:
-            return rankings
-            
-        leaderboards = self.json['aroi_leaderboards'].get('leaderboards', {})
-        categories = self.json['aroi_leaderboards'].get('summary', {}).get('categories', {})
-        
-        # Category mapping to section IDs and display names
-        category_info = {
-            'bandwidth': {'section': 'bandwidth', 'title': 'Bandwidth Champion', 'emoji': '🚀'},
-            'consensus_weight': {'section': 'consensus_weight', 'title': 'Network Authority', 'emoji': '⚖️'},
-            'exit_authority': {'section': 'exit_authority', 'title': 'Exit Authority', 'emoji': '🚪'},
-            'exit_operators': {'section': 'exit_operators', 'title': 'Exit Gate Keeper', 'emoji': '🚪'},
-            'guard_operators': {'section': 'guard_operators', 'title': 'Guard Champion', 'emoji': '🛡️'},
-            'most_diverse': {'section': 'most_diverse', 'title': 'Diversity Master', 'emoji': '🌈'},
-            'platform_diversity': {'section': 'platform_diversity', 'title': 'Platform Hero', 'emoji': '💻'},
-            'non_eu_leaders': {'section': 'non_eu_leaders', 'title': 'Non-EU Leader', 'emoji': '🌍'},
-            'frontier_builders': {'section': 'frontier_builders', 'title': 'Frontier Builder', 'emoji': '🏴‍☠️'},
-            'network_veterans': {'section': 'network_veterans', 'title': 'Network Veteran', 'emoji': '🏆'}
-        }
-        
-        # Check each category for this contact in top 25
-        for category_key, category_data in leaderboards.items():
-            if not category_data or category_key not in category_info:
-                continue
+        # Check each leaderboard category for this contact
+        for category, leaders in leaderboards.items():
+            for rank, entry in enumerate(leaders, 1):
+                # Handle both formatted entries (dict) and raw tuples
+                if isinstance(entry, dict):
+                    leader_contact = entry.get('contact_hash')
+                else:
+                    # Handle tuple format (leader_contact, data)
+                    leader_contact, data = entry
                 
-            # Look for this contact in the top 25 of this category
-            for entry in category_data[:25]:  # Only check top 25
-                if entry.get('contact_hash') == contact_hash:
-                    info = category_info[category_key]
-                    category_name = categories.get(category_key, info['title'])
-                    
-                    # Create ranking statement
-                    ranking = {
-                        'rank': entry.get('rank', 0),
-                        'category_key': category_key,
-                        'category_name': category_name,
-                        'section_id': info['section'],
-                        'title': info['title'],
-                        'emoji': info['emoji'],
-                        'link': f"aroi-leaderboards.html#{info['section']}",
-                        'statement': f"Ranked #{entry.get('rank', 0)} in {category_name}"
-                    }
-                    rankings.append(ranking)
-                    break  # Found this contact in this category, move to next category
-        
-        # Sort rankings by rank (best ranks first)
-        rankings.sort(key=lambda x: x['rank'])
+                if leader_contact == contact_hash:
+                    # Only show top 25 rankings
+                    if rank <= 25:
+                        category_info = self._get_leaderboard_category_info(category)
+                        rankings.append({
+                            'category': category,
+                            'category_name': category_info['name'],
+                            'rank': rank,
+                            'emoji': category_info['emoji'],
+                            'title': category_info['title'],
+                            'statement': f"#{rank} {category_info['name']}",
+                            'link': f"aroi-leaderboards.html#{category}"
+                        })
+                    break
         
         return rankings
+
+    def _get_leaderboard_category_info(self, category):
+        """
+        Get display information for a leaderboard category.
+        
+        Args:
+            category (str): Category key
+            
+        Returns:
+            dict: Category display information
+        """
+        category_info = {
+            'bandwidth': {'name': 'Bandwidth Champion', 'emoji': '🚀', 'title': 'Bandwidth Champion'},
+            'consensus_weight': {'name': 'Network Authority', 'emoji': '⚖️', 'title': 'Network Authority'},
+            'exit_authority': {'name': 'Exit Authority', 'emoji': '🚪', 'title': 'Exit Authority'},
+            'exit_operators': {'name': 'Exit Gate Keeper', 'emoji': '🚪', 'title': 'Exit Gate Keeper'},
+            'guard_operators': {'name': 'Guard Champion', 'emoji': '🛡️', 'title': 'Guard Champion'},
+            'most_diverse': {'name': 'Diversity Master', 'emoji': '🌈', 'title': 'Diversity Master'},
+            'platform_diversity': {'name': 'Platform Hero', 'emoji': '💻', 'title': 'Platform Hero'},
+            'non_eu_leaders': {'name': 'Non-EU Leader', 'emoji': '🌍', 'title': 'Non-EU Leader'},
+            'frontier_builders': {'name': 'Frontier Builder', 'emoji': '🏴‍☠️', 'title': 'Frontier Builder'},
+            'network_veterans': {'name': 'Network Veteran', 'emoji': '🏆', 'title': 'Network Veteran'},
+            'reliability_masters': {'name': 'Reliability Master', 'emoji': '⏰', 'title': 'Reliability Master'},
+            'legacy_titans': {'name': 'Legacy Titan', 'emoji': '👑', 'title': 'Legacy Titan'}
+        }
+        
+        return category_info.get(category, {'name': category.replace('_', ' ').title(), 'emoji': '🏅', 'title': category.replace('_', ' ').title()})
+
+    def _calculate_operator_reliability(self, contact_hash, operator_relays):
+        """
+        Calculate comprehensive reliability statistics for an operator.
+        
+        Args:
+            contact_hash (str): Contact hash for the operator
+            operator_relays (list): List of relay objects for this operator
+            
+        Returns:
+            dict: Reliability statistics including overall uptime, time periods, and outliers
+        """
+        if not hasattr(self, 'uptime_data') or not self.uptime_data or not operator_relays:
+            return None
+            
+        # Available time periods from Onionoo uptime API
+        time_periods = ['1_month', '3_months', '6_months', '1_year', '5_years']
+        period_display_names = {
+            '1_month': '30d',
+            '3_months': '90d', 
+            '6_months': '6mo',
+            '1_year': '1y',
+            '5_years': '5y'
+        }
+        
+        reliability_stats = {
+            'overall_uptime': {},  # Unweighted average uptime per time period
+            'relay_uptimes': [],   # Individual relay uptime data
+            'outliers': {          # Statistical outliers (2+ std dev from mean)
+                'low_outliers': [],
+                'high_outliers': []
+            },
+            'valid_relays': 0,
+            'total_relays': len(operator_relays)
+        }
+        
+        # Collect uptime data for each relay and time period
+        relay_uptime_data = {}
+        
+        for relay in operator_relays:
+            fingerprint = relay.get('fingerprint', '')
+            nickname = relay.get('nickname', 'Unknown')
+            
+            if not fingerprint:
+                continue
+                
+            # Find uptime data for this relay
+            relay_uptime = None
+            for uptime_relay in self.uptime_data.get('relays', []):
+                if uptime_relay.get('fingerprint') == fingerprint:
+                    relay_uptime = uptime_relay
+                    break
+            
+            if relay_uptime and relay_uptime.get('uptime'):
+                relay_data = {
+                    'fingerprint': fingerprint,
+                    'nickname': nickname,
+                    'uptime_periods': {}
+                }
+                
+                # Process each time period
+                for period in time_periods:
+                    period_data = relay_uptime['uptime'].get(period, {})
+                    if period_data.get('values'):
+                        # Calculate average uptime from values array
+                        values = [v for v in period_data['values'] if v is not None]
+                        if values:
+                            # Normalize from 0-999 to 0-100 percentage
+                            avg_uptime = sum(values) / len(values) / 999 * 100
+                            relay_data['uptime_periods'][period] = avg_uptime
+                
+                # Only include relays with at least one valid uptime period
+                if relay_data['uptime_periods']:
+                    relay_uptime_data[fingerprint] = relay_data
+                    reliability_stats['relay_uptimes'].append(relay_data)
+        
+        reliability_stats['valid_relays'] = len(relay_uptime_data)
+        
+        if not relay_uptime_data:
+            return reliability_stats
+        
+        # Calculate overall uptime statistics per time period (unweighted average)
+        for period in time_periods:
+            period_uptimes = []
+            for relay_data in relay_uptime_data.values():
+                if period in relay_data['uptime_periods']:
+                    period_uptimes.append(relay_data['uptime_periods'][period])
+            
+            if period_uptimes:
+                import statistics
+                mean_uptime = statistics.mean(period_uptimes)
+                
+                reliability_stats['overall_uptime'][period] = {
+                    'average': mean_uptime,
+                    'display_name': period_display_names[period],
+                    'relay_count': len(period_uptimes)
+                }
+                
+                # Calculate statistical outliers (2+ standard deviations from mean)
+                if len(period_uptimes) >= 3:  # Need at least 3 data points for meaningful std dev
+                    try:
+                        std_dev = statistics.stdev(period_uptimes)
+                        
+                        # Find outliers (2+ standard deviations away)
+                        low_threshold = mean_uptime - (2 * std_dev)
+                        high_threshold = mean_uptime + (2 * std_dev)
+                        
+                        for relay_data in relay_uptime_data.values():
+                            if period in relay_data['uptime_periods']:
+                                uptime = relay_data['uptime_periods'][period]
+                                
+                                if uptime < low_threshold:
+                                    reliability_stats['outliers']['low_outliers'].append({
+                                        'nickname': relay_data['nickname'],
+                                        'fingerprint': relay_data['fingerprint'],
+                                        'uptime': uptime,
+                                        'period': period,
+                                        'deviation': abs(uptime - mean_uptime) / std_dev
+                                    })
+                                elif uptime > high_threshold:
+                                    reliability_stats['outliers']['high_outliers'].append({
+                                        'nickname': relay_data['nickname'], 
+                                        'fingerprint': relay_data['fingerprint'],
+                                        'uptime': uptime,
+                                        'period': period,
+                                        'deviation': abs(uptime - mean_uptime) / std_dev
+                                    })
+                    except statistics.StatisticsError:
+                        # Handle case where all values are identical (std dev = 0)
+                        pass
+        
+        # Remove duplicate outliers (same relay appearing in multiple periods)
+        # Keep the one with highest deviation
+        def deduplicate_outliers(outliers):
+            relay_outliers = {}
+            for outlier in outliers:
+                fp = outlier['fingerprint']
+                if fp not in relay_outliers or outlier['deviation'] > relay_outliers[fp]['deviation']:
+                    relay_outliers[fp] = outlier
+            return list(relay_outliers.values())
+        
+        reliability_stats['outliers']['low_outliers'] = deduplicate_outliers(reliability_stats['outliers']['low_outliers'])
+        reliability_stats['outliers']['high_outliers'] = deduplicate_outliers(reliability_stats['outliers']['high_outliers'])
+        
+        return reliability_stats
