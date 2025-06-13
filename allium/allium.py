@@ -157,6 +157,20 @@ if __name__ == "__main__":
         ),
         required=False,
     )
+    parser.add_argument(
+        "--apis",
+        dest="enabled_apis",
+        type=str,
+        choices=['details', 'all'],
+        default='all',
+        help=(
+            "select which APIs to enable: "
+            "details (~400MB memory, details API only), "
+            "all (~2.4GB memory, details + uptime APIs). "
+            "Default: all"
+        ),
+        required=False,
+    )
     args = parser.parse_args()
 
     start_time = time.time()
@@ -181,7 +195,7 @@ if __name__ == "__main__":
     # object containing onionoo data and processing routines
     if args.progress:
         print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Initializing relay data from onionoo (using coordinator)...")
-    RELAY_SET = create_relay_set_with_coordinator(args.output_dir, args.onionoo_url, args.bandwidth_units == 'bits', args.progress, start_time, progress_step, total_steps)
+    RELAY_SET = create_relay_set_with_coordinator(args.output_dir, args.onionoo_url, args.bandwidth_units == 'bits', args.progress, start_time, progress_step, total_steps, args.enabled_apis)
     if RELAY_SET.json == None:
         sys.exit(0)
     # Update progress_step from the RELAY_SET object (it was incremented during intelligence analysis)
