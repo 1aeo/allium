@@ -21,7 +21,8 @@ class TestCoordinator:
     def test_coordinator_initialization(self):
         """Test coordinator initialization with all parameters"""
         output_dir = "./test_output"
-        onionoo_url = "https://test.onionoo.torproject.org/details"
+        onionoo_details_url = "https://test.onionoo.torproject.org/details"
+        onionoo_uptime_url = "https://test.onionoo.torproject.org/uptime"
         use_bits = True
         progress = True
         start_time = time.time()
@@ -30,7 +31,8 @@ class TestCoordinator:
         
         coordinator = Coordinator(
             output_dir=output_dir,
-            onionoo_url=onionoo_url,
+            onionoo_details_url=onionoo_details_url,
+            onionoo_uptime_url=onionoo_uptime_url,
             use_bits=use_bits,
             progress=progress,
             start_time=start_time,
@@ -39,7 +41,8 @@ class TestCoordinator:
         )
         
         assert coordinator.output_dir == output_dir
-        assert coordinator.onionoo_url == onionoo_url
+        assert coordinator.onionoo_details_url == onionoo_details_url
+        assert coordinator.onionoo_uptime_url == onionoo_uptime_url
         assert coordinator.use_bits == use_bits
         assert coordinator.progress == progress
         assert coordinator.start_time == start_time
@@ -50,10 +53,11 @@ class TestCoordinator:
     
     def test_coordinator_default_initialization(self):
         """Test coordinator with default parameters"""
-        coordinator = Coordinator("./output", "https://test.url")
+        coordinator = Coordinator("./output", "https://test.details.url", "https://test.uptime.url")
         
         assert coordinator.output_dir == "./output"
-        assert coordinator.onionoo_url == "https://test.url"
+        assert coordinator.onionoo_details_url == "https://test.details.url"
+        assert coordinator.onionoo_uptime_url == "https://test.uptime.url"
         assert coordinator.use_bits is False
         assert coordinator.progress is False
         assert coordinator.progress_step == 0
@@ -62,7 +66,7 @@ class TestCoordinator:
     
     def test_log_progress_with_progress_enabled(self):
         """Test progress logging when progress is enabled"""
-        coordinator = Coordinator("./output", "https://test.url", progress=True)
+        coordinator = Coordinator("./output", "https://test.details.url", "https://test.uptime.url", progress=True)
         
         with patch('builtins.print') as mock_print:
             coordinator._log_progress("Test message")
@@ -74,7 +78,7 @@ class TestCoordinator:
     
     def test_log_progress_with_progress_disabled(self):
         """Test that progress logging is silent when progress is disabled"""
-        coordinator = Coordinator("./output", "https://test.url", progress=False)
+        coordinator = Coordinator("./output", "https://test.details.url", "https://test.uptime.url", progress=False)
         
         with patch('builtins.print') as mock_print:
             coordinator._log_progress("Test message")
@@ -91,14 +95,14 @@ class TestCoordinator:
             "version": "1.0"
         }
         
-        coordinator = Coordinator("./output", "https://test.url", progress=True)
+        coordinator = Coordinator("./output", "https://test.details.url", "https://test.uptime.url", progress=True)
         
-        with patch('lib.coordinator.fetch_onionoo_details', return_value=mock_data) as mock_fetch:
+        with patch('lib.workers.fetch_onionoo_details', return_value=mock_data) as mock_fetch:
             with patch('builtins.print') as mock_print:
                 result = coordinator.fetch_onionoo_data()
                 
                 assert result == mock_data
-                mock_fetch.assert_called_once_with("https://test.url")
+                mock_fetch.assert_called_once_with("https://test.details.url")
                 
                 # Check progress messages
                 assert any("Fetching onionoo data using workers system" in str(call) for call in mock_print.call_args_list)
@@ -106,28 +110,28 @@ class TestCoordinator:
     
     def test_fetch_onionoo_data_failure(self):
         """Test onionoo data fetching failure"""
-        coordinator = Coordinator("./output", "https://test.url", progress=True)
+        coordinator = Coordinator("./output", "https://test.details.url", "https://test.uptime.url", progress=True)
         
-        with patch('lib.coordinator.fetch_onionoo_details', return_value=None) as mock_fetch:
+        with patch('lib.workers.fetch_onionoo_details', return_value=None) as mock_fetch:
             with patch('builtins.print') as mock_print:
                 result = coordinator.fetch_onionoo_data()
                 
                 assert result is None
-                mock_fetch.assert_called_once_with("https://test.url")
+                mock_fetch.assert_called_once_with("https://test.details.url")
                 
                 # Check error message
                 assert any("Failed to fetch onionoo data" in str(call) for call in mock_print.call_args_list)
     
     def test_fetch_onionoo_data_exception(self):
         """Test onionoo data fetching with exception"""
-        coordinator = Coordinator("./output", "https://test.url", progress=True)
+        coordinator = Coordinator("./output", "https://test.details.url", "https://test.uptime.url", progress=True)
         
-        with patch('lib.coordinator.fetch_onionoo_details', side_effect=Exception("Network error")) as mock_fetch:
+        with patch('lib.workers.fetch_onionoo_details', side_effect=Exception("Network error")) as mock_fetch:
             with patch('builtins.print') as mock_print:
                 result = coordinator.fetch_onionoo_data()
                 
                 assert result is None
-                mock_fetch.assert_called_once_with("https://test.url")
+                mock_fetch.assert_called_once_with("https://test.details.url")
                 
                 # Check error message
                 assert any("Error fetching onionoo data: Network error" in str(call) for call in mock_print.call_args_list)
@@ -139,7 +143,7 @@ class TestCoordinator:
             "version": "1.0"
         }
         
-        coordinator = Coordinator("./output", "https://test.url", progress=True, use_bits=True)
+        coordinator = Coordinator("./output", "https://test.details.url", "https://test.uptime.url", progress=True, use_bits=True)
         
         # Mock the Relays class
         mock_relay_set = MagicMock()
@@ -154,7 +158,7 @@ class TestCoordinator:
                 # Check that Relays was called with correct parameters
                 mock_relays.assert_called_once_with(
                     output_dir="./output",
-                    onionoo_url="https://test.url",
+                    onionoo_url="https://test.details.url",
                     use_bits=True,
                     progress=True,
                     start_time=coordinator.start_time,
@@ -171,7 +175,7 @@ class TestCoordinator:
         """Test relay set creation failure"""
         mock_data = {"relays": []}
         
-        coordinator = Coordinator("./output", "https://test.url", progress=True)
+        coordinator = Coordinator("./output", "https://test.details.url", "https://test.uptime.url", progress=True)
         
         # Mock the Relays class to return None json
         mock_relay_set = MagicMock()
@@ -193,7 +197,7 @@ class TestCoordinator:
             "version": "1.0"
         }
         
-        coordinator = Coordinator("./output", "https://test.url")
+        coordinator = Coordinator("./output", "https://test.details.url", "https://test.uptime.url")
         
         mock_relay_set = MagicMock()
         mock_relay_set.json = mock_data
@@ -208,7 +212,7 @@ class TestCoordinator:
     
     def test_get_relay_set_fetch_failure(self):
         """Test get_relay_set when data fetching fails"""
-        coordinator = Coordinator("./output", "https://test.url")
+        coordinator = Coordinator("./output", "https://test.details.url", "https://test.uptime.url")
         
         with patch.object(coordinator, 'fetch_onionoo_data', return_value=None) as mock_fetch:
             with patch.object(coordinator, 'create_relay_set') as mock_create:
@@ -226,9 +230,9 @@ class TestCoordinator:
             "worker3": {"status": "ready", "timestamp": time.time(), "error": None}
         }
         
-        coordinator = Coordinator("./output", "https://test.url")
+        coordinator = Coordinator("./output", "https://test.details.url", "https://test.uptime.url")
         
-        with patch('lib.coordinator.get_all_worker_status', return_value=mock_status):
+        with patch('lib.workers.get_all_worker_status', return_value=mock_status):
             summary = coordinator.get_worker_status_summary()
             
             assert summary["worker_count"] == 3
@@ -238,9 +242,9 @@ class TestCoordinator:
     
     def test_get_worker_status_summary_empty(self):
         """Test worker status summary with no workers"""
-        coordinator = Coordinator("./output", "https://test.url")
+        coordinator = Coordinator("./output", "https://test.details.url", "https://test.uptime.url")
         
-        with patch('lib.coordinator.get_all_worker_status', return_value={}):
+        with patch('lib.workers.get_all_worker_status', return_value={}):
             summary = coordinator.get_worker_status_summary()
             
             assert summary["worker_count"] == 0
@@ -269,7 +273,8 @@ class TestBackwardsCompatibility:
         with patch('lib.coordinator.Coordinator', return_value=mock_coordinator) as mock_coordinator_class:
             result = create_relay_set_with_coordinator(
                 output_dir="./test_output",
-                onionoo_url="https://test.url",
+                onionoo_details_url="https://test.details.url",
+                onionoo_uptime_url="https://test.uptime.url",
                 use_bits=True,
                 progress=True,
                 start_time=123456,
@@ -282,7 +287,8 @@ class TestBackwardsCompatibility:
             # Check that coordinator was created with correct parameters
             mock_coordinator_class.assert_called_once_with(
                 output_dir="./test_output",
-                onionoo_url="https://test.url",
+                onionoo_details_url="https://test.details.url",
+                onionoo_uptime_url="https://test.uptime.url",
                 use_bits=True,
                 progress=True,
                 start_time=123456,
@@ -299,7 +305,7 @@ class TestBackwardsCompatibility:
         mock_coordinator.get_relay_set.return_value = None
         
         with patch('lib.coordinator.Coordinator', return_value=mock_coordinator):
-            result = create_relay_set_with_coordinator("./output", "https://test.url")
+            result = create_relay_set_with_coordinator("./output", "https://test.details.url", "https://test.uptime.url")
             
             assert result is None
     
@@ -310,7 +316,7 @@ class TestBackwardsCompatibility:
         mock_coordinator.get_relay_set.return_value = mock_relay_set
         
         with patch('lib.coordinator.Coordinator', return_value=mock_coordinator) as mock_coordinator_class:
-            result = create_relay_set_with_coordinator("./output", "https://test.url")
+            result = create_relay_set_with_coordinator("./output", "https://test.details.url", "https://test.uptime.url")
             
             assert result == mock_relay_set
             
@@ -337,7 +343,7 @@ class TestCoordinatorIntegration:
             "version": "1.0"
         }
         
-        coordinator = Coordinator("./test_output", "https://test.url", progress=True)
+        coordinator = Coordinator("./test_output", "https://test.details.url", "https://test.uptime.url", progress=True)
         
         # Mock urllib request to return test data
         mock_response = MagicMock()
@@ -361,7 +367,7 @@ class TestCoordinatorIntegration:
     
     def test_coordinator_error_recovery(self):
         """Test coordinator behavior during worker errors"""
-        coordinator = Coordinator("./test_output", "https://test.url", progress=True)
+        coordinator = Coordinator("./test_output", "https://test.details.url", "https://test.uptime.url", progress=True)
         
         with tempfile.TemporaryDirectory() as temp_dir:
             with patch('lib.workers.CACHE_DIR', temp_dir):
@@ -385,7 +391,7 @@ class TestCoordinatorProgressLogging:
     
     def test_progress_logging_format(self):
         """Test that progress logging follows the expected format"""
-        coordinator = Coordinator("./output", "https://test.url", progress=True, start_time=time.time())
+        coordinator = Coordinator("./output", "https://test.details.url", "https://test.uptime.url", progress=True, start_time=time.time())
         
         with patch('builtins.print') as mock_print:
             coordinator._log_progress("Test progress message")
@@ -400,7 +406,7 @@ class TestCoordinatorProgressLogging:
     
     def test_progress_logging_memory_error_fallback(self):
         """Test progress logging fallback when memory info is unavailable"""
-        coordinator = Coordinator("./output", "https://test.url", progress=True)
+        coordinator = Coordinator("./output", "https://test.details.url", "https://test.uptime.url", progress=True)
         
         # Mock resource module to raise an exception
         with patch('resource.getrusage', side_effect=Exception("Memory unavailable")):
@@ -419,7 +425,7 @@ class TestCoordinatorEdgeCases:
     
     def test_coordinator_with_none_start_time(self):
         """Test coordinator when start_time is None"""
-        coordinator = Coordinator("./output", "https://test.url", start_time=None)
+        coordinator = Coordinator("./output", "https://test.details.url", "https://test.uptime.url", start_time=None)
         
         assert isinstance(coordinator.start_time, float)
         assert coordinator.start_time > 0
@@ -427,16 +433,17 @@ class TestCoordinatorEdgeCases:
     def test_coordinator_with_invalid_parameters(self):
         """Test coordinator with edge case parameters"""
         # Test with empty strings
-        coordinator = Coordinator("", "", progress_step=-1, total_steps=0)
+        coordinator = Coordinator("", "", "", progress_step=-1, total_steps=0)
         
         assert coordinator.output_dir == ""
-        assert coordinator.onionoo_url == ""
+        assert coordinator.onionoo_details_url == ""
+        assert coordinator.onionoo_uptime_url == ""
         assert coordinator.progress_step == -1
         assert coordinator.total_steps == 0
     
     def test_create_relay_set_with_empty_data(self):
         """Test creating relay set with empty data"""
-        coordinator = Coordinator("./output", "https://test.url")
+        coordinator = Coordinator("./output", "https://test.details.url", "https://test.uptime.url")
         
         mock_relay_set = MagicMock()
         mock_relay_set.json = {"relays": []}
@@ -454,7 +461,8 @@ class TestCoordinatorMultiAPI:
         """Test coordinator initialization with enabled_apis='all'"""
         coordinator = Coordinator(
             output_dir="./test_output",
-            onionoo_url="https://test.onionoo.torproject.org/details",
+            onionoo_details_url="https://test.onionoo.torproject.org/details",
+            onionoo_uptime_url="https://test.onionoo.torproject.org/uptime",
             enabled_apis='all'
         )
         
@@ -478,7 +486,8 @@ class TestCoordinatorMultiAPI:
         """Test coordinator initialization with details API only"""
         coordinator = Coordinator(
             output_dir="./test_output",
-            onionoo_url="https://test.onionoo.torproject.org/details",
+            onionoo_details_url="https://test.onionoo.torproject.org/details",
+            onionoo_uptime_url="https://test.onionoo.torproject.org/uptime",
             enabled_apis='details'
         )
         
@@ -504,7 +513,8 @@ class TestCoordinatorMultiAPI:
         
         coordinator = Coordinator(
             output_dir="./test_output",
-            onionoo_url="https://test.onionoo.torproject.org/details",
+            onionoo_details_url="https://test.onionoo.torproject.org/details",
+            onionoo_uptime_url="https://test.onionoo.torproject.org/uptime",
             enabled_apis='all',
             progress=True
         )
@@ -532,7 +542,8 @@ class TestCoordinatorMultiAPI:
         
         coordinator = Coordinator(
             output_dir="./test_output",
-            onionoo_url="https://test.onionoo.torproject.org/details",
+            onionoo_details_url="https://test.onionoo.torproject.org/details",
+            onionoo_uptime_url="https://test.onionoo.torproject.org/uptime",
             enabled_apis='all',
             progress=True
         )
@@ -555,7 +566,7 @@ class TestCoordinatorMultiAPI:
             "version": "uptime_test"
         }
         
-        coordinator = Coordinator("./output", "https://test.url")
+        coordinator = Coordinator("./output", "https://test.details.url", "https://test.uptime.url")
         coordinator.worker_data = {'onionoo_uptime': mock_uptime_data}
         
         result = coordinator.get_uptime_data()
@@ -563,7 +574,7 @@ class TestCoordinatorMultiAPI:
     
     def test_get_uptime_data_none(self):
         """Test getting uptime data when not available"""
-        coordinator = Coordinator("./output", "https://test.url")
+        coordinator = Coordinator("./output", "https://test.details.url", "https://test.uptime.url")
         
         result = coordinator.get_uptime_data()
         assert result is None
@@ -572,7 +583,7 @@ class TestCoordinatorMultiAPI:
         """Test getting consensus health data from coordinator"""
         mock_health_data = {"health_status": {"test": "data"}}
         
-        coordinator = Coordinator("./output", "https://test.url")
+        coordinator = Coordinator("./output", "https://test.details.url", "https://test.uptime.url")
         coordinator.worker_data = {'consensus_health': mock_health_data}
         
         result = coordinator.get_consensus_health_data()
@@ -582,7 +593,7 @@ class TestCoordinatorMultiAPI:
         """Test getting collector data from coordinator"""
         mock_collector_data = {"authorities": [{"name": "test"}]}
         
-        coordinator = Coordinator("./output", "https://test.url")
+        coordinator = Coordinator("./output", "https://test.details.url", "https://test.uptime.url")
         coordinator.worker_data = {'collector': mock_collector_data}
         
         result = coordinator.get_collector_data()
@@ -600,7 +611,7 @@ class TestCoordinatorMultiAPI:
             "version": "uptime_test"
         }
         
-        coordinator = Coordinator("./output", "https://test.url", enabled_apis='all')
+        coordinator = Coordinator("./output", "https://test.details.url", "https://test.uptime.url", enabled_apis='all')
         coordinator.worker_data = {
             'onionoo_uptime': mock_uptime_data,
             'consensus_health': {"health_status": {}},
@@ -627,7 +638,7 @@ class TestCoordinatorMultiAPI:
             "version": "details_test"
         }
         
-        coordinator = Coordinator("./output", "https://test.url", enabled_apis='all', progress=True)
+        coordinator = Coordinator("./output", "https://test.details.url", "https://test.uptime.url", enabled_apis='all', progress=True)
         
         # Mock the fetch_all_apis_threaded method to avoid real threading
         with patch.object(coordinator, 'fetch_all_apis_threaded') as mock_fetch:
@@ -654,7 +665,7 @@ class TestCoordinatorMultiAPI:
             "version": "uptime_test"
         }
         
-        coordinator = Coordinator("./output", "https://test.url", enabled_apis='all')
+        coordinator = Coordinator("./output", "https://test.details.url", "https://test.uptime.url", enabled_apis='all')
         
         mock_relay_set = MagicMock()
         mock_relay_set.json = mock_details_data
@@ -681,7 +692,7 @@ class TestCoordinatorMultiAPI:
         ]
         
         for details_url, expected_uptime_url in test_cases:
-            coordinator = Coordinator("./output", details_url, enabled_apis='all')
+            coordinator = Coordinator("./output", details_url, "https://test.uptime.url", enabled_apis='all')
             
             uptime_worker = next(w for w in coordinator.api_workers if w[0] == "onionoo_uptime")
             assert uptime_worker[2][0] == expected_uptime_url
@@ -692,7 +703,7 @@ class TestCoordinatorThreading:
     
     def test_worker_thread_management(self):
         """Test that worker threads are properly configured"""
-        coordinator = Coordinator("./output", "https://test.url", enabled_apis='all')
+        coordinator = Coordinator("./output", "https://test.details.url", "https://test.uptime.url", enabled_apis='all')
         
         # Test that api_workers are properly configured
         assert len(coordinator.api_workers) == 2
@@ -703,7 +714,7 @@ class TestCoordinatorThreading:
     
     def test_worker_configuration(self):
         """Test that worker functions and arguments are properly set up"""
-        coordinator = Coordinator("./output", "https://test.url", enabled_apis='all')
+        coordinator = Coordinator("./output", "https://test.details.url", "https://test.uptime.url", enabled_apis='all')
         
         # Check that workers are configured with correct functions and arguments
         for api_name, worker_func, args in coordinator.api_workers:
