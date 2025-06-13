@@ -152,6 +152,18 @@ class Coordinator:
         """
         return self.worker_data.get('onionoo_uptime')
 
+    def get_consensus_health_data(self):
+        """
+        Get consensus health data if available (Future API)
+        """
+        return self.worker_data.get('consensus_health')
+
+    def get_collector_data(self):
+        """
+        Get collector data if available (Future API)
+        """
+        return self.worker_data.get('collector')
+
     def create_relay_set(self, relay_data):
         """
         Create Relays instance with fetched data.
@@ -175,9 +187,10 @@ class Coordinator:
                 self._log_progress("Failed to create relay set")
             return None
         
-        # Phase 2: Attach additional API data to relay set
-        if hasattr(relay_set, 'uptime_data'):
-            relay_set.uptime_data = self.get_uptime_data()
+        # Phase 2: Attach additional API data to relay set (direct assignment)
+        relay_set.uptime_data = self.get_uptime_data()
+        relay_set.consensus_health_data = self.get_consensus_health_data()
+        relay_set.collector_data = self.get_collector_data()
         
         if self.progress:
             self._log_progress("Relay set created successfully")
