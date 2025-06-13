@@ -38,6 +38,11 @@ class Relays:
         self.total_steps = total_steps
         self.ts_file = os.path.join(os.path.dirname(ABS_PATH), "timestamp")
         
+        # API data attributes - always present for clean access
+        self.uptime_data = None
+        self.consensus_health_data = None  # Future API
+        self.collector_data = None         # Future API
+        
         # Phase 1: Support both old and new initialization patterns
         if relay_data is not None:
             # New pattern: accept data as input (for worker coordination)
