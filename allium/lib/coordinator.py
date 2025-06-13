@@ -194,6 +194,10 @@ def create_relay_set_with_coordinator(output_dir, onionoo_url, use_bits=False, p
     Create a relay set using the coordinator system.
     Phase 2: Support for multiple APIs with threading.
     """
+    # Provide default start_time if None is passed
+    if start_time is None:
+        start_time = time.time()
+        
     coordinator = Coordinator(
         output_dir=output_dir,
         onionoo_url=onionoo_url,
