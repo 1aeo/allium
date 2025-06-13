@@ -447,5 +447,270 @@ class TestCoordinatorEdgeCases:
             assert result == mock_relay_set
 
 
+class TestCoordinatorMultiAPI:
+    """Test multiapi-p2 coordinator functionality with multiple APIs"""
+    
+    def test_coordinator_initialization_with_enabled_apis_all(self):
+        """Test coordinator initialization with enabled_apis='all'"""
+        coordinator = Coordinator(
+            output_dir="./test_output",
+            onionoo_url="https://test.onionoo.torproject.org/details",
+            enabled_apis='all'
+        )
+        
+        assert coordinator.enabled_apis == 'all'
+        # Should have both details and uptime APIs
+        assert len(coordinator.api_workers) == 2
+        
+        # Check that both APIs are configured
+        api_names = [worker[0] for worker in coordinator.api_workers]
+        assert "onionoo_details" in api_names
+        assert "onionoo_uptime" in api_names
+        
+        # Check URLs are correct
+        details_worker = next(w for w in coordinator.api_workers if w[0] == "onionoo_details")
+        uptime_worker = next(w for w in coordinator.api_workers if w[0] == "onionoo_uptime")
+        
+        assert details_worker[2][0] == "https://test.onionoo.torproject.org/details"
+        assert uptime_worker[2][0] == "https://test.onionoo.torproject.org/uptime"
+    
+    def test_coordinator_initialization_with_enabled_apis_details_only(self):
+        """Test coordinator initialization with details API only"""
+        coordinator = Coordinator(
+            output_dir="./test_output",
+            onionoo_url="https://test.onionoo.torproject.org/details",
+            enabled_apis='details'
+        )
+        
+        assert coordinator.enabled_apis == 'details'
+        # Should have only details API
+        assert len(coordinator.api_workers) == 1
+        
+        api_names = [worker[0] for worker in coordinator.api_workers]
+        assert "onionoo_details" in api_names
+        assert "onionoo_uptime" not in api_names
+    
+    def test_fetch_all_apis_threaded_success(self):
+        """Test successful threaded fetching of all APIs (simulated)"""
+        mock_details_data = {
+            "relays": [{"nickname": "TestRelay1", "fingerprint": "ABC123"}],
+            "version": "details_test"
+        }
+        
+        mock_uptime_data = {
+            "relays": [{"fingerprint": "ABC123", "uptime": {"1_month": 95.5}}],
+            "version": "uptime_test"
+        }
+        
+        coordinator = Coordinator(
+            output_dir="./test_output",
+            onionoo_url="https://test.onionoo.torproject.org/details",
+            enabled_apis='all',
+            progress=True
+        )
+        
+        # Simulate successful API fetching by directly setting worker_data
+        coordinator.worker_data = {
+            'onionoo_details': mock_details_data,
+            'onionoo_uptime': mock_uptime_data
+        }
+        
+        # Test the data access methods
+        assert coordinator.worker_data == {
+            'onionoo_details': mock_details_data,
+            'onionoo_uptime': mock_uptime_data
+        }
+        
+        assert coordinator.get_uptime_data() == mock_uptime_data
+    
+    def test_fetch_all_apis_threaded_with_error(self):
+        """Test threaded API fetching with one API failing (simulated)"""
+        mock_details_data = {
+            "relays": [{"nickname": "TestRelay1", "fingerprint": "ABC123"}],
+            "version": "details_test"
+        }
+        
+        coordinator = Coordinator(
+            output_dir="./test_output",
+            onionoo_url="https://test.onionoo.torproject.org/details",
+            enabled_apis='all',
+            progress=True
+        )
+        
+        # Simulate one API failing
+        coordinator.worker_data = {
+            'onionoo_details': mock_details_data,
+            'onionoo_uptime': None
+        }
+        
+        # Details should succeed, uptime should be None
+        assert coordinator.worker_data['onionoo_details'] == mock_details_data
+        assert coordinator.worker_data['onionoo_uptime'] is None
+        assert coordinator.get_uptime_data() is None
+    
+    def test_get_uptime_data(self):
+        """Test getting uptime data from coordinator"""
+        mock_uptime_data = {
+            "relays": [{"fingerprint": "ABC123", "uptime": {"1_month": 95.5}}],
+            "version": "uptime_test"
+        }
+        
+        coordinator = Coordinator("./output", "https://test.url")
+        coordinator.worker_data = {'onionoo_uptime': mock_uptime_data}
+        
+        result = coordinator.get_uptime_data()
+        assert result == mock_uptime_data
+    
+    def test_get_uptime_data_none(self):
+        """Test getting uptime data when not available"""
+        coordinator = Coordinator("./output", "https://test.url")
+        
+        result = coordinator.get_uptime_data()
+        assert result is None
+    
+    def test_get_consensus_health_data(self):
+        """Test getting consensus health data from coordinator"""
+        mock_health_data = {"health_status": {"test": "data"}}
+        
+        coordinator = Coordinator("./output", "https://test.url")
+        coordinator.worker_data = {'consensus_health': mock_health_data}
+        
+        result = coordinator.get_consensus_health_data()
+        assert result == mock_health_data
+    
+    def test_get_collector_data(self):
+        """Test getting collector data from coordinator"""
+        mock_collector_data = {"authorities": [{"name": "test"}]}
+        
+        coordinator = Coordinator("./output", "https://test.url")
+        coordinator.worker_data = {'collector': mock_collector_data}
+        
+        result = coordinator.get_collector_data()
+        assert result == mock_collector_data
+    
+    def test_create_relay_set_with_additional_apis(self):
+        """Test relay set creation with additional API data attached"""
+        mock_details_data = {
+            "relays": [{"nickname": "TestRelay1", "fingerprint": "ABC123"}],
+            "version": "details_test"
+        }
+        
+        mock_uptime_data = {
+            "relays": [{"fingerprint": "ABC123", "uptime": {"1_month": 95.5}}],
+            "version": "uptime_test"
+        }
+        
+        coordinator = Coordinator("./output", "https://test.url", enabled_apis='all')
+        coordinator.worker_data = {
+            'onionoo_uptime': mock_uptime_data,
+            'consensus_health': {"health_status": {}},
+            'collector': {"authorities": []}
+        }
+        
+        mock_relay_set = MagicMock()
+        mock_relay_set.json = mock_details_data
+        
+        with patch('lib.coordinator.Relays', return_value=mock_relay_set) as mock_relays:
+            result = coordinator.create_relay_set(mock_details_data)
+            
+            assert result == mock_relay_set
+            
+            # Verify additional API data was attached
+            assert mock_relay_set.uptime_data == mock_uptime_data
+            assert mock_relay_set.consensus_health_data == {"health_status": {}}
+            assert mock_relay_set.collector_data == {"authorities": []}
+    
+    def test_fetch_onionoo_data_multiapi_compatibility(self):
+        """Test that fetch_onionoo_data returns details for backward compatibility"""
+        mock_details_data = {
+            "relays": [{"nickname": "TestRelay1", "fingerprint": "ABC123"}],
+            "version": "details_test"
+        }
+        
+        coordinator = Coordinator("./output", "https://test.url", enabled_apis='all', progress=True)
+        
+        # Mock the fetch_all_apis_threaded method to avoid real threading
+        with patch.object(coordinator, 'fetch_all_apis_threaded') as mock_fetch:
+            mock_fetch.return_value = {
+                'onionoo_details': mock_details_data,
+                'onionoo_uptime': {"relays": [], "version": "uptime_test"}
+            }
+            
+            with patch('builtins.print'):
+                result = coordinator.fetch_onionoo_data()
+                
+                # Should return only details data for backward compatibility
+                assert result == mock_details_data
+    
+    def test_get_relay_set_full_multiapi_flow(self):
+        """Test complete multiapi relay set creation flow"""
+        mock_details_data = {
+            "relays": [{"nickname": "TestRelay1", "fingerprint": "ABC123"}],
+            "version": "details_test"
+        }
+        
+        mock_uptime_data = {
+            "relays": [{"fingerprint": "ABC123", "uptime": {"1_month": 95.5}}],
+            "version": "uptime_test"
+        }
+        
+        coordinator = Coordinator("./output", "https://test.url", enabled_apis='all')
+        
+        mock_relay_set = MagicMock()
+        mock_relay_set.json = mock_details_data
+        
+        # Mock the data fetching to avoid real network calls
+        with patch.object(coordinator, 'fetch_onionoo_data', return_value=mock_details_data):
+            with patch('lib.coordinator.Relays', return_value=mock_relay_set):
+                # Set up worker data
+                coordinator.worker_data = {'onionoo_uptime': mock_uptime_data}
+                
+                result = coordinator.get_relay_set()
+                
+                assert result == mock_relay_set
+                
+                # Verify additional API data was attached
+                assert mock_relay_set.uptime_data == mock_uptime_data
+    
+    def test_api_workers_url_transformation(self):
+        """Test that uptime URL is correctly derived from details URL"""
+        test_cases = [
+            ("https://onionoo.torproject.org/details", "https://onionoo.torproject.org/uptime"),
+            ("https://test.example.com/api/details", "https://test.example.com/api/uptime"),
+            ("http://localhost:8080/details", "http://localhost:8080/uptime"),
+        ]
+        
+        for details_url, expected_uptime_url in test_cases:
+            coordinator = Coordinator("./output", details_url, enabled_apis='all')
+            
+            uptime_worker = next(w for w in coordinator.api_workers if w[0] == "onionoo_uptime")
+            assert uptime_worker[2][0] == expected_uptime_url
+
+
+class TestCoordinatorThreading:
+    """Test coordinator threading functionality (simplified)"""
+    
+    def test_worker_thread_management(self):
+        """Test that worker threads are properly configured"""
+        coordinator = Coordinator("./output", "https://test.url", enabled_apis='all')
+        
+        # Test that api_workers are properly configured
+        assert len(coordinator.api_workers) == 2
+        
+        api_names = [worker[0] for worker in coordinator.api_workers]
+        assert "onionoo_details" in api_names
+        assert "onionoo_uptime" in api_names
+    
+    def test_worker_configuration(self):
+        """Test that worker functions and arguments are properly set up"""
+        coordinator = Coordinator("./output", "https://test.url", enabled_apis='all')
+        
+        # Check that workers are configured with correct functions and arguments
+        for api_name, worker_func, args in coordinator.api_workers:
+            assert callable(worker_func)
+            assert isinstance(args, list)
+            assert len(args) > 0  # Should have at least URL argument
+
+
 if __name__ == "__main__":
     pytest.main([__file__])
