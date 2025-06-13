@@ -60,10 +60,19 @@ class Coordinator:
             self._log_progress(f"Starting {api_name} worker...")
             result = worker_func(*args)
             self.worker_data[api_name] = result
-            self._log_progress(f"Completed {api_name} worker")
+            if result is not None:
+                self._log_progress(f"Completed {api_name} worker")
+            else:
+                self._log_progress(f"Warning: {api_name} worker returned None")
         except Exception as e:
             self._log_progress(f"Error in {api_name} worker: {str(e)}")
             self.worker_data[api_name] = None
+            # In CI environments, provide more context for debugging
+            import os
+            if os.environ.get('CI') or os.environ.get('GITHUB_ACTIONS'):
+                print(f"🔧 CI Debug: {api_name} worker failed with: {e}")
+                import traceback
+                traceback.print_exc()
 
     def fetch_all_apis_threaded(self):
         """
@@ -101,7 +110,14 @@ class Coordinator:
             self._log_progress("Fetching onionoo data using workers system...")
         
         # For Phase 2, fetch all APIs but prioritize details for backward compatibility
-        all_data = self.fetch_all_apis_threaded()
+        try:
+            all_data = self.fetch_all_apis_threaded()
+        except Exception as e:
+            if self.progress:
+                self._log_progress(f"Error during threaded API fetching: {e}")
+            print(f"❌ Error: Failed to fetch API data: {e}")
+            print("🔧 This might be due to network connectivity issues")
+            return None
         
         # Return the details data for backward compatibility
         details_data = all_data.get('onionoo_details')
@@ -112,6 +128,11 @@ class Coordinator:
         else:
             if self.progress:
                 self._log_progress("Failed to fetch onionoo details data")
+            print("❌ Error: No details data available from onionoo API")
+            print("🔧 This might be due to:")
+            print("   - Network connectivity issues")
+            print("   - onionoo.torproject.org temporary unavailability")
+            print("   - API rate limiting")
             return None
 
     def get_uptime_data(self):

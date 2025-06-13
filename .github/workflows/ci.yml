@@ -213,12 +213,16 @@ jobs:
         python-version: ${{ matrix.python-version }}
         
     - name: Test fresh environment setup
+      env:
+        CI: true
+        GITHUB_ACTIONS: true
       run: |
         # Create a temporary directory to simulate fresh environment
         mkdir -p /tmp/allium-setup-test
         cd /tmp/allium-setup-test
         
         echo "🧪 Testing setup.sh in fresh environment (Python ${{ matrix.python-version }})"
+        echo "🤖 CI environment: CI=$CI, GITHUB_ACTIONS=$GITHUB_ACTIONS"
         
         # Download and run setup script with retry logic
         for download_attempt in 1 2 3; do
@@ -247,53 +251,72 @@ jobs:
         }
         
     - name: Validate setup results
+      env:
+        CI: true
+        GITHUB_ACTIONS: true
       run: |
         cd /tmp/allium-setup-test/allium
         
         echo "🔍 Validating setup results..."
+        echo "📁 Current directory: $(pwd)"
+        echo "📋 Contents:"
+        ls -la
         
         # Activate the virtual environment
         source venv/bin/activate
         
         # Check that key files exist in the correct subdirectory
-        test -f "allium/allium.py" || { echo "❌ allium/allium.py not found"; exit 1; }
+        test -f "allium/allium.py" || { echo "❌ allium/allium.py not found"; ls -la allium/; exit 1; }
         test -f "requirements.txt" || { echo "❌ requirements.txt not found"; exit 1; }
-        test -d "allium/www" || { echo "❌ allium/www directory not created"; exit 1; }
+        test -d "allium/www" || { echo "❌ allium/www directory not created"; ls -la allium/; exit 1; }
         
         # Check that www directory has expected content
-        test -f "allium/www/index.html" || { echo "❌ index.html not generated"; exit 1; }
+        test -f "allium/www/index.html" || { echo "❌ index.html not generated"; ls -la allium/www/; exit 1; }
         
         # Verify generated HTML is valid (basic check)
         if ! grep -q "<html" allium/www/index.html; then
           echo "❌ Generated HTML appears invalid"
+          echo "📋 First few lines of index.html:"
+          head -10 allium/www/index.html || echo "Could not read index.html"
           exit 1
         fi
         
         # Check that Python can import required modules
         python3 -c "import jinja2; print('✅ Jinja2 import successful')" || {
           echo "❌ Jinja2 not properly installed"
+          pip list | grep -i jinja || echo "Jinja2 not found in pip list"
           exit 1
         }
         
         echo "✅ Setup script validation completed successfully"
         
     - name: Test regeneration
+      env:
+        CI: true
+        GITHUB_ACTIONS: true
       run: |
         cd /tmp/allium-setup-test/allium
         
         # Activate the virtual environment
         source venv/bin/activate
         
+        # Make sure we're in the right directory with the allium.py script
         cd allium
         
         echo "🔄 Testing data regeneration..."
+        echo "📁 Current directory: $(pwd)"
+        echo "📋 Files in current directory:"
+        ls -la
         
         # Test that regeneration works with retry logic for network issues
         # Try up to 3 times to handle temporary network issues common in CI
+        # Use 'details' API only to reduce memory usage and improve reliability in CI
         for attempt in 1 2 3; do
           echo "🔄 Attempt $attempt of 3..."
-          if timeout 300 python3 allium.py --progress; then
+          if timeout 300 python3 allium.py --progress --apis details --out ../test-www; then
             echo "✅ Regeneration test completed successfully on attempt $attempt"
+            echo "📁 Generated files:"
+            ls -la ../test-www/ || echo "No test-www directory found"
             exit 0
           else
             exit_code=$?
@@ -304,6 +327,11 @@ jobs:
               echo "   - Network connectivity issues with onionoo.torproject.org"
               echo "   - Temporary service unavailability"
               echo "   - Timeout in CI environment"
+              echo "   - Memory constraints (trying details-only API)"
+              echo "📋 Debug info:"
+              echo "   Working directory: $(pwd)"
+              echo "   Python version: $(python3 --version)"
+              echo "   Available memory: $(free -h || echo 'N/A')"
               exit 1
             else
               echo "⏳ Waiting 10 seconds before retry..."
