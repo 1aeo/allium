@@ -29,13 +29,13 @@
         <a href="#exit_authority" class="aroi-nav-link" title="Exit Authority: Control over exit consensus weight, determining which relays handle the final hop where Tor traffic exits to the regular internet">🚪 Exit Authority</a>
         <a href="#exit_operators" class="aroi-nav-link" title="Exit Relays: Special relays that handle the final hop in Tor circuits, where encrypted traffic exits to reach regular internet destinations like websites">🚪 Exit Operators</a>
         <a href="#guard_operators" class="aroi-nav-link" title="Guard Relays: Entry point relays that handle the first hop in Tor circuits. Your Tor client connects to guards to enter the Tor network anonymously">🛡️ Guard Operators</a>
-        <a href="#reliability_masters" class="aroi-nav-link" title="Reliability Masters: 6-month weighted uptime scores measuring operational excellence and network reliability">⏰ Reliability Masters</a>
-        <a href="#legacy_titans" class="aroi-nav-link" title="Legacy Titans: 5-year weighted uptime scores recognizing long-term operational stability and commitment">👑 Legacy Titans</a>
         <a href="#most_diverse" class="aroi-nav-link" title="Diversity Score: Calculated by combining geographic spread (countries × 2.0), platform variety (operating systems × 1.5), and network distribution (unique ASNs × 1.0) to measure operational resilience">🌈 Most Diverse</a>
         <a href="#platform_diversity" class="aroi-nav-link" title="Most non-Linux relays operated, promoting operating system diversity beyond Linux dominance">💻 Platform Diversity</a>
         <a href="#non_eu_leaders" class="aroi-nav-link" title="Most relays operated outside the European Union, expanding Tor's geographic reach beyond EU concentration">🌍 Non-EU Leaders</a>
         <a href="#frontier_builders" class="aroi-nav-link" title="Frontier Builders: Operators running relays in rare or strategically important countries that are underrepresented in the Tor network, helping expand global privacy access">🏴‍☠️ Frontier Builders</a>
         <a href="#network_veterans" class="aroi-nav-link" title="Network Veterans: Longest-serving operators calculated by earliest relay start date multiplied by current relay scale, recognizing sustained commitment to the Tor network">🏆 Network Veterans</a>
+        <a href="#reliability_masters" class="aroi-nav-link" title="Reliability Masters: 6-month weighted uptime scores measuring operational excellence and network reliability">⏰ Reliability Masters</a>
+        <a href="#legacy_titans" class="aroi-nav-link" title="Legacy Titans: 5-year weighted uptime scores recognizing long-term operational stability and commitment">👑 Legacy Titans</a>
     </div>
 </nav>
 
@@ -376,10 +376,10 @@
     </section>
 
     <!-- Generic categories using macro -->
-    {% for category_key in ['reliability_masters', 'legacy_titans', 'most_diverse', 'platform_diversity', 'non_eu_leaders', 'frontier_builders', 'network_veterans'] %}
+    {% for category_key in ['most_diverse', 'platform_diversity', 'non_eu_leaders', 'frontier_builders', 'network_veterans', 'reliability_masters', 'legacy_titans'] %}
         {% set category_name = relays.json.aroi_leaderboards.summary.categories[category_key] %}
         {% set category_data = relays.json.aroi_leaderboards.leaderboards[category_key] %}
-        {% set emoji = '⏰' if category_key == 'reliability_masters' else '👑' if category_key == 'legacy_titans' else '🌈' if category_key == 'most_diverse' else '💻' if category_key == 'platform_diversity' else '🌍' if category_key == 'non_eu_leaders' else '🏴‍☠️' if category_key == 'frontier_builders' else '🏆' %}
+        {% set emoji = '🌈' if category_key == 'most_diverse' else '💻' if category_key == 'platform_diversity' else '🌍' if category_key == 'non_eu_leaders' else '🏴‍☠️' if category_key == 'frontier_builders' else '🏆' if category_key == 'network_veterans' else '' %}
         
         {{ generic_ranking_table(category_key, category_name, category_data, emoji, page_ctx, relays.use_bits) }}
     {% endfor %}
