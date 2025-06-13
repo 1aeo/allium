@@ -259,7 +259,7 @@ def fetch_onionoo_details(onionoo_url="https://onionoo.torproject.org/details"):
 
 def fetch_onionoo_uptime(onionoo_url="https://onionoo.torproject.org/uptime"):
     """
-    Fetch onionoo uptime data (placeholder for future implementation)
+    Fetch onionoo uptime data from the Tor Project's Onionoo API
     
     Args:
         onionoo_url: URL to fetch uptime data from
@@ -270,21 +270,65 @@ def fetch_onionoo_uptime(onionoo_url="https://onionoo.torproject.org/uptime"):
     api_name = "onionoo_uptime"
     
     try:
-        print(f"Fetching {api_name} (placeholder implementation)")
+        # Check for conditional request timestamp
+        prev_timestamp = _read_timestamp(api_name)
         
-        # Placeholder implementation - will be completed in Phase 2
-        # For now, just mark as ready with empty data
-        empty_data = {"relays": [], "version": "placeholder"}
-        _save_cache(api_name, empty_data)
+        if prev_timestamp:
+            headers = {"If-Modified-Since": prev_timestamp}
+            conn = urllib.request.Request(onionoo_url, headers=headers)
+        else:
+            conn = urllib.request.Request(onionoo_url)
+
+        try:
+            api_response = urllib.request.urlopen(conn).read()
+        except urllib.error.HTTPError as err:
+            if err.code == 304:
+                # No update since last run - use cached data
+                print("no onionoo uptime update since last run, using cached data...")
+                cached_data = _load_cache(api_name)
+                if cached_data:
+                    _mark_ready(api_name)
+                    return cached_data
+                else:
+                    # No cache available, this is a problem
+                    print("no onionoo uptime update since last run and no cache, skipping uptime data...")
+                    # Mark as stale but don't exit - uptime is not critical
+                    _mark_stale(api_name, "No cached uptime data available")
+                    return None
+            else:
+                raise err
+
+        # Parse JSON response
+        data = json.loads(api_response.decode("utf-8"))
+        
+        # Cache the data
+        _save_cache(api_name, data)
+        
+        # Write timestamp for future conditional requests
+        timestamp_str = time.strftime(
+            "%a, %d %b %Y %H:%M:%S GMT", time.gmtime(time.time())
+        )
+        _write_timestamp(api_name, timestamp_str)
+        
+        # Mark as ready
         _mark_ready(api_name)
         
-        return empty_data
+        print(f"Successfully fetched uptime data for {len(data.get('relays', []))} relays")
+        return data
         
     except Exception as e:
         error_msg = f"Failed to fetch onionoo uptime: {str(e)}"
         print(f"Error: {error_msg}")
         _mark_stale(api_name, error_msg)
-        return None
+        
+        # Try to return cached data as fallback
+        cached_data = _load_cache(api_name)
+        if cached_data:
+            print("Using cached onionoo uptime data as fallback")
+            return cached_data
+        else:
+            print("No cached uptime data available, continuing without uptime data")
+            return None
 
 
 def fetch_collector_data():
