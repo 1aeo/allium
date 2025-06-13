@@ -23,9 +23,10 @@ class Coordinator:
     Phase 2: Multiple API support with incremental rendering.
     """
     
-    def __init__(self, output_dir, onionoo_url, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=20, enabled_apis='all'):
+    def __init__(self, output_dir, onionoo_details_url, onionoo_uptime_url, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=20, enabled_apis='all'):
         self.output_dir = output_dir
-        self.onionoo_url = onionoo_url
+        self.onionoo_details_url = onionoo_details_url
+        self.onionoo_uptime_url = onionoo_uptime_url
         self.use_bits = use_bits
         self.progress = progress
         self.start_time = start_time or time.time()
@@ -43,11 +44,11 @@ class Coordinator:
         self.api_workers = []
         
         # Always include details API (required for core functionality)
-        self.api_workers.append(("onionoo_details", fetch_onionoo_details, [self.onionoo_url]))
+        self.api_workers.append(("onionoo_details", fetch_onionoo_details, [self.onionoo_details_url]))
         
         # Include uptime API only if 'all' is selected (details + uptime)
         if self.enabled_apis == 'all':
-            self.api_workers.append(("onionoo_uptime", fetch_onionoo_uptime, [self.onionoo_url.replace('/details', '/uptime')]))
+            self.api_workers.append(("onionoo_uptime", fetch_onionoo_uptime, [self.onionoo_uptime_url]))
         
     def _log_progress(self, message):
         """Log progress message using shared progress utility"""
@@ -140,7 +141,7 @@ class Coordinator:
         
         relay_set = Relays(
             output_dir=self.output_dir,
-            onionoo_url=self.onionoo_url,
+            onionoo_url=self.onionoo_details_url,
             relay_data=relay_data,  # Required parameter
             use_bits=self.use_bits,
             progress=self.progress,
@@ -189,7 +190,7 @@ class Coordinator:
 
 
 # For backwards compatibility, provide a simple function that mimics the original Relays constructor
-def create_relay_set_with_coordinator(output_dir, onionoo_url, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=20, enabled_apis='all'):
+def create_relay_set_with_coordinator(output_dir, onionoo_details_url, onionoo_uptime_url, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=20, enabled_apis='all'):
     """
     Create a relay set using the coordinator system.
     Phase 2: Support for multiple APIs with threading.
@@ -200,7 +201,8 @@ def create_relay_set_with_coordinator(output_dir, onionoo_url, use_bits=False, p
         
     coordinator = Coordinator(
         output_dir=output_dir,
-        onionoo_url=onionoo_url,
+        onionoo_details_url=onionoo_details_url,
+        onionoo_uptime_url=onionoo_uptime_url,
         use_bits=use_bits,
         progress=progress,
         start_time=start_time,
