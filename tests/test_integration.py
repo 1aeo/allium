@@ -82,7 +82,8 @@ class TestFullIntegrationFlow:
                             # Create coordinator
                             coordinator = Coordinator(
                                 output_dir=output_dir,
-                                onionoo_url="https://test.url",
+                                onionoo_details_url="https://test.details.url",
+                                onionoo_uptime_url="https://test.uptime.url",
                                 progress=True
                             )
                             
@@ -153,7 +154,7 @@ class TestFullIntegrationFlow:
                     with patch('urllib.request.urlopen', side_effect=ConnectionError("Network error")):
                         with patch('builtins.print'):  # Suppress output
                             
-                            coordinator = Coordinator(output_dir=output_dir, onionoo_url="https://test.url")
+                            coordinator = Coordinator(output_dir=output_dir, onionoo_details_url="https://test.details.url", onionoo_uptime_url="https://test.uptime.url")
                             relay_set = coordinator.get_relay_set()
                             
                             # Should succeed with cached data
@@ -179,7 +180,7 @@ class TestFullIntegrationFlow:
                     with patch('urllib.request.urlopen', side_effect=ConnectionError("Network error")):
                         with patch('builtins.print'):  # Suppress output
                             
-                            coordinator = Coordinator(output_dir=output_dir, onionoo_url="https://test.url")
+                            coordinator = Coordinator(output_dir=output_dir, onionoo_details_url="https://test.details.url", onionoo_uptime_url="https://test.uptime.url")
                             relay_set = coordinator.get_relay_set()
                             
                             # Should fail completely
@@ -226,7 +227,8 @@ class TestBackwardsCompatibilityIntegration:
                             # Use backwards compatibility function
                             relay_set = create_relay_set_with_coordinator(
                                 output_dir=output_dir,
-                                onionoo_url="https://test.url",
+                                onionoo_details_url="https://test.details.url",
+                                onionoo_uptime_url="https://test.uptime.url",
                                 use_bits=True,
                                 progress=False
                             )
@@ -281,7 +283,8 @@ class TestBackwardsCompatibilityIntegration:
                             from lib.coordinator import create_relay_set_with_coordinator
                             relay_set = create_relay_set_with_coordinator(
                                 output_dir=output_dir,
-                                onionoo_url="https://test.url",
+                                onionoo_details_url="https://test.details.url",
+                                onionoo_uptime_url="https://test.uptime.url",
                                 use_bits=False,
                                 progress=False
                             )
@@ -321,7 +324,7 @@ class TestBackwardsCompatibilityIntegration:
                 # Use new constructor pattern with data injection
                 relay_set = Relays(
                     output_dir=output_dir,
-                    onionoo_url="https://test.url",
+                    onionoo_url="https://test.details.url",
                     relay_data=mock_onionoo_data,  # Required parameter
                     use_bits=True,
                     progress=False
@@ -371,7 +374,12 @@ class TestWorkerStateManagement:
                         with patch('builtins.print'):  # Suppress output
                             
                             # First coordinator call
-                            coordinator1 = Coordinator("./output1", "https://test.url")
+                            coordinator1 = Coordinator(
+                                output_dir=temp_dir,
+                                onionoo_details_url="https://test.details.url",
+                                onionoo_uptime_url="https://test.uptime.url",
+                                progress=True
+                            )
                             relay_set1 = coordinator1.get_relay_set()
                             assert relay_set1 is not None
                             
@@ -380,7 +388,12 @@ class TestWorkerStateManagement:
                             assert status1["status"] == "ready"
                             
                             # Second coordinator call (should reuse state)
-                            coordinator2 = Coordinator("./output2", "https://test.url")
+                            coordinator2 = Coordinator(
+                                output_dir=temp_dir,
+                                onionoo_details_url="https://test.details.url",
+                                onionoo_uptime_url="https://test.uptime.url",
+                                progress=True
+                            )
                             
                             # Get status before second call
                             status_summary = coordinator2.get_worker_status_summary()
@@ -411,7 +424,12 @@ class TestWorkerStateManagement:
                             fetch_consensus_health()
                             
                             # Create coordinator and check status
-                            coordinator = Coordinator("./output", "https://test.url")
+                            coordinator = Coordinator(
+                                output_dir=temp_dir,
+                                onionoo_details_url="https://test.details.url",
+                                onionoo_uptime_url="https://test.uptime.url",
+                                progress=True
+                            )
                             summary = coordinator.get_worker_status_summary()
                             
                             assert summary["worker_count"] >= 3
@@ -434,7 +452,12 @@ class TestErrorRecoveryIntegration:
                     with patch('urllib.request.urlopen', side_effect=TimeoutError("Request timeout")):
                         with patch('builtins.print'):  # Suppress output
                             
-                            coordinator = Coordinator("./output", "https://test.url", progress=True)
+                            coordinator = Coordinator(
+                                output_dir=temp_dir,
+                                onionoo_details_url="https://test.details.url",
+                                onionoo_uptime_url="https://test.uptime.url",
+                                progress=True
+                            )
                             relay_set = coordinator.get_relay_set()
                             
                             # Should handle error gracefully
@@ -466,7 +489,12 @@ class TestErrorRecoveryIntegration:
                                 # Create cache directory
                                 os.makedirs(cache_dir, exist_ok=True)
                                 
-                                coordinator = Coordinator("./output", "https://test.url")
+                                coordinator = Coordinator(
+                                    output_dir=temp_dir,
+                                    onionoo_details_url="https://test.details.url",
+                                    onionoo_uptime_url="https://test.uptime.url",
+                                    progress=True
+                                )
                                 
                                 # Should handle the exception gracefully
                                 try:
@@ -519,7 +547,12 @@ class TestPerformanceAndCaching:
                             os.makedirs(cache_dir, exist_ok=True)
                             
                             # First call - should make network request
-                            coordinator1 = Coordinator("./output1", "https://test.url")
+                            coordinator1 = Coordinator(
+                                output_dir=temp_dir,
+                                onionoo_details_url="https://test.details.url",
+                                onionoo_uptime_url="https://test.uptime.url",
+                                progress=True
+                            )
                             relay_set1 = coordinator1.get_relay_set()
                             assert relay_set1 is not None
                             
@@ -534,7 +567,12 @@ class TestPerformanceAndCaching:
                             mock_urlopen.side_effect = http_304_error
                             
                             # Second call - should use cache (304 response)
-                            coordinator2 = Coordinator("./output2", "https://test.url")
+                            coordinator2 = Coordinator(
+                                output_dir=temp_dir,
+                                onionoo_details_url="https://test.details.url",
+                                onionoo_uptime_url="https://test.uptime.url",
+                                progress=True
+                            )
                             relay_set2 = coordinator2.get_relay_set()
                             assert relay_set2 is not None
                             
