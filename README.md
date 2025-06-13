@@ -58,11 +58,44 @@ allium integrates with multiple Tor Project APIs:
 - **Memory Usage**: ~400MB during processing
 - **Usage**: Primary data source for relay listings, geographic analysis, operator metrics
 
+**Sample Data**:
+```json
+{
+  "relays": [{
+    "fingerprint": "9695DFC35FFEB861329B9F1AB04C46397020CE31",
+    "nickname": "moria1",
+    "running": true,
+    "flags": ["Authority", "Fast", "Running", "Stable"],
+    "consensus_weight": 27,
+    "country": "us",
+    "platform": "Tor 0.4.8.7 on Linux",
+    "observed_bandwidth": 20971520
+  }]
+}
+```
+
 ### Onionoo Uptime API  
 - **URL**: `https://onionoo.torproject.org/uptime`
 - **Purpose**: Historical uptime statistics and flag history for reliability analysis
 - **Memory Usage**: ~2GB during processing (large historical dataset)
 - **Usage**: Enhanced relay reliability metrics and performance analysis
+
+**Sample Data**:
+```json
+{
+  "relays": [{
+    "fingerprint": "9695DFC35FFEB861329B9F1AB04C46397020CE31",
+    "uptime": {
+      "1_month": "978",
+      "1_year": "945"
+    },
+    "flags": {
+      "Running": {"1_month": "987", "1_year": "954"},
+      "Guard": {"1_month": "974", "1_year": "943"}
+    }
+  }]
+}
+```
 
 **Performance Features**: Parallel API fetching, HTTP conditional requests, graceful fallback to cached data
 
@@ -152,17 +185,27 @@ Contributions welcome in:
 ### AROI Leaderboard - Top 3 and Top 6 Champions
 ![AROI Leaderboard Top 3 and Top 6](docs/screenshots/aroi-leaderboard-top3-top6.png)
 
+Main AROI leaderboard showing top operators across categories with expandable views highlighting achievements in bandwidth, consensus weight, and network diversity.
+
 ### AROI Leaderboard - Top 25 Bandwidth Champions
 ![AROI Leaderboard Top 25 Bandwidth](docs/screenshots/aroi-leaderboard-top25-bandwidth.png)
+
+Detailed ranking of the top 25 bandwidth contributors showing authenticated relay operators with precise measurements and network impact metrics.
 
 ### AROI Leaderboard - Champions Badges
 ![AROI Leaderboard Champions Badges](docs/screenshots/aroi-leaderboard-champions-badges.png)
 
+Achievement badge system displaying operator accomplishments including geographic diversity, platform diversity, frontier building, and network veteran status.
+
 ### Browse by Contact
 ![Browse by Contact](docs/screenshots/browse-by-contact.png)
 
+Contact-based interface for exploring relay operators grouped by contact information, enabling easy navigation of operator families and collective contributions.
+
 ### Browse by Contact - 1aeo Example
 ![Browse by Contact 1aeo](docs/screenshots/browse-by-contact-1aeo.png.jpg)
+
+Individual operator profile showing relay family details, geographic distribution, and technical specifications across their network infrastructure.
 
 ## 📄 License
 
