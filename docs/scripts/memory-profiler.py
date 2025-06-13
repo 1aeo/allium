@@ -105,7 +105,7 @@ def profile_aroi_inline():
         sys.path.insert(0, '.')
         
         # Import the main allium functionality
-        from lib.relays import Relays
+        from lib.coordinator import create_relay_set_with_coordinator
         
         import_memory = get_memory_usage()
         import_time = time.time() - import_start
@@ -122,7 +122,7 @@ def profile_aroi_inline():
         onionoo_url = "https://onionoo.torproject.org/details"
         output_dir = "www_memory_test"
         
-        relays = Relays(
+        relays = create_relay_set_with_coordinator(
             output_dir=output_dir,
             onionoo_url=onionoo_url,
             use_bits=False,

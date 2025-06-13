@@ -17,12 +17,13 @@ def measure_performance(test_name, output_dir):
     sys.path.insert(0, '../../allium')
     sys.path.insert(0, '.')
     
-    from lib.relays import Relays
+    from lib.coordinator import create_relay_set_with_coordinator
     
+    print("📦 Loading relay data...")
     start_time = time.time()
     
-    relays = Relays(
-        output_dir=output_dir,
+    relays = create_relay_set_with_coordinator(
+        output_dir="www_performance_test",
         onionoo_url="https://onionoo.torproject.org/details", 
         use_bits=False,
         progress=False

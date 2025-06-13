@@ -7,6 +7,11 @@ timestamp
 allium/www
 www-screenshots/
 
+# Virtual environments
+venv/
+env/
+.venv/
+
 # Data files (cache, state, etc.)
 allium/data/
 

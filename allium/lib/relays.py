@@ -29,7 +29,7 @@ ENV = Environment(
 class Relays:
     """Relay class consisting of processing routines and onionoo data"""
 
-    def __init__(self, output_dir, onionoo_url, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=20, relay_data=None):
+    def __init__(self, output_dir, onionoo_url, relay_data, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=20):
         self.output_dir = output_dir
         self.onionoo_url = onionoo_url
         self.use_bits = use_bits
@@ -39,25 +39,15 @@ class Relays:
         self.total_steps = total_steps
         self.ts_file = os.path.join(os.path.dirname(ABS_PATH), "timestamp")
         
-        # API data attributes - always present for clean access
-        self.uptime_data = None
-        self.consensus_health_data = None  # Future API
-        self.collector_data = None         # Future API
+        # Use provided relay data (fetched by coordinator)
+        self.json = relay_data
+        if self.json is None:
+            return
         
-        # Phase 1: Support both old and new initialization patterns
-        if relay_data is not None:
-            # New pattern: accept data as input (for worker coordination)
-            self.json = relay_data
-            # Generate timestamp for compatibility
-            self.timestamp = time.strftime(
-                "%a, %d %b %Y %H:%M:%S GMT", time.gmtime(time.time())
-            )
-        else:
-            # Old pattern: fetch data internally (for backwards compatibility)
-            self.json = self._fetch_onionoo_details()
-            if self.json == None:
-                return
-            self.timestamp = self._write_timestamp()
+        # Generate timestamp for compatibility
+        self.timestamp = time.strftime(
+            "%a, %d %b %Y %H:%M:%S GMT", time.gmtime(time.time())
+        )
 
         self._fix_missing_observed_bandwidth()
         self._sort_by_observed_bandwidth()
@@ -74,29 +64,7 @@ class Relays:
         # Note: increment_step parameter is kept for backwards compatibility but not used
         log_progress(message, self.start_time, self.progress_step, self.total_steps, self.progress)
 
-    def _fetch_onionoo_details(self):
-        """
-        Make request to onionoo to retrieve details document, return  JSON
-        response
-        """
-        if os.path.isfile(self.ts_file):
-            with open(self.ts_file, "r") as ts_file:
-                prev_timestamp = ts_file.read()
-            headers = {"If-Modified-Since": prev_timestamp}
-            conn = urllib.request.Request(self.onionoo_url, headers=headers)
-        else:
-            conn = urllib.request.Request(self.onionoo_url)
 
-        try:
-            api_response = urllib.request.urlopen(conn).read()
-        except urllib.error.HTTPError as err:
-            if err.code == 304:
-                print("no onionoo update since last run, dying peacefully...")
-                sys.exit(1)
-            else:
-                raise (err)
-
-        return json.loads(api_response.decode("utf-8"))
 
     def _trim_platform(self):
         """

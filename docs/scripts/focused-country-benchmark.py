@@ -13,18 +13,19 @@ def benchmark_country_processing():
     print("🎯 Focused Country Processing Benchmark")
     print("=" * 55)
     
-    # Add paths
+    # Add paths for imports
     sys.path.insert(0, '../../allium')
     sys.path.insert(0, '.')
     
-    from lib.relays import Relays
+    from lib.coordinator import create_relay_set_with_coordinator
     from lib.country_utils import get_rare_countries_weighted_with_existing_data
     
-    # Load data once
-    print("📦 Loading relay data...")
-    relays = Relays(
-        output_dir="www_benchmark",
-        onionoo_url="https://onionoo.torproject.org/details", 
+    print("🎯 Starting focused country processing benchmark...")
+    start_time = time.time()
+    
+    relays = create_relay_set_with_coordinator(
+        output_dir="./benchmark_output",
+        onionoo_url="https://onionoo.torproject.org/details",
         use_bits=False,
         progress=False
     )

@@ -17,13 +17,13 @@ def test_aroi_performance():
     sys.path.insert(0, '../../allium')
     sys.path.insert(0, '.')
     
-    from lib.relays import Relays
+    from lib.coordinator import create_relay_set_with_coordinator
     
     # Test 1: Time the full AROI generation process
     print("📊 Testing AROI generation performance...")
     start_time = time.time()
     
-    relays = Relays(
+    relays = create_relay_set_with_coordinator(
         output_dir="www_performance_test",
         onionoo_url="https://onionoo.torproject.org/details", 
         use_bits=False,

@@ -277,8 +277,9 @@ class TestBackwardsCompatibilityIntegration:
                             # Create cache directory
                             os.makedirs(cache_dir, exist_ok=True)
                             
-                            # Use original constructor pattern (no relay_data)
-                            relay_set = Relays(
+                            # Use coordinator pattern instead of old direct constructor
+                            from lib.coordinator import create_relay_set_with_coordinator
+                            relay_set = create_relay_set_with_coordinator(
                                 output_dir=output_dir,
                                 onionoo_url="https://test.url",
                                 use_bits=False,
@@ -321,9 +322,9 @@ class TestBackwardsCompatibilityIntegration:
                 relay_set = Relays(
                     output_dir=output_dir,
                     onionoo_url="https://test.url",
+                    relay_data=mock_onionoo_data,  # Required parameter
                     use_bits=True,
-                    progress=False,
-                    relay_data=mock_onionoo_data  # New parameter
+                    progress=False
                 )
                 
                 # Should work with injected data
