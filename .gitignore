@@ -6,6 +6,7 @@ __pycache__
 timestamp
 allium/www
 www-screenshots/
+test_www/
 
 # Multi-API cache and data files
 allium/data/cache/
