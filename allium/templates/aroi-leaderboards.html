@@ -29,6 +29,8 @@
         <a href="#exit_authority" class="aroi-nav-link" title="Exit Authority: Control over exit consensus weight, determining which relays handle the final hop where Tor traffic exits to the regular internet">🚪 Exit Authority</a>
         <a href="#exit_operators" class="aroi-nav-link" title="Exit Relays: Special relays that handle the final hop in Tor circuits, where encrypted traffic exits to reach regular internet destinations like websites">🚪 Exit Operators</a>
         <a href="#guard_operators" class="aroi-nav-link" title="Guard Relays: Entry point relays that handle the first hop in Tor circuits. Your Tor client connects to guards to enter the Tor network anonymously">🛡️ Guard Operators</a>
+        <a href="#reliability_masters" class="aroi-nav-link" title="Reliability Masters: 6-month weighted uptime scores measuring operational excellence and network reliability">⏰ Reliability Masters</a>
+        <a href="#legacy_titans" class="aroi-nav-link" title="Legacy Titans: 5-year weighted uptime scores recognizing long-term operational stability and commitment">👑 Legacy Titans</a>
         <a href="#most_diverse" class="aroi-nav-link" title="Diversity Score: Calculated by combining geographic spread (countries × 2.0), platform variety (operating systems × 1.5), and network distribution (unique ASNs × 1.0) to measure operational resilience">🌈 Most Diverse</a>
         <a href="#platform_diversity" class="aroi-nav-link" title="Most non-Linux relays operated, promoting operating system diversity beyond Linux dominance">💻 Platform Diversity</a>
         <a href="#non_eu_leaders" class="aroi-nav-link" title="Most relays operated outside the European Union, expanding Tor's geographic reach beyond EU concentration">🌍 Non-EU Leaders</a>
@@ -86,6 +88,10 @@
         {{ champion_badge("frontier_builders", relays.json.aroi_leaderboards.leaderboards.frontier_builders, "Frontier Pioneer", "🏴‍☠️", "panel-default", "aroi-champion-frontier", page_ctx.path_prefix, relays.use_bits) }}
         
         {{ champion_badge("network_veterans", relays.json.aroi_leaderboards.leaderboards.network_veterans, "Network Veteran", "🏆", "panel-default", "aroi-champion-reliability", page_ctx.path_prefix, relays.use_bits) }}
+        
+        {{ champion_badge("reliability_masters", relays.json.aroi_leaderboards.leaderboards.reliability_masters, "Reliability Master", "⏰", "panel-success", "aroi-champion-reliability", page_ctx.path_prefix, relays.use_bits) }}
+        
+        {{ champion_badge("legacy_titans", relays.json.aroi_leaderboards.leaderboards.legacy_titans, "Legacy Titan", "👑", "panel-warning", "aroi-champion-legacy", page_ctx.path_prefix, relays.use_bits) }}
     </div>
 </section>
 
@@ -126,6 +132,11 @@
     <!-- Network Veterans -->
     {{ top3_table("Network Veterans", "🏆", relays.json.aroi_leaderboards.leaderboards.network_veterans, ["Veteran Legend", "Veteran Champion", "Veteran Hero"], "network_veterans", page_ctx, relays.use_bits) }}
 
+    <!-- Reliability Masters -->
+    {{ top3_table("Reliability Masters", "⏰", relays.json.aroi_leaderboards.leaderboards.reliability_masters, ["Reliability King", "Reliability Commander", "Reliability Hero"], "reliability_masters", page_ctx, relays.use_bits) }}
+
+    <!-- Legacy Titans -->
+    {{ top3_table("Legacy Titans", "👑", relays.json.aroi_leaderboards.leaderboards.legacy_titans, ["Legacy Supreme", "Legacy Commander", "Legacy Hero"], "legacy_titans", page_ctx, relays.use_bits) }}
 
 </section>
 
@@ -365,10 +376,10 @@
     </section>
 
     <!-- Generic categories using macro -->
-    {% for category_key in ['most_diverse', 'platform_diversity', 'non_eu_leaders', 'frontier_builders', 'network_veterans'] %}
+    {% for category_key in ['reliability_masters', 'legacy_titans', 'most_diverse', 'platform_diversity', 'non_eu_leaders', 'frontier_builders', 'network_veterans'] %}
         {% set category_name = relays.json.aroi_leaderboards.summary.categories[category_key] %}
         {% set category_data = relays.json.aroi_leaderboards.leaderboards[category_key] %}
-        {% set emoji = '🌈' if category_key == 'most_diverse' else '💻' if category_key == 'platform_diversity' else '🌍' if category_key == 'non_eu_leaders' else '🏴‍☠️' if category_key == 'frontier_builders' else '🏆' %}
+        {% set emoji = '⏰' if category_key == 'reliability_masters' else '👑' if category_key == 'legacy_titans' else '🌈' if category_key == 'most_diverse' else '💻' if category_key == 'platform_diversity' else '🌍' if category_key == 'non_eu_leaders' else '🏴‍☠️' if category_key == 'frontier_builders' else '🏆' %}
         
         {{ generic_ranking_table(category_key, category_name, category_data, emoji, page_ctx, relays.use_bits) }}
     {% endfor %}
@@ -394,6 +405,8 @@
                     <li><strong>🚪 Exit Authorities:</strong> Exit consensus weight percentage (authority over exit traffic)</li>
                     <li><strong>🚪 Exit Operators:</strong> Number of exit relays operated</li>
                     <li><strong>🛡️ Guard Operators:</strong> Number of guard relays operated</li>
+                    <li><strong>⏰ Reliability Masters:</strong> 6-month weighted uptime scores (operational excellence)</li>
+                    <li><strong>👑 Legacy Titans:</strong> 5-year weighted uptime scores (long-term stability)</li>
                     <li><strong>🌈 Most Diverse:</strong> Geographic, platform, and network diversity score</li>
                     <li><strong>💻 Platform Diversity:</strong> Non-Linux relay operators promoting OS diversity</li>
                 </ul>
@@ -408,7 +421,23 @@
             </div>
         </div>
         
-        <h4>🌈 Diversity Champion Scoring:</h4>
+        <h4>⏰ Reliability Champion Scoring:</h4>
+        <p><strong>Reliability Score Calculation:</strong> The reliability score uses a hybrid approach to measure both operational quality and network impact:</p>
+        <ul>
+            <li><strong>Average Uptime:</strong> Mean uptime percentage across all operator's relays (primary quality metric)</li>
+            <li><strong>Relay Count Weight:</strong> Scaling factor based on operational scale complexity:</li>
+            <ul>
+                <li><strong>1-50 relays:</strong> 1.0x weight (baseline)</li>
+                <li><strong>51-100 relays:</strong> 1.1x weight (10% complexity bonus)</li>
+                <li><strong>101-200 relays:</strong> 1.2x weight (20% complexity bonus)</li>
+                <li><strong>200+ relays:</strong> 1.3x weight (30% complexity bonus)</li>
+            </ul>
+        </ul>
+        <p><strong>Reliability Formula:</strong> reliability_score = average_uptime × relay_count_weight</p>
+        <p><em>Example:</em> An operator with 150 relays and 97.5% average uptime would score: 97.5% × 1.2 = <strong>117.0 reliability points</strong>.</p>
+        <p><strong>Time Periods:</strong> Reliability Masters uses 6-month data for current performance, while Legacy Titans uses 5-year data for historical excellence.</p>
+        
+        <h4>� Diversity Champion Scoring:</h4>
         <p><strong>Diversity Score Calculation:</strong> The diversity score uses a weighted formula to measure geographic, platform, and network diversity:</p>
         <ul>
             <li><strong>Geographic Component:</strong> Number of countries × 2.0 (highest weight for global presence)</li>
@@ -417,8 +446,7 @@
         </ul>
         <p><em>Example:</em> An operator with relays in 5 countries, 3 operating systems, and 8 unique ASNs would score: (5 × 2.0) + (3 × 1.5) + (8 × 1.0) = 10.0 + 4.5 + 8.0 = <strong>22.5 diversity points</strong>.</p>
         
-        
-        <h4>🏴‍☠️ Frontier Builder Scoring:</h4>
+        <h4>�🏴‍☠️ Frontier Builder Scoring:</h4>
         <p><strong>Rare Country Score Calculation:</strong> The rare country score sums up points from all countries where an operator runs relays using a weighted scoring system:</p>
         <ul>
             <li><strong>Relay Count Factor (4x weight):</strong> Countries with fewer relays receive higher scores (6 points for 1 relay, 5 points for 2 relays, down to 0 points for 7+ relays)</li>

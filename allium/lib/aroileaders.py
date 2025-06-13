@@ -672,6 +672,37 @@ def _calculate_aroi_leaderboards(relays_instance):
                 else:
                     veteran_details_short = veteran_tooltip
 
+            # Format reliability details for reliability categories (REUSE veteran pattern)
+            reliability_details_short = ""
+            reliability_tooltip = ""
+            reliability_score_raw = 0.0
+            reliability_average = 0.0
+            reliability_weight = 1.0
+            
+            if category in ['reliability_masters', 'legacy_titans']:
+                # Determine which reliability data to use
+                if category == 'reliability_masters':
+                    reliability_score_raw = metrics['reliability_6m_score']
+                    reliability_average = metrics['reliability_6m_average']
+                    reliability_weight = metrics['reliability_6m_weight']
+                    period_label = "6-month"
+                else:  # legacy_titans
+                    reliability_score_raw = metrics['reliability_5y_score']
+                    reliability_average = metrics['reliability_5y_average']
+                    reliability_weight = metrics['reliability_5y_weight']
+                    period_label = "5-year"
+                
+                # Create tooltip similar to veteran pattern
+                reliability_tooltip = f"{period_label} reliability: {reliability_average:.1f}% avg × {reliability_weight:.1f}x weight ({metrics['total_relays']} relays)"
+                
+                # Create short version for table display (reuse veteran pattern)
+                if len(reliability_tooltip) > 20:
+                    reliability_details_short = f"{reliability_average:.1f}% × {reliability_weight:.1f}x"
+                    if len(reliability_details_short) > 17:
+                        reliability_details_short = f"{reliability_average:.1f}%..."
+                else:
+                    reliability_details_short = reliability_tooltip
+
             
             display_name = metrics['aroi_domain'] if metrics['aroi_domain'] and metrics['aroi_domain'] != 'none' else operator_key
 
@@ -730,7 +761,14 @@ def _calculate_aroi_leaderboards(relays_instance):
                 'first_seen_date': metrics['first_seen'].split(' ')[0] if metrics['first_seen'] else 'Unknown',
                 'geographic_achievement': geographic_achievement,  # Add dynamic achievement
                 'geographic_breakdown_details': geographic_breakdown_details,  # Add geographic breakdown
-                'geographic_breakdown_tooltip': geographic_breakdown_tooltip  # Add geographic tooltip
+                'geographic_breakdown_tooltip': geographic_breakdown_tooltip,  # Add geographic tooltip
+                
+                # === RELIABILITY FIELDS (REUSE existing pattern) ===
+                'reliability_score': f"{reliability_score_raw:.1f}",
+                'reliability_average': f"{reliability_average:.1f}%",
+                'reliability_weight': f"{reliability_weight:.1f}x",
+                'reliability_details_short': reliability_details_short,
+                'reliability_tooltip': reliability_tooltip,
             }
             formatted_data.append(formatted_entry)
         
