@@ -49,9 +49,19 @@ cd allium
 
 # Run with retry logic to handle network issues
 echo "🔄 Attempting to generate site (may retry on network issues)..."
+
+# Check if we're in a CI environment (GitHub Actions, GitLab CI, etc.)
+if [ -n "$CI" ] || [ -n "$GITHUB_ACTIONS" ] || [ -n "$GITLAB_CI" ]; then
+    echo "🤖 CI environment detected - using details API only to reduce resource usage"
+    API_MODE="--apis details"
+else
+    echo "🖥️  Regular environment - using all APIs for full functionality"
+    API_MODE="--apis all"
+fi
+
 for attempt in 1 2 3; do
     echo "🔄 Generation attempt $attempt of 3..."
-    if python3 allium.py --progress; then
+    if python3 allium.py --progress $API_MODE; then
         echo "✅ Site generation completed successfully on attempt $attempt"
         break
     else
@@ -65,7 +75,13 @@ for attempt in 1 2 3; do
             echo "   - System resource constraints"
             echo ""
             echo "💡 You can try running the generation manually later with:"
-            echo "   cd allium && source ../venv/bin/activate && python3 allium.py --progress"
+            if [ "$ALLIUM_ROOT" = ".." ]; then
+                echo "   source venv/bin/activate && python3 allium.py --progress"
+            else
+                echo "   cd allium && source ../venv/bin/activate && python3 allium.py --progress"
+            fi
+            echo ""
+            echo "🔧 For low-memory environments, try: python3 allium.py --progress --apis details"
             exit 1
         else
             echo "⏳ Waiting 10 seconds before retry..."
