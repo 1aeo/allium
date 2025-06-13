@@ -13,6 +13,7 @@ from .workers import (
     get_worker_status, get_all_worker_status
 )
 from .relays import Relays
+from .progress import log_progress
 
 
 class Coordinator:
@@ -49,48 +50,9 @@ class Coordinator:
             self.api_workers.append(("onionoo_uptime", fetch_onionoo_uptime, [self.onionoo_url.replace('/details', '/uptime')]))
         
     def _log_progress(self, message):
-        """Log progress message in the same format as main allium.py"""
-        if self.progress:
-            try:
-                # Import the get_memory_usage function from main allium.py
-                import sys
-                import os
-                import resource
-                
-                def get_memory_usage():
-                    try:
-                        usage = resource.getrusage(resource.RUSAGE_SELF)
-                        peak_kb = usage.ru_maxrss
-                        if sys.platform == 'darwin':
-                            peak_kb = peak_kb / 1024
-                        
-                        current_rss_kb = None
-                        try:
-                            with open('/proc/self/status', 'r') as f:
-                                for line in f:
-                                    if line.startswith('VmRSS:'):
-                                        current_rss_kb = int(line.split()[1])
-                                        break
-                        except (FileNotFoundError, PermissionError, ValueError):
-                            current_rss_kb = peak_kb
-                        
-                        current_mb = (current_rss_kb or peak_kb) / 1024
-                        peak_mb = peak_kb / 1024
-                        
-                        if current_rss_kb and current_rss_kb != peak_kb:
-                            return f"RSS: {current_mb:.1f}MB, Peak: {peak_mb:.1f}MB"
-                        else:
-                            return f"Peak RSS: {peak_mb:.1f}MB"
-                    except Exception as e:
-                        return f"Memory: unavailable ({e})"
-                
-                elapsed_time = time.time() - self.start_time
-                print(f"[{time.strftime('%H:%M:%S', time.gmtime(elapsed_time))}] [{self.progress_step}/{self.total_steps}] [{get_memory_usage()}] Progress: {message}")
-            except Exception:
-                # Fallback if memory usage fails
-                elapsed_time = time.time() - self.start_time
-                print(f"[{time.strftime('%H:%M:%S', time.gmtime(elapsed_time))}] [{self.progress_step}/{self.total_steps}] [Memory: N/A] Progress: {message}")
-
+        """Log progress message using shared progress utility"""
+        log_progress(message, self.start_time, self.progress_step, self.total_steps, self.progress)
+    
     def _run_worker(self, api_name, worker_func, args):
         """Run a single API worker in a thread"""
         try:
@@ -129,7 +91,6 @@ class Coordinator:
             self._log_progress("All API workers completed")
         
         return self.worker_data
-
     def fetch_onionoo_data(self):
         """
         Fetch onionoo data using workers system.

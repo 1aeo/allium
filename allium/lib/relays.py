@@ -15,6 +15,7 @@ import urllib.request
 from shutil import rmtree
 from jinja2 import Environment, FileSystemLoader
 from .aroileaders import _calculate_aroi_leaderboards
+from .progress import log_progress, get_memory_usage
 
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
 ENV = Environment(
@@ -69,57 +70,9 @@ class Relays:
         self._generate_smart_context()  # Generate intelligence analysis
 
     def _log_progress(self, message, increment_step=False):
-        """
-        Helper method to log progress with consistent formatting.
-        Uses the same format as main allium.py progress tracking.
-        """
-        if self.progress:
-            if increment_step:
-                # This is being called from main allium.py context where we increment step
-                # We get the current step from the caller 
-                pass
-            
-            # Use the standard format with get_memory_usage from allium.py
-            try:
-                # Import the get_memory_usage function from allium.py
-                import sys
-                import os
-                import resource
-                
-                # Define get_memory_usage locally to maintain consistency
-                def get_memory_usage():
-                    try:
-                        usage = resource.getrusage(resource.RUSAGE_SELF)
-                        peak_kb = usage.ru_maxrss
-                        if sys.platform == 'darwin':
-                            peak_kb = peak_kb / 1024
-                        
-                        current_rss_kb = None
-                        try:
-                            with open('/proc/self/status', 'r') as f:
-                                for line in f:
-                                    if line.startswith('VmRSS:'):
-                                        current_rss_kb = int(line.split()[1])
-                                        break
-                        except (FileNotFoundError, PermissionError, ValueError):
-                            current_rss_kb = peak_kb
-                        
-                        current_mb = (current_rss_kb or peak_kb) / 1024
-                        peak_mb = peak_kb / 1024
-                        
-                        if current_rss_kb and current_rss_kb != peak_kb:
-                            return f"RSS: {current_mb:.1f}MB, Peak: {peak_mb:.1f}MB"
-                        else:
-                            return f"Peak RSS: {peak_mb:.1f}MB"
-                    except Exception as e:
-                        return f"Memory: unavailable ({e})"
-                
-                elapsed_time = time.time() - self.start_time
-                print(f"[{time.strftime('%H:%M:%S', time.gmtime(elapsed_time))}] [{self.progress_step}/{self.total_steps}] [{get_memory_usage()}] Progress: {message}")
-            except Exception:
-                # Fallback if memory usage fails
-                elapsed_time = time.time() - self.start_time
-                print(f"[{time.strftime('%H:%M:%S', time.gmtime(elapsed_time))}] [{self.progress_step}/{self.total_steps}] [Memory: N/A] Progress: {message}")
+        """Log progress message using shared progress utility"""
+        # Note: increment_step parameter is kept for backwards compatibility but not used
+        log_progress(message, self.start_time, self.progress_step, self.total_steps, self.progress)
 
     def _fetch_onionoo_details(self):
         """
@@ -1063,34 +1016,6 @@ class Relays:
         Reducing overall compute time from 60s to 20s.
         
         """
-        def get_memory_usage():
-            try:
-                import sys
-                import resource
-                usage = resource.getrusage(resource.RUSAGE_SELF)
-                peak_kb = usage.ru_maxrss
-                if sys.platform == 'darwin':  # macOS reports in bytes
-                    peak_kb = peak_kb / 1024
-                
-                current_rss_kb = None
-                try:
-                    with open('/proc/self/status', 'r') as f:
-                        for line in f:
-                            if line.startswith('VmRSS:'):
-                                current_rss_kb = int(line.split()[1])
-                                break
-                except (FileNotFoundError, PermissionError, ValueError):
-                    current_rss_kb = peak_kb
-                
-                current_mb = (current_rss_kb or peak_kb) / 1024
-                peak_mb = peak_kb / 1024
-                
-                if current_rss_kb and current_rss_kb != peak_kb:
-                    return f"RSS: {current_mb:.1f}MB, Peak: {peak_mb:.1f}MB"
-                else:
-                    return f"Peak RSS: {peak_mb:.1f}MB"
-            except Exception as e:
-                return f"Memory: unavailable ({e})"
         
         start_time = time.time()
         self._log_progress(f"Starting {k} page generation...")
