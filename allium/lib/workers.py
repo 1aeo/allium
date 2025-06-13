@@ -216,7 +216,8 @@ def fetch_onionoo_details(onionoo_url="https://onionoo.torproject.org/details", 
             conn = urllib.request.Request(onionoo_url)
 
         try:
-            api_response = urllib.request.urlopen(conn).read()
+            # Add timeout to prevent hanging in CI environments
+            api_response = urllib.request.urlopen(conn, timeout=30).read()
         except urllib.error.HTTPError as err:
             if err.code == 304:
                 # No update since last run - use cached data
@@ -230,7 +231,13 @@ def fetch_onionoo_details(onionoo_url="https://onionoo.torproject.org/details", 
                     log_progress("no onionoo update since last run, dying peacefully...")
                     sys.exit(1)
             else:
+                log_progress(f"HTTP error fetching onionoo data: {err.code}")
                 raise err
+        except urllib.error.URLError as err:
+            log_progress(f"Network error fetching onionoo data: {err}")
+            log_progress("Check your internet connection and try again")
+            log_progress("In CI environments, this might be a temporary network issue")
+            raise err
 
         # Parse JSON response
         data = json.loads(api_response.decode("utf-8"))
@@ -294,7 +301,8 @@ def fetch_onionoo_uptime(onionoo_url="https://onionoo.torproject.org/uptime", pr
         log_progress("Fetching uptime data from Onionoo API...")
 
         try:
-            api_response = urllib.request.urlopen(conn).read()
+            # Add timeout to prevent hanging in CI environments
+            api_response = urllib.request.urlopen(conn, timeout=30).read()
         except urllib.error.HTTPError as err:
             if err.code == 304:
                 # No update since last run - use cached data
@@ -310,7 +318,13 @@ def fetch_onionoo_uptime(onionoo_url="https://onionoo.torproject.org/uptime", pr
                     _mark_stale(api_name, "No cached uptime data available")
                     return None
             else:
+                log_progress(f"HTTP error fetching onionoo uptime data: {err.code}")
                 raise err
+        except urllib.error.URLError as err:
+            log_progress(f"Network error fetching onionoo uptime data: {err}")
+            log_progress("Check your internet connection and try again")
+            log_progress("In CI environments, this might be a temporary network issue")
+            raise err
 
         log_progress("Parsing uptime JSON response...")
 

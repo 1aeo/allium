@@ -790,8 +790,13 @@ class Relays:
         """
         try:
             from .intelligence_engine import IntelligenceEngine
-        except ImportError:
-            from .intelligence_engine import IntelligenceEngine
+        except ImportError as e:
+            if self.progress:
+                self._log_progress(f"Intelligence engine not available: {e}")
+            print("⚠️  Intelligence engine module not available, skipping analysis")
+            self.json['smart_context'] = {}
+            self.progress_step += 2  # Skip both analysis steps
+            return
         
         self.progress_step += 1
         self._log_progress("Starting Tier 1 intelligence analysis...")
@@ -1053,12 +1058,29 @@ class Relays:
             exit_bandwidth = self._format_bandwidth_with_unit(i["exit_bandwidth"], bandwidth_unit)
             
             # Calculate network position using intelligence engine
-            from .intelligence_engine import IntelligenceEngine
-            intelligence = IntelligenceEngine({})  # Empty intelligence engine just for utility method
-            total_relays = len(members)
-            network_position = intelligence._calculate_network_position(
-                i["guard_count"], i["middle_count"], i["exit_count"], total_relays
-            )
+            try:
+                from .intelligence_engine import IntelligenceEngine
+                intelligence = IntelligenceEngine({})  # Empty intelligence engine just for utility method
+                total_relays = len(members)
+                network_position = intelligence._calculate_network_position(
+                    i["guard_count"], i["middle_count"], i["exit_count"], total_relays
+                )
+            except ImportError:
+                # Fallback if intelligence engine is not available
+                total_relays = len(members)
+                guard_ratio = i["guard_count"] / total_relays if total_relays > 0 else 0
+                middle_ratio = i["middle_count"] / total_relays if total_relays > 0 else 0
+                exit_ratio = i["exit_count"] / total_relays if total_relays > 0 else 0
+                
+                # Simple network position calculation
+                if guard_ratio > 0.5:
+                    network_position = "Guard-focused"
+                elif exit_ratio > 0.5:
+                    network_position = "Exit-focused"
+                elif middle_ratio > 0.5:
+                    network_position = "Middle-focused"
+                else:
+                    network_position = "Mixed"
                 
             # Generate page context with correct breadcrumb data
             page_ctx = self.get_detail_page_context(k, v)
