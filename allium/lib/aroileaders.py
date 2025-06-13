@@ -20,6 +20,116 @@ from .country_utils import (
 )
 
 
+def _get_relay_count_weight(relay_count):
+    """
+    Calculate weight multiplier based on relay count using updated weighting scheme.
+    
+    Args:
+        relay_count (int): Number of relays operated
+        
+    Returns:
+        float: Weight multiplier
+    """
+    if relay_count <= 50:
+        return 1.0
+    elif relay_count <= 100:
+        return 1.1
+    elif relay_count <= 200:
+        return 1.2
+    else:  # 200+ relays
+        return 1.3
+
+
+def _calculate_reliability_score(operator_relays, uptime_data, time_period):
+    """
+    Calculate reliability score using hybrid approach: average uptime × relay count weight.
+    
+    Formula: Score = (Average uptime per operator) × Relay_Count_Weight
+    
+    Args:
+        operator_relays (list): List of relay objects for this operator
+        uptime_data (dict): Uptime data from Onionoo API (attached to relays_instance)
+        time_period (str): Time period to use ('6_months' or '5_years')
+        
+    Returns:
+        dict: Reliability metrics including score, average uptime, relay count, etc.
+    """
+    if not operator_relays or not uptime_data:
+        return {
+            'score': 0.0,
+            'average_uptime': 0.0,
+            'relay_count': 0,
+            'weight': 1.0,
+            'valid_relays': 0,
+            'breakdown': {}
+        }
+    
+    # Collect uptime values for each relay
+    uptime_values = []
+    breakdown = {}
+    
+    for relay in operator_relays:
+        fingerprint = relay.get('fingerprint', '')
+        nickname = relay.get('nickname', 'Unknown')
+        
+        if not fingerprint:
+            continue
+            
+        # Find uptime data for this relay
+        relay_uptime = None
+        for uptime_relay in uptime_data.get('relays', []):
+            if uptime_relay.get('fingerprint') == fingerprint:
+                relay_uptime = uptime_relay
+                break
+        
+        if relay_uptime and relay_uptime.get('uptime'):
+            period_data = relay_uptime['uptime'].get(time_period, {})
+            if period_data.get('values'):
+                # Calculate average uptime from values array
+                values = [v for v in period_data['values'] if v is not None]
+                if values:
+                    # Normalize from 0-999 to 0-100 percentage
+                    avg_uptime = sum(values) / len(values) / 999 * 100
+                    uptime_values.append(avg_uptime)
+                    breakdown[nickname] = {
+                        'fingerprint': fingerprint,
+                        'uptime': avg_uptime,
+                        'data_points': len(values)
+                    }
+    
+    # Calculate metrics
+    relay_count = len(operator_relays)
+    valid_relays = len(uptime_values)
+    
+    if not uptime_values:
+        return {
+            'score': 0.0,
+            'average_uptime': 0.0,
+            'relay_count': relay_count,
+            'weight': _get_relay_count_weight(relay_count),
+            'valid_relays': 0,
+            'breakdown': {}
+        }
+    
+    # Calculate average uptime across all relays
+    average_uptime = sum(uptime_values) / len(uptime_values)
+    
+    # Get weight multiplier based on relay count
+    weight = _get_relay_count_weight(relay_count)
+    
+    # Calculate final score: Average uptime × Weight
+    score = average_uptime * weight
+    
+    return {
+        'score': score,
+        'average_uptime': average_uptime,
+        'relay_count': relay_count,
+        'weight': weight,
+        'valid_relays': valid_relays,
+        'breakdown': breakdown
+    }
+
+
 def _format_breakdown_details(breakdown_items, max_chars, formatter_func=None):
     """
     Reusable helper function to format country/item breakdowns with truncation.
@@ -272,6 +382,16 @@ def _calculate_aroi_leaderboards(relays_instance):
                 veteran_score = veteran_days * veteran_relay_scaling_factor
                 veteran_details = f"Online and serving traffic since first day: {veteran_days} days * {veteran_relay_scaling_factor} ({total_relays} relays)"
         
+        # === RELIABILITY CALCULATIONS (NEW) ===
+        # Calculate reliability scores for both 6-month and 5-year periods
+        uptime_data = getattr(relays_instance, 'uptime_data', None)
+        
+        # 6-month reliability score (primary metric)
+        reliability_6m = _calculate_reliability_score(operator_relays, uptime_data, '6_months')
+        
+        # 5-year reliability score (legacy metric)
+        reliability_5y = _calculate_reliability_score(operator_relays, uptime_data, '5_years')
+        
         # Store operator data (mix of existing + new calculations)
         aroi_operators[operator_key] = {
             # === EXISTING CALCULATIONS (REUSED) ===
@@ -307,11 +427,24 @@ def _calculate_aroi_leaderboards(relays_instance):
             'veteran_relay_scaling_factor': veteran_relay_scaling_factor,
             'veteran_details': veteran_details,
             
+            # === RELIABILITY METRICS (NEW) ===
+            'reliability_6m_score': reliability_6m['score'],
+            'reliability_6m_average': reliability_6m['average_uptime'],
+            'reliability_6m_weight': reliability_6m['weight'],
+            'reliability_6m_valid_relays': reliability_6m['valid_relays'],
+            'reliability_6m_breakdown': reliability_6m['breakdown'],
+            
+            'reliability_5y_score': reliability_5y['score'],
+            'reliability_5y_average': reliability_5y['average_uptime'],
+            'reliability_5y_weight': reliability_5y['weight'],
+            'reliability_5y_valid_relays': reliability_5y['valid_relays'],
+            'reliability_5y_breakdown': reliability_5y['breakdown'],
+            
             # Keep minimal relay data for potential future use
             'relays': operator_relays
         }
     
-    # Generate 11 core leaderboard categories
+    # Generate 13 core leaderboard categories (added 2 new reliability categories)
     leaderboards = {}
     
     # 1. Bandwidth Contributed (use existing calculation)
@@ -349,44 +482,54 @@ def _calculate_aroi_leaderboards(relays_instance):
         reverse=True
     )[:50]
     
-    # 6. Most Diverse Operators (new calculation)
+    # 6. ⏰ Reliability Masters - 6-Month Weighted Uptime (NEW)
+    leaderboards['reliability_masters'] = sorted(
+        aroi_operators.items(),
+        key=lambda x: x[1]['reliability_6m_score'],
+        reverse=True
+    )[:50]
+    
+    # 7. 👑 Legacy Titans - 5-Year Weighted Uptime (NEW)
+    leaderboards['legacy_titans'] = sorted(
+        aroi_operators.items(),
+        key=lambda x: x[1]['reliability_5y_score'],
+        reverse=True
+    )[:50]
+    
+    # 8. Most Diverse Operators (new calculation)
     leaderboards['most_diverse'] = sorted(
         aroi_operators.items(),
         key=lambda x: x[1]['diversity_score'],
         reverse=True
     )[:50]
     
-    # 7. Platform Diversity - Non-Linux Heroes (new calculation)
+    # 9. Platform Diversity - Non-Linux Heroes (new calculation)
     leaderboards['platform_diversity'] = sorted(
         aroi_operators.items(),
         key=lambda x: x[1]['non_linux_count'],
         reverse=True
     )[:50]
     
-
-    
-    # 8. Geographic Champions - Non-EU Leaders (new calculation)
+    # 10. Geographic Champions - Non-EU Leaders (new calculation)
     leaderboards['non_eu_leaders'] = sorted(
         aroi_operators.items(),
         key=lambda x: x[1]['non_eu_count'],
         reverse=True
     )[:50]
     
-    # 9. Frontier Builders - Rare Countries (new calculation)
+    # 11. Frontier Builders - Rare Countries (new calculation)
     leaderboards['frontier_builders'] = sorted(
         aroi_operators.items(),
         key=lambda x: x[1]['rare_country_count'],
         reverse=True
     )[:50]
     
-    # 10. Network Veterans - Earliest First Seen + Relay Scale (new calculation)
+    # 12. Network Veterans - Earliest First Seen + Relay Scale (new calculation)
     leaderboards['network_veterans'] = sorted(
         aroi_operators.items(),
         key=lambda x: x[1]['veteran_score'],
         reverse=True
     )[:50]
-    
-
     
     # Format data for template rendering with bandwidth units (reuse existing formatters)
     formatted_leaderboards = {}
@@ -623,9 +766,10 @@ def _calculate_aroi_leaderboards(relays_instance):
             'exit_authority': 'Exit Authority Champions',
             'exit_operators': 'Exit Operators',
             'guard_operators': 'Guard Operators', 
+            'reliability_masters': '⏰ Reliability Masters - 6-Month Weighted Uptime',
+            'legacy_titans': '👑 Legacy Titans - 5-Year Weighted Uptime',
             'most_diverse': 'Most Diverse Operators',
             'platform_diversity': 'Platform Diversity (Non-Linux Heroes)',
-
             'non_eu_leaders': 'Geographic Champions (Non-EU Leaders)',
             'frontier_builders': 'Frontier Builders (Rare Countries)',
             'network_veterans': 'Network Veterans'
