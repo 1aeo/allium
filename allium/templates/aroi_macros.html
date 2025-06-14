@@ -158,9 +158,9 @@
         {%- elif category_key == 'platform_diversity' -%}number of non-Linux relays promoting OS diversity
         {%- elif category_key == 'non_eu_leaders' -%}number of relays operated outside the European Union
         {%- elif category_key == 'frontier_builders' -%}rare country scores from strategically important countries
-        {%- elif category_key == 'network_veterans' -%}earliest relay start dates recognizing network pioneers
-        {%- elif category_key == 'reliability_masters' -%}6-month weighted uptime reliability scores
-        {%- elif category_key == 'legacy_titans' -%}5-year weighted uptime reliability scores
+        {%- elif category_key == 'network_veterans' -%}veteran scores calculated as (earliest relay start date × total relay count). Formula: veteran_score = days_since_first_relay × total_relays. Recognizes operators who have been contributing to the Tor network for the longest time with sustained relay operations
+        {%- elif category_key == 'reliability_masters' -%}6-month weighted uptime reliability scores from Onionoo API data. Formula: reliability_score = (average_6_month_uptime × bandwidth_weight). Measures operational excellence and network reliability over recent 6-month period using bandwidth-weighted uptime percentages
+        {%- elif category_key == 'legacy_titans' -%}5-year weighted uptime reliability scores from Onionoo API data. Formula: reliability_score = (average_5_year_uptime × bandwidth_weight). Measures long-term operational stability and reliability over 5-year historical period using bandwidth-weighted uptime percentages
         {%- endif -%}">{% if emoji %}{{ emoji }} {% endif %}{{ category_name }}</h3>
         {% if category_data %}
         <div class="table-responsive">
@@ -170,23 +170,23 @@
                         <th title="Position in {{ category_name.lower() }} leaderboard">Rank</th>
                         <th title="Authenticated Relay Operator Identifier following ContactInfo specification">Operator (AROI)</th>
                         {% if category_key != 'platform_diversity' and category_key != 'non_eu_leaders' and category_key != 'frontier_builders' %}
-                        <th title="Total number of relays operated by this operator">Relays</th>
+                        <th title="{% if category_key == 'network_veterans' %}Total relay count: number of relays currently operated. For veterans, higher relay counts with early start dates result in higher veteran scores{% elif category_key == 'reliability_masters' %}Total relay count: number of relays contributing to reliability calculations. More relays provide larger sample size for uptime measurements{% elif category_key == 'legacy_titans' %}Total relay count: number of relays contributing to long-term reliability scores. Sustained relay operations over 5 years demonstrate commitment{% else %}Total number of relays operated by this operator{% endif %}">Relays</th>
                         {% endif %}
                         <th title="Primary ranking metric for 
                         {%- if category_key == 'most_diverse' -%}diversity score calculation
                         {%- elif category_key == 'platform_diversity' -%}non-Linux relay count
                         {%- elif category_key == 'non_eu_leaders' -%}non-EU relay count with percentage
                         {%- elif category_key == 'frontier_builders' -%}rare country relay count
-                        {%- elif category_key == 'network_veterans' -%}veteran score calculation
-                        {%- elif category_key == 'reliability_masters' -%}6-month reliability score calculation
-                        {%- elif category_key == 'legacy_titans' -%}5-year reliability score calculation
+                        {%- elif category_key == 'network_veterans' -%}veteran score calculation: days since first relay start date × total relay count. Higher scores indicate longer network service with more relays
+                        {%- elif category_key == 'reliability_masters' -%}6-month reliability score: average uptime percentage × bandwidth weight from Onionoo API. Measures recent operational excellence and network reliability
+                        {%- elif category_key == 'legacy_titans' -%}5-year reliability score: average uptime percentage × bandwidth weight from Onionoo API. Measures long-term operational stability and historical reliability
                         {%- endif -%}">{% if category_key == 'platform_diversity' %}Non Linux Relays{% elif category_key == 'non_eu_leaders' %}Non-EU Relays{% elif category_key == 'frontier_builders' %}Rare Relays{% elif category_key == 'reliability_masters' %}Reliability Score{% elif category_key == 'legacy_titans' %}Legacy Score{% else %}Key Metric{% endif %}</th>
                         <th title="Total observed bandwidth capacity in {% if use_bits %}bits per second{% else %}bytes per second{% endif %}">Bandwidth</th>
                         {% if category_key != 'platform_diversity' %}
-                        <th title="Number of countries with relay operations">Countries</th>
+                        <th title="{% if category_key == 'network_veterans' %}Geographic distribution: number of countries with relay operations. Geographic diversity demonstrates network resilience and reduces single-point-of-failure risks{% elif category_key == 'reliability_masters' %}Geographic distribution: number of countries with relay operations. Geographic diversity for reliability indicates distributed operational infrastructure{% elif category_key == 'legacy_titans' %}Geographic distribution: number of countries with relay operations. Geographic diversity for long-term operators shows sustained international presence{% else %}Number of countries with relay operations{% endif %}">Countries</th>
                         {% endif %}
                         {% if category_key != 'frontier_builders' and category_key != 'non_eu_leaders' and category_key != 'platform_diversity' %}
-                        <th title="Number of different operating systems used">Platforms</th>
+                        <th title="{% if category_key == 'network_veterans' %}Platform diversity: number of different operating systems used. Diversified platforms reduce monoculture risks and demonstrate technical sophistication{% elif category_key == 'reliability_masters' %}Platform diversity: number of different operating systems used. Platform diversity for reliable operators indicates varied technical infrastructure{% elif category_key == 'legacy_titans' %}Platform diversity: number of different operating systems used. Platform diversity for long-term operators shows sustained technical variety{% else %}Number of different operating systems used{% endif %}">Platforms</th>
                         {% endif %}
                         {% if category_key == 'most_diverse' %}
                         <th title="Number of unique Autonomous Systems (ASNs) used for network diversity">Unique AS</th>
@@ -209,7 +209,7 @@
                             {% elif category_key == 'platform_diversity' %}<span title="Relays promoting operating system diversity beyond Linux dominance">{{ entry.non_linux_count }}</span>
                             {% elif category_key == 'non_eu_leaders' %}<span title="Relays expanding Tor geographic reach beyond European Union concentration">{{ entry.non_eu_count_with_percentage }}</span>
                             {% elif category_key == 'frontier_builders' %}<span title="Relays in countries with strategic importance but underrepresented in Tor network">{{ entry.relays_in_rare_countries }}</span>
-                            {% elif category_key == 'network_veterans' %}<span title="Online and serving traffic since first day">{{ entry.veteran_score }}</span>
+                            {% elif category_key == 'network_veterans' %}<span title="Veteran Score Calculation: {{ entry.veteran_tooltip if entry.veteran_tooltip else 'Days since first relay started × total relay count. Higher scores indicate longer continuous network service with more relays operated' }}">{{ entry.veteran_score }}</span>
                             {% elif category_key == 'reliability_masters' %}
                                 <span title="{{ entry.reliability_tooltip }}">{{ entry.reliability_average }} avg × {{ entry.reliability_weight }}</span>
                             {% elif category_key == 'legacy_titans' %}
@@ -231,9 +231,9 @@
                             {% if category_key == 'platform_diversity' %}<span title="{{ entry.platform_breakdown_tooltip if entry.platform_breakdown_tooltip else 'Promoting operating system diversity beyond Linux dominance' }}">{{ entry.platform_breakdown_details if entry.platform_breakdown_details else 'OS diversity' }}</span>
                             {% elif category_key == 'non_eu_leaders' %}<span title="{{ entry.geographic_breakdown_tooltip }}">{{ entry.geographic_breakdown_details if entry.geographic_breakdown_details else 'Global expansion' }}</span>
                             {% elif category_key == 'frontier_builders' %}<span title="{{ entry.rare_country_tooltip }}">{{ entry.rare_country_details if entry.rare_country_details else 'Frontier presence' }}</span>
-                            {% elif category_key == 'network_veterans' %}<span title="{{ entry.veteran_tooltip }}">{{ entry.veteran_details_short if entry.veteran_details_short else 'Network longevity' }}</span>
-                            {% elif category_key == 'reliability_masters' %}<span title="{{ entry.reliability_tooltip }}">{{ entry.reliability_details_short if entry.reliability_details_short else '6-month uptime' }}</span>
-                            {% elif category_key == 'legacy_titans' %}<span title="{{ entry.reliability_tooltip }}">{{ entry.reliability_details_short if entry.reliability_details_short else '5-year uptime' }}</span>
+                            {% elif category_key == 'network_veterans' %}<span title="Network longevity specialization: {{ entry.veteran_tooltip if entry.veteran_tooltip else 'This operator has been contributing to the Tor network for an extended period, demonstrating long-term commitment and operational stability' }}">{{ entry.veteran_details_short if entry.veteran_details_short else 'Network longevity' }}</span>
+                            {% elif category_key == 'reliability_masters' %}<span title="6-month reliability specialization: {{ entry.reliability_tooltip if entry.reliability_tooltip else 'This operator demonstrates excellent short-term reliability with high uptime percentages over the recent 6-month period' }}">{{ entry.reliability_details_short if entry.reliability_details_short else '6-month uptime' }}</span>
+                            {% elif category_key == 'legacy_titans' %}<span title="5-year reliability specialization: {{ entry.reliability_tooltip if entry.reliability_tooltip else 'This operator demonstrates exceptional long-term reliability with sustained high uptime percentages over a 5-year historical period' }}">{{ entry.reliability_details_short if entry.reliability_details_short else '5-year uptime' }}</span>
                             {% endif %}
                         </td>
                         {% endif %}
