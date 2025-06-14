@@ -144,11 +144,11 @@
 <!-- COMPLETE RANKINGS (Full Leaderboards - All Categories Stacked) -->
 <!-- ===================================================================== -->
 <section id="rankings">
-    <h2 title="Full leaderboards with top 100 operators per category">📊 Complete Rankings - Top 100</h2>
-    <p class="lead">Full leaderboards with top 100 operators per category - Navigate through pages of 25 results each</p>
+    <h2 title="Full leaderboards with top 25 operators per category">📊 Complete Rankings - Top 25</h2>
+    <p class="lead">Full leaderboards with top 25 operators per category - Navigate through pages of 5 results each</p>
 
     <!-- Category 1: Bandwidth Contributed -->
-    {% call paginated_ranking_table("bandwidth", "Bandwidth Contributed", "🚀", relays.json.aroi_leaderboards.leaderboards.bandwidth, 
+    {% call top5_paginated_ranking_table("bandwidth", "Bandwidth Contributed", "🚀", relays.json.aroi_leaderboards.leaderboards.bandwidth, 
         '<th title="Position in bandwidth leaderboard based on total observed bandwidth capacity">Rank</th>
          <th title="Authenticated Relay Operator Identifier following ContactInfo specification">Operator (AROI)</th>
          <th title="Total number of relays operated with measured vs unmeasured breakdown">Relays</th>
