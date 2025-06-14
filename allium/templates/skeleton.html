@@ -484,6 +484,49 @@
                     padding-top: 30px;
                 }
 
+                /* AROI Pagination Styles using :target selector */
+                .pagination-section {
+                    display: none;
+                }
+                
+                .pagination-section:target {
+                    display: block;
+                }
+                
+                .pagination-section:first-of-type {
+                    display: block; /* Show first section by default */
+                }
+                
+                .pagination-nav {
+                    margin: 15px 0;
+                    text-align: center;
+                    border: 1px solid #ddd;
+                    border-radius: 5px;
+                    padding: 10px;
+                    background-color: #f9f9f9;
+                }
+                
+                .pagination-nav a {
+                    display: inline-block;
+                    padding: 8px 15px;
+                    margin: 0 5px;
+                    border: 1px solid #337ab7;
+                    border-radius: 3px;
+                    color: #337ab7;
+                    text-decoration: none;
+                    background-color: white;
+                }
+                
+                .pagination-nav a:hover {
+                    background-color: #337ab7;
+                    color: white;
+                }
+                
+                .pagination-nav a.active {
+                    background-color: #337ab7;
+                    color: white;
+                }
+
                 /* AROI Panel Background Colors for Champion Badges */
                 .panel-danger .panel-body {
                     background-color: #f2dede;

@@ -246,4 +246,94 @@
         </div>
         {% endif %}
     </section>
+{% endmacro %}
+
+{# Paginated Ranking Table Macro - For tables with top 100 results split into 4 pages of 25 #}
+{% macro paginated_ranking_table(category_key, title, emoji, leaderboard_data, headers, page_ctx, use_bits=false) %}
+    <section id="{{ category_key }}" class="aroi-section">
+        <h3 title="{{ title }}">{{ emoji }} {{ title }}</h3>
+        {% if leaderboard_data %}
+        
+        <!-- Pagination Navigation -->
+        <div class="pagination-nav">
+            <a href="#{{ category_key }}-1-25">1-25</a>
+            <a href="#{{ category_key }}-26-50">26-50</a>
+            <a href="#{{ category_key }}-51-75">51-75</a>
+            <a href="#{{ category_key }}-76-100">76-100</a>
+        </div>
+        
+        <!-- Page 1: Ranks 1-25 -->
+        <div id="{{ category_key }}-1-25" class="pagination-section">
+            <h4>{{ emoji }} {{ title }} - Ranks 1-25</h4>
+            <div class="table-responsive">
+                <table class="table table-striped table-condensed aroi-rankings-table aroi-standard-table">
+                    <thead>
+                        <tr>{{ headers|safe }}</tr>
+                    </thead>
+                    <tbody>
+                        {% for entry in leaderboard_data[:25] %}
+                            {{ caller(entry) }}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Page 2: Ranks 26-50 -->
+        <div id="{{ category_key }}-26-50" class="pagination-section">
+            <h4>{{ emoji }} {{ title }} - Ranks 26-50</h4>
+            <div class="table-responsive">
+                <table class="table table-striped table-condensed aroi-rankings-table aroi-standard-table">
+                    <thead>
+                        <tr>{{ headers|safe }}</tr>
+                    </thead>
+                    <tbody>
+                        {% for entry in leaderboard_data[25:50] %}
+                            {{ caller(entry) }}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Page 3: Ranks 51-75 -->
+        <div id="{{ category_key }}-51-75" class="pagination-section">
+            <h4>{{ emoji }} {{ title }} - Ranks 51-75</h4>
+            <div class="table-responsive">
+                <table class="table table-striped table-condensed aroi-rankings-table aroi-standard-table">
+                    <thead>
+                        <tr>{{ headers|safe }}</tr>
+                    </thead>
+                    <tbody>
+                        {% for entry in leaderboard_data[50:75] %}
+                            {{ caller(entry) }}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Page 4: Ranks 76-100 -->
+        <div id="{{ category_key }}-76-100" class="pagination-section">
+            <h4>{{ emoji }} {{ title }} - Ranks 76-100</h4>
+            <div class="table-responsive">
+                <table class="table table-striped table-condensed aroi-rankings-table aroi-standard-table">
+                    <thead>
+                        <tr>{{ headers|safe }}</tr>
+                    </thead>
+                    <tbody>
+                        {% for entry in leaderboard_data[75:100] %}
+                            {{ caller(entry) }}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        {% else %}
+        <div class="alert alert-warning">
+            <p>No {{ title.lower() }} data available.</p>
+        </div>
+        {% endif %}
+    </section>
 {% endmacro %} 
