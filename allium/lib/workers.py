@@ -256,22 +256,22 @@ def fetch_onionoo_details(onionoo_url="https://onionoo.torproject.org/details", 
         
         # Use consistent progress format for success message
         relay_count = len(data.get('relays', []))
-        log_progress(f"Successfully fetched {relay_count} relays from onionoo (details API)")
+        log_progress(f"successfully fetched {relay_count} relays from onionoo details API")
         
         return data
         
     except Exception as e:
         error_msg = f"Failed to fetch onionoo details: {str(e)}"
-        log_progress(f"Error: {error_msg}")
+        log_progress(f"error: {error_msg}")
         _mark_stale(api_name, error_msg)
         
         # Try to return cached data as fallback
         cached_data = _load_cache(api_name)
         if cached_data:
-            log_progress("Using cached onionoo data as fallback")
+            log_progress("using cached onionoo data as fallback")
             return cached_data
         else:
-            log_progress("No cached data available, cannot continue")
+            log_progress("no cached data available, cannot continue")
             return None
 
 
@@ -302,7 +302,7 @@ def fetch_onionoo_uptime(onionoo_url="https://onionoo.torproject.org/uptime", pr
         else:
             conn = urllib.request.Request(onionoo_url)
 
-        log_progress("Fetching uptime data from Onionoo API...")
+        log_progress("fetching uptime data from onionoo API...")
 
         try:
             # Add timeout to prevent hanging in CI environments
@@ -310,14 +310,14 @@ def fetch_onionoo_uptime(onionoo_url="https://onionoo.torproject.org/uptime", pr
         except urllib.error.HTTPError as err:
             if err.code == 304:
                 # No update since last run - use cached data
-                log_progress("No onionoo uptime update since last run, using cached data...")
+                log_progress("no onionoo uptime update since last run, using cached data...")
                 cached_data = _load_cache(api_name)
                 if cached_data:
                     _mark_ready(api_name)
                     return cached_data
                 else:
                     # No cache available, this is a problem
-                    log_progress("No onionoo uptime update since last run and no cache, skipping uptime data...")
+                    log_progress("no onionoo uptime update since last run and no cache, skipping uptime data...")
                     # Mark as stale but don't exit - uptime is not critical
                     _mark_stale(api_name, "No cached uptime data available")
                     return None
@@ -325,25 +325,19 @@ def fetch_onionoo_uptime(onionoo_url="https://onionoo.torproject.org/uptime", pr
                 log_progress(f"HTTP error fetching onionoo uptime data: {err.code}")
                 raise err
         except urllib.error.URLError as err:
-            log_progress(f"Network error fetching onionoo uptime data: {err}")
-            log_progress("Check your internet connection and try again")
-            log_progress("In CI environments, this might be a temporary network issue")
+            log_progress(f"network error fetching onionoo uptime data: {err}")
+            log_progress("check your internet connection and try again")
+            log_progress("in CI environments, this might be a temporary network issue")
             raise err
 
-        log_progress("Parsing uptime JSON response...")
+        log_progress("parsing uptime JSON response...")
 
         # Parse JSON response
         data = json.loads(api_response.decode("utf-8"))
         
-        # Progress update at 1/4 completion (after parsing)
-        log_progress("Uptime data parsing complete (1/4 done)")
-        
         # Cache the data
-        log_progress("Caching uptime data...")
+        log_progress("caching uptime data...")
         _save_cache(api_name, data)
-        
-        # Progress update at 1/2 completion (after caching)
-        log_progress("Uptime data caching complete (1/2 done)")
         
         # Write timestamp for future conditional requests
         timestamp_str = time.strftime(
@@ -351,29 +345,26 @@ def fetch_onionoo_uptime(onionoo_url="https://onionoo.torproject.org/uptime", pr
         )
         _write_timestamp(api_name, timestamp_str)
         
-        # Progress update at 3/4 completion (after timestamp)
-        log_progress("Uptime timestamp written (3/4 done)")
-        
         # Mark as ready
         _mark_ready(api_name)
         
         # Use consistent progress format for success message
         relay_count = len(data.get('relays', []))
-        log_progress(f"Successfully fetched uptime data for {relay_count} relays (uptime API)")
+        log_progress(f"successfully fetched uptime data for {relay_count} relays from onionoo uptime API")
         return data
         
     except Exception as e:
         error_msg = f"Failed to fetch onionoo uptime: {str(e)}"
-        log_progress(f"Error: {error_msg}")
+        log_progress(f"error: {error_msg}")
         _mark_stale(api_name, error_msg)
         
         # Try to return cached data as fallback
         cached_data = _load_cache(api_name)
         if cached_data:
-            log_progress("Using cached onionoo uptime data as fallback")
+            log_progress("using cached onionoo uptime data as fallback")
             return cached_data
         else:
-            log_progress("No cached uptime data available, continuing without uptime data")
+            log_progress("no cached uptime data available, continuing without uptime data")
             return None
 
 

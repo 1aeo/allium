@@ -32,7 +32,9 @@ cd www && python3 -m http.server 8000
 
 ### AROI Leaderboard System 🏆
 - **12 specialized leaderboards** for authenticated relay operators
-- **Reliability scoring system** with 6-month and 5-year weighted uptime analysis
+- **Reliability scoring system** with 6-month and 5-year average uptime analysis
+- **Simplified reliability scoring** using average uptime (no bandwidth weighting)
+- **25+ relay eligibility filter** ensuring statistical significance for reliability categories
 - **Operator achievement tracking** across multiple dimensions
 - **Geographic diversity scoring** with frontier country recognition
 - **Platform diversity metrics** highlighting technical leadership
@@ -127,7 +129,7 @@ allium integrates with multiple Tor Project APIs:
 ### Main Analytics
 - **Index page** - Top 500 relays by consensus weight
 - **Complete relay listing** - All active relays with filtering
-- **AROI leaderboards** - 10 specialized operator categories
+- **AROI leaderboards** - 12 specialized operator categories
 - **Geographic analysis** - Rare country intelligence
 
 ### Categorized Views
@@ -156,8 +158,8 @@ Twelve specialized categories tracking authenticated operator achievements:
 8. **Non-EU Leaders** - Geographic champions expanding Tor outside EU
 9. **Frontier Builders** - Operators in rare/underrepresented countries
 10. **Network Veterans** - Longest-serving operators
-11. **Reliability Masters** - 6-month weighted uptime champions
-12. **Legacy Titans** - 5-year weighted uptime champions
+11. **Reliability Masters** - 6-month average uptime champions (25+ relays)
+12. **Legacy Titans** - 5-year average uptime champions (25+ relays)
 
 ## 🔒 Security & Performance
 

@@ -193,57 +193,58 @@ This ensures accurate representation - operators are ranked by their **actual co
 
 ## ⏰ Reliability Scoring System
 
-The **Reliability Masters** and **Legacy Titans** categories recognize operators with exceptional uptime performance using weighted reliability calculations based on bandwidth contribution.
+The **Reliability Masters** and **Legacy Titans** categories recognize operators with exceptional uptime performance using simplified average uptime calculations. Only operators with more than 25 relays are eligible for these categories to ensure statistical significance.
 
 ### **Reliability Categories**
 
 #### **🔥 Reliability Masters (6-Month Uptime)**
 - **Purpose**: Recognizes operators with outstanding short-term reliability
-- **Timeframe**: 6-month weighted uptime analysis
+- **Timeframe**: 6-month average uptime analysis
+- **Eligibility**: Only operators with >25 relays
 - **Data Source**: Onionoo Uptime API (`1_month` field aggregated over 6 months)
 
 #### **💎 Legacy Titans (5-Year Uptime)**
 - **Purpose**: Honors operators with exceptional long-term stability
-- **Timeframe**: 5-year weighted uptime analysis
+- **Timeframe**: 5-year average uptime analysis  
+- **Eligibility**: Only operators with >25 relays
 - **Data Source**: Onionoo Uptime API (`1_year` field aggregated over 5 years)
 
-### **Weighted Scoring Algorithm**
+### **Simplified Scoring Algorithm**
 
-Both categories use a **bandwidth-weighted reliability calculation** implemented in `allium/lib/uptime_utils.py`:
+Both categories use a **simple average uptime calculation** with no bandwidth weighting:
 
 ```python
-# Reliability score calculation
-reliability_score = average_uptime_percentage * bandwidth_weight_multiplier
+# Reliability score calculation (simplified)
+reliability_score = sum(relay_uptime_percentages) / number_of_relays
 
-# Bandwidth weight multipliers based on relay count:
-# 1-50 relays:    1.0x multiplier
-# 51-100 relays:  1.1x multiplier  
-# 101-200 relays: 1.2x multiplier
-# 200+ relays:    1.3x multiplier
+# No bandwidth weighting applied - all relays count equally
+# Eligibility filter: only operators with > 25 relays included
 ```
 
 ### **Scoring Examples**
 
-#### **Small Operator (High Reliability)**
-- **Relays**: 5 relays
-- **6-month uptime**: 99.8%
-- **Bandwidth weight**: 1.0x
-- **Final score**: 99.8%
+#### **Medium Operator (Eligible)**
+- **Relays**: 30 relays (eligible: >25 relays)
+- **6-month uptime**: 96.8% average across all relays
+- **Final score**: 96.8% (no weighting applied)
 
-#### **Large Operator (Good Reliability)**
-- **Relays**: 250 relays
-- **6-month uptime**: 95.2%
-- **Bandwidth weight**: 1.3x
-- **Final score**: 95.2% × 1.3 = 123.76%
+#### **Large Operator (Eligible)**
+- **Relays**: 150 relays (eligible: >25 relays)
+- **6-month uptime**: 95.2% average across all relays
+- **Final score**: 95.2% (no weighting applied)
 
-This system ensures that both small operators with excellent reliability and large operators with good reliability can compete fairly, while recognizing the operational complexity of maintaining many relays.
+#### **Small Operator (Ineligible)**
+- **Relays**: 10 relays (ineligible: ≤25 relays)
+- **Status**: Not included in reliability rankings
+
+This simplified system focuses purely on operational consistency and reliability performance, while ensuring statistical significance through the 25+ relay eligibility requirement.
 
 ### **Display Format**
 
-Reliability scores are displayed as percentages with operator relay counts:
+Reliability scores are displayed as average percentages with operator relay counts:
 
-- **tor-operator@example.com**: `99.8% (5 relays)`
-- **large-network@example.org**: `123.8% (250 relays)`
+- **operator@example.com**: `96.8% avg (30 relays)`
+- **large-network@example.org**: `95.2% avg (150 relays)`
 
 ## 🏆 Network Veterans Scoring System
 
