@@ -485,46 +485,53 @@
                 }
 
                 /* AROI Pagination Styles using :target selector */
+                /* Hide all pagination sections by default */
                 .pagination-section {
                     display: none;
                 }
                 
+                /* Show first section by default (when no hash in URL) */
+                .pagination-section:first-child {
+                    display: block;
+                }
+                
+                /* Show the targeted section */
                 .pagination-section:target {
                     display: block;
                 }
                 
-                .pagination-section:first-of-type {
-                    display: block; /* Show first section by default */
+                /* When any section is targeted, hide all other sections including first */
+                .pagination-section:target ~ .pagination-section {
+                    display: none;
                 }
                 
-                .pagination-nav {
-                    margin: 15px 0;
-                    text-align: center;
-                    border: 1px solid #ddd;
-                    border-radius: 5px;
-                    padding: 10px;
-                    background-color: #f9f9f9;
+                /* Use a different approach: specific section visibility control */
+                /* Default state - show only first section */
+                #bandwidth section:not(:first-child) .pagination-section {
+                    display: none;
                 }
                 
-                .pagination-nav a {
-                    display: inline-block;
-                    padding: 8px 15px;
-                    margin: 0 5px;
-                    border: 1px solid #337ab7;
-                    border-radius: 3px;
-                    color: #337ab7;
-                    text-decoration: none;
-                    background-color: white;
-                }
+                /* When no target, show first */
+                #bandwidth-1-5 { display: block; }
+                #bandwidth-6-10,
+                #bandwidth-11-15, 
+                #bandwidth-16-20,
+                #bandwidth-21-25 { display: none; }
                 
-                .pagination-nav a:hover {
-                    background-color: #337ab7;
-                    color: white;
-                }
+                /* When targeted, show only that section */
+                #bandwidth-1-5:target { display: block; }
+                #bandwidth-6-10:target { display: block; }
+                #bandwidth-11-15:target { display: block; }
+                #bandwidth-16-20:target { display: block; }
+                #bandwidth-21-25:target { display: block; }
                 
-                .pagination-nav a.active {
-                    background-color: #337ab7;
-                    color: white;
+                /* Override: when any section is targeted, hide all others */
+                #bandwidth:target #bandwidth-1-5:not(:target),
+                #bandwidth:target #bandwidth-6-10:not(:target),
+                #bandwidth:target #bandwidth-11-15:not(:target),
+                #bandwidth:target #bandwidth-16-20:not(:target),
+                #bandwidth:target #bandwidth-21-25:not(:target) {
+                    display: none !important;
                 }
 
                 /* Improved pagination positioning and table spacing */
