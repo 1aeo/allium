@@ -1,0 +1,132 @@
+{% extends "relay-list.html" %}
+{% from "macros.html" import navigation, detail_summary %}
+{% set contact_hash = relays.json['relay_subset'][0]['contact_md5'] %}
+{% if relays.json['relay_subset'][0]['contact'] %}
+    {% set contact = relays.json['relay_subset'][0]['contact']|escape %}
+{% else %}
+    {% set contact = 'none' %}
+{% endif %}
+{% block title %}Tor Relays :: Contact {{ contact_hash }}{% endblock %}
+{% block header %}
+    {% if relays.json['relay_subset'][0]['aroi_domain'] and relays.json['relay_subset'][0]['aroi_domain'] != 'none' -%}
+        View Contact {{ relays.json['relay_subset'][0]['aroi_domain']|escape }} Details
+    {% elif contact != 'none' -%}
+        View Contact {{ contact }} Details
+    {% else -%}
+        View Contact {{ contact_hash }} Details
+    {% endif -%}
+{% endblock %}
+{% block navigation -%}
+{% set aroi_domain = relays.json['relay_subset'][0]['aroi_domain'] if relays.json['relay_subset'][0]['aroi_domain'] else 'none' %}
+{{ navigation('contacts', page_ctx) }}
+{% endblock -%}
+{% block description %}Contact {{ contact_hash }} summary:
+{{ detail_summary(bandwidth, bandwidth_unit, guard_bandwidth, middle_bandwidth, exit_bandwidth, consensus_weight_fraction, guard_consensus_weight_fraction, middle_consensus_weight_fraction, exit_consensus_weight_fraction, guard_count, middle_count, exit_count, relays.json['relay_subset']|length, network_position) }}
+
+{# AROI Leaderboard Rankings - Show rankings for top 25 operators in any category #}
+{% if contact_rankings %}
+<div class="aroi-rankings-section" style="margin-top: 15px; padding: 10px; background-color: #f0f8ff; border-left: 4px solid #007bff;">
+    <h4 style="margin: 0 0 8px 0; color: #495057; font-size: 16px;">🏆 AROI Champion Rankings</h4>
+    
+    <p style="margin-bottom: 8px; color: #666; font-size: 13px;">Winning the following <a href="{{ page_ctx.path_prefix }}misc/aroi-leaderboards.html" title="View complete AROI Champions Dashboard" style="color: #007bff; text-decoration: none; font-weight: bold;">AROI Champions Dashboard</a> categories:</p>
+    
+    <ul style="list-style-type: none; padding-left: 0; margin-bottom: 0;">
+        {% for ranking in contact_rankings %}
+        <li style="margin-bottom: 4px; padding: 4px 8px; background-color: #ffffff; border-radius: 3px; border: 1px solid #dee2e6; font-size: 14px;">
+            <a href="{{ page_ctx.path_prefix }}misc/{{ ranking.link }}" title="View {{ ranking.category_name }} leaderboard rankings" style="color: #007bff; text-decoration: none; font-weight: bold;">
+                {{ ranking.emoji }} {{ ranking.statement }}
+            </a>
+            <small style="color: #666; margin-left: 6px; font-size: 12px;">— {{ ranking.title }}</small>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+{# Contact Intelligence Phase 1 + Phase 2 - using pre-calculated data from intelligence engine #}
+{% if relays.json.smart_context and relays.json.smart_context.contact_intelligence and relays.json.smart_context.contact_intelligence.template_optimized.get(contact_hash) %}
+{% set contact_intel = relays.json.smart_context.contact_intelligence.template_optimized[contact_hash] %}
+<div class="intelligence-section" style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-left: 4px solid #007bff;">
+    <h4 style="margin-top: 0; color: #495057;">Operator Intelligence</h4>
+    
+    <ul style="list-style-type: disc; padding-left: 20px; margin-bottom: 0;">
+        <li><strong><span title="Network diversity measures infrastructure distribution across different autonomous systems (AS). Ratings: 1 network = Poor (single point of failure), 2-3 networks = Okay (limited redundancy), 4+ networks = Great (excellent resilience). Higher diversity reduces single points of failure and improves network resilience.">Network Diversity</span>:</strong> {% if 'Poor' in contact_intel.portfolio_diversity %}<span style="color: #c82333; font-weight: bold;">Poor</span>, {{ contact_intel.portfolio_diversity.split(', ', 1)[1] }}{% elif 'Okay' in contact_intel.portfolio_diversity %}<span style="color: #cc9900; font-weight: bold;">Okay</span>, {{ contact_intel.portfolio_diversity.split(', ', 1)[1] }}{% else %}<span style="color: #2e7d2e; font-weight: bold;">Great</span>, {{ contact_intel.portfolio_diversity.split(', ', 1)[1] }}{% endif %}</li>
+        
+        <li><strong><span title="Geographic diversity assesses legal and censorship risk based on country distribution. Ratings: 1 country = Poor (high legal/censorship risk), 2-3 countries = Okay (limited jurisdictional diversity), 4+ countries = Great (excellent jurisdictional protection). Diversification across countries protects against coordinated legal action and censorship.">Geographic Diversity</span>:</strong> {% if 'Poor' in contact_intel.geographic_risk %}<span style="color: #c82333; font-weight: bold;">Poor</span>, {{ contact_intel.geographic_risk.split(', ', 1)[1] }}{% elif 'Okay' in contact_intel.geographic_risk %}<span style="color: #cc9900; font-weight: bold;">Okay</span>, {{ contact_intel.geographic_risk.split(', ', 1)[1] }}{% else %}<span style="color: #2e7d2e; font-weight: bold;">Great</span>, {{ contact_intel.geographic_risk.split(', ', 1)[1] }}{% endif %}</li>
+        
+        <li><strong><span title="Infrastructure diversity analyzes platform and version distribution. Ratings: Same platform/version = Poor (high synchronization risk), Limited diversity = Okay (moderate risk), Multiple platforms/versions = Great (excellent security through diversity).">Infrastructure Diversity</span>:</strong> {% if 'Poor' in contact_intel.infrastructure_risk %}<span style="color: #c82333; font-weight: bold;">Poor</span>, {{ contact_intel.infrastructure_risk.split(', ', 1)[1] }}{% elif 'Okay' in contact_intel.infrastructure_risk %}<span style="color: #cc9900; font-weight: bold;">Okay</span>, {{ contact_intel.infrastructure_risk.split(', ', 1)[1] }}{% else %}<span style="color: #2e7d2e; font-weight: bold;">Great</span>, {{ contact_intel.infrastructure_risk.split(', ', 1)[1] }}{% endif %}</li>
+        
+        <li><strong><span title="Bandwidth measurements show how many relays are measured by directory authorities for consensus weight calculation. Measured relays contribute more effectively to the network.">Bandwidth Measurements</span>:</strong> {{ contact_intel.measurement_status }}</li>
+        
+        <li><strong><span title="Performance insights identify underutilized relays with high bandwidth (>10MB/s) but low consensus weight (<0.05% of bandwidth). These relays may need configuration optimization or better connectivity.">Performance Insights</span>:</strong> {{ contact_intel.performance_underutilized }} underutilized relays - {{ contact_intel.performance_status }}{% if contact_intel.performance_underutilized_fps %} ({% for fp in contact_intel.performance_underutilized_fps %}{{ fp[:8] }}{% if not loop.last %}, {% endif %}{% endfor %}){% endif %}</li>
+        
+        <li><strong><span title="Operational maturity tracks deployment timeline and expansion patterns. Shows operator experience and growth strategy over time.">Operational Maturity</span>:</strong> {{ contact_intel.maturity }}</li>
+    </ul>
+</div>
+{% endif %}
+
+{# Operator Reliability Section - Show uptime statistics for contact pages #}
+{% if operator_reliability and operator_reliability.valid_relays > 0 %}
+<div class="reliability-section" style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-left: 4px solid #28a745;">
+    <h4 style="margin-top: 0; color: #495057;">⏰ Network Reliability</h4>
+    
+    {# Overall uptime across time periods #}
+    <div style="margin-bottom: 15px;">
+        <strong>Overall Uptime (unweighted average):</strong>
+        <div style="margin-top: 8px;">
+            {% for period, data in operator_reliability.overall_uptime.items() %}
+                <span style="display: inline-block; margin-right: 15px; padding: 4px 8px; background-color: #e9ecef; border-radius: 3px; font-size: 13px;">
+                    <strong>{{ data.display_name }}:</strong> {{ "%.1f"|format(data.average) }}%
+                    <small style="color: #666;">({{ data.relay_count }} relays)</small>
+                </span>
+            {% endfor %}
+        </div>
+    </div>
+    
+    {# Statistical outliers section #}
+    {% set total_outliers = operator_reliability.outliers.low_outliers|length + operator_reliability.outliers.high_outliers|length %}
+    {% if total_outliers > 0 %}
+    <div style="margin-bottom: 10px;">
+        <strong>Statistical Outliers (2+ std dev from average):</strong>
+        <span style="color: #dc3545; font-weight: bold;">{{ total_outliers }} relay{{ 's' if total_outliers != 1 else '' }}</span>
+        
+        {# Low outliers (problematic relays) #}
+        {% if operator_reliability.outliers.low_outliers %}
+        <div style="margin-top: 8px;">
+            <span style="color: #dc3545; font-weight: bold;">⚠️ Low Uptime:</span>
+            {% set low_names = [] %}
+            {% for outlier in operator_reliability.outliers.low_outliers %}
+                {% set _ = low_names.append(outlier.nickname + " (" + "%.1f"|format(outlier.uptime) + "%)") %}
+            {% endfor %}
+            <span title="{{ low_names|join(', ') }}" style="cursor: help; text-decoration: underline;">
+                {{ low_names|length }} relay{{ 's' if low_names|length != 1 else '' }}
+            </span>
+        </div>
+        {% endif %}
+        
+        {# High outliers (exceptionally reliable relays) #}
+        {% if operator_reliability.outliers.high_outliers %}
+        <div style="margin-top: 8px;">
+            <span style="color: #28a745; font-weight: bold;">🏆 Exceptional Uptime:</span>
+            {% set high_names = [] %}
+            {% for outlier in operator_reliability.outliers.high_outliers %}
+                {% set _ = high_names.append(outlier.nickname + " (" + "%.1f"|format(outlier.uptime) + "%)") %}
+            {% endfor %}
+            <span title="{{ high_names|join(', ') }}" style="cursor: help; text-decoration: underline;">
+                {{ high_names|length }} relay{{ 's' if high_names|length != 1 else '' }}
+            </span>
+        </div>
+        {% endif %}
+    </div>
+    {% else %}
+    <div style="margin-bottom: 10px;">
+        <span style="color: #28a745;">✅ No statistical outliers detected - consistent performance across all relays</span>
+    </div>
+    {% endif %}
+    
+    <div style="font-size: 12px; color: #666; margin-top: 10px;">
+        Reliability data available for {{ operator_reliability.valid_relays }}/{{ operator_reliability.total_relays }} relays
+    </div>
+</div>
+{% endif %}
+{% endblock %}
