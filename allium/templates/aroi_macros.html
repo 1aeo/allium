@@ -456,4 +456,60 @@
     <th title="Number of guard and exit relays providing entry/exit services">Guard/Exit Count</th>
     <th title="Geographic distribution of relay operations across countries">Countries</th>
     <th title="Operating system diversity across relay infrastructure">Platforms</th>
+{% endmacro %}
+
+{# Complete Bandwidth Table Macro - Includes both headers and body to eliminate all duplication #}
+{% macro bandwidth_table_complete(bandwidth_data, use_bits, page_ctx) %}
+    <div class="table-responsive">
+        <table class="table table-striped table-condensed aroi-rankings-table aroi-standard-table">
+            <thead>
+                <tr>
+                    {{ bandwidth_table_headers(use_bits) }}
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in bandwidth_data %}
+                <tr>
+                    <td>{{ rank_badge(entry.rank) }}</td>
+                    <td>{{ operator_link(entry, page_ctx) }}</td>
+                    <td>
+                        <span title="Total: {{ entry.total_relays }} | Measured: {{ entry.measured_count }}">
+                            {{ entry.total_relays }}
+                            {% if entry.measured_count > 0 %}
+                                <small class="text-muted">({{ entry.measured_count }} measured)</small>
+                            {% endif %}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="text-nowrap"><strong title="Observed bandwidth capacity in {% if use_bits %}{{ entry.bandwidth_unit }} (bits per second){% else %}{{ entry.bandwidth_unit }} (bytes per second){% endif %}">{{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</strong></span>
+                    </td>
+                    <td>
+                        <span class="text-nowrap" title="Percentage of total network authority for routing decisions">{{ entry.total_consensus_weight_pct }}</span>
+                    </td>
+                    <td>
+                        <span title="Guard: {{ entry.guard_count }} | Exit: {{ entry.exit_count }} | Middle: {{ entry.middle_count }}">
+                            🛡️{{ entry.guard_count }} / 🚪{{ entry.exit_count }}
+                        </span>
+                    </td>
+                    <td>
+                        <span title="Countries: {{ entry.countries|join(', ') }}">
+                            {{ entry.country_count }}
+                            {% if entry.countries|length > 0 %}
+                                <small class="text-muted">({{ entry.countries[:2]|join(', ') }}{% if entry.countries|length > 2 %}...{% endif %})</small>
+                            {% endif %}
+                        </span>
+                    </td>
+                    <td>
+                        <span title="Platforms: {{ entry.platforms|join(', ') }}">
+                            {{ entry.platform_count }}
+                            {% if entry.non_linux_count > 0 %}
+                                <small class="text-success" title="Relays promoting OS diversity beyond Linux dominance">({{ entry.non_linux_count }} non-Linux)</small>
+                            {% endif %}
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 {% endmacro %} 
