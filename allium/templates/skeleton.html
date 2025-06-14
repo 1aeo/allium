@@ -547,10 +547,8 @@
                 }
 
                 
-                /* Simpler approach: use :not(:target) to hide non-targeted sections when any section is targeted */
-                body:has(.pagination-section:target) .pagination-section:not(:target) {
-                    display: none !important;
-                }
+                /* Category-specific pagination behavior - each category manages its own pagination independently */
+                /* When pages 11-20 or 21-25 are targeted within a category, hide other pages of that same category only */
 
                 /* Improved pagination positioning and table spacing */
                 .pagination-section:target {
