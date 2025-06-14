@@ -1552,4 +1552,176 @@ class Relays:
         
         display_data['outliers'] = outliers_data
         
+        # 6. Real-time downtime alerts (idea #8 from uptime integration proposals)
+        downtime_alerts = self._calculate_operator_downtime_alerts(v, members, i, bandwidth_unit)
+        display_data['downtime_alerts'] = downtime_alerts
+        
         return display_data
+
+    def _calculate_operator_downtime_alerts(self, contact_hash, operator_relays, contact_data, bandwidth_unit):
+        """
+        Calculate real-time downtime alerts for operator contact pages.
+        
+        Shows offline relays by type with traffic percentages and impact calculations.
+        Implements idea #8 from uptime integration proposals.
+        
+        Args:
+            contact_hash (str): Contact hash for the operator  
+            operator_relays (list): List of relay objects for this operator
+            contact_data (dict): Pre-computed contact statistics (guard_count, bandwidth, etc.)
+            bandwidth_unit (str): Bandwidth unit for display (MB/s, GB/s, etc.)
+            
+        Returns:
+            dict: Downtime alert data with offline counts, impact metrics, and tooltips
+        """
+        if not operator_relays:
+            return None
+        
+        downtime_alerts = {
+            'offline_counts': {
+                'guard': 0,
+                'middle': 0, 
+                'exit': 0
+            },
+            'offline_bandwidth_impact': {
+                'total_offline_bandwidth': 0,  # bytes
+                'total_offline_bandwidth_formatted': '0.00',  # formatted with unit
+                'offline_bandwidth_percentage': 0.0,  # percentage of operator's total bandwidth
+                'total_operator_bandwidth_formatted': '0.00'  # formatted operator total
+            },
+            'offline_consensus_weight_impact': {
+                'total_offline_cw_fraction': 0.0,  # fraction of network consensus weight
+                'offline_cw_percentage_of_operator': 0.0,  # percentage of operator's total CW  
+                'total_operator_cw_percentage': 0.0  # operator's total network influence
+            },
+            'offline_relay_details': {
+                'guard_relays': [],  # List of offline guard relays with last_seen
+                'middle_relays': [],  # List of offline middle relays with last_seen  
+                'exit_relays': []   # List of offline exit relays with last_seen
+            },
+            'has_offline_relays': False
+        }
+        
+        # Calculate network totals for percentage calculations (validation method 1)
+        if not hasattr(self, 'json') or not self.json.get('network_totals'):
+            return downtime_alerts
+            
+        network_totals = self.json['network_totals']
+        total_network_guard_cw = network_totals.get('guard_consensus_weight', 0)
+        total_network_middle_cw = network_totals.get('middle_consensus_weight', 0) 
+        total_network_exit_cw = network_totals.get('exit_consensus_weight', 0)
+        total_network_cw = total_network_guard_cw + total_network_middle_cw + total_network_exit_cw
+        
+        # Calculate operator totals for impact percentage calculations (validation method 2)
+        operator_total_bandwidth = contact_data.get('bandwidth', 0)  # bytes
+        operator_total_cw_fraction = contact_data.get('consensus_weight_fraction', 0.0)
+        
+        # Track offline totals for impact calculations
+        total_offline_bandwidth = 0
+        total_offline_cw_fraction = 0.0
+        
+        # Process each relay to check if offline and categorize by flags
+        for relay in operator_relays:
+            # Check if relay is offline (not running)
+            if not relay.get('running', False):
+                downtime_alerts['has_offline_relays'] = True
+                
+                # Get relay basic info
+                nickname = relay.get('nickname', 'Unknown')
+                fingerprint = relay.get('fingerprint', '')
+                last_seen = relay.get('last_seen', 'Unknown')
+                observed_bandwidth = relay.get('observed_bandwidth', 0)
+                consensus_weight = relay.get('consensus_weight', 0)
+                flags = relay.get('flags', [])
+                
+                # Format last seen time using existing utility
+                if last_seen and last_seen != 'Unknown':
+                    last_seen_formatted = self._format_time_ago(last_seen)
+                else:
+                    last_seen_formatted = 'Unknown'
+                
+                # Add to total offline impact calculations
+                total_offline_bandwidth += observed_bandwidth
+                
+                # Convert consensus weight to fraction for network percentage calculation
+                if total_network_cw > 0:
+                    relay_cw_fraction = consensus_weight / total_network_cw
+                    total_offline_cw_fraction += relay_cw_fraction
+                
+                # Create relay info for tooltips
+                relay_info = {
+                    'nickname': nickname,
+                    'fingerprint': fingerprint[:8],  # Short fingerprint for display
+                    'last_seen': last_seen_formatted,
+                    'bandwidth': observed_bandwidth,
+                    'consensus_weight': consensus_weight,
+                    'display_text': f"{nickname} ({last_seen_formatted})"
+                }
+                
+                # Categorize by relay type based on flags
+                if 'Guard' in flags:
+                    downtime_alerts['offline_counts']['guard'] += 1
+                    downtime_alerts['offline_relay_details']['guard_relays'].append(relay_info)
+                    
+                if 'Exit' in flags:
+                    downtime_alerts['offline_counts']['exit'] += 1  
+                    downtime_alerts['offline_relay_details']['exit_relays'].append(relay_info)
+                    
+                # Middle relays are all relays that aren't Guard or Exit only, or relays that are both
+                # This matches the logic used elsewhere in the codebase for middle relay classification
+                if not flags or ('Guard' not in flags and 'Exit' not in flags) or ('Guard' in flags and 'Exit' in flags):
+                    downtime_alerts['offline_counts']['middle'] += 1
+                    downtime_alerts['offline_relay_details']['middle_relays'].append(relay_info)
+        
+        # Calculate bandwidth impact metrics
+        if operator_total_bandwidth > 0:
+            offline_bandwidth_percentage = (total_offline_bandwidth / operator_total_bandwidth) * 100
+        else:
+            offline_bandwidth_percentage = 0.0
+            
+        downtime_alerts['offline_bandwidth_impact'] = {
+            'total_offline_bandwidth': total_offline_bandwidth,
+            'total_offline_bandwidth_formatted': self._format_bandwidth_with_unit(total_offline_bandwidth, bandwidth_unit),
+            'offline_bandwidth_percentage': offline_bandwidth_percentage,
+            'total_operator_bandwidth_formatted': self._format_bandwidth_with_unit(operator_total_bandwidth, bandwidth_unit)
+        }
+        
+        # Calculate consensus weight impact metrics  
+        if operator_total_cw_fraction > 0:
+            offline_cw_percentage_of_operator = (total_offline_cw_fraction / operator_total_cw_fraction) * 100
+        else:
+            offline_cw_percentage_of_operator = 0.0
+            
+        downtime_alerts['offline_consensus_weight_impact'] = {
+            'total_offline_cw_fraction': total_offline_cw_fraction,
+            'total_offline_cw_percentage': total_offline_cw_fraction * 100,  # Network percentage
+            'offline_cw_percentage_of_operator': offline_cw_percentage_of_operator,
+            'total_operator_cw_percentage': operator_total_cw_fraction * 100
+        }
+        
+        # Calculate traffic percentages for each relay type (validation against operator totals)
+        # This provides the "X% of observed traffic" metrics requested
+        guard_traffic_percentage = 0.0
+        middle_traffic_percentage = 0.0
+        exit_traffic_percentage = 0.0
+        
+        if contact_data.get('guard_bandwidth', 0) > 0:
+            guard_offline_bandwidth = sum(r['bandwidth'] for r in downtime_alerts['offline_relay_details']['guard_relays'])
+            guard_traffic_percentage = (guard_offline_bandwidth / contact_data['guard_bandwidth']) * 100
+            
+        if contact_data.get('middle_bandwidth', 0) > 0:
+            middle_offline_bandwidth = sum(r['bandwidth'] for r in downtime_alerts['offline_relay_details']['middle_relays'])
+            middle_traffic_percentage = (middle_offline_bandwidth / contact_data['middle_bandwidth']) * 100
+            
+        if contact_data.get('exit_bandwidth', 0) > 0:
+            exit_offline_bandwidth = sum(r['bandwidth'] for r in downtime_alerts['offline_relay_details']['exit_relays'])
+            exit_traffic_percentage = (exit_offline_bandwidth / contact_data['exit_bandwidth']) * 100
+        
+        # Add traffic percentages to offline counts for display
+        downtime_alerts['traffic_percentages'] = {
+            'guard': guard_traffic_percentage,
+            'middle': middle_traffic_percentage,
+            'exit': exit_traffic_percentage
+        }
+        
+        return downtime_alerts
