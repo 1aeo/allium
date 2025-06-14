@@ -52,10 +52,59 @@
                 </ul>
             </div>
             
-            {# Network Summary - Reusing existing detail_summary macro #}
+            {# Network Summary - Enhanced with conditional display #}
             <div>
                 <strong>Network Summary:</strong>
-                {{ detail_summary(bandwidth, bandwidth_unit, guard_bandwidth, middle_bandwidth, exit_bandwidth, consensus_weight_fraction, guard_consensus_weight_fraction, middle_consensus_weight_fraction, exit_consensus_weight_fraction, guard_count, middle_count, exit_count, relays.json['relay_subset']|length, network_position) }}
+                <ul style="list-style-type: disc; padding-left: 20px; margin-bottom: 15px;">
+                    <li><strong><span title="Observed bandwidth represents the estimated capacity this group can handle, combining total, guard, middle, and exit bandwidth contributions">Bandwidth</span>:</strong> ~{{ bandwidth }} {{ bandwidth_unit }}
+                        {# Only show non-zero bandwidth components #}
+                        {% set bw_components = [] %}
+                        {% if guard_count > 0 and guard_bandwidth != '0.00' %}
+                            {% set _ = bw_components.append(guard_bandwidth + ' ' + bandwidth_unit + ' guard') %}
+                        {% endif %}
+                        {% if middle_count > 0 and middle_bandwidth != '0.00' %}
+                            {% set _ = bw_components.append(middle_bandwidth + ' ' + bandwidth_unit + ' middle') %}
+                        {% endif %}
+                        {% if exit_count > 0 and exit_bandwidth != '0.00' %}
+                            {% set _ = bw_components.append(exit_bandwidth + ' ' + bandwidth_unit + ' exit') %}
+                        {% endif %}
+                        {% if bw_components %}
+                            (<span title="Bandwidth breakdown by relay type">{{ bw_components|join(', ') }}</span>)
+                        {% endif %}
+                    </li>
+                    
+                    <li><strong><span title="Network influence represents the percentage of overall consensus weight, indicating relative importance in the Tor network across guard, middle, and exit positions">Network Influence</span>:</strong> {{ "%.2f%%"|format(consensus_weight_fraction * 100) }} of overall consensus weight
+                        {# Only show non-zero consensus components #}
+                        {% set cw_components = [] %}
+                        {% if guard_count > 0 and guard_consensus_weight_fraction > 0 %}
+                            {% set _ = cw_components.append("%.2f%% guard"|format(guard_consensus_weight_fraction * 100)) %}
+                        {% endif %}
+                        {% if middle_count > 0 and middle_consensus_weight_fraction > 0 %}
+                            {% set _ = cw_components.append("%.2f%% middle"|format(middle_consensus_weight_fraction * 100)) %}
+                        {% endif %}
+                        {% if exit_count > 0 and exit_consensus_weight_fraction > 0 %}
+                            {% set _ = cw_components.append("%.2f%% exit"|format(exit_consensus_weight_fraction * 100)) %}
+                        {% endif %}
+                        {% if cw_components %}
+                            (<span title="Consensus weight breakdown by position">{{ cw_components|join(', ') }}</span>)
+                        {% endif %}
+                    </li>
+                    
+                    <li><strong><span title="Network position indicates the strategic role distribution of relays. Labels: Guard-focused (>60% guard), Exit-focused (>40% exit), Multi-role (both guard and exit >20%), Balanced (mixed roles), Guard-only (100% guard), Exit-only (100% exit), Middle-only (100% middle)">Network Position</span>:</strong> {{ network_position.formatted_string }}
+                        {# Only show non-zero relay counts #}
+                        {% set position_components = [] %}
+                        {% if guard_count > 0 %}
+                            {% set _ = position_components.append(guard_count|string + ' guard' + ('s' if guard_count != 1 else '')) %}
+                        {% endif %}
+                        {% if middle_count > 0 %}
+                            {% set _ = position_components.append(middle_count|string + ' middle') %}
+                        {% endif %}
+                        {% if exit_count > 0 %}
+                            {% set _ = position_components.append(exit_count|string + ' exit' + ('s' if exit_count != 1 else '')) %}
+                        {% endif %}
+                        ({{ relays.json['relay_subset']|length }} total relay{{ 's' if relays.json['relay_subset']|length != 1 else '' }}{% if position_components %}, {{ position_components|join(', ') }}{% endif %})
+                    </li>
+                </ul>
             </div>
         </div>
         
@@ -89,7 +138,7 @@
         <div class="aroi-rankings-section" style="margin-bottom: 20px; padding: 15px; background-color: #f0f8ff; border-left: 4px solid #28a745;">
             <h4 style="margin: 0 0 8px 0; color: #495057; font-size: 16px;">🏆 AROI Champion Rankings</h4>
             
-            <p style="margin-bottom: 8px; color: #666; font-size: 13px;">Winning the following <a href="{{ page_ctx.path_prefix }}misc/aroi-leaderboards.html" title="View complete AROI Champions Dashboard" style="color: #007bff; text-decoration: none; font-weight: bold;">AROI Champions Dashboard</a> categories:</p>
+            <p style="margin-bottom: 8px; color: #666; font-size: 13px;">{{ contact_rankings|length }} winning <a href="{{ page_ctx.path_prefix }}misc/aroi-leaderboards.html" title="View complete AROI Champions Dashboard" style="color: #007bff; text-decoration: none; font-weight: bold;">AROI Champions Dashboard</a> categories:</p>
             
             <ul style="list-style-type: none; padding-left: 0; margin-bottom: 0;">
                 {% for ranking in contact_rankings %}
@@ -104,53 +153,32 @@
         </div>
         {% endif %}
         
-        {# Network Reliability - Streamlined formatting #}
+        {# Network Reliability - Enhanced formatting #}
         {% if operator_reliability and operator_reliability.valid_relays > 0 %}
         <div class="reliability-section" style="padding: 15px; background-color: #f8f9fa; border-left: 4px solid #28a745;">
             <h4 style="margin-top: 0; color: #495057;">⏰ Network Reliability</h4>
             
-            {# Overall uptime - simplified format on same line #}
+            {# Overall uptime - with green highlighting for 100% #}
             <div style="margin-bottom: 15px;">
                 <strong>Overall uptime:</strong>
                 {% for period, data in operator_reliability.overall_uptime.items() %}
-                    {{ data.display_name }} {{ "%.1f"|format(data.average) }}% ({{ data.relay_count }} relays){% if not loop.last %}, {% endif %}
+                    {% if data.average == 100.0 %}
+                        <span style="color: #28a745; font-weight: bold;">{{ data.display_name }} {{ "%.1f"|format(data.average) }}%</span>
+                    {% else %}
+                        {{ data.display_name }} {{ "%.1f"|format(data.average) }}%
+                    {% endif %}
+                    ({{ data.relay_count }} relays){% if not loop.last %}, {% endif %}
                 {% endfor %}
             </div>
             
-            {# Statistical outliers section - streamlined formatting #}
+            {# Statistical outliers section - single line format #}
             {% set total_outliers = operator_reliability.outliers.low_outliers|length + operator_reliability.outliers.high_outliers|length %}
             {% if total_outliers > 0 %}
             <div style="margin-bottom: 10px;">
-                <strong><span title="≥2σ from average">Outliers</span>:</strong>
-                <span style="color: #dc3545; font-weight: bold;">{{ total_outliers }} relay{{ 's' if total_outliers != 1 else '' }}</span>
-                
-                {# Low outliers - compact format #}
-                {% if operator_reliability.outliers.low_outliers %}
-                <div style="margin-top: 8px;">
-                    <span style="color: #dc3545; font-weight: bold;">⚠️ Low:</span>
-                    {% set low_names = [] %}
-                    {% for outlier in operator_reliability.outliers.low_outliers %}
-                        {% set _ = low_names.append(outlier.nickname + " (" + "%.1f"|format(outlier.uptime) + "%)") %}
-                    {% endfor %}
-                    <span title="{{ low_names|join(', ') }}" style="cursor: help; text-decoration: underline;">
-                        {{ low_names|length }} relay{{ 's' if low_names|length != 1 else '' }}
-                    </span>
-                </div>
-                {% endif %}
-                
-                {# High outliers - compact format #}
-                {% if operator_reliability.outliers.high_outliers %}
-                <div style="margin-top: 8px;">
-                    <span style="color: #28a745; font-weight: bold;">🏆 Exceptional:</span>
-                    {% set high_names = [] %}
-                    {% for outlier in operator_reliability.outliers.high_outliers %}
-                        {% set _ = high_names.append(outlier.nickname + " (" + "%.1f"|format(outlier.uptime) + "%)") %}
-                    {% endfor %}
-                    <span title="{{ high_names|join(', ') }}" style="cursor: help; text-decoration: underline;">
-                        {{ high_names|length }} relay{{ 's' if high_names|length != 1 else '' }}
-                    </span>
-                </div>
-                {% endif %}
+                {# Get the mean from 6-month period as reference for tooltip #}
+                {% set mean_uptime = operator_reliability.overall_uptime.get('6_months', {}).get('average', 0) %}
+                <strong><span title="≥2σ from average μ {{ "%.1f"|format(mean_uptime) }}%">Outliers</span>:</strong>
+                <span style="color: #000; font-weight: normal;">{{ total_outliers }} relay{{ 's' if total_outliers != 1 else '' }}</span>{% if operator_reliability.outliers.low_outliers %}, <span style="color: #dc3545; font-weight: bold;">⚠️ Low:</span> {% set low_names = [] %}{% for outlier in operator_reliability.outliers.low_outliers %}{% set _ = low_names.append(outlier.nickname + " (" + "%.1f"|format(outlier.uptime) + "%)") %}{% endfor %}<span title="{{ low_names|join(', ') }}" style="cursor: help; text-decoration: underline;">{{ operator_reliability.outliers.low_outliers|length }} relay{{ 's' if operator_reliability.outliers.low_outliers|length != 1 else '' }}</span>{% endif %}{% if operator_reliability.outliers.high_outliers %}{% if operator_reliability.outliers.low_outliers %}, {% endif %}<span style="color: #28a745; font-weight: bold;">🏆 Exceptional:</span> {% set high_names = [] %}{% for outlier in operator_reliability.outliers.high_outliers %}{% set _ = high_names.append(outlier.nickname + " (" + "%.1f"|format(outlier.uptime) + "%)") %}{% endfor %}<span title="{{ high_names|join(', ') }}" style="cursor: help; text-decoration: underline;">{{ operator_reliability.outliers.high_outliers|length }} relay{{ 's' if operator_reliability.outliers.high_outliers|length != 1 else '' }}</span>{% endif %}
             </div>
             {% else %}
             <div style="margin-bottom: 10px;">
