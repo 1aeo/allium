@@ -370,12 +370,22 @@ class IntelligenceEngine:
             label = 'balanced'
             percentage_breakdown = f'{guard_pct}% guard, {middle_pct}% middle, {exit_pct}% exit'
         
-        # Create relay count description with proper pluralization
-        guard_desc = f'{guard_count} guard{"s" if guard_count != 1 else ""}'
-        middle_desc = f'{middle_count} middle{"s" if middle_count != 1 else ""}'
-        exit_desc = f'{exit_count} exit{"s" if exit_count != 1 else ""}'
+        # Create relay count description with proper pluralization - only include non-zero counts
+        relay_components = []
+        if guard_count > 0:
+            guard_desc = f'{guard_count} guard{"s" if guard_count != 1 else ""}'
+            relay_components.append(guard_desc)
+        if middle_count > 0:
+            middle_desc = f'{middle_count} middle{"s" if middle_count != 1 else ""}'
+            relay_components.append(middle_desc)
+        if exit_count > 0:
+            exit_desc = f'{exit_count} exit{"s" if exit_count != 1 else ""}'
+            relay_components.append(exit_desc)
         
-        formatted_string = f'{label}, {percentage_breakdown} ({total_relays} total relays, {guard_desc}, {middle_desc}, {exit_desc})'
+        # Join components with commas
+        relay_breakdown = ', '.join(relay_components) if relay_components else 'no relays'
+        
+        formatted_string = f'{label}, {percentage_breakdown} ({total_relays} total relays, {relay_breakdown})'
         
         return {
             'label': label,
