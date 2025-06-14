@@ -40,7 +40,11 @@ class TestFullIntegrationFlow:
                     "platform": "Tor 0.4.5.7 on Linux",
                     "first_seen": "2023-01-01 12:00:00",
                     "last_seen": "2024-01-01 12:00:00",
-                    "or_addresses": ["192.168.1.1:9001"]
+                    "or_addresses": ["192.168.1.1:9001"],
+                    "uptime": {
+                        "1_month": "995",
+                        "1_year": "980"
+                    }
                 },
                 {
                     "nickname": "TestRelay2", 

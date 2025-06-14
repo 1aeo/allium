@@ -34,8 +34,8 @@
         <a href="#non_eu_leaders" class="aroi-nav-link" title="Most relays operated outside the European Union, expanding Tor's geographic reach beyond EU concentration">🌍 Non-EU Leaders</a>
         <a href="#frontier_builders" class="aroi-nav-link" title="Frontier Builders: Operators running relays in rare or strategically important countries that are underrepresented in the Tor network, helping expand global privacy access">🏴‍☠️ Frontier Builders</a>
         <a href="#network_veterans" class="aroi-nav-link" title="Network Veterans: Longest-serving operators calculated by earliest relay start date multiplied by current relay scale, recognizing sustained commitment to the Tor network">🏆 Network Veterans</a>
-        <a href="#reliability_masters" class="aroi-nav-link" title="Reliability Masters: 6-month weighted uptime scores measuring operational excellence and network reliability">⏰ Reliability Masters</a>
-        <a href="#legacy_titans" class="aroi-nav-link" title="Legacy Titans: 5-year weighted uptime scores recognizing long-term operational stability and commitment">👑 Legacy Titans</a>
+        <a href="#reliability_masters" class="aroi-nav-link" title="Reliability Masters: 6-month average uptime scores for operators with 25+ relays, measuring operational excellence">⏰ Reliability Masters</a>
+        <a href="#legacy_titans" class="aroi-nav-link" title="Legacy Titans: 5-year average uptime scores for operators with 25+ relays, recognizing long-term operational stability">👑 Legacy Titans</a>
     </div>
 </nav>
 
@@ -414,44 +414,36 @@
                     <li><strong>🌍 Non-EU Leaders:</strong> Geographic champions expanding Tor outside the EU</li>
                     <li><strong>🏴‍☠️ Frontier Builders:</strong> Operators in rare or underrepresented countries</li>
                     <li><strong>🏆 Network Veterans:</strong> Longest-serving operators with earliest relay start dates</li>
-                    <li><strong>⏰ Reliability Masters:</strong> 6-month weighted uptime scores (operational excellence)</li>
-                    <li><strong>👑 Legacy Titans:</strong> 5-year weighted uptime scores (long-term stability)</li>
+                    <li><strong>⏰ Reliability Masters:</strong> 6-month average uptime scores (25+ relays, operational excellence)</li>
+                    <li><strong>👑 Legacy Titans:</strong> 5-year average uptime scores (25+ relays, long-term stability)</li>
                 </ul>
             </div>
         </div>
         
-        <h4>⏰ Reliability Masters Scoring (6-Month):</h4>
-        <p><strong>6-Month Reliability Score Calculation:</strong> The Reliability Masters category measures recent operational excellence using bandwidth-weighted uptime data from the Onionoo API over the past 6 months to identify operators with consistently high reliability.</p>
+        <h4>⏰ Reliability Masters Scoring (6-Month):</h4>  
+        <p><strong>6-Month Reliability Score Calculation:</strong> The Reliability Masters category measures recent operational excellence using simple average uptime data from the Onionoo API over the past 6 months. Only operators with more than 25 relays are eligible to ensure statistical significance.</p>
         <ul>
-            <li><strong>Primary Factor - Average 6-Month Uptime:</strong> Mean uptime percentage across all operator's relays from Onionoo 6-month uptime data (primary ranking factor)</li>
-            <li><strong>Secondary Factor - Bandwidth Weighting:</strong> Relay contribution weighted by observed bandwidth capacity to prioritize high-impact relays:</li>
-            <ul>
-                <li><strong>High-bandwidth relays:</strong> Higher weight in average calculation (reflects greater network impact)</li>
-                <li><strong>Low-bandwidth relays:</strong> Lower weight in average calculation (prevents dilution from test relays)</li>
-                <li><strong>Offline relays:</strong> Zero uptime contribution (penalizes unreliable operations)</li>
-            </ul>
+            <li><strong>Eligibility:</strong> Only operators with more than 25 relays are included (ensures meaningful sample size)</li>
+            <li><strong>Primary Factor - Average 6-Month Uptime:</strong> Simple mean uptime percentage across all operator's relays from Onionoo 6-month uptime data</li>
+            <li><strong>No Weighting Applied:</strong> All relays count equally regardless of bandwidth capacity</li>
             <li><strong>Data Source:</strong> Tor Project's Onionoo API 6-month uptime endpoint with normalized 0-999 scale values</li>
             <li><strong>Update Frequency:</strong> Updated every 30 minutes as new consensus data becomes available</li>
         </ul>
-        <p><strong>6-Month Reliability Formula:</strong> reliability_score = Σ(relay_6month_uptime × relay_bandwidth_weight) / Σ(relay_bandwidth_weight)</p>
-        <p><em>Example:</em> An operator with 3 relays: relay1 (98% uptime, 500 Mbit/s), relay2 (97% uptime, 200 Mbit/s), relay3 (95% uptime, 100 Mbit/s) would score: ((98×500) + (97×200) + (95×100)) / (500+200+100) = (49000 + 19400 + 9500) / 800 = <strong>97.375% reliability score</strong>.</p>
-        <p><strong>Focus:</strong> Emphasizes current operational performance and recent reliability trends, ideal for identifying operators with excellent short-term reliability and responsiveness to network issues.</p>
+        <p><strong>6-Month Reliability Formula:</strong> reliability_score = Σ(relay_6month_uptime) / relay_count</p>
+        <p><em>Example:</em> An operator with 30 relays: relay1 (98% uptime), relay2 (97% uptime), relay3 (95% uptime), ... relay30 (96% uptime) would score: (98 + 97 + 95 + ... + 96) / 30 = <strong>96.7% reliability score</strong>.</p>
+        <p><strong>Focus:</strong> Emphasizes consistent operational performance across all relays for established operators, ideal for identifying operators with excellent short-term reliability.</p>
         
         <h4>👑 Legacy Titans Scoring (5-Year):</h4>
-        <p><strong>5-Year Reliability Score Calculation:</strong> The Legacy Titans category measures long-term operational stability using bandwidth-weighted uptime data from the Onionoo API over the past 5 years to identify operators with sustained historical excellence.</p>
+        <p><strong>5-Year Reliability Score Calculation:</strong> The Legacy Titans category measures long-term operational stability using simple average uptime data from the Onionoo API over the past 5 years. Only operators with more than 25 relays are eligible to ensure statistical significance.</p>
         <ul>
-            <li><strong>Primary Factor - Average 5-Year Uptime:</strong> Mean uptime percentage across all operator's relays from Onionoo 5-year uptime data (primary ranking factor)</li>
-            <li><strong>Secondary Factor - Bandwidth Weighting:</strong> Relay contribution weighted by observed bandwidth capacity across the 5-year period:</li>
-            <ul>
-                <li><strong>Sustained high-bandwidth:</strong> Highest weight for relays maintaining capacity over years</li>
-                <li><strong>Variable bandwidth:</strong> Dynamic weighting based on historical capacity trends</li>
-                <li><strong>Discontinued relays:</strong> Historical contribution included up to offline date</li>
-            </ul>
-            <li><strong>Historical Perspective:</strong> Accounts for network evolution, infrastructure changes, and operator lifecycle</li>
-            <li><strong>Longevity Bonus:</strong> Operators with 5+ years of continuous service demonstrate exceptional commitment</li>
+            <li><strong>Eligibility:</strong> Only operators with more than 25 relays are included (ensures meaningful sample size)</li>
+            <li><strong>Primary Factor - Average 5-Year Uptime:</strong> Simple mean uptime percentage across all operator's relays from Onionoo 5-year uptime data</li> 
+            <li><strong>No Weighting Applied:</strong> All relays count equally regardless of bandwidth capacity or historical changes</li>
+            <li><strong>Historical Perspective:</strong> Accounts for natural infrastructure evolution and operator lifecycle over 5-year period</li>
+            <li><strong>Longevity Recognition:</strong> Operators with 5+ years of service demonstrate exceptional long-term commitment</li>
         </ul>
-        <p><strong>5-Year Reliability Formula:</strong> reliability_score = Σ(relay_5year_uptime × relay_historical_bandwidth_weight) / Σ(relay_historical_bandwidth_weight)</p>
-        <p><em>Example:</em> An operator with 5-year history: 15 active relays averaging 94.2% uptime, 8 retired relays (91.8% historical uptime), weighted by historical bandwidth contributions would score approximately <strong>93.1% legacy reliability score</strong>, demonstrating sustained long-term commitment despite natural infrastructure evolution.</p>
+        <p><strong>5-Year Reliability Formula:</strong> reliability_score = Σ(relay_5year_uptime) / relay_count</p>
+        <p><em>Example:</em> An operator with 40 relays over 5-year history: 25 active relays averaging 94.2% uptime, 15 retired relays (91.8% historical uptime) would score: ((25 × 94.2) + (15 × 91.8)) / 40 = <strong>93.2% legacy reliability score</strong>, demonstrating sustained long-term commitment.</p>
         <p><strong>Focus:</strong> Recognizes operators who have demonstrated exceptional long-term reliability and sustained commitment to the Tor network through multiple years of consistent uptime performance, infrastructure upgrades, and network service.</p>
         
         <h4>🌈 Diversity Champion Scoring:</h4>

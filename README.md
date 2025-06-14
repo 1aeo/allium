@@ -14,7 +14,7 @@ curl -sSL https://raw.githubusercontent.com/1aeo/allium/master/setup.sh | bash
 **Manual installation**:
 ```bash
 git clone https://github.com/1aeo/allium.git && cd allium
-pip3 install -r requirements.txt
+pip3 install -r config/requirements.txt
 cd allium && python3 allium.py --progress
 cd www && python3 -m http.server 8000
 # Visit http://localhost:8000
@@ -31,7 +31,8 @@ cd www && python3 -m http.server 8000
 - **Bandwidth and consensus weight analytics** with multiple viewing modes
 
 ### AROI Leaderboard System 🏆
-- **10 specialized leaderboards** for authenticated relay operators
+- **12 specialized leaderboards** for authenticated relay operators
+- **Reliability scoring system** with 6-month and 5-year weighted uptime analysis
 - **Operator achievement tracking** across multiple dimensions
 - **Geographic diversity scoring** with frontier country recognition
 - **Platform diversity metrics** highlighting technical leadership
@@ -143,7 +144,7 @@ allium integrates with multiple Tor Project APIs:
 
 ## 🌍 AROI Leaderboards
 
-Ten specialized categories tracking authenticated operator achievements:
+Twelve specialized categories tracking authenticated operator achievements:
 
 1. **Bandwidth Champions** - Total bandwidth contributed
 2. **Consensus Weight Leaders** - Network authority holders
@@ -155,6 +156,8 @@ Ten specialized categories tracking authenticated operator achievements:
 8. **Non-EU Leaders** - Geographic champions expanding Tor outside EU
 9. **Frontier Builders** - Operators in rare/underrepresented countries
 10. **Network Veterans** - Longest-serving operators
+11. **Reliability Masters** - 6-month weighted uptime champions
+12. **Legacy Titans** - 5-year weighted uptime champions
 
 ## 🔒 Security & Performance
 

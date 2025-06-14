@@ -7,6 +7,8 @@ set -e
 
 echo "🌐 Allium - Tor Relay Analytics Setup"
 echo "======================================"
+echo "🔥 Enhanced with AROI Reliability Scoring System"
+echo ""
 
 # Check Python version
 echo "🔍 Checking Python version..."
@@ -97,6 +99,12 @@ echo "📊 Generated files are in: ./www/"
 echo "🌐 To serve locally, run:"
 echo "   cd www && python3 -m http.server 8000"
 echo "   Then visit: http://localhost:8000"
+echo ""
+echo "🏆 New Features Available:"
+echo "   • Reliability Masters (6-month uptime rankings)"
+echo "   • Legacy Titans (5-year uptime rankings)"
+echo "   • Enhanced AROI leaderboards with 12 categories"
+echo "   • Improved geographic diversity scoring"
 echo ""
 echo "⚡ To regenerate with fresh data:"
 echo "   First activate the virtual environment: source venv/bin/activate"
