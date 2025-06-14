@@ -1500,7 +1500,8 @@ class Relays:
                 relay_count = data.get('relay_count', 0)
                 
                 # Fix floating point comparison by using >= 99.99 instead of == 100.0
-                if avg >= 99.99:
+                # Also handle cases where avg is exactly 100.0 or very close due to floating point precision
+                if avg >= 99.99 or abs(avg - 100.0) < 0.01:
                     uptime_formatted[period] = {
                         'display': f'<span style="color: #28a745; font-weight: bold;">{display_name} {avg:.1f}%</span>',
                         'relay_count': relay_count
