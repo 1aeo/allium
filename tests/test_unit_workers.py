@@ -64,7 +64,7 @@ class TestWorkerCacheManagement:
                 
                 # Check that error was logged
                 mock_print.assert_called()
-                assert any("Error saving cache" in str(call) for call in mock_print.call_args_list)
+                assert any("Warning: Failed to save cache" in str(call) for call in mock_print.call_args_list)
     
     def test_cache_load_handles_file_read_errors_gracefully(self):
         """Test cache loading with error handling"""
@@ -81,7 +81,7 @@ class TestWorkerCacheManagement:
                     assert result is None
                     # Check that error was logged
                     mock_print.assert_called()
-                    assert any("Error loading cache" in str(call) for call in mock_print.call_args_list)
+                    assert any("Warning: Failed to load cache" in str(call) for call in mock_print.call_args_list)
 
 
 class TestWorkerStatusManagement:
@@ -343,8 +343,8 @@ class TestOnionooUptimeWorker:
                     
                     # Verify progress messages
                     progress_calls = [call[0][0] for call in mock_progress_logger.call_args_list]
-                    assert any("Fetching uptime data from Onionoo API" in msg for msg in progress_calls)
-                    assert any("Successfully fetched uptime data for 2 relays" in msg for msg in progress_calls)
+                    assert any("fetching uptime data from onionoo API..." in msg for msg in progress_calls)
+                    assert any("successfully fetched uptime data for 2 relays from onionoo uptime API" in msg for msg in progress_calls)
     
     def test_fetch_onionoo_uptime_with_conditional_request(self):
         """Test uptime fetch with If-Modified-Since header"""
@@ -395,7 +395,7 @@ class TestOnionooUptimeWorker:
                     
                     # Verify progress messages
                     progress_calls = [call[0][0] for call in mock_progress_logger.call_args_list]
-                    assert any("No onionoo uptime update since last run, using cached data" in msg for msg in progress_calls)
+                    assert any("no onionoo uptime update since last run, using cached data..." in msg for msg in progress_calls)
     
     def test_fetch_onionoo_uptime_304_no_cache(self):
         """Test handling of 304 Not Modified response without existing cache"""
@@ -415,7 +415,7 @@ class TestOnionooUptimeWorker:
                     
                     # Verify progress messages
                     progress_calls = [call[0][0] for call in mock_progress_logger.call_args_list]
-                    assert any("No onionoo uptime update since last run and no cache" in msg for msg in progress_calls)
+                    assert any("no onionoo uptime update since last run and no cache, skipping uptime data..." in msg for msg in progress_calls)
     
     def test_fetch_onionoo_uptime_http_error(self):
         """Test handling of HTTP errors for uptime API"""
@@ -434,7 +434,7 @@ class TestOnionooUptimeWorker:
                     
                     # Verify error was logged
                     progress_calls = [call[0][0] for call in mock_progress_logger.call_args_list]
-                    assert any("Error: Failed to fetch onionoo uptime" in msg for msg in progress_calls)
+                    assert any("error: Failed to fetch onionoo uptime" in msg for msg in progress_calls)
     
     def test_fetch_onionoo_uptime_network_error_with_cache_fallback(self):
         """Test uptime network error with fallback to cache"""
@@ -457,7 +457,7 @@ class TestOnionooUptimeWorker:
                     
                     # Verify fallback message
                     progress_calls = [call[0][0] for call in mock_progress_logger.call_args_list]
-                    assert any("Using cached onionoo uptime data as fallback" in msg for msg in progress_calls)
+                    assert any("using cached onionoo uptime data as fallback" in msg for msg in progress_calls)
     
     def test_fetch_onionoo_uptime_network_error_no_cache(self):
         """Test uptime network error without cache fallback"""
@@ -472,7 +472,7 @@ class TestOnionooUptimeWorker:
                     
                     # Verify error message
                     progress_calls = [call[0][0] for call in mock_progress_logger.call_args_list]
-                    assert any("No cached uptime data available, continuing without uptime data" in msg for msg in progress_calls)
+                    assert any("no cached uptime data available, continuing without uptime data" in msg for msg in progress_calls)
     
     def test_fetch_onionoo_uptime_invalid_json(self):
         """Test handling of invalid JSON response"""
@@ -490,7 +490,7 @@ class TestOnionooUptimeWorker:
                     
                     # Verify error was logged  
                     progress_calls = [call[0][0] for call in mock_progress_logger.call_args_list]
-                    assert any("Error: Failed to fetch onionoo uptime" in msg for msg in progress_calls)
+                    assert any("error: Failed to fetch onionoo uptime" in msg for msg in progress_calls)
     
     def test_fetch_onionoo_uptime_progress_steps(self):
         """Test that uptime fetch reports progress at different steps"""
@@ -513,9 +513,9 @@ class TestOnionooUptimeWorker:
                     
                     # Verify all progress steps are reported
                     progress_calls = [call[0][0] for call in mock_progress_logger.call_args_list]
-                    assert any("Uptime data parsing complete (1/4 done)" in msg for msg in progress_calls)
-                    assert any("Uptime data caching complete (1/2 done)" in msg for msg in progress_calls)
-                    assert any("Uptime timestamp written (3/4 done)" in msg for msg in progress_calls)
+                    assert any("parsing uptime JSON response..." in msg for msg in progress_calls)
+                    assert any("caching uptime data..." in msg for msg in progress_calls)
+                    assert any("successfully fetched uptime data for 1 relays from onionoo uptime API" in msg for msg in progress_calls)
     
     def test_fetch_onionoo_uptime_worker_status_tracking(self):
         """Test that uptime worker status is properly tracked"""
