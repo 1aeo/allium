@@ -23,7 +23,7 @@ class Coordinator:
     Phase 2: Multiple API support with incremental rendering.
     """
     
-    def __init__(self, output_dir, onionoo_details_url, onionoo_uptime_url, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=28, enabled_apis='all'):
+    def __init__(self, output_dir, onionoo_details_url, onionoo_uptime_url, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=34, enabled_apis='all'):
         self.output_dir = output_dir
         self.onionoo_details_url = onionoo_details_url
         self.onionoo_uptime_url = onionoo_uptime_url
@@ -254,7 +254,7 @@ class Coordinator:
 
 
 # For backwards compatibility, provide a simple function that mimics the original Relays constructor
-def create_relay_set_with_coordinator(output_dir, onionoo_details_url, onionoo_uptime_url, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=28, enabled_apis='all'):
+def create_relay_set_with_coordinator(output_dir, onionoo_details_url, onionoo_uptime_url, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=34, enabled_apis='all'):
     """
     Create a relay set using the coordinator system.
     Phase 2: Support for multiple APIs with threading.
