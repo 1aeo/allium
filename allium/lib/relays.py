@@ -1106,10 +1106,15 @@ class Relays:
             # Generate contact rankings for AROI leaderboards (only for contact pages)
             contact_rankings = []
             operator_reliability = None
+            contact_display_data = None
             if k == "contact":
                 contact_rankings = self._generate_contact_rankings(v)
                 # Calculate operator reliability statistics
                 operator_reliability = self._calculate_operator_reliability(v, members)
+                # Pre-compute all contact-specific display data
+                contact_display_data = self._compute_contact_display_data(
+                    i, bandwidth_unit, operator_reliability, v, members
+                )
             
             # Time the template rendering
             render_start = time.time()
@@ -1135,6 +1140,7 @@ class Relays:
                 sp_countries=the_prefixed,
                 contact_rankings=contact_rankings,  # AROI leaderboard rankings for this contact
                 operator_reliability=operator_reliability,  # Operator reliability statistics for contact pages
+                contact_display_data=contact_display_data,  # Pre-computed contact-specific display data
                 # Template optimizations - pre-computed values to avoid expensive Jinja2 operations for all page types
                 consensus_weight_percentage=f"{i['consensus_weight_fraction'] * 100:.2f}%",
                 guard_consensus_weight_percentage=f"{i['guard_consensus_weight_fraction'] * 100:.2f}%",
@@ -1386,3 +1392,164 @@ class Relays:
         reliability_stats['outliers']['high_outliers'] = deduplicate_outliers(reliability_stats['outliers']['high_outliers'])
         
         return reliability_stats
+
+    def _compute_contact_display_data(self, i, bandwidth_unit, operator_reliability, v, members):
+        """
+        Compute contact-specific display data for contact pages.
+        
+        Args:
+            i: The relay data for the contact
+            bandwidth_unit: The bandwidth unit for the contact
+            operator_reliability: The reliability statistics for the contact
+            v: The contact hash
+            members: The list of relay objects for the contact
+            
+        Returns:
+            dict: Contact-specific display data
+        """
+        display_data = {}
+        
+        # 1. Bandwidth components filtering (reuse existing formatting functions)
+        bw_components = []
+        if i["guard_count"] > 0 and i["guard_bandwidth"] > 0:
+            guard_bw = self._format_bandwidth_with_unit(i["guard_bandwidth"], bandwidth_unit)
+            if guard_bw != '0.00':
+                bw_components.append(f"{guard_bw} {bandwidth_unit} guard")
+        
+        if i["middle_count"] > 0 and i["middle_bandwidth"] > 0:
+            middle_bw = self._format_bandwidth_with_unit(i["middle_bandwidth"], bandwidth_unit)
+            if middle_bw != '0.00':
+                bw_components.append(f"{middle_bw} {bandwidth_unit} middle")
+        
+        if i["exit_count"] > 0 and i["exit_bandwidth"] > 0:
+            exit_bw = self._format_bandwidth_with_unit(i["exit_bandwidth"], bandwidth_unit)
+            if exit_bw != '0.00':
+                bw_components.append(f"{exit_bw} {bandwidth_unit} exit")
+        
+        display_data['bandwidth_breakdown'] = ', '.join(bw_components) if bw_components else None
+        
+        # 2. Network influence components filtering
+        cw_components = []
+        if i["guard_count"] > 0 and i["guard_consensus_weight_fraction"] > 0:
+            cw_components.append(f"{i['guard_consensus_weight_fraction'] * 100:.2f}% guard")
+        
+        if i["middle_count"] > 0 and i["middle_consensus_weight_fraction"] > 0:
+            cw_components.append(f"{i['middle_consensus_weight_fraction'] * 100:.2f}% middle")
+        
+        if i["exit_count"] > 0 and i["exit_consensus_weight_fraction"] > 0:
+            cw_components.append(f"{i['exit_consensus_weight_fraction'] * 100:.2f}% exit")
+        
+        display_data['consensus_weight_breakdown'] = ', '.join(cw_components) if cw_components else None
+        
+        # 3. Operator intelligence formatting (reuse existing contact intelligence data)
+        intelligence_formatted = {}
+        if hasattr(self, 'json') and self.json.get('smart_context'):
+            contact_intel_data = self.json['smart_context'].get('contact_intelligence', {}).get('template_optimized', {})
+            contact_intel = contact_intel_data.get(v)
+            
+            if contact_intel:
+                # Format network diversity with color coding
+                portfolio_div = contact_intel.get('portfolio_diversity', '')
+                if 'Poor' in portfolio_div:
+                    rating, details = portfolio_div.split(', ', 1)
+                    intelligence_formatted['network_diversity'] = f'<span style="color: #c82333; font-weight: bold;">Poor</span>, {details}'
+                elif 'Okay' in portfolio_div:
+                    rating, details = portfolio_div.split(', ', 1)
+                    intelligence_formatted['network_diversity'] = f'<span style="color: #cc9900; font-weight: bold;">Okay</span>, {details}'
+                else:
+                    rating, details = portfolio_div.split(', ', 1)
+                    intelligence_formatted['network_diversity'] = f'<span style="color: #2e7d2e; font-weight: bold;">Great</span>, {details}'
+                
+                # Format geographic diversity with color coding
+                geo_risk = contact_intel.get('geographic_risk', '')
+                if 'Poor' in geo_risk:
+                    rating, details = geo_risk.split(', ', 1)
+                    intelligence_formatted['geographic_diversity'] = f'<span style="color: #c82333; font-weight: bold;">Poor</span>, {details}'
+                elif 'Okay' in geo_risk:
+                    rating, details = geo_risk.split(', ', 1)
+                    intelligence_formatted['geographic_diversity'] = f'<span style="color: #cc9900; font-weight: bold;">Okay</span>, {details}'
+                else:
+                    rating, details = geo_risk.split(', ', 1)
+                    intelligence_formatted['geographic_diversity'] = f'<span style="color: #2e7d2e; font-weight: bold;">Great</span>, {details}'
+                
+                # Format infrastructure diversity with color coding
+                infra_risk = contact_intel.get('infrastructure_risk', '')
+                if 'Poor' in infra_risk:
+                    rating, details = infra_risk.split(', ', 1)
+                    intelligence_formatted['infrastructure_diversity'] = f'<span style="color: #c82333; font-weight: bold;">Poor</span>, {details}'
+                elif 'Okay' in infra_risk:
+                    rating, details = infra_risk.split(', ', 1)
+                    intelligence_formatted['infrastructure_diversity'] = f'<span style="color: #cc9900; font-weight: bold;">Okay</span>, {details}'
+                else:
+                    rating, details = infra_risk.split(', ', 1)
+                    intelligence_formatted['infrastructure_diversity'] = f'<span style="color: #2e7d2e; font-weight: bold;">Great</span>, {details}'
+                
+                # Copy other intelligence fields
+                intelligence_formatted['measurement_status'] = contact_intel.get('measurement_status', '')
+                intelligence_formatted['performance_status'] = contact_intel.get('performance_status', '')
+                intelligence_formatted['performance_underutilized'] = contact_intel.get('performance_underutilized', 0)
+                intelligence_formatted['performance_underutilized_fps'] = contact_intel.get('performance_underutilized_fps', [])
+                intelligence_formatted['maturity'] = contact_intel.get('maturity', '')
+        
+        display_data['operator_intelligence'] = intelligence_formatted
+        
+        # 4. Overall uptime formatting with green highlighting
+        uptime_formatted = {}
+        if operator_reliability and operator_reliability.get('overall_uptime'):
+            for period, data in operator_reliability['overall_uptime'].items():
+                avg = data.get('average', 0)
+                display_name = data.get('display_name', period)
+                relay_count = data.get('relay_count', 0)
+                
+                if avg == 100.0:
+                    uptime_formatted[period] = {
+                        'display': f'<span style="color: #28a745; font-weight: bold;">{display_name} {avg:.1f}%</span>',
+                        'relay_count': relay_count
+                    }
+                else:
+                    uptime_formatted[period] = {
+                        'display': f'{display_name} {avg:.1f}%',
+                        'relay_count': relay_count
+                    }
+        
+        display_data['uptime_formatted'] = uptime_formatted
+        
+        # 5. Outliers calculations and formatting
+        outliers_data = {}
+        if operator_reliability and operator_reliability.get('outliers'):
+            total_outliers = len(operator_reliability['outliers'].get('low_outliers', [])) + len(operator_reliability['outliers'].get('high_outliers', []))
+            total_relays = operator_reliability.get('total_relays', 1)
+            
+            if total_outliers > 0:
+                outlier_percentage = (total_outliers / total_relays * 100) if total_relays > 0 else 0
+                
+                # Get statistics for tooltip
+                six_month_data = operator_reliability.get('overall_uptime', {}).get('6_months', {})
+                mean_uptime = six_month_data.get('average', 0)
+                std_dev = six_month_data.get('std_dev', 0)
+                two_sigma_threshold = mean_uptime - (2 * std_dev)
+                
+                outliers_data['total_count'] = total_outliers
+                outliers_data['total_relays'] = total_relays
+                outliers_data['percentage'] = f"{outlier_percentage:.1f}"
+                outliers_data['tooltip'] = f"≥2σ {two_sigma_threshold:.1f}% from average μ {mean_uptime:.1f}%"
+                
+                # Format low outliers
+                low_outliers = operator_reliability['outliers'].get('low_outliers', [])
+                if low_outliers:
+                    low_names = [f"{o['nickname']} ({o['uptime']:.1f}%)" for o in low_outliers]
+                    outliers_data['low_count'] = len(low_outliers)
+                    outliers_data['low_tooltip'] = ', '.join(low_names)
+                
+                # Format high outliers  
+                high_outliers = operator_reliability['outliers'].get('high_outliers', [])
+                if high_outliers:
+                    high_names = [f"{o['nickname']} ({o['uptime']:.1f}%)" for o in high_outliers]
+                    outliers_data['high_count'] = len(high_outliers)
+                    outliers_data['high_tooltip'] = ', '.join(high_names)
+            else:
+                outliers_data['none_detected'] = True
+        
+        display_data['outliers'] = outliers_data
+        
+        return display_data

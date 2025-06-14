@@ -52,41 +52,19 @@
                 </ul>
             </div>
             
-            {# Network Summary - Enhanced with conditional display #}
+            {# Network Summary - Simplified using pre-computed data #}
             <div>
                 <strong>Network Summary:</strong>
                 <ul style="list-style-type: disc; padding-left: 20px; margin-bottom: 15px;">
                     <li><strong><span title="Observed bandwidth represents the estimated capacity this group can handle, combining total, guard, middle, and exit bandwidth contributions">Bandwidth</span>:</strong> ~{{ bandwidth }} {{ bandwidth_unit }}
-                        {# Only show non-zero bandwidth components #}
-                        {% set bw_components = [] %}
-                        {% if guard_count > 0 and guard_bandwidth != '0.00' %}
-                            {% set _ = bw_components.append(guard_bandwidth + ' ' + bandwidth_unit + ' guard') %}
-                        {% endif %}
-                        {% if middle_count > 0 and middle_bandwidth != '0.00' %}
-                            {% set _ = bw_components.append(middle_bandwidth + ' ' + bandwidth_unit + ' middle') %}
-                        {% endif %}
-                        {% if exit_count > 0 and exit_bandwidth != '0.00' %}
-                            {% set _ = bw_components.append(exit_bandwidth + ' ' + bandwidth_unit + ' exit') %}
-                        {% endif %}
-                        {% if bw_components %}
-                            (<span title="Bandwidth breakdown by relay type">{{ bw_components|join(', ') }}</span>)
+                        {% if contact_display_data and contact_display_data.bandwidth_breakdown %}
+                            (<span title="Bandwidth breakdown by relay type">{{ contact_display_data.bandwidth_breakdown }}</span>)
                         {% endif %}
                     </li>
                     
                     <li><strong><span title="Network influence represents the percentage of overall consensus weight, indicating relative importance in the Tor network across guard, middle, and exit positions">Network Influence</span>:</strong> {{ "%.2f%%"|format(consensus_weight_fraction * 100) }} of overall consensus weight
-                        {# Only show non-zero consensus components #}
-                        {% set cw_components = [] %}
-                        {% if guard_count > 0 and guard_consensus_weight_fraction > 0 %}
-                            {% set _ = cw_components.append("%.2f%% guard"|format(guard_consensus_weight_fraction * 100)) %}
-                        {% endif %}
-                        {% if middle_count > 0 and middle_consensus_weight_fraction > 0 %}
-                            {% set _ = cw_components.append("%.2f%% middle"|format(middle_consensus_weight_fraction * 100)) %}
-                        {% endif %}
-                        {% if exit_count > 0 and exit_consensus_weight_fraction > 0 %}
-                            {% set _ = cw_components.append("%.2f%% exit"|format(exit_consensus_weight_fraction * 100)) %}
-                        {% endif %}
-                        {% if cw_components %}
-                            (<span title="Consensus weight breakdown by position">{{ cw_components|join(', ') }}</span>)
+                        {% if contact_display_data and contact_display_data.consensus_weight_breakdown %}
+                            (<span title="Consensus weight breakdown by position">{{ contact_display_data.consensus_weight_breakdown }}</span>)
                         {% endif %}
                     </li>
                     
@@ -95,24 +73,36 @@
             </div>
         </div>
         
-        {# Operator Intelligence - Moved to left column #}
-        {% if relays.json.smart_context and relays.json.smart_context.contact_intelligence and relays.json.smart_context.contact_intelligence.template_optimized.get(contact_hash) %}
-        {% set contact_intel = relays.json.smart_context.contact_intelligence.template_optimized[contact_hash] %}
+        {# Operator Intelligence - Simplified using pre-computed data #}
+        {% if contact_display_data and contact_display_data.operator_intelligence %}
+        {% set intelligence = contact_display_data.operator_intelligence %}
         <div class="intelligence-section" style="padding: 15px; background-color: #f8f9fa; border-left: 4px solid #007bff;">
             <h4 style="margin-top: 0; color: #495057;">📊 Operator Intelligence</h4>
             
             <ul style="list-style-type: disc; padding-left: 20px; margin-bottom: 0;">
-                <li><strong><span title="Network diversity measures infrastructure distribution across different autonomous systems (AS). Ratings: 1 network = Poor (single point of failure), 2-3 networks = Okay (limited redundancy), 4+ networks = Great (excellent resilience). Higher diversity reduces single points of failure and improves network resilience.">Network Diversity</span>:</strong> {% if 'Poor' in contact_intel.portfolio_diversity %}<span style="color: #c82333; font-weight: bold;">Poor</span>, {{ contact_intel.portfolio_diversity.split(', ', 1)[1] }}{% elif 'Okay' in contact_intel.portfolio_diversity %}<span style="color: #cc9900; font-weight: bold;">Okay</span>, {{ contact_intel.portfolio_diversity.split(', ', 1)[1] }}{% else %}<span style="color: #2e7d2e; font-weight: bold;">Great</span>, {{ contact_intel.portfolio_diversity.split(', ', 1)[1] }}{% endif %}</li>
+                {% if intelligence.network_diversity %}
+                <li><strong><span title="Network diversity measures infrastructure distribution across different autonomous systems (AS). Ratings: 1 network = Poor (single point of failure), 2-3 networks = Okay (limited redundancy), 4+ networks = Great (excellent resilience). Higher diversity reduces single points of failure and improves network resilience.">Network Diversity</span>:</strong> {{ intelligence.network_diversity|safe }}</li>
+                {% endif %}
                 
-                <li><strong><span title="Geographic diversity assesses legal and censorship risk based on country distribution. Ratings: 1 country = Poor (high legal/censorship risk), 2-3 countries = Okay (limited jurisdictional diversity), 4+ countries = Great (excellent jurisdictional protection). Diversification across countries protects against coordinated legal action and censorship.">Geographic Diversity</span>:</strong> {% if 'Poor' in contact_intel.geographic_risk %}<span style="color: #c82333; font-weight: bold;">Poor</span>, {{ contact_intel.geographic_risk.split(', ', 1)[1] }}{% elif 'Okay' in contact_intel.geographic_risk %}<span style="color: #cc9900; font-weight: bold;">Okay</span>, {{ contact_intel.geographic_risk.split(', ', 1)[1] }}{% else %}<span style="color: #2e7d2e; font-weight: bold;">Great</span>, {{ contact_intel.geographic_risk.split(', ', 1)[1] }}{% endif %}</li>
+                {% if intelligence.geographic_diversity %}
+                <li><strong><span title="Geographic diversity assesses legal and censorship risk based on country distribution. Ratings: 1 country = Poor (high legal/censorship risk), 2-3 countries = Okay (limited jurisdictional diversity), 4+ countries = Great (excellent jurisdictional protection). Diversification across countries protects against coordinated legal action and censorship.">Geographic Diversity</span>:</strong> {{ intelligence.geographic_diversity|safe }}</li>
+                {% endif %}
                 
-                <li><strong><span title="Infrastructure diversity analyzes platform and version distribution. Ratings: Same platform/version = Poor (high synchronization risk), Limited diversity = Okay (moderate risk), Multiple platforms/versions = Great (excellent security through diversity).">Infrastructure Diversity</span>:</strong> {% if 'Poor' in contact_intel.infrastructure_risk %}<span style="color: #c82333; font-weight: bold;">Poor</span>, {{ contact_intel.infrastructure_risk.split(', ', 1)[1] }}{% elif 'Okay' in contact_intel.infrastructure_risk %}<span style="color: #cc9900; font-weight: bold;">Okay</span>, {{ contact_intel.infrastructure_risk.split(', ', 1)[1] }}{% else %}<span style="color: #2e7d2e; font-weight: bold;">Great</span>, {{ contact_intel.infrastructure_risk.split(', ', 1)[1] }}{% endif %}</li>
+                {% if intelligence.infrastructure_diversity %}
+                <li><strong><span title="Infrastructure diversity analyzes platform and version distribution. Ratings: Same platform/version = Poor (high synchronization risk), Limited diversity = Okay (moderate risk), Multiple platforms/versions = Great (excellent security through diversity).">Infrastructure Diversity</span>:</strong> {{ intelligence.infrastructure_diversity|safe }}</li>
+                {% endif %}
                 
-                <li><strong><span title="Bandwidth measurements show how many relays are measured by directory authorities for consensus weight calculation. Measured relays contribute more effectively to the network.">Bandwidth Measurements</span>:</strong> {{ contact_intel.measurement_status }}</li>
+                {% if intelligence.measurement_status %}
+                <li><strong><span title="Bandwidth measurements show how many relays are measured by directory authorities for consensus weight calculation. Measured relays contribute more effectively to the network.">Bandwidth Measurements</span>:</strong> {{ intelligence.measurement_status }}</li>
+                {% endif %}
                 
-                <li><strong><span title="Performance insights identify underutilized relays with high bandwidth (>10MB/s) but low consensus weight (<0.05% of bandwidth). These relays may need configuration optimization or better connectivity.">Performance Insights</span>:</strong> {{ contact_intel.performance_underutilized }} underutilized relays - {{ contact_intel.performance_status }}{% if contact_intel.performance_underutilized_fps %} ({% for fp in contact_intel.performance_underutilized_fps %}{{ fp[:8] }}{% if not loop.last %}, {% endif %}{% endfor %}){% endif %}</li>
+                {% if intelligence.performance_status %}
+                <li><strong><span title="Performance insights identify underutilized relays with high bandwidth (>10MB/s) but low consensus weight (<0.05% of bandwidth). These relays may need configuration optimization or better connectivity.">Performance Insights</span>:</strong> {{ intelligence.performance_underutilized }} underutilized relays - {{ intelligence.performance_status }}{% if intelligence.performance_underutilized_fps %} ({% for fp in intelligence.performance_underutilized_fps %}{{ fp[:8] }}{% if not loop.last %}, {% endif %}{% endfor %}){% endif %}</li>
+                {% endif %}
                 
-                <li><strong><span title="Operational maturity tracks deployment timeline and expansion patterns. Shows operator experience and growth strategy over time.">Operational Maturity</span>:</strong> {{ contact_intel.maturity }}</li>
+                {% if intelligence.maturity %}
+                <li><strong><span title="Operational maturity tracks deployment timeline and expansion patterns. Shows operator experience and growth strategy over time.">Operational Maturity</span>:</strong> {{ intelligence.maturity }}</li>
+                {% endif %}
             </ul>
         </div>
         {% endif %}
@@ -140,42 +130,34 @@
         </div>
         {% endif %}
         
-        {# Network Reliability - Enhanced formatting #}
+        {# Network Reliability - Simplified using pre-computed data #}
         {% if operator_reliability and operator_reliability.valid_relays > 0 %}
         <div class="reliability-section" style="padding: 15px; background-color: #f8f9fa; border-left: 4px solid #28a745;">
             <h4 style="margin-top: 0; color: #495057;">⏰ Network Reliability</h4>
             
-            {# Overall uptime - with green highlighting for 100% #}
+            {# Overall uptime - using pre-computed formatted data #}
+            {% if contact_display_data and contact_display_data.uptime_formatted %}
             <div style="margin-bottom: 15px;">
                 <strong>Overall uptime:</strong>
-                {% for period, data in operator_reliability.overall_uptime.items() %}
-                    {% if data.average == 100.0 %}
-                        <span style="color: #28a745; font-weight: bold;">{{ data.display_name }} {{ "%.1f"|format(data.average) }}%</span>
-                    {% else %}
-                        {{ data.display_name }} {{ "%.1f"|format(data.average) }}%
-                    {% endif %}
-                    ({{ data.relay_count }} relays){% if not loop.last %}, {% endif %}
+                {% for period, data in contact_display_data.uptime_formatted.items() %}
+                    {{ data.display|safe }} ({{ data.relay_count }} relays){% if not loop.last %}, {% endif %}
                 {% endfor %}
             </div>
+            {% endif %}
             
-            {# Statistical outliers section - enhanced format #}
-            {% set total_outliers = operator_reliability.outliers.low_outliers|length + operator_reliability.outliers.high_outliers|length %}
-            {% if total_outliers > 0 %}
+            {# Statistical outliers section - using pre-computed data #}
+            {% if contact_display_data and contact_display_data.outliers %}
+            {% set outliers = contact_display_data.outliers %}
+            {% if outliers.total_count %}
             <div style="margin-bottom: 10px;">
-                {# Calculate percentage and get statistics for tooltip #}
-                {% set total_relays = operator_reliability.total_relays %}
-                {% set outlier_percentage = "%.1f"|format((total_outliers / total_relays * 100) if total_relays > 0 else 0) %}
-                {% set six_month_data = operator_reliability.overall_uptime.get('6_months', {}) %}
-                {% set mean_uptime = six_month_data.get('average', 0) %}
-                {% set std_dev = six_month_data.get('std_dev', 0) %}
-                {% set two_sigma_threshold = mean_uptime - (2 * std_dev) %}
-                <strong><span title="≥2σ {{ "%.1f"|format(two_sigma_threshold) }}% from average μ {{ "%.1f"|format(mean_uptime) }}%">Outliers</span>:</strong>
-                <span style="color: #000; font-weight: normal;">{{ total_outliers }} relays out of {{ total_relays }} relays ({{ outlier_percentage }}%)</span>{% if operator_reliability.outliers.low_outliers %}, <span style="color: #dc3545; font-weight: bold;">Low:</span> {% set low_names = [] %}{% for outlier in operator_reliability.outliers.low_outliers %}{% set _ = low_names.append(outlier.nickname + " (" + "%.1f"|format(outlier.uptime) + "%)") %}{% endfor %}<span title="{{ low_names|join(', ') }}" style="cursor: help; text-decoration: underline;">{{ operator_reliability.outliers.low_outliers|length }} relay{{ 's' if operator_reliability.outliers.low_outliers|length != 1 else '' }}</span>{% endif %}{% if operator_reliability.outliers.high_outliers %}{% if operator_reliability.outliers.low_outliers %}, {% endif %}<span style="color: #28a745; font-weight: bold;">Exceptional:</span> {% set high_names = [] %}{% for outlier in operator_reliability.outliers.high_outliers %}{% set _ = high_names.append(outlier.nickname + " (" + "%.1f"|format(outlier.uptime) + "%)") %}{% endfor %}<span title="{{ high_names|join(', ') }}" style="cursor: help; text-decoration: underline;">{{ operator_reliability.outliers.high_outliers|length }} relay{{ 's' if operator_reliability.outliers.high_outliers|length != 1 else '' }}</span>{% endif %}
+                <strong><span title="{{ outliers.tooltip }}">Outliers</span>:</strong>
+                <span style="color: #000; font-weight: normal;">{{ outliers.total_count }} relays out of {{ outliers.total_relays }} relays ({{ outliers.percentage }}%)</span>{% if outliers.low_count %}, <span style="color: #dc3545; font-weight: bold;">Low:</span> <span title="{{ outliers.low_tooltip }}" style="cursor: help; text-decoration: underline;">{{ outliers.low_count }} relay{{ 's' if outliers.low_count != 1 else '' }}</span>{% endif %}{% if outliers.high_count %}{% if outliers.low_count %}, {% endif %}<span style="color: #28a745; font-weight: bold;">Exceptional:</span> <span title="{{ outliers.high_tooltip }}" style="cursor: help; text-decoration: underline;">{{ outliers.high_count }} relay{{ 's' if outliers.high_count != 1 else '' }}</span>{% endif %}
             </div>
-            {% else %}
+            {% elif outliers.none_detected %}
             <div style="margin-bottom: 10px;">
                 <span style="color: #28a745;">✅ No statistical outliers detected - consistent performance across all relays</span>
             </div>
+            {% endif %}
             {% endif %}
             
             <div style="font-size: 12px; color: #666; margin-top: 10px;">
