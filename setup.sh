@@ -63,9 +63,19 @@ else
     API_MODE="--apis all"
 fi
 
+# Determine the correct path to allium.py based on the setup scenario
+if [ -f "allium.py" ]; then
+    ALLIUM_PY_PATH="allium.py"
+else
+    ALLIUM_PY_PATH="allium/allium.py"
+fi
+
 for attempt in 1 2 3; do
     echo "🔄 Generation attempt $attempt of 3..."
-    if python3 allium/allium.py --progress $API_MODE; then
+    echo "📁 Running from: $(pwd)"
+    echo "🔧 Using allium.py path: $ALLIUM_PY_PATH"
+    
+    if python3 "$ALLIUM_PY_PATH" --progress $API_MODE; then
         echo "✅ Site generation completed successfully on attempt $attempt"
         break
     else
@@ -79,9 +89,13 @@ for attempt in 1 2 3; do
             echo "   - System resource constraints"
             echo ""
             echo "💡 You can try running the generation manually later with:"
-            echo "   source venv/bin/activate && python3 allium/allium.py --progress"
+            if [ -f "allium.py" ]; then
+                echo "   source venv/bin/activate && python3 allium.py --progress"
+            else
+                echo "   source venv/bin/activate && python3 allium/allium.py --progress"
+            fi
             echo ""
-            echo "🔧 For low-memory environments, try: python3 allium/allium.py --progress --apis details"
+            echo "🔧 For low-memory environments, try: python3 $ALLIUM_PY_PATH --progress --apis details"
             exit 1
         else
             echo "⏳ Waiting 10 seconds before retry..."
@@ -107,7 +121,11 @@ echo "   • Improved geographic diversity scoring"
 echo ""
 echo "⚡ To regenerate with fresh data:"
 echo "   First activate the virtual environment: source venv/bin/activate"
-echo "   Then run: python3 allium/allium.py --progress"
+if [ -f "allium.py" ]; then
+    echo "   Then run: python3 allium.py --progress"
+else
+    echo "   Then run: python3 allium/allium.py --progress"
+fi
 echo ""
 echo "📚 Documentation: docs/README.md"
 echo "🔧 Configuration options: python3 allium/allium.py --help" 
