@@ -19,13 +19,12 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'allium'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'allium', 'lib'))
 
 from workers import (
-    save_cache, load_cache, mark_worker_ready, mark_worker_stale, 
-    get_worker_status, get_all_worker_status, write_timestamp, 
-    read_timestamp, fetch_onionoo_details, get_cache_timestamp,
-    is_stale_with_fallback,
-    fetch_onionoo_uptime,
-    fetch_collector_data,
-    fetch_consensus_health
+    _save_cache as save_cache, _load_cache as load_cache, 
+    _mark_ready as mark_worker_ready, _mark_stale as mark_worker_stale, 
+    get_worker_status, get_all_worker_status, 
+    _write_timestamp as write_timestamp, _read_timestamp as read_timestamp, 
+    fetch_onionoo_details, fetch_onionoo_uptime,
+    fetch_collector_data, fetch_consensus_health
 )
 
 
@@ -65,7 +64,7 @@ class TestWorkerCacheManagement:
                 
                 # Check that error was logged
                 mock_print.assert_called()
-                assert any("Error saving cache" in str(call) for call in mock_print.call_args_list)
+                assert any("Warning: Failed to save cache" in str(call) for call in mock_print.call_args_list)
     
     def test_cache_load_handles_file_read_errors_gracefully(self):
         """Test cache loading with error handling"""
@@ -82,7 +81,7 @@ class TestWorkerCacheManagement:
                     assert result is None
                     # Check that error was logged
                     mock_print.assert_called()
-                    assert any("Error loading cache" in str(call) for call in mock_print.call_args_list)
+                    assert any("Warning: Failed to load cache" in str(call) for call in mock_print.call_args_list)
 
 
 class TestWorkerStatusManagement:
@@ -98,7 +97,7 @@ class TestWorkerStatusManagement:
                 
                 assert status["status"] == "ready"
                 assert status["error"] is None
-                assert isinstance(status["last_update"], float)
+                assert isinstance(status["timestamp"], float)
     
     def test_worker_status_mark_stale_updates_state_with_error_message(self):
         """Test marking worker as stale and checking status"""
@@ -112,7 +111,7 @@ class TestWorkerStatusManagement:
                 
                 assert status["status"] == "stale"
                 assert status["error"] == error_msg
-                assert isinstance(status["last_update"], float)
+                assert isinstance(status["timestamp"], float)
     
     def test_worker_status_get_all_returns_complete_status_dictionary(self):
         """Test getting all worker statuses"""
@@ -128,12 +127,12 @@ class TestWorkerStatusManagement:
                 assert all_status["worker1"]["status"] == "ready"
                 assert all_status["worker2"]["status"] == "stale"
     
-    def test_worker_status_get_returns_unknown_for_nonexistent_worker(self):
+    def test_worker_status_get_returns_none_for_nonexistent_worker(self):
         """Test getting status for non-existent worker"""
         with tempfile.TemporaryDirectory() as temp_dir:
             with patch('workers.STATE_FILE', os.path.join(temp_dir, "state.json")):
                 status = get_worker_status("nonexistent_worker")
-                assert status["status"] == "unknown"
+                assert status is None
     
     def test_worker_state_persists_across_multiple_operations(self):
         """Test that worker state persists across multiple operations"""
@@ -162,7 +161,7 @@ class TestWorkerTimestampManagement:
     
     def test_timestamp_write_and_read_preserves_exact_time_value(self):
         """Test writing and reading timestamps"""
-        test_timestamp = time.time()
+        test_timestamp = "Mon, 01 Jan 2024 12:00:00 GMT"
         
         with tempfile.TemporaryDirectory() as temp_dir:
             with patch('workers.CACHE_DIR', temp_dir):
@@ -170,7 +169,7 @@ class TestWorkerTimestampManagement:
                 
                 read_timestamp_value = read_timestamp("test_worker")
                 
-                assert abs(read_timestamp_value - test_timestamp) < 0.001  # Allow small float precision difference
+                assert read_timestamp_value == test_timestamp
     
     def test_timestamp_read_returns_none_when_file_does_not_exist(self):
         """Test reading timestamp when file doesn't exist"""
@@ -344,8 +343,8 @@ class TestOnionooUptimeWorker:
                     
                     # Verify progress messages
                     progress_calls = [call[0][0] for call in mock_progress_logger.call_args_list]
-                    assert any("Fetching uptime data from Onionoo API" in msg for msg in progress_calls)
-                    assert any("Successfully fetched uptime data for 2 relays" in msg for msg in progress_calls)
+                    assert any("fetching uptime data from onionoo API..." in msg for msg in progress_calls)
+                    assert any("successfully fetched uptime data for 2 relays from onionoo uptime API" in msg for msg in progress_calls)
     
     def test_fetch_onionoo_uptime_with_conditional_request(self):
         """Test uptime fetch with If-Modified-Since header"""
@@ -396,7 +395,7 @@ class TestOnionooUptimeWorker:
                     
                     # Verify progress messages
                     progress_calls = [call[0][0] for call in mock_progress_logger.call_args_list]
-                    assert any("No onionoo uptime update since last run, using cached data" in msg for msg in progress_calls)
+                    assert any("no onionoo uptime update since last run, using cached data..." in msg for msg in progress_calls)
     
     def test_fetch_onionoo_uptime_304_no_cache(self):
         """Test handling of 304 Not Modified response without existing cache"""
@@ -416,7 +415,7 @@ class TestOnionooUptimeWorker:
                     
                     # Verify progress messages
                     progress_calls = [call[0][0] for call in mock_progress_logger.call_args_list]
-                    assert any("No onionoo uptime update since last run and no cache" in msg for msg in progress_calls)
+                    assert any("no onionoo uptime update since last run and no cache, skipping uptime data..." in msg for msg in progress_calls)
     
     def test_fetch_onionoo_uptime_http_error(self):
         """Test handling of HTTP errors for uptime API"""
@@ -435,7 +434,7 @@ class TestOnionooUptimeWorker:
                     
                     # Verify error was logged
                     progress_calls = [call[0][0] for call in mock_progress_logger.call_args_list]
-                    assert any("Error: Failed to fetch onionoo uptime" in msg for msg in progress_calls)
+                    assert any("error: Failed to fetch onionoo uptime" in msg for msg in progress_calls)
     
     def test_fetch_onionoo_uptime_network_error_with_cache_fallback(self):
         """Test uptime network error with fallback to cache"""
@@ -458,7 +457,7 @@ class TestOnionooUptimeWorker:
                     
                     # Verify fallback message
                     progress_calls = [call[0][0] for call in mock_progress_logger.call_args_list]
-                    assert any("Using cached onionoo uptime data as fallback" in msg for msg in progress_calls)
+                    assert any("using cached onionoo uptime data as fallback" in msg for msg in progress_calls)
     
     def test_fetch_onionoo_uptime_network_error_no_cache(self):
         """Test uptime network error without cache fallback"""
@@ -473,7 +472,7 @@ class TestOnionooUptimeWorker:
                     
                     # Verify error message
                     progress_calls = [call[0][0] for call in mock_progress_logger.call_args_list]
-                    assert any("No cached uptime data available, continuing without uptime data" in msg for msg in progress_calls)
+                    assert any("no cached uptime data available, continuing without uptime data" in msg for msg in progress_calls)
     
     def test_fetch_onionoo_uptime_invalid_json(self):
         """Test handling of invalid JSON response"""
@@ -491,7 +490,7 @@ class TestOnionooUptimeWorker:
                     
                     # Verify error was logged  
                     progress_calls = [call[0][0] for call in mock_progress_logger.call_args_list]
-                    assert any("Error: Failed to fetch onionoo uptime" in msg for msg in progress_calls)
+                    assert any("error: Failed to fetch onionoo uptime" in msg for msg in progress_calls)
     
     def test_fetch_onionoo_uptime_progress_steps(self):
         """Test that uptime fetch reports progress at different steps"""
@@ -514,9 +513,9 @@ class TestOnionooUptimeWorker:
                     
                     # Verify all progress steps are reported
                     progress_calls = [call[0][0] for call in mock_progress_logger.call_args_list]
-                    assert any("Uptime data parsing complete (1/4 done)" in msg for msg in progress_calls)
-                    assert any("Uptime data caching complete (1/2 done)" in msg for msg in progress_calls)
-                    assert any("Uptime timestamp written (3/4 done)" in msg for msg in progress_calls)
+                    assert any("parsing uptime JSON response..." in msg for msg in progress_calls)
+                    assert any("caching uptime data..." in msg for msg in progress_calls)
+                    assert any("successfully fetched uptime data for 1 relays from onionoo uptime API" in msg for msg in progress_calls)
     
     def test_fetch_onionoo_uptime_worker_status_tracking(self):
         """Test that uptime worker status is properly tracked"""
