@@ -442,16 +442,16 @@ def _calculate_aroi_leaderboards(relays_instance):
         reverse=True
     )[:50]
     
-    # 6. ⏰ Reliability Masters - 6-Month Average Uptime (NEW) - Only operators with > 25 relays
-    reliability_masters_filtered = {k: v for k, v in aroi_operators.items() if v['total_relays'] > 25}
+    # 6. ⏰ Reliability Masters - 6-Month Average Uptime (NEW) - Only operators with > 25 relays AND > 0% uptime
+    reliability_masters_filtered = {k: v for k, v in aroi_operators.items() if v['total_relays'] > 25 and v['reliability_6m_score'] > 0.0}
     leaderboards['reliability_masters'] = sorted(
         reliability_masters_filtered.items(),
         key=lambda x: x[1]['reliability_6m_score'],
         reverse=True
     )[:50]
     
-    # 7. 👑 Legacy Titans - 5-Year Average Uptime (NEW) - Only operators with > 25 relays
-    legacy_titans_filtered = {k: v for k, v in aroi_operators.items() if v['total_relays'] > 25}
+    # 7. 👑 Legacy Titans - 5-Year Average Uptime (NEW) - Only operators with > 25 relays AND > 0% uptime
+    legacy_titans_filtered = {k: v for k, v in aroi_operators.items() if v['total_relays'] > 25 and v['reliability_5y_score'] > 0.0}
     leaderboards['legacy_titans'] = sorted(
         legacy_titans_filtered.items(),
         key=lambda x: x[1]['reliability_5y_score'],
