@@ -18,7 +18,7 @@ from lib.coordinator import Coordinator, create_relay_set_with_coordinator
 class TestCoordinator:
     """Test the main Coordinator class"""
     
-    def test_coordinator_initialization(self):
+    def test_coordinator_initialization_sets_all_parameters_correctly(self):
         """Test coordinator initialization with all parameters"""
         output_dir = "./test_output"
         onionoo_details_url = "https://test.onionoo.torproject.org/details"
@@ -51,7 +51,7 @@ class TestCoordinator:
         assert coordinator.workers == {}
         assert coordinator.worker_data == {}
     
-    def test_coordinator_default_initialization(self):
+    def test_coordinator_initialization_uses_default_values_when_minimal_parameters_provided(self):
         """Test coordinator with default parameters"""
         coordinator = Coordinator("./output", "https://test.details.url", "https://test.uptime.url")
         
@@ -64,7 +64,7 @@ class TestCoordinator:
         assert coordinator.total_steps == 20
         assert isinstance(coordinator.start_time, float)
     
-    def test_log_progress_with_progress_enabled(self):
+    def test_log_progress_outputs_formatted_message_when_progress_enabled(self):
         """Test progress logging when progress is enabled"""
         coordinator = Coordinator("./output", "https://test.details.url", "https://test.uptime.url", progress=True)
         
@@ -76,7 +76,7 @@ class TestCoordinator:
             assert "Test message" in call_args
             assert "Progress:" in call_args
     
-    def test_log_progress_with_progress_disabled(self):
+    def test_log_progress_remains_silent_when_progress_disabled(self):
         """Test that progress logging is silent when progress is disabled"""
         coordinator = Coordinator("./output", "https://test.details.url", "https://test.uptime.url", progress=False)
         
@@ -85,7 +85,7 @@ class TestCoordinator:
             
             mock_print.assert_not_called()
     
-    def test_fetch_onionoo_data_success(self):
+    def test_fetch_onionoo_data_returns_relay_data_when_api_call_succeeds(self):
         """Test successful onionoo data fetching"""
         mock_data = {
             "relays": [
@@ -110,7 +110,7 @@ class TestCoordinator:
                 assert any("Fetching onionoo data using workers system" in str(call) for call in mock_print.call_args_list)
                 assert any("Successfully fetched 2 relays from onionoo" in str(call) for call in mock_print.call_args_list)
     
-    def test_fetch_onionoo_data_failure(self):
+    def test_fetch_onionoo_data_returns_none_when_api_call_fails(self):
         """Test onionoo data fetching failure"""
         coordinator = Coordinator("./output", "https://test.details.url", "https://test.uptime.url", progress=True)
         
@@ -126,7 +126,7 @@ class TestCoordinator:
                 # Check error message
                 assert any("Failed to fetch onionoo details data" in str(call) for call in mock_print.call_args_list)
     
-    def test_fetch_onionoo_data_exception(self):
+    def test_fetch_onionoo_data_returns_none_when_network_exception_occurs(self):
         """Test onionoo data fetching with exception"""
         coordinator = Coordinator("./output", "https://test.details.url", "https://test.uptime.url", progress=True)
         
@@ -141,7 +141,7 @@ class TestCoordinator:
                 # Check error message
                 assert any("Error during threaded API fetching: Network error" in str(call) for call in mock_print.call_args_list)
     
-    def test_create_relay_set_success(self):
+    def test_create_relay_set_returns_relay_object_when_data_processing_succeeds(self):
         """Test successful relay set creation"""
         mock_data = {
             "relays": [{"nickname": "test1"}],
@@ -176,7 +176,7 @@ class TestCoordinator:
                 assert any("Creating relay set with fetched data" in str(call) for call in mock_print.call_args_list)
                 assert any("Relay set created successfully" in str(call) for call in mock_print.call_args_list)
     
-    def test_create_relay_set_failure(self):
+    def test_create_relay_set_returns_none_when_data_processing_fails(self):
         """Test relay set creation failure"""
         mock_data = {"relays": []}
         
@@ -195,7 +195,7 @@ class TestCoordinator:
                 # Check error message
                 assert any("Failed to create relay set" in str(call) for call in mock_print.call_args_list)
     
-    def test_get_relay_set_full_flow_success(self):
+    def test_get_relay_set_completes_full_workflow_successfully_when_all_steps_succeed(self):
         """Test the complete get_relay_set flow"""
         mock_data = {
             "relays": [{"nickname": "test1"}],

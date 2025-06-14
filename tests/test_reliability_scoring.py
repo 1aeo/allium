@@ -15,7 +15,7 @@ from lib.aroileaders import _calculate_reliability_score
 class TestReliabilityScoring:
     """Test reliability scoring functionality"""
     
-    def test_reliability_masters_category_exists(self):
+    def test_reliability_masters_category_definition_includes_required_properties(self):
         """Test that reliability_masters category is properly defined"""
         # Mock test since we don't have the full AROILeaders class structure
         # In real implementation, this would verify category exists in leaderboard data
@@ -32,7 +32,7 @@ class TestReliabilityScoring:
         assert '25+ Relays' in category['title']
         assert category['emoji'] == '⏰'
         
-    def test_legacy_titans_category_exists(self):
+    def test_legacy_titans_category_definition_includes_required_properties(self):
         """Test that legacy_titans category is properly defined"""
         # Mock test since we don't have the full AROILeaders class structure
         categories = {
@@ -48,7 +48,7 @@ class TestReliabilityScoring:
         assert '25+ Relays' in category['title']
         assert category['emoji'] == '👑'
         
-    def test_reliability_simple_average_calculation(self):
+    def test_reliability_score_calculation_uses_simple_average_without_weighting(self):
         """Test simple average reliability score calculation (no weighting)"""
         # Mock operator data for testing
         test_operators = {
@@ -84,7 +84,7 @@ class TestReliabilityScoring:
             )
             assert five_year_result['weight'] == 1.0  # No weighting applied
         
-    def test_no_bandwidth_weight_multipliers(self):
+    def test_bandwidth_weight_multipliers_are_not_applied_to_any_operators(self):
         """Test that no bandwidth weight multipliers are applied"""
         # Test that all operators get weight of 1.0 regardless of relay count
         result_small = _calculate_reliability_score([], None, '6_months')
@@ -95,7 +95,7 @@ class TestReliabilityScoring:
         assert result_medium['weight'] == 1.0
         assert result_large['weight'] == 1.0
         
-    def test_25_relay_minimum_filter(self):
+    def test_operator_filtering_excludes_operators_with_25_or_fewer_relays(self):
         """Test that only operators with > 25 relays are included in rankings"""
         # This would be tested at the leaderboard generation level
         # Mock test to verify filter logic exists
@@ -113,7 +113,7 @@ class TestReliabilityScoring:
         assert 'large_op' in filtered_ops      # Should be included
         assert len(filtered_ops) == 2
         
-    def test_reliability_categories_in_leaderboard_order(self):
+    def test_reliability_categories_appear_in_correct_leaderboard_positions(self):
         """Test that reliability categories appear in correct leaderboard order"""
         # Mock category order to test positioning
         category_order = [
@@ -128,7 +128,7 @@ class TestReliabilityScoring:
         assert reliability_masters_pos == 5   # Position 6 (0-indexed: 5)
         assert legacy_titans_pos == 6         # Position 7 (0-indexed: 6)
         
-    def test_empty_uptime_data_handling(self):
+    def test_empty_uptime_data_returns_zero_scores_with_default_values(self):
         """Test handling of operators with no uptime data"""
         result = _calculate_reliability_score([], None, '6_months')
         
@@ -137,7 +137,7 @@ class TestReliabilityScoring:
         assert result['weight'] == 1.0
         assert result['valid_relays'] == 0
         
-    def test_uptime_data_validation(self):
+    def test_uptime_data_validation_handles_empty_inputs_gracefully(self):
         """Test validation of uptime percentage data"""
         # Test with empty operator relay list
         result = _calculate_reliability_score([], {}, '6_months')
@@ -147,7 +147,7 @@ class TestReliabilityScoring:
         assert result['relay_count'] == 0
         assert result['weight'] == 1.0
         
-    def test_reliability_display_formatting_no_weight(self):
+    def test_reliability_display_formatting_excludes_weight_information(self):
         """Test proper formatting of reliability scores for display (no weight shown)"""
         # Mock display formatting test
         mock_reliability_data = {
@@ -166,7 +166,7 @@ class TestReliabilityScoring:
 class TestReliabilityIntegration:
     """Test integration of reliability features with existing system"""
     
-    def test_reliability_categories_in_complete_category_list(self):
+    def test_reliability_categories_are_included_in_complete_category_list(self):
         """Test that reliability categories are included in complete category list"""
         # Mock complete category list
         all_categories = [
@@ -180,7 +180,7 @@ class TestReliabilityIntegration:
         assert 'reliability_masters' in all_categories
         assert 'legacy_titans' in all_categories
         
-    def test_reliability_tooltips_exist(self):
+    def test_reliability_categories_have_proper_tooltips_with_25_relay_requirement(self):
         """Test that proper tooltips exist for reliability categories"""
         # Mock tooltips
         tooltips = {
@@ -202,7 +202,7 @@ class TestReliabilityIntegration:
         assert 'average uptime' in legacy_tooltip.lower()
         assert '25+' in legacy_tooltip
         
-    def test_reliability_categories_have_proper_emojis(self):
+    def test_reliability_categories_display_correct_emojis_in_interface(self):
         """Test that reliability categories have appropriate emojis"""
         # Mock categories with emojis
         categories = {
@@ -217,7 +217,7 @@ class TestReliabilityIntegration:
 class TestReliabilityMockData:
     """Test reliability scoring with mock data"""
     
-    def test_calculate_operator_reliability_scores(self):
+    def test_operator_reliability_scores_calculation_with_eligibility_filtering(self):
         """Test calculation of reliability scores for mock operators"""
         # Mock test data - in real implementation would use actual relay data
         mock_operators = {

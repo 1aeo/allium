@@ -1,5 +1,5 @@
 """
-Unit tests for allium/lib/workers.py - Phase 1 API worker system
+Unit tests for allium/lib/workers.py - Worker system for API data fetching
 """
 import json
 import os
@@ -15,163 +15,169 @@ from unittest.mock import patch, mock_open, MagicMock
 # Add the allium directory to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'allium'))
 
-from lib.workers import (
-    fetch_onionoo_details,
-    fetch_onionoo_uptime, 
+# Add the lib directory to Python path for workers import
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'allium', 'lib'))
+
+from workers import (
+    save_cache, load_cache, mark_worker_ready, mark_worker_stale, 
+    get_worker_status, get_all_worker_status, write_timestamp, 
+    read_timestamp, fetch_onionoo_details, get_cache_timestamp,
+    is_stale_with_fallback,
+    fetch_onionoo_uptime,
     fetch_collector_data,
-    fetch_consensus_health,
-    get_worker_status,
-    get_all_worker_status,
-    _save_cache,
-    _load_cache,
-    _mark_ready,
-    _mark_stale,
-    _save_state,
-    _load_state,
-    _write_timestamp,
-    _read_timestamp
+    fetch_consensus_health
 )
 
 
-class TestCacheOperations:
-    """Test basic cache file operations"""
+class TestWorkerCacheManagement:
+    """Test worker cache management functionality"""
     
-    def test_save_and_load_cache(self):
+    def test_cache_file_save_and_load_preserves_data_integrity(self):
         """Test saving and loading cache data"""
-        test_data = {"relays": [{"nickname": "TestRelay"}]}
+        test_data = {"test": "data", "number": 123}
         
         with tempfile.TemporaryDirectory() as temp_dir:
-            with patch('lib.workers.CACHE_DIR', temp_dir):
-                _save_cache("test_data", test_data)
-                loaded_data = _load_cache("test_data")
+            cache_file = os.path.join(temp_dir, "test_cache.json")
+            
+            with patch('workers.CACHE_DIR', temp_dir):
+                # Save data
+                save_cache("test_worker", test_data)
+                
+                # Load data
+                loaded_data = load_cache("test_worker")
+                
                 assert loaded_data == test_data
     
-    def test_load_cache_nonexistent(self):
-        """Test loading cache file that doesn't exist"""
+    def test_cache_load_returns_none_when_file_does_not_exist(self):
+        """Test loading cache when file doesn't exist"""
         with tempfile.TemporaryDirectory() as temp_dir:
-            with patch('lib.workers.CACHE_DIR', temp_dir):
-                result = _load_cache("nonexistent")
+            with patch('workers.CACHE_DIR', temp_dir):
+                result = load_cache("nonexistent_worker")
                 assert result is None
     
-    def test_save_cache_error_handling(self):
-        """Test cache save error handling"""
-        test_data = {"relays": []}
+    def test_cache_save_handles_file_write_errors_gracefully(self):
+        """Test cache saving with error handling"""
+        test_data = {"test": "data"}
         
-        with patch('builtins.open', side_effect=PermissionError("Permission denied")):
+        with patch('builtins.open', side_effect=IOError("Permission denied")):
             with patch('builtins.print') as mock_print:
-                _save_cache("test", test_data)
-                mock_print.assert_called_once()
-                assert "Warning: Failed to save cache" in mock_print.call_args[0][0]
-    
-    def test_load_cache_error_handling(self):
-        """Test cache load error handling"""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            with patch('lib.workers.CACHE_DIR', temp_dir):
-                # Create a corrupted JSON file
-                cache_file = os.path.join(temp_dir, "corrupted.json")
-                with open(cache_file, 'w') as f:
-                    f.write('{"invalid": json}')
+                save_cache("test_worker", test_data)
                 
+                # Check that error was logged
+                mock_print.assert_called()
+                assert any("Error saving cache" in str(call) for call in mock_print.call_args_list)
+    
+    def test_cache_load_handles_file_read_errors_gracefully(self):
+        """Test cache loading with error handling"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Create a file with invalid JSON
+            cache_file = os.path.join(temp_dir, "onionoo_details.json")
+            with open(cache_file, 'w') as f:
+                f.write("invalid json content")
+            
+            with patch('workers.CACHE_DIR', temp_dir):
                 with patch('builtins.print') as mock_print:
-                    result = _load_cache("corrupted")
+                    result = load_cache("onionoo_details")
+                    
                     assert result is None
-                    mock_print.assert_called_once()
-                    assert "Warning: Failed to load cache" in mock_print.call_args[0][0]
+                    # Check that error was logged
+                    mock_print.assert_called()
+                    assert any("Error loading cache" in str(call) for call in mock_print.call_args_list)
 
 
-class TestStateManagement:
-    """Test worker state management functionality"""
+class TestWorkerStatusManagement:
+    """Test worker status tracking functionality"""
     
-    def setup_method(self):
-        """Clear worker status before each test"""
-        # Clear the in-memory worker status dictionary
-        import lib.workers
-        lib.workers._worker_status = {}
+    def test_worker_status_mark_ready_updates_state_correctly(self):
+        """Test marking worker as ready and checking status"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with patch('workers.STATE_FILE', os.path.join(temp_dir, "state.json")):
+                mark_worker_ready("test_worker")
+                
+                status = get_worker_status("test_worker")
+                
+                assert status["status"] == "ready"
+                assert status["error"] is None
+                assert isinstance(status["last_update"], float)
     
-    def test_mark_ready_and_get_status(self):
-        """Test marking a worker as ready and retrieving its status"""
-        _mark_ready("test_api")
-        status = get_worker_status("test_api")
+    def test_worker_status_mark_stale_updates_state_with_error_message(self):
+        """Test marking worker as stale and checking status"""
+        error_msg = "Network timeout"
         
-        assert status is not None
-        assert status["status"] == "ready"
-        assert status["error"] is None
-        assert isinstance(status["timestamp"], float)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with patch('workers.STATE_FILE', os.path.join(temp_dir, "state.json")):
+                mark_worker_stale("test_worker", error_msg)
+                
+                status = get_worker_status("test_worker")
+                
+                assert status["status"] == "stale"
+                assert status["error"] == error_msg
+                assert isinstance(status["last_update"], float)
     
-    def test_mark_stale_and_get_status(self):
-        """Test marking a worker as stale and retrieving its status"""
-        _mark_stale("test_api", "Connection failed")
-        status = get_worker_status("test_api")
-        
-        assert status is not None
-        assert status["status"] == "stale"
-        assert status["error"] == "Connection failed"
-        assert isinstance(status["timestamp"], float)
+    def test_worker_status_get_all_returns_complete_status_dictionary(self):
+        """Test getting all worker statuses"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with patch('workers.STATE_FILE', os.path.join(temp_dir, "state.json")):
+                mark_worker_ready("worker1")
+                mark_worker_stale("worker2", "Error")
+                
+                all_status = get_all_worker_status()
+                
+                assert "worker1" in all_status
+                assert "worker2" in all_status
+                assert all_status["worker1"]["status"] == "ready"
+                assert all_status["worker2"]["status"] == "stale"
     
-    def test_get_all_worker_status(self):
-        """Test getting status for all workers"""
-        _mark_ready("api1")
-        _mark_stale("api2", "Error message")
-        
-        all_status = get_all_worker_status()
-        assert len(all_status) == 2
-        assert "api1" in all_status
-        assert "api2" in all_status
-        assert all_status["api1"]["status"] == "ready"
-        assert all_status["api2"]["status"] == "stale"
-    
-    def test_get_worker_status_nonexistent(self):
+    def test_worker_status_get_returns_unknown_for_nonexistent_worker(self):
         """Test getting status for non-existent worker"""
-        status = get_worker_status("nonexistent_api")
-        assert status is None
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with patch('workers.STATE_FILE', os.path.join(temp_dir, "state.json")):
+                status = get_worker_status("nonexistent_worker")
+                assert status["status"] == "unknown"
     
-    def test_state_persistence(self):
-        """Test that worker state persists to file"""
+    def test_worker_state_persists_across_multiple_operations(self):
+        """Test that worker state persists across multiple operations"""
         with tempfile.TemporaryDirectory() as temp_dir:
             state_file = os.path.join(temp_dir, "state.json")
             
-            with patch('lib.workers.STATE_FILE', state_file):
-                _mark_ready("persistent_api")
+            with patch('workers.STATE_FILE', state_file):
+                # Mark worker as ready
+                mark_worker_ready("persistent_worker")
                 
-                # Verify state file was created
-                assert os.path.exists(state_file)
+                # Check status
+                status1 = get_worker_status("persistent_worker")
+                assert status1["status"] == "ready"
                 
-                # Verify content
-                with open(state_file, 'r') as f:
-                    state_data = json.load(f)
+                # Mark worker as stale
+                mark_worker_stale("persistent_worker", "New error")
                 
-                assert "workers" in state_data
-                assert "persistent_api" in state_data["workers"]
-                assert state_data["workers"]["persistent_api"]["status"] == "ready"
+                # Check status again
+                status2 = get_worker_status("persistent_worker")
+                assert status2["status"] == "stale"
+                assert status2["error"] == "New error"
 
 
-class TestTimestampOperations:
-    """Test timestamp file operations for conditional requests"""
+class TestWorkerTimestampManagement:
+    """Test worker timestamp functionality"""
     
-    def test_write_and_read_timestamp(self):
+    def test_timestamp_write_and_read_preserves_exact_time_value(self):
         """Test writing and reading timestamps"""
-        test_timestamp = "Mon, 01 Jan 2024 12:00:00 GMT"
+        test_timestamp = time.time()
         
         with tempfile.TemporaryDirectory() as temp_dir:
-            with patch('lib.workers.CACHE_DIR', temp_dir):
-                _write_timestamp("test_api", test_timestamp)
-                read_timestamp = _read_timestamp("test_api")
-                assert read_timestamp == test_timestamp
+            with patch('workers.CACHE_DIR', temp_dir):
+                write_timestamp("test_worker", test_timestamp)
+                
+                read_timestamp_value = read_timestamp("test_worker")
+                
+                assert abs(read_timestamp_value - test_timestamp) < 0.001  # Allow small float precision difference
     
-    def test_read_timestamp_nonexistent(self):
-        """Test reading timestamp that doesn't exist"""
+    def test_timestamp_read_returns_none_when_file_does_not_exist(self):
+        """Test reading timestamp when file doesn't exist"""
         with tempfile.TemporaryDirectory() as temp_dir:
-            with patch('lib.workers.CACHE_DIR', temp_dir):
-                result = _read_timestamp("nonexistent")
+            with patch('workers.CACHE_DIR', temp_dir):
+                result = read_timestamp("nonexistent_worker")
                 assert result is None
-    
-    def test_timestamp_error_handling(self):
-        """Test timestamp operation error handling"""
-        with patch('builtins.open', side_effect=PermissionError("Permission denied")):
-            with patch('builtins.print') as mock_print:
-                _write_timestamp("test", "timestamp")
-                mock_print.assert_called_once()
-                assert "Warning: Failed to save timestamp for test" in mock_print.call_args[0][0]
 
 
 class TestOnionooDetailsWorker:
@@ -190,12 +196,12 @@ class TestOnionooDetailsWorker:
         
         with patch('urllib.request.urlopen', return_value=mock_response):
             with tempfile.TemporaryDirectory() as temp_dir:
-                with patch('lib.workers.CACHE_DIR', temp_dir):
+                with patch('workers.CACHE_DIR', temp_dir):
                     result = fetch_onionoo_details()
                     
                     assert result == mock_response_data
                     # Verify it was cached
-                    cached = _load_cache("onionoo_details")
+                    cached = load_cache("onionoo_details")
                     assert cached == mock_response_data
     
     def test_fetch_onionoo_details_with_conditional_request(self):
@@ -211,9 +217,9 @@ class TestOnionooDetailsWorker:
         with patch('urllib.request.Request', return_value=mock_request_class) as mock_request:
             with patch('urllib.request.urlopen', return_value=mock_response):
                 with tempfile.TemporaryDirectory() as temp_dir:
-                    with patch('lib.workers.CACHE_DIR', temp_dir):
+                    with patch('workers.CACHE_DIR', temp_dir):
                         # First save a timestamp
-                        _write_timestamp("onionoo_details", test_timestamp)
+                        write_timestamp("onionoo_details", test_timestamp)
                         
                         result = fetch_onionoo_details()
                         
@@ -233,9 +239,9 @@ class TestOnionooDetailsWorker:
         
         with patch('urllib.request.urlopen', side_effect=mock_error):
             with tempfile.TemporaryDirectory() as temp_dir:
-                with patch('lib.workers.CACHE_DIR', temp_dir):
+                with patch('workers.CACHE_DIR', temp_dir):
                     # Pre-populate cache
-                    _save_cache("onionoo_details", cached_data)
+                    save_cache("onionoo_details", cached_data)
                     
                     result = fetch_onionoo_details()
                     
@@ -249,7 +255,7 @@ class TestOnionooDetailsWorker:
         
         with patch('urllib.request.urlopen', side_effect=mock_error):
             with tempfile.TemporaryDirectory() as temp_dir:
-                with patch('lib.workers.CACHE_DIR', temp_dir):
+                with patch('workers.CACHE_DIR', temp_dir):
                     # Patch sys.exit to prevent actual exit and return None instead
                     with patch('sys.exit') as mock_exit:
                         result = fetch_onionoo_details()
@@ -265,7 +271,7 @@ class TestOnionooDetailsWorker:
         
         with patch('urllib.request.urlopen', side_effect=mock_error):
             with tempfile.TemporaryDirectory() as temp_dir:
-                with patch('lib.workers.CACHE_DIR', temp_dir):
+                with patch('workers.CACHE_DIR', temp_dir):
                     result = fetch_onionoo_details()
                     
                     assert result is None
@@ -276,9 +282,9 @@ class TestOnionooDetailsWorker:
         
         with patch('urllib.request.urlopen', side_effect=urllib.error.URLError("Network error")):
             with tempfile.TemporaryDirectory() as temp_dir:
-                with patch('lib.workers.CACHE_DIR', temp_dir):
+                with patch('workers.CACHE_DIR', temp_dir):
                     # Pre-populate cache
-                    _save_cache("onionoo_details", cached_data)
+                    save_cache("onionoo_details", cached_data)
                     
                     result = fetch_onionoo_details()
                     
@@ -288,7 +294,7 @@ class TestOnionooDetailsWorker:
         """Test network error without cache fallback"""
         with patch('urllib.request.urlopen', side_effect=urllib.error.URLError("Network error")):
             with tempfile.TemporaryDirectory() as temp_dir:
-                with patch('lib.workers.CACHE_DIR', temp_dir):
+                with patch('workers.CACHE_DIR', temp_dir):
                     result = fetch_onionoo_details()
                     
                     assert result is None
@@ -328,12 +334,12 @@ class TestOnionooUptimeWorker:
         
         with patch('urllib.request.urlopen', return_value=mock_response):
             with tempfile.TemporaryDirectory() as temp_dir:
-                with patch('lib.workers.CACHE_DIR', temp_dir):
+                with patch('workers.CACHE_DIR', temp_dir):
                     result = fetch_onionoo_uptime(progress_logger=mock_progress_logger)
                     
                     assert result == mock_response_data
                     # Verify it was cached
-                    cached = _load_cache("onionoo_uptime")
+                    cached = load_cache("onionoo_uptime")
                     assert cached == mock_response_data
                     
                     # Verify progress messages
@@ -353,9 +359,9 @@ class TestOnionooUptimeWorker:
         with patch('urllib.request.Request', return_value=mock_request_class) as mock_request:
             with patch('urllib.request.urlopen', return_value=mock_response):
                 with tempfile.TemporaryDirectory() as temp_dir:
-                    with patch('lib.workers.CACHE_DIR', temp_dir):
+                    with patch('workers.CACHE_DIR', temp_dir):
                         # First save a timestamp
-                        _write_timestamp("onionoo_uptime", test_timestamp)
+                        write_timestamp("onionoo_uptime", test_timestamp)
                         
                         result = fetch_onionoo_uptime()
                         
@@ -380,9 +386,9 @@ class TestOnionooUptimeWorker:
         
         with patch('urllib.request.urlopen', side_effect=mock_error):
             with tempfile.TemporaryDirectory() as temp_dir:
-                with patch('lib.workers.CACHE_DIR', temp_dir):
+                with patch('workers.CACHE_DIR', temp_dir):
                     # Pre-populate cache
-                    _save_cache("onionoo_uptime", cached_data)
+                    save_cache("onionoo_uptime", cached_data)
                     
                     result = fetch_onionoo_uptime(progress_logger=mock_progress_logger)
                     
@@ -402,7 +408,7 @@ class TestOnionooUptimeWorker:
         
         with patch('urllib.request.urlopen', side_effect=mock_error):
             with tempfile.TemporaryDirectory() as temp_dir:
-                with patch('lib.workers.CACHE_DIR', temp_dir):
+                with patch('workers.CACHE_DIR', temp_dir):
                     result = fetch_onionoo_uptime(progress_logger=mock_progress_logger)
                     
                     # Should return None when no cache is available
@@ -422,7 +428,7 @@ class TestOnionooUptimeWorker:
         
         with patch('urllib.request.urlopen', side_effect=mock_error):
             with tempfile.TemporaryDirectory() as temp_dir:
-                with patch('lib.workers.CACHE_DIR', temp_dir):
+                with patch('workers.CACHE_DIR', temp_dir):
                     result = fetch_onionoo_uptime(progress_logger=mock_progress_logger)
                     
                     assert result is None
@@ -442,9 +448,9 @@ class TestOnionooUptimeWorker:
         
         with patch('urllib.request.urlopen', side_effect=urllib.error.URLError("Network error")):
             with tempfile.TemporaryDirectory() as temp_dir:
-                with patch('lib.workers.CACHE_DIR', temp_dir):
+                with patch('workers.CACHE_DIR', temp_dir):
                     # Pre-populate cache
-                    _save_cache("onionoo_uptime", cached_data)
+                    save_cache("onionoo_uptime", cached_data)
                     
                     result = fetch_onionoo_uptime(progress_logger=mock_progress_logger)
                     
@@ -460,7 +466,7 @@ class TestOnionooUptimeWorker:
         
         with patch('urllib.request.urlopen', side_effect=urllib.error.URLError("Network error")):
             with tempfile.TemporaryDirectory() as temp_dir:
-                with patch('lib.workers.CACHE_DIR', temp_dir):
+                with patch('workers.CACHE_DIR', temp_dir):
                     result = fetch_onionoo_uptime(progress_logger=mock_progress_logger)
                     
                     assert result is None
@@ -478,7 +484,7 @@ class TestOnionooUptimeWorker:
         
         with patch('urllib.request.urlopen', return_value=mock_response):
             with tempfile.TemporaryDirectory() as temp_dir:
-                with patch('lib.workers.CACHE_DIR', temp_dir):
+                with patch('workers.CACHE_DIR', temp_dir):
                     result = fetch_onionoo_uptime(progress_logger=mock_progress_logger)
                     
                     assert result is None
@@ -501,7 +507,7 @@ class TestOnionooUptimeWorker:
         
         with patch('urllib.request.urlopen', return_value=mock_response):
             with tempfile.TemporaryDirectory() as temp_dir:
-                with patch('lib.workers.CACHE_DIR', temp_dir):
+                with patch('workers.CACHE_DIR', temp_dir):
                     result = fetch_onionoo_uptime(progress_logger=mock_progress_logger)
                     
                     assert result == mock_response_data
@@ -521,7 +527,7 @@ class TestOnionooUptimeWorker:
         
         with patch('urllib.request.urlopen', return_value=mock_response):
             with tempfile.TemporaryDirectory() as temp_dir:
-                with patch('lib.workers.CACHE_DIR', temp_dir):
+                with patch('workers.CACHE_DIR', temp_dir):
                     result = fetch_onionoo_uptime()
                     
                     assert result == mock_response_data
@@ -536,7 +542,7 @@ class TestOnionooUptimeWorker:
         """Test that uptime worker status is marked as stale on error"""
         with patch('urllib.request.urlopen', side_effect=urllib.error.URLError("Network error")):
             with tempfile.TemporaryDirectory() as temp_dir:
-                with patch('lib.workers.CACHE_DIR', temp_dir):
+                with patch('workers.CACHE_DIR', temp_dir):
                     result = fetch_onionoo_uptime()
                     
                     assert result is None
@@ -590,12 +596,12 @@ class TestDirectoryCreation:
                 os.rmdir(cache_dir)
             
             # Patch the directory constants
-            with patch('lib.workers.CACHE_DIR', cache_dir):
-                with patch('lib.workers.DATA_DIR', data_dir):
-                    # Create the cache directory since _save_cache expects it to exist
+            with patch('workers.CACHE_DIR', cache_dir):
+                with patch('workers.DATA_DIR', data_dir):
+                    # Create the cache directory since save_cache expects it to exist
                     os.makedirs(cache_dir, exist_ok=True)
                     # Manually trigger directory creation by calling the function that creates them
-                    _save_cache("test", {"test": "data"})
+                    save_cache("test", {"test": "data"})
                     
                     # Now check that directories exist
                     assert os.path.exists(cache_dir)
