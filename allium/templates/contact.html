@@ -137,7 +137,7 @@
             
             {# Overall uptime - using pre-computed formatted data #}
             {% if contact_display_data and contact_display_data.uptime_formatted %}
-            <div style="margin-bottom: 15px;">
+            <div style="margin-bottom: 10px;">
                 <strong>Overall uptime:</strong>
                 {% for period, data in contact_display_data.uptime_formatted.items() %}
                     {{ data.display|safe }} ({{ data.relay_count }} relays){% if not loop.last %}, {% endif %}
@@ -149,12 +149,12 @@
             {% if contact_display_data and contact_display_data.outliers %}
             {% set outliers = contact_display_data.outliers %}
             {% if outliers.total_count %}
-            <div style="margin-bottom: 15px;">
+            <div style="margin-bottom: 10px;">
                 <strong><span title="{{ outliers.tooltip }}">Outliers</span>:</strong>
-                <span style="color: #000; font-weight: normal;">{{ outliers.total_count }} relays out of {{ outliers.total_relays }} relays ({{ outliers.percentage }}%)</span>{% if outliers.low_count %}, <span style="color: #dc3545; font-weight: bold;">Low:</span> <span title="{{ outliers.low_tooltip }}" style="cursor: help; text-decoration: underline;">{{ outliers.low_count }} relay{{ 's' if outliers.low_count != 1 else '' }}</span>{% endif %}{% if outliers.high_count %}{% if outliers.low_count %}, {% endif %}<span style="color: #28a745; font-weight: bold;">Exceptional:</span> <span title="{{ outliers.high_tooltip }}" style="cursor: help; text-decoration: underline;">{{ outliers.high_count }} relay{{ 's' if outliers.high_count != 1 else '' }}</span>{% endif %}
+                <span style="color: #000; font-weight: normal;">{{ outliers.total_count }} relays out of {{ outliers.total_relays }} relays ({{ outliers.percentage }}%)</span>{% if outliers.low_count %}, <span style="color: #dc3545; font-weight: bold;">Low:</span> <span title="{{ outliers.low_tooltip }}" style="cursor: help;">{{ outliers.low_count }} relay{{ 's' if outliers.low_count != 1 else '' }}</span>{% endif %}{% if outliers.high_count %}{% if outliers.low_count %}, {% endif %}<span style="color: #28a745; font-weight: bold;">Exceptional:</span> <span title="{{ outliers.high_tooltip }}" style="cursor: help;">{{ outliers.high_count }} relay{{ 's' if outliers.high_count != 1 else '' }}</span>{% endif %}
             </div>
             {% elif outliers.none_detected %}
-            <div style="margin-bottom: 15px;">
+            <div style="margin-bottom: 10px;">
                 <span style="color: #28a745;">✅ No statistical outliers detected - consistent performance across all relays</span>
             </div>
             {% endif %}
@@ -164,16 +164,17 @@
             {% if contact_display_data and contact_display_data.downtime_alerts %}
             {% set alerts = contact_display_data.downtime_alerts %}
             {% if alerts.has_offline_relays %}
+            {% set total_offline = alerts.offline_counts.guard + alerts.offline_counts.middle + alerts.offline_counts.exit %}
             <div style="margin-bottom: 10px;">
-                <strong>🚨 Offline:</strong>
+                <strong>🚨 Offline ({{ total_offline }}):</strong>
                 {% if alerts.offline_counts.guard > 0 %}
-                    <span title="{% for relay in alerts.offline_relay_details.guard_relays %}{{ relay.display_text }}{% if not loop.last %}, {% endif %}{% endfor %}" style="cursor: help; text-decoration: underline;">{{ alerts.offline_counts.guard }} guard ({{ "%.1f"|format(alerts.traffic_percentages.guard) }}% of observed traffic)</span>{% if alerts.offline_counts.middle > 0 or alerts.offline_counts.exit > 0 %}, {% endif %}
+                    <span title="{% for relay in alerts.offline_relay_details.guard_relays %}{{ relay.display_text }}{% if not loop.last %}, {% endif %}{% endfor %}" style="cursor: help;">{{ alerts.offline_counts.guard }} guard ({{ "%.1f"|format(alerts.traffic_percentages.guard) }}% of observed traffic)</span>{% if alerts.offline_counts.middle > 0 or alerts.offline_counts.exit > 0 %}, {% endif %}
                 {% endif %}
                 {% if alerts.offline_counts.middle > 0 %}
-                    <span title="{% for relay in alerts.offline_relay_details.middle_relays %}{{ relay.display_text }}{% if not loop.last %}, {% endif %}{% endfor %}" style="cursor: help; text-decoration: underline;">{{ alerts.offline_counts.middle }} middle ({{ "%.1f"|format(alerts.traffic_percentages.middle) }}% of observed traffic)</span>{% if alerts.offline_counts.exit > 0 %}, {% endif %}
+                    <span title="{% for relay in alerts.offline_relay_details.middle_relays %}{{ relay.display_text }}{% if not loop.last %}, {% endif %}{% endfor %}" style="cursor: help;">{{ alerts.offline_counts.middle }} middle ({{ "%.1f"|format(alerts.traffic_percentages.middle) }}% of observed traffic)</span>{% if alerts.offline_counts.exit > 0 %}, {% endif %}
                 {% endif %}
                 {% if alerts.offline_counts.exit > 0 %}
-                    <span title="{% for relay in alerts.offline_relay_details.exit_relays %}{{ relay.display_text }}{% if not loop.last %}, {% endif %}{% endfor %}" style="cursor: help; text-decoration: underline;">{{ alerts.offline_counts.exit }} exit ({{ "%.1f"|format(alerts.traffic_percentages.exit) }}% of observed traffic)</span>
+                    <span title="{% for relay in alerts.offline_relay_details.exit_relays %}{{ relay.display_text }}{% if not loop.last %}, {% endif %}{% endfor %}" style="cursor: help;">{{ alerts.offline_counts.exit }} exit ({{ "%.1f"|format(alerts.traffic_percentages.exit) }}% of observed traffic)</span>
                 {% endif %}
             </div>
             <div style="margin-bottom: 10px; font-size: 13px; color: #856404;">
@@ -187,7 +188,7 @@
             {% endif %}
             
             <div style="font-size: 12px; color: #666; margin-top: 10px;">
-                Reliability data available for {{ operator_reliability.valid_relays }}/{{ operator_reliability.total_relays }} relays
+                Reliability data available for {{ operator_reliability.valid_relays }}/{{ operator_reliability.total_relays }} relays{% if contact_display_data and contact_display_data.uptime_timestamp %}, from {{ contact_display_data.uptime_timestamp }}{% endif %}
             </div>
         </div>
         {% endif %}
