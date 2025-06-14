@@ -90,20 +90,7 @@
                         {% endif %}
                     </li>
                     
-                    <li><strong><span title="Network position indicates the strategic role distribution of relays. Labels: Guard-focused (>60% guard), Exit-focused (>40% exit), Multi-role (both guard and exit >20%), Balanced (mixed roles), Guard-only (100% guard), Exit-only (100% exit), Middle-only (100% middle)">Network Position</span>:</strong> {{ network_position.formatted_string }}
-                        {# Only show non-zero relay counts #}
-                        {% set position_components = [] %}
-                        {% if guard_count > 0 %}
-                            {% set _ = position_components.append(guard_count|string + ' guard' + ('s' if guard_count != 1 else '')) %}
-                        {% endif %}
-                        {% if middle_count > 0 %}
-                            {% set _ = position_components.append(middle_count|string + ' middle') %}
-                        {% endif %}
-                        {% if exit_count > 0 %}
-                            {% set _ = position_components.append(exit_count|string + ' exit' + ('s' if exit_count != 1 else '')) %}
-                        {% endif %}
-                        ({{ relays.json['relay_subset']|length }} total relay{{ 's' if relays.json['relay_subset']|length != 1 else '' }}{% if position_components %}, {{ position_components|join(', ') }}{% endif %})
-                    </li>
+                    <li><strong><span title="Network position indicates the strategic role distribution of relays. Labels: Guard-focused (>60% guard), Exit-focused (>40% exit), Multi-role (both guard and exit >20%), Balanced (mixed roles), Guard-only (100% guard), Exit-only (100% exit), Middle-only (100% middle)">Network Position</span>:</strong> {{ network_position }}</li>
                 </ul>
             </div>
         </div>
@@ -133,7 +120,7 @@
     
     {# Right Column (40%): AROI Rankings & Streamlined Reliability #}
     <div class="col-md-5">
-        {# AROI Leaderboard Rankings #}
+        {# AROI Leaderboard Rankings - Sorted by rank #}
         {% if contact_rankings %}
         <div class="aroi-rankings-section" style="margin-bottom: 20px; padding: 15px; background-color: #f0f8ff; border-left: 4px solid #28a745;">
             <h4 style="margin: 0 0 8px 0; color: #495057; font-size: 16px;">🏆 AROI Champion Rankings</h4>
@@ -171,14 +158,19 @@
                 {% endfor %}
             </div>
             
-            {# Statistical outliers section - single line format #}
+            {# Statistical outliers section - enhanced format #}
             {% set total_outliers = operator_reliability.outliers.low_outliers|length + operator_reliability.outliers.high_outliers|length %}
             {% if total_outliers > 0 %}
             <div style="margin-bottom: 10px;">
-                {# Get the mean from 6-month period as reference for tooltip #}
-                {% set mean_uptime = operator_reliability.overall_uptime.get('6_months', {}).get('average', 0) %}
-                <strong><span title="≥2σ from average μ {{ "%.1f"|format(mean_uptime) }}%">Outliers</span>:</strong>
-                <span style="color: #000; font-weight: normal;">{{ total_outliers }} relay{{ 's' if total_outliers != 1 else '' }}</span>{% if operator_reliability.outliers.low_outliers %}, <span style="color: #dc3545; font-weight: bold;">⚠️ Low:</span> {% set low_names = [] %}{% for outlier in operator_reliability.outliers.low_outliers %}{% set _ = low_names.append(outlier.nickname + " (" + "%.1f"|format(outlier.uptime) + "%)") %}{% endfor %}<span title="{{ low_names|join(', ') }}" style="cursor: help; text-decoration: underline;">{{ operator_reliability.outliers.low_outliers|length }} relay{{ 's' if operator_reliability.outliers.low_outliers|length != 1 else '' }}</span>{% endif %}{% if operator_reliability.outliers.high_outliers %}{% if operator_reliability.outliers.low_outliers %}, {% endif %}<span style="color: #28a745; font-weight: bold;">🏆 Exceptional:</span> {% set high_names = [] %}{% for outlier in operator_reliability.outliers.high_outliers %}{% set _ = high_names.append(outlier.nickname + " (" + "%.1f"|format(outlier.uptime) + "%)") %}{% endfor %}<span title="{{ high_names|join(', ') }}" style="cursor: help; text-decoration: underline;">{{ operator_reliability.outliers.high_outliers|length }} relay{{ 's' if operator_reliability.outliers.high_outliers|length != 1 else '' }}</span>{% endif %}
+                {# Calculate percentage and get statistics for tooltip #}
+                {% set total_relays = operator_reliability.total_relays %}
+                {% set outlier_percentage = "%.1f"|format((total_outliers / total_relays * 100) if total_relays > 0 else 0) %}
+                {% set six_month_data = operator_reliability.overall_uptime.get('6_months', {}) %}
+                {% set mean_uptime = six_month_data.get('average', 0) %}
+                {% set std_dev = six_month_data.get('std_dev', 0) %}
+                {% set two_sigma_threshold = mean_uptime - (2 * std_dev) %}
+                <strong><span title="≥2σ {{ "%.1f"|format(two_sigma_threshold) }}% from average μ {{ "%.1f"|format(mean_uptime) }}%">Outliers</span>:</strong>
+                <span style="color: #000; font-weight: normal;">{{ total_outliers }} relays out of {{ total_relays }} relays ({{ outlier_percentage }}%)</span>{% if operator_reliability.outliers.low_outliers %}, <span style="color: #dc3545; font-weight: bold;">Low:</span> {% set low_names = [] %}{% for outlier in operator_reliability.outliers.low_outliers %}{% set _ = low_names.append(outlier.nickname + " (" + "%.1f"|format(outlier.uptime) + "%)") %}{% endfor %}<span title="{{ low_names|join(', ') }}" style="cursor: help; text-decoration: underline;">{{ operator_reliability.outliers.low_outliers|length }} relay{{ 's' if operator_reliability.outliers.low_outliers|length != 1 else '' }}</span>{% endif %}{% if operator_reliability.outliers.high_outliers %}{% if operator_reliability.outliers.low_outliers %}, {% endif %}<span style="color: #28a745; font-weight: bold;">Exceptional:</span> {% set high_names = [] %}{% for outlier in operator_reliability.outliers.high_outliers %}{% set _ = high_names.append(outlier.nickname + " (" + "%.1f"|format(outlier.uptime) + "%)") %}{% endfor %}<span title="{{ high_names|join(', ') }}" style="cursor: help; text-decoration: underline;">{{ operator_reliability.outliers.high_outliers|length }} relay{{ 's' if operator_reliability.outliers.high_outliers|length != 1 else '' }}</span>{% endif %}
             </div>
             {% else %}
             <div style="margin-bottom: 10px;">
