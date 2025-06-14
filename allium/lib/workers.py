@@ -254,6 +254,10 @@ def fetch_onionoo_details(onionoo_url="https://onionoo.torproject.org/details", 
         # Mark as ready
         _mark_ready(api_name)
         
+        # Use consistent progress format for success message
+        relay_count = len(data.get('relays', []))
+        log_progress(f"Successfully fetched {relay_count} relays from onionoo (details API)")
+        
         return data
         
     except Exception as e:
@@ -355,7 +359,7 @@ def fetch_onionoo_uptime(onionoo_url="https://onionoo.torproject.org/uptime", pr
         
         # Use consistent progress format for success message
         relay_count = len(data.get('relays', []))
-        log_progress(f"Successfully fetched uptime data for {relay_count} relays")
+        log_progress(f"Successfully fetched uptime data for {relay_count} relays (uptime API)")
         return data
         
     except Exception as e:
