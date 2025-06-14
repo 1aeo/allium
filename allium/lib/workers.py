@@ -234,9 +234,9 @@ def fetch_onionoo_details(onionoo_url="https://onionoo.torproject.org/details", 
                 log_progress(f"HTTP error fetching onionoo data: {err.code}")
                 raise err
         except urllib.error.URLError as err:
-            log_progress(f"Network error fetching onionoo data: {err}")
-            log_progress("Check your internet connection and try again")
-            log_progress("In CI environments, this might be a temporary network issue")
+            log_progress(f"network error fetching onionoo data: {err}")
+            log_progress("check your internet connection and try again")
+            log_progress("in CI environments, this might be a temporary network issue")
             raise err
 
         # Parse JSON response
