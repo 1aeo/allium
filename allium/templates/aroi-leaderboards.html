@@ -149,7 +149,7 @@
 
     <!-- Category 1: Bandwidth Contributed -->
     <section id="bandwidth" class="aroi-section">
-        <h3 title="Operators ranked by total observed bandwidth capacity across all relays">🚀 Bandwidth Contributed - Top 25</h3>
+        <h3 title="Operators ranked by total observed bandwidth capacity across all relays">🚀 Bandwidth Contributed</h3>
         {% if relays.json.aroi_leaderboards.leaderboards.bandwidth %}
         
         <!-- Page 1: Ranks 1-10 -->
@@ -186,7 +186,7 @@
 
     <!-- Category 2: Network Heavyweight Rankings -->
     <section id="consensus_weight" class="aroi-section">
-        <h3 title="Operators ranked by total network consensus weight percentage controlling Tor routing decisions">🏛️ Network Heavyweight Rankings - Top 25</h3>
+        <h3 title="Operators ranked by total network consensus weight percentage controlling Tor routing decisions">🏛️ Network Heavyweight Rankings</h3>
         {% if relays.json.aroi_leaderboards.leaderboards.consensus_weight %}
         
         <!-- Page 1: Ranks 1-10 -->
@@ -223,7 +223,7 @@
 
     <!-- Category 3: Exit Authorities -->
     <section id="exit_authority" class="aroi-section">
-        <h3 title="Operators ranked by exit consensus weight controlling internet exit traffic">🚪 Exit Authorities - Top 25</h3>
+        <h3 title="Operators ranked by exit consensus weight controlling internet exit traffic">🚪 Exit Authorities</h3>
         {% if relays.json.aroi_leaderboards.leaderboards.exit_authority %}
         
         <!-- Page 1: Ranks 1-10 -->
@@ -260,7 +260,7 @@
 
     <!-- Category 4: Exit Champions -->
     <section id="exit_operators" class="aroi-section">
-        <h3 title="Operators ranked by number of exit relays providing internet access points">🚪 Exit Champions - Top 25</h3>
+        <h3 title="Operators ranked by number of exit relays providing internet access points">🚪 Exit Champions</h3>
         {% if relays.json.aroi_leaderboards.leaderboards.exit_operators %}
         
         <!-- Page 1: Ranks 1-10 -->
@@ -297,7 +297,7 @@
 
     <!-- Category 5: Guard Gatekeepers -->
     <section id="guard_operators" class="aroi-section">
-        <h3 title="Operators ranked by number of guard relays serving as network entry points">🛡️ Guard Gatekeepers - Top 25</h3>
+        <h3 title="Operators ranked by number of guard relays serving as network entry points">🛡️ Guard Gatekeepers</h3>
         {% if relays.json.aroi_leaderboards.leaderboards.guard_operators %}
         
         <!-- Page 1: Ranks 1-10 -->
@@ -347,7 +347,7 @@
             {%- elif category_key == 'network_veterans' -%}veteran scores calculated as (earliest relay start date × total relay count). Formula: veteran_score = days_since_first_relay × total_relays. Recognizes operators who have been contributing to the Tor network for the longest time with sustained relay operations
             {%- elif category_key == 'reliability_masters' -%}6-month average uptime reliability scores from Onionoo API data for operators with 25+ relays. Formula: reliability_score = average_6_month_uptime. Measures operational excellence and network reliability over recent 6-month period using simple average uptime percentages
             {%- elif category_key == 'legacy_titans' -%}5-year average uptime reliability scores from Onionoo API data for operators with 25+ relays. Formula: reliability_score = average_5_year_uptime. Measures long-term operational stability and reliability over 5-year historical period using simple average uptime percentages
-            {%- endif -%}">{{ emoji }} {{ category_name }} - Top 25</h3>
+            {%- endif -%}">{{ emoji }} {{ category_name }}</h3>
             {% if category_data %}
             
             <!-- Page 1: Ranks 1-10 -->
