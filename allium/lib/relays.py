@@ -1248,10 +1248,10 @@ class Relays:
         """
         category_info = {
             'bandwidth': {'name': 'Bandwidth Champion', 'emoji': '🚀', 'title': 'Bandwidth Champion'},
-            'consensus_weight': {'name': 'Network Authority', 'emoji': '⚖️', 'title': 'Network Authority'},
-            'exit_authority': {'name': 'Exit Authority', 'emoji': '🚪', 'title': 'Exit Authority'},
-            'exit_operators': {'name': 'Exit Gate Keeper', 'emoji': '🚪', 'title': 'Exit Gate Keeper'},
-            'guard_operators': {'name': 'Guard Champion', 'emoji': '🛡️', 'title': 'Guard Champion'},
+                    'consensus_weight': {'name': 'Network Heavyweight', 'emoji': '⚖️', 'title': 'Network Heavyweight'},
+        'exit_authority': {'name': 'Exit Heavyweight Master', 'emoji': '🚪', 'title': 'Exit Heavyweight Master'},
+        'exit_operators': {'name': 'Exit Champion', 'emoji': '🚪', 'title': 'Exit Champion'},
+        'guard_operators': {'name': 'Guard Gatekeepers', 'emoji': '🛡️', 'title': 'Guard Gatekeepers'},
             'most_diverse': {'name': 'Diversity Master', 'emoji': '🌈', 'title': 'Diversity Master'},
             'platform_diversity': {'name': 'Platform Hero', 'emoji': '💻', 'title': 'Platform Hero'},
             'non_eu_leaders': {'name': 'Non-EU Leader', 'emoji': '🌍', 'title': 'Non-EU Leader'},
