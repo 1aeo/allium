@@ -512,4 +512,150 @@
             </tbody>
         </table>
     </div>
+{% endmacro %}
+
+{# Consensus Weight Table Complete Macro - Network Heavyweight Rankings #}
+{% macro consensus_weight_table_complete(consensus_data, use_bits, page_ctx) %}
+    <div class="table-responsive">
+        <table class="table table-striped table-condensed aroi-rankings-table aroi-standard-table">
+            <thead>
+                <tr>
+                    <th title="Position in network authority leaderboard based on consensus weight">Rank</th>
+                    <th title="Authenticated Relay Operator Identifier following ContactInfo specification">Operator (AROI)</th>
+                    <th title="Total relay count contributing to consensus weight calculation">Relays</th>
+                    <th title="Percentage of total Tor network consensus weight controlled">Network Heavyweight</th>
+                    <th title="Total observed bandwidth capacity in {% if use_bits %}bits per second{% else %}bytes per second{% endif %}">Bandwidth</th>
+                    <th title="Number of guard and exit relays providing specialized services">Guard/Exit Count</th>
+                    <th title="Number of countries with relay presence">Countries</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in consensus_data %}
+                <tr>
+                    <td>{{ rank_badge(entry.rank) }}</td>
+                    <td>{{ operator_link(entry, page_ctx) }}</td>
+                    <td title="Active relays currently contributing to Tor network">{{ entry.total_relays }}</td>
+                    <td>
+                        <span class="text-nowrap"><strong title="Network consensus weight controlling Tor routing decisions">{{ entry.total_consensus_weight_pct }}</strong></span>
+                    </td>
+                    <td>
+                        <span class="text-nowrap" title="Observed bandwidth capacity in {% if use_bits %}{{ entry.bandwidth_unit }} (bits per second){% else %}{{ entry.bandwidth_unit }} (bytes per second){% endif %}">{{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</span>
+                    </td>
+                    <td>
+                        <span title="Guard: {{ entry.guard_count }} | Exit: {{ entry.exit_count }}">
+                            🛡️{{ entry.guard_count }} / 🚪{{ entry.exit_count }}
+                        </span>
+                    </td>
+                    <td title="Number of countries with relay operations">{{ entry.country_count }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endmacro %}
+
+{# Exit Authority Table Complete Macro - Exit Authorities #}
+{% macro exit_authority_table_complete(exit_authority_data, use_bits, page_ctx) %}
+    <div class="table-responsive">
+        <table class="table table-striped table-condensed aroi-rankings-table aroi-standard-table">
+            <thead>
+                <tr>
+                    <th title="Position in exit authority leaderboard based on exit consensus weight">Rank</th>
+                    <th title="Authenticated Relay Operator Identifier following ContactInfo specification">Operator (AROI)</th>
+                    <th title="Number of relays providing exit services to internet">Exit Relays</th>
+                    <th title="Percentage of exit consensus weight controlling internet access">Exit Authority</th>
+                    <th title="Overall network consensus weight across all relay types">Total Authority</th>
+                    <th title="Total observed bandwidth capacity in {% if use_bits %}bits per second{% else %}bytes per second{% endif %}">Bandwidth</th>
+                    <th title="Number of countries with relay operations">Countries</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in exit_authority_data %}
+                <tr>
+                    <td>{{ rank_badge(entry.rank) }}</td>
+                    <td>{{ operator_link(entry, page_ctx) }}</td>
+                    <td title="Active exit relays providing internet access">{{ entry.exit_count }}</td>
+                    <td>
+                        <span class="text-nowrap"><strong title="Control over internet exit traffic routing">{{ entry.exit_consensus_weight_pct }}</strong></span>
+                    </td>
+                    <td>
+                        <span class="text-nowrap" title="Total network consensus weight across all relay types">{{ entry.total_consensus_weight_pct }}</span>
+                    </td>
+                    <td>
+                        <span class="text-nowrap" title="Observed bandwidth capacity in {% if use_bits %}{{ entry.bandwidth_unit }} (bits per second){% else %}{{ entry.bandwidth_unit }} (bytes per second){% endif %}">{{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</span>
+                    </td>
+                    <td title="Geographic distribution of relay operations">{{ entry.country_count }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endmacro %}
+
+{# Exit Operators Table Complete Macro - Exit Champions #}
+{% macro exit_operators_table_complete(exit_operators_data, use_bits, page_ctx) %}
+    <div class="table-responsive">
+        <table class="table table-striped table-condensed aroi-rankings-table aroi-specialized-table">
+            <thead>
+                <tr>
+                    <th title="Position in exit operators leaderboard based on exit relay count">Rank</th>
+                    <th title="Authenticated Relay Operator Identifier following ContactInfo specification">Operator (AROI)</th>
+                    <th title="Number of relays providing exit services to internet">Exit Relays</th>
+                    <th title="Combined count of all relay types operated">Total Relays</th>
+                    <th title="Total observed bandwidth capacity in {% if use_bits %}bits per second{% else %}bytes per second{% endif %}">Bandwidth</th>
+                    <th title="Percentage of total network consensus weight">Consensus Weight</th>
+                    <th title="Number of countries with relay operations">Countries</th>
+                    <th title="Number of relays providing guard services">Guard Count</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in exit_operators_data %}
+                <tr>
+                    <td>{{ rank_badge(entry.rank) }}</td>
+                    <td>{{ operator_link(entry, page_ctx) }}</td>
+                    <td><strong title="Active exit relays providing critical internet access points">{{ entry.exit_count }}</strong></td>
+                    <td title="All relay types operated by this operator">{{ entry.total_relays }} <small class="text-muted">({{ entry.exit_percentage }})</small></td>
+                    <td title="Observed bandwidth capacity in {% if use_bits %}{{ entry.bandwidth_unit }} (bits per second){% else %}{{ entry.bandwidth_unit }} (bytes per second){% endif %}">{{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</td>
+                    <td title="Network consensus weight percentage">{{ entry.total_consensus_weight_pct }}</td>
+                    <td title="Geographic reach across countries">{{ entry.country_count }}</td>
+                    <td title="Number of guard relays providing network entry points">{{ entry.guard_count }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endmacro %}
+
+{# Guard Operators Table Complete Macro - Guard Gatekeepers #}
+{% macro guard_operators_table_complete(guard_operators_data, use_bits, page_ctx) %}
+    <div class="table-responsive">
+        <table class="table table-striped table-condensed aroi-rankings-table aroi-specialized-table">
+            <thead>
+                <tr>
+                    <th title="Position in guard operators leaderboard based on guard relay count">Rank</th>
+                    <th title="Authenticated Relay Operator Identifier following ContactInfo specification">Operator (AROI)</th>
+                    <th title="Number of relays serving as entry points into the Tor network">Guard Relays</th>
+                    <th title="Combined count of all relay types operated">Total Relays</th>
+                    <th title="Total observed bandwidth capacity in {% if use_bits %}bits per second{% else %}bytes per second{% endif %}">Bandwidth</th>
+                    <th title="Percentage of total network consensus weight">Consensus Weight</th>
+                    <th title="Number of countries with relay operations">Countries</th>
+                    <th title="Number of relays providing exit services">Exit Count</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in guard_operators_data %}
+                <tr>
+                    <td>{{ rank_badge(entry.rank) }}</td>
+                    <td>{{ operator_link(entry, page_ctx) }}</td>
+                    <td><strong title="Active guard relays serving as critical network entry points">{{ entry.guard_count }}</strong></td>
+                    <td title="All relay types operated by this operator">{{ entry.total_relays }} <small class="text-muted">({{ entry.guard_percentage }})</small></td>
+                    <td title="Observed bandwidth capacity in {% if use_bits %}{{ entry.bandwidth_unit }} (bits per second){% else %}{{ entry.bandwidth_unit }} (bytes per second){% endif %}">{{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</td>
+                    <td title="Network consensus weight percentage">{{ entry.total_consensus_weight_pct }}</td>
+                    <td title="Geographic reach across countries">{{ entry.country_count }}</td>
+                    <td title="Number of exit relays providing internet access points">{{ entry.exit_count }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 {% endmacro %} 
