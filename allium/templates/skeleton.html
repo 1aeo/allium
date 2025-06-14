@@ -491,28 +491,33 @@
                 }
                 
                 /* Show first section by default (when no hash in URL) */
-                #bandwidth-1-10 {
+                #bandwidth-1-10,
+                #consensus_weight-1-10,
+                #exit_authority-1-10,
+                #exit_operators-1-10,
+                #guard_operators-1-10 {
                     display: block;
                 }
                 
                 /* When a specific section is targeted, show only that section */
-                #bandwidth-1-10:target {
+                #bandwidth-1-10:target,
+                #bandwidth-11-20:target,
+                #bandwidth-21-25:target,
+                #consensus_weight-1-10:target,
+                #consensus_weight-11-20:target,
+                #consensus_weight-21-25:target,
+                #exit_authority-1-10:target,
+                #exit_authority-11-20:target,
+                #exit_authority-21-25:target,
+                #exit_operators-1-10:target,
+                #exit_operators-11-20:target,
+                #exit_operators-21-25:target,
+                #guard_operators-1-10:target,
+                #guard_operators-11-20:target,
+                #guard_operators-21-25:target {
                     display: block;
                 }
-                
-                #bandwidth-11-20:target {
-                    display: block;
-                }
-                
-                #bandwidth-21-25:target {
-                    display: block;
-                }
-                
-                /* When sections 11-20 or 21-25 are targeted, explicitly hide the first section */
-                #bandwidth-11-20:target ~ * #bandwidth-1-10,
-                #bandwidth-21-25:target ~ * #bandwidth-1-10 {
-                    display: none !important;
-                }
+
                 
                 /* Simpler approach: use :not(:target) to hide non-targeted sections when any section is targeted */
                 body:has(.pagination-section:target) .pagination-section:not(:target) {
