@@ -57,15 +57,26 @@ class Coordinator:
     def _run_worker(self, api_name, worker_func, args):
         """Run a single API worker in a thread"""
         try:
-            self._log_progress(f"Starting {api_name} worker...")
-            result = worker_func(*args)
+            # Create API-specific progress logger that includes API name
+            api_specific_logger = self._create_api_specific_logger(api_name)
+            
+            # Update args to use the API-specific logger
+            args_with_api_logger = list(args)
+            args_with_api_logger[1] = api_specific_logger  # Replace progress_logger
+            
+            # Log API-specific start message
+            api_display_name = self._get_api_display_name(api_name)
+            self._log_progress_with_step_increment(f"{api_display_name} - fetching onionoo data using workers system")
+            
+            result = worker_func(*args_with_api_logger)
             self.worker_data[api_name] = result
             if result is not None:
-                self._log_progress(f"Completed {api_name} worker")
+                self._log_progress_with_step_increment(f"{api_display_name} - completed successfully")
             else:
-                self._log_progress(f"Warning: {api_name} worker returned None")
+                self._log_progress_with_step_increment(f"{api_display_name} - warning: returned no data")
         except Exception as e:
-            self._log_progress(f"Error in {api_name} worker: {str(e)}")
+            api_display_name = self._get_api_display_name(api_name)
+            self._log_progress_with_step_increment(f"{api_display_name} - error: {str(e)}")
             self.worker_data[api_name] = None
             # In CI environments, provide more context for debugging
             import os
@@ -74,12 +85,37 @@ class Coordinator:
                 import traceback
                 traceback.print_exc()
 
+    def _get_api_display_name(self, api_name):
+        """Get display name for API"""
+        if api_name == "onionoo_details":
+            return "Details API"
+        elif api_name == "onionoo_uptime":
+            return "Uptime API"
+        else:
+            return api_name.replace("_", " ").title()
+
+    def _create_api_specific_logger(self, api_name):
+        """Create a progress logger that includes API name in messages"""
+        api_display_name = self._get_api_display_name(api_name)
+        
+        def api_logger(message):
+            # Format message with API name prefix
+            formatted_message = f"{api_display_name} - {message}"
+            self._log_progress(formatted_message)
+        
+        return api_logger
+
+    def _log_progress_with_step_increment(self, message):
+        """Log progress message and increment progress step"""
+        self.progress_step += 1
+        log_progress(message, self.start_time, self.progress_step, self.total_steps, self.progress)
+
     def fetch_all_apis_threaded(self):
         """
         Fetch data from all APIs using threading (Phase 2 implementation)
         """
         if self.progress:
-            self._log_progress("Starting threaded API fetching...")
+            self._log_progress_with_step_increment("Starting threaded API fetching...")
         
         # Start all API workers in threads
         for api_name, worker_func, args in self.api_workers:
@@ -94,27 +130,26 @@ class Coordinator:
         # Wait for all threads to complete
         for api_name, thread in self.worker_threads:
             thread.join()
-            if self.progress:
-                self._log_progress(f"Joined {api_name} worker thread")
+            # Don't log thread join messages to avoid clutter
         
         if self.progress:
-            self._log_progress("All API workers completed")
+            self._log_progress_with_step_increment("All API workers completed")
         
         return self.worker_data
+
     def fetch_onionoo_data(self):
         """
         Fetch onionoo data using workers system.
         Phase 2: Uses threaded approach for multiple APIs, but returns only details for compatibility.
         """
-        if self.progress:
-            self._log_progress("Fetching onionoo data using workers system...")
+        # No generic progress message here - the specific API messages are logged in _run_worker
         
         # For Phase 2, fetch all APIs but prioritize details for backward compatibility
         try:
             all_data = self.fetch_all_apis_threaded()
         except Exception as e:
             if self.progress:
-                self._log_progress(f"Error during threaded API fetching: {e}")
+                self._log_progress_with_step_increment(f"Error during threaded API fetching: {e}")
             print(f"❌ Error: Failed to fetch API data: {e}")
             print("🔧 This might be due to network connectivity issues")
             return None
@@ -125,7 +160,7 @@ class Coordinator:
             return details_data
         else:
             if self.progress:
-                self._log_progress("Failed to fetch onionoo details data")
+                self._log_progress_with_step_increment("Failed to fetch onionoo details data")
             print("❌ Error: No details data available from onionoo API")
             print("🔧 This might be due to:")
             print("   - Network connectivity issues")
@@ -156,7 +191,7 @@ class Coordinator:
         Create Relays instance with fetched data.
         """
         if self.progress:
-            self._log_progress("Creating relay set with fetched data...")
+            self._log_progress_with_step_increment("Creating relay set with fetched data...")
         
         relay_set = Relays(
             output_dir=self.output_dir,
@@ -171,7 +206,7 @@ class Coordinator:
         
         if relay_set.json is None:
             if self.progress:
-                self._log_progress("Failed to create relay set")
+                self._log_progress_with_step_increment("Failed to create relay set")
             return None
         
         # Phase 2: Attach additional API data to relay set (direct assignment)
@@ -186,8 +221,11 @@ class Coordinator:
         if uptime_data:
             relay_set._generate_aroi_leaderboards()
         
+        # Update the relay_set's progress_step to match our current progress
+        relay_set.progress_step = self.progress_step
+        
         if self.progress:
-            self._log_progress("Relay set created successfully")
+            self._log_progress_with_step_increment("Relay set created successfully")
         
         return relay_set
     

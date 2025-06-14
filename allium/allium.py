@@ -186,7 +186,16 @@ if __name__ == "__main__":
 
     start_time = time.time()
     progress_step = 0
-    total_steps = 22  # Increased to account for 2 intelligence analysis steps
+    # Updated to account for separate API stages:
+    # - Previous 22 steps remain the same
+    # - +1 for starting threaded API fetching
+    # - +2 for Details API (start + complete) 
+    # - +2 for Uptime API (start + complete) when enabled
+    # - +1 for all API workers completed
+    # - +2 for creating relay set and completion
+    base_steps = 22
+    api_steps = 6  # Maximum API-related steps (when all APIs enabled)
+    total_steps = base_steps + api_steps  # 28 total steps
 
     if args.progress:
         print(f"🌐 Allium - Tor Relay Analytics Generator")
