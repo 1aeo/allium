@@ -1393,6 +1393,28 @@ class Relays:
         
         return reliability_stats
 
+    def _format_intelligence_rating(self, rating_text):
+        """
+        Helper function to format intelligence ratings with color coding.
+        
+        Args:
+            rating_text (str): Rating text like "Poor, 1 network" or "Great, 4 networks"
+            
+        Returns:
+            str: HTML formatted string with color-coded rating
+        """
+        if not rating_text or ', ' not in rating_text:
+            return rating_text
+        
+        rating, details = rating_text.split(', ', 1)
+        
+        if 'Poor' in rating:
+            return f'<span style="color: #c82333; font-weight: bold;">Poor</span>, {details}'
+        elif 'Okay' in rating:
+            return f'<span style="color: #cc9900; font-weight: bold;">Okay</span>, {details}'
+        else:  # Great or other
+            return f'<span style="color: #2e7d2e; font-weight: bold;">Great</span>, {details}'
+
     def _compute_contact_display_data(self, i, bandwidth_unit, operator_reliability, v, members):
         """
         Compute contact-specific display data for contact pages.
@@ -1450,39 +1472,15 @@ class Relays:
             if contact_intel:
                 # Format network diversity with color coding
                 portfolio_div = contact_intel.get('portfolio_diversity', '')
-                if 'Poor' in portfolio_div:
-                    rating, details = portfolio_div.split(', ', 1)
-                    intelligence_formatted['network_diversity'] = f'<span style="color: #c82333; font-weight: bold;">Poor</span>, {details}'
-                elif 'Okay' in portfolio_div:
-                    rating, details = portfolio_div.split(', ', 1)
-                    intelligence_formatted['network_diversity'] = f'<span style="color: #cc9900; font-weight: bold;">Okay</span>, {details}'
-                else:
-                    rating, details = portfolio_div.split(', ', 1)
-                    intelligence_formatted['network_diversity'] = f'<span style="color: #2e7d2e; font-weight: bold;">Great</span>, {details}'
+                intelligence_formatted['network_diversity'] = self._format_intelligence_rating(portfolio_div)
                 
                 # Format geographic diversity with color coding
                 geo_risk = contact_intel.get('geographic_risk', '')
-                if 'Poor' in geo_risk:
-                    rating, details = geo_risk.split(', ', 1)
-                    intelligence_formatted['geographic_diversity'] = f'<span style="color: #c82333; font-weight: bold;">Poor</span>, {details}'
-                elif 'Okay' in geo_risk:
-                    rating, details = geo_risk.split(', ', 1)
-                    intelligence_formatted['geographic_diversity'] = f'<span style="color: #cc9900; font-weight: bold;">Okay</span>, {details}'
-                else:
-                    rating, details = geo_risk.split(', ', 1)
-                    intelligence_formatted['geographic_diversity'] = f'<span style="color: #2e7d2e; font-weight: bold;">Great</span>, {details}'
+                intelligence_formatted['geographic_diversity'] = self._format_intelligence_rating(geo_risk)
                 
                 # Format infrastructure diversity with color coding
                 infra_risk = contact_intel.get('infrastructure_risk', '')
-                if 'Poor' in infra_risk:
-                    rating, details = infra_risk.split(', ', 1)
-                    intelligence_formatted['infrastructure_diversity'] = f'<span style="color: #c82333; font-weight: bold;">Poor</span>, {details}'
-                elif 'Okay' in infra_risk:
-                    rating, details = infra_risk.split(', ', 1)
-                    intelligence_formatted['infrastructure_diversity'] = f'<span style="color: #cc9900; font-weight: bold;">Okay</span>, {details}'
-                else:
-                    rating, details = infra_risk.split(', ', 1)
-                    intelligence_formatted['infrastructure_diversity'] = f'<span style="color: #2e7d2e; font-weight: bold;">Great</span>, {details}'
+                intelligence_formatted['infrastructure_diversity'] = self._format_intelligence_rating(infra_risk)
                 
                 # Copy other intelligence fields
                 intelligence_formatted['measurement_status'] = contact_intel.get('measurement_status', '')
@@ -1501,7 +1499,8 @@ class Relays:
                 display_name = data.get('display_name', period)
                 relay_count = data.get('relay_count', 0)
                 
-                if avg == 100.0:
+                # Fix floating point comparison by using >= 99.99 instead of == 100.0
+                if avg >= 99.99:
                     uptime_formatted[period] = {
                         'display': f'<span style="color: #28a745; font-weight: bold;">{display_name} {avg:.1f}%</span>',
                         'relay_count': relay_count
@@ -1532,7 +1531,7 @@ class Relays:
                 outliers_data['total_count'] = total_outliers
                 outliers_data['total_relays'] = total_relays
                 outliers_data['percentage'] = f"{outlier_percentage:.1f}"
-                outliers_data['tooltip'] = f"≥2σ {two_sigma_threshold:.1f}% from average μ {mean_uptime:.1f}%"
+                outliers_data['tooltip'] = f"6 month: ≥2σ {two_sigma_threshold:.1f}% from average μ {mean_uptime:.1f}%"
                 
                 # Format low outliers
                 low_outliers = operator_reliability['outliers'].get('low_outliers', [])
