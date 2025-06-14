@@ -191,7 +191,7 @@ class Coordinator:
         Create Relays instance with fetched data.
         """
         if self.progress:
-            self._log_progress_with_step_increment("Creating relay set with fetched data...")
+            self._log_progress_with_step_increment("Creating relay set with Details API data...")
         
         relay_set = Relays(
             output_dir=self.output_dir,
@@ -225,7 +225,7 @@ class Coordinator:
         relay_set.progress_step = self.progress_step
         
         if self.progress:
-            self._log_progress_with_step_increment("Relay set created successfully")
+            self._log_progress_with_step_increment("Relay set created successfully with Details API and Uptime API data")
         
         return relay_set
     
