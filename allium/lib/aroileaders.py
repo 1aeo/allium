@@ -20,27 +20,12 @@ from .country_utils import (
 )
 
 
-def _get_relay_count_weight(relay_count):
-    """
-    Calculate weight multiplier based on relay count using updated weighting scheme.
-    
-    Args:
-        relay_count (int): Number of relays operated
-        
-    Returns:
-        float: Weight multiplier
-    """
-    if relay_count < 25:
-        return 1.0
-    else:  # 25+ relays
-        return 1.1
-
 
 def _calculate_reliability_score(operator_relays, uptime_data, time_period):
     """
-    Calculate reliability score using hybrid approach: average uptime × relay count weight.
+    Calculate reliability score using simple average uptime (no weighting).
     
-    Formula: Score = (Average uptime per operator) × Relay_Count_Weight
+    Formula: Score = Average uptime percentage across all relays
     Uses shared uptime utilities to avoid code duplication with relays.py.
     
     Args:
@@ -56,7 +41,7 @@ def _calculate_reliability_score(operator_relays, uptime_data, time_period):
             'score': 0.0,
             'average_uptime': 0.0,
             'relay_count': 0,
-            'weight': 1.0,
+            'weight': 1.0,  # Always 1.0 since no weighting is applied
             'valid_relays': 0,
             'breakdown': {}
         }
@@ -75,19 +60,16 @@ def _calculate_reliability_score(operator_relays, uptime_data, time_period):
             'score': 0.0,
             'average_uptime': 0.0,
             'relay_count': relay_count,
-            'weight': _get_relay_count_weight(relay_count),
+            'weight': 1.0,  # Always 1.0 since no weighting is applied
             'valid_relays': 0,
             'breakdown': {}
         }
     
-    # Calculate average uptime across all relays
+    # Calculate simple average uptime across all relays (no weighting)
     average_uptime = sum(period_result['uptime_values']) / len(period_result['uptime_values'])
     
-    # Get weight multiplier based on relay count
-    weight = _get_relay_count_weight(relay_count)
-    
-    # Calculate final score: Average uptime × Weight
-    score = average_uptime * weight
+    # Score is simply the average uptime (no weight multiplier)
+    score = average_uptime
     
     # Convert relay_breakdown format for compatibility
     breakdown = {}
@@ -102,7 +84,7 @@ def _calculate_reliability_score(operator_relays, uptime_data, time_period):
         'score': score,
         'average_uptime': average_uptime,
         'relay_count': relay_count,
-        'weight': weight,
+        'weight': 1.0,  # Always 1.0 since no weighting is applied
         'valid_relays': valid_relays,
         'breakdown': breakdown
     }
@@ -460,16 +442,18 @@ def _calculate_aroi_leaderboards(relays_instance):
         reverse=True
     )[:50]
     
-    # 6. ⏰ Reliability Masters - 6-Month Weighted Uptime (NEW)
+    # 6. ⏰ Reliability Masters - 6-Month Average Uptime (NEW) - Only operators with > 25 relays
+    reliability_masters_filtered = {k: v for k, v in aroi_operators.items() if v['total_relays'] > 25}
     leaderboards['reliability_masters'] = sorted(
-        aroi_operators.items(),
+        reliability_masters_filtered.items(),
         key=lambda x: x[1]['reliability_6m_score'],
         reverse=True
     )[:50]
     
-    # 7. 👑 Legacy Titans - 5-Year Weighted Uptime (NEW)
+    # 7. 👑 Legacy Titans - 5-Year Average Uptime (NEW) - Only operators with > 25 relays
+    legacy_titans_filtered = {k: v for k, v in aroi_operators.items() if v['total_relays'] > 25}
     leaderboards['legacy_titans'] = sorted(
-        aroi_operators.items(),
+        legacy_titans_filtered.items(),
         key=lambda x: x[1]['reliability_5y_score'],
         reverse=True
     )[:50]
@@ -670,16 +654,11 @@ def _calculate_aroi_leaderboards(relays_instance):
                     reliability_weight = metrics['reliability_5y_weight']
                     period_label = "5-year"
                 
-                # Create tooltip similar to veteran pattern
-                reliability_tooltip = f"{period_label} reliability: {reliability_average:.1f}% avg × {reliability_weight:.1f}x weight ({metrics['total_relays']} relays)"
+                # Create tooltip without weighting information (simplified)
+                reliability_tooltip = f"{period_label} reliability: {reliability_average:.1f}% average uptime ({metrics['total_relays']} relays)"
                 
-                # Create short version for table display (reuse veteran pattern)
-                if len(reliability_tooltip) > 20:
-                    reliability_details_short = f"{reliability_average:.1f}% × {reliability_weight:.1f}x"
-                    if len(reliability_details_short) > 17:
-                        reliability_details_short = f"{reliability_average:.1f}%..."
-                else:
-                    reliability_details_short = reliability_tooltip
+                # Create short version for table display (simplified, no weight)
+                reliability_details_short = f"{reliability_average:.1f}% avg"
 
             
             display_name = metrics['aroi_domain'] if metrics['aroi_domain'] and metrics['aroi_domain'] != 'none' else operator_key

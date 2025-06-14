@@ -63,8 +63,10 @@ The AROI Leaderboard System provides:
 | **Most Diverse Operators** | ✅ Ready | Yes | Immediate |
 | **Platform Diversity** | ✅ Ready | Yes | Immediate |
 | **Geographic Champions** | ✅ Ready | Yes | Immediate |
-| **Frontier Builders** | ⚠️ Calculation | Yes | Rarity Analysis |
-| **Network Veterans** | ⚠️ Calculation | Yes | Veteran Scoring |
+| **Frontier Builders** | ✅ Implemented | Yes | Rarity Analysis |
+| **Network Veterans** | ✅ Implemented | Yes | Veteran Scoring |
+| **Reliability Masters** | ✅ Implemented | Yes | 6-Month Uptime |
+| **Legacy Titans** | ✅ Implemented | Yes | 5-Year Uptime |
 
 ## 🏁 Frontier Builders Rarity Scoring System
 
@@ -188,6 +190,60 @@ The leaderboard shows operators by their actual relays in rare countries:
 - **your@e-mail**: `3 relays in 3 rare countries`
 
 This ensures accurate representation - operators are ranked by their **actual contribution to network diversity** in underrepresented regions, not by total relay count.
+
+## ⏰ Reliability Scoring System
+
+The **Reliability Masters** and **Legacy Titans** categories recognize operators with exceptional uptime performance using weighted reliability calculations based on bandwidth contribution.
+
+### **Reliability Categories**
+
+#### **🔥 Reliability Masters (6-Month Uptime)**
+- **Purpose**: Recognizes operators with outstanding short-term reliability
+- **Timeframe**: 6-month weighted uptime analysis
+- **Data Source**: Onionoo Uptime API (`1_month` field aggregated over 6 months)
+
+#### **💎 Legacy Titans (5-Year Uptime)**
+- **Purpose**: Honors operators with exceptional long-term stability
+- **Timeframe**: 5-year weighted uptime analysis
+- **Data Source**: Onionoo Uptime API (`1_year` field aggregated over 5 years)
+
+### **Weighted Scoring Algorithm**
+
+Both categories use a **bandwidth-weighted reliability calculation** implemented in `allium/lib/uptime_utils.py`:
+
+```python
+# Reliability score calculation
+reliability_score = average_uptime_percentage * bandwidth_weight_multiplier
+
+# Bandwidth weight multipliers based on relay count:
+# 1-50 relays:    1.0x multiplier
+# 51-100 relays:  1.1x multiplier  
+# 101-200 relays: 1.2x multiplier
+# 200+ relays:    1.3x multiplier
+```
+
+### **Scoring Examples**
+
+#### **Small Operator (High Reliability)**
+- **Relays**: 5 relays
+- **6-month uptime**: 99.8%
+- **Bandwidth weight**: 1.0x
+- **Final score**: 99.8%
+
+#### **Large Operator (Good Reliability)**
+- **Relays**: 250 relays
+- **6-month uptime**: 95.2%
+- **Bandwidth weight**: 1.3x
+- **Final score**: 95.2% × 1.3 = 123.76%
+
+This system ensures that both small operators with excellent reliability and large operators with good reliability can compete fairly, while recognizing the operational complexity of maintaining many relays.
+
+### **Display Format**
+
+Reliability scores are displayed as percentages with operator relay counts:
+
+- **tor-operator@example.com**: `99.8% (5 relays)`
+- **large-network@example.org**: `123.8% (250 relays)`
 
 ## 🏆 Network Veterans Scoring System
 
