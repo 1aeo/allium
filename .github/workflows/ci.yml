@@ -227,7 +227,7 @@ jobs:
         # Download and run setup script with retry logic
         for download_attempt in 1 2 3; do
           echo "📥 Download attempt $download_attempt of 3..."
-          if curl -sSL --connect-timeout 30 --max-time 60 https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/scripts/setup.sh -o setup.sh; then
+          if curl -sSL --connect-timeout 30 --max-time 60 https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/setup.sh -o setup.sh; then
             echo "✅ Setup script downloaded successfully"
             break
           else
@@ -268,16 +268,16 @@ jobs:
         # Check that key files exist in the correct subdirectory
         test -f "allium/allium.py" || { echo "❌ allium/allium.py not found"; ls -la allium/; exit 1; }
         test -f "config/requirements.txt" || { echo "❌ config/requirements.txt not found"; exit 1; }
-        test -d "allium/www" || { echo "❌ allium/www directory not created"; ls -la allium/; exit 1; }
+        test -d "www" || { echo "❌ www directory not created"; ls -la .; exit 1; }
         
         # Check that www directory has expected content
-        test -f "allium/www/index.html" || { echo "❌ index.html not generated"; ls -la allium/www/; exit 1; }
+        test -f "www/index.html" || { echo "❌ index.html not generated"; ls -la www/; exit 1; }
         
         # Verify generated HTML is valid (basic check)
-        if ! grep -q "<html" allium/www/index.html; then
+        if ! grep -q "<html" www/index.html; then
           echo "❌ Generated HTML appears invalid"
           echo "📋 First few lines of index.html:"
-          head -10 allium/www/index.html || echo "Could not read index.html"
+          head -10 www/index.html || echo "Could not read index.html"
           exit 1
         fi
         
