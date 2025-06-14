@@ -226,14 +226,12 @@
                         {% endif %}
                         {% if category_key == 'most_diverse' %}
                         <td title="Number of unique Autonomous Systems providing network distribution">{{ entry.unique_as_count }}</td>
-                        {% else %}
+                        {% elif category_key != 'reliability_masters' and category_key != 'legacy_titans' %}
                         <td>
                             {% if category_key == 'platform_diversity' %}<span title="{{ entry.platform_breakdown_tooltip if entry.platform_breakdown_tooltip else 'Promoting operating system diversity beyond Linux dominance' }}">{{ entry.platform_breakdown_details if entry.platform_breakdown_details else 'OS diversity' }}</span>
                             {% elif category_key == 'non_eu_leaders' %}<span title="{{ entry.geographic_breakdown_tooltip }}">{{ entry.geographic_breakdown_details if entry.geographic_breakdown_details else 'Global expansion' }}</span>
                             {% elif category_key == 'frontier_builders' %}<span title="{{ entry.rare_country_tooltip }}">{{ entry.rare_country_details if entry.rare_country_details else 'Frontier presence' }}</span>
                             {% elif category_key == 'network_veterans' %}<span title="Network longevity specialization: {{ entry.veteran_tooltip if entry.veteran_tooltip else 'This operator has been contributing to the Tor network for an extended period, demonstrating long-term commitment and operational stability' }}">{{ entry.veteran_details_short if entry.veteran_details_short else 'Network longevity' }}</span>
-                            {% elif category_key == 'reliability_masters' %}<span title="6-month reliability specialization: {{ entry.reliability_tooltip if entry.reliability_tooltip else 'This operator demonstrates excellent short-term reliability with high uptime percentages over the recent 6-month period' }}">{{ entry.reliability_details_short if entry.reliability_details_short else '6-month uptime' }}</span>
-                            {% elif category_key == 'legacy_titans' %}<span title="5-year reliability specialization: {{ entry.reliability_tooltip if entry.reliability_tooltip else 'This operator demonstrates exceptional long-term reliability with sustained high uptime percentages over a 5-year historical period' }}">{{ entry.reliability_details_short if entry.reliability_details_short else '5-year uptime' }}</span>
                             {% endif %}
                         </td>
                         {% endif %}
