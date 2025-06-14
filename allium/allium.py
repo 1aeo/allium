@@ -100,15 +100,16 @@ def get_page_context(page_type, breadcrumb_type=None, breadcrumb_data=None):
     
     return ctx
 
-def check_dependencies():
+def check_dependencies(show_progress=False):
     """Check if required dependencies are available."""
     try:
         import jinja2
-        if hasattr(jinja2, '__version__'):
-            version = jinja2.__version__
-            print(f"✅ Jinja2 {version} found")
-        else:
-            print("✅ Jinja2 found")
+        if show_progress:
+            if hasattr(jinja2, '__version__'):
+                version = jinja2.__version__
+                print(f"✅ Jinja2 {version} found")
+            else:
+                print("✅ Jinja2 found")
     except ImportError:
         print("❌ Error: Jinja2 not found")
         print("💡 Install it with: pip3 install -r requirements.txt")
@@ -198,10 +199,10 @@ if __name__ == "__main__":
     if args.progress:
         print(f"🌐 Allium - Tor Relay Analytics Generator")
         print(f"========================================")
-        check_dependencies()
+        check_dependencies(show_progress=True)
         print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Starting allium static site generation...")
     else:
-        check_dependencies()
+        check_dependencies(show_progress=False)
 
     # Fail fast - ensure output directory exists before expensive processing
     if args.progress:
