@@ -376,7 +376,7 @@
     </section>
 
     <!-- Generic categories using macro -->
-    {% for category_key in ['reliability_masters', 'legacy_titans', 'most_diverse', 'platform_diversity', 'non_eu_leaders', 'frontier_builders', 'network_veterans'] %}
+    {% for category_key in ['most_diverse', 'platform_diversity', 'non_eu_leaders', 'frontier_builders', 'network_veterans', 'reliability_masters', 'legacy_titans'] %}
         {% set category_name = relays.json.aroi_leaderboards.summary.categories[category_key] %}
         {% set category_data = relays.json.aroi_leaderboards.leaderboards[category_key] %}
         {% set emoji = '🌈' if category_key == 'most_diverse' else '💻' if category_key == 'platform_diversity' else '🌍' if category_key == 'non_eu_leaders' else '🏴‍☠️' if category_key == 'frontier_builders' else '🏆' if category_key == 'network_veterans' else '' %}
@@ -405,17 +405,17 @@
                     <li><strong>🚪 Exit Authorities:</strong> Exit consensus weight percentage (authority over exit traffic)</li>
                     <li><strong>🚪 Exit Gate Keepers:</strong> Number of exit relays operated</li>
                     <li><strong>🛡️ Guard Champions:</strong> Number of guard relays operated</li>
-                    <li><strong>⏰ Reliability Masters:</strong> 6-month weighted uptime scores (operational excellence)</li>
+                    <li><strong>🌈 Most Diverse:</strong> Geographic, platform, and network diversity score</li>
                 </ul>
             </div>
             <div class="col-md-6">
                 <ul>
-                    <li><strong>👑 Legacy Titans:</strong> 5-year weighted uptime scores (long-term stability)</li>
-                    <li><strong>🌈 Most Diverse:</strong> Geographic, platform, and network diversity score</li>
                     <li><strong>💻 Platform Diversity:</strong> Non-Linux relay operators promoting OS diversity</li>
                     <li><strong>🌍 Non-EU Leaders:</strong> Geographic champions expanding Tor outside the EU</li>
                     <li><strong>🏴‍☠️ Frontier Builders:</strong> Operators in rare or underrepresented countries</li>
                     <li><strong>🏆 Network Veterans:</strong> Longest-serving operators with earliest relay start dates</li>
+                    <li><strong>⏰ Reliability Masters:</strong> 6-month weighted uptime scores (operational excellence)</li>
+                    <li><strong>👑 Legacy Titans:</strong> 5-year weighted uptime scores (long-term stability)</li>
                 </ul>
             </div>
         </div>
@@ -454,7 +454,7 @@
         <p><em>Example:</em> An operator with 5-year history: 15 active relays averaging 94.2% uptime, 8 retired relays (91.8% historical uptime), weighted by historical bandwidth contributions would score approximately <strong>93.1% legacy reliability score</strong>, demonstrating sustained long-term commitment despite natural infrastructure evolution.</p>
         <p><strong>Focus:</strong> Recognizes operators who have demonstrated exceptional long-term reliability and sustained commitment to the Tor network through multiple years of consistent uptime performance, infrastructure upgrades, and network service.</p>
         
-        <h4>� Diversity Champion Scoring:</h4>
+        <h4>🌈 Diversity Champion Scoring:</h4>
         <p><strong>Diversity Score Calculation:</strong> The diversity score uses a weighted formula to measure geographic, platform, and network diversity:</p>
         <ul>
             <li><strong>Geographic Component:</strong> Number of countries × 2.0 (highest weight for global presence)</li>
@@ -463,7 +463,7 @@
         </ul>
         <p><em>Example:</em> An operator with relays in 5 countries, 3 operating systems, and 8 unique ASNs would score: (5 × 2.0) + (3 × 1.5) + (8 × 1.0) = 10.0 + 4.5 + 8.0 = <strong>22.5 diversity points</strong>.</p>
         
-        <h4>�🏴‍☠️ Frontier Builder Scoring:</h4>
+        <h4>🏴‍☠️ Frontier Builder Scoring:</h4>
         <p><strong>Rare Country Score Calculation:</strong> The rare country score sums up points from all countries where an operator runs relays using a weighted scoring system:</p>
         <ul>
             <li><strong>Relay Count Factor (4x weight):</strong> Countries with fewer relays receive higher scores (6 points for 1 relay, 5 points for 2 relays, down to 0 points for 7+ relays)</li>
