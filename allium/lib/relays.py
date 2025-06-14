@@ -1065,6 +1065,8 @@ class Relays:
                 network_position = intelligence._calculate_network_position(
                     i["guard_count"], i["middle_count"], i["exit_count"], total_relays
                 )
+                # Use the pre-formatted string from intelligence engine
+                network_position_display = network_position.get('formatted_string', 'unknown')
             except ImportError:
                 # Fallback if intelligence engine is not available
                 total_relays = len(members)
@@ -1074,14 +1076,30 @@ class Relays:
                 
                 # Simple network position calculation
                 if guard_ratio > 0.5:
-                    network_position = "Guard-focused"
+                    network_position_label = "Guard-focused"
                 elif exit_ratio > 0.5:
-                    network_position = "Exit-focused"
+                    network_position_label = "Exit-focused"
                 elif middle_ratio > 0.5:
-                    network_position = "Middle-focused"
+                    network_position_label = "Middle-focused"
                 else:
-                    network_position = "Mixed"
+                    network_position_label = "Mixed"
                 
+                # Create simple fallback display
+                position_components = []
+                if i["guard_count"] > 0:
+                    guard_text = 'guard' if i["guard_count"] == 1 else 'guards'
+                    position_components.append(f"{i['guard_count']} {guard_text}")
+                if i["middle_count"] > 0:
+                    middle_text = 'middle' if i["middle_count"] == 1 else 'middles'
+                    position_components.append(f"{i['middle_count']} {middle_text}")
+                if i["exit_count"] > 0:
+                    exit_text = 'exit' if i["exit_count"] == 1 else 'exits'
+                    position_components.append(f"{i['exit_count']} {exit_text}")
+                
+                total_text = 'relay' if total_relays == 1 else 'relays'
+                components_text = ', ' + ', '.join(position_components) if position_components else ''
+                network_position_display = f"{network_position_label} ({total_relays} total {total_text}{components_text})"
+            
             # Generate page context with correct breadcrumb data
             page_ctx = self.get_detail_page_context(k, v)
             
@@ -1109,7 +1127,7 @@ class Relays:
                 exit_count=i["exit_count"],
                 guard_count=i["guard_count"],
                 middle_count=i["middle_count"],
-                network_position=network_position,  # Pre-computed network position
+                network_position=network_position_display,
                 is_index=False,
                 page_ctx=page_ctx,
                 key=k,
@@ -1234,6 +1252,9 @@ class Relays:
                         })
                     break
         
+        # Sort rankings by rank (1st place first, 25th place last)
+        rankings.sort(key=lambda x: x['rank'])
+        
         return rankings
 
     def _get_leaderboard_category_info(self, category):
@@ -1312,9 +1333,11 @@ class Relays:
             
             if period_result['uptime_values']:
                 mean_uptime = statistics.mean(period_result['uptime_values'])
+                std_dev = statistics.stdev(period_result['uptime_values']) if len(period_result['uptime_values']) > 1 else 0
                 
                 reliability_stats['overall_uptime'][period] = {
                     'average': mean_uptime,
+                    'std_dev': std_dev,
                     'display_name': period_display_names[period],
                     'relay_count': len(period_result['uptime_values'])
                 }
