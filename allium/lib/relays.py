@@ -1267,6 +1267,8 @@ class Relays:
         """
         Calculate comprehensive reliability statistics for an operator.
         
+        Uses shared uptime utilities to avoid code duplication with aroileaders.py.
+        
         Args:
             contact_hash (str): Contact hash for the operator
             operator_relays (list): List of relay objects for this operator
@@ -1277,6 +1279,9 @@ class Relays:
         if not hasattr(self, 'uptime_data') or not self.uptime_data or not operator_relays:
             return None
             
+        from .uptime_utils import extract_relay_uptime_for_period, calculate_statistical_outliers
+        import statistics
+        
         # Available time periods from Onionoo uptime API
         time_periods = ['1_month', '3_months', '6_months', '1_year', '5_years']
         period_display_names = {
@@ -1298,100 +1303,51 @@ class Relays:
             'total_relays': len(operator_relays)
         }
         
-        # Collect uptime data for each relay and time period
-        relay_uptime_data = {}
+        # Process each time period using shared utilities
+        all_relay_data = {}
         
-        for relay in operator_relays:
-            fingerprint = relay.get('fingerprint', '')
-            nickname = relay.get('nickname', 'Unknown')
-            
-            if not fingerprint:
-                continue
-                
-            # Find uptime data for this relay
-            relay_uptime = None
-            for uptime_relay in self.uptime_data.get('relays', []):
-                if uptime_relay.get('fingerprint') == fingerprint:
-                    relay_uptime = uptime_relay
-                    break
-            
-            if relay_uptime and relay_uptime.get('uptime'):
-                relay_data = {
-                    'fingerprint': fingerprint,
-                    'nickname': nickname,
-                    'uptime_periods': {}
-                }
-                
-                # Process each time period
-                for period in time_periods:
-                    period_data = relay_uptime['uptime'].get(period, {})
-                    if period_data.get('values'):
-                        # Calculate average uptime from values array
-                        values = [v for v in period_data['values'] if v is not None]
-                        if values:
-                            # Normalize from 0-999 to 0-100 percentage
-                            avg_uptime = sum(values) / len(values) / 999 * 100
-                            relay_data['uptime_periods'][period] = avg_uptime
-                
-                # Only include relays with at least one valid uptime period
-                if relay_data['uptime_periods']:
-                    relay_uptime_data[fingerprint] = relay_data
-                    reliability_stats['relay_uptimes'].append(relay_data)
-        
-        reliability_stats['valid_relays'] = len(relay_uptime_data)
-        
-        if not relay_uptime_data:
-            return reliability_stats
-        
-        # Calculate overall uptime statistics per time period (unweighted average)
         for period in time_periods:
-            period_uptimes = []
-            for relay_data in relay_uptime_data.values():
-                if period in relay_data['uptime_periods']:
-                    period_uptimes.append(relay_data['uptime_periods'][period])
+            # Extract uptime data for this period using shared utility
+            period_result = extract_relay_uptime_for_period(operator_relays, self.uptime_data, period)
             
-            if period_uptimes:
-                import statistics
-                mean_uptime = statistics.mean(period_uptimes)
+            if period_result['uptime_values']:
+                mean_uptime = statistics.mean(period_result['uptime_values'])
                 
                 reliability_stats['overall_uptime'][period] = {
                     'average': mean_uptime,
                     'display_name': period_display_names[period],
-                    'relay_count': len(period_uptimes)
+                    'relay_count': len(period_result['uptime_values'])
                 }
                 
-                # Calculate statistical outliers (2+ standard deviations from mean)
-                if len(period_uptimes) >= 3:  # Need at least 3 data points for meaningful std dev
-                    try:
-                        std_dev = statistics.stdev(period_uptimes)
-                        
-                        # Find outliers (2+ standard deviations away)
-                        low_threshold = mean_uptime - (2 * std_dev)
-                        high_threshold = mean_uptime + (2 * std_dev)
-                        
-                        for relay_data in relay_uptime_data.values():
-                            if period in relay_data['uptime_periods']:
-                                uptime = relay_data['uptime_periods'][period]
-                                
-                                if uptime < low_threshold:
-                                    reliability_stats['outliers']['low_outliers'].append({
-                                        'nickname': relay_data['nickname'],
-                                        'fingerprint': relay_data['fingerprint'],
-                                        'uptime': uptime,
-                                        'period': period,
-                                        'deviation': abs(uptime - mean_uptime) / std_dev
-                                    })
-                                elif uptime > high_threshold:
-                                    reliability_stats['outliers']['high_outliers'].append({
-                                        'nickname': relay_data['nickname'], 
-                                        'fingerprint': relay_data['fingerprint'],
-                                        'uptime': uptime,
-                                        'period': period,
-                                        'deviation': abs(uptime - mean_uptime) / std_dev
-                                    })
-                    except statistics.StatisticsError:
-                        # Handle case where all values are identical (std dev = 0)
-                        pass
+                # Calculate statistical outliers using shared utility
+                outliers = calculate_statistical_outliers(
+                    period_result['uptime_values'], 
+                    period_result['relay_breakdown']
+                )
+                
+                # Add period information to outliers
+                for outlier in outliers['low_outliers']:
+                    outlier['period'] = period
+                for outlier in outliers['high_outliers']:
+                    outlier['period'] = period
+                
+                # Collect outliers from all periods
+                reliability_stats['outliers']['low_outliers'].extend(outliers['low_outliers'])
+                reliability_stats['outliers']['high_outliers'].extend(outliers['high_outliers'])
+                
+                # Collect relay data for relay_uptimes
+                for fingerprint, relay_data in period_result['relay_breakdown'].items():
+                    if fingerprint not in all_relay_data:
+                        all_relay_data[fingerprint] = {
+                            'fingerprint': fingerprint,
+                            'nickname': relay_data['nickname'],
+                            'uptime_periods': {}
+                        }
+                    all_relay_data[fingerprint]['uptime_periods'][period] = relay_data['uptime']
+        
+        # Set relay uptimes and valid relays count
+        reliability_stats['relay_uptimes'] = list(all_relay_data.values())
+        reliability_stats['valid_relays'] = len(all_relay_data)
         
         # Remove duplicate outliers (same relay appearing in multiple periods)
         # Keep the one with highest deviation

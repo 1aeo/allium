@@ -5,6 +5,7 @@ sandbox
 __pycache__
 timestamp
 allium/www
+www/
 www-screenshots/
 
 # Virtual environments

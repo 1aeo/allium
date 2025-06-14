@@ -63,6 +63,8 @@
         <li><strong><span title="Operational maturity tracks deployment timeline and expansion patterns. Shows operator experience and growth strategy over time.">Operational Maturity</span>:</strong> {{ contact_intel.maturity }}</li>
     </ul>
 </div>
+{% endif %}
+
 {# Operator Reliability Section - Show uptime statistics for contact pages #}
 {% if operator_reliability and operator_reliability.valid_relays > 0 %}
 <div class="reliability-section" style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-left: 4px solid #28a745;">
@@ -126,6 +128,5 @@
         Reliability data available for {{ operator_reliability.valid_relays }}/{{ operator_reliability.total_relays }} relays
     </div>
 </div>
-{% endif %}
 {% endif %}
 {% endblock %}

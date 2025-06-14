@@ -30,14 +30,10 @@ def _get_relay_count_weight(relay_count):
     Returns:
         float: Weight multiplier
     """
-    if relay_count <= 50:
+    if relay_count < 25:
         return 1.0
-    elif relay_count <= 100:
+    else:  # 25+ relays
         return 1.1
-    elif relay_count <= 200:
-        return 1.2
-    else:  # 200+ relays
-        return 1.3
 
 
 def _calculate_reliability_score(operator_relays, uptime_data, time_period):
@@ -45,6 +41,7 @@ def _calculate_reliability_score(operator_relays, uptime_data, time_period):
     Calculate reliability score using hybrid approach: average uptime × relay count weight.
     
     Formula: Score = (Average uptime per operator) × Relay_Count_Weight
+    Uses shared uptime utilities to avoid code duplication with relays.py.
     
     Args:
         operator_relays (list): List of relay objects for this operator
@@ -64,44 +61,16 @@ def _calculate_reliability_score(operator_relays, uptime_data, time_period):
             'breakdown': {}
         }
     
-    # Collect uptime values for each relay
-    uptime_values = []
-    breakdown = {}
+    from .uptime_utils import extract_relay_uptime_for_period
     
-    for relay in operator_relays:
-        fingerprint = relay.get('fingerprint', '')
-        nickname = relay.get('nickname', 'Unknown')
-        
-        if not fingerprint:
-            continue
-            
-        # Find uptime data for this relay
-        relay_uptime = None
-        for uptime_relay in uptime_data.get('relays', []):
-            if uptime_relay.get('fingerprint') == fingerprint:
-                relay_uptime = uptime_relay
-                break
-        
-        if relay_uptime and relay_uptime.get('uptime'):
-            period_data = relay_uptime['uptime'].get(time_period, {})
-            if period_data.get('values'):
-                # Calculate average uptime from values array
-                values = [v for v in period_data['values'] if v is not None]
-                if values:
-                    # Normalize from 0-999 to 0-100 percentage
-                    avg_uptime = sum(values) / len(values) / 999 * 100
-                    uptime_values.append(avg_uptime)
-                    breakdown[nickname] = {
-                        'fingerprint': fingerprint,
-                        'uptime': avg_uptime,
-                        'data_points': len(values)
-                    }
+    # Extract uptime data for this period using shared utility
+    period_result = extract_relay_uptime_for_period(operator_relays, uptime_data, time_period)
     
     # Calculate metrics
     relay_count = len(operator_relays)
-    valid_relays = len(uptime_values)
+    valid_relays = len(period_result['uptime_values'])
     
-    if not uptime_values:
+    if not period_result['uptime_values']:
         return {
             'score': 0.0,
             'average_uptime': 0.0,
@@ -112,13 +81,22 @@ def _calculate_reliability_score(operator_relays, uptime_data, time_period):
         }
     
     # Calculate average uptime across all relays
-    average_uptime = sum(uptime_values) / len(uptime_values)
+    average_uptime = sum(period_result['uptime_values']) / len(period_result['uptime_values'])
     
     # Get weight multiplier based on relay count
     weight = _get_relay_count_weight(relay_count)
     
     # Calculate final score: Average uptime × Weight
     score = average_uptime * weight
+    
+    # Convert relay_breakdown format for compatibility
+    breakdown = {}
+    for fingerprint, relay_data in period_result['relay_breakdown'].items():
+        breakdown[relay_data['nickname']] = {
+            'fingerprint': fingerprint,
+            'uptime': relay_data['uptime'],
+            'data_points': relay_data.get('data_points', 0)
+        }
     
     return {
         'score': score,
