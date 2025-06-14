@@ -232,7 +232,7 @@ if __name__ == "__main__":
         print("💡 Try running the command again, or check your internet connection")
         sys.exit(1)
     
-    # Update progress_step from the RELAY_SET object (it was incremented during intelligence analysis)
+    # Update progress_step from the RELAY_SET object (it was incremented during API processing and intelligence analysis)
     progress_step = RELAY_SET.progress_step
     if args.progress:
         print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Loaded relay data from onionoo - found {len(RELAY_SET.json.get('relays', []))} relays")
