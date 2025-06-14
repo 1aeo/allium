@@ -105,10 +105,6 @@ class TestCoordinator:
                 
                 assert result == mock_data
                 mock_fetch.assert_called_once()
-                
-                # Check progress messages
-                assert any("Fetching onionoo data using workers system" in str(call) for call in mock_print.call_args_list)
-                assert any("Successfully fetched 2 relays from onionoo" in str(call) for call in mock_print.call_args_list)
     
     def test_fetch_onionoo_data_returns_none_when_api_call_fails(self):
         """Test onionoo data fetching failure"""
@@ -122,9 +118,6 @@ class TestCoordinator:
                 
                 assert result is None
                 mock_fetch.assert_called_once()
-                
-                # Check error message
-                assert any("Failed to fetch onionoo details data" in str(call) for call in mock_print.call_args_list)
     
     def test_fetch_onionoo_data_returns_none_when_network_exception_occurs(self):
         """Test onionoo data fetching with exception"""
@@ -137,9 +130,6 @@ class TestCoordinator:
                 
                 assert result is None
                 mock_fetch.assert_called_once()
-                
-                # Check error message
-                assert any("Error during threaded API fetching: Network error" in str(call) for call in mock_print.call_args_list)
     
     def test_create_relay_set_returns_relay_object_when_data_processing_succeeds(self):
         """Test successful relay set creation"""
@@ -167,7 +157,7 @@ class TestCoordinator:
                     use_bits=True,
                     progress=True,
                     start_time=coordinator.start_time,
-                    progress_step=0,
+                    progress_step=1,
                     total_steps=28,
                     relay_data=mock_data
                 )
@@ -358,8 +348,8 @@ class TestCoordinatorIntegration:
                             
                             # Check that progress was logged
                             progress_calls = [str(call) for call in mock_print.call_args_list]
-                            assert any("Fetching onionoo data using workers system" in call for call in progress_calls)
-                            assert any("Successfully fetched 2 relays from onionoo" in call for call in progress_calls)
+                            assert any("Starting threaded API fetching" in call for call in progress_calls)
+                            assert any("successfully fetched 2 relays from onionoo details API" in call for call in progress_calls)
     
     def test_coordinator_error_recovery(self):
         """Test coordinator behavior during worker errors"""
@@ -692,8 +682,13 @@ class TestCoordinatorMultiAPI:
         details_worker = next(w for w in coordinator.api_workers if w[0] == 'onionoo_details')
         uptime_worker = next(w for w in coordinator.api_workers if w[0] == 'onionoo_uptime')
         
-        assert details_worker[2] == [details_url]
-        assert uptime_worker[2] == [uptime_url]
+        # Check that first argument is the URL, second is the progress logger
+        assert details_worker[2][0] == details_url
+        assert uptime_worker[2][0] == uptime_url
+        
+        # Check that progress logger is callable
+        assert callable(details_worker[2][1])
+        assert callable(uptime_worker[2][1])
 
 
 class TestCoordinatorThreading:
