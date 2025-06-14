@@ -235,7 +235,7 @@ if __name__ == "__main__":
     # Update progress_step from the RELAY_SET object (it was incremented during API processing and intelligence analysis)
     progress_step = RELAY_SET.progress_step
     if args.progress:
-        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Loaded relay data from onionoo - found {len(RELAY_SET.json.get('relays', []))} relays")
+        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Details API data loaded successfully - found {len(RELAY_SET.json.get('relays', []))} relays")
 
     # Output directory already created early via ensure_output_directory() - skip redundant creation
 
