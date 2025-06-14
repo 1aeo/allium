@@ -376,7 +376,7 @@
     </section>
 
     <!-- Generic categories using macro -->
-    {% for category_key in ['most_diverse', 'platform_diversity', 'non_eu_leaders', 'frontier_builders', 'network_veterans', 'reliability_masters', 'legacy_titans'] %}
+    {% for category_key in ['reliability_masters', 'legacy_titans', 'most_diverse', 'platform_diversity', 'non_eu_leaders', 'frontier_builders', 'network_veterans'] %}
         {% set category_name = relays.json.aroi_leaderboards.summary.categories[category_key] %}
         {% set category_data = relays.json.aroi_leaderboards.leaderboards[category_key] %}
         {% set emoji = '🌈' if category_key == 'most_diverse' else '💻' if category_key == 'platform_diversity' else '🌍' if category_key == 'non_eu_leaders' else '🏴‍☠️' if category_key == 'frontier_builders' else '🏆' if category_key == 'network_veterans' else '' %}
