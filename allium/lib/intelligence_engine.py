@@ -445,13 +445,22 @@ class IntelligenceEngine:
                 
                 # Determine network diversity rating
                 if unique_as_count == 1:
-                    network_rating = "Poor"
+                    # Special case: Check if this contact is the only operator in their AS
+                    first_relay_as = contact_relays[0].get('as') if contact_relays else None
+                    if (first_relay_as and 'as' in self.sorted_data and 
+                        first_relay_as in self.sorted_data['as'] and
+                        self.sorted_data['as'][first_relay_as].get('unique_contact_count', 0) == 1):
+                        network_rating = "Great"
+                        portfolio_diversity = f"{network_rating}, 1 AS with 1 operator"
+                    else:
+                        network_rating = "Poor"
+                        portfolio_diversity = f"{network_rating}, {unique_as_count} network{'s' if unique_as_count != 1 else ''}"
                 elif unique_as_count <= 3:
                     network_rating = "Okay"
+                    portfolio_diversity = f"{network_rating}, {unique_as_count} network{'s' if unique_as_count != 1 else ''}"
                 else:
                     network_rating = "Great"
-                
-                portfolio_diversity = f"{network_rating}, {unique_as_count} network{'s' if unique_as_count != 1 else ''}"
+                    portfolio_diversity = f"{network_rating}, {unique_as_count} network{'s' if unique_as_count != 1 else ''}"
                 
 
                 
