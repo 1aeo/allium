@@ -69,8 +69,8 @@ def test_aroileaders_module_import_succeeds_with_expected_functions():
 
 def test_requirements_file_exists_and_contains_required_dependencies():
     """Test that requirements.txt exists and has content"""
-    req_file = os.path.join(os.path.dirname(__file__), '..', 'requirements.txt')
-    assert os.path.exists(req_file), "requirements.txt not found"
+    req_file = os.path.join(os.path.dirname(__file__), '..', 'config', 'requirements.txt')
+    assert os.path.exists(req_file), "requirements.txt not found in config directory"
     
     with open(req_file, 'r') as f:
         content = f.read().strip()
