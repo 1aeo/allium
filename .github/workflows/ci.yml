@@ -23,7 +23,7 @@ jobs:
       uses: actions/cache@v4
       with:
         path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-linting-${{ hashFiles('**/requirements.txt') }}
+        key: ${{ runner.os }}-pip-linting-${{ hashFiles('**/config/requirements.txt') }}
         restore-keys: |
           ${{ runner.os }}-pip-linting-
           
@@ -59,14 +59,14 @@ jobs:
       uses: actions/cache@v4
       with:
         path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-tests-${{ hashFiles('**/requirements.txt') }}
+        key: ${{ runner.os }}-pip-tests-${{ hashFiles('**/config/requirements.txt') }}
         restore-keys: |
           ${{ runner.os }}-pip-tests-
           
     - name: Install test dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        pip install -r config/requirements.txt
         pip install pytest pytest-cov
         
     - name: Run unit tests
@@ -147,7 +147,7 @@ jobs:
     - name: Install security tools
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        pip install -r config/requirements.txt
         pip install bandit safety
         
     - name: Run security scans
@@ -181,7 +181,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        pip install -r config/requirements.txt
         
     - name: Test AROI leaderboard generation
       run: |
@@ -227,7 +227,7 @@ jobs:
         # Download and run setup script with retry logic
         for download_attempt in 1 2 3; do
           echo "📥 Download attempt $download_attempt of 3..."
-          if curl -sSL --connect-timeout 30 --max-time 60 https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/setup.sh -o setup.sh; then
+          if curl -sSL --connect-timeout 30 --max-time 60 https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/scripts/setup.sh -o setup.sh; then
             echo "✅ Setup script downloaded successfully"
             break
           else
@@ -267,7 +267,7 @@ jobs:
         
         # Check that key files exist in the correct subdirectory
         test -f "allium/allium.py" || { echo "❌ allium/allium.py not found"; ls -la allium/; exit 1; }
-        test -f "requirements.txt" || { echo "❌ requirements.txt not found"; exit 1; }
+        test -f "config/requirements.txt" || { echo "❌ config/requirements.txt not found"; exit 1; }
         test -d "allium/www" || { echo "❌ allium/www directory not created"; ls -la allium/; exit 1; }
         
         # Check that www directory has expected content
@@ -394,7 +394,7 @@ jobs:
         
     - name: Install dependencies
       run: |
-        pip install -r requirements.txt
+        pip install -r config/requirements.txt
         pip install memory-profiler
         
     - name: Performance test

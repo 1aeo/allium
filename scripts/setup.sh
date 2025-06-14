@@ -42,7 +42,7 @@ source venv/bin/activate
 
 echo "📦 Installing dependencies..."
 pip install --upgrade pip
-pip install -r requirements.txt
+pip install -r config/requirements.txt
 
 echo "🚀 Running first generation with progress tracking..."
 cd allium
