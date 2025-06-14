@@ -198,11 +198,11 @@ def _calculate_aroi_leaderboards(relays_instance):
         if aroi_domain and aroi_domain != 'none':
             operator_key = aroi_domain
         else:
-            # Use first 24 characters of contact info for better readability (extended from 16)
+            # Use first 30 characters of contact info for better readability (extended from 24)
             if contact_info and len(contact_info.strip()) > 0:
                 clean_contact = contact_info.strip()
-                if len(clean_contact) > 24:
-                    operator_key = clean_contact[:24] + '...'
+                if len(clean_contact) > 30:
+                    operator_key = clean_contact[:30] + '...'
                 else:
                     operator_key = clean_contact
             else:
