@@ -5,7 +5,7 @@
     <div class="col-md-3 col-sm-6 aroi-champion-badge">
         <div class="panel {{ panel_class }}">
             <div class="panel-body text-center {{ champion_class }}">
-                <h3 class="aroi-header-spacing" title="Elite champion in {{ title.lower() }} category">{{ emoji }} {{ title }}</h3>
+                <h3 class="aroi-header-spacing" title="Elite champion in {{ title.lower() }} category"><a href="#{{ category_key }}" style="color: inherit; text-decoration: none;">{{ emoji }} {{ title }}</a></h3>
                 {% if leaderboard_data %}
                     {% set champion = leaderboard_data[0] %}
                     <h4><strong><a href="{{ path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info_escaped }}" class="aroi-underline-link">{{ champion.display_name|escape }}</a></strong></h4>
@@ -54,7 +54,7 @@
 {# Top 3 Table Macro - Eliminate 10x duplicate top 3 table blocks #}
 {% macro top3_table(title, emoji, leaderboard_data, achievements, performance_type, page_ctx, use_bits=false) %}
     <div class="aroi-subsection">
-        <h4 title="Top 3 performers in {{ title.lower() }} category">{{ emoji }} {{ title }}</h4>
+        <h4 title="Top 3 performers in {{ title.lower() }} category"><a href="#{{ performance_type }}" style="color: inherit; text-decoration: none;">{{ emoji }} {{ title }}</a></h4>
         {% if leaderboard_data %}
         <div class="table-responsive">
             <table class="table table-striped aroi-top3-table">

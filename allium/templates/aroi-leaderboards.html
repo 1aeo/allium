@@ -71,7 +71,7 @@
     <div class="row">
         {{ champion_badge("bandwidth", relays.json.aroi_leaderboards.leaderboards.bandwidth, "Platinum Bandwidth", "🥇", "panel-warning", "aroi-champion-platinum", page_ctx.path_prefix, relays.use_bits) }}
         
-        {{ champion_badge("consensus_weight", relays.json.aroi_leaderboards.leaderboards.consensus_weight, "Network Heavyweight", "🏛️", "panel-warning", "aroi-champion-network", page_ctx.path_prefix, relays.use_bits) }}
+        {{ champion_badge("consensus_weight", relays.json.aroi_leaderboards.leaderboards.consensus_weight, "Network Heavyweight", "⚖️", "panel-warning", "aroi-champion-network", page_ctx.path_prefix, relays.use_bits) }}
         
         {{ champion_badge("exit_authority", relays.json.aroi_leaderboards.leaderboards.exit_authority, "Exit Heavyweight Master", "🚪", "panel-danger", "aroi-champion-exit-authority", page_ctx.path_prefix, relays.use_bits) }}
         
@@ -79,7 +79,7 @@
         
         {{ champion_badge("guard_operators", relays.json.aroi_leaderboards.leaderboards.guard_operators, "Guard Gatekeepers", "🛡️", "panel-info", "aroi-champion-guard", page_ctx.path_prefix, relays.use_bits) }}
         
-        {{ champion_badge("most_diverse", relays.json.aroi_leaderboards.leaderboards.most_diverse, "Diversity Master", "🌍", "panel-success", "aroi-champion-diversity", page_ctx.path_prefix, relays.use_bits) }}
+        {{ champion_badge("most_diverse", relays.json.aroi_leaderboards.leaderboards.most_diverse, "Diversity Master", "🌈", "panel-success", "aroi-champion-diversity", page_ctx.path_prefix, relays.use_bits) }}
         
         {{ champion_badge("platform_diversity", relays.json.aroi_leaderboards.leaderboards.platform_diversity, "Platform Hero", "💻", "panel-info", "aroi-champion-platform", page_ctx.path_prefix, relays.use_bits) }}
         
@@ -106,7 +106,7 @@
     {{ top3_table("Bandwidth Titans", "💪", relays.json.aroi_leaderboards.leaderboards.bandwidth, ["Bandwidth King", "Bandwidth Warrior", "Bandwidth Hero"], "bandwidth", page_ctx, relays.use_bits) }}
 
     <!-- Network Heavyweight Elite -->
-    {{ top3_table("Network Heavyweight Elite", "🏛️", relays.json.aroi_leaderboards.leaderboards.consensus_weight, ["Authority Supreme", "Authority Commander", "Authority Captain"], "consensus_weight", page_ctx, relays.use_bits) }}
+    {{ top3_table("Network Heavyweight Elite", "⚖️", relays.json.aroi_leaderboards.leaderboards.consensus_weight, ["Authority Supreme", "Authority Commander", "Authority Captain"], "consensus_weight", page_ctx, relays.use_bits) }}
 
     <!-- Exit Authorities -->
     {{ top3_table("Exit Authorities", "🚪", relays.json.aroi_leaderboards.leaderboards.exit_authority, ["Exit Authority King", "Exit Authority Commander", "Exit Authority Captain"], "exit_authority", page_ctx, relays.use_bits) }}
@@ -118,7 +118,7 @@
     {{ top3_table("Guard Gatekeepers", "🛡️", relays.json.aroi_leaderboards.leaderboards.guard_operators, ["Guard Commander", "Guard Captain", "Guard Leader"], "guard_operators", page_ctx, relays.use_bits) }}
 
     <!-- Diversity Masters -->
-    {{ top3_table("Diversity Masters", "🌍", relays.json.aroi_leaderboards.leaderboards.most_diverse, ["Diversity Master", "Diversity Master", "Diversity Master"], "most_diverse", page_ctx, relays.use_bits) }}
+    {{ top3_table("Diversity Masters", "🌈", relays.json.aroi_leaderboards.leaderboards.most_diverse, ["Diversity Master", "Diversity Master", "Diversity Master"], "most_diverse", page_ctx, relays.use_bits) }}
 
     <!-- Platform Heroes -->
     {{ top3_table("Platform Heroes", "💻", relays.json.aroi_leaderboards.leaderboards.platform_diversity, ["Platform Hero", "Platform Hero", "Platform Hero"], "platform_diversity", page_ctx, relays.use_bits) }}
@@ -219,7 +219,7 @@
 
     <!-- Category 2: Network Heavyweight Rankings -->
     <section id="consensus_weight" class="aroi-section">
-        <h3 title="Operators ranked by total network consensus weight percentage controlling Tor routing decisions">🏛️ Network Heavyweight Rankings</h3>
+        <h3 title="Operators ranked by total network consensus weight percentage controlling Tor routing decisions">⚖️ Network Heavyweight Rankings</h3>
         {% if relays.json.aroi_leaderboards.leaderboards.consensus_weight %}
         <div class="table-responsive">
             <table class="table table-striped table-condensed aroi-rankings-table aroi-standard-table">
@@ -375,11 +375,14 @@
         {% endif %}
     </section>
 
+    <!-- Category 6: Most Diverse Operators -->
+    {{ generic_ranking_table("most_diverse", "Most Diverse Operators", relays.json.aroi_leaderboards.leaderboards.most_diverse, "🌈", page_ctx, relays.use_bits) }}
+
     <!-- Generic categories using macro -->
-    {% for category_key in ['most_diverse', 'platform_diversity', 'non_eu_leaders', 'frontier_builders', 'network_veterans', 'reliability_masters', 'legacy_titans'] %}
+    {% for category_key in ['platform_diversity', 'non_eu_leaders', 'frontier_builders', 'network_veterans', 'reliability_masters', 'legacy_titans'] %}
         {% set category_name = relays.json.aroi_leaderboards.summary.categories[category_key] %}
         {% set category_data = relays.json.aroi_leaderboards.leaderboards[category_key] %}
-        {% set emoji = '🌈' if category_key == 'most_diverse' else '💻' if category_key == 'platform_diversity' else '🌍' if category_key == 'non_eu_leaders' else '🏴‍☠️' if category_key == 'frontier_builders' else '🏆' if category_key == 'network_veterans' else '' %}
+        {% set emoji = '💻' if category_key == 'platform_diversity' else '🌍' if category_key == 'non_eu_leaders' else '🏴‍☠️' if category_key == 'frontier_builders' else '🏆' if category_key == 'network_veterans' else '' %}
         
         {{ generic_ranking_table(category_key, category_name, category_data, emoji, page_ctx, relays.use_bits) }}
     {% endfor %}
@@ -401,7 +404,7 @@
             <div class="col-md-6">
                 <ul>
                     <li><strong>🚀 Bandwidth Contributed:</strong> Total observed bandwidth across all relays</li>
-                    <li><strong>🏛️ Network Heavyweight Rankings:</strong> Total consensus weight percentage in the network</li>
+                    <li><strong>⚖️ Network Heavyweight Rankings:</strong> Total consensus weight percentage in the network</li>
                     <li><strong>🚪 Exit Authorities:</strong> Exit consensus weight percentage (authority over exit traffic)</li>
                     <li><strong>🚪 Exit Champions:</strong> Number of exit relays operated</li>
                     <li><strong>🛡️ Guard Gatekeepers:</strong> Number of guard relays operated</li>
