@@ -444,4 +444,16 @@
         </div>
         {% endif %}
     </section>
+{% endmacro %}
+
+{# Bandwidth Table Headers Macro - To avoid repetition across pagination sections #}
+{% macro bandwidth_table_headers(use_bits=false) %}
+    <th title="Position in bandwidth leaderboard based on total observed bandwidth capacity">Rank</th>
+    <th title="Authenticated Relay Operator Identifier following ContactInfo specification">Operator (AROI)</th>
+    <th title="Total number of relays operated with measured vs unmeasured breakdown">Relays</th>
+    <th title="Total observed bandwidth capacity contributed to Tor network in {% if use_bits %}bits per second (Mbit/s, Gbit/s, etc.){% else %}bytes per second (MB/s, GB/s, etc.){% endif %}">Bandwidth</th>
+    <th title="Percentage of total Tor network consensus weight controlling routing decisions">Consensus Weight</th>
+    <th title="Number of guard and exit relays providing entry/exit services">Guard/Exit Count</th>
+    <th title="Geographic distribution of relay operations across countries">Countries</th>
+    <th title="Operating system diversity across relay infrastructure">Platforms</th>
 {% endmacro %} 
