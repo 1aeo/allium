@@ -99,9 +99,9 @@ class Coordinator:
         api_display_name = self._get_api_display_name(api_name)
         
         def api_logger(message):
-            # Format message with API name prefix
+            # Format message with API name prefix and increment step
             formatted_message = f"{api_display_name} - {message}"
-            self._log_progress(formatted_message)
+            self._log_progress_with_step_increment(formatted_message)
         
         return api_logger
 

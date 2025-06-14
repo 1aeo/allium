@@ -240,9 +240,11 @@ def fetch_onionoo_details(onionoo_url="https://onionoo.torproject.org/details", 
             raise err
 
         # Parse JSON response
+        log_progress("parsing JSON response...")
         data = json.loads(api_response.decode("utf-8"))
         
         # Cache the data
+        log_progress("caching data...")
         _save_cache(api_name, data)
         
         # Write timestamp for future conditional requests
@@ -302,8 +304,6 @@ def fetch_onionoo_uptime(onionoo_url="https://onionoo.torproject.org/uptime", pr
         else:
             conn = urllib.request.Request(onionoo_url)
 
-        log_progress("fetching uptime data from onionoo API...")
-
         try:
             # Add timeout to prevent hanging in CI environments
             api_response = urllib.request.urlopen(conn, timeout=30).read()
@@ -330,13 +330,13 @@ def fetch_onionoo_uptime(onionoo_url="https://onionoo.torproject.org/uptime", pr
             log_progress("in CI environments, this might be a temporary network issue")
             raise err
 
-        log_progress("parsing uptime JSON response...")
+        log_progress("parsing JSON response...")
 
         # Parse JSON response
         data = json.loads(api_response.decode("utf-8"))
         
         # Cache the data
-        log_progress("caching uptime data...")
+        log_progress("caching data...")
         _save_cache(api_name, data)
         
         # Write timestamp for future conditional requests
@@ -350,7 +350,7 @@ def fetch_onionoo_uptime(onionoo_url="https://onionoo.torproject.org/uptime", pr
         
         # Use consistent progress format for success message
         relay_count = len(data.get('relays', []))
-        log_progress(f"successfully fetched uptime data for {relay_count} relays from onionoo uptime API")
+        log_progress(f"successfully fetched {relay_count} relays from onionoo uptime API")
         return data
         
     except Exception as e:
@@ -361,10 +361,10 @@ def fetch_onionoo_uptime(onionoo_url="https://onionoo.torproject.org/uptime", pr
         # Try to return cached data as fallback
         cached_data = _load_cache(api_name)
         if cached_data:
-            log_progress("using cached onionoo uptime data as fallback")
+            log_progress("using cached onionoo data as fallback")
             return cached_data
         else:
-            log_progress("no cached uptime data available, continuing without uptime data")
+            log_progress("no cached data available, continuing without uptime data")
             return None
 
 
