@@ -44,11 +44,11 @@ class Coordinator:
         self.api_workers = []
         
         # Always include details API (required for core functionality)
-        self.api_workers.append(("onionoo_details", fetch_onionoo_details, [self.onionoo_details_url]))
+        self.api_workers.append(("onionoo_details", fetch_onionoo_details, [self.onionoo_details_url, self._log_progress]))
         
         # Include uptime API only if 'all' is selected (details + uptime)
         if self.enabled_apis == 'all':
-            self.api_workers.append(("onionoo_uptime", fetch_onionoo_uptime, [self.onionoo_uptime_url]))
+            self.api_workers.append(("onionoo_uptime", fetch_onionoo_uptime, [self.onionoo_uptime_url, self._log_progress]))
         
     def _log_progress(self, message):
         """Log progress message using shared progress utility"""
@@ -122,8 +122,6 @@ class Coordinator:
         # Return the details data for backward compatibility
         details_data = all_data.get('onionoo_details')
         if details_data:
-            if self.progress:
-                self._log_progress(f"Successfully fetched {len(details_data.get('relays', []))} relays from onionoo")
             return details_data
         else:
             if self.progress:
