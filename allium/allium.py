@@ -186,16 +186,14 @@ if __name__ == "__main__":
 
     start_time = time.time()
     progress_step = 0
-    # Updated to account for separate API stages:
-    # - Previous 22 steps remain the same
-    # - +1 for starting threaded API fetching
-    # - +2 for Details API (start + complete) 
-    # - +2 for Uptime API (start + complete) when enabled
-    # - +1 for all API workers completed
-    # - +2 for creating relay set and completion
-    base_steps = 22
-    api_steps = 6  # Maximum API-related steps (when all APIs enabled)
-    total_steps = base_steps + api_steps  # 28 total steps
+    # Updated to account for all actual progress steps:
+    # Setup steps (1-4): starting, output dir creation, ready, initializing
+    # API steps (5-18): threaded fetching, both APIs (fetch->parse->cache->success->complete), relay set creation
+    # Site generation steps (19-34): data loaded, index, all relays, AROI, misc pages, unique values, relay info, static files, completion
+    setup_steps = 4
+    api_steps = 14  # Maximum API-related steps (when all APIs enabled) 
+    site_generation_steps = 16  # Site generation and completion steps
+    total_steps = setup_steps + api_steps + site_generation_steps  # 34 total steps
 
     if args.progress:
         print(f"🌐 Allium - Tor Relay Analytics Generator")

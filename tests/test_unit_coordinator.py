@@ -27,7 +27,7 @@ class TestCoordinator:
         progress = True
         start_time = time.time()
         progress_step = 5
-        total_steps = 28
+        total_steps = 34
         
         coordinator = Coordinator(
             output_dir=output_dir,
@@ -61,7 +61,7 @@ class TestCoordinator:
         assert coordinator.use_bits is False
         assert coordinator.progress is False
         assert coordinator.progress_step == 0
-        assert coordinator.total_steps == 28
+        assert coordinator.total_steps == 34
         assert isinstance(coordinator.start_time, float)
     
     def test_log_progress_outputs_formatted_message_when_progress_enabled(self):
@@ -158,7 +158,7 @@ class TestCoordinator:
                     progress=True,
                     start_time=coordinator.start_time,
                     progress_step=1,
-                    total_steps=28,
+                    total_steps=34,
                     relay_data=mock_data
                 )
                 
@@ -279,7 +279,7 @@ class TestBackwardsCompatibility:
                 progress=True,
                 start_time=mock_coordinator_class.call_args[1]['start_time'],
                 progress_step=0,
-                total_steps=28,
+                total_steps=34,
                 enabled_apis='all'
             )
             
@@ -312,7 +312,7 @@ class TestBackwardsCompatibility:
             assert kwargs['use_bits'] is False
             assert kwargs['progress'] is False
             assert kwargs['progress_step'] == 0
-            assert kwargs['total_steps'] == 28
+            assert kwargs['total_steps'] == 34
             assert isinstance(kwargs['start_time'], float)
 
 
@@ -388,7 +388,7 @@ class TestCoordinatorProgressLogging:
             # Check format: [HH:MM:SS] [step/total] [Memory: ...] Progress: message
             assert "[" in log_message and "]" in log_message  # Time format
             assert "Progress: Test progress message" in log_message
-            assert "[0/28]" in log_message  # Default step/total
+            assert "[0/34]" in log_message  # Default step/total
     
     def test_progress_logging_memory_error_fallback(self):
         """Test progress logging fallback when memory info is unavailable"""
