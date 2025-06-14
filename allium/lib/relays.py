@@ -1552,7 +1552,13 @@ class Relays:
         
         display_data['outliers'] = outliers_data
         
-        # 6. Real-time downtime alerts (idea #8 from uptime integration proposals)
+        # 6. Uptime data timestamp (reuse existing uptime data)
+        uptime_timestamp = None
+        if hasattr(self, 'uptime_data') and self.uptime_data and self.uptime_data.get('relays_published'):
+            uptime_timestamp = self.uptime_data['relays_published']
+        display_data['uptime_timestamp'] = uptime_timestamp
+        
+        # 7. Real-time downtime alerts (idea #8 from uptime integration proposals)
         downtime_alerts = self._calculate_operator_downtime_alerts(v, members, i, bandwidth_unit)
         display_data['downtime_alerts'] = downtime_alerts
         
