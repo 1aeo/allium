@@ -190,7 +190,7 @@
                         {% endif %}
                         {% if category_key == 'most_diverse' %}
                         <th title="Number of unique Autonomous Systems (ASNs) used for network diversity">Unique AS</th>
-                        {% else %}
+                        {% elif category_key != 'reliability_masters' and category_key != 'legacy_titans' %}
                         <th title="Primary operational focus or unique contribution to Tor network">Specialization</th>
                         {% endif %}
                     </tr>
