@@ -491,24 +491,16 @@
                 }
                 
                 /* Show first section by default (when no hash in URL) */
-                #bandwidth-1-5 {
+                #bandwidth-1-10 {
                     display: block;
                 }
                 
                 /* When a specific section is targeted, show only that section */
-                #bandwidth-1-5:target {
+                #bandwidth-1-10:target {
                     display: block;
                 }
                 
-                #bandwidth-6-10:target {
-                    display: block;
-                }
-                
-                #bandwidth-11-15:target {
-                    display: block;
-                }
-                
-                #bandwidth-16-20:target {
+                #bandwidth-11-20:target {
                     display: block;
                 }
                 
@@ -516,11 +508,9 @@
                     display: block;
                 }
                 
-                /* When sections 6-10, 11-15, 16-20, or 21-25 are targeted, explicitly hide the first section */
-                #bandwidth-6-10:target ~ * #bandwidth-1-5,
-                #bandwidth-11-15:target ~ * #bandwidth-1-5,
-                #bandwidth-16-20:target ~ * #bandwidth-1-5,
-                #bandwidth-21-25:target ~ * #bandwidth-1-5 {
+                /* When sections 11-20 or 21-25 are targeted, explicitly hide the first section */
+                #bandwidth-11-20:target ~ * #bandwidth-1-10,
+                #bandwidth-21-25:target ~ * #bandwidth-1-10 {
                     display: none !important;
                 }
                 
