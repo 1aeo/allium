@@ -286,11 +286,11 @@ class Relays:
             else:
                 relay["last_seen_ago"] = "unknown"
                 
-            # Optimization 11: Pre-compute uptime/downtime display based on last_restarted and Running flag
+            # Optimization 11: Pre-compute uptime/downtime display based on last_restarted and running status
             relay["uptime_display"] = None
             if relay.get('last_restarted'):
-                flags = relay.get('flags', [])
-                is_running = 'Running' in flags
+                # Use the same 'running' field that determines the red/green dot for consistency
+                is_running = relay.get('running', False)
                 
                 # Calculate time difference from last_restarted to now using existing helper
                 time_since_restart = self._format_time_ago(relay['last_restarted'])
@@ -318,11 +318,11 @@ class Relays:
         all_uptime_values = {'1_month': [], '6_months': [], '1_year': [], '5_years': []}
         
         for relay in self.json["relays"]:
-            # Recalculate uptime/downtime display based on last_restarted and Running flag
+            # Recalculate uptime/downtime display based on last_restarted and running status
             relay["uptime_display"] = None
             if relay.get('last_restarted'):
-                flags = relay.get('flags', [])
-                is_running = 'Running' in flags
+                # Use the same 'running' field that determines the red/green dot for consistency
+                is_running = relay.get('running', False)
                 
                 # Calculate time difference from last_restarted to now using existing helper
                 time_since_restart = self._format_time_ago(relay['last_restarted'])

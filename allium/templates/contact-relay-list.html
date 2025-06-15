@@ -26,11 +26,8 @@
     <th></th>
     <th>Nickname</th>
     <th>BW</th>
-    {% if key and not is_index -%}
-    <th title="Bandwidth measured by >=3 bandwidth authorities">BW Measured</th>
-    {% endif -%}
     <th>Uptime/Downtime</th>
-    <th>Uptime (1M/6M/1Y/5Y)</th>
+    <th title="{% if contact_display_data and contact_display_data.outliers and contact_display_data.outliers.tooltip %}{{ contact_display_data.outliers.tooltip }}{% else %}Statistical outliers: ≥2σ from average{% endif %}">Uptime (1M/6M/1Y/5Y)</th>
     <th>Country</th>
     <th class="visible-md visible-lg">IPv4</th>
     {% set has_ipv6 = false -%}
@@ -56,9 +53,6 @@
     <th>Platform</th>
     <th class="visible-md visible-lg">Flags</th>
     <th class="visible-md visible-lg">First Seen</th>
-    {% if key and not is_index -%}
-    <th class="visible-md visible-lg">Last Restarted</th>
-    {% endif -%}
 </tr>
 <tbody>
     {% if is_index -%}
@@ -91,16 +85,18 @@
 			}}</a>
 		    </td>
 		{% endif -%}
-		<td>{{ obs_bandwidth }} {{ obs_unit }}</td>
-		{% if key and not is_index -%}
-		    <td title=">=3 bandwidth authorities have measured">
-		        {% if relay['measured'] is not none -%}
-		            {% if relay['measured'] -%}Yes{% else -%}No{% endif -%}
+		<td>
+		    {{ obs_bandwidth }} {{ obs_unit }}
+		    {% if relay['measured'] is not none -%}
+		        {% if relay['measured'] -%}
+		            <span style="color: #28a745; font-weight: bold;" title="Bandwidth measured by ≥3 bandwidth authorities">✓</span>
 		        {% else -%}
-		            unknown
+		            <span style="color: #dc3545; font-weight: bold;" title="Bandwidth not measured by ≥3 bandwidth authorities">✗</span>
 		        {% endif -%}
-		    </td>
-		{% endif -%}
+		    {% else -%}
+		        <span style="color: #6c757d;" title="Bandwidth measurement status unknown">?</span>
+		    {% endif -%}
+		</td>
 		<td>
 		    {% if relay.get('uptime_display') -%}
 		        {% if relay['uptime_display'].startswith('DOWN') -%}
@@ -217,15 +213,6 @@
 		    <td class="visible-md visible-lg">
 			{{ relay['first_seen'].split(' ', 1)[0]|escape
 			}}
-		    </td>
-		{% endif -%}
-		{% if key and not is_index -%}
-		    <td class="visible-md visible-lg" title="{% if relay['last_restarted'] -%}{{ relay['last_restarted'].split(' ', 1)[0]|escape }}{% else -%}unknown{% endif -%}">
-		        {% if relay['last_restarted'] -%}
-		            {{ relays._format_time_ago(relay['last_restarted']) }}
-		        {% else -%}
-		            unknown
-		        {% endif -%}
 		    </td>
 		{% endif -%}
 	    </tr>
