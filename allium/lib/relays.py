@@ -1792,8 +1792,14 @@ class Relays:
             'unrecommended': sum(1 for relay in members if relay.get('version_status') == 'unrecommended')
         }
         
-        # Format version compliance display
-        intelligence_formatted['version_compliance'] = f"{version_compliant} compliant, {version_not_compliant} not compliant, {version_unknown} unknown"
+        # Format version compliance display (only show non-zero values for not compliant and unknown)
+        version_compliance_parts = [f"{version_compliant} compliant"]
+        if version_not_compliant > 0:
+            version_compliance_parts.append(f"{version_not_compliant} not compliant")
+        if version_unknown > 0:
+            version_compliance_parts.append(f"{version_unknown} unknown")
+        
+        intelligence_formatted['version_compliance'] = ', '.join(version_compliance_parts)
         
         # Format version status display (only show counts > 0)
         version_status_parts = []

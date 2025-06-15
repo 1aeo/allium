@@ -107,7 +107,7 @@
                 {% if intelligence.version_compliance %}
                 <li><strong><span title="Version compliance shows how many relays are running recommended versions. Compliant relays run directory authority recommended versions (recommended_version=true), non-compliant run unrecommended versions (recommended_version=false), unknown have no version recommendation data available.">Version Compliance</span>:</strong> {{ intelligence.version_compliance }}
                     {% if intelligence.version_status and intelligence.version_status != 'none' %}
-                    <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px; margin-bottom: 0;">
+                    <ul style="list-style-type: disc; padding-left: 20px; margin-top: 0px; margin-bottom: 0;">
                         <li><strong><span title="Version status breakdown shows the distribution of Tor software versions. Recommended versions are approved by directory authorities, experimental are newer than recommended, obsolete are older than recommended, new in series are newer within the same version series, unrecommended don't meet any of the above criteria.">Version Status</span>:</strong> {{ intelligence.version_status }}</li>
                     </ul>
                     {% endif %}
