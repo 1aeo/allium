@@ -1442,6 +1442,7 @@ class Relays:
             'bandwidth': {'name': 'Bandwidth Champion', 'emoji': '🚀', 'title': 'Bandwidth Champion'},
                     'consensus_weight': {'name': 'Network Heavyweight', 'emoji': '⚖️', 'title': 'Network Heavyweight'},
         'exit_authority': {'name': 'Exit Heavyweight Master', 'emoji': '🚪', 'title': 'Exit Heavyweight Master'},
+        'guard_authority': {'name': 'Guard Heavyweight Master', 'emoji': '🛡️', 'title': 'Guard Heavyweight Master'},
         'exit_operators': {'name': 'Exit Champion', 'emoji': '🚪', 'title': 'Exit Champion'},
         'guard_operators': {'name': 'Guard Gatekeepers', 'emoji': '🛡️', 'title': 'Guard Gatekeepers'},
             'most_diverse': {'name': 'Diversity Master', 'emoji': '🌈', 'title': 'Diversity Master'},

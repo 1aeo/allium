@@ -297,6 +297,8 @@ def _calculate_aroi_leaderboards(relays_instance):
         # Exit Authority - reuse existing calculation from relays.py
         exit_consensus_weight = contact_data.get('exit_consensus_weight_fraction', 0.0)
         
+        # Guard Authority - reuse existing calculation from relays.py
+        guard_consensus_weight = contact_data.get('guard_consensus_weight_fraction', 0.0)
         # Veteran Score - earliest first seen time weighted by relay scale
         veteran_score = 0.0
         veteran_days = 0
@@ -382,6 +384,7 @@ def _calculate_aroi_leaderboards(relays_instance):
             'diversity_score': diversity_score,
             'uptime_percentage': uptime_percentage,
             'exit_consensus_weight': exit_consensus_weight,
+            'guard_consensus_weight': guard_consensus_weight,
             'veteran_score': veteran_score,
             'veteran_days': veteran_days,
             'veteran_relay_scaling_factor': veteran_relay_scaling_factor,
@@ -404,7 +407,7 @@ def _calculate_aroi_leaderboards(relays_instance):
             'relays': operator_relays
         }
     
-    # Generate 13 core leaderboard categories (added 2 new reliability categories)
+    # Generate 14 core leaderboard categories (added Guard Authority + 2 new reliability categories)
     leaderboards = {}
     
     # 1. Bandwidth Contributed (use existing calculation)
@@ -428,21 +431,28 @@ def _calculate_aroi_leaderboards(relays_instance):
         reverse=True
     )[:50]
     
-    # 4. Exit Operators (use existing calculation)
+    # 4. Guard Authority Champions (new calculation)
+    leaderboards['guard_authority'] = sorted(
+        aroi_operators.items(),
+        key=lambda x: x[1]['guard_consensus_weight'],
+        reverse=True
+    )[:50]
+    
+    # 5. Exit Operators (use existing calculation)
     leaderboards['exit_operators'] = sorted(
         aroi_operators.items(),
         key=lambda x: x[1]['exit_count'],
         reverse=True
     )[:50]
     
-    # 5. Guard Operators (use existing calculation)
+    # 6. Guard Operators (use existing calculation)
     leaderboards['guard_operators'] = sorted(
         aroi_operators.items(),
         key=lambda x: x[1]['guard_count'],
         reverse=True
     )[:50]
     
-    # 6. ⏰ Reliability Masters - 6-Month Average Uptime (NEW) - Only operators with > 25 relays AND > 0% uptime
+    # 7. ⏰ Reliability Masters - 6-Month Average Uptime (NEW) - Only operators with > 25 relays AND > 0% uptime
     reliability_masters_filtered = {k: v for k, v in aroi_operators.items() if v['total_relays'] > 25 and v['reliability_6m_score'] > 0.0}
     leaderboards['reliability_masters'] = sorted(
         reliability_masters_filtered.items(),
@@ -450,7 +460,7 @@ def _calculate_aroi_leaderboards(relays_instance):
         reverse=True
     )[:50]
     
-    # 7. 👑 Legacy Titans - 5-Year Average Uptime (NEW) - Only operators with > 25 relays AND > 0% uptime
+    # 8. 👑 Legacy Titans - 5-Year Average Uptime (NEW) - Only operators with > 25 relays AND > 0% uptime
     legacy_titans_filtered = {k: v for k, v in aroi_operators.items() if v['total_relays'] > 25 and v['reliability_5y_score'] > 0.0}
     leaderboards['legacy_titans'] = sorted(
         legacy_titans_filtered.items(),
@@ -458,35 +468,35 @@ def _calculate_aroi_leaderboards(relays_instance):
         reverse=True
     )[:50]
     
-    # 8. Most Diverse Operators (new calculation)
+    # 9. Most Diverse Operators (new calculation)
     leaderboards['most_diverse'] = sorted(
         aroi_operators.items(),
         key=lambda x: x[1]['diversity_score'],
         reverse=True
     )[:50]
     
-    # 9. Platform Diversity - Non-Linux Heroes (new calculation)
+    # 10. Platform Diversity - Non-Linux Heroes (new calculation)
     leaderboards['platform_diversity'] = sorted(
         aroi_operators.items(),
         key=lambda x: x[1]['non_linux_count'],
         reverse=True
     )[:50]
     
-    # 10. Geographic Champions - Non-EU Leaders (new calculation)
+    # 11. Geographic Champions - Non-EU Leaders (new calculation)
     leaderboards['non_eu_leaders'] = sorted(
         aroi_operators.items(),
         key=lambda x: x[1]['non_eu_count'],
         reverse=True
     )[:50]
     
-    # 11. Frontier Builders - Rare Countries (new calculation)
+    # 12. Frontier Builders - Rare Countries (new calculation)
     leaderboards['frontier_builders'] = sorted(
         aroi_operators.items(),
         key=lambda x: x[1]['rare_country_count'],
         reverse=True
     )[:50]
     
-    # 12. Network Veterans - Earliest First Seen + Relay Scale (new calculation)
+    # 13. Network Veterans - Earliest First Seen + Relay Scale (new calculation)
     leaderboards['network_veterans'] = sorted(
         aroi_operators.items(),
         key=lambda x: x[1]['veteran_score'],
@@ -683,6 +693,7 @@ def _calculate_aroi_leaderboards(relays_instance):
                 'bandwidth_unit': bandwidth_unit,
                 'total_consensus_weight_pct': f"{metrics['total_consensus_weight'] * 100:.2f}%",
                 'exit_consensus_weight_pct': f"{metrics['exit_consensus_weight'] * 100:.2f}%",
+                'guard_consensus_weight_pct': f"{metrics['guard_consensus_weight'] * 100:.2f}%",
                 'guard_count': metrics['guard_count'],
                 'exit_count': metrics['exit_count'],
                 'guard_percentage': f"{guard_percentage:.0f}%",
@@ -755,10 +766,11 @@ def _calculate_aroi_leaderboards(relays_instance):
         'total_consensus_weight_pct': f"{total_cw_all * 100:.1f}%",
         'live_categories_count': len(formatted_leaderboards),  # Dynamic count of actual leaderboards
         'update_timestamp': relays_instance.timestamp if hasattr(relays_instance, 'timestamp') else 'Unknown',
-        'categories': {
+                    'categories': {
             'bandwidth': 'Bandwidth Contributed',
             'consensus_weight': 'Consensus Weight',
             'exit_authority': 'Exit Authority Champions',
+            'guard_authority': 'Guard Authority Champions',
             'exit_operators': 'Exit Operators',
             'guard_operators': 'Guard Operators', 
             'reliability_masters': '⏰ Reliability Masters (6-Month Uptime)',
