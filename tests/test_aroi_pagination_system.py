@@ -25,6 +25,13 @@ class TestAROIPaginationSystem(unittest.TestCase):
             autoescape=select_autoescape(['html', 'xml'])
         )
         
+        # Add custom filters for template compatibility
+        from lib.relays import determine_unit_filter, format_bandwidth_with_unit, format_bandwidth_filter, format_time_ago
+        self.jinja_env.filters['determine_unit'] = determine_unit_filter
+        self.jinja_env.filters['format_bandwidth_with_unit'] = format_bandwidth_with_unit
+        self.jinja_env.filters['format_bandwidth'] = format_bandwidth_filter
+        self.jinja_env.filters['format_time_ago'] = format_time_ago
+        
         # Create mock AROI leaderboard data for all 12 categories
         self.mock_leaderboards = {}
         categories = [
@@ -301,6 +308,13 @@ class TestPaginationIntegration(unittest.TestCase):
             loader=FileSystemLoader(template_dir),
             autoescape=select_autoescape(['html', 'xml'])
         )
+        
+        # Add custom filters for template compatibility
+        from lib.relays import determine_unit_filter, format_bandwidth_with_unit, format_bandwidth_filter, format_time_ago
+        jinja_env.filters['determine_unit'] = determine_unit_filter
+        jinja_env.filters['format_bandwidth_with_unit'] = format_bandwidth_with_unit
+        jinja_env.filters['format_bandwidth'] = format_bandwidth_filter
+        jinja_env.filters['format_time_ago'] = format_time_ago
         
         template = jinja_env.get_template('aroi-leaderboards.html')
         context = {

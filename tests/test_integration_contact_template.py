@@ -25,6 +25,13 @@ class TestContactTemplateIntegration(unittest.TestCase):
             autoescape=select_autoescape(['html', 'xml'])
         )
         
+        # Add custom filters for template compatibility
+        from lib.relays import determine_unit_filter, format_bandwidth_with_unit, format_bandwidth_filter, format_time_ago
+        self.jinja_env.filters['determine_unit'] = determine_unit_filter
+        self.jinja_env.filters['format_bandwidth_with_unit'] = format_bandwidth_with_unit
+        self.jinja_env.filters['format_bandwidth'] = format_bandwidth_filter
+        self.jinja_env.filters['format_time_ago'] = format_time_ago
+        
         # Sample template context data
         self.template_context = {
             'contact': 'test@example.com',
@@ -38,9 +45,27 @@ class TestContactTemplateIntegration(unittest.TestCase):
                     'relay_subset': [{
                         'aroi_domain': 'example.org',
                         'country': 'us',
-                        'country_name': 'United States'
+                        'country_name': 'United States',
+                        'observed_bandwidth': 1000000,
+                        'nickname': 'TestRelay',
+                        'fingerprint': 'ABC123DEF456',
+                        'running': True,
+                        'flags': ['Running', 'Valid'],
+                        'flags_escaped': ['Running', 'Valid'],
+                        'flags_lower_escaped': ['running', 'valid'],
+                        'effective_family': [],
+                        'measured': True,
+                        'uptime_display': 'UP 5d 12h',
+                        'uptime_api_display': '99.5%',
+                        'or_addresses': ['192.168.1.1:9001'],
+                        'as': 'AS7922',
+                        'as_name': 'Comcast Cable',
+                        'platform': 'Linux',
+                        'first_seen': '2023-01-01 12:00:00',
+                        'first_seen_date_escaped': '2023-01-01'
                     }]
-                }
+                },
+                'use_bits': False
             },
             'page_ctx': {
                 'path_prefix': '../'

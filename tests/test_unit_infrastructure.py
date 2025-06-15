@@ -31,6 +31,16 @@ def test_all_jinja2_templates_have_valid_syntax_without_errors():
     
     env = Environment(loader=FileSystemLoader(template_dir))
     
+    # Add custom filters for template compatibility
+    import sys
+    import os
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'allium'))
+    from lib.relays import determine_unit_filter, format_bandwidth_with_unit, format_bandwidth_filter, format_time_ago
+    env.filters['determine_unit'] = determine_unit_filter
+    env.filters['format_bandwidth_with_unit'] = format_bandwidth_with_unit
+    env.filters['format_bandwidth'] = format_bandwidth_filter
+    env.filters['format_time_ago'] = format_time_ago
+    
     template_files = []
     for root, dirs, files in os.walk(template_dir):
         for file in files:

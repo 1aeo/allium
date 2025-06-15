@@ -137,11 +137,11 @@
                 reverse=True) -%}
                 {% if relays.json['relay_subset'][v['relays'][0]]['fingerprint'] not in processed -%}
                     <tr>
-                        {% set obs_unit = relays._determine_unit(v['bandwidth']) -%}
-                        {% set obs_bandwidth = relays._format_bandwidth_with_unit(v['bandwidth'], obs_unit) -%}
-                        {% set guard_bw = relays._format_bandwidth_with_unit(v['guard_bandwidth'], obs_unit) -%}
-                        {% set middle_bw = relays._format_bandwidth_with_unit(v['middle_bandwidth'], obs_unit) -%}
-                        {% set exit_bw = relays._format_bandwidth_with_unit(v['exit_bandwidth'], obs_unit) -%}
+                        {% set obs_unit = v['bandwidth']|determine_unit(relays.use_bits) -%}
+                        {% set obs_bandwidth = v['bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
+                        {% set guard_bw = v['guard_bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
+                        {% set middle_bw = v['middle_bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
+                        {% set exit_bw = v['exit_bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
                         <td>
                                                     {% if v['aroi_domain'] and v['aroi_domain'] != 'none' -%}
                             <a href="{{ page_ctx.path_prefix }}family/{{ k|escape }}/" title="Family {{ k|escape }}" style="text-decoration: underline;">{{ v['aroi_domain']|escape }} ({{ v['relays']|length }} relays) {{ k[:4]|escape }}</a>

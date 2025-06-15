@@ -50,8 +50,8 @@
     {% endif -%}
     {% for relay in relay_list -%}
 	<tr>
-	    {% set obs_unit = relays._determine_unit(relay['observed_bandwidth']) -%}
-	    {% set obs_bandwidth = relays._format_bandwidth_with_unit(relay['observed_bandwidth'], obs_unit) -%}
+	    	{% set obs_unit = relay['observed_bandwidth']|determine_unit(relays.use_bits) -%}
+	{% set obs_bandwidth = relay['observed_bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
 	    {% if relay['running'] -%}
 		<td>
 		    <span class="circle circle-online" title="This relay is online"></span>
@@ -191,7 +191,7 @@
 		{% if key and not is_index -%}
 		    <td class="visible-md visible-lg" title="{% if relay['last_restarted'] -%}{{ relay['last_restarted'].split(' ', 1)[0]|escape }}{% else -%}unknown{% endif -%}">
 		        {% if relay['last_restarted'] -%}
-		            {{ relays._format_time_ago(relay['last_restarted']) }}
+		            			{{ relay['last_restarted']|format_time_ago }}
 		        {% else -%}
 		            unknown
 		        {% endif -%}
