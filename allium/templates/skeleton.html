@@ -548,77 +548,11 @@
 
                 
                 /* Category-specific pagination behavior - each category manages its own pagination independently */
-                /* Default: Show 1-10 sections by default, hide 11-20 and 21-25 sections unless targeted */
+                /* Use the correct CSS approach with :has() selector to hide non-targeted sections */
                 
-                /* Hide all 11-20 and 21-25 sections by default */
-                [id$="-11-20"], [id$="-21-25"] {
-                    display: none;
-                }
-                
-                /* Show targeted sections */
-                [id$="-11-20"]:target, [id$="-21-25"]:target {
-                    display: block;
-                }
-                
-                /* When 11-20 or 21-25 is targeted, hide 1-10 section of same category */
-                #bandwidth-11-20:target ~ #bandwidth-1-10,
-                #bandwidth-21-25:target ~ #bandwidth-1-10 {
-                    display: none;
-                }
-                
-                #consensus_weight-11-20:target ~ #consensus_weight-1-10,
-                #consensus_weight-21-25:target ~ #consensus_weight-1-10 {
-                    display: none;
-                }
-                
-                #exit_authority-11-20:target ~ #exit_authority-1-10,
-                #exit_authority-21-25:target ~ #exit_authority-1-10 {
-                    display: none;
-                }
-                
-                #exit_operators-11-20:target ~ #exit_operators-1-10,
-                #exit_operators-21-25:target ~ #exit_operators-1-10 {
-                    display: none;
-                }
-                
-                #guard_operators-11-20:target ~ #guard_operators-1-10,
-                #guard_operators-21-25:target ~ #guard_operators-1-10 {
-                    display: none;
-                }
-                
-                #most_diverse-11-20:target ~ #most_diverse-1-10,
-                #most_diverse-21-25:target ~ #most_diverse-1-10 {
-                    display: none;
-                }
-                
-                #platform_diversity-11-20:target ~ #platform_diversity-1-10,
-                #platform_diversity-21-25:target ~ #platform_diversity-1-10 {
-                    display: none;
-                }
-                
-                #non_eu_leaders-11-20:target ~ #non_eu_leaders-1-10,
-                #non_eu_leaders-21-25:target ~ #non_eu_leaders-1-10 {
-                    display: none;
-                }
-                
-                #frontier_builders-11-20:target ~ #frontier_builders-1-10,
-                #frontier_builders-21-25:target ~ #frontier_builders-1-10 {
-                    display: none;
-                }
-                
-                #network_veterans-11-20:target ~ #network_veterans-1-10,
-                #network_veterans-21-25:target ~ #network_veterans-1-10 {
-                    display: none;
-                }
-                
-                #reliability_masters-11-20:target ~ #reliability_masters-1-10,
-                #reliability_masters-21-25:target ~ #reliability_masters-1-10 {
-                    display: none;
-                }
-                
-                #legacy_titans-11-20:target ~ #legacy_titans-1-10,
-                #legacy_titans-21-25:target ~ #legacy_titans-1-10 {
-                    display: none;
+                /* When any pagination section is targeted, hide all non-targeted pagination sections */
+                body:has(.pagination-section:target) .pagination-section:not(:target) {
+                    display: none !important;
                 }
 
                 /* Improved pagination positioning and table spacing */
