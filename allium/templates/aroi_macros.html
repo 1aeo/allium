@@ -592,6 +592,44 @@
     </div>
 {% endmacro %}
 
+{# Guard Authority Table Complete Macro - Guard Authorities #}
+{% macro guard_authority_table_complete(guard_authority_data, use_bits, page_ctx) %}
+    <div class="table-responsive">
+        <table class="table table-striped table-condensed aroi-rankings-table aroi-standard-table">
+            <thead>
+                <tr>
+                    <th title="Position in guard authority leaderboard based on guard consensus weight">Rank</th>
+                    <th title="Authenticated Relay Operator Identifier following ContactInfo specification">Operator (AROI)</th>
+                    <th title="Number of relays providing guard services to network entry">Guard Relays</th>
+                    <th title="Percentage of guard consensus weight controlling network entry">Guard Authority</th>
+                    <th title="Overall network consensus weight across all relay types">Total Authority</th>
+                    <th title="Total observed bandwidth capacity in {% if use_bits %}bits per second{% else %}bytes per second{% endif %}">Bandwidth</th>
+                    <th title="Number of countries with relay operations">Countries</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in guard_authority_data %}
+                <tr>
+                    <td>{{ rank_badge(entry.rank) }}</td>
+                    <td>{{ operator_link(entry, page_ctx) }}</td>
+                    <td title="Active guard relays providing network entry">{{ entry.guard_count }}</td>
+                    <td>
+                        <span class="text-nowrap"><strong title="Control over network entry traffic routing">{{ entry.guard_consensus_weight_pct }}</strong></span>
+                    </td>
+                    <td>
+                        <span class="text-nowrap" title="Total network consensus weight across all relay types">{{ entry.total_consensus_weight_pct }}</span>
+                    </td>
+                    <td>
+                        <span class="text-nowrap" title="Observed bandwidth capacity in {% if use_bits %}{{ entry.bandwidth_unit }} (bits per second){% else %}{{ entry.bandwidth_unit }} (bytes per second){% endif %}">{{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</span>
+                    </td>
+                    <td title="Geographic distribution of relay operations">{{ entry.country_count }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endmacro %}
+
 {# Exit Operators Table Complete Macro - Exit Champions #}
 {% macro exit_operators_table_complete(exit_operators_data, use_bits, page_ctx) %}
     <div class="table-responsive">

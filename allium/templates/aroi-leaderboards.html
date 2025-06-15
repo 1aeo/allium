@@ -1,5 +1,5 @@
 {% from "macros.html" import navigation %}
-{% from "aroi_macros.html" import champion_badge, top3_table, ranking_table_row, operator_link, rank_badge, generic_ranking_table, top5_paginated_ranking_table, bandwidth_table_headers, bandwidth_table_complete, consensus_weight_table_complete, exit_authority_table_complete, exit_operators_table_complete, guard_operators_table_complete, generic_ranking_table_paginated %}
+{% from "aroi_macros.html" import champion_badge, top3_table, ranking_table_row, operator_link, rank_badge, generic_ranking_table, top5_paginated_ranking_table, bandwidth_table_headers, bandwidth_table_complete, consensus_weight_table_complete, exit_authority_table_complete, guard_authority_table_complete, exit_operators_table_complete, guard_operators_table_complete, generic_ranking_table_paginated %}
 {% extends "skeleton.html" -%}
 {% block title -%}
     🏆 Tor Network Operator Champion Dashboard
@@ -27,6 +27,7 @@
         <a href="#bandwidth" class="aroi-nav-link" title="Operators ranked by total observed bandwidth capacity across all relays">🚀 Bandwidth</a>
         <a href="#consensus_weight" class="aroi-nav-link" title="Consensus Weight: The voting power each relay has in determining network routing decisions. Higher consensus weight means more influence over which relays are selected for Tor circuits">⚖️ Consensus</a>
         <a href="#exit_authority" class="aroi-nav-link" title="Exit Authority: Control over exit consensus weight, determining which relays handle the final hop where Tor traffic exits to the regular internet">🚪 Exit Authority</a>
+        <a href="#guard_authority" class="aroi-nav-link" title="Guard Authority: Control over guard consensus weight, determining which relays handle the first hop where Tor traffic enters the network">🛡️ Guard Authority</a>
         <a href="#exit_operators" class="aroi-nav-link" title="Exit Relays: Special relays that handle the final hop in Tor circuits, where encrypted traffic exits to reach regular internet destinations like websites">🚪 Exit Operators</a>
         <a href="#guard_operators" class="aroi-nav-link" title="Guard Relays: Entry point relays that handle the first hop in Tor circuits. Your Tor client connects to guards to enter the Tor network anonymously">🛡️ Guard Operators</a>
         <a href="#most_diverse" class="aroi-nav-link" title="Diversity Score: Calculated by combining geographic spread (countries × 2.0), platform variety (operating systems × 1.5), and network distribution (unique ASNs × 1.0) to measure operational resilience">🌈 Most Diverse</a>
@@ -75,6 +76,8 @@
         
         {{ champion_badge("exit_authority", relays.json.aroi_leaderboards.leaderboards.exit_authority, "Exit Heavyweight Master", "🚪", "panel-danger", "aroi-champion-exit-authority", page_ctx.path_prefix, relays.use_bits) }}
         
+        {{ champion_badge("guard_authority", relays.json.aroi_leaderboards.leaderboards.guard_authority, "Guard Heavyweight Master", "🛡️", "panel-primary", "aroi-champion-guard-authority", page_ctx.path_prefix, relays.use_bits) }}
+        
         {{ champion_badge("exit_operators", relays.json.aroi_leaderboards.leaderboards.exit_operators, "Exit Champion", "🚪", "panel-warning", "aroi-champion-exit", page_ctx.path_prefix, relays.use_bits) }}
         
         {{ champion_badge("guard_operators", relays.json.aroi_leaderboards.leaderboards.guard_operators, "Guard Gatekeepers", "🛡️", "panel-info", "aroi-champion-guard", page_ctx.path_prefix, relays.use_bits) }}
@@ -110,6 +113,9 @@
 
     <!-- Exit Authorities -->
     {{ top3_table("Exit Authorities", "🚪", relays.json.aroi_leaderboards.leaderboards.exit_authority, ["Exit Authority King", "Exit Authority Commander", "Exit Authority Captain"], "exit_authority", page_ctx, relays.use_bits) }}
+
+    <!-- Guard Authorities -->
+    {{ top3_table("Guard Authorities", "🛡️", relays.json.aroi_leaderboards.leaderboards.guard_authority, ["Guard Authority King", "Guard Authority Commander", "Guard Authority Captain"], "guard_authority", page_ctx, relays.use_bits) }}
 
     <!-- Exit Champions -->
     {{ top3_table("Exit Champions", "🚪", relays.json.aroi_leaderboards.leaderboards.exit_operators, ["Exit Master", "Exit Champion", "Exit Hero"], "exit_operators", page_ctx, relays.use_bits) }}
@@ -258,7 +264,44 @@
         {% endif %}
     </section>
 
-    <!-- Category 4: Exit Champions -->
+    <!-- Category 4: Guard Authorities -->
+    <section id="guard_authority" class="aroi-section">
+        <h3 title="Operators ranked by guard consensus weight controlling Tor entry traffic">🛡️ Guard Authorities</h3>
+        {% if relays.json.aroi_leaderboards.leaderboards.guard_authority %}
+        
+        <!-- Page 1: Ranks 1-10 -->
+        <div id="guard_authority-1-10" class="pagination-section">
+            <h4>🛡️ Ranks 1-10</h4>
+            {{ guard_authority_table_complete(relays.json.aroi_leaderboards.leaderboards.guard_authority[:10], relays.use_bits, page_ctx) }}
+        </div>
+        
+        <!-- Page 2: Ranks 11-20 -->
+        <div id="guard_authority-11-20" class="pagination-section">
+            <h4>🛡️ Ranks 11-20</h4>
+            {{ guard_authority_table_complete(relays.json.aroi_leaderboards.leaderboards.guard_authority[10:20], relays.use_bits, page_ctx) }}
+        </div>
+        
+        <!-- Page 3: Ranks 21-25 -->
+        <div id="guard_authority-21-25" class="pagination-section">
+            <h4>🛡️ Ranks 21-25</h4>
+            {{ guard_authority_table_complete(relays.json.aroi_leaderboards.leaderboards.guard_authority[20:25], relays.use_bits, page_ctx) }}
+        </div>
+        
+        <!-- Pagination Navigation (moved below tables) -->
+        <div class="pagination-nav-bottom">
+            <a href="#guard_authority-1-10">1-10</a>
+            <a href="#guard_authority-11-20">11-20</a>
+            <a href="#guard_authority-21-25">21-25</a>
+        </div>
+        
+        {% else %}
+        <div class="alert alert-warning">
+            <p>No guard authority data available.</p>
+        </div>
+        {% endif %}
+    </section>
+
+    <!-- Category 5: Exit Champions -->
     <section id="exit_operators" class="aroi-section">
         <h3 title="Operators ranked by number of exit relays providing internet access points">🚪 Exit Champions</h3>
         {% if relays.json.aroi_leaderboards.leaderboards.exit_operators %}
@@ -295,7 +338,7 @@
         {% endif %}
     </section>
 
-    <!-- Category 5: Guard Gatekeepers -->
+    <!-- Category 6: Guard Gatekeepers -->
     <section id="guard_operators" class="aroi-section">
         <h3 title="Operators ranked by number of guard relays serving as network entry points">🛡️ Guard Gatekeepers</h3>
         {% if relays.json.aroi_leaderboards.leaderboards.guard_operators %}
@@ -402,6 +445,7 @@
                     <li><strong>🚀 Bandwidth Contributed:</strong> Total observed bandwidth across all relays</li>
                     <li><strong>⚖️ Network Heavyweight Rankings:</strong> Total consensus weight percentage in the network</li>
                     <li><strong>🚪 Exit Authorities:</strong> Exit consensus weight percentage (authority over exit traffic)</li>
+                    <li><strong>🛡️ Guard Authorities:</strong> Guard consensus weight percentage (authority over entry traffic)</li>
                     <li><strong>🚪 Exit Champions:</strong> Number of exit relays operated</li>
                     <li><strong>🛡️ Guard Gatekeepers:</strong> Number of guard relays operated</li>
                     <li><strong>🌈 Most Diverse:</strong> Geographic, platform, and network diversity score</li>
