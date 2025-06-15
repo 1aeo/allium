@@ -1329,35 +1329,81 @@ class Relays:
             rmtree(output_path)
         os.makedirs(output_path)
 
-        for relay in relay_list:
+        # Cache contact display data to avoid O(N²) performance issues
+        contact_display_cache = {}
+        self._log_progress(f"Starting relay info generation for {len(relay_list)} relays...")
+
+        for idx, relay in enumerate(relay_list):
             if not relay["fingerprint"].isalnum():
                 continue
+                
+            # Progress logging every 1000 relays
+            if idx % 1000 == 0 and idx > 0:
+                self._log_progress(f"Processed {idx} relay info pages...")
+                
+            if idx % 100 == 0:  # Debug output every 100 relays
+                print(f"DEBUG: Processing relay {idx}: {relay.get('nickname', 'Unknown')}")
+                
             # Import here to avoid circular imports
             from allium import get_page_context
             
+            print(f"DEBUG: Getting page context for relay {idx}")
             page_ctx = get_page_context('detail', 'relay_detail', {
                 'nickname': relay.get('nickname', relay.get('fingerprint', 'Unknown')),
                 'fingerprint': relay.get('fingerprint', 'Unknown'),
                 'as_number': relay.get('as', '')
             })
             
-            # Get contact-level statistics from already computed data
-            contact_display_data = self._get_relay_contact_display_data(relay)
+            print(f"DEBUG: Getting contact display data for relay {idx}")
+            # Get contact-level statistics from already computed data with caching
+            contact_display_data = self._get_relay_contact_display_data_cached(relay, contact_display_cache)
             
+            print(f"DEBUG: Rendering template for relay {idx}")
             rendered = template.render(
                 relay=relay, page_ctx=page_ctx, relays=self, contact_display_data=contact_display_data
             )
             
+            print(f"DEBUG: Creating directory for relay {idx}")
             # Create directory structure: relay/FINGERPRINT/index.html (depth 2)
             relay_dir = os.path.join(output_path, relay["fingerprint"])
             os.makedirs(relay_dir)
             
+            print(f"DEBUG: Writing file for relay {idx}")
             with open(
                 os.path.join(relay_dir, "index.html"),
                 "w",
                 encoding="utf8",
             ) as html:
                 html.write(rendered)
+                
+            if idx % 100 == 0:  # Debug output every 100 relays
+                print(f"DEBUG: Completed relay {idx}")
+
+        self._log_progress(f"Completed relay info generation for {len(relay_list)} relays")
+
+    def _get_relay_contact_display_data_cached(self, relay, cache):
+        """
+        Get contact-level display data for a single relay with caching to avoid O(N²) performance issues.
+        
+        Args:
+            relay (dict): Single relay object
+            cache (dict): Cache dictionary to store computed contact display data
+            
+        Returns:
+            dict: Contact display data with outliers statistics for tooltip
+        """
+        contact_hash = relay.get('contact_md5')
+        if not contact_hash:
+            return {'outliers': {'tooltip': 'Contact group 2 standard deviations: No contact information'}}
+        
+        # Check cache first
+        if contact_hash in cache:
+            return cache[contact_hash]
+        
+        # Compute contact display data and cache it
+        contact_display_data = self._get_relay_contact_display_data(relay)
+        cache[contact_hash] = contact_display_data
+        return contact_display_data
 
     def _get_relay_contact_display_data(self, relay):
         """
