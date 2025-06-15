@@ -1777,9 +1777,36 @@ class Relays:
                 intelligence_formatted['performance_underutilized_fps'] = contact_intel.get('performance_underutilized_fps', [])
                 intelligence_formatted['maturity'] = contact_intel.get('maturity', '')
         
+        # 4. Version compliance and version status counting (reuse existing relay counting patterns)
+        # Count version compliance: recommended_version=true for compliant, =false for non-compliant, not set/empty for unknown
+        version_compliant = sum(1 for relay in members if relay.get('recommended_version') is True)
+        version_not_compliant = sum(1 for relay in members if relay.get('recommended_version') is False)
+        version_unknown = sum(1 for relay in members if relay.get('recommended_version') is None)
+        
+        # Count version status: recommended, experimental, obsolete, new in series, unrecommended
+        version_status_counts = {
+            'recommended': sum(1 for relay in members if relay.get('version_status') == 'recommended'),
+            'experimental': sum(1 for relay in members if relay.get('version_status') == 'experimental'),
+            'obsolete': sum(1 for relay in members if relay.get('version_status') == 'obsolete'),
+            'new_in_series': sum(1 for relay in members if relay.get('version_status') == 'new in series'),
+            'unrecommended': sum(1 for relay in members if relay.get('version_status') == 'unrecommended')
+        }
+        
+        # Format version compliance display
+        intelligence_formatted['version_compliance'] = f"{version_compliant} compliant, {version_not_compliant} not compliant, {version_unknown} unknown"
+        
+        # Format version status display (only show counts > 0)
+        version_status_parts = []
+        for status, count in version_status_counts.items():
+            if count > 0:
+                status_display = status.replace('_', ' ')  # Convert new_in_series to "new in series"
+                version_status_parts.append(f"{count} {status_display}")
+        
+        intelligence_formatted['version_status'] = ', '.join(version_status_parts) if version_status_parts else 'none'
+        
         display_data['operator_intelligence'] = intelligence_formatted
         
-        # 4. Overall uptime formatting with green highlighting
+        # 5. Overall uptime formatting with green highlighting
         uptime_formatted = {}
         if operator_reliability and operator_reliability.get('overall_uptime'):
             for period, data in operator_reliability['overall_uptime'].items():
@@ -1802,7 +1829,7 @@ class Relays:
         
         display_data['uptime_formatted'] = uptime_formatted
         
-        # 5. Outliers calculations and formatting
+        # 6. Outliers calculations and formatting
         outliers_data = {}
         if operator_reliability and operator_reliability.get('outliers'):
             total_outliers = len(operator_reliability['outliers'].get('low_outliers', [])) + len(operator_reliability['outliers'].get('high_outliers', []))
@@ -1840,13 +1867,13 @@ class Relays:
         
         display_data['outliers'] = outliers_data
         
-        # 6. Uptime data timestamp (reuse existing uptime data)
+        # 7. Uptime data timestamp (reuse existing uptime data)
         uptime_timestamp = None
         if hasattr(self, 'uptime_data') and self.uptime_data and self.uptime_data.get('relays_published'):
             uptime_timestamp = self.uptime_data['relays_published']
         display_data['uptime_timestamp'] = uptime_timestamp
         
-        # 7. Real-time downtime alerts (idea #8 from uptime integration proposals)
+        # 8. Real-time downtime alerts (idea #8 from uptime integration proposals)
         downtime_alerts = self._calculate_operator_downtime_alerts(v, members, i, bandwidth_unit)
         display_data['downtime_alerts'] = downtime_alerts
         
