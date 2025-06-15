@@ -1,0 +1,365 @@
+{% extends "contact-relay-list.html" %}
+{% from "macros.html" import navigation, detail_summary %}
+{% set contact_hash = relays.json['relay_subset'][0]['contact_md5'] %}
+{% if relays.json['relay_subset'][0]['contact'] %}
+    {% set contact = relays.json['relay_subset'][0]['contact']|escape %}
+{% else %}
+    {% set contact = 'none' %}
+{% endif %}
+{% block title %}Tor Relays :: Contact {{ contact_hash }}{% endblock %}
+{% block header %}
+    {% if relays.json['relay_subset'][0]['aroi_domain'] and relays.json['relay_subset'][0]['aroi_domain'] != 'none' -%}
+        View Contact {{ relays.json['relay_subset'][0]['aroi_domain']|escape }} Details
+    {% elif contact != 'none' -%}
+        View Contact {{ contact }} Details
+    {% else -%}
+        View Contact {{ contact_hash }} Details
+    {% endif -%}
+{% endblock %}
+{% block navigation -%}
+{% set aroi_domain = relays.json['relay_subset'][0]['aroi_domain'] if relays.json['relay_subset'][0]['aroi_domain'] else 'none' %}
+{{ navigation('contacts', page_ctx) }}
+{% endblock -%}
+{% block description %}
+
+{# ===== NEW: OPERATOR PERFORMANCE COMPARISON SECTION ===== #}
+{% if operator_comparison_metrics %}
+<div class="operator-comparison-metrics" style="margin-bottom: 25px; padding: 20px; background: linear-gradient(135deg, #f8f9ff 0%, #e8f4fd 100%); border-radius: 8px; border-left: 5px solid #007bff;">
+    <h3 style="color: #495057; margin: 0 0 20px 0; display: flex; align-items: center;">
+        <span style="margin-right: 10px;">📊</span>Performance vs Network
+        <small style="font-weight: normal; color: #6c757d; margin-left: 10px; font-size: 14px;">Last updated: {{ operator_comparison_metrics.last_updated }}</small>
+    </h3>
+    
+    {# Top 4 Critical Metrics - Always Visible #}
+    <div class="critical-metrics-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px; margin-bottom: 20px;">
+        
+        {# Metric 1: Network Uptime Performance Benchmark #}
+        {% if operator_comparison_metrics.uptime_benchmark %}
+        <div class="metric-card" style="padding: 15px; background: white; border-radius: 6px; border: 1px solid #dee2e6; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <div class="metric-header" style="display: flex; align-items: center; margin-bottom: 10px;">
+                <span style="font-size: 18px; margin-right: 8px;">⏰</span>
+                <strong style="color: #495057;">Uptime Benchmark</strong>
+            </div>
+            <div class="metric-value" style="font-size: 24px; font-weight: bold; color: {{ operator_comparison_metrics.uptime_benchmark.color }}; margin-bottom: 5px;">
+                {{ operator_comparison_metrics.uptime_benchmark.score }}%
+            </div>
+            <div class="metric-subtitle" style="color: #6c757d; font-size: 13px; margin-bottom: 8px;">
+                Network Ranking: {{ operator_comparison_metrics.uptime_benchmark.percentile }} percentile
+            </div>
+            <div class="metric-details" style="font-size: 12px; color: #6c757d;">
+                <div>vs Network Avg: {{ operator_comparison_metrics.uptime_benchmark.vs_network }}</div>
+                <div>vs Similar Operators: {{ operator_comparison_metrics.uptime_benchmark.vs_peers }}</div>
+            </div>
+        </div>
+        {% endif %}
+        
+        {# Metric 2: Consensus Weight Efficiency #}
+        {% if operator_comparison_metrics.cw_efficiency %}
+        <div class="metric-card" style="padding: 15px; background: white; border-radius: 6px; border: 1px solid #dee2e6; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <div class="metric-header" style="display: flex; align-items: center; margin-bottom: 10px;">
+                <span style="font-size: 18px; margin-right: 8px;">⚖️</span>
+                <strong style="color: #495057;">Consensus Weight Efficiency</strong>
+            </div>
+            <div class="metric-value" style="font-size: 24px; font-weight: bold; color: {{ operator_comparison_metrics.cw_efficiency.color }}; margin-bottom: 5px;">
+                {{ operator_comparison_metrics.cw_efficiency.ratio }}
+            </div>
+            <div class="metric-subtitle" style="color: #6c757d; font-size: 13px; margin-bottom: 8px;">
+                CW/Bandwidth Ratio ({{ operator_comparison_metrics.cw_efficiency.rating }})
+            </div>
+            <div class="metric-details" style="font-size: 12px; color: #6c757d;">
+                <div>vs Peer Group: {{ operator_comparison_metrics.cw_efficiency.vs_peers }}</div>
+                <div>vs Network Median: {{ operator_comparison_metrics.cw_efficiency.vs_network }}</div>
+            </div>
+        </div>
+        {% endif %}
+        
+        {# Metric 3: Peer Group Ranking #}
+        {% if operator_comparison_metrics.peer_ranking %}
+        <div class="metric-card" style="padding: 15px; background: white; border-radius: 6px; border: 1px solid #dee2e6; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <div class="metric-header" style="display: flex; align-items: center; margin-bottom: 10px;">
+                <span style="font-size: 18px; margin-right: 8px;">👥</span>
+                <strong style="color: #495057;">Peer Group Ranking</strong>
+            </div>
+            <div class="metric-value" style="font-size: 24px; font-weight: bold; color: {{ operator_comparison_metrics.peer_ranking.color }}; margin-bottom: 5px;">
+                #{{ operator_comparison_metrics.peer_ranking.rank }}
+            </div>
+            <div class="metric-subtitle" style="color: #6c757d; font-size: 13px; margin-bottom: 8px;">
+                of {{ operator_comparison_metrics.peer_ranking.total }} operators ({{ operator_comparison_metrics.peer_ranking.relay_range }} relays)
+            </div>
+            <div class="metric-details" style="font-size: 12px; color: #6c757d;">
+                <div>Top Performer: {{ operator_comparison_metrics.peer_ranking.top_score }}%</div>
+                <div>Peer Average: {{ operator_comparison_metrics.peer_ranking.peer_avg }}%</div>
+            </div>
+        </div>
+        {% endif %}
+        
+        {# Metric 4: Resource Utilization Efficiency #}
+        {% if operator_comparison_metrics.resource_efficiency %}
+        <div class="metric-card" style="padding: 15px; background: white; border-radius: 6px; border: 1px solid #dee2e6; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <div class="metric-header" style="display: flex; align-items: center; margin-bottom: 10px;">
+                <span style="font-size: 18px; margin-right: 8px;">🖥️</span>
+                <strong style="color: #495057;">Resource Efficiency</strong>
+            </div>
+            <div class="metric-value" style="font-size: 24px; font-weight: bold; color: {{ operator_comparison_metrics.resource_efficiency.color }}; margin-bottom: 5px;">
+                {{ operator_comparison_metrics.resource_efficiency.score }}%
+            </div>
+            <div class="metric-subtitle" style="color: #6c757d; font-size: 13px; margin-bottom: 8px;">
+                {{ operator_comparison_metrics.resource_efficiency.percentile }} percentile
+            </div>
+            <div class="metric-details" style="font-size: 12px; color: #6c757d;">
+                <div>Bandwidth/Relay: {{ operator_comparison_metrics.resource_efficiency.bw_per_relay }}</div>
+                <div>Overload Events: {{ operator_comparison_metrics.resource_efficiency.overload_count }}</div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+    {# Expandable Additional Metrics Section #}
+    <details class="additional-metrics-section" style="margin-top: 15px;">
+        <summary style="cursor: pointer; font-weight: bold; padding: 10px; background: rgba(0,123,255,0.1); border-radius: 4px; border: none; color: #007bff;">
+            📈 View Additional Performance Metrics (6 more)
+        </summary>
+        <div class="additional-metrics-content" style="margin-top: 15px; padding: 15px; background: rgba(255,255,255,0.7); border-radius: 6px;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
+                
+                {# Additional Metrics 5-10 in compact format #}
+                {% if operator_comparison_metrics.network_position %}
+                <div class="compact-metric" style="padding: 12px; background: white; border-radius: 4px; border: 1px solid #e9ecef;">
+                    <div style="font-weight: bold; color: #495057; margin-bottom: 5px;">🛡️ Network Position</div>
+                    <div style="font-size: 18px; color: {{ operator_comparison_metrics.network_position.color }};">{{ operator_comparison_metrics.network_position.effectiveness }}%</div>
+                    <div style="font-size: 11px; color: #6c757d;">{{ operator_comparison_metrics.network_position.summary }}</div>
+                </div>
+                {% endif %}
+                
+                {% if operator_comparison_metrics.diversity_score %}
+                <div class="compact-metric" style="padding: 12px; background: white; border-radius: 4px; border: 1px solid #e9ecef;">
+                    <div style="font-weight: bold; color: #495057; margin-bottom: 5px;">🌍 Infrastructure Diversity</div>
+                    <div style="font-size: 18px; color: {{ operator_comparison_metrics.diversity_score.color }};">{{ operator_comparison_metrics.diversity_score.score }}%</div>
+                    <div style="font-size: 11px; color: #6c757d;">{{ operator_comparison_metrics.diversity_score.as_count }} ASes, {{ operator_comparison_metrics.diversity_score.country_count }} countries</div>
+                </div>
+                {% endif %}
+                
+                {% if operator_comparison_metrics.measurement_coverage %}
+                <div class="compact-metric" style="padding: 12px; background: white; border-radius: 4px; border: 1px solid #e9ecef;">
+                    <div style="font-weight: bold; color: #495057; margin-bottom: 5px;">📏 Bandwidth Measurements</div>
+                    <div style="font-size: 18px; color: {{ operator_comparison_metrics.measurement_coverage.color }};">{{ operator_comparison_metrics.measurement_coverage.percentage }}%</div>
+                    <div style="font-size: 11px; color: #6c757d;">{{ operator_comparison_metrics.measurement_coverage.measured_count }}/{{ operator_comparison_metrics.measurement_coverage.total_count }} relays measured</div>
+                </div>
+                {% endif %}
+                
+                {% if operator_comparison_metrics.load_balance %}
+                <div class="compact-metric" style="padding: 12px; background: white; border-radius: 4px; border: 1px solid #e9ecef;">
+                    <div style="font-weight: bold; color: #495057; margin-bottom: 5px;">⚖️ Traffic Balance</div>
+                    <div style="font-size: 18px; color: {{ operator_comparison_metrics.load_balance.color }};">{{ operator_comparison_metrics.load_balance.score }}%</div>
+                    <div style="font-size: 11px; color: #6c757d;">{{ operator_comparison_metrics.load_balance.distribution }}</div>
+                </div>
+                {% endif %}
+                
+                {% if operator_comparison_metrics.platform_optimization %}
+                <div class="compact-metric" style="padding: 12px; background: white; border-radius: 4px; border: 1px solid #e9ecef;">
+                    <div style="font-weight: bold; color: #495057; margin-bottom: 5px;">🔧 Platform Optimization</div>
+                    <div style="font-size: 18px; color: {{ operator_comparison_metrics.platform_optimization.color }};">{{ operator_comparison_metrics.platform_optimization.score }}%</div>
+                    <div style="font-size: 11px; color: #6c757d;">{{ operator_comparison_metrics.platform_optimization.summary }}</div>
+                </div>
+                {% endif %}
+                
+                {% if operator_comparison_metrics.security_resilience %}
+                <div class="compact-metric" style="padding: 12px; background: white; border-radius: 4px; border: 1px solid #e9ecef;">
+                    <div style="font-weight: bold; color: #495057; margin-bottom: 5px;">🛡️ Security & Resilience</div>
+                    <div style="font-size: 18px; color: {{ operator_comparison_metrics.security_resilience.color }};">{{ operator_comparison_metrics.security_resilience.score }}%</div>
+                    <div style="font-size: 11px; color: #6c757d;">{{ operator_comparison_metrics.security_resilience.summary }}</div>
+                </div>
+                {% endif %}
+            </div>
+            
+            {# Performance Insights and Recommendations #}
+            {% if operator_comparison_metrics.insights %}
+            <div class="performance-insights" style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 6px; border-left: 4px solid #28a745;">
+                <h5 style="color: #495057; margin: 0 0 10px 0;">💡 Performance Insights</h5>
+                <ul style="margin: 0; padding-left: 20px; color: #495057;">
+                    {% for insight in operator_comparison_metrics.insights %}
+                    <li style="margin-bottom: 5px;">{{ insight }}</li>
+                    {% endfor %}
+                </ul>
+                {% if operator_comparison_metrics.recommendations %}
+                <div style="margin-top: 10px; font-size: 13px; color: #6c757d;">
+                    <strong>Next Steps:</strong> {{ operator_comparison_metrics.recommendations|join(', ') }}
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </details>
+</div>
+{% endif %}
+{# ===== END: OPERATOR PERFORMANCE COMPARISON SECTION ===== #}
+
+{# Option 1: Two-Column Layout (60/40 Split) - Final Version #}
+<div class="row" style="margin-bottom: 20px;">
+    {# Left Column (60%): Contact & Network Overview + Operator Intelligence #}
+    <div class="col-md-7" style="padding-right: 20px;">
+        <div style="padding: 15px; background-color: #f8f9fa; border-left: 4px solid #007bff; margin-bottom: 20px;">
+            <h4 style="margin-top: 0; color: #495057;">📋 Contact & Network Overview</h4>
+            
+            {# Contact Information #}
+            <div style="margin-bottom: 15px;">
+                <ul style="list-style-type: disc; padding-left: 20px; margin-bottom: 0;">
+                    {% if aroi_domain and aroi_domain != 'none' %}
+                    <li><strong>Domain:</strong> {{ aroi_domain|escape }}</li>
+                    {% endif %}
+                    {% if contact != 'none' %}
+                    <li><strong>Contact:</strong> {{ contact }}</li>
+                    {% endif %}
+                    <li><strong>Hash:</strong> {{ contact_hash }}</li>
+                    {% if relays.json['relay_subset'][0]['country'] %}
+                    <li><strong>Country:</strong> 
+                        <a href="{{ page_ctx.path_prefix }}country/{{ relays.json['relay_subset'][0]['country'] }}/" style="color: #337ab7; text-decoration: none;">
+                            <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ relays.json['relay_subset'][0]['country'] }}.png" 
+                                 title="{{ relays.json['relay_subset'][0]['country_name'] if relays.json['relay_subset'][0]['country_name'] else relays.json['relay_subset'][0]['country']|upper }}" 
+                                 alt="{{ relays.json['relay_subset'][0]['country_name'] if relays.json['relay_subset'][0]['country_name'] else relays.json['relay_subset'][0]['country']|upper }}" 
+                                 style="width: 16px; height: 12px; margin-right: 5px; vertical-align: middle;">
+                            {{ relays.json['relay_subset'][0]['country_name'] if relays.json['relay_subset'][0]['country_name'] else relays.json['relay_subset'][0]['country']|upper }}
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </div>
+            
+            {# Network Summary - Simplified using pre-computed data #}
+            <div>
+                <strong>Network Summary:</strong>
+                <ul style="list-style-type: disc; padding-left: 20px; margin-bottom: 15px;">
+                    <li><strong><span title="Observed bandwidth represents the estimated capacity this group can handle, combining total, guard, middle, and exit bandwidth contributions">Bandwidth</span>:</strong> ~{{ bandwidth }} {{ bandwidth_unit }}
+                        {% if contact_display_data and contact_display_data.bandwidth_breakdown %}
+                            (<span title="Bandwidth breakdown by relay type">{{ contact_display_data.bandwidth_breakdown }}</span>)
+                        {% endif %}
+                    </li>
+                    
+                    <li><strong><span title="Network influence represents the percentage of overall consensus weight, indicating relative importance in the Tor network across guard, middle, and exit positions">Network Influence</span>:</strong> {{ "%.2f%%"|format(consensus_weight_fraction * 100) }} of overall consensus weight
+                        {% if contact_display_data and contact_display_data.consensus_weight_breakdown %}
+                            (<span title="Consensus weight breakdown by position">{{ contact_display_data.consensus_weight_breakdown }}</span>)
+                        {% endif %}
+                    </li>
+                    
+                    <li><strong><span title="Network position indicates the strategic role distribution of relays. Labels: Guard-focused (>60% guard), Exit-focused (>40% exit), Multi-role (both guard and exit >20%), Balanced (mixed roles), Guard-only (100% guard), Exit-only (100% exit), Middle-only (100% middle)">Network Position</span>:</strong> {{ network_position }}</li>
+                </ul>
+            </div>
+        </div>
+        
+        {# Operator Intelligence - Simplified using pre-computed data #}
+        {% if contact_display_data and contact_display_data.operator_intelligence %}
+        {% set intelligence = contact_display_data.operator_intelligence %}
+        <div class="intelligence-section" style="padding: 15px; background-color: #f8f9fa; border-left: 4px solid #007bff;">
+            <h4 style="margin-top: 0; color: #495057;">📊 Operator Intelligence</h4>
+            
+            <ul style="list-style-type: disc; padding-left: 20px; margin-bottom: 0;">
+                {% if intelligence.network_diversity %}
+                <li><strong><span title="Network diversity measures infrastructure distribution across different autonomous systems (AS). Ratings: 1 network = Poor (single point of failure), 2-3 networks = Okay (limited redundancy), 4+ networks = Great (excellent resilience). Higher diversity reduces single points of failure and improves network resilience.">Network Diversity</span>:</strong> {{ intelligence.network_diversity|safe }}</li>
+                {% endif %}
+                
+                {% if intelligence.geographic_diversity %}
+                <li><strong><span title="Geographic diversity assesses legal and censorship risk based on country distribution. Ratings: 1 country = Poor (high legal/censorship risk), 2-3 countries = Okay (limited jurisdictional diversity), 4+ countries = Great (excellent jurisdictional protection). Diversification across countries protects against coordinated legal action and censorship.">Geographic Diversity</span>:</strong> {{ intelligence.geographic_diversity|safe }}</li>
+                {% endif %}
+                
+                {% if intelligence.infrastructure_diversity %}
+                <li><strong><span title="Infrastructure diversity analyzes platform and version distribution. Ratings: Same platform/version = Poor (high synchronization risk), Limited diversity = Okay (moderate risk), Multiple platforms/versions = Great (excellent security through diversity).">Infrastructure Diversity</span>:</strong> {{ intelligence.infrastructure_diversity|safe }}</li>
+                {% endif %}
+                
+                {% if intelligence.measurement_status %}
+                <li><strong><span title="Bandwidth measurements show how many relays are measured by directory authorities for consensus weight calculation. Measured relays contribute more effectively to the network.">Bandwidth Measurements</span>:</strong> {{ intelligence.measurement_status }}</li>
+                {% endif %}
+                
+                {% if intelligence.performance_status %}
+                <li><strong><span title="Performance insights identify underutilized relays with high bandwidth (>10MB/s) but low consensus weight (<0.05% of bandwidth). These relays may need configuration optimization or better connectivity.">Performance Insights</span>:</strong> {{ intelligence.performance_underutilized }} underutilized relays - {{ intelligence.performance_status }}{% if intelligence.performance_underutilized_fps %} ({% for fp in intelligence.performance_underutilized_fps %}{{ fp[:8] }}{% if not loop.last %}, {% endif %}{% endfor %}){% endif %}</li>
+                {% endif %}
+                
+                {% if intelligence.maturity %}
+                <li><strong><span title="Operational maturity tracks deployment timeline and expansion patterns. Shows operator experience and growth strategy over time.">Operational Maturity</span>:</strong> {{ intelligence.maturity }}</li>
+                {% endif %}
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+    
+    {# Right Column (40%): AROI Rankings & Streamlined Reliability #}
+    <div class="col-md-5">
+        {# AROI Leaderboard Rankings - Sorted by rank #}
+        {% if contact_rankings %}
+        <div class="aroi-rankings-section" style="margin-bottom: 20px; padding: 15px; background-color: #f0f8ff; border-left: 4px solid #28a745;">
+            <h4 style="margin: 0 0 8px 0; color: #495057; font-size: 16px;">🏆 AROI Champion Rankings</h4>
+            
+            <p style="margin-bottom: 8px; color: #666; font-size: 13px;">{{ contact_rankings|length }} winning <a href="{{ page_ctx.path_prefix }}misc/aroi-leaderboards.html" title="View complete AROI Champions Dashboard" style="color: #007bff; text-decoration: none; font-weight: bold;">AROI Champions Dashboard</a> categories:</p>
+            
+            <ul style="list-style-type: none; padding-left: 0; margin-bottom: 0;">
+                {% for ranking in contact_rankings %}
+                <li style="margin-bottom: 4px; padding: 4px 8px; background-color: #ffffff; border-radius: 3px; border: 1px solid #dee2e6; font-size: 14px;">
+                    <a href="{{ page_ctx.path_prefix }}misc/{{ ranking.link }}" title="View {{ ranking.category_name }} leaderboard rankings" style="color: #007bff; text-decoration: none; font-weight: bold;">
+                        {{ ranking.emoji }} {{ ranking.statement }}
+                    </a>
+                    <small style="color: #666; margin-left: 6px; font-size: 12px;">— {{ ranking.title }}</small>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+        
+        {# Network Reliability - Simplified using pre-computed data #}
+        {% if operator_reliability and operator_reliability.valid_relays > 0 %}
+        <div class="reliability-section" style="padding: 15px; background-color: #f8f9fa; border-left: 4px solid #28a745;">
+            <h4 style="margin-top: 0; color: #495057;">⏰ Network Reliability</h4>
+            
+            <ul style="list-style-type: disc; padding-left: 20px; margin-bottom: 0;">
+                {# Overall uptime - using pre-computed formatted data #}
+                {% if contact_display_data and contact_display_data.uptime_formatted %}
+                <li><strong>Overall uptime:</strong>
+                    {% for period, data in contact_display_data.uptime_formatted.items() %}
+                        {{ data.display|safe }} ({{ data.relay_count }} relays){% if not loop.last %}, {% endif %}
+                    {% endfor %}
+                </li>
+                {% endif %}
+                
+                {# Statistical outliers section - using pre-computed data #}
+                {% if contact_display_data and contact_display_data.outliers %}
+                {% set outliers = contact_display_data.outliers %}
+                {% if outliers.total_count %}
+                <li><strong><span title="{{ outliers.tooltip }}">Outliers</span>:</strong>
+                    <span style="color: #000; font-weight: normal;">{{ outliers.total_count }} relays out of {{ outliers.total_relays }} relays ({{ outliers.percentage }}%)</span>{% if outliers.low_count %}, <span style="color: #dc3545; font-weight: bold;">Low:</span> <span title="{{ outliers.low_tooltip }}" style="cursor: help;">{{ outliers.low_count }} relay{{ 's' if outliers.low_count != 1 else '' }}</span>{% endif %}{% if outliers.high_count %}{% if outliers.low_count %}, {% endif %}<span style="color: #28a745; font-weight: bold;">Exceptional:</span> <span title="{{ outliers.high_tooltip }}" style="cursor: help;">{{ outliers.high_count }} relay{{ 's' if outliers.high_count != 1 else '' }}</span>{% endif %}
+                </li>
+                {% elif outliers.none_detected %}
+                <li><span style="color: #28a745;">✅ No statistical outliers detected - consistent performance across all relays</span></li>
+                {% endif %}
+                {% endif %}
+                
+                {# Real-time Downtime Alerts - Idea #8 from uptime integration proposals #}
+                {% if contact_display_data and contact_display_data.downtime_alerts %}
+                {% set alerts = contact_display_data.downtime_alerts %}
+                {% if alerts.has_offline_relays %}
+                {% set total_offline = alerts.offline_counts.guard + alerts.offline_counts.middle + alerts.offline_counts.exit %}
+                <li><strong><span style="color: #dc3545;">🚨 Offline ({{ total_offline }})</span>:</strong>
+                    {% if alerts.offline_counts.guard > 0 %}
+                        <span title="{% for relay in alerts.offline_relay_details.guard_relays %}{{ relay.display_text }}{% if not loop.last %}, {% endif %}{% endfor %}" style="cursor: help;">{{ alerts.offline_counts.guard }} guard ({{ "%.1f"|format(alerts.traffic_percentages.guard) }}% of observed traffic)</span>{% if alerts.offline_counts.middle > 0 or alerts.offline_counts.exit > 0 %}, {% endif %}
+                    {% endif %}
+                    {% if alerts.offline_counts.middle > 0 %}
+                        <span title="{% for relay in alerts.offline_relay_details.middle_relays %}{{ relay.display_text }}{% if not loop.last %}, {% endif %}{% endfor %}" style="cursor: help;">{{ alerts.offline_counts.middle }} middle ({{ "%.1f"|format(alerts.traffic_percentages.middle) }}% of observed traffic)</span>{% if alerts.offline_counts.exit > 0 %}, {% endif %}
+                    {% endif %}
+                    {% if alerts.offline_counts.exit > 0 %}
+                        <span title="{% for relay in alerts.offline_relay_details.exit_relays %}{{ relay.display_text }}{% if not loop.last %}, {% endif %}{% endfor %}" style="cursor: help;">{{ alerts.offline_counts.exit }} exit ({{ "%.1f"|format(alerts.traffic_percentages.exit) }}% of observed traffic)</span>
+                    {% endif %}
+                    <ul style="list-style-type: disc; padding-left: 20px; margin-top: 0; margin-bottom: 0;">
+                        <li style="font-size: 13px; color: #856404;"><strong style="color: #dc3545;">Impact:</strong> {{ alerts.offline_bandwidth_impact.total_offline_bandwidth_formatted }} {{ bandwidth_unit }} ({{ "%.1f"|format(alerts.offline_bandwidth_impact.offline_bandwidth_percentage) }}% of {{ alerts.offline_bandwidth_impact.total_operator_bandwidth_formatted }} {{ bandwidth_unit }}){% if alerts.offline_consensus_weight_impact.total_operator_cw_percentage > 0 %} and {{ "%.3f"|format(alerts.offline_consensus_weight_impact.total_offline_cw_percentage) }}% ({{ "%.1f"|format(alerts.offline_consensus_weight_impact.offline_cw_percentage_of_operator) }}% of {{ "%.2f"|format(alerts.offline_consensus_weight_impact.total_operator_cw_percentage) }}%) consensus weight{% endif %}</li>
+                    </ul>
+                </li>
+                {% else %}
+                <li><strong>Offline:</strong> 0 relays</li>
+                {% endif %}
+                {% endif %}
+            </ul>
+            
+            <div style="font-size: 12px; color: #666; margin-top: 10px;">
+                Reliability data available for {{ operator_reliability.valid_relays }}/{{ operator_reliability.total_relays }} relays{% if contact_display_data and contact_display_data.uptime_timestamp %}, from {{ contact_display_data.uptime_timestamp }}{% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
