@@ -62,9 +62,6 @@
                     <li class="{% if active_section == 'aroi' %}active{% endif %}">
                         <a href="{{ page_ctx.path_prefix }}index.html">Operator Champions</a>
                     </li>
-                    <li class="{% if active_section == 'top500' %}active{% endif %}">
-                        <a href="{{ page_ctx.path_prefix }}top500.html">Top 500 Relays</a>
-                    </li>
                     <li class="{% if active_section == 'contacts' %}active{% endif %}">
                         <a href="{{ page_ctx.path_prefix }}misc/contacts-by-bandwidth.html">By Operator / Contact</a>
                     </li>
@@ -79,6 +76,9 @@
                     </li>
                     <li class="{% if active_section == 'platforms' %}active{% endif %}">
                         <a href="{{ page_ctx.path_prefix }}misc/platforms-by-bandwidth.html">By Platform</a>
+                    </li>
+                    <li class="{% if active_section == 'top500' %}active{% endif %}">
+                        <a href="{{ page_ctx.path_prefix }}top500.html">Top 500 Relays</a>
                     </li>
                     <li class="{% if active_section == 'all' %}active{% endif %}">
                         <a href="{{ page_ctx.path_prefix }}misc/all.html">All Relays</a>
