@@ -1341,8 +1341,11 @@ class Relays:
                 'as_number': relay.get('as', '')
             })
             
+            # Calculate contact-level uptime statistics for this relay's contact group
+            contact_display_data = self._get_relay_contact_uptime_stats(relay)
+            
             rendered = template.render(
-                relay=relay, page_ctx=page_ctx, relays=self
+                relay=relay, page_ctx=page_ctx, relays=self, contact_display_data=contact_display_data
             )
             
             # Create directory structure: relay/FINGERPRINT/index.html (depth 2)
@@ -1355,6 +1358,51 @@ class Relays:
                 encoding="utf8",
             ) as html:
                 html.write(rendered)
+
+    def _get_relay_contact_uptime_stats(self, relay):
+        """
+        Get contact-level uptime statistics for a single relay's contact group.
+        This provides the same statistical context as shown on contact pages.
+        
+        Args:
+            relay (dict): Single relay object
+            
+        Returns:
+            dict: Contact display data with outliers statistics for tooltip
+        """
+        contact_hash = relay.get('contact_md5')
+        if not contact_hash:
+            return {'outliers': {'tooltip': 'Contact group 2 standard deviations: No contact information'}}
+        
+        # Find all relays in this contact group
+        contact_relays = [r for r in self.json["relays"] if r.get('contact_md5') == contact_hash]
+        
+        if len(contact_relays) <= 1:
+            return {'outliers': {'tooltip': 'Contact group 2 standard deviations: Insufficient data (single relay)'}}
+        
+        # Calculate operator reliability for this contact group using the same method as contact pages
+        operator_reliability = self._calculate_operator_reliability(contact_hash, contact_relays)
+        
+        if not operator_reliability or not operator_reliability.get('overall_uptime'):
+            return {'outliers': {'tooltip': 'Contact group 2 standard deviations: No uptime data available'}}
+        
+        # Get 6-month statistics for tooltip (same as contact pages)
+        six_month_data = operator_reliability.get('overall_uptime', {}).get('6_months', {})
+        if not six_month_data:
+            return {'outliers': {'tooltip': 'Contact group 2 standard deviations: No 6-month data available'}}
+        
+        mean_uptime = six_month_data.get('average', 0)
+        std_dev = six_month_data.get('std_dev', 0)
+        two_sigma_threshold = mean_uptime - (2 * std_dev)
+        
+        # Create the contact-level tooltip with the "Contact group 2 standard deviations:" prefix
+        tooltip = f"Contact group 2 standard deviations: 6 month ≥2σ {two_sigma_threshold:.1f}% from average μ {mean_uptime:.1f}%"
+        
+        return {
+            'outliers': {
+                'tooltip': tooltip
+            }
+        }
 
     def _generate_contact_rankings(self, contact_hash):
         """
