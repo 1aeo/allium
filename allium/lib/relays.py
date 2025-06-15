@@ -1249,6 +1249,8 @@ class Relays:
                 contact_display_data = self._compute_contact_display_data(
                     i, bandwidth_unit, operator_reliability, v, members
                 )
+                # Store contact_display_data in the contact structure for relay pages to access
+                i['contact_display_data'] = contact_display_data
             
             # Time the template rendering
             render_start = time.time()
@@ -1329,133 +1331,61 @@ class Relays:
             rmtree(output_path)
         os.makedirs(output_path)
 
-        # Cache contact display data to avoid O(N²) performance issues
-        contact_display_cache = {}
-        self._log_progress(f"Starting relay info generation for {len(relay_list)} relays...")
-
-        for idx, relay in enumerate(relay_list):
+        for relay in relay_list:
             if not relay["fingerprint"].isalnum():
                 continue
-                
-            # Progress logging every 1000 relays
-            if idx % 1000 == 0 and idx > 0:
-                self._log_progress(f"Processed {idx} relay info pages...")
-                
-            if idx % 100 == 0:  # Debug output every 100 relays
-                print(f"DEBUG: Processing relay {idx}: {relay.get('nickname', 'Unknown')}")
-                
             # Import here to avoid circular imports
             from allium import get_page_context
             
-            print(f"DEBUG: Getting page context for relay {idx}")
             page_ctx = get_page_context('detail', 'relay_detail', {
                 'nickname': relay.get('nickname', relay.get('fingerprint', 'Unknown')),
                 'fingerprint': relay.get('fingerprint', 'Unknown'),
                 'as_number': relay.get('as', '')
             })
             
-            print(f"DEBUG: Getting contact display data for relay {idx}")
-            # Get contact-level statistics from already computed data with caching
-            contact_display_data = self._get_relay_contact_display_data_cached(relay, contact_display_cache)
+            # Get the contact display data from existing contact structure
+            contact_display_data = self._get_contact_display_data_for_relay(relay)
             
-            print(f"DEBUG: Rendering template for relay {idx}")
             rendered = template.render(
                 relay=relay, page_ctx=page_ctx, relays=self, contact_display_data=contact_display_data
             )
             
-            print(f"DEBUG: Creating directory for relay {idx}")
             # Create directory structure: relay/FINGERPRINT/index.html (depth 2)
             relay_dir = os.path.join(output_path, relay["fingerprint"])
             os.makedirs(relay_dir)
             
-            print(f"DEBUG: Writing file for relay {idx}")
             with open(
                 os.path.join(relay_dir, "index.html"),
                 "w",
                 encoding="utf8",
             ) as html:
                 html.write(rendered)
-                
-            if idx % 100 == 0:  # Debug output every 100 relays
-                print(f"DEBUG: Completed relay {idx}")
 
-        self._log_progress(f"Completed relay info generation for {len(relay_list)} relays")
-
-    def _get_relay_contact_display_data_cached(self, relay, cache):
+    def _get_contact_display_data_for_relay(self, relay):
         """
-        Get contact-level display data for a single relay with caching to avoid O(N²) performance issues.
-        
-        Args:
-            relay (dict): Single relay object
-            cache (dict): Cache dictionary to store computed contact display data
-            
-        Returns:
-            dict: Contact display data with outliers statistics for tooltip
-        """
-        contact_hash = relay.get('contact_md5')
-        if not contact_hash:
-            return {'outliers': {'tooltip': 'Contact group 2 standard deviations: No contact information'}}
-        
-        # Check cache first
-        if contact_hash in cache:
-            return cache[contact_hash]
-        
-        # Compute contact display data and cache it
-        contact_display_data = self._get_relay_contact_display_data(relay)
-        cache[contact_hash] = contact_display_data
-        return contact_display_data
-
-    def _get_relay_contact_display_data(self, relay):
-        """
-        Get contact-level display data for a single relay by accessing already computed contact statistics.
+        Get existing contact display data for a relay by looking up its contact hash.
         
         Args:
             relay (dict): Single relay object
             
         Returns:
-            dict: Contact display data with outliers statistics for tooltip
+            dict: Contact display data if available, empty dict otherwise
         """
         contact_hash = relay.get('contact_md5')
         if not contact_hash:
-            return {'outliers': {'tooltip': 'Contact group 2 standard deviations: No contact information'}}
+            return {}
         
-        # Access existing contact data from sorted contacts
+        # Check if this contact has already computed display data in sorted contacts
         contact_data = self.json.get("sorted", {}).get("contact", {}).get(contact_hash)
         if not contact_data:
-            return {'outliers': {'tooltip': 'Contact group 2 standard deviations: Contact not found'}}
+            return {}
         
-        # Get members (relays in this contact group) 
-        members = []
-        for relay_idx in contact_data.get("relays", []):
-            if relay_idx < len(self.json["relays"]):
-                members.append(self.json["relays"][relay_idx])
+        # If contact display data was already computed and stored, return it
+        if 'contact_display_data' in contact_data:
+            return contact_data['contact_display_data']
         
-        if len(members) <= 1:
-            return {'outliers': {'tooltip': 'Contact group 2 standard deviations: Insufficient data (single relay)'}}
-        
-        # Calculate operator reliability using existing methods
-        operator_reliability = self._calculate_operator_reliability(contact_hash, members)
-        
-        if not operator_reliability or not operator_reliability.get('overall_uptime'):
-            return {'outliers': {'tooltip': 'Contact group 2 standard deviations: No uptime data available'}}
-        
-        # Get 6-month statistics for tooltip (same as contact pages)
-        six_month_data = operator_reliability.get('overall_uptime', {}).get('6_months', {})
-        if not six_month_data:
-            return {'outliers': {'tooltip': 'Contact group 2 standard deviations: No 6-month data available'}}
-        
-        mean_uptime = six_month_data.get('average', 0)
-        std_dev = six_month_data.get('std_dev', 0)
-        two_sigma_threshold = mean_uptime - (2 * std_dev)
-        
-        # Create the contact-level tooltip with the "Contact group 2 standard deviations:" prefix
-        tooltip = f"Contact group 2 standard deviations: 6 month ≥2σ {two_sigma_threshold:.1f}% from average μ {mean_uptime:.1f}%"
-        
-        return {
-            'outliers': {
-                'tooltip': tooltip
-            }
-        }
+        # Otherwise return empty dict and template will use fallback
+        return {}
 
     def _generate_contact_rankings(self, contact_hash):
         """
