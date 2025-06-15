@@ -412,7 +412,7 @@ class TestContactDisplayData(unittest.TestCase):
         
         # Should show green "All" when all relays are compliant
         self.assertIn('version_compliance', intelligence)
-        expected = '<span style="color: #2e7d2e; font-weight: bold;">All</span> 3 compliant'
+        expected = '<span style="color: #2e7d2e; font-weight: bold;">All</span>, 3 compliant'
         self.assertEqual(intelligence['version_compliance'], expected)
 
     def test_compute_contact_display_data_version_status_counting(self):
@@ -503,7 +503,7 @@ class TestContactDisplayData(unittest.TestCase):
         intelligence = result['operator_intelligence']
         
         # Should show green "All" for fully compliant operator
-        expected = '<span style="color: #2e7d2e; font-weight: bold;">All</span> 3 compliant'
+        expected = '<span style="color: #2e7d2e; font-weight: bold;">All</span>, 3 compliant'
         self.assertEqual(intelligence['version_compliance'], expected)
         self.assertNotIn('not compliant', intelligence['version_compliance'])
         self.assertNotIn('unknown', intelligence['version_compliance'])
