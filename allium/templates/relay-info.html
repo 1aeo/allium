@@ -219,6 +219,111 @@ alt="{{ flag|escape }}">
 {% endfor -%}
 </dd>
 
+{% if relay.get('flag_history') and relay.flag_history.has_flag_data %}
+<dt title="Historical flag performance and stability analysis based on Onionoo uptime API">
+🏷️ Flag History & Performance
+</dt>
+<dd>
+<div class="flag-history-panel" style="margin-top: 10px;">
+    <div class="flag-history-header" style="margin-bottom: 15px;">
+        <strong>Overall Flag Stability Score: <span style="color: {% if relay.flag_history.overall_score >= 95 %}#28a745{% elif relay.flag_history.overall_score >= 90 %}#ffc107{% else %}#dc3545{% endif %};">{{ "%.1f"|format(relay.flag_history.overall_score) }}% ({{ relay.flag_history.overall_grade }})</span></strong>
+    </div>
+    
+    {% if relay.flag_history.flag_performances %}
+    <div class="flag-performances" style="margin-bottom: 15px;">
+        <h5 style="margin-bottom: 10px; font-size: 14px; color: #666;">Flag Reliability by Role:</h5>
+        <div class="flag-performance-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px;">
+            {% for flag_perf in relay.flag_history.flag_performances[:6] %}
+            <div class="flag-performance-item" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; background: {% if flag_perf.reliability >= 95 %}#f8fff8{% elif flag_perf.reliability >= 90 %}#fffaf0{% else %}#fff5f5{% endif %};">
+                <div style="font-weight: bold; font-size: 12px; color: #333;">
+                    {{ flag_perf.flag_name }}
+                    <span style="float: right; color: {% if flag_perf.reliability >= 95 %}#28a745{% elif flag_perf.reliability >= 90 %}#ffc107{% else %}#dc3545{% endif %};">{{ "%.1f"|format(flag_perf.reliability) }}%</span>
+                </div>
+                <div style="font-size: 11px; color: #666; margin-top: 2px;">{{ flag_perf.description[:40] }}{% if flag_perf.description|length > 40 %}...{% endif %}</div>
+                <div style="font-size: 10px; color: #888; margin-top: 2px;">Grade: {{ flag_perf.grade }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+    
+    {% if relay.flag_history.role_reliabilities %}
+    <div class="role-reliabilities" style="margin-bottom: 15px;">
+        <h5 style="margin-bottom: 10px; font-size: 14px; color: #666;">Role-Specific Reliability:</h5>
+        <div class="role-reliability-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px;">
+            {% if relay.flag_history.role_reliabilities.entry_guard is not none %}
+            <div style="padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
+                <strong>🛡️ Entry Guard:</strong> <span style="color: {% if relay.flag_history.role_reliabilities.entry_guard >= 95 %}#28a745{% elif relay.flag_history.role_reliabilities.entry_guard >= 90 %}#ffc107{% else %}#dc3545{% endif %};">{{ "%.1f"|format(relay.flag_history.role_reliabilities.entry_guard) }}%</span>
+            </div>
+            {% endif %}
+            {% if relay.flag_history.role_reliabilities.exit_node is not none %}
+            <div style="padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
+                <strong>🚪 Exit Node:</strong> <span style="color: {% if relay.flag_history.role_reliabilities.exit_node >= 95 %}#28a745{% elif relay.flag_history.role_reliabilities.exit_node >= 90 %}#ffc107{% else %}#dc3545{% endif %};">{{ "%.1f"|format(relay.flag_history.role_reliabilities.exit_node) }}%</span>
+            </div>
+            {% endif %}
+            {% if relay.flag_history.role_reliabilities.relay_operation is not none %}
+            <div style="padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
+                <strong>⚡ Basic Operation:</strong> <span style="color: {% if relay.flag_history.role_reliabilities.relay_operation >= 95 %}#28a745{% elif relay.flag_history.role_reliabilities.relay_operation >= 90 %}#ffc107{% else %}#dc3545{% endif %};">{{ "%.1f"|format(relay.flag_history.role_reliabilities.relay_operation) }}%</span>
+            </div>
+            {% endif %}
+            {% if relay.flag_history.role_reliabilities.directory_services is not none %}
+            <div style="padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
+                <strong>📁 Directory Services:</strong> <span style="color: {% if relay.flag_history.role_reliabilities.directory_services >= 95 %}#28a745{% elif relay.flag_history.role_reliabilities.directory_services >= 90 %}#ffc107{% else %}#dc3545{% endif %};">{{ "%.1f"|format(relay.flag_history.role_reliabilities.directory_services) }}%</span>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+    
+    {% if relay.flag_history.consistency_summary %}
+    <div class="flag-consistency" style="margin-bottom: 15px;">
+        <h5 style="margin-bottom: 10px; font-size: 14px; color: #666;">Flag Consistency Summary:</h5>
+        <div style="font-size: 12px;">
+            <span style="color: #28a745;">✓ {{ relay.flag_history.consistency_summary.stable_count }} stable flags (≥95% uptime)</span> • 
+            <span style="color: #ffc107;">⚠ {{ relay.flag_history.consistency_summary.intermittent_count }} intermittent flags (80-95%)</span> • 
+            <span style="color: #dc3545;">✗ {{ relay.flag_history.consistency_summary.unstable_count }} unstable flags (<80%)</span>
+        </div>
+    </div>
+    {% endif %}
+    
+    {% if relay.flag_history.recommendations %}
+    <div class="flag-recommendations" style="margin-bottom: 10px;">
+        <h5 style="margin-bottom: 10px; font-size: 14px; color: #666;">📋 Recommendations:</h5>
+        <ul style="font-size: 12px; margin: 0; padding-left: 20px;">
+            {% for recommendation in relay.flag_history.recommendations[:3] %}
+            <li style="margin-bottom: 3px;">{{ recommendation }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+    
+    {% if relay.flag_history.issues %}
+    <div class="flag-issues" style="margin-bottom: 10px;">
+        <h5 style="margin-bottom: 10px; font-size: 14px; color: #d63384;">⚠️ Issues Detected:</h5>
+        <ul style="font-size: 12px; margin: 0; padding-left: 20px;">
+            {% for issue in relay.flag_history.issues[:3] %}
+            <li style="margin-bottom: 3px; color: #d63384;">{{ issue }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+    
+    <div style="font-size: 11px; color: #999; margin-top: 10px; border-top: 1px solid #eee; padding-top: 8px;">
+        <em>Flag history analysis based on Onionoo uptime API data. Grades: Excellent (≥98%), Good (95-98%), Fair (90-95%), Poor (80-90%), Critical (<80%)</em>
+    </div>
+</div>
+</dd>
+{% else %}
+<dt title="Historical flag performance and stability analysis">
+🏷️ Flag History & Performance
+</dt>
+<dd>
+<div style="color: #999; font-style: italic; font-size: 12px;">
+    No flag history data available
+</div>
+</dd>
+{% endif %}
+
 <dt title="Bandwidth details: Observed capacity | Advertised capability | Rate limit | Burst limit">
 Bandwidth (Observed | Advertised | Rate | Burst)
 </dt>

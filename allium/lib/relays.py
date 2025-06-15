@@ -1850,6 +1850,10 @@ class Relays:
         downtime_alerts = self._calculate_operator_downtime_alerts(v, members, i, bandwidth_unit)
         display_data['downtime_alerts'] = downtime_alerts
         
+        # 8. Operator flag analysis (flag history and performance)
+        operator_flag_analysis = self._compute_contact_flag_analysis(v, members)
+        display_data['flag_analysis'] = operator_flag_analysis
+        
         return display_data
 
     def _calculate_operator_downtime_alerts(self, contact_hash, operator_relays, contact_data, bandwidth_unit):
@@ -2019,3 +2023,63 @@ class Relays:
         }
         
         return downtime_alerts
+
+    def _process_flag_history_data(self):
+        """
+        Process flag history data for all relays using the FlagHistoryAnalyzer.
+        This adds flag history metrics to relay objects for display in relay-info.html.
+        """
+        if not hasattr(self, 'uptime_data') or not self.uptime_data:
+            return
+            
+        try:
+            from .flag_history_utils import FlagHistoryAnalyzer, create_flag_history_display_data
+            
+            flag_analyzer = FlagHistoryAnalyzer(self.uptime_data)
+            
+            # Process flag history for each relay
+            for relay in self.json["relays"]:
+                fingerprint = relay.get('fingerprint')
+                if fingerprint:
+                    # Analyze flag history for this relay
+                    flag_analysis = flag_analyzer.analyze_relay_flag_history(fingerprint)
+                    
+                    # Create display-ready data for templates
+                    relay['flag_history'] = create_flag_history_display_data(flag_analysis)
+                    
+                    # Add detailed flag analysis for operator contact pages
+                    relay['flag_analysis_detailed'] = flag_analysis
+        
+        except ImportError as e:
+            print(f"Warning: Could not import flag history utilities: {e}")
+        except Exception as e:
+            print(f"Warning: Error processing flag history data: {e}")
+    
+    def _compute_contact_flag_analysis(self, contact_hash, operator_relays):
+        """
+        Compute operator-wide flag analysis for contact pages.
+        
+        Args:
+            contact_hash (str): Contact hash for the operator
+            operator_relays (list): List of relay objects for this operator
+            
+        Returns:
+            dict: Operator flag analysis or None if no data available
+        """
+        if not hasattr(self, 'uptime_data') or not self.uptime_data or not operator_relays:
+            return None
+            
+        try:
+            from .flag_history_utils import FlagHistoryAnalyzer
+            
+            flag_analyzer = FlagHistoryAnalyzer(self.uptime_data)
+            operator_flag_analysis = flag_analyzer.analyze_operator_flag_performance(operator_relays)
+            
+            return operator_flag_analysis
+            
+        except ImportError as e:
+            print(f"Warning: Could not import flag history utilities for operator analysis: {e}")
+            return None
+        except Exception as e:
+            print(f"Warning: Error computing operator flag analysis: {e}")
+            return None
