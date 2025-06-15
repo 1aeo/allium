@@ -35,9 +35,13 @@ cd www && python3 -m http.server 8000
 - **Enhanced operator profiles** with streamlined reliability metrics
 - **Improved information density** while preserving all analytical data
 - **Responsive design** with mobile-friendly layouts
+- **JavaScript-free pagination** for AROI leaderboards with independent category navigation
 
 ### AROI Leaderboard System 🏆
 - **12 specialized leaderboards** for authenticated relay operators
+- **Paginated rankings** with 1-10, 11-20, 21-25 views per category for improved navigation
+- **Independent pagination** - each category manages its own page state
+- **CSS-only navigation** using `:target` selectors for maximum security and performance
 - **Reliability scoring system** with 6-month and 5-year average uptime analysis
 - **Simplified reliability scoring** using average uptime (no bandwidth weighting)
 - **25+ relay eligibility filter** ensuring statistical significance for reliability categories
