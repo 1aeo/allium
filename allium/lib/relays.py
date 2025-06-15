@@ -1792,23 +1792,58 @@ class Relays:
             'unrecommended': sum(1 for relay in members if relay.get('version_status') == 'unrecommended')
         }
         
+        # Collect actual Tor versions for each status category (for tooltips)
+        version_status_versions = {
+            'recommended': set(),
+            'experimental': set(),
+            'obsolete': set(),
+            'new_in_series': set(),
+            'unrecommended': set()
+        }
+        
+        for relay in members:
+            status = relay.get('version_status')
+            version = relay.get('version')
+            if status and version:
+                if status == 'new in series':
+                    version_status_versions['new_in_series'].add(version)
+                elif status in version_status_versions:
+                    version_status_versions[status].add(version)
+        
         # Format version compliance display (only show non-zero values for not compliant and unknown)
-        version_compliance_parts = [f"{version_compliant} compliant"]
-        if version_not_compliant > 0:
-            version_compliance_parts.append(f"{version_not_compliant} not compliant")
-        if version_unknown > 0:
-            version_compliance_parts.append(f"{version_unknown} unknown")
+        # Add green "All" when all relays are compliant
+        total_relays = len(members)
+        all_compliant = total_relays > 0 and version_not_compliant == 0 and version_unknown == 0
         
-        intelligence_formatted['version_compliance'] = ', '.join(version_compliance_parts)
+        if all_compliant:
+            intelligence_formatted['version_compliance'] = f'<span style="color: #2e7d2e; font-weight: bold;">All</span> {version_compliant} compliant'
+        else:
+            version_compliance_parts = [f"{version_compliant} compliant"]
+            if version_not_compliant > 0:
+                version_compliance_parts.append(f"{version_not_compliant} not compliant")
+            if version_unknown > 0:
+                version_compliance_parts.append(f"{version_unknown} unknown")
+            intelligence_formatted['version_compliance'] = ', '.join(version_compliance_parts)
         
-        # Format version status display (only show counts > 0)
+        # Format version status display (only show counts > 0) with version tooltips
         version_status_parts = []
+        version_status_tooltips = {}
+        
         for status, count in version_status_counts.items():
             if count > 0:
                 status_display = status.replace('_', ' ')  # Convert new_in_series to "new in series"
                 version_status_parts.append(f"{count} {status_display}")
+                
+                # Create tooltip with actual Tor versions
+                versions = sorted(list(version_status_versions[status]))
+                if versions:
+                    tooltip_status = status_display.capitalize()
+                    version_status_tooltips[status] = f"{tooltip_status} versions: {', '.join(versions)}"
+                else:
+                    version_status_tooltips[status] = f"{status_display.capitalize()} versions: (no version data)"
         
         intelligence_formatted['version_status'] = ', '.join(version_status_parts) if version_status_parts else 'none'
+        intelligence_formatted['version_status_tooltips'] = version_status_tooltips
         
         display_data['operator_intelligence'] = intelligence_formatted
         
