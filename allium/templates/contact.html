@@ -149,7 +149,7 @@
                 {% if contact_display_data and contact_display_data.outliers %}
                 {% set outliers = contact_display_data.outliers %}
                 {% if outliers.total_count %}
-                <li><strong><span title="{{ outliers.tooltip }}">Outliers</span>:</strong>
+                <li><strong>Outlier ({{ outliers.tooltip }}):</strong>
                     <span style="color: #000; font-weight: normal;">{{ outliers.total_count }} relays out of {{ outliers.total_relays }} relays ({{ outliers.percentage }}%)</span>{% if outliers.low_count %}, <span style="color: #dc3545; font-weight: bold;">Low:</span> <span title="{{ outliers.low_tooltip }}" style="cursor: help;">{{ outliers.low_count }} relay{{ 's' if outliers.low_count != 1 else '' }}</span>{% endif %}{% if outliers.high_count %}{% if outliers.low_count %}, {% endif %}<span style="color: #28a745; font-weight: bold;">Exceptional:</span> <span title="{{ outliers.high_tooltip }}" style="cursor: help;">{{ outliers.high_count }} relay{{ 's' if outliers.high_count != 1 else '' }}</span>{% endif %}
                 </li>
                 {% elif outliers.none_detected %}
