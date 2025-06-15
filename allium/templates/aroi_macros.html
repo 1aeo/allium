@@ -16,6 +16,8 @@
                             <span title="Network consensus weight controlling Tor routing decisions">{{ champion.total_consensus_weight_pct }} authority</span>
                         {% elif category_key == "exit_authority" %}
                             <span title="Control over internet exit traffic routing">{{ champion.exit_consensus_weight_pct }} exit authority</span>
+                        {% elif category_key == "guard_authority" %}
+                            <span title="Control over network entry traffic routing">{{ champion.guard_consensus_weight_pct }} guard authority</span>
                         {% elif category_key == "exit_operators" %}
                             <span title="Active exit relays providing critical internet access points">{{ champion.exit_count }} exit relays</span>
                         {% elif category_key == "guard_operators" %}
@@ -39,6 +41,8 @@
                     <small>
                         {% if category_key == "exit_authority" %}
                             <span title="Complete relay infrastructure operated by exit authority champion">{{ champion.exit_count }} exit relays</span>
+                        {% elif category_key == "guard_authority" %}
+                            <span title="Complete relay infrastructure operated by guard authority champion">{{ champion.guard_count }} guard relays</span>
                         {% elif category_key == "most_diverse" %}
                             <span title="Geographic distribution of relay operations">{{ champion.country_count }} countries</span>
                         {% else %}
@@ -99,6 +103,8 @@
                                 <span title="Percentage of total Tor network consensus weight controlling routing decisions">{{ entry.total_consensus_weight_pct }} network authority</span>
                             {% elif performance_type == "exit_authority" %}
                                 <span title="Percentage of exit consensus weight controlling internet access points">{{ entry.exit_consensus_weight_pct }} exit authority</span>
+                            {% elif performance_type == "guard_authority" %}
+                                <span title="Percentage of guard consensus weight controlling network entry points">{{ entry.guard_consensus_weight_pct }} guard authority</span>
                             {% elif performance_type == "exit_operators" %}
                                 <span title="Number of active exit relays providing critical internet access points">{{ entry.exit_count }} active exit relays</span>
                             {% elif performance_type == "guard_operators" %}
