@@ -434,11 +434,12 @@ class TestContactDisplayData(unittest.TestCase):
         
         intelligence = result['operator_intelligence']
         
-        # Should count version status correctly and only show non-zero counts
+        # Should count version status correctly and only show non-zero counts with status indicator
         self.assertIn('version_status', intelligence)
         version_status = intelligence['version_status']
         
-        # Check that all non-zero counts are included
+        # Check that it shows "Poor" indicator since only 2/6 = 33% are recommended (≤50%)
+        self.assertIn('<span style="color: #c82333; font-weight: bold;">Poor</span>', version_status)
         self.assertIn('2 (33%) recommended', version_status)
         self.assertIn('1 (17%) experimental', version_status)
         self.assertIn('1 (17%) obsolete', version_status)
@@ -476,8 +477,9 @@ class TestContactDisplayData(unittest.TestCase):
         intelligence = result['operator_intelligence']
         version_status = intelligence['version_status']
         
-        # Should only show recommended (non-zero count)
-        self.assertEqual(version_status, '2 (100%) recommended')
+        # Should only show recommended with "All" status indicator (non-zero count)
+        expected_status = '<span style="color: #2e7d2e; font-weight: bold;">All</span>, 2 (100%) recommended'
+        self.assertEqual(version_status, expected_status)
         self.assertNotIn('experimental', version_status)
         self.assertNotIn('obsolete', version_status)
         self.assertNotIn('unrecommended', version_status)
@@ -575,7 +577,8 @@ class TestContactDisplayData(unittest.TestCase):
         # version_status: None=2 (missing fields), recommended=1
         expected = '<span style="color: #c82333; font-weight: bold;">Poor</span>, 1 (33%) compliant, 2 (67%) unknown'
         self.assertEqual(intelligence['version_compliance'], expected)
-        self.assertEqual(intelligence['version_status'], '1 (33%) recommended')
+        expected_status = '<span style="color: #c82333; font-weight: bold;">Poor</span>, 1 (33%) recommended'
+        self.assertEqual(intelligence['version_status'], expected_status)
         
         # Should include tooltip for the one valid recommended relay
         self.assertIn('recommended', intelligence['version_status_tooltips'])
@@ -664,6 +667,88 @@ class TestContactDisplayData(unittest.TestCase):
         self.assertIn('version_compliance', intelligence)
         expected = '<span style="color: #c82333; font-weight: bold;">Poor</span>, 0 (0%) compliant, 2 (67%) not compliant, 1 (33%) unknown'
         self.assertEqual(intelligence['version_compliance'], expected)
+
+    def test_compute_contact_display_data_version_status_all_recommended(self):
+        """Test version status with green 'All' when all relays have recommended status."""
+        # Sample relay data with all recommended status
+        test_members = [
+            {'recommended_version': True, 'version_status': 'recommended', 'version': '0.4.8.7'},
+            {'recommended_version': True, 'version_status': 'recommended', 'version': '0.4.8.8'},
+            {'recommended_version': False, 'version_status': 'recommended', 'version': '0.4.8.9'},
+        ]
+        
+        result = self.relays._compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        )
+        
+        intelligence = result['operator_intelligence']
+        
+        # Should show green "All" when all relays have recommended status
+        self.assertIn('version_status', intelligence)
+        expected = '<span style="color: #2e7d2e; font-weight: bold;">All</span>, 3 (100%) recommended'
+        self.assertEqual(intelligence['version_status'], expected)
+
+    def test_compute_contact_display_data_version_status_partial_recommended(self):
+        """Test version status with orange 'Partial' when >50% but not 100% have recommended status."""
+        # Sample relay data with partial recommended status (3 out of 4 = 75% recommended)
+        test_members = [
+            {'recommended_version': True, 'version_status': 'recommended', 'version': '0.4.8.7'},
+            {'recommended_version': True, 'version_status': 'recommended', 'version': '0.4.8.8'},
+            {'recommended_version': True, 'version_status': 'recommended', 'version': '0.4.8.9'},
+            {'recommended_version': False, 'version_status': 'obsolete', 'version': '0.4.6.10'},
+        ]
+        
+        result = self.relays._compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        )
+        
+        intelligence = result['operator_intelligence']
+        
+        # Should show orange "Partial" when >50% but not 100% have recommended status
+        self.assertIn('version_status', intelligence)
+        expected = '<span style="color: #cc9900; font-weight: bold;">Partial</span>, 3 (75%) recommended, 1 (25%) obsolete'
+        self.assertEqual(intelligence['version_status'], expected)
+
+    def test_compute_contact_display_data_version_status_poor_recommended(self):
+        """Test version status with red 'Poor' when ≤50% have recommended status."""
+        # Sample relay data with poor recommended status (1 out of 4 = 25% recommended)
+        test_members = [
+            {'recommended_version': True, 'version_status': 'recommended', 'version': '0.4.8.7'},
+            {'recommended_version': False, 'version_status': 'obsolete', 'version': '0.4.6.10'},
+            {'recommended_version': False, 'version_status': 'obsolete', 'version': '0.4.6.11'},
+            {'recommended_version': None, 'version_status': 'experimental', 'version': '0.4.9.0-alpha'},
+        ]
+        
+        result = self.relays._compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        )
+        
+        intelligence = result['operator_intelligence']
+        
+        # Should show red "Poor" when ≤50% have recommended status
+        self.assertIn('version_status', intelligence)
+        expected = '<span style="color: #c82333; font-weight: bold;">Poor</span>, 1 (25%) recommended, 1 (25%) experimental, 2 (50%) obsolete'
+        self.assertEqual(intelligence['version_status'], expected)
+
+    def test_compute_contact_display_data_version_status_zero_recommended(self):
+        """Test version status when no relays have recommended status."""
+        # Sample relay data with no recommended status
+        test_members = [
+            {'recommended_version': False, 'version_status': 'obsolete', 'version': '0.4.6.10'},
+            {'recommended_version': False, 'version_status': 'unrecommended', 'version': '0.4.7.5'},
+            {'recommended_version': None, 'version_status': 'experimental', 'version': '0.4.9.0-alpha'},
+        ]
+        
+        result = self.relays._compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        )
+        
+        intelligence = result['operator_intelligence']
+        
+        # Should show red "Poor" when 0% have recommended status
+        self.assertIn('version_status', intelligence)
+        expected = '<span style="color: #c82333; font-weight: bold;">Poor</span>, 0 (0%) recommended, 1 (33%) experimental, 1 (33%) obsolete, 1 (33%) unrecommended'
+        self.assertEqual(intelligence['version_status'], expected)
 
 
 if __name__ == '__main__':
