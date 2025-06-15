@@ -1,6 +1,58 @@
 # AROI Leaderboard System
 
-**Autonomous Relay Operator Identification (AROI) Leaderboard** - A comprehensive ranking and analysis system for Tor relay operators.
+**Autonomous Relay Operator Identification (AROI) Leaderboard** - A comprehensive ranking and analysis system for Tor relay operators with advanced pagination for optimal user experience.
+
+## 🔥 **NEW: Pagination System**
+
+### **JavaScript-Free CSS Pagination** 
+The AROI leaderboard now features a comprehensive pagination system providing enhanced navigation through large datasets:
+
+#### **🎯 Key Features:**
+- **Independent Category Pagination**: Each of the 12 categories manages its own pagination state
+- **CSS-Only Implementation**: Uses `:target` selectors for maximum security and performance
+- **Three-Page Structure**: Rankings split into 1-10, 11-20, and 21-25 for optimal viewing
+- **Consistent Navigation**: Unified pagination experience across all categories
+- **Bookmarkable URLs**: Direct links to specific pages (e.g., `#bandwidth-11-20`)
+
+#### **📱 User Experience Benefits:**
+- **Improved Performance**: Faster page loads with smaller data chunks
+- **Better Readability**: Focused view on 10 entries per page
+- **Enhanced Navigation**: Easy jumping between ranking ranges
+- **Mobile Friendly**: Optimized for smaller screens with reduced data per view
+
+#### **🔒 Technical Implementation:**
+```css
+/* Category-scoped pagination using :has() selector */
+#bandwidth:has(.pagination-section:target) .pagination-section:not(:target) {
+    display: none !important;
+}
+
+/* Show first page by default */
+#bandwidth-1-10, #consensus_weight-1-10, /* ... all categories */ {
+    display: block;
+}
+
+/* Show targeted sections */
+.pagination-section:target {
+    display: block;
+}
+```
+
+#### **🌟 Categories with Pagination:**
+1. **🚀 Bandwidth Contributed** - `#bandwidth-{1-10,11-20,21-25}`
+2. **⚖️ Consensus Weight** - `#consensus_weight-{1-10,11-20,21-25}`
+3. **🚪 Exit Authority** - `#exit_authority-{1-10,11-20,21-25}`
+4. **🚪 Exit Champions** - `#exit_operators-{1-10,11-20,21-25}`
+5. **🛡️ Guard Gatekeepers** - `#guard_operators-{1-10,11-20,21-25}`
+6. **🌈 Most Diverse** - `#most_diverse-{1-10,11-20,21-25}`
+7. **💻 Platform Diversity** - `#platform_diversity-{1-10,11-20,21-25}`
+8. **🌍 Non-EU Leaders** - `#non_eu_leaders-{1-10,11-20,21-25}`
+9. **🏴‍☠️ Frontier Builders** - `#frontier_builders-{1-10,11-20,21-25}`
+10. **🏆 Network Veterans** - `#network_veterans-{1-10,11-20,21-25}`
+11. **⏰ Reliability Masters** - `#reliability_masters-{1-10,11-20,21-25}`
+12. **👑 Legacy Titans** - `#legacy_titans-{1-10,11-20,21-25}`
+
+---
 
 ## 📋 Documents
 
@@ -42,14 +94,21 @@ The AROI Leaderboard System provides:
 - **Duplicate Prevention**: Accurate operator representation without double-counting
 
 ### **Performance Ranking**
-- **Multi-Category Analysis**: 10 distinct ranking categories covering all aspects of relay operation
+- **Multi-Category Analysis**: 12 distinct ranking categories covering all aspects of relay operation
 - **Real-Time Updates**: Live ranking updates based on current network status
 - **Achievement System**: Champion badges and recognition for top performers
+- **Paginated Navigation**: Enhanced user experience with 1-10, 11-20, 21-25 ranking views
 
 ### **Geographic & Technical Diversity**
 - **Global Coverage**: Geographic diversity tracking and frontier country analysis
 - **Platform Diversity**: Recognition for non-Linux operators and BSD technical leaders
 - **Infrastructure Analysis**: ASN diversity and network distribution tracking
+
+### **User Experience & Performance**
+- **JavaScript-Free Interface**: CSS-only pagination for maximum security and compatibility
+- **Independent Category Management**: Each leaderboard category maintains separate navigation state
+- **Bookmarkable Rankings**: Direct URL access to specific ranking ranges
+- **Mobile Optimization**: Responsive design optimized for smaller screens with paginated data
 
 ## 📊 Implementation Status
 

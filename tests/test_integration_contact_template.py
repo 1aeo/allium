@@ -78,20 +78,18 @@ class TestContactTemplateIntegration(unittest.TestCase):
             },
             'contact_rankings': [
                 {
-                    'emoji': '🏆',
-                    'statement': '#1 in Bandwidth Champions',
-                    'title': 'Leading bandwidth contributor',
-                    'category_name': 'Bandwidth Champions',
-                    'link': 'aroi-leaderboards.html#bandwidth-champions',
-                    'rank': 1
+                    'title': 'Bandwidth Champion',
+                    'badge': '🥇',
+                    'description': 'Top bandwidth contributor',
+                    'link': 'aroi-leaderboards.html#bandwidth-1-10',
+                    'tooltip': 'Highest total bandwidth across all relays'
                 },
                 {
-                    'emoji': '🌐',
-                    'statement': '#3 in Most Diverse Operators',
-                    'title': 'Geographic and platform diversity leader',
-                    'category_name': 'Most Diverse Operators', 
-                    'link': 'aroi-leaderboards.html#most-diverse-operators',
-                    'rank': 3
+                    'title': 'Diversity Master',
+                    'badge': '🌈',
+                    'description': 'Most diverse operator',
+                    'link': 'aroi-leaderboards.html#most_diverse-1-10',
+                    'tooltip': 'Highest diversity score combining geographic, platform, and network variety'
                 }
             ],
             'operator_reliability': {
@@ -162,13 +160,13 @@ class TestContactTemplateIntegration(unittest.TestCase):
         # Should display ranking count
         self.assertIn('2 winning', rendered)  # Should show count of rankings
         
-        # Should contain ranking links
-        self.assertIn('aroi-leaderboards.html#bandwidth-champions', rendered)
-        self.assertIn('aroi-leaderboards.html#most-diverse-operators', rendered)
+        # Should contain pagination-based ranking links
+        self.assertIn('aroi-leaderboards.html#bandwidth-1-10', rendered)
+        self.assertIn('aroi-leaderboards.html#most_diverse-1-10', rendered)
         
         # Should display ranking statements
-        self.assertIn('🏆 #1 in Bandwidth Champions', rendered)
-        self.assertIn('🌐 #3 in Most Diverse Operators', rendered)
+        self.assertIn('🥇 Bandwidth Champion', rendered)
+        self.assertIn('� Diversity Master', rendered)
 
     def test_contact_template_without_aroi_rankings(self):
         """Test contact template layout when no AROI rankings exist."""
@@ -319,6 +317,15 @@ class TestContactTemplateIntegration(unittest.TestCase):
         self.assertIn('col-md-5', rendered)  # Right column
         
         # These will stack on mobile (below md breakpoint)
+
+    def test_contact_template_aroi_rankings_pagination(self):
+        """Test AROI rankings display correctly with pagination links."""
+        template = self.jinja_env.get_template('contact.html')
+        rendered = template.render(**self.template_context)
+        
+        # Check that AROI rankings display correctly with pagination links
+        self.assertIn('aroi-leaderboards.html#bandwidth-1-10', rendered)
+        self.assertIn('aroi-leaderboards.html#most_diverse-1-10', rendered)
 
 
 if __name__ == '__main__':
