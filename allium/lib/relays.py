@@ -1820,7 +1820,7 @@ class Relays:
                 outliers_data['total_count'] = total_outliers
                 outliers_data['total_relays'] = total_relays
                 outliers_data['percentage'] = f"{outlier_percentage:.1f}"
-                outliers_data['tooltip'] = f"6 month: ≥2σ {two_sigma_threshold:.1f}% from average μ {mean_uptime:.1f}%"
+                outliers_data['tooltip'] = f"6mo: ≥2σ {two_sigma_threshold:.1f}% from μ {mean_uptime:.1f}%"
                 
                 # Format low outliers
                 low_outliers = operator_reliability['outliers'].get('low_outliers', [])
