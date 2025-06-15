@@ -1341,8 +1341,8 @@ class Relays:
                 'as_number': relay.get('as', '')
             })
             
-            # Calculate contact-level uptime statistics for this relay's contact group
-            contact_display_data = self._get_relay_contact_uptime_stats(relay)
+            # Get contact-level statistics from already computed data
+            contact_display_data = self._get_relay_contact_display_data(relay)
             
             rendered = template.render(
                 relay=relay, page_ctx=page_ctx, relays=self, contact_display_data=contact_display_data
@@ -1359,10 +1359,9 @@ class Relays:
             ) as html:
                 html.write(rendered)
 
-    def _get_relay_contact_uptime_stats(self, relay):
+    def _get_relay_contact_display_data(self, relay):
         """
-        Get contact-level uptime statistics for a single relay's contact group.
-        This provides the same statistical context as shown on contact pages.
+        Get contact-level display data for a single relay by accessing already computed contact statistics.
         
         Args:
             relay (dict): Single relay object
@@ -1374,14 +1373,22 @@ class Relays:
         if not contact_hash:
             return {'outliers': {'tooltip': 'Contact group 2 standard deviations: No contact information'}}
         
-        # Find all relays in this contact group
-        contact_relays = [r for r in self.json["relays"] if r.get('contact_md5') == contact_hash]
+        # Access existing contact data from sorted contacts
+        contact_data = self.json.get("sorted", {}).get("contact", {}).get(contact_hash)
+        if not contact_data:
+            return {'outliers': {'tooltip': 'Contact group 2 standard deviations: Contact not found'}}
         
-        if len(contact_relays) <= 1:
+        # Get members (relays in this contact group) 
+        members = []
+        for relay_idx in contact_data.get("relays", []):
+            if relay_idx < len(self.json["relays"]):
+                members.append(self.json["relays"][relay_idx])
+        
+        if len(members) <= 1:
             return {'outliers': {'tooltip': 'Contact group 2 standard deviations: Insufficient data (single relay)'}}
         
-        # Calculate operator reliability for this contact group using the same method as contact pages
-        operator_reliability = self._calculate_operator_reliability(contact_hash, contact_relays)
+        # Calculate operator reliability using existing methods
+        operator_reliability = self._calculate_operator_reliability(contact_hash, members)
         
         if not operator_reliability or not operator_reliability.get('overall_uptime'):
             return {'outliers': {'tooltip': 'Contact group 2 standard deviations: No uptime data available'}}
