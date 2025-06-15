@@ -286,33 +286,49 @@ class Relays:
             else:
                 relay["last_seen_ago"] = "unknown"
                 
-            # Optimization 11: Pre-compute uptime data for table display
-            relay["uptime_1_month"] = None
-            if hasattr(self, 'uptime_data') and self.uptime_data:
-                fingerprint = relay.get('fingerprint', '')
-                if fingerprint:
-                    from .uptime_utils import find_relay_uptime_data, calculate_relay_uptime_average
-                    relay_uptime = find_relay_uptime_data(fingerprint, self.uptime_data)
-                    if relay_uptime and relay_uptime.get('uptime', {}).get('1_month', {}).get('values'):
-                        uptime_values = relay_uptime['uptime']['1_month']['values']
-                        relay["uptime_1_month"] = calculate_relay_uptime_average(uptime_values)
+            # Optimization 11: Pre-compute uptime/downtime display based on last_restarted and Running flag
+            relay["uptime_display"] = None
+            if relay.get('last_restarted'):
+                flags = relay.get('flags', [])
+                is_running = 'Running' in flags
+                
+                # Calculate time difference from last_restarted to now using existing helper
+                time_since_restart = self._format_time_ago(relay['last_restarted'])
+                
+                if time_since_restart and time_since_restart != "unknown":
+                    if is_running:
+                        relay["uptime_display"] = f"UP {time_since_restart}"
+                    else:
+                        relay["uptime_display"] = f"DOWN {time_since_restart}"
+                else:
+                    relay["uptime_display"] = "Unknown"
+            else:
+                relay["uptime_display"] = "Unknown"
 
     def _reprocess_uptime_data(self):
         """
-        Reprocess uptime data for all relays after uptime_data is attached.
-        This is called by the coordinator after uptime data becomes available.
+        Reprocess uptime/downtime display for all relays.
+        This method is kept for compatibility but now updates the uptime_display field.
         """
-        if hasattr(self, 'uptime_data') and self.uptime_data:
-            from .uptime_utils import find_relay_uptime_data, calculate_relay_uptime_average
-            for relay in self.json["relays"]:
-                fingerprint = relay.get('fingerprint', '')
-                if fingerprint:
-                    relay_uptime = find_relay_uptime_data(fingerprint, self.uptime_data)
-                    if relay_uptime and relay_uptime.get('uptime', {}).get('1_month', {}).get('values'):
-                        uptime_values = relay_uptime['uptime']['1_month']['values']
-                        relay["uptime_1_month"] = calculate_relay_uptime_average(uptime_values)
+        for relay in self.json["relays"]:
+            # Recalculate uptime/downtime display based on last_restarted and Running flag
+            relay["uptime_display"] = None
+            if relay.get('last_restarted'):
+                flags = relay.get('flags', [])
+                is_running = 'Running' in flags
+                
+                # Calculate time difference from last_restarted to now using existing helper
+                time_since_restart = self._format_time_ago(relay['last_restarted'])
+                
+                if time_since_restart and time_since_restart != "unknown":
+                    if is_running:
+                        relay["uptime_display"] = f"UP {time_since_restart}"
                     else:
-                        relay["uptime_1_month"] = None
+                        relay["uptime_display"] = f"DOWN {time_since_restart}"
+                else:
+                    relay["uptime_display"] = "Unknown"
+            else:
+                relay["uptime_display"] = "Unknown"
 
     def _sort_by_observed_bandwidth(self):
         """
