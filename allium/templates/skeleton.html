@@ -572,9 +572,12 @@
                 }
 
                 /* Improved pagination positioning and table spacing */
+                .pagination-section {
+                    scroll-margin-top: 80px; /* Modern CSS property for scroll positioning without layout gaps */
+                }
+                
                 .pagination-section:target {
-                    padding-top: 60px; /* Add space above when targeted to show main title */
-                    margin-top: -60px; /* Offset the padding so normal flow isn't affected */
+                    /* Using scroll-margin-top instead of padding/margin for clean scroll behavior */
                 }
 
                 .pagination-section h4 {
