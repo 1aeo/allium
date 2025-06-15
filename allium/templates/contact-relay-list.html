@@ -25,7 +25,7 @@
 <tr>
     <th></th>
     <th>Nickname</th>
-    <th>BW ({{ bandwidth }} {{ bandwidth_unit }})</th>
+    <th title="Observed bandwidth: An estimate of the capacity this relay can handle. The relay remembers the max bandwidth sustained output over any ten second period in the past 5 days, and another sustained input. The observed value is the lesser of these two numbers.">BW ({{ bandwidth }} {{ bandwidth_unit }})</th>
     <th>Uptime/Downtime</th>
     <th title="{% if contact_display_data and contact_display_data.outliers and contact_display_data.outliers.tooltip %}{{ contact_display_data.outliers.tooltip }}{% else %}Statistical outliers: ≥2σ from average{% endif %}">Uptime (1M/6M/1Y/5Y)</th>
     <th class="visible-md visible-lg">IPv4</th>
