@@ -304,12 +304,20 @@ class Relays:
                     relay["uptime_display"] = "Unknown"
             else:
                 relay["uptime_display"] = "Unknown"
+            
+            # Initialize uptime API display (will be populated by _reprocess_uptime_data)
+            relay["uptime_api_display"] = "0.0%/0.0%/0.0%/0.0%"
 
     def _reprocess_uptime_data(self):
         """
-        Reprocess uptime/downtime display for all relays.
-        This method is kept for compatibility but now updates the uptime_display field.
+        Reprocess uptime data for all relays after uptime_data is attached.
+        Calculate both uptime/downtime display and uptime API percentages with statistical coloring.
         """
+        import statistics
+        
+        # First pass: Calculate uptime/downtime display and extract API percentages
+        all_uptime_values = {'1_month': [], '6_months': [], '1_year': [], '5_years': []}
+        
         for relay in self.json["relays"]:
             # Recalculate uptime/downtime display based on last_restarted and Running flag
             relay["uptime_display"] = None
@@ -329,6 +337,72 @@ class Relays:
                     relay["uptime_display"] = "Unknown"
             else:
                 relay["uptime_display"] = "Unknown"
+            
+            # Calculate uptime API percentages
+            uptime_percentages = {'1_month': 0.0, '6_months': 0.0, '1_year': 0.0, '5_years': 0.0}
+            
+            if hasattr(self, 'uptime_data') and self.uptime_data:
+                from .uptime_utils import find_relay_uptime_data, calculate_relay_uptime_average
+                
+                fingerprint = relay.get('fingerprint', '')
+                if fingerprint:
+                    relay_uptime = find_relay_uptime_data(fingerprint, self.uptime_data)
+                    if relay_uptime and relay_uptime.get('uptime'):
+                        # Calculate percentages for each time period
+                        for period in ['1_month', '6_months', '1_year', '5_years']:
+                            period_data = relay_uptime['uptime'].get(period, {})
+                            if period_data.get('values'):
+                                uptime_percentage = calculate_relay_uptime_average(period_data['values'])
+                                uptime_percentages[period] = uptime_percentage
+                                # Collect for statistical analysis
+                                all_uptime_values[period].append(uptime_percentage)
+            
+            # Store raw percentages for later coloring
+            relay["uptime_percentages"] = uptime_percentages
+        
+        # Second pass: Calculate statistical thresholds and apply coloring
+        uptime_thresholds = {}
+        for period in ['1_month', '6_months', '1_year', '5_years']:
+            values = all_uptime_values[period]
+            if len(values) >= 3:  # Need at least 3 values for meaningful statistics
+                try:
+                    mean = statistics.mean(values)
+                    std_dev = statistics.stdev(values)
+                    uptime_thresholds[period] = {
+                        'mean': mean,
+                        'std_dev': std_dev,
+                        'low_threshold': mean - (2 * std_dev),
+                        'high_threshold': mean + (2 * std_dev)
+                    }
+                except statistics.StatisticsError:
+                    uptime_thresholds[period] = None
+            else:
+                uptime_thresholds[period] = None
+        
+        # Third pass: Generate colored display strings
+        for relay in self.json["relays"]:
+            percentages = relay.get("uptime_percentages", {})
+            display_parts = []
+            
+            # Format as "96.7%/98.2%/93.2%/86.1%" with coloring
+            for period in ['1_month', '6_months', '1_year', '5_years']:
+                percentage = percentages.get(period, 0.0)
+                percentage_str = f"{percentage:.1f}%"
+                
+                # Apply statistical coloring if thresholds are available
+                if uptime_thresholds.get(period):
+                    thresholds = uptime_thresholds[period]
+                    if percentage < thresholds['low_threshold']:
+                        # Red for low outliers (>2 std dev below mean)
+                        percentage_str = f'<span style="color: #dc3545;">{percentage_str}</span>'
+                    elif percentage > thresholds['high_threshold']:
+                        # Green for high outliers (>2 std dev above mean)
+                        percentage_str = f'<span style="color: #28a745;">{percentage_str}</span>'
+                
+                display_parts.append(percentage_str)
+            
+            # Join with forward slashes
+            relay["uptime_api_display"] = "/".join(display_parts)
 
     def _sort_by_observed_bandwidth(self):
         """
