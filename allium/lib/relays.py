@@ -402,7 +402,11 @@ class Relays:
                 
                 # Apply statistical coloring using existing outlier detection results
                 # Don't color 0.0% values (missing data) as red outliers
-                if period_outliers.get(period) and percentage > 0:
+                # Color 100.0% values green to match exceptional results under network reliability outliers
+                if percentage >= 100.0 or abs(percentage - 100.0) < 0.01:
+                    # Green for perfect uptime (100.0%)
+                    percentage_str = f'<span style="color: #28a745;">{percentage_str}</span>'
+                elif period_outliers.get(period) and percentage > 0:
                     outliers = period_outliers[period]
                     if percentage in outliers['low_outliers']:
                         # Red for low outliers (>2 std dev below mean)
