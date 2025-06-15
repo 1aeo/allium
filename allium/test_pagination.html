@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Pagination Test</title>
+    <style>
+        /* Basic styling for visibility */
+        .pagination-section {
+            display: none;
+            border: 2px solid #ccc;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        
+        /* Show first section by default */
+        #bandwidth-1-10,
+        #consensus_weight-1-10 {
+            display: block;
+        }
+        
+        /* Show targeted sections */
+        .pagination-section:target {
+            display: block;
+        }
+        
+        /* SCOPED PAGINATION - Each category manages its own pagination independently */
+        #bandwidth:has(.pagination-section:target) .pagination-section:not(:target),
+        #consensus_weight:has(.pagination-section:target) .pagination-section:not(:target) {
+            display: none !important;
+        }
+        
+        .pagination-nav-bottom {
+            text-align: center;
+            margin: 10px 0;
+        }
+        
+        .pagination-nav-bottom a {
+            margin: 0 5px;
+            padding: 5px 10px;
+            background: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 3px;
+        }
+        
+        .pagination-nav-bottom a:hover {
+            background: #0056b3;
+        }
+        
+        /* Section styling */
+        section {
+            border: 1px solid #000;
+            margin: 20px 0;
+            padding: 15px;
+        }
+        
+        h2 {
+            color: #333;
+            margin-top: 0;
+        }
+        
+        h3 {
+            color: #666;
+            margin-top: 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Pagination Independence Test</h1>
+    <p>This test validates that pagination in each category works independently. Click pagination buttons in one category - it should not affect the other category.</p>
+    
+    <!-- Category 1: Bandwidth -->
+    <section id="bandwidth">
+        <h2>🚀 Bandwidth Category</h2>
+        
+        <div id="bandwidth-1-10" class="pagination-section">
+            <h3>Bandwidth - Ranks 1-10</h3>
+            <p>This is the first page of bandwidth results (1-10).</p>
+        </div>
+        
+        <div id="bandwidth-11-20" class="pagination-section">
+            <h3>Bandwidth - Ranks 11-20</h3>
+            <p>This is the second page of bandwidth results (11-20).</p>
+        </div>
+        
+        <div id="bandwidth-21-25" class="pagination-section">
+            <h3>Bandwidth - Ranks 21-25</h3>
+            <p>This is the third page of bandwidth results (21-25).</p>
+        </div>
+        
+        <div class="pagination-nav-bottom">
+            <a href="#bandwidth-1-10">1-10</a>
+            <a href="#bandwidth-11-20">11-20</a>
+            <a href="#bandwidth-21-25">21-25</a>
+        </div>
+    </section>
+    
+    <!-- Category 2: Consensus Weight -->
+    <section id="consensus_weight">
+        <h2>🏛️ Consensus Weight Category</h2>
+        
+        <div id="consensus_weight-1-10" class="pagination-section">
+            <h3>Consensus Weight - Ranks 1-10</h3>
+            <p>This is the first page of consensus weight results (1-10).</p>
+        </div>
+        
+        <div id="consensus_weight-11-20" class="pagination-section">
+            <h3>Consensus Weight - Ranks 11-20</h3>
+            <p>This is the second page of consensus weight results (11-20).</p>
+        </div>
+        
+        <div id="consensus_weight-21-25" class="pagination-section">
+            <h3>Consensus Weight - Ranks 21-25</h3>
+            <p>This is the third page of consensus weight results (21-25).</p>
+        </div>
+        
+        <div class="pagination-nav-bottom">
+            <a href="#consensus_weight-1-10">1-10</a>
+            <a href="#consensus_weight-11-20">11-20</a>
+            <a href="#consensus_weight-21-25">21-25</a>
+        </div>
+    </section>
+    
+    <div style="margin-top: 30px; padding: 20px; background: #f0f0f0; border-radius: 5px;">
+        <h3>Test Instructions:</h3>
+        <ol>
+            <li>Initially, both categories should show their first page (1-10)</li>
+            <li>Click "11-20" in the Bandwidth category - only bandwidth should change, consensus weight should stay on 1-10</li>
+            <li>Click "21-25" in the Consensus Weight category - only consensus weight should change, bandwidth should stay on 11-20</li>
+            <li>Each category operates independently!</li>
+        </ol>
+    </div>
+</body>
+</html> 
