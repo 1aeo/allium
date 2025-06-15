@@ -548,10 +548,21 @@
 
                 
                 /* Category-specific pagination behavior - each category manages its own pagination independently */
-                /* Use the correct CSS approach with :has() selector to hide non-targeted sections */
+                /* Use scoped :has() selector so each category manages its own pagination state */
                 
-                /* When any pagination section is targeted, hide all non-targeted pagination sections */
-                body:has(.pagination-section:target) .pagination-section:not(:target) {
+                /* When a pagination section is targeted within a category, hide other sections in that same category only */
+                #bandwidth:has(.pagination-section:target) .pagination-section:not(:target),
+                #consensus_weight:has(.pagination-section:target) .pagination-section:not(:target),
+                #exit_authority:has(.pagination-section:target) .pagination-section:not(:target),
+                #exit_operators:has(.pagination-section:target) .pagination-section:not(:target),
+                #guard_operators:has(.pagination-section:target) .pagination-section:not(:target),
+                #most_diverse:has(.pagination-section:target) .pagination-section:not(:target),
+                #platform_diversity:has(.pagination-section:target) .pagination-section:not(:target),
+                #non_eu_leaders:has(.pagination-section:target) .pagination-section:not(:target),
+                #frontier_builders:has(.pagination-section:target) .pagination-section:not(:target),
+                #network_veterans:has(.pagination-section:target) .pagination-section:not(:target),
+                #reliability_masters:has(.pagination-section:target) .pagination-section:not(:target),
+                #legacy_titans:has(.pagination-section:target) .pagination-section:not(:target) {
                     display: none !important;
                 }
 
