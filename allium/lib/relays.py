@@ -313,7 +313,6 @@ class Relays:
         Reprocess uptime data for all relays after uptime_data is attached.
         Calculate both uptime/downtime display and uptime API percentages with statistical coloring.
         """
-        import statistics
         
         # First pass: Calculate uptime/downtime display and extract API percentages
         all_uptime_values = {'1_month': [], '6_months': [], '1_year': [], '5_years': []}
@@ -360,24 +359,36 @@ class Relays:
             # Store raw percentages for later coloring
             relay["uptime_percentages"] = uptime_percentages
         
-        # Second pass: Calculate statistical thresholds and apply coloring
-        uptime_thresholds = {}
+        # Second pass: Calculate statistical outliers using existing function
+        from .uptime_utils import calculate_statistical_outliers
+        
+        period_outliers = {}
         for period in ['1_month', '6_months', '1_year', '5_years']:
             values = all_uptime_values[period]
             if len(values) >= 3:  # Need at least 3 values for meaningful statistics
-                try:
-                    mean = statistics.mean(values)
-                    std_dev = statistics.stdev(values)
-                    uptime_thresholds[period] = {
-                        'mean': mean,
-                        'std_dev': std_dev,
-                        'low_threshold': mean - (2 * std_dev),
-                        'high_threshold': mean + (2 * std_dev)
+                # Create relay breakdown format expected by calculate_statistical_outliers
+                fake_relay_breakdown = {}
+                for i, value in enumerate(values):
+                    # Only include values > 0 to exclude missing data from outlier calculation
+                    if value > 0:
+                        fake_relay_breakdown[f"relay_{i}"] = {
+                            'nickname': f"relay_{i}",
+                            'uptime': value
+                        }
+                
+                # Filter values to only include > 0 for outlier calculation
+                filtered_values = [v for v in values if v > 0]
+                
+                if len(filtered_values) >= 3:
+                    outliers = calculate_statistical_outliers(filtered_values, fake_relay_breakdown, 2.0)
+                    period_outliers[period] = {
+                        'low_outliers': {item['uptime'] for item in outliers['low_outliers']},
+                        'high_outliers': {item['uptime'] for item in outliers['high_outliers']}
                     }
-                except statistics.StatisticsError:
-                    uptime_thresholds[period] = None
+                else:
+                    period_outliers[period] = {'low_outliers': set(), 'high_outliers': set()}
             else:
-                uptime_thresholds[period] = None
+                period_outliers[period] = {'low_outliers': set(), 'high_outliers': set()}
         
         # Third pass: Generate colored display strings
         for relay in self.json["relays"]:
@@ -389,13 +400,14 @@ class Relays:
                 percentage = percentages.get(period, 0.0)
                 percentage_str = f"{percentage:.1f}%"
                 
-                # Apply statistical coloring if thresholds are available
-                if uptime_thresholds.get(period):
-                    thresholds = uptime_thresholds[period]
-                    if percentage < thresholds['low_threshold']:
+                # Apply statistical coloring using existing outlier detection results
+                # Don't color 0.0% values (missing data) as red outliers
+                if period_outliers.get(period) and percentage > 0:
+                    outliers = period_outliers[period]
+                    if percentage in outliers['low_outliers']:
                         # Red for low outliers (>2 std dev below mean)
                         percentage_str = f'<span style="color: #dc3545;">{percentage_str}</span>'
-                    elif percentage > thresholds['high_threshold']:
+                    elif percentage in outliers['high_outliers']:
                         # Green for high outliers (>2 std dev above mean)
                         percentage_str = f'<span style="color: #28a745;">{percentage_str}</span>'
                 
