@@ -1852,15 +1852,56 @@ class Relays:
             intelligence_formatted['version_compliance'] = result
         
         # Format version status display (only show counts > 0) with version tooltips and percentages
+        # Add status indicators based on recommended status ratio (similar to version compliance)
         version_status_parts = []
         version_status_tooltips = {}
         
+        recommended_count = version_status_counts.get('recommended', 0)
+        
+        # Format with status indicator based on recommended percentage
+        if total_relays == 0:
+            # Edge case: no relays
+            intelligence_formatted['version_status'] = 'none'
+        elif recommended_count == total_relays:
+            # All relays have recommended status
+            intelligence_formatted['version_status'] = f'<span style="color: #2e7d2e; font-weight: bold;">All</span>, {recommended_count} (100%) recommended'
+        elif recommended_count > 0 and (recommended_count / total_relays) > 0.5:
+            # More than 50% have recommended status
+            recommended_pct = round((recommended_count / total_relays) * 100)
+            result = f'<span style="color: #cc9900; font-weight: bold;">Partial</span>, {recommended_count} ({recommended_pct}%) recommended'
+            
+            # Add other status counts
+            other_parts = []
+            for status, count in version_status_counts.items():
+                if status != 'recommended' and count > 0:
+                    status_display = status.replace('_', ' ')  # Convert new_in_series to "new in series"
+                    status_pct = round((count / total_relays) * 100)
+                    other_parts.append(f"{count} ({status_pct}%) {status_display}")
+            
+            if other_parts:
+                result += ', ' + ', '.join(other_parts)
+            intelligence_formatted['version_status'] = result
+        else:
+            # 50% or less have recommended status (or no recommended relays)
+            recommended_pct = round((recommended_count / total_relays) * 100) if total_relays > 0 else 0
+            result = f'<span style="color: #c82333; font-weight: bold;">Poor</span>, {recommended_count} ({recommended_pct}%) recommended'
+            
+            # Add other status counts
+            other_parts = []
+            for status, count in version_status_counts.items():
+                if status != 'recommended' and count > 0:
+                    status_display = status.replace('_', ' ')  # Convert new_in_series to "new in series"
+                    status_pct = round((count / total_relays) * 100)
+                    other_parts.append(f"{count} ({status_pct}%) {status_display}")
+            
+            if other_parts:
+                result += ', ' + ', '.join(other_parts)
+            intelligence_formatted['version_status'] = result
+        
+        # Create tooltips for all status categories (including recommended)
         for status, count in version_status_counts.items():
             if count > 0:
                 status_display = status.replace('_', ' ')  # Convert new_in_series to "new in series"
-                # Calculate percentage
-                status_pct = round((count / total_relays) * 100) if total_relays > 0 else 0
-                version_status_parts.append(f"{count} ({status_pct}%) {status_display}")
                 
                 # Create tooltip with actual Tor versions
                 versions = sorted(list(version_status_versions[status]))
@@ -1870,7 +1911,6 @@ class Relays:
                 else:
                     version_status_tooltips[status] = f"{status_display.capitalize()} versions: (no version data)"
         
-        intelligence_formatted['version_status'] = ', '.join(version_status_parts) if version_status_parts else 'none'
         intelligence_formatted['version_status_tooltips'] = version_status_tooltips
         
         display_data['operator_intelligence'] = intelligence_formatted
