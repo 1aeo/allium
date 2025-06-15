@@ -369,6 +369,111 @@ class TestContactDisplayData(unittest.TestCase):
         self.assertNotIn('middle', result['consensus_weight_breakdown'])
         self.assertNotIn('exit', result['consensus_weight_breakdown'])
 
+    def test_compute_contact_display_data_version_compliance_counting(self):
+        """Test version compliance counting (compliant/non-compliant/unknown)."""
+        # Sample relay data with various version compliance states
+        test_members = [
+            {'recommended_version': True, 'version_status': 'recommended'},
+            {'recommended_version': False, 'version_status': 'obsolete'},
+            {'recommended_version': None, 'version_status': 'experimental'},
+            {'recommended_version': True, 'version_status': 'recommended'},
+            {'recommended_version': False, 'version_status': 'unrecommended'},
+        ]
+        
+        result = self.relays._compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        )
+        
+        intelligence = result['operator_intelligence']
+        
+        # Should count version compliance correctly
+        self.assertIn('version_compliance', intelligence)
+        self.assertEqual(intelligence['version_compliance'], '2 compliant, 2 not compliant, 1 unknown')
+
+    def test_compute_contact_display_data_version_status_counting(self):
+        """Test version status counting (recommended/experimental/obsolete/new in series/unrecommended)."""
+        # Sample relay data with various version statuses
+        test_members = [
+            {'recommended_version': True, 'version_status': 'recommended'},
+            {'recommended_version': True, 'version_status': 'recommended'},
+            {'recommended_version': False, 'version_status': 'obsolete'},
+            {'recommended_version': None, 'version_status': 'experimental'},
+            {'recommended_version': False, 'version_status': 'unrecommended'},
+            {'recommended_version': True, 'version_status': 'new in series'},
+        ]
+        
+        result = self.relays._compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        )
+        
+        intelligence = result['operator_intelligence']
+        
+        # Should count version status correctly and only show non-zero counts
+        self.assertIn('version_status', intelligence)
+        version_status = intelligence['version_status']
+        
+        # Check that all non-zero counts are included
+        self.assertIn('2 recommended', version_status)
+        self.assertIn('1 experimental', version_status)
+        self.assertIn('1 obsolete', version_status)
+        self.assertIn('1 new in series', version_status)  # Test underscore replacement
+        self.assertIn('1 unrecommended', version_status)
+
+    def test_compute_contact_display_data_version_status_zero_filtering(self):
+        """Test that version status with zero counts are filtered out."""
+        # Sample relay data with only some version statuses
+        test_members = [
+            {'recommended_version': True, 'version_status': 'recommended'},
+            {'recommended_version': True, 'version_status': 'recommended'},
+            # No obsolete, experimental, new in series, or unrecommended
+        ]
+        
+        result = self.relays._compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        )
+        
+        intelligence = result['operator_intelligence']
+        version_status = intelligence['version_status']
+        
+        # Should only show recommended (non-zero count)
+        self.assertEqual(version_status, '2 recommended')
+        self.assertNotIn('experimental', version_status)
+        self.assertNotIn('obsolete', version_status)
+        self.assertNotIn('unrecommended', version_status)
+
+    def test_compute_contact_display_data_version_empty_members(self):
+        """Test version compliance/status handling with empty member list."""
+        result = self.relays._compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', []
+        )
+        
+        intelligence = result['operator_intelligence']
+        
+        # Should handle empty member list gracefully
+        self.assertEqual(intelligence['version_compliance'], '0 compliant, 0 not compliant, 0 unknown')
+        self.assertEqual(intelligence['version_status'], 'none')
+
+    def test_compute_contact_display_data_version_missing_fields(self):
+        """Test version compliance/status handling with missing version fields."""
+        # Sample relay data with missing version fields
+        test_members = [
+            {},  # No version fields at all
+            {'recommended_version': True},  # Missing version_status
+            {'version_status': 'recommended'},  # Missing recommended_version
+        ]
+        
+        result = self.relays._compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        )
+        
+        intelligence = result['operator_intelligence']
+        
+        # Should handle missing fields gracefully
+        # recommended_version: None=3 (missing fields treated as None), True=1, False=0 
+        # version_status: None=2 (missing fields), recommended=1
+        self.assertEqual(intelligence['version_compliance'], '1 compliant, 0 not compliant, 2 unknown')
+        self.assertEqual(intelligence['version_status'], '1 recommended')
+
 
 if __name__ == '__main__':
     unittest.main()
