@@ -453,7 +453,7 @@
     <th title="Total number of relays operated with measured vs unmeasured breakdown">Relays</th>
     <th title="Total observed bandwidth capacity contributed to Tor network in {% if use_bits %}bits per second (Mbit/s, Gbit/s, etc.){% else %}bytes per second (MB/s, GB/s, etc.){% endif %}">Bandwidth</th>
     <th title="Percentage of total Tor network consensus weight controlling routing decisions">Consensus Weight</th>
-    <th title="Number of guard and exit relays providing entry/exit services">Guard/Exit Count</th>
+    <th title="Number of guard, middle, and exit relays providing specialized services">Guard/Middle/Exit Count</th>
     <th title="Geographic distribution of relay operations across countries">Countries</th>
     <th title="Operating system diversity across relay infrastructure">Platforms</th>
 {% endmacro %}
@@ -488,14 +488,14 @@
                     </td>
                     <td>
                         <span title="Guard: {{ entry.guard_count }} | Exit: {{ entry.exit_count }} | Middle: {{ entry.middle_count }}">
-                            🛡️{{ entry.guard_count }} / 🚪{{ entry.exit_count }}
+                            🛡️{{ entry.guard_count }} / 🌐{{ entry.middle_count }} / 🚪{{ entry.exit_count }}
                         </span>
                     </td>
                     <td>
                         <span title="Countries: {{ entry.countries|join(', ') }}">
                             {{ entry.country_count }}
                             {% if entry.countries|length > 0 %}
-                                <small class="text-muted">({{ entry.countries[:2]|join(', ') }}{% if entry.countries|length > 2 %}...{% endif %})</small>
+                                <small class="text-muted">({{ entry.countries[:6]|join(', ') }}{% if entry.countries|length > 6 %}...{% endif %})</small>
                             {% endif %}
                         </span>
                     </td>
@@ -525,7 +525,7 @@
                     <th title="Total relay count contributing to consensus weight calculation">Relays</th>
                     <th title="Percentage of total Tor network consensus weight controlled">Network Heavyweight</th>
                     <th title="Total observed bandwidth capacity in {% if use_bits %}bits per second{% else %}bytes per second{% endif %}">Bandwidth</th>
-                    <th title="Number of guard and exit relays providing specialized services">Guard/Exit Count</th>
+                    <th title="Number of guard, middle, and exit relays providing specialized services">Guard/Middle/Exit Count</th>
                     <th title="Number of countries with relay presence">Countries</th>
                 </tr>
             </thead>
@@ -542,8 +542,8 @@
                         <span class="text-nowrap" title="Observed bandwidth capacity in {% if use_bits %}{{ entry.bandwidth_unit }} (bits per second){% else %}{{ entry.bandwidth_unit }} (bytes per second){% endif %}">{{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</span>
                     </td>
                     <td>
-                        <span title="Guard: {{ entry.guard_count }} | Exit: {{ entry.exit_count }}">
-                            🛡️{{ entry.guard_count }} / 🚪{{ entry.exit_count }}
+                        <span title="Guard: {{ entry.guard_count }} | Exit: {{ entry.exit_count }} | Middle: {{ entry.middle_count }}">
+                            🛡️{{ entry.guard_count }} / 🌐{{ entry.middle_count }} / 🚪{{ entry.exit_count }}
                         </span>
                     </td>
                     <td title="Number of countries with relay operations">{{ entry.country_count }}</td>
