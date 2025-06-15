@@ -29,7 +29,7 @@
     {% if key and not is_index -%}
     <th title="Bandwidth measured by >=3 bandwidth authorities">BW Measured</th>
     {% endif -%}
-    <th>Uptime</th>
+    <th>Uptime/Downtime</th>
     <th>Country</th>
     <th class="visible-md visible-lg">IPv4</th>
     {% set has_ipv6 = false -%}
@@ -101,8 +101,8 @@
 		    </td>
 		{% endif -%}
 		<td>
-		    {% if relay.get('uptime_1_month') -%}
-		        {{ "%.1f"|format(relay['uptime_1_month']) }}%
+		    {% if relay.get('uptime_display') -%}
+		        {{ relay['uptime_display']|escape }}
 		    {% else -%}
 		        N/A
 		    {% endif -%}
