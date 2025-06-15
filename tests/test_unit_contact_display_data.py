@@ -449,8 +449,8 @@ class TestContactDisplayData(unittest.TestCase):
         
         intelligence = result['operator_intelligence']
         
-        # Should handle empty member list gracefully
-        self.assertEqual(intelligence['version_compliance'], '0 compliant, 0 not compliant, 0 unknown')
+        # Should handle empty member list gracefully (zero values for not compliant and unknown are filtered out)
+        self.assertEqual(intelligence['version_compliance'], '0 compliant')
         self.assertEqual(intelligence['version_status'], 'none')
 
     def test_compute_contact_display_data_version_missing_fields(self):
@@ -468,11 +468,31 @@ class TestContactDisplayData(unittest.TestCase):
         
         intelligence = result['operator_intelligence']
         
-        # Should handle missing fields gracefully
-        # recommended_version: None=3 (missing fields treated as None), True=1, False=0 
+        # Should handle missing fields gracefully (zero values for not compliant are filtered out)
+        # recommended_version: None=2 (missing fields treated as None), True=1, False=0 
         # version_status: None=2 (missing fields), recommended=1
-        self.assertEqual(intelligence['version_compliance'], '1 compliant, 0 not compliant, 2 unknown')
+        self.assertEqual(intelligence['version_compliance'], '1 compliant, 2 unknown')
         self.assertEqual(intelligence['version_status'], '1 recommended')
+
+    def test_compute_contact_display_data_version_compliance_zero_filtering(self):
+        """Test that zero values for not compliant and unknown are filtered out."""
+        # Sample relay data with only compliant relays (no not compliant or unknown)
+        test_members = [
+            {'recommended_version': True, 'version_status': 'recommended'},
+            {'recommended_version': True, 'version_status': 'recommended'},
+            {'recommended_version': True, 'version_status': 'experimental'},
+        ]
+        
+        result = self.relays._compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        )
+        
+        intelligence = result['operator_intelligence']
+        
+        # Should only show compliant (non-zero count), filter out zero values
+        self.assertEqual(intelligence['version_compliance'], '3 compliant')
+        self.assertNotIn('not compliant', intelligence['version_compliance'])
+        self.assertNotIn('unknown', intelligence['version_compliance'])
 
 
 if __name__ == '__main__':
