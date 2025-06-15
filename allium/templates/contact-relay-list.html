@@ -144,6 +144,7 @@
 				     title="{{ relay['country_name']|escape }}"
 				     alt="{{ relay['country_name']|escape }}">
 			    </a>
+			    {{ relay['country']|upper|escape }}
 			</td>
 		    {% else -%}
 			<td>
