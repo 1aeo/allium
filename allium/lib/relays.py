@@ -1819,38 +1819,48 @@ class Relays:
             intelligence_formatted['version_compliance'] = '0 compliant'
         elif version_compliant == total_relays:
             # All relays are compliant (recommended_version=True)
-            intelligence_formatted['version_compliance'] = f'<span style="color: #2e7d2e; font-weight: bold;">All</span>, {version_compliant} compliant'
+            intelligence_formatted['version_compliance'] = f'<span style="color: #2e7d2e; font-weight: bold;">All</span>, {version_compliant} (100%) compliant'
         elif version_compliant > 0 and (version_compliant / total_relays) > 0.5:
             # More than 50% are compliant
-            intelligence_formatted['version_compliance'] = f'<span style="color: #cc9900; font-weight: bold;">Partial</span> {version_compliant} compliant'
+            compliant_pct = round((version_compliant / total_relays) * 100)
+            result = f'<span style="color: #cc9900; font-weight: bold;">Partial</span>, {version_compliant} ({compliant_pct}%) compliant'
             # Add non-zero counts for not compliant and unknown
-            version_compliance_parts = []
+            parts = []
             if version_not_compliant > 0:
-                version_compliance_parts.append(f"{version_not_compliant} not compliant")
+                not_compliant_pct = round((version_not_compliant / total_relays) * 100)
+                parts.append(f"{version_not_compliant} ({not_compliant_pct}%) not compliant")
             if version_unknown > 0:
-                version_compliance_parts.append(f"{version_unknown} unknown")
-            if version_compliance_parts:
-                intelligence_formatted['version_compliance'] += ', ' + ', '.join(version_compliance_parts)
+                unknown_pct = round((version_unknown / total_relays) * 100)
+                parts.append(f"{version_unknown} ({unknown_pct}%) unknown")
+            if parts:
+                result += ', ' + ', '.join(parts)
+            intelligence_formatted['version_compliance'] = result
         else:
             # 50% or less are compliant (or no compliant relays)
-            intelligence_formatted['version_compliance'] = f'<span style="color: #c82333; font-weight: bold;">Poor</span> {version_compliant} compliant'
+            compliant_pct = round((version_compliant / total_relays) * 100) if total_relays > 0 else 0
+            result = f'<span style="color: #c82333; font-weight: bold;">Poor</span>, {version_compliant} ({compliant_pct}%) compliant'
             # Add non-zero counts for not compliant and unknown
-            version_compliance_parts = []
+            parts = []
             if version_not_compliant > 0:
-                version_compliance_parts.append(f"{version_not_compliant} not compliant")
+                not_compliant_pct = round((version_not_compliant / total_relays) * 100)
+                parts.append(f"{version_not_compliant} ({not_compliant_pct}%) not compliant")
             if version_unknown > 0:
-                version_compliance_parts.append(f"{version_unknown} unknown")
-            if version_compliance_parts:
-                intelligence_formatted['version_compliance'] += ', ' + ', '.join(version_compliance_parts)
+                unknown_pct = round((version_unknown / total_relays) * 100)
+                parts.append(f"{version_unknown} ({unknown_pct}%) unknown")
+            if parts:
+                result += ', ' + ', '.join(parts)
+            intelligence_formatted['version_compliance'] = result
         
-        # Format version status display (only show counts > 0) with version tooltips
+        # Format version status display (only show counts > 0) with version tooltips and percentages
         version_status_parts = []
         version_status_tooltips = {}
         
         for status, count in version_status_counts.items():
             if count > 0:
                 status_display = status.replace('_', ' ')  # Convert new_in_series to "new in series"
-                version_status_parts.append(f"{count} {status_display}")
+                # Calculate percentage
+                status_pct = round((count / total_relays) * 100) if total_relays > 0 else 0
+                version_status_parts.append(f"{count} ({status_pct}%) {status_display}")
                 
                 # Create tooltip with actual Tor versions
                 versions = sorted(list(version_status_versions[status]))
