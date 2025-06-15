@@ -302,6 +302,30 @@ Autonomous System (AS Number | AS Name)
 {% endif -%}
 </dd>
 <dt>
+Uptime / Downtime
+</dt>
+<dd>
+{% if relay.get('uptime_display') -%}
+    {% if relay['uptime_display'].startswith('DOWN') -%}
+        <span style="color: #dc3545;">{{ relay['uptime_display']|escape }}</span>
+    {% else -%}
+        {{ relay['uptime_display']|escape }}
+    {% endif -%}
+{% else -%}
+    N/A
+{% endif -%}
+</dd>
+<dt title="{% if contact_display_data and contact_display_data.outliers and contact_display_data.outliers.tooltip %}{{ contact_display_data.outliers.tooltip }}{% else %}Statistical outliers: ≥2σ from average{% endif %}">
+Uptime (1M/6M/1Y/5T)
+</dt>
+<dd>
+{% if relay.get('uptime_api_display') -%}
+    {{ relay['uptime_api_display']|safe }}
+{% else -%}
+    N/A
+{% endif -%}
+</dd>
+<dt>
 Seen (First | Last)
 </dt>
 <dd>
