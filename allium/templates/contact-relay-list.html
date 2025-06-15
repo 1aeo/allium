@@ -1,0 +1,223 @@
+{% from "macros.html" import navigation %}
+{% extends "skeleton.html" -%}
+{% block title -%}
+    Tor Relays
+{% endblock -%}
+{% block body -%}
+<h2>
+{% block header -%}
+{% endblock -%}
+</h2>
+
+{% block navigation -%}
+{% endblock -%}
+
+<p>
+{% block description -%}
+{% endblock -%}
+</p>
+
+<p class="text-muted" style="margin-bottom: 15px;">
+<small>Last updated: {{ relays.timestamp }}. Refreshed every 30 minutes from the Tor directory authorities via <a href="https://onionoo.torproject.org/">Tor Project's onionoo API</a>.</small>
+</p>
+
+<table class="table table-condensed">
+<tr>
+    <th></th>
+    <th>Nickname</th>
+    <th>BW</th>
+    {% if key and not is_index -%}
+    <th title="Bandwidth measured by >=3 bandwidth authorities">BW Measured</th>
+    {% endif -%}
+    <th>Uptime</th>
+    <th>Country</th>
+    <th class="visible-md visible-lg">IPv4</th>
+    {% set has_ipv6 = false -%}
+    {% if is_index -%}
+	{% set relay_list_check = relays.json['relay_subset'][:500] -%}
+    {% else -%}
+	{% set relay_list_check = relays.json['relay_subset'] -%}
+    {% endif -%}
+    {% for relay in relay_list_check -%}
+        {% if relay.get('or_addresses') and not has_ipv6 -%}
+            {% for addr in relay['or_addresses'] -%}
+                {% if ':' in addr and addr.count(':') > 1 -%}
+                    {% set has_ipv6 = true -%}
+                {% endif -%}
+            {% endfor -%}
+        {% endif -%}
+    {% endfor -%}
+    {% if has_ipv6 -%}
+    <th class="visible-md visible-lg">IPv6</th>
+    {% endif -%}
+    <th>AS Number</th>
+    <th>AS Name</th>
+    <th>Platform</th>
+    <th class="visible-md visible-lg">Flags</th>
+    <th class="visible-md visible-lg">First Seen</th>
+    {% if key and not is_index -%}
+    <th class="visible-md visible-lg">Last Restarted</th>
+    {% endif -%}
+</tr>
+<tbody>
+    {% if is_index -%}
+	{% set relay_list = relays.json['relay_subset'][:500] -%}
+    {% else -%}
+	{% set relay_list = relays.json['relay_subset'] -%}
+    {% endif -%}
+    {% for relay in relay_list -%}
+	<tr>
+	    {% set obs_unit = relays._determine_unit(relay['observed_bandwidth']) -%}
+	    {% set obs_bandwidth = relays._format_bandwidth_with_unit(relay['observed_bandwidth'], obs_unit) -%}
+	    {% if relay['running'] -%}
+		<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+	    {% else -%}
+		<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+	    {% endif -%}
+	    {% if relay['effective_family']|length > 1 -%}
+		<td title="{{ relay['nickname']|escape }}">
+		    <a href="{{ page_ctx.path_prefix }}relay/{{ relay['fingerprint']|escape }}/">{{ relay['nickname']|truncate(14)|escape
+			}}</a> (<a href="{{ page_ctx.path_prefix }}family/{{ relay['fingerprint']|escape }}/">{{
+			relay['effective_family']| length }}</a>)
+		    </td>
+		{% else -%}
+		    <td title="{{ relay['nickname']|escape }}">
+			<a href="{{ page_ctx.path_prefix }}relay/{{ relay['fingerprint']|escape }}/">{{ relay['nickname']|truncate(14)|escape
+			}}</a>
+		    </td>
+		{% endif -%}
+		<td>{{ obs_bandwidth }} {{ obs_unit }}</td>
+		{% if key and not is_index -%}
+		    <td title=">=3 bandwidth authorities have measured">
+		        {% if relay['measured'] is not none -%}
+		            {% if relay['measured'] -%}Yes{% else -%}No{% endif -%}
+		        {% else -%}
+		            unknown
+		        {% endif -%}
+		    </td>
+		{% endif -%}
+		<td>
+		    {% if relay.get('uptime_1_month') -%}
+		        {{ "%.1f"|format(relay['uptime_1_month']) }}%
+		    {% else -%}
+		        N/A
+		    {% endif -%}
+		</td>
+		{% if relay['country'] -%}
+		    {% if key != 'country' -%}
+			<td>
+			    <a href="{{ page_ctx.path_prefix }}country/{{ relay['country']|escape }}/">
+				<img src="{{ page_ctx.path_prefix }}static/images/cc/{{ relay['country']|escape }}.png"
+				     title="{{ relay['country_name']|escape }}"
+				     alt="{{ relay['country_name']|escape }}">
+			    </a>
+			</td>
+		    {% else -%}
+			<td>
+			    <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ relay['country']|escape }}.png"
+				 title="{{ relay['country_name']|escape }}"
+				 alt="{{ relay['country_name']|escape }}">
+			    {{ relay['country_name']|escape }}
+			</td>
+		    {% endif -%}
+		{% else -%}
+		    <td>X</td>
+		{% endif -%}
+		<td class="visible-md visible-lg">
+		    {% if relay.get('or_addresses') and relay['or_addresses']|length > 0 -%}
+		        {% set ipv4_addr = relay['or_addresses'][0].split(':', 1)[0] -%}
+		        <a href="https://bgp.tools/prefix/{{ ipv4_addr|escape }}">{{ ipv4_addr|escape }}</a>
+		    {% else -%}
+		        N/A
+		    {% endif -%}
+		</td>
+		{% if has_ipv6 -%}
+		<td class="visible-md visible-lg">
+		    {% set ipv6_found = false -%}
+		    {% set ipv6_addr = '' -%}
+		    {% if relay.get('or_addresses') -%}
+		        {% for addr in relay['or_addresses'] -%}
+		            {% if ':' in addr and addr.count(':') > 1 and not ipv6_found -%}
+		                {% set ipv6_addr = addr.split(']')[0].lstrip('[') -%}
+		                {% set ipv6_found = true -%}
+		            {% endif -%}
+		        {% endfor -%}
+		    {% endif -%}
+		    {% if ipv6_found -%}
+		        {{ ipv6_addr|escape }}
+		    {% else -%}
+		        N/A
+		    {% endif -%}
+		</td>
+		{% endif -%}
+		{% if relay['as'] -%}
+		    {% if key != 'as' -%}
+			<td>
+			    <a href="{{ page_ctx.path_prefix }}as/{{ relay['as']|escape }}/">{{
+			    relay['as']|escape }}</a>
+			</td>
+		    {% else -%}
+			<td>{{ relay['as']|escape }}</td>
+		    {% endif -%}
+		{% else -%}
+		    <td>Unknown</td>
+		{% endif -%}
+		{% if relay['as_name'] -%}
+		    <td>
+			<a href="https://bgp.tools/{{ relay['as']|escape }}"
+			   title="{{ relay['as_name']|escape }}">{{
+			relay['as_name']|escape|truncate(length=20) }}</a>
+		    </td>
+		{% else -%}
+		    <td>Unknown</td>
+		{% endif -%}
+		{% if key != 'platform' -%}
+		    <td>
+			<a href="{{ page_ctx.path_prefix }}platform/{{ relay['platform']|escape }}/">{{
+			relay['platform']|truncate(length=10)|escape }}</a>
+		    </td>
+		{% else -%}
+		    <td>{{ relay['platform']|truncate(length=10)|escape }}</td>
+		{% endif -%}
+		<td class="visible-md visible-lg">
+		    {% for flag in relay['flags'] -%}
+			{% if flag != 'StaleDesc' -%}
+			    {% set flag_idx = loop.index0 -%}
+			    <a href="{{ page_ctx.path_prefix }}flag/{{ relay['flags_lower_escaped'][flag_idx] }}/">
+				<img src="{{ page_ctx.path_prefix }}static/images/flags/{{ relay['flags_lower_escaped'][flag_idx] }}.png"
+				     title="{{ relay['flags_escaped'][flag_idx] }}"
+				     alt="{{ relay['flags_escaped'][flag_idx] }}">
+			    </a>
+			{% endif -%}
+		    {% endfor
+		    -%}
+		</td>
+		{% if key != 'first_seen' -%}
+		    <td class="visible-md visible-lg">
+			<a href="{{ page_ctx.path_prefix }}first_seen/{{ relay['first_seen_date_escaped'] }}/">{{
+			relay['first_seen'].split(' ', 1)[0]|escape }}</a>
+		    </td>
+		{% else -%}
+		    <td class="visible-md visible-lg">
+			{{ relay['first_seen'].split(' ', 1)[0]|escape
+			}}
+		    </td>
+		{% endif -%}
+		{% if key and not is_index -%}
+		    <td class="visible-md visible-lg" title="{% if relay['last_restarted'] -%}{{ relay['last_restarted'].split(' ', 1)[0]|escape }}{% else -%}unknown{% endif -%}">
+		        {% if relay['last_restarted'] -%}
+		            {{ relays._format_time_ago(relay['last_restarted']) }}
+		        {% else -%}
+		            unknown
+		        {% endif -%}
+		    </td>
+		{% endif -%}
+	    </tr>
+	{% endfor -%}
+    </tbody>
+</table>
+{% endblock -%} 
