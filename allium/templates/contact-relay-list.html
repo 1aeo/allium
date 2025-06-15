@@ -29,7 +29,8 @@
     {% if key and not is_index -%}
     <th title="Bandwidth measured by >=3 bandwidth authorities">BW Measured</th>
     {% endif -%}
-    <th>Uptime/Downtime</th>
+    <th>Uptime/<span style="color: #dc3545;">Downtime</span></th>
+    <th>Uptime (1M/6M/1Y/5Y)</th>
     <th>Country</th>
     <th class="visible-md visible-lg">IPv4</th>
     {% set has_ipv6 = false -%}
@@ -102,7 +103,18 @@
 		{% endif -%}
 		<td>
 		    {% if relay.get('uptime_display') -%}
-		        {{ relay['uptime_display']|escape }}
+		        {% if relay['uptime_display'].startswith('DOWN') -%}
+		            <span style="color: #dc3545;">{{ relay['uptime_display']|escape }}</span>
+		        {% else -%}
+		            {{ relay['uptime_display']|escape }}
+		        {% endif -%}
+		    {% else -%}
+		        N/A
+		    {% endif -%}
+		</td>
+		<td>
+		    {% if relay.get('uptime_api_display') -%}
+		        {{ relay['uptime_api_display']|safe }}
 		    {% else -%}
 		        N/A
 		    {% endif -%}
