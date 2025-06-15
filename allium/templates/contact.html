@@ -108,24 +108,7 @@
                 <li><strong><span title="Version compliance shows how many relays are running recommended versions. Compliant relays run directory authority recommended versions (recommended_version=true), non-compliant run unrecommended versions (recommended_version=false), unknown have no version recommendation data available.">Version Compliance</span>:</strong> {{ intelligence.version_compliance|safe }}
                     {% if intelligence.version_status and intelligence.version_status != 'none' %}
                     <ul style="list-style-type: disc; padding-left: 20px; margin-top: 0px; margin-bottom: 0;">
-                        <li><strong><span title="Version status breakdown shows the distribution of Tor software versions. Recommended versions are approved by directory authorities, experimental are newer than recommended, obsolete are older than recommended, new in series are newer within the same version series, unrecommended don't meet any of the above criteria.">Version Status</span>:</strong> 
-                            {% set status_parts = intelligence.version_status.split(', ') %}
-                            {% for part in status_parts %}
-                                {% set count_and_status = part.split(' ', 1) %}
-                                {% if count_and_status|length == 2 %}
-                                    {% set count = count_and_status[0] %}
-                                    {% set status_name = count_and_status[1] %}
-                                    {% set status_key = status_name.replace(' ', '_') %}
-                                    {% if intelligence.version_status_tooltips and intelligence.version_status_tooltips[status_key] %}
-                                        <span title="{{ intelligence.version_status_tooltips[status_key] }}" style="cursor: help;">{{ part }}</span>{% if not loop.last %}, {% endif %}
-                                    {% else %}
-                                        {{ part }}{% if not loop.last %}, {% endif %}
-                                    {% endif %}
-                                {% else %}
-                                    {{ part }}{% if not loop.last %}, {% endif %}
-                                {% endif %}
-                            {% endfor %}
-                        </li>
+                        <li><strong><span title="Version status breakdown shows the distribution of Tor software versions. Recommended versions are approved by directory authorities, experimental are newer than recommended, obsolete are older than recommended, new in series are newer within the same version series, unrecommended don't meet any of the above criteria.">Version Status</span>:</strong> {{ intelligence.version_status|safe }}</li>
                     </ul>
                     {% endif %}
                 </li>
