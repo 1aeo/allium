@@ -151,7 +151,7 @@
 			    <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ relay['country']|escape }}.png"
 				 title="{{ relay['country_name']|escape }}"
 				 alt="{{ relay['country_name']|escape }}">
-			    {{ relay['country']|upper|escape }}
+			    {{ relay['country_name']|escape }}
 			</td>
 		    {% endif -%}
 		{% else -%}
