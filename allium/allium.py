@@ -190,11 +190,11 @@ if __name__ == "__main__":
     # Updated to account for all actual progress steps:
     # Setup steps (1-4): starting, output dir creation, ready, initializing
     # API steps (5-18): threaded fetching, both APIs (fetch->parse->cache->success->complete), relay set creation
-    # Site generation steps (19-34): data loaded, index, all relays, AROI, misc pages, unique values, relay info, static files, completion
+    # Site generation steps (19-35): data loaded, index, top500, all relays, AROI, misc pages, unique values, relay info, static files, completion
     setup_steps = 4
     api_steps = 14  # Maximum API-related steps (when all APIs enabled) 
-    site_generation_steps = 16  # Site generation and completion steps
-    total_steps = setup_steps + api_steps + site_generation_steps  # 34 total steps
+    site_generation_steps = 17  # Site generation and completion steps (added top500 page)
+    total_steps = setup_steps + api_steps + site_generation_steps  # 35 total steps
 
     if args.progress:
         print(f"🌐 Allium - Tor Relay Analytics Generator")
@@ -238,18 +238,29 @@ if __name__ == "__main__":
 
     # Output directory already created early via ensure_output_directory() - skip redundant creation
 
-    # index and "all" HTML relay sets; index set limited to 500 relays
+    # AROI leaderboards as main index page, preserve top 500 relays at separate path
     if args.progress:
-        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Generating index page...")
+        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Generating index page (AROI leaderboards)...")
     page_ctx = get_page_context('index', 'home')
     RELAY_SET.write_misc(
-        template="index.html",
+        template="aroi-leaderboards.html",
         path="index.html",
+        page_ctx=page_ctx,
+    )
+    if args.progress:
+        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Generated index page with AROI leaderboards")
+
+    # Preserve top 500 relays at dedicated path
+    if args.progress:
+        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Generating top 500 relays page...")
+    RELAY_SET.write_misc(
+        template="index.html",
+        path="top500.html",
         page_ctx=page_ctx,
         is_index=True,
     )
     if args.progress:
-        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Generated index page with top 500 relays")
+        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Generated top 500 relays page")
 
     if args.progress:
         print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Generating all relays page...")
