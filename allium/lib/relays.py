@@ -1811,19 +1811,37 @@ class Relays:
                     version_status_versions[status].add(version)
         
         # Format version compliance display (only show non-zero values for not compliant and unknown)
-        # Add green "All" when all relays are compliant
+        # Add status indicators based on compliance ratio
         total_relays = len(members)
-        all_compliant = total_relays > 0 and version_not_compliant == 0 and version_unknown == 0
         
-        if all_compliant:
+        if total_relays == 0:
+            # Edge case: no relays
+            intelligence_formatted['version_compliance'] = '0 compliant'
+        elif version_compliant == total_relays:
+            # All relays are compliant (recommended_version=True)
             intelligence_formatted['version_compliance'] = f'<span style="color: #2e7d2e; font-weight: bold;">All</span> {version_compliant} compliant'
-        else:
-            version_compliance_parts = [f"{version_compliant} compliant"]
+        elif version_compliant > 0 and (version_compliant / total_relays) > 0.5:
+            # More than 50% are compliant
+            intelligence_formatted['version_compliance'] = f'<span style="color: #cc9900; font-weight: bold;">Partial</span> {version_compliant} compliant'
+            # Add non-zero counts for not compliant and unknown
+            version_compliance_parts = []
             if version_not_compliant > 0:
                 version_compliance_parts.append(f"{version_not_compliant} not compliant")
             if version_unknown > 0:
                 version_compliance_parts.append(f"{version_unknown} unknown")
-            intelligence_formatted['version_compliance'] = ', '.join(version_compliance_parts)
+            if version_compliance_parts:
+                intelligence_formatted['version_compliance'] += ', ' + ', '.join(version_compliance_parts)
+        else:
+            # 50% or less are compliant (or no compliant relays)
+            intelligence_formatted['version_compliance'] = f'<span style="color: #c82333; font-weight: bold;">Poor</span> {version_compliant} compliant'
+            # Add non-zero counts for not compliant and unknown
+            version_compliance_parts = []
+            if version_not_compliant > 0:
+                version_compliance_parts.append(f"{version_not_compliant} not compliant")
+            if version_unknown > 0:
+                version_compliance_parts.append(f"{version_unknown} unknown")
+            if version_compliance_parts:
+                intelligence_formatted['version_compliance'] += ', ' + ', '.join(version_compliance_parts)
         
         # Format version status display (only show counts > 0) with version tooltips
         version_status_parts = []

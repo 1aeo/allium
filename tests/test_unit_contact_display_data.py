@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import pytest
 import unittest
 from unittest.mock import Mock, patch, MagicMock
 import sys
@@ -386,9 +385,10 @@ class TestContactDisplayData(unittest.TestCase):
         
         intelligence = result['operator_intelligence']
         
-        # Should count version compliance correctly (not all compliant, so no green "All")
+        # Should count version compliance correctly (2/5 = 40% compliant, which is ≤50% so "Poor")
         self.assertIn('version_compliance', intelligence)
-        self.assertEqual(intelligence['version_compliance'], '2 compliant, 2 not compliant, 1 unknown')
+        expected = '<span style="color: #c82333; font-weight: bold;">Poor</span> 2 compliant, 2 not compliant, 1 unknown'
+        self.assertEqual(intelligence['version_compliance'], expected)
         
         # Should include version status tooltips
         self.assertIn('version_status_tooltips', intelligence)
@@ -569,15 +569,100 @@ class TestContactDisplayData(unittest.TestCase):
         
         intelligence = result['operator_intelligence']
         
-        # Should handle missing fields gracefully (zero values for not compliant are filtered out)
+        # Should handle missing fields gracefully (1/3 = 33% compliant, which is ≤50% so "Poor")
         # recommended_version: None=2 (missing fields treated as None), True=1, False=0 
         # version_status: None=2 (missing fields), recommended=1
-        self.assertEqual(intelligence['version_compliance'], '1 compliant, 2 unknown')
+        expected = '<span style="color: #c82333; font-weight: bold;">Poor</span> 1 compliant, 2 unknown'
+        self.assertEqual(intelligence['version_compliance'], expected)
         self.assertEqual(intelligence['version_status'], '1 recommended')
         
         # Should include tooltip for the one valid recommended relay
         self.assertIn('recommended', intelligence['version_status_tooltips'])
         self.assertIn('0.4.8.8', intelligence['version_status_tooltips']['recommended'])
+
+    def test_compute_contact_display_data_version_compliance_partial(self):
+        """Test version compliance with orange 'Partial' when >50% but not 100% are compliant."""
+        # Sample relay data with partial compliance (3 out of 4 = 75% compliant)
+        test_members = [
+            {'recommended_version': True, 'version_status': 'recommended', 'version': '0.4.8.7'},
+            {'recommended_version': True, 'version_status': 'recommended', 'version': '0.4.8.8'},
+            {'recommended_version': True, 'version_status': 'experimental', 'version': '0.4.9.0-alpha'},
+            {'recommended_version': False, 'version_status': 'obsolete', 'version': '0.4.6.10'},
+        ]
+        
+        result = self.relays._compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        )
+        
+        intelligence = result['operator_intelligence']
+        
+        # Should show orange "Partial" when >50% but not 100% are compliant
+        self.assertIn('version_compliance', intelligence)
+        expected = '<span style="color: #cc9900; font-weight: bold;">Partial</span> 3 compliant, 1 not compliant'
+        self.assertEqual(intelligence['version_compliance'], expected)
+
+    def test_compute_contact_display_data_version_compliance_exactly_50_percent(self):
+        """Test version compliance boundary case when exactly 50% are compliant."""
+        # Sample relay data with exactly 50% compliance (2 out of 4 = 50% compliant)
+        test_members = [
+            {'recommended_version': True, 'version_status': 'recommended', 'version': '0.4.8.7'},
+            {'recommended_version': True, 'version_status': 'recommended', 'version': '0.4.8.8'},
+            {'recommended_version': False, 'version_status': 'obsolete', 'version': '0.4.6.10'},
+            {'recommended_version': False, 'version_status': 'unrecommended', 'version': '0.4.7.5'},
+        ]
+        
+        result = self.relays._compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        )
+        
+        intelligence = result['operator_intelligence']
+        
+        # Should show red "Poor" when exactly 50% are compliant (not >50%)
+        self.assertIn('version_compliance', intelligence)
+        expected = '<span style="color: #c82333; font-weight: bold;">Poor</span> 2 compliant, 2 not compliant'
+        self.assertEqual(intelligence['version_compliance'], expected)
+
+    def test_compute_contact_display_data_version_compliance_just_over_50_percent(self):
+        """Test version compliance boundary case when just over 50% are compliant."""
+        # Sample relay data with just over 50% compliance (3 out of 5 = 60% compliant)
+        test_members = [
+            {'recommended_version': True, 'version_status': 'recommended', 'version': '0.4.8.7'},
+            {'recommended_version': True, 'version_status': 'recommended', 'version': '0.4.8.8'},
+            {'recommended_version': True, 'version_status': 'experimental', 'version': '0.4.9.0-alpha'},
+            {'recommended_version': False, 'version_status': 'obsolete', 'version': '0.4.6.10'},
+            {'recommended_version': None, 'version_status': 'experimental', 'version': '0.4.9.1-alpha'},
+        ]
+        
+        result = self.relays._compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        )
+        
+        intelligence = result['operator_intelligence']
+        
+        # Should show orange "Partial" when just over 50% are compliant
+        self.assertIn('version_compliance', intelligence)
+        expected = '<span style="color: #cc9900; font-weight: bold;">Partial</span> 3 compliant, 1 not compliant, 1 unknown'
+        self.assertEqual(intelligence['version_compliance'], expected)
+
+    def test_compute_contact_display_data_version_compliance_zero_compliant(self):
+        """Test version compliance when no relays are compliant."""
+        # Sample relay data with no compliant relays
+        test_members = [
+            {'recommended_version': False, 'version_status': 'obsolete', 'version': '0.4.6.10'},
+            {'recommended_version': False, 'version_status': 'unrecommended', 'version': '0.4.7.5'},
+            {'recommended_version': None, 'version_status': 'experimental', 'version': '0.4.9.0-alpha'},
+        ]
+        
+        result = self.relays._compute_contact_display_data(
+            self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', test_members
+        )
+        
+        intelligence = result['operator_intelligence']
+        
+        # Should show red "Poor" when 0% are compliant
+        self.assertIn('version_compliance', intelligence)
+        expected = '<span style="color: #c82333; font-weight: bold;">Poor</span> 0 compliant, 2 not compliant, 1 unknown'
+        self.assertEqual(intelligence['version_compliance'], expected)
 
 
 if __name__ == '__main__':
