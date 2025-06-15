@@ -1819,7 +1819,7 @@ class Relays:
             intelligence_formatted['version_compliance'] = '0 compliant'
         elif version_compliant == total_relays:
             # All relays are compliant (recommended_version=True)
-            intelligence_formatted['version_compliance'] = f'<span style="color: #2e7d2e; font-weight: bold;">All</span> {version_compliant} compliant'
+            intelligence_formatted['version_compliance'] = f'<span style="color: #2e7d2e; font-weight: bold;">All</span>, {version_compliant} compliant'
         elif version_compliant > 0 and (version_compliant / total_relays) > 0.5:
             # More than 50% are compliant
             intelligence_formatted['version_compliance'] = f'<span style="color: #cc9900; font-weight: bold;">Partial</span> {version_compliant} compliant'
