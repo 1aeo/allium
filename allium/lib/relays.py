@@ -285,6 +285,34 @@ class Relays:
                 relay["last_seen_ago"] = self._format_time_ago(relay["last_seen"])
             else:
                 relay["last_seen_ago"] = "unknown"
+                
+            # Optimization 11: Pre-compute uptime data for table display
+            relay["uptime_1_month"] = None
+            if hasattr(self, 'uptime_data') and self.uptime_data:
+                fingerprint = relay.get('fingerprint', '')
+                if fingerprint:
+                    from .uptime_utils import find_relay_uptime_data, calculate_relay_uptime_average
+                    relay_uptime = find_relay_uptime_data(fingerprint, self.uptime_data)
+                    if relay_uptime and relay_uptime.get('uptime', {}).get('1_month', {}).get('values'):
+                        uptime_values = relay_uptime['uptime']['1_month']['values']
+                        relay["uptime_1_month"] = calculate_relay_uptime_average(uptime_values)
+
+    def _reprocess_uptime_data(self):
+        """
+        Reprocess uptime data for all relays after uptime_data is attached.
+        This is called by the coordinator after uptime data becomes available.
+        """
+        if hasattr(self, 'uptime_data') and self.uptime_data:
+            from .uptime_utils import find_relay_uptime_data, calculate_relay_uptime_average
+            for relay in self.json["relays"]:
+                fingerprint = relay.get('fingerprint', '')
+                if fingerprint:
+                    relay_uptime = find_relay_uptime_data(fingerprint, self.uptime_data)
+                    if relay_uptime and relay_uptime.get('uptime', {}).get('1_month', {}).get('values'):
+                        uptime_values = relay_uptime['uptime']['1_month']['values']
+                        relay["uptime_1_month"] = calculate_relay_uptime_average(uptime_values)
+                    else:
+                        relay["uptime_1_month"] = None
 
     def _sort_by_observed_bandwidth(self):
         """

@@ -220,6 +220,8 @@ class Coordinator:
         # The leaderboards were calculated during __init__ before uptime_data was attached
         if uptime_data:
             relay_set._generate_aroi_leaderboards()
+            # Reprocess uptime data for individual relays now that uptime_data is available
+            relay_set._reprocess_uptime_data()
         
         # Update the relay_set's progress_step to match our current progress
         relay_set.progress_step = self.progress_step
