@@ -222,13 +222,13 @@ alt="{{ flag|escape }}">
 <dt title="Bandwidth details: Observed capacity | Advertised capability | Rate limit | Burst limit">
 Bandwidth (Observed | Advertised | Rate | Burst)
 </dt>
-{% set obs_unit = relays._determine_unit(relay['observed_bandwidth']) -%}
-{% set obs_bandwidth = relays._format_bandwidth_with_unit(relay['observed_bandwidth'], obs_unit) -%}
+    {% set obs_unit = relay['observed_bandwidth']|determine_unit(relays.use_bits) -%}
+    {% set obs_bandwidth = relay['observed_bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
 <dd>
 <span title="Observed: {{ obs_bandwidth }} {{ obs_unit }}">{{ obs_bandwidth }} {{ obs_unit }}</span> | 
-<span title="Advertised: {% if relay['advertised_bandwidth'] -%}{% set adv_unit = relays._determine_unit(relay['advertised_bandwidth']) -%}{% set adv_bandwidth = relays._format_bandwidth_with_unit(relay['advertised_bandwidth'], adv_unit) -%}{{ adv_bandwidth }} {{ adv_unit }}{% else -%}unknown{% endif -%}">{% if relay['advertised_bandwidth'] -%}{% set adv_unit = relays._determine_unit(relay['advertised_bandwidth']) -%}{% set adv_bandwidth = relays._format_bandwidth_with_unit(relay['advertised_bandwidth'], adv_unit) -%}{{ adv_bandwidth }} {{ adv_unit }}{% else -%}unknown{% endif -%}</span> | 
-<span title="Rate: {% if relay['bandwidth_rate'] -%}{% set rate_unit = relays._determine_unit(relay['bandwidth_rate']) -%}{% set rate_bandwidth = relays._format_bandwidth_with_unit(relay['bandwidth_rate'], rate_unit) -%}{{ rate_bandwidth }} {{ rate_unit }}{% else -%}unknown{% endif -%}">{% if relay['bandwidth_rate'] -%}{% set rate_unit = relays._determine_unit(relay['bandwidth_rate']) -%}{% set rate_bandwidth = relays._format_bandwidth_with_unit(relay['bandwidth_rate'], rate_unit) -%}{{ rate_bandwidth }} {{ rate_unit }}{% else -%}unknown{% endif -%}</span> | 
-<span title="Burst: {% if relay['bandwidth_burst'] -%}{% set burst_unit = relays._determine_unit(relay['bandwidth_burst']) -%}{% set burst_bandwidth = relays._format_bandwidth_with_unit(relay['bandwidth_burst'], burst_unit) -%}{{ burst_bandwidth }} {{ burst_unit }}{% else -%}unknown{% endif -%}">{% if relay['bandwidth_burst'] -%}{% set burst_unit = relays._determine_unit(relay['bandwidth_burst']) -%}{% set burst_bandwidth = relays._format_bandwidth_with_unit(relay['bandwidth_burst'], burst_unit) -%}{{ burst_bandwidth }} {{ burst_unit }}{% else -%}unknown{% endif -%}</span>
+{% if relay['advertised_bandwidth'] -%}{% set adv_unit = relay['advertised_bandwidth']|determine_unit(relays.use_bits) -%}{% set adv_bandwidth = relay['advertised_bandwidth']|format_bandwidth_with_unit(adv_unit) -%}<span title="Advertised: {{ adv_bandwidth }} {{ adv_unit }}">{{ adv_bandwidth }} {{ adv_unit }}</span>{% else -%}<span title="Advertised: unknown">unknown</span>{% endif -%} | 
+{% if relay['bandwidth_rate'] -%}{% set rate_unit = relay['bandwidth_rate']|determine_unit(relays.use_bits) -%}{% set rate_bandwidth = relay['bandwidth_rate']|format_bandwidth_with_unit(rate_unit) -%}<span title="Rate: {{ rate_bandwidth }} {{ rate_unit }}">{{ rate_bandwidth }} {{ rate_unit }}</span>{% else -%}<span title="Rate: unknown">unknown</span>{% endif -%} | 
+{% if relay['bandwidth_burst'] -%}{% set burst_unit = relay['bandwidth_burst']|determine_unit(relays.use_bits) -%}{% set burst_bandwidth = relay['bandwidth_burst']|format_bandwidth_with_unit(burst_unit) -%}<span title="Burst: {{ burst_bandwidth }} {{ burst_unit }}">{{ burst_bandwidth }} {{ burst_unit }}</span>{% else -%}<span title="Burst: unknown">unknown</span>{% endif -%}
 </dd>
 
 <dt>
@@ -329,14 +329,14 @@ Uptime (1M/6M/1Y/5Y)
 Seen (First | Last)
 </dt>
 <dd>
-<a href="{{ page_ctx.path_prefix }}first_seen/{{ relay['first_seen'].split(' ', 1)[0]|escape }}/">{{ relays._format_time_ago(relay['first_seen']) }} ({{ relay['first_seen']|escape }})</a> | {{ relays._format_time_ago(relay['last_seen']) }} ({{ relay['last_seen']|escape }})
+<a href="{{ page_ctx.path_prefix }}first_seen/{{ relay['first_seen'].split(' ', 1)[0]|escape }}/">{{ relay['first_seen']|format_time_ago }} ({{ relay['first_seen']|escape }})</a> | {{ relay['last_seen']|format_time_ago }} ({{ relay['last_seen']|escape }})
 </dd>
 <dt title="UTC timestamp when this relay was last (re-)started. Missing if router descriptor containing this information cannot be found.">
 Last Restarted
 </dt>
 <dd>
 {% if relay['last_restarted'] -%}
-{{ relays._format_time_ago(relay['last_restarted']) }} ({{ relay['last_restarted']|escape }})
+{{ relay['last_restarted']|format_time_ago }} ({{ relay['last_restarted']|escape }})
 {% else -%}
 unknown
 {% endif -%}

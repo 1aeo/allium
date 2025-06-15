@@ -62,8 +62,8 @@
     {% endif -%}
     {% for relay in relay_list -%}
 	<tr>
-	    {% set obs_unit = relays._determine_unit(relay['observed_bandwidth']) -%}
-	    {% set obs_bandwidth = relays._format_bandwidth_with_unit(relay['observed_bandwidth'], obs_unit) -%}
+	    {% set obs_unit = relay['observed_bandwidth']|determine_unit(relays.use_bits) -%}
+	    {% set obs_bandwidth = relay['observed_bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
 	    {% if relay['running'] -%}
 		<td>
 		    <span class="circle circle-online" title="This relay is online"></span>
@@ -190,7 +190,7 @@
 		    <td class="visible-md visible-lg">
 			<a href="{{ page_ctx.path_prefix }}first_seen/{{ relay['first_seen_date_escaped'] }}/" title="{{ relay['first_seen'].split(' ', 1)[0]|escape }}">
 			    {% if relay['first_seen'] -%}
-			        {{ relays._format_time_ago(relay['first_seen']) }}
+			        {{ relay['first_seen']|format_time_ago }}
 			    {% else -%}
 			        unknown
 			    {% endif -%}
@@ -199,7 +199,7 @@
 		{% else -%}
 		    <td class="visible-md visible-lg" title="{{ relay['first_seen'].split(' ', 1)[0]|escape }}">
 			{% if relay['first_seen'] -%}
-			    {{ relays._format_time_ago(relay['first_seen']) }}
+			    {{ relay['first_seen']|format_time_ago }}
 			{% else -%}
 			    unknown
 			{% endif -%}

@@ -18,12 +18,134 @@ from .aroileaders import _calculate_aroi_leaderboards
 from .progress import log_progress, get_memory_usage
 
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
+
+# Utility functions for Jinja2 filters (standalone versions of Relays methods)
+def determine_unit(bandwidth_bytes, use_bits=False):
+    """Determine unit - simple threshold checking"""
+    if use_bits:
+        bits = bandwidth_bytes * 8
+        if bits >= 1000000000:  # If greater than or equal to 1 Gbit/s
+            return "Gbit/s"
+        elif bits >= 1000000:  # If greater than or equal to 1 Mbit/s
+            return "Mbit/s"
+        else:
+            return "Kbit/s"
+    else:
+        if bandwidth_bytes >= 1000000000:  # If greater than or equal to 1 GB/s
+            return "GB/s"
+        elif bandwidth_bytes >= 1000000:  # If greater than or equal to 1 MB/s
+            return "MB/s"
+        else:
+            return "KB/s"
+
+def get_divisor_for_unit(unit):
+    """Simple dictionary lookup for divisors"""
+    divisors = {
+        # Bits (convert bytes to bits, then to unit)
+        "Gbit/s": 125000000,   # 1000000000 / 8
+        "Mbit/s": 125000,      # 1000000 / 8  
+        "Kbit/s": 125,         # 1000 / 8
+        # Bytes  
+        "GB/s": 1000000000,
+        "MB/s": 1000000,
+        "KB/s": 1000
+    }
+    if unit in divisors:
+        return divisors[unit]
+    raise ValueError(f"Unknown unit: {unit}")
+
+def format_bandwidth_with_unit(bandwidth_bytes, unit, decimal_places=2):
+    """Format bandwidth using specified unit with configurable decimal places"""
+    divisor = get_divisor_for_unit(unit)
+    value = bandwidth_bytes / divisor
+    return f"{value:.{decimal_places}f}"
+
+def format_time_ago(timestamp_str):
+    """Format timestamp as multi-unit time ago (e.g., '2y 3m 2w ago')"""
+    from datetime import datetime, timezone
+    
+    try:
+        # Parse the timestamp string
+        timestamp = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
+        timestamp = timestamp.replace(tzinfo=timezone.utc)
+        now = datetime.now(timezone.utc)
+        
+        # Calculate time difference
+        diff = now - timestamp
+        total_seconds = int(diff.total_seconds())
+        
+        if total_seconds < 0:
+            return "in the future"
+        
+        # Time unit calculations
+        years = total_seconds // (365 * 24 * 3600)
+        remainder = total_seconds % (365 * 24 * 3600)
+        
+        months = remainder // (30 * 24 * 3600)
+        remainder = remainder % (30 * 24 * 3600)
+        
+        weeks = remainder // (7 * 24 * 3600)
+        remainder = remainder % (7 * 24 * 3600)
+        
+        days = remainder // (24 * 3600)
+        remainder = remainder % (24 * 3600)
+        
+        hours = remainder // 3600
+        remainder = remainder % 3600
+        
+        minutes = remainder // 60
+        seconds = remainder % 60
+        
+        # Build the result with up to 3 largest units
+        parts = []
+        units = [
+            (years, 'y'),
+            (months, 'mo'),
+            (weeks, 'w'),
+            (days, 'd'),
+            (hours, 'h'),
+            (minutes, 'm'),
+            (seconds, 's')
+        ]
+        
+        # Take the 3 largest non-zero units
+        for value, unit in units:
+            if value > 0:
+                parts.append(f"{value}{unit}")
+            if len(parts) == 3:
+                break
+        
+        if not parts:
+            return "just now"
+        
+        return " ".join(parts) + " ago"
+        
+    except (ValueError, TypeError):
+        return "unknown"
+
 ENV = Environment(
     loader=FileSystemLoader(os.path.join(ABS_PATH, "../templates")),
     trim_blocks=True,
     lstrip_blocks=True,
     autoescape=True  # Enable autoescape to prevent XSS vulnerabilities
 )
+
+# Create filters that can access context for use_bits parameter
+def determine_unit_filter(bandwidth_bytes, use_bits=False):
+    """Filter version of determine_unit that handles context access"""
+    return determine_unit(bandwidth_bytes, use_bits)
+
+def format_bandwidth_filter(bandwidth_bytes, unit=None, use_bits=False, decimal_places=2):
+    """Filter that determines unit and formats bandwidth in one step"""
+    if unit is None:
+        unit = determine_unit(bandwidth_bytes, use_bits)
+    return format_bandwidth_with_unit(bandwidth_bytes, unit, decimal_places)
+
+# Add custom filters to the Jinja2 environment
+ENV.filters['determine_unit'] = determine_unit_filter
+ENV.filters['format_bandwidth_with_unit'] = format_bandwidth_with_unit
+ENV.filters['format_bandwidth'] = format_bandwidth_filter
+ENV.filters['format_time_ago'] = format_time_ago
 
 
 class Relays:
