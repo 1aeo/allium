@@ -2002,7 +2002,7 @@ class Relays:
         # 7. Uptime data timestamp (reuse existing uptime data)
         uptime_timestamp = None
         if hasattr(self, 'uptime_data') and self.uptime_data and self.uptime_data.get('relays_published'):
-            uptime_timestamp = self.uptime_data['relays_published']
+            uptime_timestamp = self.uptime_data['relays_published'] + ' UTC'
         display_data['uptime_timestamp'] = uptime_timestamp
         
         # 8. Real-time downtime alerts (idea #8 from uptime integration proposals)
@@ -2103,13 +2103,13 @@ class Relays:
             'Stable': {'icon': '🛡️', 'display_name': 'Stable Operation'}, 
             'Guard': {'icon': '🛡️', 'display_name': 'Entry Guard'},
             'Exit': {'icon': '🚪', 'display_name': 'Exit Node'},
-            'HSDir': {'icon': '📁', 'display_name': 'Directory Services'},
+            'HSDir': {'icon': '📂', 'display_name': 'Directory Mirror'},
             'Authority': {'icon': '⚖️', 'display_name': 'Directory Authority'},
-            'V2Dir': {'icon': '📂', 'display_name': 'Directory Mirror'},
+            'V2Dir': {'icon': '📁', 'display_name': 'Directory Services'},
             'BadExit': {'icon': '🚫', 'display_name': 'Bad Exit'}
         }
         
-        # Define flag ordering for consistent display
+        # Define flag ordering for consistent display - Directory Services before Directory Mirror
         flag_order = ['BadExit', 'Stable', 'Fast', 'Running', 'Authority', 'Guard', 'Exit', 'V2Dir', 'HSDir']
         
         flag_reliabilities = {}
