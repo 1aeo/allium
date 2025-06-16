@@ -236,13 +236,12 @@ def process_all_uptime_data_consolidated(all_relays, uptime_data, include_flag_a
                 
                 for period, data in periods.items():
                     if period in ['1_month', '6_months', '1_year', '5_years'] and data.get('values'):
-                        # Flag data contains fractional times (0-1) as per Onionoo spec
-                        # Convert to percentages (0-100)
-                        valid_values = [v for v in data['values'] if v is not None and 0 <= v <= 1]
+                        # Flag data uses same scale as regular uptime data (0-999) 
+                        # Convert to percentages (0-100) using existing utility
+                        valid_values = [v for v in data['values'] if v is not None and 0 <= v <= 999]
                         if valid_values:
-                            # Calculate average fractional uptime and convert to percentage
-                            avg_fractional = sum(valid_values) / len(valid_values)
-                            avg_uptime = avg_fractional * 100  # Convert 0-1 to 0-100%
+                            # Calculate average uptime using shared utility (handles 0-999 to 0-100% conversion)
+                            avg_uptime = calculate_relay_uptime_average(valid_values)
                             
                             flag_data[flag][period] = {
                                 'uptime': avg_uptime,
