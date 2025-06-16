@@ -227,6 +227,7 @@ def process_all_uptime_data_consolidated(all_relays, uptime_data, include_flag_a
         flag_data = {}
         if include_flag_analysis:
             flags_section = uptime_relay.get('flags', {})
+            
             for flag, periods in flags_section.items():
                 flag_data[flag] = {}
                 

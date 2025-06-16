@@ -282,7 +282,7 @@
                         {% elif period_data.color_class == 'statistical-outlier-high' %}
                             {% set color_style = 'color: #dc3545; font-weight: bold;' %}
                         {% elif period_data.color_class == 'below-mean' %}
-                            {% set color_style = 'color: #ffc107; font-weight: bold;' %}
+                            {% set color_style = 'color: #cc9900; font-weight: bold;' %}
                         {% endif %}
                         {% set formatted_value %}<span title="{{ period_data.tooltip }}" style="cursor: help; {{ color_style }}">{{ "%.1f"|format(period_data.value) }}%</span>{% endset %}
                         {% set _ = period_values.append(formatted_value) %}
@@ -299,7 +299,7 @@
             
             <div style="font-size: 12px; color: #666; margin-top: 10px;">
                 <span style="color: #28a745;">Green: >99%</span>, 
-                <span style="color: #ffc107;">Yellow: below network mean</span>, 
+                <span style="color: #cc9900;">Yellow: below network mean</span>, 
                 <span style="color: #dc3545;">Red: ≥2σ from network mean</span>
                 {% if contact_display_data and contact_display_data.uptime_timestamp %}, from {{ contact_display_data.uptime_timestamp }}{% endif %}
             </div>
