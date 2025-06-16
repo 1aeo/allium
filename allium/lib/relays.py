@@ -148,7 +148,6 @@ ENV.filters['format_bandwidth_with_unit'] = format_bandwidth_with_unit
 ENV.filters['format_bandwidth'] = format_bandwidth_filter
 ENV.filters['format_time_ago'] = format_time_ago
 
-
 class Relays:
     """Relay class consisting of processing routines and onionoo data"""
 
@@ -186,7 +185,6 @@ class Relays:
         """Log progress message using shared progress utility"""
         # Note: increment_step parameter is kept for backwards compatibility but not used
         log_progress(message, self.start_time, self.progress_step, self.total_steps, self.progress)
-
 
 
     def _trim_platform(self):
@@ -458,7 +456,7 @@ class Relays:
             # Store consolidated results for use by contact page processing
             self._consolidated_uptime_results = consolidated_results
             
-            print(f"DEBUG: Consolidated processing completed - {len(relay_uptime_data)} relays processed, {len(network_flag_statistics)} flags found")
+
             
             # Apply results to individual relays
             for relay in self.json["relays"]:
