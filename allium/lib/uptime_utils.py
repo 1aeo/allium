@@ -6,6 +6,7 @@ to avoid duplication between aroileaders.py and relays.py.
 """
 
 import statistics
+import math
 
 
 def normalize_uptime_value(raw_value):
@@ -269,18 +270,28 @@ def process_all_uptime_data_consolidated(all_relays, uptime_data, include_flag_a
         values = network_uptime_values[period]
         if len(values) >= 3:
             try:
-                mean_val = sum(values) / len(values)
-                # Calculate standard deviation manually to avoid statistics import issues
-                variance = sum((x - mean_val) ** 2 for x in values) / len(values)
-                std_dev = variance ** 0.5
+                total_sum = sum(values)
+                count = len(values)
+                sum_of_squares = sum(x ** 2 for x in values)
                 
-                network_statistics[period] = {
-                    'mean': mean_val,
+                # Calculate statistical thresholds for outlier detection
+                mean = total_sum / count
+                variance = (sum_of_squares / count) - (mean ** 2)
+                std_dev = math.sqrt(max(0, variance))  # Ensure non-negative variance
+                
+                # Set lower bound of 0 for two_sigma_low since negative uptimes are impossible
+                two_sigma_low = max(0.0, mean - 2 * std_dev)
+                two_sigma_high = mean + 2 * std_dev
+                
+                period_stats = {
+                    'mean': mean,
                     'std_dev': std_dev,
-                    'count': len(values),
-                    'two_sigma_low': mean_val - (2 * std_dev),
-                    'two_sigma_high': mean_val + (2 * std_dev)
+                    'two_sigma_low': two_sigma_low,
+                    'two_sigma_high': two_sigma_high,
+                    'count': count
                 }
+                
+                network_statistics[period] = period_stats
             except Exception:
                 network_statistics[period] = None
         else:
@@ -294,17 +305,28 @@ def process_all_uptime_data_consolidated(all_relays, uptime_data, include_flag_a
             for period, values in periods_data.items():
                 if len(values) >= 3:
                     try:
-                        mean_val = sum(values) / len(values)
-                        variance = sum((x - mean_val) ** 2 for x in values) / len(values)
-                        std_dev = variance ** 0.5
+                        total_sum = sum(values)
+                        count = len(values)
+                        sum_of_squares = sum(x ** 2 for x in values)
                         
-                        network_flag_statistics[flag][period] = {
-                            'mean': mean_val,
+                        # Calculate statistical thresholds for outlier detection
+                        mean = total_sum / count
+                        variance = (sum_of_squares / count) - (mean ** 2)
+                        std_dev = math.sqrt(max(0, variance))  # Ensure non-negative variance
+                        
+                        # Set lower bound of 0 for two_sigma_low since negative uptimes are impossible
+                        two_sigma_low = max(0.0, mean - 2 * std_dev)
+                        two_sigma_high = mean + 2 * std_dev
+                        
+                        period_stats = {
+                            'mean': mean,
                             'std_dev': std_dev,
-                            'count': len(values),
-                            'two_sigma_low': mean_val - (2 * std_dev),
-                            'two_sigma_high': mean_val + (2 * std_dev)
+                            'two_sigma_low': two_sigma_low,
+                            'two_sigma_high': two_sigma_high,
+                            'count': count
                         }
+                        
+                        network_flag_statistics[flag][period] = period_stats
                     except Exception:
                         network_flag_statistics[flag][period] = None
                 else:
