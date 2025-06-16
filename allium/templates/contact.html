@@ -303,8 +303,8 @@
             
             <div style="font-size: 12px; color: #666; margin-top: 10px;">
                 <span style="color: #28a745;">Green: >99%</span>, 
-                <span style="color: #cc9900;">Yellow: below network mean</span>, 
-                <span style="color: #dc3545;">Red: ≥2σ from network mean</span>
+                <span style="color: #cc9900;">Yellow: <μ of network</span>, 
+                <span style="color: #dc3545;">Red: ≥2σ from network μ</span>
                 {% if contact_display_data and contact_display_data.uptime_timestamp %}, from {{ contact_display_data.uptime_timestamp }}{% endif %}
             </div>
         </div>
