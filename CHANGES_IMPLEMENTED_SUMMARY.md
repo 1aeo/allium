@@ -2,18 +2,30 @@
 
 ## ✅ **Successfully Implemented Changes**
 
-### **1. Flag Display Name Corrections**
+### **1. Flag Display Name Updates**
 **Fixed flag mappings in `allium/lib/relays.py`:**
-- ✅ `'HSDir'`: Changed from 'Directory Services' → 'Directory Mirror' 
-- ✅ `'V2Dir'`: Changed from 'Directory Mirror' → 'Directory Services'
+- ✅ `'HSDir'`: Changed 'Directory Services' → 'Directory Mirror' → **'Hidden Services'** 
+- ✅ `'V2Dir'`: Changed 'Directory Mirror' → **'Directory Services'**
 
 ### **2. Flag Ordering Adjustment**  
 **Updated flag order in `allium/lib/relays.py`:**
 - ✅ **Before**: `['BadExit', 'Stable', 'Fast', 'Running', 'Authority', 'Guard', 'Exit', 'V2Dir', 'HSDir']`
-- ✅ **After**: `['BadExit', 'Stable', 'Fast', 'Running', 'Authority', 'Guard', 'Exit', 'V2Dir', 'HSDir']`
-- ✅ **Result**: Directory Services (V2Dir) now appears before Directory Mirror (HSDir)
+- ✅ **After**: `['BadExit', 'Stable', 'Fast', 'Running', 'Authority', 'Guard', 'Exit', 'HSDir', 'V2Dir']`
+- ✅ **Result**: Hidden Services (HSDir) now appears before Directory Services (V2Dir)
 
-### **3. Period Conversion Logic Fix**
+### **3. Final Flag Display Order**
+**Current flag ordering and display names:**
+1. **Bad Exit** (BadExit)
+2. **Stable Operation** (Stable) 
+3. **Fast Relay** (Fast)
+4. **Running Operation** (Running)
+5. **Directory Authority** (Authority)
+6. **Entry Guard** (Guard)
+7. **Exit Node** (Exit)
+8. **Hidden Services** (HSDir) ← Now appears first
+9. **Directory Services** (V2Dir) ← Now appears second
+
+### **4. Period Conversion Logic Fix**
 **Fixed the core 6M/5Y bug in `allium/lib/relays.py`:**
 - ✅ **Root Cause**: String replacement conflict creating `'6Ms'` instead of `'6M'` and `'5Ys'` instead of `'5Y'`
 - ✅ **Solution**: Replaced broken regex logic with explicit period mapping:
@@ -29,17 +41,17 @@
       period_short = '5Y'
   ```
 
-### **4. UTC Timezone Addition**
+### **5. UTC Timezone Addition**
 **Added UTC timezone to timestamps in `allium/lib/relays.py`:**
 - ✅ **Implementation**: `uptime_timestamp = self.uptime_data['relays_published'] + ' UTC'`
 - ✅ **Affects**: Both flag reliability and relay reliability timestamp displays
 
-### **5. Yellow Color Adjustment** 
+### **6. Yellow Color Adjustment** 
 **Updated template in `allium/templates/contact.html`:**
 - ✅ **Changed**: Bright yellow `#ffc107` → Darker yellow `#cc9900` 
 - ✅ **Matches**: Operator intelligence network diversity color scheme
 
-### **6. Outlier Sub-bullet Layout**
+### **7. Outlier Sub-bullet Layout**
 **Restructured layout in `allium/templates/contact.html`:**
 - ✅ **Moved**: Outlier detection as sub-bullet under "Overall uptime"
 - ✅ **Added**: `<ul style="list-style-type: circle;">` with proper spacing
@@ -89,7 +101,7 @@ From our earlier investigation:
 
 When working correctly, the changes should provide:
 - **Flag Reliability sections** showing 6M/5Y periods when data available
-- **Proper flag ordering** with Directory Services before Directory Mirror  
+- **Proper flag ordering** with Hidden Services before Directory Services  
 - **UTC timestamps** clearly labeled in all reliability sections
 - **Improved layout** with outliers as sub-bullets under overall uptime
 - **Better color scheme** with darker yellow for below-mean values
