@@ -2017,15 +2017,15 @@ class Relays:
         """
         Compute flag reliability analysis for contact operator using consolidated uptime data.
         
-        This method now uses pre-computed results from _reprocess_uptime_data() to avoid
-        redundant loops through the same uptime data.
+        This method uses pre-computed results from _reprocess_uptime_data(). If consolidated
+        processing isn't available, no flag data is returned (section won't be shown).
         
         Args:
             contact_hash: Contact hash for the operator
             members: List of relay objects for the operator
             
         Returns:
-            dict: Flag reliability analysis data
+            dict: Flag reliability analysis data or indication that no data is available
         """
         try:
             # Use consolidated uptime results if available (from _reprocess_uptime_data)
@@ -2070,14 +2070,14 @@ class Relays:
                 }
                 
             else:
-                # Fallback to individual processing if consolidated results not available
-                return self._compute_contact_flag_analysis_fallback(contact_hash, members)
+                # No consolidated results available - don't show flag reliability section
+                return {'has_flag_data': False, 'error': 'Consolidated uptime processing not available'}
                 
         except Exception as e:
             return {
                 'has_flag_data': False, 
                 'error': f'Flag analysis processing failed: {str(e)}',
-                'source': 'error_fallback'
+                'source': 'error'
             }
     
     def _process_operator_flag_reliability(self, operator_flag_data, network_flag_statistics):
@@ -2182,79 +2182,6 @@ class Relays:
             'has_data': bool(available_periods)
         }
     
-    def _compute_contact_flag_analysis_fallback(self, contact_hash, members):
-        """
-        Fallback flag analysis processing if consolidated results are not available.
-        This method actually calculates flag reliability using individual uptime data processing.
-        
-        Args:
-            contact_hash: Contact hash for the operator
-            members: List of relay objects for the operator
-            
-        Returns:
-            dict: Flag reliability analysis data
-        """
-        # Get uptime data (should be attached to relay set)
-        if not hasattr(self, 'uptime_data') or not self.uptime_data:
-            return {'has_flag_data': False, 'error': 'No uptime data available'}
-        
-        # Process flag data manually for this operator
-        from .uptime_utils import find_relay_uptime_data
-        
-        operator_flag_data = {}
-        
-        for relay in members:
-            fingerprint = relay.get('fingerprint', '')
-            nickname = relay.get('nickname', 'Unknown')
-            
-            if not fingerprint:
-                continue
-                
-            # Find uptime data for this relay
-            relay_uptime = find_relay_uptime_data(fingerprint, self.uptime_data)
-            
-            if relay_uptime and relay_uptime.get('flags'):
-                flags_section = relay_uptime['flags']
-                
-                for flag, periods in flags_section.items():
-                    if flag not in operator_flag_data:
-                        operator_flag_data[flag] = {}
-                    
-                    for period, data in periods.items():
-                        if period in ['1_month', '6_months', '1_year', '5_years'] and data.get('values'):
-                            # Process flag data using same logic as consolidated processing
-                            valid_values = [v for v in data['values'] if v is not None and 0 <= v <= 1]
-                            if valid_values:
-                                # Calculate average fractional uptime and convert to percentage
-                                avg_fractional = sum(valid_values) / len(valid_values)
-                                avg_uptime = avg_fractional * 100  # Convert 0-1 to 0-100%
-                                
-                                if period not in operator_flag_data[flag]:
-                                    operator_flag_data[flag][period] = []
-                                    
-                                operator_flag_data[flag][period].append({
-                                    'relay_nickname': nickname,
-                                    'relay_fingerprint': fingerprint,
-                                    'uptime': avg_uptime,
-                                    'data_points': len(valid_values)
-                                })
-        
-        if not operator_flag_data:
-            return {'has_flag_data': False, 'error': 'No flag data found in uptime API for operator relays'}
-        
-        # Process the extracted data using the same method as consolidated processing
-        flag_reliability_results = self._process_operator_flag_reliability(
-            operator_flag_data, {}  # No network statistics in fallback
-        )
-        
-        return {
-            'has_flag_data': True,
-            'flag_reliabilities': flag_reliability_results['flag_reliabilities'],
-            'available_periods': flag_reliability_results['available_periods'],
-            'period_display': flag_reliability_results['period_display'],
-            'source': 'fallback_processing'
-        }
-
     def _calculate_operator_downtime_alerts(self, contact_hash, operator_relays, contact_data, bandwidth_unit):
         """
         Calculate real-time downtime alerts for operator contact pages.
