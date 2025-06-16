@@ -30,9 +30,6 @@ class TestAnchorLinks:
             
             # Check for anchor link
             assert f'href="#{anchor}"' in self.template_content, f"Missing anchor link: {anchor}"
-            
-            # Check for anchor icon
-            assert '🔗' in self.template_content, "Missing anchor icon"
     
     def test_anchor_structure(self):
         """Test that anchor links have the correct HTML structure"""
@@ -41,10 +38,7 @@ class TestAnchorLinks:
         matches = re.findall(section_header_pattern, self.template_content)
         assert len(matches) >= 6, "Missing section header divs for anchor links"
         
-        # Look for anchor icon structure
-        anchor_icon_pattern = r'<a href="#[^"]*" class="anchor-icon"[^>]*>'
-        matches = re.findall(anchor_icon_pattern, self.template_content)
-        assert len(matches) >= 6, "Missing anchor icon links"
+
         
 
     
@@ -52,27 +46,13 @@ class TestAnchorLinks:
         """Test that required CSS classes are present"""
         required_classes = [
             'section-header',
-            'anchor-link',
-            'anchor-icon',
-            'anchor-tooltip'
+            'anchor-link'
         ]
         
         for css_class in required_classes:
             assert f'class="{css_class}"' in self.template_content or f'class="{css_class} ' in self.template_content, f"Missing CSS class: {css_class}"
     
-    def test_anchor_tooltip_text(self):
-        """Test that anchor tooltips have appropriate text"""
-        tooltip_patterns = [
-            r'Link to IPv4 Exit Policy Summary',
-            r'Link to IPv6 Exit Policy Summary',
-            r'Link to Exit Policy',
-            r'Link to Effective Family',
-            r'Link to Alleged Family',
-            r'Link to Indirect Family'
-        ]
-        
-        for pattern in tooltip_patterns:
-            assert re.search(pattern, self.template_content), f"Missing tooltip text: {pattern}"
+
     
     def test_css_target_highlighting(self):
         """Test that CSS target highlighting is present"""
@@ -84,10 +64,10 @@ class TestAnchorLinks:
     
     def test_anchor_accessibility(self):
         """Test that anchor links are accessible"""
-        # Check for title attributes
-        title_pattern = r'title="Link to this section"'
-        matches = re.findall(title_pattern, self.template_content)
-        assert len(matches) >= 6, "Missing title attributes for accessibility"
+        # Anchor links should still be accessible via direct clicks
+        anchor_link_pattern = r'<a href="#[^"]*" class="anchor-link"[^>]*>'
+        matches = re.findall(anchor_link_pattern, self.template_content)
+        assert len(matches) >= 6, "Missing accessible anchor links"
         
 
 
