@@ -160,4 +160,159 @@ def calculate_statistical_outliers(uptime_values, relay_breakdown, std_dev_thres
         
     except statistics.StatisticsError:
         # Handle case where all values are identical (std dev = 0)
-        return {'low_outliers': [], 'high_outliers': []} 
+        return {'low_outliers': [], 'high_outliers': []}
+
+
+def process_all_uptime_data_consolidated(all_relays, uptime_data, include_flag_analysis=True):
+    """
+    Consolidated uptime data processing function that extracts all uptime-related data
+    in a single pass through the uptime API data to optimize performance.
+    
+    This replaces multiple separate loops through uptime data with one optimized pass
+    that computes:
+    - Regular uptime percentages for individual relays
+    - Network-wide statistical analysis for outlier detection  
+    - Flag-specific uptime data for flag reliability analysis
+    
+    Args:
+        all_relays (list): List of all relay objects
+        uptime_data (dict): Onionoo uptime API data
+        include_flag_analysis (bool): Whether to include flag reliability analysis
+        
+    Returns:
+        dict: Consolidated uptime analysis with all computed metrics
+    """
+    if not uptime_data or not all_relays:
+        return {
+            'relay_uptime_data': {},
+            'network_statistics': {},
+            'flag_analysis_data': {} if include_flag_analysis else None
+        }
+    
+    # Create fingerprint to relay mapping for fast lookup
+    relay_fingerprint_map = {}
+    for relay in all_relays:
+        fingerprint = relay.get('fingerprint')
+        if fingerprint:
+            relay_fingerprint_map[fingerprint] = relay
+    
+    # Initialize data structures for consolidated processing
+    relay_uptime_data = {}  # fingerprint -> {uptime_percentages, flag_data}
+    network_uptime_values = {'1_month': [], '6_months': [], '1_year': [], '5_years': []}
+    network_flag_data = {}  # flag -> period -> [values] for network statistics
+    
+    # SINGLE PASS through uptime data - this replaces multiple separate loops
+    for uptime_relay in uptime_data.get('relays', []):
+        fingerprint = uptime_relay.get('fingerprint')
+        if not fingerprint:
+            continue
+            
+        # Check if this relay is in our relay set
+        relay_obj = relay_fingerprint_map.get(fingerprint)
+        
+        # Process regular uptime data
+        uptime_percentages = {'1_month': 0.0, '6_months': 0.0, '1_year': 0.0, '5_years': 0.0}
+        uptime_section = uptime_relay.get('uptime', {})
+        
+        for period in ['1_month', '6_months', '1_year', '5_years']:
+            period_data = uptime_section.get(period, {})
+            if period_data.get('values'):
+                uptime_percentage = calculate_relay_uptime_average(period_data['values'])
+                uptime_percentages[period] = uptime_percentage
+                
+                # Collect for network statistics (for all relays, not just operator relays)
+                network_uptime_values[period].append(uptime_percentage)
+        
+        # Process flag-specific uptime data (if enabled)
+        flag_data = {}
+        if include_flag_analysis:
+            flags_section = uptime_relay.get('flags', {})
+            for flag, periods in flags_section.items():
+                flag_data[flag] = {}
+                
+                # Initialize network flag data structure
+                if flag not in network_flag_data:
+                    network_flag_data[flag] = {'1_month': [], '6_months': [], '1_year': [], '5_years': []}
+                
+                for period, data in periods.items():
+                    if period in ['1_month', '6_months', '1_year', '5_years'] and data.get('values'):
+                        # Convert fractional uptime values (0-1) to percentages
+                        uptime_values = [v * 100 for v in data['values'] if v is not None]
+                        if uptime_values:
+                            avg_uptime = sum(uptime_values) / len(uptime_values)
+                            flag_data[flag][period] = {
+                                'uptime': avg_uptime,
+                                'data_points': len(uptime_values),
+                                'relay_info': {
+                                    'nickname': relay_obj.get('nickname', 'Unknown') if relay_obj else 'Unknown',
+                                    'fingerprint': fingerprint
+                                }
+                            }
+                            
+                            # Collect for network flag statistics
+                            network_flag_data[flag][period].append(avg_uptime)
+        
+        # Store processed data for this relay
+        relay_uptime_data[fingerprint] = {
+            'uptime_percentages': uptime_percentages,
+            'flag_data': flag_data,
+            'relay_obj': relay_obj  # Store reference for easy access
+        }
+    
+    # Calculate network statistics for outlier detection
+    network_statistics = {}
+    for period in ['1_month', '6_months', '1_year', '5_years']:
+        values = network_uptime_values[period]
+        if len(values) >= 3:
+            try:
+                mean_val = sum(values) / len(values)
+                # Calculate standard deviation manually to avoid statistics import issues
+                variance = sum((x - mean_val) ** 2 for x in values) / len(values)
+                std_dev = variance ** 0.5
+                
+                network_statistics[period] = {
+                    'mean': mean_val,
+                    'std_dev': std_dev,
+                    'count': len(values),
+                    'two_sigma_low': mean_val - (2 * std_dev),
+                    'two_sigma_high': mean_val + (2 * std_dev)
+                }
+            except Exception:
+                network_statistics[period] = None
+        else:
+            network_statistics[period] = None
+    
+    # Calculate network flag statistics (if flag analysis enabled)
+    network_flag_statistics = {}
+    if include_flag_analysis:
+        for flag, periods_data in network_flag_data.items():
+            network_flag_statistics[flag] = {}
+            for period, values in periods_data.items():
+                if len(values) >= 3:
+                    try:
+                        mean_val = sum(values) / len(values)
+                        variance = sum((x - mean_val) ** 2 for x in values) / len(values)
+                        std_dev = variance ** 0.5
+                        
+                        network_flag_statistics[flag][period] = {
+                            'mean': mean_val,
+                            'std_dev': std_dev,
+                            'count': len(values),
+                            'two_sigma_low': mean_val - (2 * std_dev),
+                            'two_sigma_high': mean_val + (2 * std_dev)
+                        }
+                    except Exception:
+                        network_flag_statistics[flag][period] = None
+                else:
+                    network_flag_statistics[flag][period] = None
+    
+    return {
+        'relay_uptime_data': relay_uptime_data,
+        'network_statistics': network_statistics,
+        'network_flag_statistics': network_flag_statistics if include_flag_analysis else None,
+        'processing_summary': {
+            'total_relays_processed': len(relay_uptime_data),
+            'network_relays_with_uptime': len([r for r in relay_uptime_data.values() if any(p > 0 for p in r['uptime_percentages'].values())]),
+            'flags_found': list(network_flag_data.keys()) if include_flag_analysis else []
+        }
+    } 

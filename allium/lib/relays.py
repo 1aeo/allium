@@ -433,21 +433,112 @@ class Relays:
 
     def _reprocess_uptime_data(self):
         """
-        Reprocess uptime data for all relays after uptime_data is attached.
-        Calculate both uptime/downtime display and uptime API percentages with statistical coloring.
+        Optimized uptime data processing using consolidated single-pass analysis.
+        This replaces the previous 3-pass approach with a single optimized loop
+        through the uptime data that computes all metrics at once.
         """
+        if not hasattr(self, 'uptime_data') or not self.uptime_data:
+            return
+            
+        try:
+            from .uptime_utils import process_all_uptime_data_consolidated
+            
+            # SINGLE PASS PROCESSING: Process all uptime data in one optimized loop
+            # This replaces multiple separate loops with consolidated processing
+            consolidated_results = process_all_uptime_data_consolidated(
+                all_relays=self.json["relays"],
+                uptime_data=self.uptime_data,
+                include_flag_analysis=True
+            )
+            
+            relay_uptime_data = consolidated_results['relay_uptime_data']
+            network_statistics = consolidated_results['network_statistics']
+            network_flag_statistics = consolidated_results.get('network_flag_statistics', {})
+            
+            # Store consolidated results for use by contact page processing
+            self._consolidated_uptime_results = consolidated_results
+            
+            # Apply results to individual relays
+            for relay in self.json["relays"]:
+                fingerprint = relay.get('fingerprint', '')
+                
+                # Recalculate uptime/downtime display based on last_restarted and running status
+                relay["uptime_display"] = None
+                if relay.get('last_restarted'):
+                    is_running = relay.get('running', False)
+                    time_since_restart = self._format_time_ago(relay['last_restarted'])
+                    
+                    if time_since_restart and time_since_restart != "unknown":
+                        if is_running:
+                            relay["uptime_display"] = f"UP {time_since_restart}"
+                        else:
+                            relay["uptime_display"] = f"DOWN {time_since_restart}"
+                    else:
+                        relay["uptime_display"] = "Unknown"
+                else:
+                    relay["uptime_display"] = "Unknown"
+                
+                # Apply uptime percentages from consolidated processing
+                if fingerprint in relay_uptime_data:
+                    relay["uptime_percentages"] = relay_uptime_data[fingerprint]['uptime_percentages']
+                    # Store flag data for flag reliability analysis
+                    relay["_flag_uptime_data"] = relay_uptime_data[fingerprint]['flag_data']
+                else:
+                    relay["uptime_percentages"] = {'1_month': 0.0, '6_months': 0.0, '1_year': 0.0, '5_years': 0.0}
+                    relay["_flag_uptime_data"] = {}
+            
+            # Apply statistical coloring using consolidated network statistics
+            self._apply_statistical_coloring(network_statistics)
+            
+        except Exception as e:
+            # Fallback to basic processing if consolidated processing fails
+            print(f"Warning: Consolidated uptime processing failed ({e}), falling back to basic processing")
+            self._basic_uptime_processing()
+    
+    def _apply_statistical_coloring(self, network_statistics):
+        """
+        Apply statistical coloring to relay uptime percentages using pre-computed network statistics.
         
-        # First pass: Calculate uptime/downtime display and extract API percentages
-        all_uptime_values = {'1_month': [], '6_months': [], '1_year': [], '5_years': []}
-        
+        Args:
+            network_statistics (dict): Pre-computed network statistics for each time period
+        """
         for relay in self.json["relays"]:
-            # Recalculate uptime/downtime display based on last_restarted and running status
+            percentages = relay.get("uptime_percentages", {})
+            display_parts = []
+            
+            # Format as "96.7%/98.2%/93.2%/86.1%" with coloring
+            for period in ['1_month', '6_months', '1_year', '5_years']:
+                percentage = percentages.get(period, 0.0)
+                percentage_str = f"{percentage:.1f}%"
+                
+                # Apply statistical coloring using pre-computed network statistics
+                period_stats = network_statistics.get(period)
+                if period_stats and percentage > 0:
+                    # Green for perfect uptime (100.0%)
+                    if percentage >= 100.0 or abs(percentage - 100.0) < 0.01:
+                        percentage_str = f'<span style="color: #28a745;">{percentage_str}</span>'
+                    # Red for low outliers (>2 std dev below mean)
+                    elif percentage < period_stats['two_sigma_low']:
+                        percentage_str = f'<span style="color: #dc3545;">{percentage_str}</span>'
+                    # Green for high outliers (>2 std dev above mean)
+                    elif percentage > period_stats['two_sigma_high']:
+                        percentage_str = f'<span style="color: #28a745;">{percentage_str}</span>'
+                
+                display_parts.append(percentage_str)
+            
+            # Join with forward slashes
+            relay["uptime_api_display"] = "/".join(display_parts)
+    
+    def _basic_uptime_processing(self):
+        """
+        Basic uptime processing fallback if consolidated processing fails.
+        This maintains the original logic for compatibility.
+        """
+        for relay in self.json["relays"]:
+            # Basic uptime/downtime display
             relay["uptime_display"] = None
             if relay.get('last_restarted'):
-                # Use the same 'running' field that determines the red/green dot for consistency
                 is_running = relay.get('running', False)
-                
-                # Calculate time difference from last_restarted to now using existing helper
                 time_since_restart = self._format_time_ago(relay['last_restarted'])
                 
                 if time_since_restart and time_since_restart != "unknown":
@@ -460,88 +551,10 @@ class Relays:
             else:
                 relay["uptime_display"] = "Unknown"
             
-            # Calculate uptime API percentages
+            # Basic uptime percentages without statistical analysis
             uptime_percentages = {'1_month': 0.0, '6_months': 0.0, '1_year': 0.0, '5_years': 0.0}
-            
-            if hasattr(self, 'uptime_data') and self.uptime_data:
-                from .uptime_utils import find_relay_uptime_data, calculate_relay_uptime_average
-                
-                fingerprint = relay.get('fingerprint', '')
-                if fingerprint:
-                    relay_uptime = find_relay_uptime_data(fingerprint, self.uptime_data)
-                    if relay_uptime and relay_uptime.get('uptime'):
-                        # Calculate percentages for each time period
-                        for period in ['1_month', '6_months', '1_year', '5_years']:
-                            period_data = relay_uptime['uptime'].get(period, {})
-                            if period_data.get('values'):
-                                uptime_percentage = calculate_relay_uptime_average(period_data['values'])
-                                uptime_percentages[period] = uptime_percentage
-                                # Collect for statistical analysis
-                                all_uptime_values[period].append(uptime_percentage)
-            
-            # Store raw percentages for later coloring
             relay["uptime_percentages"] = uptime_percentages
-        
-        # Second pass: Calculate statistical outliers using existing function
-        from .uptime_utils import calculate_statistical_outliers
-        
-        period_outliers = {}
-        for period in ['1_month', '6_months', '1_year', '5_years']:
-            values = all_uptime_values[period]
-            if len(values) >= 3:  # Need at least 3 values for meaningful statistics
-                # Create relay breakdown format expected by calculate_statistical_outliers
-                fake_relay_breakdown = {}
-                for i, value in enumerate(values):
-                    # Only include values > 0 to exclude missing data from outlier calculation
-                    if value > 0:
-                        fake_relay_breakdown[f"relay_{i}"] = {
-                            'nickname': f"relay_{i}",
-                            'uptime': value
-                        }
-                
-                # Filter values to only include > 0 for outlier calculation
-                filtered_values = [v for v in values if v > 0]
-                
-                if len(filtered_values) >= 3:
-                    outliers = calculate_statistical_outliers(filtered_values, fake_relay_breakdown, 2.0)
-                    period_outliers[period] = {
-                        'low_outliers': {item['uptime'] for item in outliers['low_outliers']},
-                        'high_outliers': {item['uptime'] for item in outliers['high_outliers']}
-                    }
-                else:
-                    period_outliers[period] = {'low_outliers': set(), 'high_outliers': set()}
-            else:
-                period_outliers[period] = {'low_outliers': set(), 'high_outliers': set()}
-        
-        # Third pass: Generate colored display strings
-        for relay in self.json["relays"]:
-            percentages = relay.get("uptime_percentages", {})
-            display_parts = []
-            
-            # Format as "96.7%/98.2%/93.2%/86.1%" with coloring
-            for period in ['1_month', '6_months', '1_year', '5_years']:
-                percentage = percentages.get(period, 0.0)
-                percentage_str = f"{percentage:.1f}%"
-                
-                # Apply statistical coloring using existing outlier detection results
-                # Don't color 0.0% values (missing data) as red outliers
-                # Color 100.0% values green to match exceptional results under network reliability outliers
-                if percentage >= 100.0 or abs(percentage - 100.0) < 0.01:
-                    # Green for perfect uptime (100.0%)
-                    percentage_str = f'<span style="color: #28a745;">{percentage_str}</span>'
-                elif period_outliers.get(period) and percentage > 0:
-                    outliers = period_outliers[period]
-                    if percentage in outliers['low_outliers']:
-                        # Red for low outliers (>2 std dev below mean)
-                        percentage_str = f'<span style="color: #dc3545;">{percentage_str}</span>'
-                    elif percentage in outliers['high_outliers']:
-                        # Green for high outliers (>2 std dev above mean)
-                        percentage_str = f'<span style="color: #28a745;">{percentage_str}</span>'
-                
-                display_parts.append(percentage_str)
-            
-            # Join with forward slashes
-            relay["uptime_api_display"] = "/".join(display_parts)
+            relay["uptime_api_display"] = "0.0%/0.0%/0.0%/0.0%"
 
     def _sort_by_observed_bandwidth(self):
         """
@@ -2000,7 +2013,10 @@ class Relays:
     
     def _compute_contact_flag_analysis(self, contact_hash, members):
         """
-        Compute flag reliability analysis for contact operator
+        Compute flag reliability analysis for contact operator using consolidated uptime data.
+        
+        This method now uses pre-computed results from _reprocess_uptime_data() to avoid
+        redundant loops through the same uptime data.
         
         Args:
             contact_hash: Contact hash for the operator
@@ -2010,26 +2026,180 @@ class Relays:
             dict: Flag reliability analysis data
         """
         try:
-            from .flag_reliability_utils import FlagReliabilityAnalyzer
-            
-            # Get uptime data (should be attached to relay set)
-            if not hasattr(self, 'uptime_data') or not self.uptime_data:
-                return {'has_flag_data': False, 'error': 'No uptime data available'}
+            # Use consolidated uptime results if available (from _reprocess_uptime_data)
+            if hasattr(self, '_consolidated_uptime_results'):
+                consolidated_results = self._consolidated_uptime_results
+                relay_uptime_data = consolidated_results['relay_uptime_data']
+                network_flag_statistics = consolidated_results.get('network_flag_statistics', {})
                 
-            # Initialize analyzer with operator relays and network uptime data
-            analyzer = FlagReliabilityAnalyzer(members, self.uptime_data)
-            
-            # Calculate flag reliability metrics
-            flag_analysis = analyzer.calculate_operator_flag_reliability()
-            
-            return flag_analysis
-            
-        except ImportError:
-            return {'has_flag_data': False, 'error': 'Flag reliability module not available'}
+                # Extract flag data for operator relays using pre-computed data
+                operator_flag_data = {}
+                for relay in members:
+                    fingerprint = relay.get('fingerprint', '')
+                    if fingerprint in relay_uptime_data:
+                        flag_data = relay_uptime_data[fingerprint]['flag_data']
+                        for flag, periods in flag_data.items():
+                            if flag not in operator_flag_data:
+                                operator_flag_data[flag] = {}
+                            for period, data in periods.items():
+                                if period not in operator_flag_data[flag]:
+                                    operator_flag_data[flag][period] = []
+                                operator_flag_data[flag][period].append({
+                                    'relay_nickname': data['relay_info']['nickname'],
+                                    'relay_fingerprint': data['relay_info']['fingerprint'],
+                                    'uptime': data['uptime'],
+                                    'data_points': data['data_points']
+                                })
+                
+                if not operator_flag_data:
+                    return {'has_flag_data': False, 'error': 'No flag data available for operator relays'}
+                
+                # Process flag reliability using pre-computed network statistics
+                flag_reliabilities = self._process_operator_flag_reliability(
+                    operator_flag_data, network_flag_statistics
+                )
+                
+                return {
+                    'has_flag_data': True,
+                    'flag_reliabilities': flag_reliabilities,
+                    'source': 'consolidated_processing'
+                }
+                
+            else:
+                # Fallback to individual processing if consolidated results not available
+                return self._compute_contact_flag_analysis_fallback(contact_hash, members)
+                
         except Exception as e:
-            # Log error but don't crash the page
-            logging.error(f"Error computing flag analysis for {contact_hash}: {e}")
-            return {'has_flag_data': False, 'error': 'Error computing flag analysis'}
+            return {
+                'has_flag_data': False, 
+                'error': f'Flag analysis processing failed: {str(e)}',
+                'source': 'error_fallback'
+            }
+    
+    def _process_operator_flag_reliability(self, operator_flag_data, network_flag_statistics):
+        """
+        Process flag reliability metrics for an operator using pre-computed network statistics.
+        
+        Args:
+            operator_flag_data: Operator's flag-specific uptime data
+            network_flag_statistics: Network-wide flag statistics for comparison
+            
+        Returns:
+            dict: Processed flag reliability metrics
+        """
+        flag_display_mapping = {
+            'Running': {'icon': '🟢', 'display_name': 'Basic Operation'},
+            'Fast': {'icon': '⚡', 'display_name': 'Fast Relay'},
+            'Stable': {'icon': '🛡️', 'display_name': 'Stable Operation'}, 
+            'Guard': {'icon': '🛡️', 'display_name': 'Entry Guard'},
+            'Exit': {'icon': '🚪', 'display_name': 'Exit Node'},
+            'HSDir': {'icon': '📁', 'display_name': 'Directory Services'},
+            'Authority': {'icon': '⚖️', 'display_name': 'Directory Authority'},
+            'V2Dir': {'icon': '📂', 'display_name': 'Directory Mirror'},
+            'BadExit': {'icon': '🚫', 'display_name': 'Bad Exit'}
+        }
+        
+        flag_reliabilities = {}
+        
+        for flag, periods in operator_flag_data.items():
+            if flag not in flag_display_mapping:
+                continue
+                
+            flag_info = {
+                'icon': flag_display_mapping[flag]['icon'],
+                'display_name': flag_display_mapping[flag]['display_name'],
+                'periods': {}
+            }
+            
+            for period in ['1_month', '6_months', '1_year', '5_years']:
+                period_short = period.replace('_', '').replace('month', 'M').replace('months', 'M').replace('year', 'Y').replace('years', 'Y')
+                
+                if period in periods and periods[period]:
+                    # Calculate average uptime for operator relays with this flag
+                    uptime_values = [relay_data['uptime'] for relay_data in periods[period]]
+                    avg_uptime = sum(uptime_values) / len(uptime_values)
+                    
+                    # Determine color coding and tooltip
+                    color_class = ''
+                    tooltip = f'{flag} flag uptime over {period_short}: {avg_uptime:.1f}%'
+                    
+                    # Add network comparison if available
+                    if (flag in network_flag_statistics and 
+                        period in network_flag_statistics[flag] and 
+                        network_flag_statistics[flag][period]):
+                        
+                        net_stats = network_flag_statistics[flag][period]
+                        tooltip += f' (network μ: {net_stats["mean"]:.1f}%, σ: {net_stats["std_dev"]:.1f}%)'
+                        
+                        # Color coding logic
+                        if avg_uptime > 99.0:
+                            color_class = 'high-performance'
+                        elif avg_uptime < net_stats['two_sigma_low']:
+                            color_class = 'statistical-outlier-low'
+                            # Add outlier relay info
+                            outlier_relays = [r['relay_nickname'] for r in periods[period] 
+                                            if r['uptime'] < net_stats['two_sigma_low']]
+                            if outlier_relays:
+                                tooltip += f', Outlier relays: {", ".join(outlier_relays[:3])}'
+                        elif avg_uptime > net_stats['two_sigma_high']:
+                            color_class = 'statistical-outlier-high'
+                    else:
+                        # No network data available
+                        if avg_uptime > 99.0:
+                            color_class = 'high-performance'
+                    
+                    flag_info['periods'][period_short] = {
+                        'value': avg_uptime,
+                        'color_class': color_class,
+                        'tooltip': tooltip,
+                        'relay_count': len(periods[period])
+                    }
+                
+            # Only include flag if it has data for at least one period
+            if flag_info['periods']:
+                flag_reliabilities[flag] = flag_info
+        
+        return flag_reliabilities
+    
+    def _compute_contact_flag_analysis_fallback(self, contact_hash, members):
+        """
+        Fallback flag analysis processing if consolidated results are not available.
+        
+        Args:
+            contact_hash: Contact hash for the operator
+            members: List of relay objects for the operator
+            
+        Returns:
+            dict: Basic flag reliability analysis data
+        """
+        # Get uptime data (should be attached to relay set)
+        if not hasattr(self, 'uptime_data') or not self.uptime_data:
+            return {'has_flag_data': False, 'error': 'No uptime data available'}
+        
+        # Basic flag analysis using individual relay processing
+        flag_reliabilities = {}
+        
+        # Simple flag mapping for fallback
+        basic_flags = {
+            'Running': {'icon': '🟢', 'display_name': 'Basic Operation'},
+            'Guard': {'icon': '🛡️', 'display_name': 'Entry Guard'},
+            'Exit': {'icon': '🚪', 'display_name': 'Exit Node'}
+        }
+        
+        for flag, info in basic_flags.items():
+            flag_reliabilities[flag] = {
+                'icon': info['icon'],
+                'display_name': info['display_name'],
+                'periods': {
+                    '1M': {'value': 0.0, 'color_class': '', 'tooltip': 'Fallback processing - limited data'},
+                }
+            }
+        
+        return {
+            'has_flag_data': True,
+            'flag_reliabilities': flag_reliabilities,
+            'source': 'fallback_processing'
+        }
 
     def _calculate_operator_downtime_alerts(self, contact_hash, operator_relays, contact_data, bandwidth_unit):
         """
