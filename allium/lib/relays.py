@@ -541,7 +541,7 @@ class Relays:
         Process flag uptime data into display format with prefixes and tooltips.
         
         Calculates flag-specific uptime display strings using priority system:
-        Exit > Guard > Fast > Running flags.
+        Exit > Guard > Fast > Running flags. Only shows flags the relay actually has.
         
         Args:
             network_flag_statistics (dict): Network-wide flag statistics for comparison
@@ -557,19 +557,22 @@ class Relays:
         }
         
         for relay in self.json["relays"]:
+            # Get actual flags this relay has
+            relay_flags = set(relay.get('flags', []))
             flag_data = relay.get("_flag_uptime_data", {})
             
-            if not flag_data:
+            if not flag_data or not relay_flags:
                 relay["flag_uptime_display"] = "N/A"
                 relay["flag_uptime_tooltip"] = "No flag uptime data available"
                 continue
             
-            # Determine priority flag (Exit > Guard > Fast > Running)
+            # Determine priority flag from flags the relay ACTUALLY HAS
             selected_flag = None
             best_priority = float('inf')
             
             for flag in flag_data.keys():
-                if flag in flag_priority and flag_priority[flag] < best_priority:
+                # Only consider flags the relay actually has
+                if flag in flag_priority and flag in relay_flags and flag_priority[flag] < best_priority:
                     selected_flag = flag
                     best_priority = flag_priority[flag]
             
@@ -595,17 +598,43 @@ class Relays:
                     # Format with prefix
                     percentage_str = f"{prefix}{uptime_val:.1f}%"
                     
-                    # Apply color coding (same logic as regular uptime)
-                    if uptime_val >= 100.0 or abs(uptime_val - 100.0) < 0.01:
-                        colored_str = f'<span style="color: #28a745;">{percentage_str}</span>'
-                    elif uptime_val >= 99.0:
-                        colored_str = f'<span style="color: #28a745;">{percentage_str}</span>'
-                    elif uptime_val < 95.0:
-                        colored_str = f'<span style="color: #dc3545;">{percentage_str}</span>'
-                    elif uptime_val < 98.0:
-                        colored_str = f'<span style="color: #ffcc00;">{percentage_str}</span>'
+                    # Apply FLAG RELIABILITY color coding (not uptime color coding)
+                    color_class = ''
+                    
+                    # Add network comparison for color determination
+                    if (selected_flag in network_flag_statistics and 
+                        period in network_flag_statistics[selected_flag] and
+                        network_flag_statistics[selected_flag][period]):
+                        
+                        net_stats = network_flag_statistics[selected_flag][period]
+                        net_mean = net_stats.get('mean', 0)
+                        two_sigma_low = net_stats.get('two_sigma_low', 0)
+                        two_sigma_high = net_stats.get('two_sigma_high', float('inf'))
+                        
+                        # Enhanced color coding logic matching flag reliability:
+                        # Special handling for very low values (≤1%) - likely to be statistical outliers
+                        if uptime_val <= 1.0:
+                            colored_str = f'<span style="color: #dc3545;">{percentage_str}</span>'  # Red
+                        elif uptime_val <= two_sigma_low:
+                            colored_str = f'<span style="color: #dc3545;">{percentage_str}</span>'  # Red
+                        elif uptime_val >= 99.0:
+                            colored_str = f'<span style="color: #28a745;">{percentage_str}</span>'  # Green
+                        elif uptime_val > two_sigma_high:
+                            colored_str = f'<span style="color: #28a745;">{percentage_str}</span>'  # Green
+                        elif uptime_val < net_mean:
+                            colored_str = f'<span style="color: #ffcc00;">{percentage_str}</span>'  # Yellow
+                        else:
+                            # Above mean but within normal range - no special coloring
+                            colored_str = percentage_str
                     else:
-                        colored_str = percentage_str
+                        # Fallback color coding when no network statistics available
+                        if uptime_val <= 1.0:
+                            colored_str = f'<span style="color: #dc3545;">{percentage_str}</span>'  # Red
+                        elif uptime_val >= 99.0:
+                            colored_str = f'<span style="color: #28a745;">{percentage_str}</span>'  # Green
+                        else:
+                            # Default: no special coloring
+                            colored_str = percentage_str
                     
                     display_parts.append(colored_str)
                     
