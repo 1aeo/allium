@@ -140,10 +140,10 @@
         </div>
         {% endif %}
         
-        {# Network Reliability - Simplified using pre-computed data #}
+        {# Relay Reliability - Simplified using pre-computed data #}
         {% if operator_reliability and operator_reliability.valid_relays > 0 %}
         <div class="reliability-section" style="padding: 15px; background-color: #f8f9fa; border-left: 4px solid #28a745;">
-            <h4 style="margin-top: 0; color: #495057;">⏰ Network Reliability</h4>
+            <h4 style="margin-top: 0; color: #495057;">⏰ Relay Reliability</h4>
             
             <ul style="list-style-type: disc; padding-left: 20px; margin-bottom: 0;">
                 {# Overall uptime - using pre-computed formatted data #}
@@ -194,6 +194,43 @@
             
             <div style="font-size: 12px; color: #666; margin-top: 10px;">
                 Reliability data available for {{ operator_reliability.valid_relays }}/{{ operator_reliability.total_relays }} relays{% if contact_display_data and contact_display_data.uptime_timestamp %}, from {{ contact_display_data.uptime_timestamp }}{% endif %}
+            </div>
+        </div>
+        {% endif %}
+        
+        {# Flag Reliability - New section using flag-specific uptime data #}
+        {% if contact_display_data and contact_display_data.flag_analysis and contact_display_data.flag_analysis.has_flag_data %}
+        {% set flag_data = contact_display_data.flag_analysis %}
+        <div class="flag-reliability-section" style="padding: 15px; background-color: #f8f9fa; border-left: 4px solid #007bff; margin-top: 20px;">
+            <h4 style="margin-top: 0; color: #495057;">🏷️ Flag Reliability</h4>
+            
+            <div style="font-size: 14px; margin-bottom: 10px;">
+                <strong>Flag-specific uptime percentages (1M/6M/1Y/5Y):</strong>
+            </div>
+            
+            {% for flag_name, flag_info in flag_data.flag_reliabilities.items() %}
+            <div style="margin-bottom: 8px;">
+                <span style="font-weight: bold;">{{ flag_info.icon }} {{ flag_info.display_name }}:</span>
+                {% for period, period_data in flag_info.periods.items() %}
+                    {% if period_data.value > 0 %}
+                        {% set color_style = '' %}
+                        {% if period_data.color_class == 'high-performance' %}
+                            {% set color_style = 'color: #28a745; font-weight: bold;' %}
+                        {% elif period_data.color_class == 'statistical-outlier-low' %}
+                            {% set color_style = 'color: #dc3545; font-weight: bold;' %}
+                        {% elif period_data.color_class == 'statistical-outlier-high' %}
+                            {% set color_style = 'color: #dc3545; font-weight: bold;' %}
+                        {% endif %}
+                        <span title="{{ period_data.tooltip }}" style="cursor: help; {{ color_style }}">{{ "%.1f"|format(period_data.value) }}%</span>{% if not loop.last %} / {% endif %}
+                    {% endif %}
+                {% endfor %}
+            </div>
+            {% endfor %}
+            
+            <div style="font-size: 12px; color: #666; margin-top: 10px;">
+                <span style="color: #28a745;">Green: >99%</span>, 
+                <span style="color: #dc3545;">Red: ≥2σ from network mean</span>
+                {% if contact_display_data and contact_display_data.uptime_timestamp %}, from {{ contact_display_data.uptime_timestamp }}{% endif %}
             </div>
         </div>
         {% endif %}

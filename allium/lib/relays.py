@@ -16,6 +16,7 @@ from shutil import rmtree
 from jinja2 import Environment, FileSystemLoader
 from .aroileaders import _calculate_aroi_leaderboards
 from .progress import log_progress, get_memory_usage
+import logging
 
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
 
@@ -1991,7 +1992,44 @@ class Relays:
         downtime_alerts = self._calculate_operator_downtime_alerts(v, members, i, bandwidth_unit)
         display_data['downtime_alerts'] = downtime_alerts
         
+        # 9. Flag analysis
+        operator_flag_analysis = self._compute_contact_flag_analysis(v, members)
+        display_data['flag_analysis'] = operator_flag_analysis
+        
         return display_data
+    
+    def _compute_contact_flag_analysis(self, contact_hash, members):
+        """
+        Compute flag reliability analysis for contact operator
+        
+        Args:
+            contact_hash: Contact hash for the operator
+            members: List of relay objects for the operator
+            
+        Returns:
+            dict: Flag reliability analysis data
+        """
+        try:
+            from .flag_reliability_utils import FlagReliabilityAnalyzer
+            
+            # Get uptime data (should be attached to relay set)
+            if not hasattr(self, 'uptime_data') or not self.uptime_data:
+                return {'has_flag_data': False, 'error': 'No uptime data available'}
+                
+            # Initialize analyzer with operator relays and network uptime data
+            analyzer = FlagReliabilityAnalyzer(members, self.uptime_data)
+            
+            # Calculate flag reliability metrics
+            flag_analysis = analyzer.calculate_operator_flag_reliability()
+            
+            return flag_analysis
+            
+        except ImportError:
+            return {'has_flag_data': False, 'error': 'Flag reliability module not available'}
+        except Exception as e:
+            # Log error but don't crash the page
+            logging.error(f"Error computing flag analysis for {contact_hash}: {e}")
+            return {'has_flag_data': False, 'error': 'Error computing flag analysis'}
 
     def _calculate_operator_downtime_alerts(self, contact_hash, operator_relays, contact_data, bandwidth_unit):
         """
