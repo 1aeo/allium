@@ -2103,7 +2103,7 @@ class Relays:
             'Stable': {'icon': '🛡️', 'display_name': 'Stable Operation'}, 
             'Guard': {'icon': '🛡️', 'display_name': 'Entry Guard'},
             'Exit': {'icon': '🚪', 'display_name': 'Exit Node'},
-            'HSDir': {'icon': '📂', 'display_name': 'Directory Mirror'},
+            'HSDir': {'icon': '📂', 'display_name': 'Hidden Services'},
             'Authority': {'icon': '⚖️', 'display_name': 'Directory Authority'},
             'V2Dir': {'icon': '📁', 'display_name': 'Directory Services'},
             'BadExit': {'icon': '🚫', 'display_name': 'Bad Exit'}
