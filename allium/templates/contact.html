@@ -129,19 +129,21 @@
                     {% for period, data in contact_display_data.uptime_formatted.items() %}
                         {{ data.display|safe }} ({{ data.relay_count }} relays){% if not loop.last %}, {% endif %}
                     {% endfor %}
+                    
+                    {# Statistical outliers as sub-bullet under overall uptime #}
+                    {% if contact_display_data and contact_display_data.outliers %}
+                    {% set outliers = contact_display_data.outliers %}
+                    <ul style="list-style-type: circle; padding-left: 20px; margin-top: 3px; margin-bottom: 0;">
+                        {% if outliers.total_count %}
+                        <li><strong>Outlier ({{ outliers.tooltip }}):</strong>
+                            <span style="color: #000; font-weight: normal;">{{ outliers.total_count }} relays out of {{ outliers.total_relays }} relays ({{ outliers.percentage }}%)</span>{% if outliers.low_count %}, <span style="color: #dc3545; font-weight: bold;">Low:</span> <span title="{{ outliers.low_tooltip }}" style="cursor: help;">{{ outliers.low_count }} relay{{ 's' if outliers.low_count != 1 else '' }}</span>{% endif %}{% if outliers.high_count %}{% if outliers.low_count %}, {% endif %}<span style="color: #28a745; font-weight: bold;">Exceptional:</span> <span title="{{ outliers.high_tooltip }}" style="cursor: help;">{{ outliers.high_count }} relay{{ 's' if outliers.high_count != 1 else '' }}</span>{% endif %}
+                        </li>
+                        {% elif outliers.none_detected %}
+                        <li><span style="color: #28a745;">✅ No statistical outliers detected - consistent performance across all relays</span></li>
+                        {% endif %}
+                    </ul>
+                    {% endif %}
                 </li>
-                {% endif %}
-                
-                {# Statistical outliers section - using pre-computed data #}
-                {% if contact_display_data and contact_display_data.outliers %}
-                {% set outliers = contact_display_data.outliers %}
-                {% if outliers.total_count %}
-                <li><strong>Outlier ({{ outliers.tooltip }}):</strong>
-                    <span style="color: #000; font-weight: normal;">{{ outliers.total_count }} relays out of {{ outliers.total_relays }} relays ({{ outliers.percentage }}%)</span>{% if outliers.low_count %}, <span style="color: #dc3545; font-weight: bold;">Low:</span> <span title="{{ outliers.low_tooltip }}" style="cursor: help;">{{ outliers.low_count }} relay{{ 's' if outliers.low_count != 1 else '' }}</span>{% endif %}{% if outliers.high_count %}{% if outliers.low_count %}, {% endif %}<span style="color: #28a745; font-weight: bold;">Exceptional:</span> <span title="{{ outliers.high_tooltip }}" style="cursor: help;">{{ outliers.high_count }} relay{{ 's' if outliers.high_count != 1 else '' }}</span>{% endif %}
-                </li>
-                {% elif outliers.none_detected %}
-                <li><span style="color: #28a745;">✅ No statistical outliers detected - consistent performance across all relays</span></li>
-                {% endif %}
                 {% endif %}
                 
                 {# Real-time Downtime Alerts - Idea #8 from uptime integration proposals #}
@@ -210,19 +212,21 @@
                     {% for period, data in contact_display_data.uptime_formatted.items() %}
                         {{ data.display|safe }} ({{ data.relay_count }} relays){% if not loop.last %}, {% endif %}
                     {% endfor %}
+                    
+                    {# Statistical outliers as sub-bullet under overall uptime #}
+                    {% if contact_display_data and contact_display_data.outliers %}
+                    {% set outliers = contact_display_data.outliers %}
+                    <ul style="list-style-type: circle; padding-left: 20px; margin-top: 3px; margin-bottom: 0;">
+                        {% if outliers.total_count %}
+                        <li><strong>Outlier ({{ outliers.tooltip }}):</strong>
+                            <span style="color: #000; font-weight: normal;">{{ outliers.total_count }} relays out of {{ outliers.total_relays }} relays ({{ outliers.percentage }}%)</span>{% if outliers.low_count %}, <span style="color: #dc3545; font-weight: bold;">Low:</span> <span title="{{ outliers.low_tooltip }}" style="cursor: help;">{{ outliers.low_count }} relay{{ 's' if outliers.low_count != 1 else '' }}</span>{% endif %}{% if outliers.high_count %}{% if outliers.low_count %}, {% endif %}<span style="color: #28a745; font-weight: bold;">Exceptional:</span> <span title="{{ outliers.high_tooltip }}" style="cursor: help;">{{ outliers.high_count }} relay{{ 's' if outliers.high_count != 1 else '' }}</span>{% endif %}
+                        </li>
+                        {% elif outliers.none_detected %}
+                        <li><span style="color: #28a745;">✅ No statistical outliers detected - consistent performance across all relays</span></li>
+                        {% endif %}
+                    </ul>
+                    {% endif %}
                 </li>
-                {% endif %}
-                
-                {# Statistical outliers section - using pre-computed data #}
-                {% if contact_display_data and contact_display_data.outliers %}
-                {% set outliers = contact_display_data.outliers %}
-                {% if outliers.total_count %}
-                <li><strong>Outlier ({{ outliers.tooltip }}):</strong>
-                    <span style="color: #000; font-weight: normal;">{{ outliers.total_count }} relays out of {{ outliers.total_relays }} relays ({{ outliers.percentage }}%)</span>{% if outliers.low_count %}, <span style="color: #dc3545; font-weight: bold;">Low:</span> <span title="{{ outliers.low_tooltip }}" style="cursor: help;">{{ outliers.low_count }} relay{{ 's' if outliers.low_count != 1 else '' }}</span>{% endif %}{% if outliers.high_count %}{% if outliers.low_count %}, {% endif %}<span style="color: #28a745; font-weight: bold;">Exceptional:</span> <span title="{{ outliers.high_tooltip }}" style="cursor: help;">{{ outliers.high_count }} relay{{ 's' if outliers.high_count != 1 else '' }}</span>{% endif %}
-                </li>
-                {% elif outliers.none_detected %}
-                <li><span style="color: #28a745;">✅ No statistical outliers detected - consistent performance across all relays</span></li>
-                {% endif %}
                 {% endif %}
                 
                 {# Real-time Downtime Alerts - Idea #8 from uptime integration proposals #}
