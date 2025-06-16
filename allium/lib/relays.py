@@ -456,8 +456,6 @@ class Relays:
             # Store consolidated results for use by contact page processing
             self._consolidated_uptime_results = consolidated_results
             
-
-            
             # Apply results to individual relays
             for relay in self.json["relays"]:
                 fingerprint = relay.get('fingerprint', '')
@@ -2034,10 +2032,14 @@ class Relays:
                 
                 # Extract flag data for operator relays using pre-computed data
                 operator_flag_data = {}
+                
                 for relay in members:
                     fingerprint = relay.get('fingerprint', '')
+                    nickname = relay.get('nickname', 'Unknown')
+                    
                     if fingerprint in relay_uptime_data:
                         flag_data = relay_uptime_data[fingerprint]['flag_data']
+                        
                         for flag, periods in flag_data.items():
                             if flag not in operator_flag_data:
                                 operator_flag_data[flag] = {}
@@ -2107,6 +2109,7 @@ class Relays:
         periods_with_data = set()
         
         for flag, periods in operator_flag_data.items():
+            
             if flag not in flag_display_mapping:
                 continue
                 
