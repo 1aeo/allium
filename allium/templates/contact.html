@@ -205,14 +205,17 @@
             <h4 style="margin-top: 0; color: #495057;">🏷️ Flag Reliability</h4>
             
             <div style="font-size: 14px; margin-bottom: 10px;">
-                <strong>Flag-specific uptime percentages (1M/6M/1Y/5Y):</strong>
+                <strong>Flag-specific uptime percentages{% if flag_data.period_display and flag_data.period_display != 'No Data' %} ({{ flag_data.period_display }}){% endif %}:</strong>
             </div>
             
+            {% if flag_data.available_periods and flag_data.available_periods|length > 0 %}
             {% for flag_name, flag_info in flag_data.flag_reliabilities.items() %}
             <div style="margin-bottom: 8px;">
                 <span style="font-weight: bold;">{{ flag_info.icon }} {{ flag_info.display_name }}:</span>
-                {% for period, period_data in flag_info.periods.items() %}
-                    {% if period_data.value > 0 %}
+                {% set period_values = [] %}
+                {% for period in flag_data.available_periods %}
+                    {% if period in flag_info.periods %}
+                        {% set period_data = flag_info.periods[period] %}
                         {% set color_style = '' %}
                         {% if period_data.color_class == 'high-performance' %}
                             {% set color_style = 'color: #28a745; font-weight: bold;' %}
@@ -221,11 +224,18 @@
                         {% elif period_data.color_class == 'statistical-outlier-high' %}
                             {% set color_style = 'color: #dc3545; font-weight: bold;' %}
                         {% endif %}
-                        <span title="{{ period_data.tooltip }}" style="cursor: help; {{ color_style }}">{{ "%.1f"|format(period_data.value) }}%</span>{% if not loop.last %} / {% endif %}
+                        {% set formatted_value %}<span title="{{ period_data.tooltip }}" style="cursor: help; {{ color_style }}">{{ "%.1f"|format(period_data.value) }}%</span>{% endset %}
+                        {% set _ = period_values.append(formatted_value) %}
                     {% endif %}
                 {% endfor %}
+                {{ period_values|join(' / ') }}
             </div>
             {% endfor %}
+            {% else %}
+            <div style="color: #6c757d; font-style: italic;">
+                No flag reliability data available for this operator.
+            </div>
+            {% endif %}
             
             <div style="font-size: 12px; color: #666; margin-top: 10px;">
                 <span style="color: #28a745;">Green: >99%</span>, 

@@ -2055,13 +2055,15 @@ class Relays:
                     return {'has_flag_data': False, 'error': 'No flag data available for operator relays'}
                 
                 # Process flag reliability using pre-computed network statistics
-                flag_reliabilities = self._process_operator_flag_reliability(
+                flag_reliability_results = self._process_operator_flag_reliability(
                     operator_flag_data, network_flag_statistics
                 )
                 
                 return {
                     'has_flag_data': True,
-                    'flag_reliabilities': flag_reliabilities,
+                    'flag_reliabilities': flag_reliability_results['flag_reliabilities'],
+                    'available_periods': flag_reliability_results['available_periods'],
+                    'period_display': flag_reliability_results['period_display'],
                     'source': 'consolidated_processing'
                 }
                 
@@ -2085,7 +2087,7 @@ class Relays:
             network_flag_statistics: Network-wide flag statistics for comparison
             
         Returns:
-            dict: Processed flag reliability metrics
+            dict: Processed flag reliability metrics with available periods info
         """
         flag_display_mapping = {
             'Running': {'icon': '🟢', 'display_name': 'Basic Operation'},
@@ -2100,6 +2102,9 @@ class Relays:
         }
         
         flag_reliabilities = {}
+        
+        # Track which time periods have data across all flags
+        periods_with_data = set()
         
         for flag, periods in operator_flag_data.items():
             if flag not in flag_display_mapping:
@@ -2119,47 +2124,61 @@ class Relays:
                     uptime_values = [relay_data['uptime'] for relay_data in periods[period]]
                     avg_uptime = sum(uptime_values) / len(uptime_values)
                     
-                    # Determine color coding and tooltip
-                    color_class = ''
-                    tooltip = f'{flag} flag uptime over {period_short}: {avg_uptime:.1f}%'
-                    
-                    # Add network comparison if available
-                    if (flag in network_flag_statistics and 
-                        period in network_flag_statistics[flag] and 
-                        network_flag_statistics[flag][period]):
+                    # Only include if average uptime > 0 (has meaningful data)
+                    if avg_uptime > 0:
+                        periods_with_data.add(period_short)
                         
-                        net_stats = network_flag_statistics[flag][period]
-                        tooltip += f' (network μ: {net_stats["mean"]:.1f}%, σ: {net_stats["std_dev"]:.1f}%)'
+                        # Determine color coding and tooltip
+                        color_class = ''
+                        tooltip = f'{flag} flag uptime over {period_short}: {avg_uptime:.1f}%'
                         
-                        # Color coding logic
-                        if avg_uptime > 99.0:
-                            color_class = 'high-performance'
-                        elif avg_uptime < net_stats['two_sigma_low']:
-                            color_class = 'statistical-outlier-low'
-                            # Add outlier relay info
-                            outlier_relays = [r['relay_nickname'] for r in periods[period] 
-                                            if r['uptime'] < net_stats['two_sigma_low']]
-                            if outlier_relays:
-                                tooltip += f', Outlier relays: {", ".join(outlier_relays[:3])}'
-                        elif avg_uptime > net_stats['two_sigma_high']:
-                            color_class = 'statistical-outlier-high'
-                    else:
-                        # No network data available
-                        if avg_uptime > 99.0:
-                            color_class = 'high-performance'
-                    
-                    flag_info['periods'][period_short] = {
-                        'value': avg_uptime,
-                        'color_class': color_class,
-                        'tooltip': tooltip,
-                        'relay_count': len(periods[period])
-                    }
+                        # Add network comparison if available
+                        if (flag in network_flag_statistics and 
+                            period in network_flag_statistics[flag] and 
+                            network_flag_statistics[flag][period]):
+                            
+                            net_stats = network_flag_statistics[flag][period]
+                            tooltip += f' (network μ: {net_stats["mean"]:.1f}%, σ: {net_stats["std_dev"]:.1f}%)'
+                            
+                            # Color coding logic
+                            if avg_uptime > 99.0:
+                                color_class = 'high-performance'
+                            elif avg_uptime < net_stats['two_sigma_low']:
+                                color_class = 'statistical-outlier-low'
+                                # Add outlier relay info
+                                outlier_relays = [r['relay_nickname'] for r in periods[period] 
+                                                if r['uptime'] < net_stats['two_sigma_low']]
+                                if outlier_relays:
+                                    tooltip += f', Outlier relays: {", ".join(outlier_relays[:3])}'
+                            elif avg_uptime > net_stats['two_sigma_high']:
+                                color_class = 'statistical-outlier-high'
+                            else:
+                                # No network data available
+                                if avg_uptime > 99.0:
+                                    color_class = 'high-performance'
+                        
+                        flag_info['periods'][period_short] = {
+                            'value': avg_uptime,
+                            'color_class': color_class,
+                            'tooltip': tooltip,
+                            'relay_count': len(periods[period])
+                        }
                 
             # Only include flag if it has data for at least one period
             if flag_info['periods']:
                 flag_reliabilities[flag] = flag_info
         
-        return flag_reliabilities
+        # Generate dynamic period display string
+        period_order = ['1M', '6M', '1Y', '5Y']
+        available_periods = [p for p in period_order if p in periods_with_data]
+        period_display = '/'.join(available_periods) if available_periods else 'No Data'
+        
+        return {
+            'flag_reliabilities': flag_reliabilities,
+            'available_periods': available_periods,
+            'period_display': period_display,
+            'has_data': bool(available_periods)
+        }
     
     def _compute_contact_flag_analysis_fallback(self, contact_hash, members):
         """
