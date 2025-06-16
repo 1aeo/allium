@@ -16,7 +16,8 @@ from .country_utils import (
     count_non_eu_countries, 
     count_frontier_countries_weighted_with_existing_data,
     calculate_diversity_score, 
-    calculate_geographic_achievement
+    calculate_geographic_achievement,
+    EU_POLITICAL_REGION  # Add this import
 )
 
 
@@ -277,6 +278,17 @@ def _calculate_aroi_leaderboards(relays_instance):
         sorted_all_country_breakdown = sorted(all_country_breakdown.items(), 
                                      key=lambda x: (-x[1], x[0]))
         
+        # Calculate non-EU country breakdown for specialization column (NEW)
+        non_eu_country_breakdown = {}
+        for relay in operator_relays:
+            country = relay.get('country', '').upper()
+            if country and country.lower() not in EU_POLITICAL_REGION:
+                non_eu_country_breakdown[country] = non_eu_country_breakdown.get(country, 0) + 1
+        
+        # Sort by relay count (descending) then by country name for consistent display
+        sorted_non_eu_country_breakdown = sorted(non_eu_country_breakdown.items(), 
+                                                key=lambda x: (-x[1], x[0]))
+        
 
         
 
@@ -381,6 +393,7 @@ def _calculate_aroi_leaderboards(relays_instance):
             'relays_in_rare_countries': relays_in_rare_countries,
             'rare_country_breakdown': sorted_rare_breakdown,
             'all_country_breakdown': sorted_all_country_breakdown,  # Reusable country breakdown
+            'non_eu_country_breakdown': sorted_non_eu_country_breakdown,  # Non-EU country breakdown
             'diversity_score': diversity_score,
             'uptime_percentage': uptime_percentage,
             'exit_consensus_weight': exit_consensus_weight,
@@ -520,9 +533,9 @@ def _calculate_aroi_leaderboards(relays_instance):
             geographic_breakdown_tooltip = ""
             if category == 'non_eu_leaders':
                 geographic_achievement = calculate_geographic_achievement(metrics['countries'])
-                # Reuse pre-calculated country breakdown data instead of recalculating
+                # Use non-EU country breakdown for specialization column instead of all countries
                 geographic_breakdown_details, geographic_breakdown_tooltip = _format_breakdown_details(
-                    metrics['all_country_breakdown'], 52
+                    metrics['non_eu_country_breakdown'], 52
                 )
             
             # Format rare country breakdown for frontier_builders category
