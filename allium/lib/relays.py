@@ -2109,8 +2109,8 @@ class Relays:
             'BadExit': {'icon': '🚫', 'display_name': 'Bad Exit'}
         }
         
-        # Define flag ordering for consistent display - Directory Services before Directory Mirror
-        flag_order = ['BadExit', 'Stable', 'Fast', 'Running', 'Authority', 'Guard', 'Exit', 'V2Dir', 'HSDir']
+        # Define flag ordering for consistent display - Hidden Services before Directory Services
+        flag_order = ['BadExit', 'Stable', 'Fast', 'Running', 'Authority', 'Guard', 'Exit', 'HSDir', 'V2Dir']
         
         flag_reliabilities = {}
         
