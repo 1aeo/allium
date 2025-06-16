@@ -458,6 +458,8 @@ class Relays:
             # Store consolidated results for use by contact page processing
             self._consolidated_uptime_results = consolidated_results
             
+            print(f"DEBUG: Consolidated processing completed - {len(relay_uptime_data)} relays processed, {len(network_flag_statistics)} flags found")
+            
             # Apply results to individual relays
             for relay in self.json["relays"]:
                 fingerprint = relay.get('fingerprint', '')
@@ -2124,8 +2126,8 @@ class Relays:
                     uptime_values = [relay_data['uptime'] for relay_data in periods[period]]
                     avg_uptime = sum(uptime_values) / len(uptime_values)
                     
-                    # Only include if average uptime > 0 (has meaningful data)
-                    if avg_uptime > 0:
+                    # Include all values >= 0 (0% is valid data meaning relay never had this flag)
+                    if avg_uptime >= 0:
                         periods_with_data.add(period_short)
                         
                         # Determine color coding and tooltip
@@ -2183,40 +2185,73 @@ class Relays:
     def _compute_contact_flag_analysis_fallback(self, contact_hash, members):
         """
         Fallback flag analysis processing if consolidated results are not available.
+        This method actually calculates flag reliability using individual uptime data processing.
         
         Args:
             contact_hash: Contact hash for the operator
             members: List of relay objects for the operator
             
         Returns:
-            dict: Basic flag reliability analysis data
+            dict: Flag reliability analysis data
         """
         # Get uptime data (should be attached to relay set)
         if not hasattr(self, 'uptime_data') or not self.uptime_data:
             return {'has_flag_data': False, 'error': 'No uptime data available'}
         
-        # Basic flag analysis using individual relay processing
-        flag_reliabilities = {}
+        # Process flag data manually for this operator
+        from .uptime_utils import find_relay_uptime_data
         
-        # Simple flag mapping for fallback
-        basic_flags = {
-            'Running': {'icon': '🟢', 'display_name': 'Basic Operation'},
-            'Guard': {'icon': '🛡️', 'display_name': 'Entry Guard'},
-            'Exit': {'icon': '🚪', 'display_name': 'Exit Node'}
-        }
+        operator_flag_data = {}
         
-        for flag, info in basic_flags.items():
-            flag_reliabilities[flag] = {
-                'icon': info['icon'],
-                'display_name': info['display_name'],
-                'periods': {
-                    '1M': {'value': 0.0, 'color_class': '', 'tooltip': 'Fallback processing - limited data'},
-                }
-            }
+        for relay in members:
+            fingerprint = relay.get('fingerprint', '')
+            nickname = relay.get('nickname', 'Unknown')
+            
+            if not fingerprint:
+                continue
+                
+            # Find uptime data for this relay
+            relay_uptime = find_relay_uptime_data(fingerprint, self.uptime_data)
+            
+            if relay_uptime and relay_uptime.get('flags'):
+                flags_section = relay_uptime['flags']
+                
+                for flag, periods in flags_section.items():
+                    if flag not in operator_flag_data:
+                        operator_flag_data[flag] = {}
+                    
+                    for period, data in periods.items():
+                        if period in ['1_month', '6_months', '1_year', '5_years'] and data.get('values'):
+                            # Process flag data using same logic as consolidated processing
+                            valid_values = [v for v in data['values'] if v is not None and 0 <= v <= 1]
+                            if valid_values:
+                                # Calculate average fractional uptime and convert to percentage
+                                avg_fractional = sum(valid_values) / len(valid_values)
+                                avg_uptime = avg_fractional * 100  # Convert 0-1 to 0-100%
+                                
+                                if period not in operator_flag_data[flag]:
+                                    operator_flag_data[flag][period] = []
+                                    
+                                operator_flag_data[flag][period].append({
+                                    'relay_nickname': nickname,
+                                    'relay_fingerprint': fingerprint,
+                                    'uptime': avg_uptime,
+                                    'data_points': len(valid_values)
+                                })
+        
+        if not operator_flag_data:
+            return {'has_flag_data': False, 'error': 'No flag data found in uptime API for operator relays'}
+        
+        # Process the extracted data using the same method as consolidated processing
+        flag_reliability_results = self._process_operator_flag_reliability(
+            operator_flag_data, {}  # No network statistics in fallback
+        )
         
         return {
             'has_flag_data': True,
-            'flag_reliabilities': flag_reliabilities,
+            'flag_reliabilities': flag_reliability_results['flag_reliabilities'],
+            'available_periods': flag_reliability_results['available_periods'],
+            'period_display': flag_reliability_results['period_display'],
             'source': 'fallback_processing'
         }
 
