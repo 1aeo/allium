@@ -714,7 +714,8 @@ def _calculate_aroi_leaderboards(relays_instance):
                 'middle_count': metrics['middle_count'],
                 'measured_count': metrics['measured_count'],
                 'unique_as_count': metrics['unique_as_count'],
-                'country_count': metrics['country_count'],
+                # Frontier Builders should show only rare country count, not total country count
+                'country_count': metrics['rare_country_count'] if category == 'frontier_builders' else metrics['country_count'],
                 'countries': metrics['countries'][:5],  # Top 5 countries for display
                 'platform_count': metrics['platform_count'],
                 'platforms': metrics['platforms'][:3],  # Top 3 platforms for display
