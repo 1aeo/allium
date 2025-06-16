@@ -2168,14 +2168,15 @@ class Relays:
                             tooltip += f' (network μ: {net_stats["mean"]:.1f}%, 2σ: {net_stats["two_sigma_low"]:.1f}%)'
                             
                             # Enhanced color coding logic: prioritize statistical outliers over >99%
-                            if avg_uptime < net_stats['two_sigma_low']:
+                            # Use explicit comparison to handle floating point edge cases
+                            if avg_uptime <= net_stats['two_sigma_low']:
                                 color_class = 'statistical-outlier-low'
                                 # Add outlier relay info
                                 outlier_relays = [r['relay_nickname'] for r in periods[period] 
-                                                if r['uptime'] < net_stats['two_sigma_low']]
+                                                if r['uptime'] <= net_stats['two_sigma_low']]
                                 if outlier_relays:
                                     tooltip += f', Outlier relays: {", ".join(outlier_relays[:3])}'
-                            elif avg_uptime > net_stats['two_sigma_high']:
+                            elif avg_uptime >= net_stats['two_sigma_high']:
                                 color_class = 'statistical-outlier-high'
                             elif avg_uptime > 99.0:
                                 color_class = 'high-performance'
@@ -2185,8 +2186,10 @@ class Relays:
                                 # Above mean but within normal range
                                 color_class = ''
                         else:
-                            # No network data available
-                            if avg_uptime > 99.0:
+                            # No network data available - handle 0.0% as special case
+                            if avg_uptime == 0.0:
+                                color_class = 'statistical-outlier-low'  # 0.0% should always be red
+                            elif avg_uptime > 99.0:
                                 color_class = 'high-performance'
                         
                         flag_info['periods'][period_short] = {
