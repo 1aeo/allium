@@ -28,7 +28,7 @@ EU_POLITICAL_REGION = {
 
 # === FRONTIER/RARE COUNTRIES ===
 # Source: aroileaders.py rare_countries definition
-FRONTIER_COUNTRIES = {'mn', 'tn', 'uy', 'kz', 'md', 'lk', 'mk', 'mt', 'ee', 'lv'}
+FRONTIER_COUNTRIES = {'mn', 'tn', 'uy', 'kz', 'md', 'lk', 'mk', 'mt'}
 
 # === WEIGHTED RARE COUNTRY SCORING SYSTEM ===
 # Multi-factor scoring for dynamic rare country classification
@@ -50,7 +50,7 @@ GEOPOLITICAL_CLASSIFICATIONS = {
     # Island nations (2 points) - Strategic geographic positions
     'island_nations': {
         'mt', 'cy', 'is', 'mv', 'fj', 'mg', 'mu', 'sc', 'bb', 'jm', 'tt',
-        'bh', 'sg', 'bn', 'ki', 'tv', 'to', 'ws', 'vu', 'sb', 'pw', 'fm',
+        'bh', 'bn', 'ki', 'tv', 'to', 'ws', 'vu', 'sb', 'pw', 'fm',
         'mh', 'nr', 'ag', 'bs', 'dm', 'gd', 'kn', 'lc', 'vc', 'cv'
     },
     
@@ -73,7 +73,7 @@ GEOPOLITICAL_CLASSIFICATIONS = {
         'ar', 'br', 'cl', 'co', 'ec', 'pe', 'uy', 've', 'mx', 'gt', 'hn',
         'sv', 'cr', 'pa', 'do', 'jm',
         # Eastern Europe
-        'al', 'ba', 'bg', 'hr', 'mk', 'md', 'me', 'rs', 'ro'
+        'al', 'ba', 'mk', 'md', 'me'
     }
 }
 
