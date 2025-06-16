@@ -97,7 +97,7 @@
                 {% endif %}
                 
                 {% if intelligence.performance_status %}
-                <li><strong><span title="Performance insights identify underutilized relays with high bandwidth (>10MB/s) but low consensus weight (<0.05% of bandwidth). These relays may need configuration optimization or better connectivity.">Performance Insights</span>:</strong> {{ intelligence.performance_underutilized }} underutilized relays - {{ intelligence.performance_status }}{% if intelligence.performance_underutilized_fps %} ({% for fp in intelligence.performance_underutilized_fps %}{{ fp[:8] }}{% if not loop.last %}, {% endif %}{% endfor %}){% endif %}</li>
+                <li><strong><span title="Performance insights identify underutilized relays with high bandwidth (>10MB/s) but low consensus weight (<0.05% of bandwidth). These relays may need configuration optimization or better connectivity.">Performance Insights</span>:</strong> {{ intelligence.performance_underutilized }} underutilized relays - {{ intelligence.performance_status }}{% if intelligence.performance_underutilized_fps %} ({% for fp in intelligence.performance_underutilized_fps %}{% for relay in relays.json['relay_subset'] %}{% if relay['fingerprint'] == fp %}<a href="{{ page_ctx.path_prefix }}relay/{{ relay['fingerprint']|escape }}/">{{ relay['nickname']|escape }}</a>{% endif %}{% endfor %}{% if not loop.last %}, {% endif %}{% endfor %}){% endif %}</li>
                 {% endif %}
                 
                 {% if intelligence.maturity %}
