@@ -2165,20 +2165,31 @@ class Relays:
                             network_flag_statistics[flag][period]):
                             
                             net_stats = network_flag_statistics[flag][period]
-                            tooltip += f' (network μ: {net_stats["mean"]:.1f}%, 2σ: {net_stats["std_dev"]*2:.1f}%)'
                             
-                            # Color coding logic: green >99%, red ≥2σ from mean, yellow below mean
-                            if avg_uptime > 99.0:
-                                color_class = 'high-performance'
-                            elif avg_uptime < net_stats['two_sigma_low']:
+                            # Enhanced tooltip with clear above/below mean indication
+                            tooltip += f' (network μ: {net_stats["mean"]:.1f}%'
+                            if avg_uptime > net_stats["mean"]:
+                                tooltip += f', {avg_uptime - net_stats["mean"]:.1f}% above mean'
+                            elif avg_uptime < net_stats["mean"]:
+                                tooltip += f', {abs(avg_uptime - net_stats["mean"]):.1f}% below mean'
+                            else:
+                                tooltip += f', at network mean'
+                            
+                            # Add 2σ thresholds for context
+                            tooltip += f', 2σ low: {net_stats["two_sigma_low"]:.1f}%, 2σ high: {net_stats["two_sigma_high"]:.1f}%)'
+                            
+                            # Enhanced color coding logic: prioritize statistical outliers over >99%
+                            if avg_uptime < net_stats['two_sigma_low']:
                                 color_class = 'statistical-outlier-low'
                                 # Add outlier relay info
                                 outlier_relays = [r['relay_nickname'] for r in periods[period] 
                                                 if r['uptime'] < net_stats['two_sigma_low']]
                                 if outlier_relays:
-                                    tooltip += f', Outlier relays: {", ".join(outlier_relays[:3])}'
+                                    tooltip += f' Outlier relays: {", ".join(outlier_relays[:3])}'
                             elif avg_uptime > net_stats['two_sigma_high']:
                                 color_class = 'statistical-outlier-high'
+                            elif avg_uptime > 99.0:
+                                color_class = 'high-performance'
                             elif avg_uptime < net_stats['mean']:
                                 color_class = 'below-mean'
                             else:
