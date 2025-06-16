@@ -2134,7 +2134,17 @@ class Relays:
             }
             
             for period in ['1_month', '6_months', '1_year', '5_years']:
-                period_short = period.replace('_', '').replace('month', 'M').replace('months', 'M').replace('year', 'Y').replace('years', 'Y')
+                # Fixed period mapping - handle months before month to avoid conflict
+                if period == '1_month':
+                    period_short = '1M'
+                elif period == '6_months':
+                    period_short = '6M'
+                elif period == '1_year':
+                    period_short = '1Y'
+                elif period == '5_years':
+                    period_short = '5Y'
+                else:
+                    period_short = period  # fallback
                 
                 if period in periods and periods[period]:
                     # Calculate average uptime for operator relays with this flag
