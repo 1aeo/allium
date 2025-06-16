@@ -15,51 +15,11 @@
     color: inherit;
 }
 
-.anchor-icon {
-    display: inline-block;
-    margin-left: 8px;
-    opacity: 0.4;
-    transition: opacity 0.2s;
-    position: relative;
-    font-size: 14px;
-    color: #666;
-    text-decoration: none;
-}
 
-.section-header:hover .anchor-icon {
-    opacity: 0.8;
-}
 
-.anchor-tooltip {
-    position: absolute;
-    top: -30px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: #333;
-    color: white;
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 12px;
-    white-space: nowrap;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s;
-    z-index: 1000;
-}
 
-.anchor-tooltip::after {
-    content: '';
-    position: absolute;
-    top: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    border: 4px solid transparent;
-    border-top-color: #333;
-}
 
-.anchor-icon:hover .anchor-tooltip {
-    opacity: 1;
-}
+
 
 /* Highlight section when targeted */
 :target {
@@ -140,10 +100,6 @@ relay['contact']|escape }}</a>
 <dt id="ipv4-exit-policy-summary">
 <div class="section-header">
 <a href="#ipv4-exit-policy-summary" class="anchor-link">IPv4 Exit Policy Summary</a>
-<a href="#ipv4-exit-policy-summary" class="anchor-icon" title="Link to this section">
-🔗
-<span class="anchor-tooltip">Link to IPv4 Exit Policy Summary</span>
-</a>
 </div>
 </dt>
 <dd>
@@ -160,10 +116,6 @@ relay['contact']|escape }}</a>
 <dt id="ipv6-exit-policy-summary">
 <div class="section-header">
 <a href="#ipv6-exit-policy-summary" class="anchor-link">IPv6 Exit Policy Summary</a>
-<a href="#ipv6-exit-policy-summary" class="anchor-icon" title="Link to this section">
-🔗
-<span class="anchor-tooltip">Link to IPv6 Exit Policy Summary</span>
-</a>
 </div>
 </dt>
 <dd>
@@ -180,10 +132,6 @@ relay['contact']|escape }}</a>
 <dt id="exit-policy">
 <div class="section-header">
 <a href="#exit-policy" class="anchor-link">Exit Policy</a>
-<a href="#exit-policy" class="anchor-icon" title="Link to this section">
-🔗
-<span class="anchor-tooltip">Link to Exit Policy</span>
-</a>
 </div>
 </dt>
 <dd>
@@ -196,20 +144,12 @@ relay['contact']|escape }}</a>
 <dt id="effective-family" title="Array of fingerprints of relays that are in an effective, mutual family relationship with this relay. These relays are part of this relay's family and they consider this relay to be part of their family. Always contains the relay's own fingerprint. Omitted if the descriptor containing this information cannot be found.">
 <div class="section-header">
 <a href="#effective-family" class="anchor-link">Effective Family Members: {{ relay['effective_family']|length }}</a> (<a href="{{ page_ctx.path_prefix }}family/{{ relay['fingerprint']|escape }}/">View</a>)
-<a href="#effective-family" class="anchor-icon" title="Link to this section">
-🔗
-<span class="anchor-tooltip">Link to Effective Family</span>
-</a>
 </div>
 </dt>
 {% else -%}
 <dt id="effective-family" title="Array of fingerprints of relays that are in an effective, mutual family relationship with this relay. These relays are part of this relay's family and they consider this relay to be part of their family. Always contains the relay's own fingerprint. Omitted if the descriptor containing this information cannot be found.">
 <div class="section-header">
 <a href="#effective-family" class="anchor-link">Effective Family Member: {{ relay['effective_family']|length }}</a>
-<a href="#effective-family" class="anchor-icon" title="Link to this section">
-🔗
-<span class="anchor-tooltip">Link to Effective Family</span>
-</a>
 </div>
 </dt>
 {% endif -%}
@@ -226,10 +166,6 @@ relay['contact']|escape }}</a>
 <dt id="alleged-family" title="Array of fingerprints of relays that are not in an effective, mutual family relationship with this relay. These relays are part of this relay's family but they don't consider this relay to be part of their family. Omitted if empty or if descriptor containing this information cannot be found.">
 <div class="section-header">
 <a href="#alleged-family" class="anchor-link">Alleged Family {% if relay['alleged_family'] and relay['alleged_family']|length == 1 -%}Member{% else -%}Members{% endif -%}: {% if relay['alleged_family'] -%}{{ relay['alleged_family']|length }}{% else -%}0{% endif -%}</a>
-<a href="#alleged-family" class="anchor-icon" title="Link to this section">
-🔗
-<span class="anchor-tooltip">Link to Alleged Family</span>
-</a>
 </div>
 </dt>
 <dd>
@@ -249,10 +185,6 @@ relay['contact']|escape }}</a>
 <dt id="indirect-family" title="Array of fingerprints of relays that consider this relay to be part of their family but that are not part of this relay's family. Omitted if empty or if descriptor containing this information cannot be found.">
 <div class="section-header">
 <a href="#indirect-family" class="anchor-link">Indirect Family {% if relay['indirect_family'] and relay['indirect_family']|length == 1 -%}Member{% else -%}Members{% endif -%}: {% if relay['indirect_family'] -%}{{ relay['indirect_family']|length }}{% else -%}0{% endif -%}</a>
-<a href="#indirect-family" class="anchor-icon" title="Link to this section">
-🔗
-<span class="anchor-tooltip">Link to Indirect Family</span>
-</a>
 </div>
 </dt>
 <dd>
