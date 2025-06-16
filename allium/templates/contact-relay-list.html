@@ -28,6 +28,7 @@
     <th title="Observed bandwidth: An estimate of the capacity this relay can handle. The relay remembers the max bandwidth sustained output over any ten second period in the past 5 days, and another sustained input. The observed value is the lesser of these two numbers.">BW ({{ bandwidth }} {{ bandwidth_unit }})</th>
     <th>Uptime/Downtime</th>
     <th title="{% if contact_display_data and contact_display_data.outliers and contact_display_data.outliers.tooltip %}{{ contact_display_data.outliers.tooltip }}{% else %}Statistical outliers: ≥2σ from average{% endif %}">Uptime (1M/6M/1Y/5Y)</th>
+    <th title="Flag-specific uptime percentages showing the reliability of this relay when operating in its primary network role. Priority: Exit > Guard > Fast > Running flags.">Flag Uptime (1M/6M/1Y/5Y)</th>
     <th class="visible-md visible-lg">IPv4</th>
     <th class="visible-md visible-lg">Flags</th>
     <th>Country</th>
@@ -115,6 +116,53 @@
 		        N/A
 		    {% endif -%}
 		</td>
+		<td>
+		    {% if relay.get('_flag_uptime_data') -%}
+		        {% set flag_data = relay['_flag_uptime_data'] -%}
+		        {% set selected_flag = none -%}
+		        {# Priority order: Exit > Guard > Fast > Running #}
+		        {% if 'Exit' in flag_data -%}
+		            {% set selected_flag = 'Exit' -%}
+		        {% elif 'Guard' in flag_data -%}
+		            {% set selected_flag = 'Guard' -%}
+		        {% elif 'Fast' in flag_data -%}
+		            {% set selected_flag = 'Fast' -%}
+		        {% elif 'Running' in flag_data -%}
+		            {% set selected_flag = 'Running' -%}
+		        {% endif -%}
+		        
+		        {% if selected_flag and flag_data[selected_flag] -%}
+		            {# Build the display string for 1M/6M/1Y/5Y #}
+		            {% set display_parts = [] -%}
+		            {% for period in ['1_month', '6_months', '1_year', '5_years'] -%}
+		                {% if period in flag_data[selected_flag] -%}
+		                    {% set uptime_val = flag_data[selected_flag][period]['uptime'] -%}
+		                    {% set percentage_str = "%.1f%%"|format(uptime_val) -%}
+		                    {# Apply same coloring logic as regular uptime #}
+		                    {% if uptime_val >= 100.0 or (uptime_val - 100.0)|abs < 0.01 -%}
+		                        {% set colored_str = '<span style="color: #28a745;">' + percentage_str + '</span>' -%}
+		                    {% elif uptime_val >= 99.0 -%}
+		                        {% set colored_str = '<span style="color: #28a745;">' + percentage_str + '</span>' -%}
+		                    {% elif uptime_val < 95.0 -%}
+		                        {% set colored_str = '<span style="color: #dc3545;">' + percentage_str + '</span>' -%}
+		                    {% elif uptime_val < 98.0 -%}
+		                        {% set colored_str = '<span style="color: #ffcc00;">' + percentage_str + '</span>' -%}
+		                    {% else -%}
+		                        {% set colored_str = percentage_str -%}
+		                    {% endif -%}
+		                    {% set _ = display_parts.append(colored_str) -%}
+		                {% else -%}
+		                    {% set _ = display_parts.append('0.0%') -%}
+		                {% endif -%}
+		            {% endfor -%}
+		            {{ display_parts|join('/')|safe }}
+		        {% else -%}
+		            N/A
+		        {% endif -%}
+		    {% else -%}
+		        N/A
+		    {% endif -%}
+		</td>
 		<td class="visible-md visible-lg">
 		    {% if relay.get('or_addresses') and relay['or_addresses']|length > 0 -%}
 		        {% set ipv4_addr = relay['or_addresses'][0].split(':', 1)[0] -%}
@@ -133,8 +181,7 @@
 				     alt="{{ relay['flags_escaped'][flag_idx] }}">
 			    </a>
 			{% endif -%}
-		    {% endfor
-		    -%}
+		    {% endfor -%}
 		</td>
 		{% if relay['country'] -%}
 		    {% if key != 'country' -%}
