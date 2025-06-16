@@ -164,23 +164,27 @@
             {{ bandwidth_table_complete(relays.json.aroi_leaderboards.leaderboards.bandwidth[:10], relays.use_bits, page_ctx) }}
         </div>
         
-        <!-- Page 2: Ranks 11-20 -->
+        <!-- Page 2: Ranks 11-20 (only show if data exists) -->
+        {% if relays.json.aroi_leaderboards.leaderboards.bandwidth|length > 10 %}
         <div id="bandwidth-11-20" class="pagination-section">
             <h4>🚀 Ranks 11-20</h4>
             {{ bandwidth_table_complete(relays.json.aroi_leaderboards.leaderboards.bandwidth[10:20], relays.use_bits, page_ctx) }}
         </div>
+        {% endif %}
         
-        <!-- Page 3: Ranks 21-25 -->
+        <!-- Page 3: Ranks 21-25 (only show if data exists) -->
+        {% if relays.json.aroi_leaderboards.leaderboards.bandwidth|length > 20 %}
         <div id="bandwidth-21-25" class="pagination-section">
             <h4>🚀 Ranks 21-25</h4>
             {{ bandwidth_table_complete(relays.json.aroi_leaderboards.leaderboards.bandwidth[20:25], relays.use_bits, page_ctx) }}
         </div>
+        {% endif %}
         
-        <!-- Pagination Navigation (moved below tables) -->
+        <!-- Pagination Navigation (moved below tables) - only show links for pages with data -->
         <div class="pagination-nav-bottom">
             <a href="#bandwidth-1-10">1-10</a>
-            <a href="#bandwidth-11-20">11-20</a>
-            <a href="#bandwidth-21-25">21-25</a>
+            {% if relays.json.aroi_leaderboards.leaderboards.bandwidth|length > 10 %}<a href="#bandwidth-11-20">11-20</a>{% endif %}
+            {% if relays.json.aroi_leaderboards.leaderboards.bandwidth|length > 20 %}<a href="#bandwidth-21-25">21-25</a>{% endif %}
         </div>
         
         {% else %}
@@ -201,23 +205,27 @@
             {{ consensus_weight_table_complete(relays.json.aroi_leaderboards.leaderboards.consensus_weight[:10], relays.use_bits, page_ctx) }}
         </div>
         
-        <!-- Page 2: Ranks 11-20 -->
+        <!-- Page 2: Ranks 11-20 (only show if data exists) -->
+        {% if relays.json.aroi_leaderboards.leaderboards.consensus_weight|length > 10 %}
         <div id="consensus_weight-11-20" class="pagination-section">
             <h4>🏛️ Ranks 11-20</h4>
             {{ consensus_weight_table_complete(relays.json.aroi_leaderboards.leaderboards.consensus_weight[10:20], relays.use_bits, page_ctx) }}
         </div>
+        {% endif %}
         
-        <!-- Page 3: Ranks 21-25 -->
+        <!-- Page 3: Ranks 21-25 (only show if data exists) -->
+        {% if relays.json.aroi_leaderboards.leaderboards.consensus_weight|length > 20 %}
         <div id="consensus_weight-21-25" class="pagination-section">
             <h4>🏛️ Ranks 21-25</h4>
             {{ consensus_weight_table_complete(relays.json.aroi_leaderboards.leaderboards.consensus_weight[20:25], relays.use_bits, page_ctx) }}
         </div>
+        {% endif %}
         
-        <!-- Pagination Navigation (moved below tables) -->
+        <!-- Pagination Navigation (moved below tables) - only show links for pages with data -->
         <div class="pagination-nav-bottom">
             <a href="#consensus_weight-1-10">1-10</a>
-            <a href="#consensus_weight-11-20">11-20</a>
-            <a href="#consensus_weight-21-25">21-25</a>
+            {% if relays.json.aroi_leaderboards.leaderboards.consensus_weight|length > 10 %}<a href="#consensus_weight-11-20">11-20</a>{% endif %}
+            {% if relays.json.aroi_leaderboards.leaderboards.consensus_weight|length > 20 %}<a href="#consensus_weight-21-25">21-25</a>{% endif %}
         </div>
         
         {% else %}
@@ -238,23 +246,27 @@
             {{ exit_authority_table_complete(relays.json.aroi_leaderboards.leaderboards.exit_authority[:10], relays.use_bits, page_ctx) }}
         </div>
         
-        <!-- Page 2: Ranks 11-20 -->
+        <!-- Page 2: Ranks 11-20 (only show if data exists) -->
+        {% if relays.json.aroi_leaderboards.leaderboards.exit_authority|length > 10 %}
         <div id="exit_authority-11-20" class="pagination-section">
             <h4>🚪 Ranks 11-20</h4>
             {{ exit_authority_table_complete(relays.json.aroi_leaderboards.leaderboards.exit_authority[10:20], relays.use_bits, page_ctx) }}
         </div>
+        {% endif %}
         
-        <!-- Page 3: Ranks 21-25 -->
+        <!-- Page 3: Ranks 21-25 (only show if data exists) -->
+        {% if relays.json.aroi_leaderboards.leaderboards.exit_authority|length > 20 %}
         <div id="exit_authority-21-25" class="pagination-section">
             <h4>🚪 Ranks 21-25</h4>
             {{ exit_authority_table_complete(relays.json.aroi_leaderboards.leaderboards.exit_authority[20:25], relays.use_bits, page_ctx) }}
         </div>
+        {% endif %}
         
-        <!-- Pagination Navigation (moved below tables) -->
+        <!-- Pagination Navigation (moved below tables) - only show links for pages with data -->
         <div class="pagination-nav-bottom">
             <a href="#exit_authority-1-10">1-10</a>
-            <a href="#exit_authority-11-20">11-20</a>
-            <a href="#exit_authority-21-25">21-25</a>
+            {% if relays.json.aroi_leaderboards.leaderboards.exit_authority|length > 10 %}<a href="#exit_authority-11-20">11-20</a>{% endif %}
+            {% if relays.json.aroi_leaderboards.leaderboards.exit_authority|length > 20 %}<a href="#exit_authority-21-25">21-25</a>{% endif %}
         </div>
         
         {% else %}
@@ -275,23 +287,27 @@
             {{ guard_authority_table_complete(relays.json.aroi_leaderboards.leaderboards.guard_authority[:10], relays.use_bits, page_ctx) }}
         </div>
         
-        <!-- Page 2: Ranks 11-20 -->
+        <!-- Page 2: Ranks 11-20 (only show if data exists) -->
+        {% if relays.json.aroi_leaderboards.leaderboards.guard_authority|length > 10 %}
         <div id="guard_authority-11-20" class="pagination-section">
             <h4>🛡️ Ranks 11-20</h4>
             {{ guard_authority_table_complete(relays.json.aroi_leaderboards.leaderboards.guard_authority[10:20], relays.use_bits, page_ctx) }}
         </div>
+        {% endif %}
         
-        <!-- Page 3: Ranks 21-25 -->
+        <!-- Page 3: Ranks 21-25 (only show if data exists) -->
+        {% if relays.json.aroi_leaderboards.leaderboards.guard_authority|length > 20 %}
         <div id="guard_authority-21-25" class="pagination-section">
             <h4>🛡️ Ranks 21-25</h4>
             {{ guard_authority_table_complete(relays.json.aroi_leaderboards.leaderboards.guard_authority[20:25], relays.use_bits, page_ctx) }}
         </div>
+        {% endif %}
         
-        <!-- Pagination Navigation (moved below tables) -->
+        <!-- Pagination Navigation (moved below tables) - only show links for pages with data -->
         <div class="pagination-nav-bottom">
             <a href="#guard_authority-1-10">1-10</a>
-            <a href="#guard_authority-11-20">11-20</a>
-            <a href="#guard_authority-21-25">21-25</a>
+            {% if relays.json.aroi_leaderboards.leaderboards.guard_authority|length > 10 %}<a href="#guard_authority-11-20">11-20</a>{% endif %}
+            {% if relays.json.aroi_leaderboards.leaderboards.guard_authority|length > 20 %}<a href="#guard_authority-21-25">21-25</a>{% endif %}
         </div>
         
         {% else %}
@@ -312,23 +328,27 @@
             {{ exit_operators_table_complete(relays.json.aroi_leaderboards.leaderboards.exit_operators[:10], relays.use_bits, page_ctx) }}
         </div>
         
-        <!-- Page 2: Ranks 11-20 -->
+        <!-- Page 2: Ranks 11-20 (only show if data exists) -->
+        {% if relays.json.aroi_leaderboards.leaderboards.exit_operators|length > 10 %}
         <div id="exit_operators-11-20" class="pagination-section">
             <h4>🚪 Ranks 11-20</h4>
             {{ exit_operators_table_complete(relays.json.aroi_leaderboards.leaderboards.exit_operators[10:20], relays.use_bits, page_ctx) }}
         </div>
+        {% endif %}
         
-        <!-- Page 3: Ranks 21-25 -->
+        <!-- Page 3: Ranks 21-25 (only show if data exists) -->
+        {% if relays.json.aroi_leaderboards.leaderboards.exit_operators|length > 20 %}
         <div id="exit_operators-21-25" class="pagination-section">
             <h4>🚪 Ranks 21-25</h4>
             {{ exit_operators_table_complete(relays.json.aroi_leaderboards.leaderboards.exit_operators[20:25], relays.use_bits, page_ctx) }}
         </div>
+        {% endif %}
         
-        <!-- Pagination Navigation (moved below tables) -->
+        <!-- Pagination Navigation (moved below tables) - only show links for pages with data -->
         <div class="pagination-nav-bottom">
             <a href="#exit_operators-1-10">1-10</a>
-            <a href="#exit_operators-11-20">11-20</a>
-            <a href="#exit_operators-21-25">21-25</a>
+            {% if relays.json.aroi_leaderboards.leaderboards.exit_operators|length > 10 %}<a href="#exit_operators-11-20">11-20</a>{% endif %}
+            {% if relays.json.aroi_leaderboards.leaderboards.exit_operators|length > 20 %}<a href="#exit_operators-21-25">21-25</a>{% endif %}
         </div>
         
         {% else %}
@@ -349,23 +369,27 @@
             {{ guard_operators_table_complete(relays.json.aroi_leaderboards.leaderboards.guard_operators[:10], relays.use_bits, page_ctx) }}
         </div>
         
-        <!-- Page 2: Ranks 11-20 -->
+        <!-- Page 2: Ranks 11-20 (only show if data exists) -->
+        {% if relays.json.aroi_leaderboards.leaderboards.guard_operators|length > 10 %}
         <div id="guard_operators-11-20" class="pagination-section">
             <h4>🛡️ Ranks 11-20</h4>
             {{ guard_operators_table_complete(relays.json.aroi_leaderboards.leaderboards.guard_operators[10:20], relays.use_bits, page_ctx) }}
         </div>
+        {% endif %}
         
-        <!-- Page 3: Ranks 21-25 -->
+        <!-- Page 3: Ranks 21-25 (only show if data exists) -->
+        {% if relays.json.aroi_leaderboards.leaderboards.guard_operators|length > 20 %}
         <div id="guard_operators-21-25" class="pagination-section">
             <h4>🛡️ Ranks 21-25</h4>
             {{ guard_operators_table_complete(relays.json.aroi_leaderboards.leaderboards.guard_operators[20:25], relays.use_bits, page_ctx) }}
         </div>
+        {% endif %}
         
-        <!-- Pagination Navigation (moved below tables) -->
+        <!-- Pagination Navigation (moved below tables) - only show links for pages with data -->
         <div class="pagination-nav-bottom">
             <a href="#guard_operators-1-10">1-10</a>
-            <a href="#guard_operators-11-20">11-20</a>
-            <a href="#guard_operators-21-25">21-25</a>
+            {% if relays.json.aroi_leaderboards.leaderboards.guard_operators|length > 10 %}<a href="#guard_operators-11-20">11-20</a>{% endif %}
+            {% if relays.json.aroi_leaderboards.leaderboards.guard_operators|length > 20 %}<a href="#guard_operators-21-25">21-25</a>{% endif %}
         </div>
         
         {% else %}
@@ -399,23 +423,27 @@
                 {{ generic_ranking_table_paginated(category_key, category_data[:10], page_ctx, relays.use_bits) }}
             </div>
             
-            <!-- Page 2: Ranks 11-20 -->
+            <!-- Page 2: Ranks 11-20 (only show if data exists) -->
+            {% if category_data|length > 10 %}
             <div id="{{ category_key }}-11-20" class="pagination-section">
                 <h4>{% if emoji and category_key not in ['reliability_masters', 'legacy_titans'] %}{{ emoji }} {% endif %}Ranks 11-20</h4>
                 {{ generic_ranking_table_paginated(category_key, category_data[10:20], page_ctx, relays.use_bits) }}
             </div>
+            {% endif %}
             
-            <!-- Page 3: Ranks 21-25 -->
+            <!-- Page 3: Ranks 21-25 (only show if data exists) -->
+            {% if category_data|length > 20 %}
             <div id="{{ category_key }}-21-25" class="pagination-section">
                 <h4>{% if emoji and category_key not in ['reliability_masters', 'legacy_titans'] %}{{ emoji }} {% endif %}Ranks 21-25</h4>
                 {{ generic_ranking_table_paginated(category_key, category_data[20:25], page_ctx, relays.use_bits) }}
             </div>
+            {% endif %}
             
-            <!-- Pagination Navigation (moved below tables) -->
+            <!-- Pagination Navigation (moved below tables) - only show links for pages with data -->
             <div class="pagination-nav-bottom">
                 <a href="#{{ category_key }}-1-10">1-10</a>
-                <a href="#{{ category_key }}-11-20">11-20</a>
-                <a href="#{{ category_key }}-21-25">21-25</a>
+                {% if category_data|length > 10 %}<a href="#{{ category_key }}-11-20">11-20</a>{% endif %}
+                {% if category_data|length > 20 %}<a href="#{{ category_key }}-21-25">21-25</a>{% endif %}
             </div>
             
             {% else %}
