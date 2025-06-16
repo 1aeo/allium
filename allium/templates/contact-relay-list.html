@@ -117,48 +117,8 @@
 		    {% endif -%}
 		</td>
 		<td>
-		    {% if relay.get('_flag_uptime_data') -%}
-		        {% set flag_data = relay['_flag_uptime_data'] -%}
-		        {% set selected_flag = none -%}
-		        {# Priority order: Exit > Guard > Fast > Running #}
-		        {% if 'Exit' in flag_data -%}
-		            {% set selected_flag = 'Exit' -%}
-		        {% elif 'Guard' in flag_data -%}
-		            {% set selected_flag = 'Guard' -%}
-		        {% elif 'Fast' in flag_data -%}
-		            {% set selected_flag = 'Fast' -%}
-		        {% elif 'Running' in flag_data -%}
-		            {% set selected_flag = 'Running' -%}
-		        {% endif -%}
-		        
-		        {% if selected_flag and flag_data[selected_flag] -%}
-		            {# Build the display string for 1M/6M/1Y/5Y #}
-		            {% set display_parts = [] -%}
-		            {% for period in ['1_month', '6_months', '1_year', '5_years'] -%}
-		                {% if period in flag_data[selected_flag] -%}
-		                    {% set uptime_val = flag_data[selected_flag][period]['uptime'] -%}
-		                    {% set percentage_str = "%.1f%%"|format(uptime_val) -%}
-		                    {# Apply same coloring logic as regular uptime #}
-		                    {% if uptime_val >= 100.0 or (uptime_val - 100.0)|abs < 0.01 -%}
-		                        {% set colored_str = '<span style="color: #28a745;">' + percentage_str + '</span>' -%}
-		                    {% elif uptime_val >= 99.0 -%}
-		                        {% set colored_str = '<span style="color: #28a745;">' + percentage_str + '</span>' -%}
-		                    {% elif uptime_val < 95.0 -%}
-		                        {% set colored_str = '<span style="color: #dc3545;">' + percentage_str + '</span>' -%}
-		                    {% elif uptime_val < 98.0 -%}
-		                        {% set colored_str = '<span style="color: #ffcc00;">' + percentage_str + '</span>' -%}
-		                    {% else -%}
-		                        {% set colored_str = percentage_str -%}
-		                    {% endif -%}
-		                    {% set _ = display_parts.append(colored_str) -%}
-		                {% else -%}
-		                    {% set _ = display_parts.append('0.0%') -%}
-		                {% endif -%}
-		            {% endfor -%}
-		            {{ display_parts|join('/')|safe }}
-		        {% else -%}
-		            N/A
-		        {% endif -%}
+		    {% if relay.get('flag_uptime_display') and relay['flag_uptime_display'] != 'N/A' -%}
+		        <span title="{{ relay['flag_uptime_tooltip']|escape }}">{{ relay['flag_uptime_display']|safe }}</span>
 		    {% else -%}
 		        N/A
 		    {% endif -%}
