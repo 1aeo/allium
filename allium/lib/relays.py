@@ -521,6 +521,12 @@ class Relays:
                     # Green for high outliers (>2 std dev above mean)
                     elif percentage > period_stats['two_sigma_high']:
                         percentage_str = f'<span style="color: #28a745;">{percentage_str}</span>'
+                    # Yellow for below-mean values
+                    elif percentage < period_stats['mean']:
+                        percentage_str = f'<span style="color: #ffcc00;">{percentage_str}</span>'
+                    else:
+                        # Above mean but within normal range
+                        percentage_str = f'<span style="color: #28a745;">{percentage_str}</span>'
                 
                 display_parts.append(percentage_str)
             
@@ -2092,7 +2098,7 @@ class Relays:
             dict: Processed flag reliability metrics with available periods info
         """
         flag_display_mapping = {
-            'Running': {'icon': '🟢', 'display_name': 'Basic Operation'},
+            'Running': {'icon': '🟢', 'display_name': 'Running Operation'},
             'Fast': {'icon': '⚡', 'display_name': 'Fast Relay'},
             'Stable': {'icon': '🛡️', 'display_name': 'Stable Operation'}, 
             'Guard': {'icon': '🛡️', 'display_name': 'Entry Guard'},
@@ -2103,12 +2109,20 @@ class Relays:
             'BadExit': {'icon': '🚫', 'display_name': 'Bad Exit'}
         }
         
+        # Define flag ordering for consistent display
+        flag_order = ['BadExit', 'Stable', 'Fast', 'Running', 'Authority', 'Guard', 'Exit', 'V2Dir', 'HSDir']
+        
         flag_reliabilities = {}
         
         # Track which time periods have data across all flags
         periods_with_data = set()
         
-        for flag, periods in operator_flag_data.items():
+        # Process flags in the specified order
+        for flag in flag_order:
+            if flag not in operator_flag_data:
+                continue
+                
+            periods = operator_flag_data[flag]
             
             if flag not in flag_display_mapping:
                 continue
@@ -2141,9 +2155,9 @@ class Relays:
                             network_flag_statistics[flag][period]):
                             
                             net_stats = network_flag_statistics[flag][period]
-                            tooltip += f' (network μ: {net_stats["mean"]:.1f}%, σ: {net_stats["std_dev"]:.1f}%)'
+                            tooltip += f' (network μ: {net_stats["mean"]:.1f}%, 2σ: {net_stats["std_dev"]*2:.1f}%)'
                             
-                            # Color coding logic
+                            # Color coding logic: green >99%, red ≥2σ from mean, yellow below mean
                             if avg_uptime > 99.0:
                                 color_class = 'high-performance'
                             elif avg_uptime < net_stats['two_sigma_low']:
@@ -2155,10 +2169,15 @@ class Relays:
                                     tooltip += f', Outlier relays: {", ".join(outlier_relays[:3])}'
                             elif avg_uptime > net_stats['two_sigma_high']:
                                 color_class = 'statistical-outlier-high'
+                            elif avg_uptime < net_stats['mean']:
+                                color_class = 'below-mean'
                             else:
-                                # No network data available
-                                if avg_uptime > 99.0:
-                                    color_class = 'high-performance'
+                                # Above mean but within normal range
+                                color_class = ''
+                        else:
+                            # No network data available
+                            if avg_uptime > 99.0:
+                                color_class = 'high-performance'
                         
                         flag_info['periods'][period_short] = {
                             'value': avg_uptime,

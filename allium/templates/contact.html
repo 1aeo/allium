@@ -116,9 +116,67 @@
             </ul>
         </div>
         {% endif %}
+        
+        {# Relay Reliability on Left Side (when AROI rankings present) #}
+        {% if contact_rankings and operator_reliability and operator_reliability.valid_relays > 0 %}
+        <div class="reliability-section" style="padding: 15px; background-color: #f8f9fa; border-left: 4px solid #28a745; margin-top: 20px;">
+            <h4 style="margin-top: 0; color: #495057;">⏰ Relay Reliability</h4>
+            
+            <ul style="list-style-type: disc; padding-left: 20px; margin-bottom: 0;">
+                {# Overall uptime - using pre-computed formatted data #}
+                {% if contact_display_data and contact_display_data.uptime_formatted %}
+                <li><strong>Overall uptime:</strong>
+                    {% for period, data in contact_display_data.uptime_formatted.items() %}
+                        {{ data.display|safe }} ({{ data.relay_count }} relays){% if not loop.last %}, {% endif %}
+                    {% endfor %}
+                </li>
+                {% endif %}
+                
+                {# Statistical outliers section - using pre-computed data #}
+                {% if contact_display_data and contact_display_data.outliers %}
+                {% set outliers = contact_display_data.outliers %}
+                {% if outliers.total_count %}
+                <li><strong>Outlier ({{ outliers.tooltip }}):</strong>
+                    <span style="color: #000; font-weight: normal;">{{ outliers.total_count }} relays out of {{ outliers.total_relays }} relays ({{ outliers.percentage }}%)</span>{% if outliers.low_count %}, <span style="color: #dc3545; font-weight: bold;">Low:</span> <span title="{{ outliers.low_tooltip }}" style="cursor: help;">{{ outliers.low_count }} relay{{ 's' if outliers.low_count != 1 else '' }}</span>{% endif %}{% if outliers.high_count %}{% if outliers.low_count %}, {% endif %}<span style="color: #28a745; font-weight: bold;">Exceptional:</span> <span title="{{ outliers.high_tooltip }}" style="cursor: help;">{{ outliers.high_count }} relay{{ 's' if outliers.high_count != 1 else '' }}</span>{% endif %}
+                </li>
+                {% elif outliers.none_detected %}
+                <li><span style="color: #28a745;">✅ No statistical outliers detected - consistent performance across all relays</span></li>
+                {% endif %}
+                {% endif %}
+                
+                {# Real-time Downtime Alerts - Idea #8 from uptime integration proposals #}
+                {% if contact_display_data and contact_display_data.downtime_alerts %}
+                {% set alerts = contact_display_data.downtime_alerts %}
+                {% if alerts.has_offline_relays %}
+                {% set total_offline = alerts.offline_counts.guard + alerts.offline_counts.middle + alerts.offline_counts.exit %}
+                <li><strong><span style="color: #dc3545;">🚨 Offline ({{ total_offline }})</span>:</strong>
+                    {% if alerts.offline_counts.guard > 0 %}
+                        <span title="{% for relay in alerts.offline_relay_details.guard_relays %}{{ relay.display_text }}{% if not loop.last %}, {% endif %}{% endfor %}" style="cursor: help;">{{ alerts.offline_counts.guard }} guard ({{ "%.1f"|format(alerts.traffic_percentages.guard) }}% of observed traffic)</span>{% if alerts.offline_counts.middle > 0 or alerts.offline_counts.exit > 0 %}, {% endif %}
+                    {% endif %}
+                    {% if alerts.offline_counts.middle > 0 %}
+                        <span title="{% for relay in alerts.offline_relay_details.middle_relays %}{{ relay.display_text }}{% if not loop.last %}, {% endif %}{% endfor %}" style="cursor: help;">{{ alerts.offline_counts.middle }} middle ({{ "%.1f"|format(alerts.traffic_percentages.middle) }}% of observed traffic)</span>{% if alerts.offline_counts.exit > 0 %}, {% endif %}
+                    {% endif %}
+                    {% if alerts.offline_counts.exit > 0 %}
+                        <span title="{% for relay in alerts.offline_relay_details.exit_relays %}{{ relay.display_text }}{% if not loop.last %}, {% endif %}{% endfor %}" style="cursor: help;">{{ alerts.offline_counts.exit }} exit ({{ "%.1f"|format(alerts.traffic_percentages.exit) }}% of observed traffic)</span>
+                    {% endif %}
+                    <ul style="list-style-type: disc; padding-left: 20px; margin-top: 0; margin-bottom: 0;">
+                        <li style="font-size: 13px; color: #856404;"><strong style="color: #dc3545;">Impact:</strong> {{ alerts.offline_bandwidth_impact.total_offline_bandwidth_formatted }} {{ bandwidth_unit }} ({{ "%.1f"|format(alerts.offline_bandwidth_impact.offline_bandwidth_percentage) }}% of {{ alerts.offline_bandwidth_impact.total_operator_bandwidth_formatted }} {{ bandwidth_unit }}){% if alerts.offline_consensus_weight_impact.total_operator_cw_percentage > 0 %} and {{ "%.3f"|format(alerts.offline_consensus_weight_impact.total_offline_cw_percentage) }}% ({{ "%.1f"|format(alerts.offline_consensus_weight_impact.offline_cw_percentage_of_operator) }}% of {{ "%.2f"|format(alerts.offline_consensus_weight_impact.total_operator_cw_percentage) }}%) consensus weight{% endif %}</li>
+                    </ul>
+                </li>
+                {% else %}
+                <li><strong>Offline:</strong> 0 relays</li>
+                {% endif %}
+                {% endif %}
+            </ul>
+            
+            <div style="font-size: 12px; color: #666; margin-top: 10px;">
+                Reliability data available for {{ operator_reliability.valid_relays }}/{{ operator_reliability.total_relays }} relays{% if contact_display_data and contact_display_data.uptime_timestamp %}, from {{ contact_display_data.uptime_timestamp }}{% endif %}
+            </div>
+        </div>
+        {% endif %}
     </div>
     
-    {# Right Column (40%): AROI Rankings & Streamlined Reliability #}
+    {# Right Column (40%): AROI Rankings & Flag Reliability, or Relay Reliability when no AROI #}
     <div class="col-md-5">
         {# AROI Leaderboard Rankings - Sorted by rank #}
         {% if contact_rankings %}
@@ -140,8 +198,8 @@
         </div>
         {% endif %}
         
-        {# Relay Reliability - Simplified using pre-computed data #}
-        {% if operator_reliability and operator_reliability.valid_relays > 0 %}
+        {# Relay Reliability on Right Side (when no AROI rankings) #}
+        {% if not contact_rankings and operator_reliability and operator_reliability.valid_relays > 0 %}
         <div class="reliability-section" style="padding: 15px; background-color: #f8f9fa; border-left: 4px solid #28a745;">
             <h4 style="margin-top: 0; color: #495057;">⏰ Relay Reliability</h4>
             
@@ -198,7 +256,7 @@
         </div>
         {% endif %}
         
-        {# Flag Reliability - New section using flag-specific uptime data #}
+        {# Flag Reliability - Always on right side #}
         {% if contact_display_data and contact_display_data.flag_analysis and contact_display_data.flag_analysis.has_flag_data %}
         {% set flag_data = contact_display_data.flag_analysis %}
         <div class="flag-reliability-section" style="padding: 15px; background-color: #f8f9fa; border-left: 4px solid #007bff; margin-top: 20px;">
@@ -211,7 +269,7 @@
             {% if flag_data.available_periods and flag_data.available_periods|length > 0 %}
             {% for flag_name, flag_info in flag_data.flag_reliabilities.items() %}
             <div style="margin-bottom: 8px;">
-                <span style="font-weight: bold;">{{ flag_info.icon }} {{ flag_info.display_name }}:</span>
+                <span>{{ flag_info.icon }} {{ flag_info.display_name }}:</span>
                 {% set period_values = [] %}
                 {% for period in flag_data.available_periods %}
                     {% if period in flag_info.periods %}
@@ -223,6 +281,8 @@
                             {% set color_style = 'color: #dc3545; font-weight: bold;' %}
                         {% elif period_data.color_class == 'statistical-outlier-high' %}
                             {% set color_style = 'color: #dc3545; font-weight: bold;' %}
+                        {% elif period_data.color_class == 'below-mean' %}
+                            {% set color_style = 'color: #ffc107; font-weight: bold;' %}
                         {% endif %}
                         {% set formatted_value %}<span title="{{ period_data.tooltip }}" style="cursor: help; {{ color_style }}">{{ "%.1f"|format(period_data.value) }}%</span>{% endset %}
                         {% set _ = period_values.append(formatted_value) %}
@@ -239,6 +299,7 @@
             
             <div style="font-size: 12px; color: #666; margin-top: 10px;">
                 <span style="color: #28a745;">Green: >99%</span>, 
+                <span style="color: #ffc107;">Yellow: below network mean</span>, 
                 <span style="color: #dc3545;">Red: ≥2σ from network mean</span>
                 {% if contact_display_data and contact_display_data.uptime_timestamp %}, from {{ contact_display_data.uptime_timestamp }}{% endif %}
             </div>
