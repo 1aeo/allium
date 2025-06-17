@@ -246,20 +246,6 @@ relay['dir_address']|escape }}</a>
 none
 </dd>
 {% endif -%}
-<dt>
-Flags: {{ relay['flags']|reject('equalto', 'StaleDesc')|list|length }}
-</dt>
-<dd>
-{% for flag in relay['flags'] -%}
-{% if flag != 'StaleDesc' -%}
-<a href="{{ page_ctx.path_prefix }}flag/{{ flag.lower()|escape }}/">
-<img src="{{ page_ctx.path_prefix }}static/images/flags/{{ flag.lower()|escape }}.png"
-title="{{ flag|escape }}"
-alt="{{ flag|escape }}">
-</a> {{ flag|escape }}
-{% endif -%}
-{% endfor -%}
-</dd>
 
 <dt title="Bandwidth details: Observed capacity | Advertised capability | Rate limit | Burst limit">
 Bandwidth (Observed | Advertised | Rate | Burst)
@@ -294,6 +280,32 @@ unknown
 {% if relay['fingerprint'] in relays.json.smart_context.performance_correlation.template_optimized.underutilized_fingerprints %}
 <br><small class="text-warning">⚠️ Underutilized: High bandwidth but low consensus weight</small>
 {% endif %}
+</dd>
+
+<dt>
+Flags: {{ relay['flags']|reject('equalto', 'StaleDesc')|list|length }}
+</dt>
+<dd>
+{% for flag in relay['flags'] -%}
+{% if flag != 'StaleDesc' -%}
+<a href="{{ page_ctx.path_prefix }}flag/{{ flag.lower()|escape }}/">
+<img src="{{ page_ctx.path_prefix }}static/images/flags/{{ flag.lower()|escape }}.png"
+title="{{ flag|escape }}"
+alt="{{ flag|escape }}">
+</a> {{ flag|escape }}
+{% endif -%}
+{% endfor -%}
+</dd>
+
+<dt title="Flag-specific uptime percentages showing the reliability of this relay when operating in its primary network role. Priority: Exit > Guard > Fast > Running flags.">
+Flag Uptime (1M/6M/1Y/5Y)
+</dt>
+<dd>
+{% if relay.get('flag_uptime_display') and relay['flag_uptime_display'] != 'N/A' -%}
+<span title="{{ relay['flag_uptime_tooltip']|escape }}">{{ relay['flag_uptime_display']|safe }}</span>
+{% else -%}
+N/A
+{% endif -%}
 </dd>
 
 
