@@ -1528,6 +1528,19 @@ class Relays:
                 total_text = 'relay' if total_relays == 1 else 'relays'
                 components_text = ', ' + ', '.join(position_components) if position_components else ''
                 network_position_display = f"{network_position_label} ({total_relays} total {total_text}{components_text})"
+                
+                # Create fallback network_position object
+                network_position = {
+                    'label': network_position_label,
+                    'formatted_string': network_position_display
+                }
+                
+            except Exception as e:
+                print(f"DEBUG: Network position calculation error for {k}={v}: {e}")
+                network_position = {
+                    'label': 'error',
+                    'formatted_string': f'calculation error: {str(e)}'
+                }
             
             # Generate page context with correct breadcrumb data
             page_ctx = self.get_detail_page_context(k, v)
@@ -1563,7 +1576,7 @@ class Relays:
                 exit_count=i["exit_count"],
                 guard_count=i["guard_count"],
                 middle_count=i["middle_count"],
-                network_position=network_position_display,
+                network_position=network_position,
                 is_index=False,
                 page_ctx=page_ctx,
                 key=k,
