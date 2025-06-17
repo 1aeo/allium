@@ -215,6 +215,15 @@ Bandwidth (Observed | Advertised | Rate | Burst)
 {% if relay['advertised_bandwidth'] -%}{% set adv_unit = relay['advertised_bandwidth']|determine_unit(relays.use_bits) -%}{% set adv_bandwidth = relay['advertised_bandwidth']|format_bandwidth_with_unit(adv_unit) -%}<span title="Advertised: {{ adv_bandwidth }} {{ adv_unit }}">{{ adv_bandwidth }} {{ adv_unit }}</span>{% else -%}<span title="Advertised: unknown">unknown</span>{% endif -%} | 
 {% if relay['bandwidth_rate'] -%}{% set rate_unit = relay['bandwidth_rate']|determine_unit(relays.use_bits) -%}{% set rate_bandwidth = relay['bandwidth_rate']|format_bandwidth_with_unit(rate_unit) -%}<span title="Rate: {{ rate_bandwidth }} {{ rate_unit }}">{{ rate_bandwidth }} {{ rate_unit }}</span>{% else -%}<span title="Rate: unknown">unknown</span>{% endif -%} | 
 {% if relay['bandwidth_burst'] -%}{% set burst_unit = relay['bandwidth_burst']|determine_unit(relays.use_bits) -%}{% set burst_bandwidth = relay['bandwidth_burst']|format_bandwidth_with_unit(burst_unit) -%}<span title="Burst: {{ burst_bandwidth }} {{ burst_unit }}">{{ burst_bandwidth }} {{ burst_unit }}</span>{% else -%}<span title="Burst: unknown">unknown</span>{% endif -%}
+{% if relay['measured'] is not none -%}
+    {% if relay['measured'] -%}
+        <span style="color: #28a745; font-weight: bold;" title="Bandwidth measured by ≥3 bandwidth authorities">✓</span>
+    {% else -%}
+        <span style="color: #dc3545; font-weight: bold;" title="Bandwidth not measured by ≥3 bandwidth authorities">✗</span>
+    {% endif -%}
+{% else -%}
+    <span style="color: #6c757d;" title="Bandwidth measurement status unknown">?</span>
+{% endif -%}
 </dd>
 
 <dt>
@@ -225,15 +234,6 @@ Network Participation (Consensus Weight | Guard | Middle | Exit)
 <span title="Probability of this relay to be selected for the guard position. This probability is calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so that this probability can only be an approximation.">{% if relay['guard_probability'] -%}{{ "%.2f"|format(relay['guard_probability'] * 100) }}%{% else -%}N/A{% endif -%}</span> | 
 <span title="Probability of this relay to be selected for the middle position. This probability is calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so that this probability can only be an approximation.">{% if relay['middle_probability'] -%}{{ "%.2f"|format(relay['middle_probability'] * 100) }}%{% else -%}N/A{% endif -%}</span> | 
 <span title="Probability of this relay to be selected for the exit position. This probability is calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so that this probability can only be an approximation.">{% if relay['exit_probability'] -%}{{ "%.2f"|format(relay['exit_probability'] * 100) }}%{% else -%}N/A{% endif -%}</span>
-{% if relay['measured'] is not none -%}
-    {% if relay['measured'] -%}
-        <span style="color: #28a745; font-weight: bold;" title="Bandwidth measured by ≥3 bandwidth authorities">✓</span>
-    {% else -%}
-        <span style="color: #dc3545; font-weight: bold;" title="Bandwidth not measured by ≥3 bandwidth authorities">✗</span>
-    {% endif -%}
-{% else -%}
-    <span style="color: #6c757d;" title="Bandwidth measurement status unknown">?</span>
-{% endif -%}
 {% if relay['fingerprint'] in relays.json.smart_context.performance_correlation.template_optimized.underutilized_fingerprints %}
 <br><small class="text-warning">⚠️ Underutilized: High bandwidth but low consensus weight</small>
 {% endif %}
@@ -352,6 +352,16 @@ Flag Uptime (1M/6M/1Y/5Y)
 N/A
 {% endif -%}
 </dd>
+<dt title="{% if contact_display_data and contact_display_data.outliers and contact_display_data.outliers.tooltip %}{{ contact_display_data.outliers.tooltip }}{% else %}Statistical outliers: ≥2σ from average{% endif %}">
+Uptime (1M/6M/1Y/5Y)
+</dt>
+<dd>
+{% if relay.get('uptime_api_display') -%}
+    {{ relay['uptime_api_display']|safe }}
+{% else -%}
+    N/A
+{% endif -%}
+</dd>
 <dt>
 Uptime / Downtime
 </dt>
@@ -362,16 +372,6 @@ Uptime / Downtime
     {% else -%}
         {{ relay['uptime_display']|escape }}
     {% endif -%}
-{% else -%}
-    N/A
-{% endif -%}
-</dd>
-<dt title="{% if contact_display_data and contact_display_data.outliers and contact_display_data.outliers.tooltip %}{{ contact_display_data.outliers.tooltip }}{% else %}Statistical outliers: ≥2σ from average{% endif %}">
-Uptime (1M/6M/1Y/5Y)
-</dt>
-<dd>
-{% if relay.get('uptime_api_display') -%}
-    {{ relay['uptime_api_display']|safe }}
 {% else -%}
     N/A
 {% endif -%}
