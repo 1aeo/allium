@@ -587,6 +587,9 @@ class Relays:
             prefix = flag_prefixes[selected_flag]
             flag_display = flag_display_names[selected_flag]
             
+            # Get regular uptime percentages for comparison
+            regular_uptime = relay.get("uptime_percentages", {})
+            
             for period in ['1_month', '6_months', '1_year', '5_years']:
                 # Map to short period names for tooltip
                 period_short = {'1_month': '1M', '6_months': '6M', '1_year': '1Y', '5_years': '5Y'}[period]
@@ -594,6 +597,16 @@ class Relays:
                 if period in flag_data[selected_flag]:
                     uptime_val = flag_data[selected_flag][period]['uptime']
                     data_points = flag_data[selected_flag][period].get('data_points', 0)
+                    
+                    # Compare flag uptime with regular uptime before adding prefix
+                    regular_uptime_val = regular_uptime.get(period, 0.0)
+                    
+                    # Only show flag uptime if it differs from regular uptime (allowing for small floating point differences)
+                    if abs(uptime_val - regular_uptime_val) < 0.1:
+                        # Values are essentially the same, skip showing flag uptime for this period
+                        display_parts.append("—")  # Show dash to indicate "same as uptime"
+                        tooltip_parts.append(f"{period_short}: Same as uptime ({uptime_val:.1f}%)")
+                        continue
                     
                     # Format with prefix
                     percentage_str = f"{prefix}{uptime_val:.1f}%"
@@ -659,14 +672,18 @@ class Relays:
                     tooltip_parts.append(f"{period_short}: {uptime_val:.1f}%{network_comparison}")
                 else:
                     # No data for this period
-                    display_parts.append(f"{prefix}0.0%")
-                    tooltip_parts.append(f"{period_short}: No data")
+                    display_parts.append("—")
+                    tooltip_parts.append(f"{period_short}: No flag data")
             
             # Store results
-            relay["flag_uptime_display"] = "/".join(display_parts)
-            
-            # Generate tooltip in same format as flag reliability
-            relay["flag_uptime_tooltip"] = f"{flag_display} flag uptime over time periods: " + ", ".join(tooltip_parts)
+            # If all periods show dashes (no differences), show "N/A" instead
+            if all(part == "—" for part in display_parts):
+                relay["flag_uptime_display"] = "N/A"
+                relay["flag_uptime_tooltip"] = f"{flag_display} flag uptime matches overall uptime across all periods"
+            else:
+                relay["flag_uptime_display"] = "/".join(display_parts)
+                # Generate tooltip in same format as flag reliability
+                relay["flag_uptime_tooltip"] = f"{flag_display} flag uptime over time periods: " + ", ".join(tooltip_parts)
     
     def _basic_uptime_processing(self):
         """
