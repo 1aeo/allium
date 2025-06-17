@@ -549,7 +549,6 @@ class Relays:
         """
         # Flag priority mapping (Exit > Guard > Fast > Running)
         flag_priority = {'Exit': 1, 'Guard': 2, 'Fast': 3, 'Running': 4}
-        flag_prefixes = {'Exit': 'E', 'Guard': 'G', 'Fast': 'F', 'Running': 'R'}
         flag_display_names = {
             'Exit': 'Exit Node',
             'Guard': 'Entry Guard', 
@@ -585,7 +584,6 @@ class Relays:
             # Build display string with color coding and prefix
             display_parts = []
             tooltip_parts = []
-            prefix = flag_prefixes[selected_flag]
             flag_display = flag_display_names[selected_flag]
             
             # Get regular uptime percentages for comparison
