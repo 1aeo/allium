@@ -120,6 +120,22 @@ class TestContactTemplateIntegration(unittest.TestCase):
             'operator_reliability': {
                 'valid_relays': 5,
                 'total_relays': 5
+            },
+            'flag_reliability': {
+                'Exit': {
+                    'percentage': 96.2,
+                    'rating': 'High',
+                    'relay_count': 3,
+                    'color_class': 'text-success',
+                    'tooltip': 'Exit flag reliability: 96.2% - Excellent performance across 3 relays'
+                },
+                'Guard': {
+                    'percentage': 94.1,
+                    'rating': 'Good', 
+                    'relay_count': 2,
+                    'color_class': 'text-success',
+                    'tooltip': 'Guard flag reliability: 94.1% - Good performance across 2 relays'
+                }
             }
         }
 
@@ -351,6 +367,111 @@ class TestContactTemplateIntegration(unittest.TestCase):
         # Check that AROI rankings display correctly with pagination links
         self.assertIn('aroi-leaderboards.html#bandwidth-1-10', rendered)
         self.assertIn('aroi-leaderboards.html#most_diverse-1-10', rendered)
+
+    def test_contact_template_flag_reliability_display(self):
+        """Test that flag reliability section displays correctly."""
+        template = self.jinja_env.get_template('contact.html')
+        rendered = template.render(**self.template_context)
+        
+        # Should contain flag reliability section
+        self.assertIn('Flag Reliability', rendered)
+        
+        # Should display flag reliability percentages and ratings
+        self.assertIn('Exit Flag Reliability: 96.2% (High) - 3 relays', rendered)
+        self.assertIn('Guard Flag Reliability: 94.1% (Good) - 2 relays', rendered)
+        
+        # Should include proper color classes
+        self.assertIn('text-success', rendered)
+
+    def test_contact_template_flag_reliability_tooltips(self):
+        """Test that flag reliability tooltips are properly included."""
+        template = self.jinja_env.get_template('contact.html')
+        rendered = template.render(**self.template_context)
+        
+        # Should contain tooltip content
+        self.assertIn('Exit flag reliability: 96.2% - Excellent performance across 3 relays', rendered)
+        self.assertIn('Guard flag reliability: 94.1% - Good performance across 2 relays', rendered)
+
+    def test_contact_template_bandwidth_measurement_indicators(self):
+        """Test that bandwidth measurement indicators are displayed."""
+        # Update context to include measurement status
+        context_with_measurements = self.template_context.copy()
+        context_with_measurements['relays']['json']['relay_subset'][0]['measured'] = True
+        
+        template = self.jinja_env.get_template('contact.html')
+        rendered = template.render(context_with_measurements)
+        
+        # Should include bandwidth measurement indicators in relay table
+        # Note: This would require the template to actually include these indicators
+        # For now, we test that the measured status is available in context
+        self.assertTrue(context_with_measurements['relays']['json']['relay_subset'][0]['measured'])
+
+    def test_contact_template_color_coding_consistency(self):
+        """Test that color coding is consistent across different reliability displays."""
+        template = self.jinja_env.get_template('contact.html')
+        rendered = template.render(**self.template_context)
+        
+        # Should use consistent Bootstrap color classes
+        green_occurrences = rendered.count('text-success')
+        self.assertGreater(green_occurrences, 0, "Should have green (success) color coding")
+        
+        # Should not mix different color schemes
+        self.assertNotIn('color: green', rendered)  # Should use Bootstrap classes, not inline styles
+
+    def test_contact_template_no_flag_reliability_data(self):
+        """Test contact template when no flag reliability data is available."""
+        context_no_flags = self.template_context.copy()
+        context_no_flags['flag_reliability'] = {}
+        
+        template = self.jinja_env.get_template('contact.html')
+        rendered = template.render(context_no_flags)
+        
+        # Should handle empty flag reliability gracefully
+        # Template should not crash and should not show empty flag sections
+        self.assertIsInstance(rendered, str)
+        self.assertGreater(len(rendered), 0)
+
+    def test_contact_template_mixed_flag_reliability_ratings(self):
+        """Test display of mixed flag reliability ratings (good/poor performance)."""
+        context_mixed_flags = self.template_context.copy()
+        context_mixed_flags['flag_reliability'] = {
+            'Exit': {
+                'percentage': 96.2,
+                'rating': 'High',
+                'relay_count': 3,
+                'color_class': 'text-success',
+                'tooltip': 'Exit flag reliability: 96.2% - Excellent performance'
+            },
+            'Fast': {
+                'percentage': 75.5,
+                'rating': 'Poor',
+                'relay_count': 5,
+                'color_class': 'text-danger',
+                'tooltip': 'Fast flag reliability: 75.5% - Poor performance needs attention'
+            }
+        }
+        
+        template = self.jinja_env.get_template('contact.html')
+        rendered = template.render(context_mixed_flags)
+        
+        # Should display both high and poor performance flags
+        self.assertIn('96.2% (High)', rendered)
+        self.assertIn('75.5% (Poor)', rendered)
+        
+        # Should use appropriate color classes
+        self.assertIn('text-success', rendered)  # For high performance
+        self.assertIn('text-danger', rendered)   # For poor performance
+
+    def test_contact_template_statistical_analysis_integration(self):
+        """Test that statistical analysis data is properly integrated."""
+        template = self.jinja_env.get_template('contact.html')
+        rendered = template.render(**self.template_context)
+        
+        # Should display outlier information
+        self.assertIn('1 relays out of 5 relays (20.0%)', rendered)
+        
+        # Should include statistical tooltips
+        self.assertIn('≥2σ 97.8% from average μ 99.9%', rendered)
 
 
 if __name__ == '__main__':

@@ -484,6 +484,166 @@ class ComprehensiveValidator:
                 "All critical functionality elements present"
             )
     
+    def validate_flag_uptime_system(self):
+        """Validate flag uptime system functionality"""
+        print("🏃 Validating flag uptime system...")
+        
+        validation_count = 0
+        
+        # Test 1: Validate flag uptime display on relay pages
+        if self.optimized_dir and os.path.exists(self.optimized_dir):
+            relay_files = list(Path(self.optimized_dir).glob("relay/*/*.html"))[:5]
+            
+            for relay_file in relay_files:
+                try:
+                    with open(relay_file, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    
+                    # Check for flag uptime section
+                    if 'Flag Uptime' in content:
+                        validation_count += 1
+                        if 'Match Overall Uptime' in content or '%' in content:
+                            self.results.add_result(
+                                f"flag_uptime_relay_{relay_file.name}",
+                                "PASS",
+                                "Flag uptime displayed correctly on relay page"
+                            )
+                        else:
+                            self.results.add_result(
+                                f"flag_uptime_relay_{relay_file.name}",
+                                "WARN",
+                                "Flag uptime section present but no percentage data"
+                            )
+                        
+                except Exception as e:
+                    self.results.add_result(
+                        f"flag_uptime_relay_{relay_file.name}",
+                        "FAIL",
+                        f"Error validating flag uptime: {e}"
+                    )
+        
+        # Test 2: Validate flag reliability on contact pages  
+        if self.optimized_dir and os.path.exists(self.optimized_dir):
+            contact_files = list(Path(self.optimized_dir).glob("contact/*/*.html"))[:3]
+            
+            for contact_file in contact_files:
+                try:
+                    with open(contact_file, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    
+                    if 'Flag Reliability' in content:
+                        validation_count += 1
+                        if any(cls in content for cls in ['text-success', 'text-warning', 'text-danger']):
+                            self.results.add_result(
+                                f"flag_reliability_contact_{contact_file.name}",
+                                "PASS",
+                                "Flag reliability displayed with proper color coding"
+                            )
+                        else:
+                            self.results.add_result(
+                                f"flag_reliability_contact_{contact_file.name}",
+                                "WARN",
+                                "Flag reliability present but no color coding detected"
+                            )
+                            
+                except Exception as e:
+                    self.results.add_result(
+                        f"flag_reliability_contact_{contact_file.name}",
+                        "FAIL",
+                        f"Error validating flag reliability: {e}"
+                    )
+        
+        # Test 3: Validate bandwidth measurement indicators
+        if self.optimized_dir and os.path.exists(self.optimized_dir):
+            relay_files = list(Path(self.optimized_dir).glob("relay/*/*.html"))[:5]
+            
+            measurement_indicator_found = False
+            for relay_file in relay_files:
+                try:
+                    with open(relay_file, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    
+                    if '✓' in content and 'bandwidth' in content.lower():
+                        measurement_indicator_found = True
+                        validation_count += 1
+                        break
+                        
+                except Exception:
+                    continue
+            
+            self.results.add_result(
+                "bandwidth_measurement_indicators",
+                "PASS" if measurement_indicator_found else "WARN",
+                "Bandwidth measurement indicators found" if measurement_indicator_found else "No bandwidth measurement indicators detected"
+            )
+        
+        # Overall validation result
+        if validation_count > 0:
+            self.results.add_result(
+                "flag_uptime_system_overall",
+                "PASS",
+                f"Flag uptime system validated across {validation_count} components"
+            )
+        else:
+            self.results.add_result(
+                "flag_uptime_system_overall",
+                "WARN",
+                "No flag uptime components detected in validation sample"
+            )
+
+    def validate_uptime_processing_optimization(self):
+        """Validate uptime processing consolidation and performance"""
+        print("⚡ Validating uptime processing optimization...")
+        
+        # Test 1: Check for uptime_utils.py module
+        uptime_utils_path = os.path.join(os.path.dirname(__file__), "../../allium/lib/uptime_utils.py")
+        if os.path.exists(uptime_utils_path):
+            self.results.add_result(
+                "uptime_utils_module",
+                "PASS",
+                "uptime_utils.py module found"
+            )
+            
+            # Check for key functions
+            try:
+                with open(uptime_utils_path, 'r') as f:
+                    content = f.read()
+                
+                required_functions = [
+                    'normalize_uptime_value',
+                    'calculate_relay_uptime_average', 
+                    'extract_relay_uptime_for_period',
+                    'calculate_statistical_outliers'
+                ]
+                
+                missing_functions = [func for func in required_functions if func not in content]
+                
+                if missing_functions:
+                    self.results.add_result(
+                        "uptime_utils_functions",
+                        "FAIL",
+                        f"Missing functions in uptime_utils.py: {missing_functions}"
+                    )
+                else:
+                    self.results.add_result(
+                        "uptime_utils_functions", 
+                        "PASS",
+                        "All required uptime utility functions found"
+                    )
+                    
+            except Exception as e:
+                self.results.add_result(
+                    "uptime_utils_functions",
+                    "FAIL",
+                    f"Error reading uptime_utils.py: {e}"
+                )
+        else:
+            self.results.add_result(
+                "uptime_utils_module",
+                "FAIL",
+                "uptime_utils.py module not found"
+            )
+
     def cleanup_temporary_files(self):
         """Clean up temporary validation files"""
         print("🧹 Cleaning up temporary files...")
@@ -535,6 +695,10 @@ class ComprehensiveValidator:
         # Content validation
         self.validate_aroi_leaderboards_page()
         self.validate_critical_functionality()
+        
+        # Flag uptime system validation
+        self.validate_flag_uptime_system()
+        self.validate_uptime_processing_optimization()
         
         # Optimization validation
         self.validate_template_optimizations()
