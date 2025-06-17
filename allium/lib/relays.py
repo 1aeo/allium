@@ -538,10 +538,11 @@ class Relays:
     
     def _process_flag_uptime_display(self, network_flag_statistics):
         """
-        Process flag uptime data into display format with prefixes and tooltips.
+        Process flag uptime data into display format with tooltips.
         
         Calculates flag-specific uptime display strings using priority system:
         Exit > Guard > Fast > Running flags. Only shows flags the relay actually has.
+        Only displays flag uptime values when they differ from regular uptime.
         
         Args:
             network_flag_statistics (dict): Network-wide flag statistics for comparison
@@ -608,8 +609,8 @@ class Relays:
                         tooltip_parts.append(f"{period_short}: Same as uptime ({uptime_val:.1f}%)")
                         continue
                     
-                    # Format with prefix
-                    percentage_str = f"{prefix}{uptime_val:.1f}%"
+                    # Format without prefix
+                    percentage_str = f"{uptime_val:.1f}%"
                     
                     # Apply FLAG RELIABILITY color coding (not uptime color coding)
                     color_class = ''
