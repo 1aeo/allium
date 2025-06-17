@@ -347,7 +347,11 @@ Flag Uptime (1M/6M/1Y/5Y)
 </dt>
 <dd>
 {% if relay.get('flag_uptime_display') and relay['flag_uptime_display'] != 'N/A' -%}
-<span title="{{ relay['flag_uptime_tooltip']|escape }}">{{ relay['flag_uptime_display']|safe }}</span>
+    {% if relay['flag_uptime_display'] == 'Match' -%}
+        <span title="{{ relay['flag_uptime_tooltip']|escape }}">Match Overall Uptime ({{ relay['uptime_api_display']|safe }})</span>
+    {% else -%}
+        <span title="{{ relay['flag_uptime_tooltip']|escape }}">{{ relay['flag_uptime_display']|safe }}</span>
+    {% endif -%}
 {% else -%}
 N/A
 {% endif -%}
