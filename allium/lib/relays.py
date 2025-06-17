@@ -526,7 +526,7 @@ class Relays:
                         percentage_str = f'<span style="color: #28a745;">{percentage_str}</span>'
                     # Yellow for below-mean values
                     elif percentage < period_stats['mean']:
-                        percentage_str = f'<span style="color: #ffcc00;">{percentage_str}</span>'
+                        percentage_str = f'<span style="color: #cc9900;">{percentage_str}</span>'
                     else:
                         # Above mean but within normal range
                         percentage_str = f'<span style="color: #28a745;">{percentage_str}</span>'
@@ -622,7 +622,7 @@ class Relays:
                         elif uptime_val > two_sigma_high:
                             colored_str = f'<span style="color: #28a745;">{percentage_str}</span>'  # Green
                         elif uptime_val < net_mean:
-                            colored_str = f'<span style="color: #ffcc00;">{percentage_str}</span>'  # Yellow
+                            colored_str = f'<span style="color: #cc9900;">{percentage_str}</span>'  # Yellow
                         else:
                             # Above mean but within normal range - no special coloring
                             colored_str = percentage_str
