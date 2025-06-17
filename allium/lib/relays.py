@@ -678,7 +678,7 @@ class Relays:
             # Store results
             # If all periods show dashes (no differences), show "N/A" instead
             if all(part == "—" for part in display_parts):
-                relay["flag_uptime_display"] = "N/A"
+                relay["flag_uptime_display"] = "Match"
                 relay["flag_uptime_tooltip"] = f"{flag_display} flag uptime matches overall uptime across all periods"
             else:
                 relay["flag_uptime_display"] = "/".join(display_parts)
