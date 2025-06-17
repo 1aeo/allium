@@ -2182,21 +2182,26 @@ class Relays:
                     fingerprint = relay.get('fingerprint', '')
                     nickname = relay.get('nickname', 'Unknown')
                     
+                    # Get actual flags this relay currently has (same approach as line 561)
+                    relay_flags = set(relay.get('flags', []))
+                    
                     if fingerprint in relay_uptime_data:
                         flag_data = relay_uptime_data[fingerprint]['flag_data']
                         
                         for flag, periods in flag_data.items():
-                            if flag not in operator_flag_data:
-                                operator_flag_data[flag] = {}
-                            for period, data in periods.items():
-                                if period not in operator_flag_data[flag]:
-                                    operator_flag_data[flag][period] = []
-                                operator_flag_data[flag][period].append({
-                                    'relay_nickname': data['relay_info']['nickname'],
-                                    'relay_fingerprint': data['relay_info']['fingerprint'],
-                                    'uptime': data['uptime'],
-                                    'data_points': data['data_points']
-                                })
+                            # Only include flag data for flags the relay currently has
+                            if flag in relay_flags:
+                                if flag not in operator_flag_data:
+                                    operator_flag_data[flag] = {}
+                                for period, data in periods.items():
+                                    if period not in operator_flag_data[flag]:
+                                        operator_flag_data[flag][period] = []
+                                    operator_flag_data[flag][period].append({
+                                        'relay_nickname': data['relay_info']['nickname'],
+                                        'relay_fingerprint': data['relay_info']['fingerprint'],
+                                        'uptime': data['uptime'],
+                                        'data_points': data['data_points']
+                                    })
                 
                 if not operator_flag_data:
                     return {'has_flag_data': False, 'error': 'No flag data available for operator relays'}
