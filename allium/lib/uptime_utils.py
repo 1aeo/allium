@@ -345,24 +345,44 @@ def find_operator_percentile_position(operator_uptime, network_percentiles):
 
 def format_network_percentiles_display(network_percentiles, operator_uptime):
     """
-    Format the network percentiles display string with operator position.
+    Format the network percentiles display string with operator position and color coding.
+    
+    Color coding matches operator intelligence section:
+    - Above median: Green (#2e7d2e - same as "All" in version compliance)
+    - Below median: Dark yellow (#cc9900 - same as "Okay" in diversity ratings)
+    - Below 5th percentile: Red (#c82333 - same as "Poor" in diversity ratings)
     
     Args:
         network_percentiles (dict): Network percentile data
         operator_uptime (float): Operator's average uptime percentage
         
     Returns:
-        str: Formatted display string
+        str: Formatted display string with color-coded operator position
     """
     if not network_percentiles or not network_percentiles.get('percentiles'):
         return None
         
     percentiles = network_percentiles['percentiles']
-    network_avg = network_percentiles.get('average', 0)
+    network_median = network_percentiles.get('average', 0)  # This is actually the median
     
     # Get operator position information
     position_info = find_operator_percentile_position(operator_uptime, network_percentiles)
     insert_after = position_info['insert_after']
+    percentile_range = position_info.get('percentile_range', 'unknown')
+    
+    # Determine operator color coding based on percentile position
+    if percentile_range == '<5th':
+        # Below 5th percentile: Red (Poor performance)
+        operator_color = '#c82333'
+    elif operator_uptime >= percentiles.get('50th', 0):
+        # Above median: Green (Good performance)
+        operator_color = '#2e7d2e'
+    else:
+        # Below median but above 5th percentile: Dark yellow (Okay performance)
+        operator_color = '#cc9900'
+    
+    # Format operator entry with color coding
+    operator_entry = f'<span style="color: {operator_color}; font-weight: bold;">Operator: {operator_uptime:.0f}%</span>'
     
     # Build the ordered percentile parts
     parts = []
@@ -372,59 +392,54 @@ def format_network_percentiles_display(network_percentiles, operator_uptime):
     
     # Insert operator after 5th if appropriate
     if insert_after == '5th':
-        parts.append(f"Operator: {operator_uptime:.0f}%")
+        parts.append(operator_entry)
     
     # Add 25th percentile
     parts.append(f"25th Pct: {percentiles.get('25th', 0):.0f}%")
     
-    # Insert operator after 25th if appropriate, or at beginning if below 5th
-    if insert_after is None:  # <5th percentile - insert at beginning after 5th
-        # Actually, for <5th percentile, we want to insert at the very beginning
-        # Let me restructure this
-        pass  # Handle this case separately
-    elif insert_after == '25th':
-        parts.append(f"Operator: {operator_uptime:.0f}%")
+    # Insert operator after 25th if appropriate
+    if insert_after == '25th':
+        parts.append(operator_entry)
     
-    # Add average
-    parts.append(f"Avg: {network_avg:.0f}%")
+    # Add median (renamed from "Avg")
+    parts.append(f"Median: {network_median:.0f}%")
     
-    # Insert operator after average if appropriate
+    # Insert operator after median if appropriate
     if insert_after == 'avg':  # 50th-75th percentile range
-        parts.append(f"Operator: {operator_uptime:.0f}%")
+        parts.append(operator_entry)
     
     # Add 75th percentile
     parts.append(f"75th Pct: {percentiles.get('75th', 0):.0f}%")
     
     # Insert operator after 75th if appropriate
     if insert_after == '75th':
-        parts.append(f"Operator: {operator_uptime:.0f}%")
+        parts.append(operator_entry)
     
     # Add 90th percentile
     parts.append(f"90th Pct: {percentiles.get('90th', 0):.0f}%")
     
     # Insert operator after 90th if appropriate
     if insert_after == '90th':
-        parts.append(f"Operator: {operator_uptime:.0f}%")
+        parts.append(operator_entry)
     
     # Add 95th percentile
     parts.append(f"95th Pct: {percentiles.get('95th', 0):.0f}%")
     
     # Insert operator after 95th if appropriate
     if insert_after == '95th':
-        parts.append(f"Operator: {operator_uptime:.0f}%")
+        parts.append(operator_entry)
     
     # Add 99th percentile
     parts.append(f"99th Pct: {percentiles.get('99th', 0):.0f}%")
     
     # Insert operator after 99th if appropriate (>99th percentile)
     if insert_after == '99th':
-        parts.append(f"Operator: {operator_uptime:.0f}%")
+        parts.append(operator_entry)
     
     # Handle special case for operators below 5th percentile
     if insert_after is None:  # <5th percentile
         # Insert at the beginning after the label
-        operator_part = f"Operator: {operator_uptime:.0f}%"
-        parts.insert(0, operator_part)  # Insert at beginning of parts list
+        parts.insert(0, operator_entry)  # Insert at beginning of parts list
     
     return "<strong>Network Uptime (6mo):</strong> " + ", ".join(parts)
 
