@@ -1967,21 +1967,30 @@ class Relays:
             six_month_data = operator_reliability.get('overall_uptime', {}).get('6_months', {})
             
             if network_data and six_month_data:
-                from .uptime_utils import format_network_percentiles_display
+                from .uptime_utils import format_network_percentiles_display, find_operator_percentile_position
                 
                 operator_avg = six_month_data.get('average', 0)
                 total_network_relays = network_data.get('total_relays', 0)
-                operator_position = six_month_data.get('network_position', 'Unknown')
+                
+                # Get operator's percentile range for dynamic tooltip
+                position_info = find_operator_percentile_position(operator_avg, network_data)
+                percentile_range = position_info.get('percentile_range', 'unknown')
                 
                 # Use the simplified display formatting function
                 percentile_display = format_network_percentiles_display(network_data, operator_avg)
                 
                 if percentile_display:
+                    # Create enhanced tooltip with statistical methodology explanation
+                    if percentile_range != 'unknown':
+                        tooltip_text = f"Statistical distribution of 6-month uptime performance across {total_network_relays:,} network relays. Each relay's daily uptime values are averaged over 6 months, then percentile ranks show performance quartiles. This operator falls in the {percentile_range} percentile range of network reliability."
+                    else:
+                        tooltip_text = f"Statistical distribution of 6-month uptime performance across {total_network_relays:,} network relays. Each relay's daily uptime values are averaged over 6 months, then percentile ranks show performance quartiles."
+                    
                     network_percentiles_formatted = {
                         'display': percentile_display,
-                        'operator_position': operator_position,
                         'total_network_relays': total_network_relays,
-                        'tooltip': f"Based on {total_network_relays:,} active relays in the network"
+                        'percentile_range': percentile_range,
+                        'tooltip': tooltip_text
                     }
         
         display_data['network_percentiles_formatted'] = network_percentiles_formatted
