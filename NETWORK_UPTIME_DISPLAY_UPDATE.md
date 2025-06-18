@@ -3,9 +3,9 @@
 ## Changes Implemented
 
 ### A) Label Update
-- **Changed**: "Avg" → "Median" in Network Uptime (6mo) display
-- **Rationale**: The value shown is actually the median (50th percentile), not arithmetic mean
-- **Technical**: More accurate labeling of the robust statistical measure used
+- **Changed**: "Avg" → "50th Pct" in Network Uptime (6mo) display
+- **Rationale**: Consistent labeling with other percentiles (5th Pct, 25th Pct, etc.)
+- **Technical**: More accurate and consistent percentile naming scheme
 
 ### B) Color Coding Implementation
 
@@ -51,7 +51,7 @@ Color coding for operator position matches the operator intelligence section sty
 - **Function**: `format_network_percentiles_display()`
 
 ### Key Changes
-1. **Label Update**: `f"Avg: {network_avg:.0f}%"` → `f"Median: {network_median:.0f}%"`
+1. **Label Update**: `f"Avg: {network_avg:.0f}%"` → `f"50th Pct: {network_median:.0f}%"`
 
 2. **Color Logic**: Added percentile-based color determination:
    ```python
@@ -71,7 +71,7 @@ Color coding for operator position matches the operator intelligence section sty
 ## Validation Results
 
 ✅ **All Tests Passed**
-- "Avg" successfully renamed to "Median"
+- "Avg" successfully renamed to "50th Pct"
 - Color coding correctly applied:
   - Above median: Green `#2e7d2e` ✅
   - Below median: Dark yellow `#cc9900` ✅  
@@ -96,4 +96,4 @@ The color scheme maintains visual consistency with the operator intelligence sec
 
 ---
 
-**Status**: ✅ Implemented and validated - Network Uptime display now shows "Median" with color-coded operator positions matching the operator intelligence section.
+**Status**: ✅ Implemented and validated - Network Uptime display now shows "50th Pct" with color-coded operator positions matching the operator intelligence section.
