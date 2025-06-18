@@ -1649,8 +1649,9 @@ class Relays:
                 
                 # For 6-month period, add network percentile comparison
                 if period == '6_months' and network_percentiles:
-                    operator_position = find_operator_percentile_position(mean_uptime, network_percentiles)
-                    reliability_stats['overall_uptime'][period]['network_position'] = operator_position
+                    operator_position_info = find_operator_percentile_position(mean_uptime, network_percentiles)
+                    reliability_stats['overall_uptime'][period]['network_position'] = operator_position_info['description']
+                    reliability_stats['overall_uptime'][period]['percentile_range'] = operator_position_info['percentile_range']
                 
                 # Calculate statistical outliers using shared utility
                 outliers = calculate_statistical_outliers(
@@ -1966,64 +1967,22 @@ class Relays:
             six_month_data = operator_reliability.get('overall_uptime', {}).get('6_months', {})
             
             if network_data and six_month_data:
-                percentiles = network_data.get('percentiles', {})
+                from .uptime_utils import format_network_percentiles_display
+                
                 operator_avg = six_month_data.get('average', 0)
-                network_avg = network_data.get('average', 0)
                 total_network_relays = network_data.get('total_relays', 0)
                 operator_position = six_month_data.get('network_position', 'Unknown')
                 
-                # Format the percentile display string as requested
-                percentile_parts = []
-                percentile_parts.append(f"25th Pct: {percentiles.get('25th', 0):.0f}%")
-                percentile_parts.append(f"Avg: {network_avg:.0f}%")
-                percentile_parts.append(f"75th Pct: {percentiles.get('75th', 0):.0f}%")
-                percentile_parts.append(f"90th Pct: {percentiles.get('90th', 0):.0f}%")
+                # Use the simplified display formatting function
+                percentile_display = format_network_percentiles_display(network_data, operator_avg)
                 
-                # Insert operator position in the appropriate place based on percentile
-                operator_inserted = False
-                if operator_avg >= percentiles.get('99th', 100):
-                    percentile_parts.append(f"Operator: {operator_avg:.0f}%")
-                    operator_inserted = True
-                elif operator_avg >= percentiles.get('95th', 100):
-                    percentile_parts.append(f"95th Pct: {percentiles.get('95th', 0):.0f}%")
-                    percentile_parts.append(f"Operator: {operator_avg:.0f}%")
-                    operator_inserted = True
-                elif operator_avg >= percentiles.get('90th', 100):
-                    percentile_parts.append(f"Operator: {operator_avg:.0f}%")
-                    percentile_parts.append(f"95th Pct: {percentiles.get('95th', 0):.0f}%")
-                    operator_inserted = True
-                elif operator_avg >= percentiles.get('75th', 100):
-                    # Insert operator before 90th percentile
-                    percentile_parts.insert(-1, f"Operator: {operator_avg:.0f}%")
-                    operator_inserted = True
-                elif operator_avg >= percentiles.get('50th', 100):
-                    # Insert operator before 75th percentile
-                    percentile_parts.insert(-2, f"Operator: {operator_avg:.0f}%")
-                    operator_inserted = True
-                elif operator_avg >= percentiles.get('25th', 100):
-                    # Insert operator before average
-                    percentile_parts.insert(-3, f"Operator: {operator_avg:.0f}%")
-                    operator_inserted = True
-                else:
-                    # Insert operator at the beginning
-                    percentile_parts.insert(1, f"Operator: {operator_avg:.0f}%")
-                    operator_inserted = True
-                
-                # Add remaining percentiles if not already included
-                if not any("95th Pct" in part for part in percentile_parts):
-                    percentile_parts.append(f"95th Pct: {percentiles.get('95th', 0):.0f}%")
-                
-                percentile_parts.append(f"99th Pct: {percentiles.get('99th', 0):.0f}%")
-                
-                # Create the formatted display
-                percentile_display = "Network Uptime (6mo): " + ", ".join(percentile_parts)
-                
-                network_percentiles_formatted = {
-                    'display': percentile_display,
-                    'operator_position': operator_position,
-                    'total_network_relays': total_network_relays,
-                    'tooltip': f"Based on {total_network_relays:,} active relays in the network"
-                }
+                if percentile_display:
+                    network_percentiles_formatted = {
+                        'display': percentile_display,
+                        'operator_position': operator_position,
+                        'total_network_relays': total_network_relays,
+                        'tooltip': f"Based on {total_network_relays:,} active relays in the network"
+                    }
         
         display_data['network_percentiles_formatted'] = network_percentiles_formatted
         
