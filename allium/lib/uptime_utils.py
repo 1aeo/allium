@@ -29,19 +29,30 @@ def calculate_relay_uptime_average(uptime_values):
         uptime_values (list): List of raw uptime values (0-999 scale)
         
     Returns:
-        float: Average uptime as percentage (0.0-100.0), or 0.0 if no valid values
+        float: Average uptime as percentage (0.0-100.0), or 0.0 if no valid values or uptime <= 1%
     """
     if not uptime_values:
         return 0.0
     
-    # Filter out None values and normalize
-    valid_values = [v for v in uptime_values if v is not None]
+    # Filter out None values and invalid values
+    valid_values = [v for v in uptime_values if v is not None and isinstance(v, (int, float)) and 0 <= v <= 999]
     if not valid_values:
+        return 0.0
+    
+    # Require minimum data points for reliable calculation
+    if len(valid_values) < 30:  # Need at least 30 data points (1 month of daily data)
         return 0.0
     
     # Calculate average and normalize to percentage
     avg_raw = sum(valid_values) / len(valid_values)
-    return normalize_uptime_value(avg_raw)
+    percentage = normalize_uptime_value(avg_raw)
+    
+    # Only include relays with meaningful uptime (> 1%)
+    # This excludes offline relays, data errors, and extremely unreliable relays
+    if percentage <= 1.0:
+        return 0.0  # Will be excluded from percentile calculations
+    
+    return percentage
 
 
 def find_relay_uptime_data(fingerprint, uptime_data):
@@ -118,6 +129,7 @@ def calculate_network_uptime_percentiles(uptime_data, time_period='6_months'):
     Calculate network-wide uptime percentiles for all active relays.
     
     Used to show where an operator fits within the overall network distribution.
+    Only includes relays with uptime > 1% and sufficient data points.
     
     Args:
         uptime_data (dict): Uptime data from Onionoo API containing all network relays
@@ -130,18 +142,61 @@ def calculate_network_uptime_percentiles(uptime_data, time_period='6_months'):
         return None
         
     network_uptime_values = []
+    total_relays_processed = 0
+    excluded_relays = {
+        'no_uptime_data': 0,
+        'insufficient_data': 0, 
+        'low_uptime': 0,
+        'invalid_data': 0
+    }
     
     # Collect uptime data from all active relays in the network
     for relay_uptime in uptime_data.get('relays', []):
-        if relay_uptime.get('uptime'):
-            period_data = relay_uptime['uptime'].get(time_period, {})
-            if period_data.get('values'):
-                # Calculate average uptime for this relay
-                avg_uptime = calculate_relay_uptime_average(period_data['values'])
-                if avg_uptime > 0:  # Only include relays with valid uptime data
-                    network_uptime_values.append(avg_uptime)
+        total_relays_processed += 1
+        
+        if not relay_uptime.get('uptime'):
+            excluded_relays['no_uptime_data'] += 1
+            continue
+            
+        period_data = relay_uptime['uptime'].get(time_period, {})
+        if not period_data.get('values'):
+            excluded_relays['no_uptime_data'] += 1
+            continue
+        
+        # Calculate average uptime - this now includes filtering
+        avg_uptime = calculate_relay_uptime_average(period_data['values'])
+        
+        if avg_uptime == 0.0:
+            # Could be insufficient data, low uptime, or invalid data
+            # The calculate_relay_uptime_average function handles the specific filtering
+            values = period_data.get('values', [])
+            valid_values = [v for v in values if v is not None and isinstance(v, (int, float)) and 0 <= v <= 999]
+            
+            if not valid_values:
+                excluded_relays['invalid_data'] += 1
+            elif len(valid_values) < 30:
+                excluded_relays['insufficient_data'] += 1
+            else:
+                # Must be low uptime (<=1%)
+                excluded_relays['low_uptime'] += 1
+        else:
+            # Valid relay with meaningful uptime (> 1%)
+            network_uptime_values.append(avg_uptime)
+    
+    # Log filtering results for debugging
+    included_relays = len(network_uptime_values)
+    excluded_total = sum(excluded_relays.values())
+    
+    print(f"📊 Network Percentile Calculation ({time_period}):")
+    print(f"   Total relays processed: {total_relays_processed}")
+    print(f"   Included in percentiles: {included_relays} ({(included_relays/total_relays_processed)*100:.1f}%)")
+    print(f"   Excluded - No uptime data: {excluded_relays['no_uptime_data']}")
+    print(f"   Excluded - Insufficient data (<30 points): {excluded_relays['insufficient_data']}")
+    print(f"   Excluded - Low uptime (≤1%): {excluded_relays['low_uptime']}")
+    print(f"   Excluded - Invalid data: {excluded_relays['invalid_data']}")
     
     if len(network_uptime_values) < 10:  # Need sufficient data for meaningful percentiles
+        print(f"❌ ERROR: Only {len(network_uptime_values)} valid relays found - insufficient for percentiles")
         return None
         
     # Sort for percentile calculations
@@ -194,21 +249,27 @@ def calculate_network_uptime_percentiles(uptime_data, time_period='6_months'):
         # Calculate average
         average = statistics.mean(network_uptime_values)
         
-        # Mathematical validation: average must be between 25th and 75th percentiles
-        # If not, there's likely a data processing error
+        # Mathematical validation - should no longer be needed with proper filtering
         if average < percentiles['25th']:
-            # Log the error but don't crash - use median as fallback for average
-            print(f"WARNING: Mathematical impossibility detected in network percentiles:")
-            print(f"  Average ({average:.1f}%) < 25th percentile ({percentiles['25th']:.1f}%)")
-            print(f"  Using median as fallback for average calculation")
+            print(f"🚨 UNEXPECTED: Mathematical impossibility still detected after filtering!")
+            print(f"   Average ({average:.1f}%) < 25th percentile ({percentiles['25th']:.1f}%)")
+            print(f"   This suggests additional data quality issues that need investigation")
+            # Still use median as fallback for robustness
             average = percentiles['50th']
+        else:
+            print(f"✅ Mathematical validation passed: Average ({average:.1f}%) >= 25th percentile ({percentiles['25th']:.1f}%)")
         
         result = {
             'percentiles': percentiles,
             'average': average,
             'median': percentiles['50th'],
             'total_relays': len(network_uptime_values),
-            'time_period': time_period
+            'time_period': time_period,
+            'filtering_stats': {
+                'total_processed': total_relays_processed,
+                'included': included_relays,
+                'excluded': excluded_relays
+            }
         }
         
         return result
