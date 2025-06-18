@@ -402,7 +402,7 @@ def format_network_percentiles_display(network_percentiles, operator_uptime):
         parts.append(operator_entry)
     
     # Add median (renamed from "Avg")
-    parts.append(f"Median: {network_median:.0f}%")
+    parts.append(f"50th Pct: {network_median:.0f}%")
     
     # Insert operator after median if appropriate
     if insert_after == 'avg':  # 50th-75th percentile range
