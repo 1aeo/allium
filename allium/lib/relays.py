@@ -408,23 +408,7 @@ class Relays:
                 relay["last_seen_ago"] = "unknown"
                 
             # Optimization 11: Pre-compute uptime/downtime display based on last_restarted and running status
-            relay["uptime_display"] = None
-            if relay.get('last_restarted'):
-                # Use the same 'running' field that determines the red/green dot for consistency
-                is_running = relay.get('running', False)
-                
-                # Calculate time difference from last_restarted to now using existing helper
-                time_since_restart = self._format_time_ago(relay['last_restarted'])
-                
-                if time_since_restart and time_since_restart != "unknown":
-                    if is_running:
-                        relay["uptime_display"] = f"UP {time_since_restart}"
-                    else:
-                        relay["uptime_display"] = f"DOWN {time_since_restart}"
-                else:
-                    relay["uptime_display"] = "Unknown"
-            else:
-                relay["uptime_display"] = "Unknown"
+            relay["uptime_display"] = self._calculate_uptime_display(relay)
             
             # Initialize uptime API display (will be populated by _reprocess_uptime_data)
             relay["uptime_api_display"] = "0.0%/0.0%/0.0%/0.0%"
@@ -463,21 +447,8 @@ class Relays:
             for relay in self.json["relays"]:
                 fingerprint = relay.get('fingerprint', '')
                 
-                # Recalculate uptime/downtime display based on last_restarted and running status
-                relay["uptime_display"] = None
-                if relay.get('last_restarted'):
-                    is_running = relay.get('running', False)
-                    time_since_restart = self._format_time_ago(relay['last_restarted'])
-                    
-                    if time_since_restart and time_since_restart != "unknown":
-                        if is_running:
-                            relay["uptime_display"] = f"UP {time_since_restart}"
-                        else:
-                            relay["uptime_display"] = f"DOWN {time_since_restart}"
-                    else:
-                        relay["uptime_display"] = "Unknown"
-                else:
-                    relay["uptime_display"] = "Unknown"
+                # Note: uptime_display was already calculated in _preprocess_template_data()
+                # No need to recalculate here since uptime API doesn't modify running/last_restarted/last_seen
                 
                 # Apply uptime percentages from consolidated processing
                 if fingerprint in relay_uptime_data:
@@ -709,20 +680,7 @@ class Relays:
         """
         for relay in self.json["relays"]:
             # Basic uptime/downtime display
-            relay["uptime_display"] = None
-            if relay.get('last_restarted'):
-                is_running = relay.get('running', False)
-                time_since_restart = self._format_time_ago(relay['last_restarted'])
-                
-                if time_since_restart and time_since_restart != "unknown":
-                    if is_running:
-                        relay["uptime_display"] = f"UP {time_since_restart}"
-                    else:
-                        relay["uptime_display"] = f"DOWN {time_since_restart}"
-                else:
-                    relay["uptime_display"] = "Unknown"
-            else:
-                relay["uptime_display"] = "Unknown"
+            relay["uptime_display"] = self._calculate_uptime_display(relay)
             
             # Basic uptime percentages without statistical analysis
             uptime_percentages = {'1_month': 0.0, '6_months': 0.0, '1_year': 0.0, '5_years': 0.0}
@@ -2622,3 +2580,41 @@ class Relays:
         }
         
         return downtime_alerts
+
+    def _calculate_uptime_display(self, relay):
+        """
+        Calculate uptime/downtime display for a single relay.
+        
+        Logic:
+        - For running relays: Show uptime from last_restarted
+        - For offline relays: Show downtime from last_seen (avoids incorrect long downtimes)
+        
+        Args:
+            relay (dict): Relay data dictionary
+            
+        Returns:
+            str: Formatted uptime display (e.g., "UP 2d 5h ago", "DOWN 3h 45m ago", "Unknown")
+        """
+        if not relay.get('last_restarted'):
+            return "Unknown"
+            
+        is_running = relay.get('running', False)
+        
+        if is_running:
+            # For running relays, show uptime from last_restarted
+            time_since_restart = self._format_time_ago(relay['last_restarted'])
+            if time_since_restart and time_since_restart != "unknown":
+                return f"UP {time_since_restart}"
+            else:
+                return "Unknown"
+        else:
+            # For offline relays, show downtime from last_seen (when it was last observed online)
+            # This avoids showing incorrect long downtimes based on old last_restarted timestamps
+            if relay.get('last_seen'):
+                time_since_last_seen = self._format_time_ago(relay['last_seen'])
+                if time_since_last_seen and time_since_last_seen != "unknown":
+                    return f"DOWN {time_since_last_seen}"
+                else:
+                    return "DOWN (unknown)"
+            else:
+                return "DOWN (unknown)"
