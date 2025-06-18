@@ -1589,12 +1589,17 @@ class Relays:
             operator_relays (list): List of relay objects for this operator
             
         Returns:
-            dict: Reliability statistics including overall uptime, time periods, and outliers
+            dict: Reliability statistics including overall uptime, time periods, outliers, and network percentiles
         """
         if not hasattr(self, 'uptime_data') or not self.uptime_data or not operator_relays:
             return None
             
-        from .uptime_utils import extract_relay_uptime_for_period, calculate_statistical_outliers
+        from .uptime_utils import (
+            extract_relay_uptime_for_period, 
+            calculate_statistical_outliers,
+            calculate_network_uptime_percentiles,
+            find_operator_percentile_position
+        )
         import statistics
         
         # Available time periods from Onionoo uptime API
@@ -1614,9 +1619,15 @@ class Relays:
                 'low_outliers': [],
                 'high_outliers': []
             },
+            'network_uptime_percentiles': None,  # Network-wide percentiles for 6-month period
             'valid_relays': 0,
             'total_relays': len(operator_relays)
         }
+        
+        # Calculate network-wide uptime percentiles for 6-month period
+        network_percentiles = calculate_network_uptime_percentiles(self.uptime_data, '6_months')
+        if network_percentiles:
+            reliability_stats['network_uptime_percentiles'] = network_percentiles
         
         # Process each time period using shared utilities
         all_relay_data = {}
@@ -1635,6 +1646,11 @@ class Relays:
                     'display_name': period_display_names[period],
                     'relay_count': len(period_result['uptime_values'])
                 }
+                
+                # For 6-month period, add network percentile comparison
+                if period == '6_months' and network_percentiles:
+                    operator_position = find_operator_percentile_position(mean_uptime, network_percentiles)
+                    reliability_stats['overall_uptime'][period]['network_position'] = operator_position
                 
                 # Calculate statistical outliers using shared utility
                 outliers = calculate_statistical_outliers(
@@ -1942,6 +1958,74 @@ class Relays:
                     }
         
         display_data['uptime_formatted'] = uptime_formatted
+        
+        # 5.1. Network Uptime Percentiles formatting (6-month period)
+        network_percentiles_formatted = {}
+        if operator_reliability and operator_reliability.get('network_uptime_percentiles'):
+            network_data = operator_reliability['network_uptime_percentiles']
+            six_month_data = operator_reliability.get('overall_uptime', {}).get('6_months', {})
+            
+            if network_data and six_month_data:
+                percentiles = network_data.get('percentiles', {})
+                operator_avg = six_month_data.get('average', 0)
+                network_avg = network_data.get('average', 0)
+                total_network_relays = network_data.get('total_relays', 0)
+                operator_position = six_month_data.get('network_position', 'Unknown')
+                
+                # Format the percentile display string as requested
+                percentile_parts = []
+                percentile_parts.append(f"25th Pct: {percentiles.get('25th', 0):.0f}%")
+                percentile_parts.append(f"Avg: {network_avg:.0f}%")
+                percentile_parts.append(f"75th Pct: {percentiles.get('75th', 0):.0f}%")
+                percentile_parts.append(f"90th Pct: {percentiles.get('90th', 0):.0f}%")
+                
+                # Insert operator position in the appropriate place based on percentile
+                operator_inserted = False
+                if operator_avg >= percentiles.get('99th', 100):
+                    percentile_parts.append(f"Operator: {operator_avg:.0f}%")
+                    operator_inserted = True
+                elif operator_avg >= percentiles.get('95th', 100):
+                    percentile_parts.append(f"95th Pct: {percentiles.get('95th', 0):.0f}%")
+                    percentile_parts.append(f"Operator: {operator_avg:.0f}%")
+                    operator_inserted = True
+                elif operator_avg >= percentiles.get('90th', 100):
+                    percentile_parts.append(f"Operator: {operator_avg:.0f}%")
+                    percentile_parts.append(f"95th Pct: {percentiles.get('95th', 0):.0f}%")
+                    operator_inserted = True
+                elif operator_avg >= percentiles.get('75th', 100):
+                    # Insert operator before 90th percentile
+                    percentile_parts.insert(-1, f"Operator: {operator_avg:.0f}%")
+                    operator_inserted = True
+                elif operator_avg >= percentiles.get('50th', 100):
+                    # Insert operator before 75th percentile
+                    percentile_parts.insert(-2, f"Operator: {operator_avg:.0f}%")
+                    operator_inserted = True
+                elif operator_avg >= percentiles.get('25th', 100):
+                    # Insert operator before average
+                    percentile_parts.insert(-3, f"Operator: {operator_avg:.0f}%")
+                    operator_inserted = True
+                else:
+                    # Insert operator at the beginning
+                    percentile_parts.insert(1, f"Operator: {operator_avg:.0f}%")
+                    operator_inserted = True
+                
+                # Add remaining percentiles if not already included
+                if not any("95th Pct" in part for part in percentile_parts):
+                    percentile_parts.append(f"95th Pct: {percentiles.get('95th', 0):.0f}%")
+                
+                percentile_parts.append(f"99th Pct: {percentiles.get('99th', 0):.0f}%")
+                
+                # Create the formatted display
+                percentile_display = "Network Uptime (6mo): " + ", ".join(percentile_parts)
+                
+                network_percentiles_formatted = {
+                    'display': percentile_display,
+                    'operator_position': operator_position,
+                    'total_network_relays': total_network_relays,
+                    'tooltip': f"Based on {total_network_relays:,} active relays in the network"
+                }
+        
+        display_data['network_percentiles_formatted'] = network_percentiles_formatted
         
         # 6. Outliers calculations and formatting
         outliers_data = {}

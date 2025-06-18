@@ -113,6 +113,109 @@ def extract_relay_uptime_for_period(operator_relays, uptime_data, time_period):
     }
 
 
+def calculate_network_uptime_percentiles(uptime_data, time_period='6_months'):
+    """
+    Calculate network-wide uptime percentiles for all active relays.
+    
+    Used to show where an operator fits within the overall network distribution.
+    
+    Args:
+        uptime_data (dict): Uptime data from Onionoo API containing all network relays
+        time_period (str): Time period key (default: '6_months')
+        
+    Returns:
+        dict: Contains percentile values and statistics for network-wide uptime distribution
+    """
+    if not uptime_data or not uptime_data.get('relays'):
+        return None
+        
+    network_uptime_values = []
+    
+    # Collect uptime data from all active relays in the network
+    for relay_uptime in uptime_data.get('relays', []):
+        if relay_uptime.get('uptime'):
+            period_data = relay_uptime['uptime'].get(time_period, {})
+            if period_data.get('values'):
+                # Calculate average uptime for this relay
+                avg_uptime = calculate_relay_uptime_average(period_data['values'])
+                if avg_uptime > 0:  # Only include relays with valid uptime data
+                    network_uptime_values.append(avg_uptime)
+    
+    if len(network_uptime_values) < 10:  # Need sufficient data for meaningful percentiles
+        return None
+        
+    # Sort for percentile calculations
+    network_uptime_values.sort()
+    
+    try:
+        # Calculate percentiles using statistics.quantiles (Python 3.8+)
+        # For older Python versions, we'll use manual calculation
+        def calculate_percentile(data, percentile):
+            """Calculate percentile manually for compatibility"""
+            if not data:
+                return 0.0
+            k = (len(data) - 1) * (percentile / 100.0)
+            f = int(k)
+            c = k - f
+            if f == len(data) - 1:
+                return data[f]
+            return data[f] + c * (data[f + 1] - data[f])
+        
+        percentiles = {
+            '25th': calculate_percentile(network_uptime_values, 25),
+            '50th': calculate_percentile(network_uptime_values, 50),  # Median
+            '75th': calculate_percentile(network_uptime_values, 75),
+            '90th': calculate_percentile(network_uptime_values, 90),
+            '95th': calculate_percentile(network_uptime_values, 95),
+            '99th': calculate_percentile(network_uptime_values, 99)
+        }
+        
+        return {
+            'percentiles': percentiles,
+            'average': statistics.mean(network_uptime_values),
+            'median': percentiles['50th'],
+            'total_relays': len(network_uptime_values),
+            'time_period': time_period
+        }
+        
+    except Exception as e:
+        # Fallback in case of any calculation errors
+        return None
+
+
+def find_operator_percentile_position(operator_uptime, network_percentiles):
+    """
+    Find where an operator's uptime fits within network percentiles.
+    
+    Args:
+        operator_uptime (float): Operator's average uptime percentage
+        network_percentiles (dict): Network percentile data from calculate_network_uptime_percentiles
+        
+    Returns:
+        str: Formatted string showing operator's position (e.g., "81%" if between 75th and 90th percentiles)
+    """
+    if not network_percentiles or not network_percentiles.get('percentiles'):
+        return "Unknown"
+        
+    percentiles = network_percentiles['percentiles']
+    
+    # Find which percentile range the operator falls into
+    if operator_uptime >= percentiles['99th']:
+        return f"{operator_uptime:.1f}% (>99th Pct)"
+    elif operator_uptime >= percentiles['95th']:
+        return f"{operator_uptime:.1f}% (95th-99th Pct)"
+    elif operator_uptime >= percentiles['90th']:
+        return f"{operator_uptime:.1f}% (90th-95th Pct)"
+    elif operator_uptime >= percentiles['75th']:
+        return f"{operator_uptime:.1f}% (75th-90th Pct)"
+    elif operator_uptime >= percentiles['50th']:
+        return f"{operator_uptime:.1f}% (50th-75th Pct)"
+    elif operator_uptime >= percentiles['25th']:
+        return f"{operator_uptime:.1f}% (25th-50th Pct)"
+    else:
+        return f"{operator_uptime:.1f}% (<25th Pct)"
+
+
 def calculate_statistical_outliers(uptime_values, relay_breakdown, std_dev_threshold=2.0):
     """
     Calculate statistical outliers from uptime values.

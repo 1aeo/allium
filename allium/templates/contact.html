@@ -155,6 +155,12 @@
                 </li>
                 {% endif %}
                 
+                {# Network Uptime Percentiles - new metric for 6-month period #}
+                {% if contact_display_data and contact_display_data.network_percentiles_formatted %}
+                {% set percentiles = contact_display_data.network_percentiles_formatted %}
+                <li style="margin-left: 20px; list-style-type: disc;"><strong><span title="{{ percentiles.tooltip }}" style="cursor: help;">{{ percentiles.display }}</span></strong></li>
+                {% endif %}
+                
                 {# Statistical outliers section - using pre-computed data #}
                 {% if contact_display_data and contact_display_data.outliers %}
                 {% set outliers = contact_display_data.outliers %}
