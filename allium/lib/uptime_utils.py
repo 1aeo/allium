@@ -206,6 +206,7 @@ def calculate_network_uptime_percentiles(uptime_data, time_period='6_months'):
                 # Use statistics.quantiles for more accurate results
                 quantile_values = statistics.quantiles(network_uptime_values, n=100, method='inclusive')
                 percentiles = {
+                    '5th': quantile_values[4],   # 5th percentile
                     '25th': quantile_values[24],  # 25th percentile
                     '50th': quantile_values[49],  # 50th percentile (median)
                     '75th': quantile_values[74],  # 75th percentile
@@ -233,6 +234,7 @@ def calculate_network_uptime_percentiles(uptime_data, time_period='6_months'):
                 return data[f] + c * (data[f + 1] - data[f])
             
             percentiles = {
+                '5th': calculate_percentile(network_uptime_values, 5),
                 '25th': calculate_percentile(network_uptime_values, 25),
                 '50th': calculate_percentile(network_uptime_values, 50),  # Median
                 '75th': calculate_percentile(network_uptime_values, 75),
@@ -327,11 +329,17 @@ def find_operator_percentile_position(operator_uptime, network_percentiles):
             'insert_after': '25th',  # Insert after 25th percentile
             'percentile_range': '25th-50th'
         }
+    elif operator_uptime >= percentiles['5th']:
+        return {
+            'description': f"{operator_uptime:.1f}% (5th-25th Pct)",
+            'insert_after': '5th',   # Insert after 5th percentile
+            'percentile_range': '5th-25th'
+        }
     else:
         return {
-            'description': f"{operator_uptime:.1f}% (<25th Pct)",
+            'description': f"{operator_uptime:.1f}% (<5th Pct)",
             'insert_after': None,    # Insert at beginning (after label)
-            'percentile_range': '<25th'
+            'percentile_range': '<5th'
         }
 
 
@@ -359,12 +367,21 @@ def format_network_percentiles_display(network_percentiles, operator_uptime):
     # Build the ordered percentile parts
     parts = []
     
-    # Always start with 25th percentile
+    # Always start with 5th percentile
+    parts.append(f"5th Pct: {percentiles.get('5th', 0):.0f}%")
+    
+    # Insert operator after 5th if appropriate
+    if insert_after == '5th':
+        parts.append(f"Operator: {operator_uptime:.0f}%")
+    
+    # Add 25th percentile
     parts.append(f"25th Pct: {percentiles.get('25th', 0):.0f}%")
     
-    # Insert operator after 25th if appropriate
-    if insert_after is None:  # <25th percentile
-        parts.append(f"Operator: {operator_uptime:.0f}%")
+    # Insert operator after 25th if appropriate, or at beginning if below 5th
+    if insert_after is None:  # <5th percentile - insert at beginning after 5th
+        # Actually, for <5th percentile, we want to insert at the very beginning
+        # Let me restructure this
+        pass  # Handle this case separately
     elif insert_after == '25th':
         parts.append(f"Operator: {operator_uptime:.0f}%")
     
@@ -403,7 +420,13 @@ def format_network_percentiles_display(network_percentiles, operator_uptime):
     if insert_after == '99th':
         parts.append(f"Operator: {operator_uptime:.0f}%")
     
-    return "Network Uptime (6mo): " + ", ".join(parts)
+    # Handle special case for operators below 5th percentile
+    if insert_after is None:  # <5th percentile
+        # Insert at the beginning after the label
+        operator_part = f"Operator: {operator_uptime:.0f}%"
+        parts.insert(0, operator_part)  # Insert at beginning of parts list
+    
+    return "<strong>Network Uptime (6mo):</strong> " + ", ".join(parts)
 
 
 def calculate_statistical_outliers(uptime_values, relay_breakdown, std_dev_threshold=2.0):
