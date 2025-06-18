@@ -434,6 +434,9 @@ class Relays:
         Optimized uptime data processing using consolidated single-pass analysis.
         This replaces the previous 3-pass approach with a single optimized loop
         through the uptime data that computes all metrics at once.
+        
+        Also calculates network-wide uptime percentiles once for all contact pages
+        to avoid performance bottlenecks from recalculating for each contact.
         """
         if not hasattr(self, 'uptime_data') or not self.uptime_data:
             return
@@ -495,7 +498,22 @@ class Relays:
             # Fallback to basic processing if consolidated processing fails
             print(f"Warning: Consolidated uptime processing failed ({e}), falling back to basic processing")
             self._basic_uptime_processing()
-    
+            
+        # PERFORMANCE OPTIMIZATION: Calculate network-wide uptime percentiles ONCE for all contacts
+        # This avoids recalculating the same percentiles for every contact page (major performance optimization)
+        if hasattr(self, 'uptime_data') and self.uptime_data:
+            from .uptime_utils import calculate_network_uptime_percentiles
+            self._log_progress("Calculating network uptime percentiles (6-month period)...")
+            self.network_uptime_percentiles = calculate_network_uptime_percentiles(self.uptime_data, '6_months')
+            if self.network_uptime_percentiles:
+                total_relays = self.network_uptime_percentiles.get('total_relays', 0)
+                self._log_progress(f"Network percentiles calculated: {total_relays:,} relays analyzed")
+            else:
+                self.network_uptime_percentiles = None
+                self._log_progress("Network percentiles calculation failed: insufficient data")
+        else:
+            self.network_uptime_percentiles = None
+
     def _apply_statistical_coloring(self, network_statistics):
         """
         Apply statistical coloring to relay uptime percentages using pre-computed network statistics.
@@ -1769,18 +1787,23 @@ class Relays:
         Calculate comprehensive reliability statistics for an operator.
         
         Uses shared uptime utilities to avoid code duplication with aroileaders.py.
+        Uses cached network percentiles for efficiency (calculated once in _reprocess_uptime_data).
         
         Args:
             contact_hash (str): Contact hash for the operator
             operator_relays (list): List of relay objects for this operator
             
         Returns:
-            dict: Reliability statistics including overall uptime, time periods, and outliers
+            dict: Reliability statistics including overall uptime, time periods, outliers, and network percentiles
         """
         if not hasattr(self, 'uptime_data') or not self.uptime_data or not operator_relays:
             return None
             
-        from .uptime_utils import extract_relay_uptime_for_period, calculate_statistical_outliers
+        from .uptime_utils import (
+            extract_relay_uptime_for_period, 
+            calculate_statistical_outliers,
+            find_operator_percentile_position
+        )
         import statistics
         
         # Available time periods from Onionoo uptime API
@@ -1800,9 +1823,15 @@ class Relays:
                 'low_outliers': [],
                 'high_outliers': []
             },
+            'network_uptime_percentiles': None,  # Network-wide percentiles for 6-month period
             'valid_relays': 0,
             'total_relays': len(operator_relays)
         }
+        
+        # PERFORMANCE OPTIMIZATION: Use cached network percentiles instead of recalculating
+        # Network percentiles are calculated once in _reprocess_uptime_data for all contacts
+        if hasattr(self, 'network_uptime_percentiles') and self.network_uptime_percentiles:
+            reliability_stats['network_uptime_percentiles'] = self.network_uptime_percentiles
         
         # Process each time period using shared utilities
         all_relay_data = {}
@@ -1821,6 +1850,12 @@ class Relays:
                     'display_name': period_display_names[period],
                     'relay_count': len(period_result['uptime_values'])
                 }
+                
+                # For 6-month period, add network percentile comparison using cached data
+                if period == '6_months' and reliability_stats['network_uptime_percentiles']:
+                    operator_position_info = find_operator_percentile_position(mean_uptime, reliability_stats['network_uptime_percentiles'])
+                    reliability_stats['overall_uptime'][period]['network_position'] = operator_position_info['description']
+                    reliability_stats['overall_uptime'][period]['percentile_range'] = operator_position_info['percentile_range']
                 
                 # Calculate statistical outliers using shared utility
                 outliers = calculate_statistical_outliers(
@@ -2128,6 +2163,41 @@ class Relays:
                     }
         
         display_data['uptime_formatted'] = uptime_formatted
+        
+        # 5.1. Network Uptime Percentiles formatting (6-month period)
+        network_percentiles_formatted = {}
+        if operator_reliability and operator_reliability.get('network_uptime_percentiles'):
+            network_data = operator_reliability['network_uptime_percentiles']
+            six_month_data = operator_reliability.get('overall_uptime', {}).get('6_months', {})
+            
+            if network_data and six_month_data:
+                from .uptime_utils import format_network_percentiles_display, find_operator_percentile_position
+                
+                operator_avg = six_month_data.get('average', 0)
+                total_network_relays = network_data.get('total_relays', 0)
+                
+                # Get operator's percentile range for dynamic tooltip
+                position_info = find_operator_percentile_position(operator_avg, network_data)
+                percentile_range = position_info.get('percentile_range', 'unknown')
+                
+                # Use the simplified display formatting function
+                percentile_display = format_network_percentiles_display(network_data, operator_avg)
+                
+                if percentile_display:
+                    # Create enhanced tooltip with statistical methodology explanation
+                    if percentile_range != 'unknown':
+                        tooltip_text = f"Statistical distribution of 6-month uptime performance across {total_network_relays:,} network relays. Each relay's daily uptime values are averaged over 6 months, then percentile ranks show performance quartiles. This operator falls in the {percentile_range} percentile range of network reliability."
+                    else:
+                        tooltip_text = f"Statistical distribution of 6-month uptime performance across {total_network_relays:,} network relays. Each relay's daily uptime values are averaged over 6 months, then percentile ranks show performance quartiles."
+                    
+                    network_percentiles_formatted = {
+                        'display': percentile_display,
+                        'total_network_relays': total_network_relays,
+                        'percentile_range': percentile_range,
+                        'tooltip': tooltip_text
+                    }
+        
+        display_data['network_percentiles_formatted'] = network_percentiles_formatted
         
         # 6. Outliers calculations and formatting
         outliers_data = {}
