@@ -32,7 +32,8 @@ cd www && python3 -m http.server 8000
 
 ### Enhanced User Interface 🎨
 - **Optimized contact pages** with efficient two-column layout (50% space reduction)
-- **Enhanced operator profiles** with streamlined reliability metrics
+- **Enhanced operator profiles** with streamlined reliability metrics and network uptime percentiles
+- **Network uptime percentile analysis** showing operator positioning within network performance distribution
 - **Improved information density** while preserving all analytical data
 - **Responsive design** with mobile-friendly layouts
 - **JavaScript-free pagination** for AROI leaderboards with independent category navigation
