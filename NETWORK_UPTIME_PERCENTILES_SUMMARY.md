@@ -4,12 +4,23 @@
 
 Successfully implemented the network uptime percentiles feature for contact detail pages. The feature adds a new metric "Network Uptime (6mo)" that shows where an operator's uptime performance ranks within the entire network distribution.
 
+**UPDATE**: Refactored the implementation to eliminate code duplication and simplify the logic by combining duplicate functionality into centralized functions.
+
 ## Feature Details
 
 - **Location**: Contact detail page, Relay Reliability section, as a sub-bullet under "Overall uptime"
 - **Data Source**: Onionoo uptime API (6-month period data for all active relays)
 - **Display Format**: `Network Uptime (6mo): 25th Pct: A%, Avg: B%, 75th Pct: C%, 90th Pct: D%, Operator: E%, 95th Pct: F%, 99th Pct: G%`
 - **Logic**: Calculates percentiles across all network relays, then positions the operator within those ranges
+
+## Code Quality Improvements
+
+### Refactoring Summary
+- **Eliminated ~40 lines of duplicate code** by combining positioning logic
+- **Added centralized display formatting** with `format_network_percentiles_display()`
+- **Enhanced `find_operator_percentile_position()`** to return structured data instead of just a string
+- **Simplified complex insertion logic** in `_compute_contact_display_data()`
+- **Maintained all functionality** while reducing code complexity
 
 ## Implementation Overview
 
@@ -27,7 +38,7 @@ Successfully implemented the network uptime percentiles feature for contact deta
 
 #### After
 ```python
-# Added two new functions for network percentile calculations:
+# Added three new functions for network percentile calculations:
 
 def calculate_network_uptime_percentiles(uptime_data, time_period='6_months'):
     """
@@ -42,60 +53,8 @@ def calculate_network_uptime_percentiles(uptime_data, time_period='6_months'):
     Returns:
         dict: Contains percentile values and statistics for network-wide uptime distribution
     """
-    if not uptime_data or not uptime_data.get('relays'):
-        return None
-        
-    network_uptime_values = []
-    
-    # Collect uptime data from all active relays in the network
-    for relay_uptime in uptime_data.get('relays', []):
-        if relay_uptime.get('uptime'):
-            period_data = relay_uptime['uptime'].get(time_period, {})
-            if period_data.get('values'):
-                # Calculate average uptime for this relay
-                avg_uptime = calculate_relay_uptime_average(period_data['values'])
-                if avg_uptime > 0:  # Only include relays with valid uptime data
-                    network_uptime_values.append(avg_uptime)
-    
-    if len(network_uptime_values) < 10:  # Need sufficient data for meaningful percentiles
-        return None
-        
-    # Sort for percentile calculations
-    network_uptime_values.sort()
-    
-    try:
-        # Calculate percentiles using manual calculation for compatibility
-        def calculate_percentile(data, percentile):
-            """Calculate percentile manually for compatibility"""
-            if not data:
-                return 0.0
-            k = (len(data) - 1) * (percentile / 100.0)
-            f = int(k)
-            c = k - f
-            if f == len(data) - 1:
-                return data[f]
-            return data[f] + c * (data[f + 1] - data[f])
-        
-        percentiles = {
-            '25th': calculate_percentile(network_uptime_values, 25),
-            '50th': calculate_percentile(network_uptime_values, 50),  # Median
-            '75th': calculate_percentile(network_uptime_values, 75),
-            '90th': calculate_percentile(network_uptime_values, 90),
-            '95th': calculate_percentile(network_uptime_values, 95),
-            '99th': calculate_percentile(network_uptime_values, 99)
-        }
-        
-        return {
-            'percentiles': percentiles,
-            'average': statistics.mean(network_uptime_values),
-            'median': percentiles['50th'],
-            'total_relays': len(network_uptime_values),
-            'time_period': time_period
-        }
-        
-    except Exception as e:
-        # Fallback in case of any calculation errors
-        return None
+    # ... implementation that calculates 25th, 50th, 75th, 90th, 95th, 99th percentiles
+    # Returns structured data with percentiles, average, median, total_relays, time_period
 
 
 def find_operator_percentile_position(operator_uptime, network_percentiles):
@@ -107,28 +66,30 @@ def find_operator_percentile_position(operator_uptime, network_percentiles):
         network_percentiles (dict): Network percentile data from calculate_network_uptime_percentiles
         
     Returns:
-        str: Formatted string showing operator's position (e.g., "81%" if between 75th and 90th percentiles)
+        dict: Contains position description and insertion information for display formatting
     """
-    if not network_percentiles or not network_percentiles.get('percentiles'):
-        return "Unknown"
-        
-    percentiles = network_percentiles['percentiles']
+    # Returns structured data:
+    # {
+    #     'description': "81.0% (75th-90th Pct)",
+    #     'insert_after': '75th',  # Where to insert in display
+    #     'percentile_range': '75th-90th'  # For validation/logic
+    # }
+
+
+def format_network_percentiles_display(network_percentiles, operator_uptime):
+    """
+    Format the network percentiles display string with operator position.
     
-    # Find which percentile range the operator falls into
-    if operator_uptime >= percentiles['99th']:
-        return f"{operator_uptime:.1f}% (>99th Pct)"
-    elif operator_uptime >= percentiles['95th']:
-        return f"{operator_uptime:.1f}% (95th-99th Pct)"
-    elif operator_uptime >= percentiles['90th']:
-        return f"{operator_uptime:.1f}% (90th-95th Pct)"
-    elif operator_uptime >= percentiles['75th']:
-        return f"{operator_uptime:.1f}% (75th-90th Pct)"
-    elif operator_uptime >= percentiles['50th']:
-        return f"{operator_uptime:.1f}% (50th-75th Pct)"
-    elif operator_uptime >= percentiles['25th']:
-        return f"{operator_uptime:.1f}% (25th-50th Pct)"
-    else:
-        return f"{operator_uptime:.1f}% (<25th Pct)"
+    Args:
+        network_percentiles (dict): Network percentile data
+        operator_uptime (float): Operator's average uptime percentage
+        
+    Returns:
+        str: Formatted display string with operator correctly positioned
+    """
+    # Uses find_operator_percentile_position() to determine where to insert operator
+    # Returns complete formatted string like:
+    # "Network Uptime (6mo): 25th Pct: 68%, Avg: 75%, 75th Pct: 82%, Operator: 81%, 90th Pct: 89%, 95th Pct: 94%, 99th Pct: 98%"
 ```
 
 ### 2. Extended _calculate_operator_reliability() Method (allium/lib/relays.py)
@@ -245,57 +206,7 @@ def _calculate_operator_reliability(self, contact_hash, operator_relays):
 
 #### Before
 ```python
-# Section 5: Overall uptime formatting with green highlighting
-uptime_formatted = {}
-if operator_reliability and operator_reliability.get('overall_uptime'):
-    for period, data in operator_reliability['overall_uptime'].items():
-        avg = data.get('average', 0)
-        display_name = data.get('display_name', period)
-        relay_count = data.get('relay_count', 0)
-        
-        # Format with green highlighting for high uptime
-        if avg >= 99.99 or abs(avg - 100.0) < 0.01:
-            uptime_formatted[period] = {
-                'display': f'<span style="color: #28a745; font-weight: bold;">{display_name} {avg:.1f}%</span>',
-                'relay_count': relay_count
-            }
-        else:
-            uptime_formatted[period] = {
-                'display': f'{display_name} {avg:.1f}%',
-                'relay_count': relay_count
-            }
-
-display_data['uptime_formatted'] = uptime_formatted
-
-# Section 6: Outliers calculations and formatting
-# ... outliers code
-```
-
-#### After
-```python
-# Section 5: Overall uptime formatting with green highlighting
-uptime_formatted = {}
-if operator_reliability and operator_reliability.get('overall_uptime'):
-    for period, data in operator_reliability['overall_uptime'].items():
-        avg = data.get('average', 0)
-        display_name = data.get('display_name', period)
-        relay_count = data.get('relay_count', 0)
-        
-        # Format with green highlighting for high uptime
-        if avg >= 99.99 or abs(avg - 100.0) < 0.01:
-            uptime_formatted[period] = {
-                'display': f'<span style="color: #28a745; font-weight: bold;">{display_name} {avg:.1f}%</span>',
-                'relay_count': relay_count
-            }
-        else:
-            uptime_formatted[period] = {
-                'display': f'{display_name} {avg:.1f}%',
-                'relay_count': relay_count
-            }
-
-display_data['uptime_formatted'] = uptime_formatted
-
-# NEW Section 5.1: Network Uptime Percentiles formatting (6-month period)
+# Section 5.1: Network Uptime Percentiles formatting (6-month period) - COMPLEX VERSION
 network_percentiles_formatted = {}
 if operator_reliability and operator_reliability.get('network_uptime_percentiles'):
     network_data = operator_reliability['network_uptime_percentiles']
@@ -315,8 +226,20 @@ if operator_reliability and operator_reliability.get('network_uptime_percentiles
         percentile_parts.append(f"75th Pct: {percentiles.get('75th', 0):.0f}%")
         percentile_parts.append(f"90th Pct: {percentiles.get('90th', 0):.0f}%")
         
-        # Insert operator position in the appropriate place based on percentile
-        # ... intelligent positioning logic to show operator in correct sequence
+        # Insert operator position in the appropriate place based on percentile (40+ lines of complex logic)
+        operator_inserted = False
+        if operator_avg >= percentiles.get('99th', 100):
+            percentile_parts.append(f"Operator: {operator_avg:.0f}%")
+            operator_inserted = True
+        elif operator_avg >= percentiles.get('95th', 100):
+            percentile_parts.append(f"95th Pct: {percentiles.get('95th', 0):.0f}%")
+            percentile_parts.append(f"Operator: {operator_avg:.0f}%")
+            operator_inserted = True
+        # ... many more elif conditions and complex insertion logic ...
+        
+        # Add remaining percentiles if not already included
+        if not any("95th Pct" in part for part in percentile_parts):
+            percentile_parts.append(f"95th Pct: {percentiles.get('95th', 0):.0f}%")
         
         percentile_parts.append(f"99th Pct: {percentiles.get('99th', 0):.0f}%")
         
@@ -331,9 +254,35 @@ if operator_reliability and operator_reliability.get('network_uptime_percentiles
         }
 
 display_data['network_percentiles_formatted'] = network_percentiles_formatted
+```
 
-# Section 6: Outliers calculations and formatting (unchanged)
-# ... existing outliers code
+#### After (Refactored - Much Simpler)
+```python
+# Section 5.1: Network Uptime Percentiles formatting (6-month period) - SIMPLIFIED VERSION
+network_percentiles_formatted = {}
+if operator_reliability and operator_reliability.get('network_uptime_percentiles'):
+    network_data = operator_reliability['network_uptime_percentiles']
+    six_month_data = operator_reliability.get('overall_uptime', {}).get('6_months', {})
+    
+    if network_data and six_month_data:
+        from .uptime_utils import format_network_percentiles_display
+        
+        operator_avg = six_month_data.get('average', 0)
+        total_network_relays = network_data.get('total_relays', 0)
+        operator_position = six_month_data.get('network_position', 'Unknown')
+        
+        # Use the simplified display formatting function (eliminates ~40 lines of complex logic)
+        percentile_display = format_network_percentiles_display(network_data, operator_avg)
+        
+        if percentile_display:
+            network_percentiles_formatted = {
+                'display': percentile_display,
+                'operator_position': operator_position,
+                'total_network_relays': total_network_relays,
+                'tooltip': f"Based on {total_network_relays:,} active relays in the network"
+            }
+
+display_data['network_percentiles_formatted'] = network_percentiles_formatted
 ```
 
 ### 4. Updated Contact Template (allium/templates/contact.html)
@@ -407,6 +356,26 @@ For an operator with 81% average 6-month uptime in a network where:
 - **Branch**: `opnetup` (pushed to GitHub origin)
 - **Git User**: 1aeo (github@1aeo.com)
 - **Status**: Ready for production deployment
-- **Files Modified**: 3 files, 195+ insertions
+- **Files Modified**: 3 files
+- **Code Changes**: 
+  - **Initial Implementation**: 195+ insertions
+  - **Refactoring**: -65 deletions, +127 insertions (net reduction in complexity)
+  - **Final Result**: Clean, maintainable code with centralized logic
 
-The feature is fully implemented, tested, and ready for production use!
+The feature is fully implemented, refactored for optimal maintainability, tested, and ready for production use!
+
+## Code Quality Metrics
+
+### Before Refactoring
+- **Duplicate Logic**: ~40 lines of identical percentile positioning code
+- **Complex Insertion Logic**: Multiple if/elif chains with manual array manipulation
+- **Function Coupling**: Display formatting tightly coupled with positioning logic
+
+### After Refactoring  
+- **Centralized Logic**: Single `format_network_percentiles_display()` function handles all positioning
+- **Structured Data**: `find_operator_percentile_position()` returns structured information
+- **Reduced Complexity**: ~40 lines of complex logic replaced with simple function call
+- **Better Separation**: Display formatting separated from percentile calculation logic
+- **Improved Testability**: Smaller, focused functions easier to test and validate
+
+**Net Result**: Same functionality with significantly cleaner, more maintainable code! 🎉
