@@ -175,7 +175,7 @@ class TestContactTemplateIntegration(unittest.TestCase):
         
         # Should contain network reliability section
         self.assertIn('⏰ Network Reliability', rendered)
-        self.assertIn('Overall uptime:', rendered)
+        self.assertIn('Overall Uptime:', rendered)
 
     def test_contact_template_with_aroi_rankings(self):
         """Test contact template when AROI rankings are present."""
@@ -191,7 +191,7 @@ class TestContactTemplateIntegration(unittest.TestCase):
         
         # Should display ranking statements
         self.assertIn('🥇 Bandwidth Champion', rendered)
-        self.assertIn('� Diversity Master', rendered)
+        self.assertIn('🌈 Diversity Master', rendered)
 
     def test_contact_template_without_aroi_rankings(self):
         """Test contact template layout when no AROI rankings exist."""
