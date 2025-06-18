@@ -192,28 +192,131 @@ def find_operator_percentile_position(operator_uptime, network_percentiles):
         network_percentiles (dict): Network percentile data from calculate_network_uptime_percentiles
         
     Returns:
-        str: Formatted string showing operator's position (e.g., "81%" if between 75th and 90th percentiles)
+        dict: Contains position description and insertion information for display formatting
     """
     if not network_percentiles or not network_percentiles.get('percentiles'):
-        return "Unknown"
+        return {
+            'description': "Unknown",
+            'insert_after': None,
+            'percentile_range': 'unknown'
+        }
         
     percentiles = network_percentiles['percentiles']
     
-    # Find which percentile range the operator falls into
+    # Determine position and where to insert in display
     if operator_uptime >= percentiles['99th']:
-        return f"{operator_uptime:.1f}% (>99th Pct)"
+        return {
+            'description': f"{operator_uptime:.1f}% (>99th Pct)",
+            'insert_after': '99th',  # Insert after 99th percentile
+            'percentile_range': '>99th'
+        }
     elif operator_uptime >= percentiles['95th']:
-        return f"{operator_uptime:.1f}% (95th-99th Pct)"
+        return {
+            'description': f"{operator_uptime:.1f}% (95th-99th Pct)",
+            'insert_after': '95th',  # Insert after 95th percentile  
+            'percentile_range': '95th-99th'
+        }
     elif operator_uptime >= percentiles['90th']:
-        return f"{operator_uptime:.1f}% (90th-95th Pct)"
+        return {
+            'description': f"{operator_uptime:.1f}% (90th-95th Pct)",
+            'insert_after': '90th',  # Insert after 90th percentile
+            'percentile_range': '90th-95th'
+        }
     elif operator_uptime >= percentiles['75th']:
-        return f"{operator_uptime:.1f}% (75th-90th Pct)"
+        return {
+            'description': f"{operator_uptime:.1f}% (75th-90th Pct)",
+            'insert_after': '75th',  # Insert after 75th percentile
+            'percentile_range': '75th-90th'
+        }
     elif operator_uptime >= percentiles['50th']:
-        return f"{operator_uptime:.1f}% (50th-75th Pct)"
+        return {
+            'description': f"{operator_uptime:.1f}% (50th-75th Pct)",
+            'insert_after': 'avg',   # Insert after average
+            'percentile_range': '50th-75th'
+        }
     elif operator_uptime >= percentiles['25th']:
-        return f"{operator_uptime:.1f}% (25th-50th Pct)"
+        return {
+            'description': f"{operator_uptime:.1f}% (25th-50th Pct)",
+            'insert_after': '25th',  # Insert after 25th percentile
+            'percentile_range': '25th-50th'
+        }
     else:
-        return f"{operator_uptime:.1f}% (<25th Pct)"
+        return {
+            'description': f"{operator_uptime:.1f}% (<25th Pct)",
+            'insert_after': None,    # Insert at beginning (after label)
+            'percentile_range': '<25th'
+        }
+
+
+def format_network_percentiles_display(network_percentiles, operator_uptime):
+    """
+    Format the network percentiles display string with operator position.
+    
+    Args:
+        network_percentiles (dict): Network percentile data
+        operator_uptime (float): Operator's average uptime percentage
+        
+    Returns:
+        str: Formatted display string
+    """
+    if not network_percentiles or not network_percentiles.get('percentiles'):
+        return None
+        
+    percentiles = network_percentiles['percentiles']
+    network_avg = network_percentiles.get('average', 0)
+    
+    # Get operator position information
+    position_info = find_operator_percentile_position(operator_uptime, network_percentiles)
+    insert_after = position_info['insert_after']
+    
+    # Build the ordered percentile parts
+    parts = []
+    
+    # Always start with 25th percentile
+    parts.append(f"25th Pct: {percentiles.get('25th', 0):.0f}%")
+    
+    # Insert operator after 25th if appropriate
+    if insert_after is None:  # <25th percentile
+        parts.append(f"Operator: {operator_uptime:.0f}%")
+    elif insert_after == '25th':
+        parts.append(f"Operator: {operator_uptime:.0f}%")
+    
+    # Add average
+    parts.append(f"Avg: {network_avg:.0f}%")
+    
+    # Insert operator after average if appropriate
+    if insert_after == 'avg':  # 50th-75th percentile range
+        parts.append(f"Operator: {operator_uptime:.0f}%")
+    
+    # Add 75th percentile
+    parts.append(f"75th Pct: {percentiles.get('75th', 0):.0f}%")
+    
+    # Insert operator after 75th if appropriate
+    if insert_after == '75th':
+        parts.append(f"Operator: {operator_uptime:.0f}%")
+    
+    # Add 90th percentile
+    parts.append(f"90th Pct: {percentiles.get('90th', 0):.0f}%")
+    
+    # Insert operator after 90th if appropriate
+    if insert_after == '90th':
+        parts.append(f"Operator: {operator_uptime:.0f}%")
+    
+    # Add 95th percentile
+    parts.append(f"95th Pct: {percentiles.get('95th', 0):.0f}%")
+    
+    # Insert operator after 95th if appropriate
+    if insert_after == '95th':
+        parts.append(f"Operator: {operator_uptime:.0f}%")
+    
+    # Add 99th percentile
+    parts.append(f"99th Pct: {percentiles.get('99th', 0):.0f}%")
+    
+    # Insert operator after 99th if appropriate (>99th percentile)
+    if insert_after == '99th':
+        parts.append(f"Operator: {operator_uptime:.0f}%")
+    
+    return "Network Uptime (6mo): " + ", ".join(parts)
 
 
 def calculate_statistical_outliers(uptime_values, relay_breakdown, std_dev_threshold=2.0):
