@@ -30,19 +30,31 @@ def calculate_relay_uptime_average(uptime_values):
         uptime_values (list): List of raw uptime values (0-999 scale)
         
     Returns:
-        float: Average uptime as percentage (0.0-100.0), or 0.0 if no valid values
+        float: Average uptime as percentage (0.0-100.0), or 0.0 if no valid values or uptime <= 1%
     """
     if not uptime_values:
         return 0.0
     
-    # Filter out None values and normalize
-    valid_values = [v for v in uptime_values if v is not None]
+    # Filter out None values and invalid values
+    valid_values = [v for v in uptime_values if v is not None and isinstance(v, (int, float)) and 0 <= v <= 999]
     if not valid_values:
+        return 0.0
+    
+    # Require minimum data points for reliable calculation
+    if len(valid_values) < 30:  # Need at least 30 data points (1 month of daily data)
         return 0.0
     
     # Calculate average and normalize to percentage
     avg_raw = sum(valid_values) / len(valid_values)
-    return normalize_uptime_value(avg_raw)
+    percentage = normalize_uptime_value(avg_raw)
+    
+    # Only include relays with minimal uptime (> 1%) to exclude completely offline relays
+    # We include all operational relays, including problem ones, as they represent the real
+    # network experience. Hiding poorly performing relays would misrepresent network reality.
+    if percentage <= 1.0:
+        return 0.0  # Will be excluded from percentile calculations
+    
+    return percentage
 
 
 def find_relay_uptime_data(fingerprint, uptime_data):
@@ -112,6 +124,325 @@ def extract_relay_uptime_for_period(operator_relays, uptime_data, time_period):
         'relay_breakdown': relay_breakdown,
         'valid_relays': len(uptime_values)
     }
+
+
+def calculate_network_uptime_percentiles(uptime_data, time_period='6_months'):
+    """
+    Calculate network-wide uptime percentiles for all active relays.
+    
+    Used to show where an operator fits within the overall network distribution.
+    Only excludes relays with ≤1% uptime (essentially offline) and insufficient data points.
+    
+    Includes all operational relays, including those with poor performance, as they represent 
+    the real network experience. Hiding poorly performing relays would misrepresent network reality.
+    
+    Due to the highly skewed nature of relay uptime data (75% of relays achieve >98% uptime),
+    we use median instead of mean to represent "average" network performance, as median
+    is robust to outliers and mathematically guaranteed to be valid.
+    
+    Args:
+        uptime_data (dict): Uptime data from Onionoo API containing all network relays
+        time_period (str): Time period key (default: '6_months')
+        
+    Returns:
+        dict: Contains percentile values and statistics for network-wide uptime distribution
+    """
+    if not uptime_data or not uptime_data.get('relays'):
+        return None
+        
+    network_uptime_values = []
+    total_relays_processed = 0
+    excluded_relays = {
+        'no_uptime_data': 0,
+        'insufficient_data': 0, 
+        'low_uptime': 0,
+        'invalid_data': 0
+    }
+    
+    # Collect uptime data from all active relays in the network
+    for relay_uptime in uptime_data.get('relays', []):
+        total_relays_processed += 1
+        
+        if not relay_uptime.get('uptime'):
+            excluded_relays['no_uptime_data'] += 1
+            continue
+            
+        period_data = relay_uptime['uptime'].get(time_period, {})
+        if not period_data.get('values'):
+            excluded_relays['no_uptime_data'] += 1
+            continue
+        
+        # Calculate average uptime - this includes all relays >1% (includes problem relays)
+        avg_uptime = calculate_relay_uptime_average(period_data['values'])
+        
+        if avg_uptime == 0.0:
+            # Could be insufficient data, low uptime, or invalid data
+            # The calculate_relay_uptime_average function handles the specific filtering
+            values = period_data.get('values', [])
+            valid_values = [v for v in values if v is not None and isinstance(v, (int, float)) and 0 <= v <= 999]
+            
+            if not valid_values:
+                excluded_relays['invalid_data'] += 1
+            elif len(valid_values) < 30:
+                excluded_relays['insufficient_data'] += 1
+            else:
+                # Must be low uptime (≤1% - essentially offline)
+                excluded_relays['low_uptime'] += 1
+        else:
+            # Valid relay with any operational uptime (> 1%) - includes problem relays
+            network_uptime_values.append(avg_uptime)
+    
+    if len(network_uptime_values) < 10:  # Need sufficient data for meaningful percentiles
+        return None
+        
+    # Sort for percentile calculations
+    network_uptime_values.sort()
+    
+    try:
+        # Use Python's robust quantiles function if available (Python 3.8+)
+        # Otherwise fall back to manual calculation
+        try:
+            import sys
+            if sys.version_info >= (3, 8):
+                # Use statistics.quantiles for more accurate results
+                quantile_values = statistics.quantiles(network_uptime_values, n=100, method='inclusive')
+                percentiles = {
+                    '5th': quantile_values[4],   # 5th percentile
+                    '25th': quantile_values[24],  # 25th percentile
+                    '50th': quantile_values[49],  # 50th percentile (median)
+                    '75th': quantile_values[74],  # 75th percentile
+                    '90th': quantile_values[89],  # 90th percentile
+                    '95th': quantile_values[94],  # 95th percentile
+                    '99th': quantile_values[98]   # 99th percentile
+                }
+            else:
+                raise ImportError("Using fallback calculation")
+        except (ImportError, IndexError):
+            # Fallback to manual calculation for older Python versions
+            def calculate_percentile(data, percentile):
+                """Calculate percentile manually using numpy-style interpolation"""
+                if not data:
+                    return 0.0
+                n = len(data)
+                if n == 1:
+                    return data[0]
+                # Use method similar to numpy.percentile with linear interpolation
+                k = (n - 1) * (percentile / 100.0)
+                f = int(k)
+                c = k - f
+                if f >= n - 1:
+                    return data[-1]
+                return data[f] + c * (data[f + 1] - data[f])
+            
+            percentiles = {
+                '5th': calculate_percentile(network_uptime_values, 5),
+                '25th': calculate_percentile(network_uptime_values, 25),
+                '50th': calculate_percentile(network_uptime_values, 50),  # Median
+                '75th': calculate_percentile(network_uptime_values, 75),
+                '90th': calculate_percentile(network_uptime_values, 90),
+                '95th': calculate_percentile(network_uptime_values, 95),
+                '99th': calculate_percentile(network_uptime_values, 99)
+            }
+        
+        # Use median as the "average" - robust to outliers and mathematically guaranteed valid
+        # This represents the typical relay performance better than mean in highly skewed distributions
+        # and avoids mathematical impossibilities while showing honest network representation
+        network_average = percentiles['50th']  # median
+        
+        # Also calculate arithmetic mean for comparison/debugging
+        arithmetic_mean = statistics.mean(network_uptime_values)
+        
+        result = {
+            'percentiles': percentiles,
+            'average': network_average,  # This is actually the median for robustness
+            'median': percentiles['50th'],
+            'arithmetic_mean': arithmetic_mean,  # Included for debugging
+            'total_relays': len(network_uptime_values),
+            'time_period': time_period,
+            'filtering_stats': {
+                'total_processed': total_relays_processed,
+                'included': len(network_uptime_values),
+                'excluded': excluded_relays
+            }
+        }
+        
+        return result
+        
+    except Exception as e:
+        # Fallback in case of any calculation errors
+        return None
+
+
+def find_operator_percentile_position(operator_uptime, network_percentiles):
+    """
+    Find where an operator's uptime fits within network percentiles.
+    
+    Args:
+        operator_uptime (float): Operator's average uptime percentage
+        network_percentiles (dict): Network percentile data from calculate_network_uptime_percentiles
+        
+    Returns:
+        dict: Contains position description and insertion information for display formatting
+    """
+    if not network_percentiles or not network_percentiles.get('percentiles'):
+        return {
+            'description': "Unknown",
+            'insert_after': None,
+            'percentile_range': 'unknown'
+        }
+        
+    percentiles = network_percentiles['percentiles']
+    
+    # Determine position and where to insert in display
+    if operator_uptime >= percentiles['99th']:
+        return {
+            'description': f"{operator_uptime:.1f}% (>99th Pct)",
+            'insert_after': '99th',  # Insert after 99th percentile
+            'percentile_range': '>99th'
+        }
+    elif operator_uptime >= percentiles['95th']:
+        return {
+            'description': f"{operator_uptime:.1f}% (95th-99th Pct)",
+            'insert_after': '95th',  # Insert after 95th percentile  
+            'percentile_range': '95th-99th'
+        }
+    elif operator_uptime >= percentiles['90th']:
+        return {
+            'description': f"{operator_uptime:.1f}% (90th-95th Pct)",
+            'insert_after': '90th',  # Insert after 90th percentile
+            'percentile_range': '90th-95th'
+        }
+    elif operator_uptime >= percentiles['75th']:
+        return {
+            'description': f"{operator_uptime:.1f}% (75th-90th Pct)",
+            'insert_after': '75th',  # Insert after 75th percentile
+            'percentile_range': '75th-90th'
+        }
+    elif operator_uptime >= percentiles['50th']:
+        return {
+            'description': f"{operator_uptime:.1f}% (50th-75th Pct)",
+            'insert_after': 'avg',   # Insert after average
+            'percentile_range': '50th-75th'
+        }
+    elif operator_uptime >= percentiles['25th']:
+        return {
+            'description': f"{operator_uptime:.1f}% (25th-50th Pct)",
+            'insert_after': '25th',  # Insert after 25th percentile
+            'percentile_range': '25th-50th'
+        }
+    elif operator_uptime >= percentiles['5th']:
+        return {
+            'description': f"{operator_uptime:.1f}% (5th-25th Pct)",
+            'insert_after': '5th',   # Insert after 5th percentile
+            'percentile_range': '5th-25th'
+        }
+    else:
+        return {
+            'description': f"{operator_uptime:.1f}% (<5th Pct)",
+            'insert_after': None,    # Insert at beginning (after label)
+            'percentile_range': '<5th'
+        }
+
+
+def format_network_percentiles_display(network_percentiles, operator_uptime):
+    """
+    Format the network percentiles display string with operator position and color coding.
+    
+    Color coding matches operator intelligence section:
+    - Above median: Green (#2e7d2e - same as "All" in version compliance)
+    - Below median: Dark yellow (#cc9900 - same as "Okay" in diversity ratings)
+    - Below 5th percentile: Red (#c82333 - same as "Poor" in diversity ratings)
+    
+    Args:
+        network_percentiles (dict): Network percentile data
+        operator_uptime (float): Operator's average uptime percentage
+        
+    Returns:
+        str: Formatted display string with color-coded operator position
+    """
+    if not network_percentiles or not network_percentiles.get('percentiles'):
+        return None
+        
+    percentiles = network_percentiles['percentiles']
+    network_median = network_percentiles.get('average', 0)  # This is actually the median
+    
+    # Get operator position information
+    position_info = find_operator_percentile_position(operator_uptime, network_percentiles)
+    insert_after = position_info['insert_after']
+    percentile_range = position_info.get('percentile_range', 'unknown')
+    
+    # Determine operator color coding based on percentile position
+    if percentile_range == '<5th':
+        # Below 5th percentile: Red (Poor performance)
+        operator_color = '#c82333'
+    elif operator_uptime >= percentiles.get('50th', 0):
+        # Above median: Green (Good performance)
+        operator_color = '#2e7d2e'
+    else:
+        # Below median but above 5th percentile: Dark yellow (Okay performance)
+        operator_color = '#cc9900'
+    
+    # Format operator entry with color coding
+    operator_entry = f'<span style="color: {operator_color}; font-weight: bold;">Operator: {operator_uptime:.0f}%</span>'
+    
+    # Build the ordered percentile parts
+    parts = []
+    
+    # Always start with 5th percentile
+    parts.append(f"5th Pct: {percentiles.get('5th', 0):.0f}%")
+    
+    # Insert operator after 5th if appropriate
+    if insert_after == '5th':
+        parts.append(operator_entry)
+    
+    # Add 25th percentile
+    parts.append(f"25th Pct: {percentiles.get('25th', 0):.0f}%")
+    
+    # Insert operator after 25th if appropriate
+    if insert_after == '25th':
+        parts.append(operator_entry)
+    
+    # Add median (renamed from "Avg")
+    parts.append(f"50th Pct: {network_median:.0f}%")
+    
+    # Insert operator after median if appropriate
+    if insert_after == 'avg':  # 50th-75th percentile range
+        parts.append(operator_entry)
+    
+    # Add 75th percentile
+    parts.append(f"75th Pct: {percentiles.get('75th', 0):.0f}%")
+    
+    # Insert operator after 75th if appropriate
+    if insert_after == '75th':
+        parts.append(operator_entry)
+    
+    # Add 90th percentile
+    parts.append(f"90th Pct: {percentiles.get('90th', 0):.0f}%")
+    
+    # Insert operator after 90th if appropriate
+    if insert_after == '90th':
+        parts.append(operator_entry)
+    
+    # Add 95th percentile
+    parts.append(f"95th Pct: {percentiles.get('95th', 0):.0f}%")
+    
+    # Insert operator after 95th if appropriate
+    if insert_after == '95th':
+        parts.append(operator_entry)
+    
+    # Add 99th percentile
+    parts.append(f"99th Pct: {percentiles.get('99th', 0):.0f}%")
+    
+    # Insert operator after 99th if appropriate (>99th percentile)
+    if insert_after == '99th':
+        parts.append(operator_entry)
+    
+    # Handle special case for operators below 5th percentile
+    if insert_after is None:  # <5th percentile
+        # Insert at the beginning after the label
+        parts.insert(0, operator_entry)  # Insert at beginning of parts list
+    
+    return "<strong>Network Uptime (6mo):</strong> " + ", ".join(parts)
 
 
 def calculate_statistical_outliers(uptime_values, relay_breakdown, std_dev_threshold=2.0):
