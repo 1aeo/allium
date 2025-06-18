@@ -191,21 +191,7 @@ def calculate_network_uptime_percentiles(uptime_data, time_period='6_months'):
             # Valid relay with any operational uptime (> 1%) - includes problem relays
             network_uptime_values.append(avg_uptime)
     
-    # Log filtering results for debugging
-    included_relays = len(network_uptime_values)
-    excluded_total = sum(excluded_relays.values())
-    
-    print(f"📊 Network Percentile Calculation ({time_period}):")
-    print(f"   Total relays processed: {total_relays_processed}")
-    print(f"   Included in percentiles: {included_relays} ({(included_relays/total_relays_processed)*100:.1f}%)")
-    print(f"   Excluded - No uptime data: {excluded_relays['no_uptime_data']}")
-    print(f"   Excluded - Insufficient data (<30 points): {excluded_relays['insufficient_data']}")
-    print(f"   Excluded - Offline relays (≤1%): {excluded_relays['low_uptime']}")
-    print(f"   Excluded - Invalid data: {excluded_relays['invalid_data']}")
-    print(f"   ℹ️  Including all operational relays (even poor performers) for honest network representation")
-    
     if len(network_uptime_values) < 10:  # Need sufficient data for meaningful percentiles
-        print(f"❌ ERROR: Only {len(network_uptime_values)} valid relays found - insufficient for percentiles")
         return None
         
     # Sort for percentile calculations
@@ -263,17 +249,6 @@ def calculate_network_uptime_percentiles(uptime_data, time_period='6_months'):
         # Also calculate arithmetic mean for comparison/debugging
         arithmetic_mean = statistics.mean(network_uptime_values)
         
-        # Mathematical validation - explains why median is used for honest network representation
-        if arithmetic_mean < percentiles['25th']:
-            print(f"ℹ️  Network shows typical infrastructure distribution pattern:")
-            print(f"   Arithmetic mean ({arithmetic_mean:.1f}%) < 25th percentile ({percentiles['25th']:.1f}%)")
-            print(f"   This reflects reality: many excellent relays + scattered problem relays")
-            print(f"   Using median ({network_average:.1f}%) as robust 'average' for honest representation")
-        else:
-            print(f"✅ Network distribution is well-behaved:")
-            print(f"   Arithmetic mean ({arithmetic_mean:.1f}%) ≥ 25th percentile ({percentiles['25th']:.1f}%)")
-            print(f"   Using median ({network_average:.1f}%) for consistency and robustness")
-        
         result = {
             'percentiles': percentiles,
             'average': network_average,  # This is actually the median for robustness
@@ -283,7 +258,7 @@ def calculate_network_uptime_percentiles(uptime_data, time_period='6_months'):
             'time_period': time_period,
             'filtering_stats': {
                 'total_processed': total_relays_processed,
-                'included': included_relays,
+                'included': len(network_uptime_values),
                 'excluded': excluded_relays
             }
         }
@@ -292,7 +267,6 @@ def calculate_network_uptime_percentiles(uptime_data, time_period='6_months'):
         
     except Exception as e:
         # Fallback in case of any calculation errors
-        print(f"ERROR in calculate_network_uptime_percentiles: {e}")
         return None
 
 
