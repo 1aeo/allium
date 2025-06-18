@@ -434,11 +434,14 @@ class Relays:
         """
         Reprocess uptime data for all relays after uptime_data is attached.
         Calculate both uptime/downtime display and uptime API percentages with statistical coloring.
+        
+        Also calculates network-wide uptime percentiles once for all contact pages
+        to avoid performance bottlenecks from recalculating for each contact.
         """
         
         # First pass: Calculate uptime/downtime display and extract API percentages
         all_uptime_values = {'1_month': [], '6_months': [], '1_year': [], '5_years': []}
-        
+
         for relay in self.json["relays"]:
             # Recalculate uptime/downtime display based on last_restarted and running status
             relay["uptime_display"] = None
@@ -480,7 +483,7 @@ class Relays:
             
             # Store raw percentages for later coloring
             relay["uptime_percentages"] = uptime_percentages
-        
+
         # Second pass: Calculate statistical outliers using existing function
         from .uptime_utils import calculate_statistical_outliers
         
@@ -511,7 +514,7 @@ class Relays:
                     period_outliers[period] = {'low_outliers': set(), 'high_outliers': set()}
             else:
                 period_outliers[period] = {'low_outliers': set(), 'high_outliers': set()}
-        
+
         # Third pass: Generate colored display strings
         for relay in self.json["relays"]:
             percentages = relay.get("uptime_percentages", {})
@@ -541,6 +544,21 @@ class Relays:
             
             # Join with forward slashes
             relay["uptime_api_display"] = "/".join(display_parts)
+
+        # PERFORMANCE OPTIMIZATION: Calculate network-wide uptime percentiles ONCE for all contacts
+        # This avoids recalculating the same percentiles for every contact page (major performance optimization)
+        if hasattr(self, 'uptime_data') and self.uptime_data:
+            from .uptime_utils import calculate_network_uptime_percentiles
+            self._log_progress("Calculating network uptime percentiles (6-month period)...")
+            self.network_uptime_percentiles = calculate_network_uptime_percentiles(self.uptime_data, '6_months')
+            if self.network_uptime_percentiles:
+                total_relays = self.network_uptime_percentiles.get('total_relays', 0)
+                self._log_progress(f"Network percentiles calculated: {total_relays:,} relays analyzed")
+            else:
+                self.network_uptime_percentiles = None
+                self._log_progress("Network percentiles calculation failed: insufficient data")
+        else:
+            self.network_uptime_percentiles = None
 
     def _sort_by_observed_bandwidth(self):
         """
@@ -1583,6 +1601,7 @@ class Relays:
         Calculate comprehensive reliability statistics for an operator.
         
         Uses shared uptime utilities to avoid code duplication with aroileaders.py.
+        Uses cached network percentiles for efficiency (calculated once in _reprocess_uptime_data).
         
         Args:
             contact_hash (str): Contact hash for the operator
@@ -1597,7 +1616,6 @@ class Relays:
         from .uptime_utils import (
             extract_relay_uptime_for_period, 
             calculate_statistical_outliers,
-            calculate_network_uptime_percentiles,
             find_operator_percentile_position
         )
         import statistics
@@ -1624,10 +1642,10 @@ class Relays:
             'total_relays': len(operator_relays)
         }
         
-        # Calculate network-wide uptime percentiles for 6-month period
-        network_percentiles = calculate_network_uptime_percentiles(self.uptime_data, '6_months')
-        if network_percentiles:
-            reliability_stats['network_uptime_percentiles'] = network_percentiles
+        # PERFORMANCE OPTIMIZATION: Use cached network percentiles instead of recalculating
+        # Network percentiles are calculated once in _reprocess_uptime_data for all contacts
+        if hasattr(self, 'network_uptime_percentiles') and self.network_uptime_percentiles:
+            reliability_stats['network_uptime_percentiles'] = self.network_uptime_percentiles
         
         # Process each time period using shared utilities
         all_relay_data = {}
@@ -1647,9 +1665,9 @@ class Relays:
                     'relay_count': len(period_result['uptime_values'])
                 }
                 
-                # For 6-month period, add network percentile comparison
-                if period == '6_months' and network_percentiles:
-                    operator_position_info = find_operator_percentile_position(mean_uptime, network_percentiles)
+                # For 6-month period, add network percentile comparison using cached data
+                if period == '6_months' and reliability_stats['network_uptime_percentiles']:
+                    operator_position_info = find_operator_percentile_position(mean_uptime, reliability_stats['network_uptime_percentiles'])
                     reliability_stats['overall_uptime'][period]['network_position'] = operator_position_info['description']
                     reliability_stats['overall_uptime'][period]['percentile_range'] = operator_position_info['percentile_range']
                 
