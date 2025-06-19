@@ -179,7 +179,7 @@
             </div>
             <div class="card-metrics">
                 <div class="metric-item primary">
-                    <span class="metric-value">{{ relays.json.network_health.unique_asns }}</span>
+                    <span class="metric-value">{{ relays.json.network_health.unique_as_count }}</span>
                     <span class="metric-label">Unique AS</span>
                 </div>
                 <div class="metric-grid">
@@ -203,7 +203,7 @@
     
     <!-- LAST UPDATED -->
     <div class="ribbon-footer">
-        <p class="last-updated">Last updated: {{ relays.json.network_health.last_updated }}</p>
+        <p class="last-updated">Last updated: {{ page_ctx.timestamp_str }} UTC</p>
     </div>
     
 </div>
