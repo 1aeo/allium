@@ -889,6 +889,312 @@
                         background-color: #f5f5f5;
                     }
                 }
+
+                /* Network Health Dashboard Styles */
+                .network-health-dashboard {
+                    max-width: 1200px;
+                    margin: 0 auto;
+                    padding: 20px;
+                }
+
+                .health-overview, .network-composition, .infrastructure-security {
+                    margin-bottom: 40px;
+                }
+
+                .health-card, .composition-card, .infrastructure-card, .security-card {
+                    background: white;
+                    border-radius: 12px;
+                    padding: 24px;
+                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+                    border: 1px solid #e1e8ed;
+                    transition: all 0.3s ease;
+                    height: 100%;
+                }
+
+                .health-card:hover, .composition-card:hover, 
+                .infrastructure-card:hover, .security-card:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+                }
+
+                .card-header {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    margin-bottom: 20px;
+                    padding-bottom: 15px;
+                    border-bottom: 2px solid #f5f8fa;
+                }
+
+                .card-header h3 {
+                    margin: 0;
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    font-size: 1.3rem;
+                    color: #2c3e50;
+                }
+
+                .card-icon {
+                    font-size: 1.5rem;
+                }
+
+                .status-badge, .capacity-badge, .balance-indicator, 
+                .diversity-badge, .community-badge, .security-badge {
+                    padding: 6px 12px;
+                    border-radius: 20px;
+                    font-size: 0.8rem;
+                    font-weight: 600;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                }
+
+                .status-badge.excellent, .diversity-badge.excellent, .security-badge.good {
+                    background: #d5f4e6;
+                    color: #27ae60;
+                }
+
+                .capacity-badge.high {
+                    background: #dbeafe;
+                    color: #3b82f6;
+                }
+
+                .security-badge.warning {
+                    background: #fef3c7;
+                    color: #d97706;
+                }
+
+                .primary-metric {
+                    text-align: center;
+                    margin-bottom: 20px;
+                }
+
+                .large-number {
+                    display: block;
+                    font-size: 3rem;
+                    font-weight: bold;
+                    color: #2c3e50;
+                    line-height: 1;
+                }
+
+                .metric-context {
+                    display: block;
+                    font-size: 1rem;
+                    color: #7f8c8d;
+                    margin-top: 8px;
+                }
+
+                .supporting-metrics {
+                    display: flex;
+                    justify-content: space-around;
+                    margin-bottom: 15px;
+                }
+
+                .support-metric {
+                    text-align: center;
+                }
+
+                .support-value {
+                    display: block;
+                    font-weight: bold;
+                    color: #2c3e50;
+                }
+
+                .support-label {
+                    font-size: 0.9rem;
+                    color: #7f8c8d;
+                }
+
+                .role-breakdown {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 15px;
+                }
+
+                .role-item {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    padding: 12px;
+                    background: #f8fafc;
+                    border-radius: 8px;
+                }
+
+                .role-visual {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    flex: 1;
+                }
+
+                .role-bar {
+                    height: 6px;
+                    background: #e2e8f0;
+                    border-radius: 3px;
+                    flex: 1;
+                    max-width: 100px;
+                }
+
+                .role-fill {
+                    height: 100%;
+                    border-radius: 3px;
+                }
+
+                .guards-fill { background: #10b981; }
+                .exits-fill { background: #ef4444; }
+                .middle-fill { background: #6366f1; }
+
+                .role-stats {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+
+                .role-count {
+                    font-weight: bold;
+                    color: #2c3e50;
+                }
+
+                .role-percentage {
+                    color: #64748b;
+                    font-size: 0.9rem;
+                }
+
+                .geo-primary {
+                    text-align: center;
+                    margin-bottom: 15px;
+                }
+
+                .geo-number {
+                    display: block;
+                    font-size: 2.5rem;
+                    font-weight: bold;
+                    color: #2c3e50;
+                }
+
+                .geo-label {
+                    color: #7f8c8d;
+                }
+
+                .geo-split {
+                    display: flex;
+                    justify-content: space-around;
+                    margin-bottom: 15px;
+                }
+
+                .geo-region {
+                    text-align: center;
+                }
+
+                .region-percentage {
+                    display: block;
+                    font-weight: bold;
+                    color: #2c3e50;
+                }
+
+                .infra-metric {
+                    text-align: center;
+                    padding: 10px;
+                    background: #f8fafc;
+                    border-radius: 8px;
+                }
+
+                .infra-count {
+                    display: block;
+                    font-size: 1.5rem;
+                    font-weight: bold;
+                    color: #2c3e50;
+                }
+
+                .community-metrics {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 15px;
+                }
+
+                .community-metric {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 10px;
+                    background: #f8fafc;
+                    border-radius: 8px;
+                }
+
+                .community-number {
+                    font-weight: bold;
+                    color: #2c3e50;
+                }
+
+                .security-alert {
+                    margin-bottom: 15px;
+                }
+
+                .alert-header {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    margin-bottom: 10px;
+                }
+
+                .alert-details {
+                    margin-bottom: 10px;
+                }
+
+                .alert-count {
+                    font-weight: bold;
+                    color: #e74c3c;
+                }
+
+                .risk-level {
+                    color: #f39c12;
+                }
+
+                .security-status {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 8px;
+                }
+
+                .status-item {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    font-size: 0.9rem;
+                    color: #64748b;
+                }
+
+                .last-updated {
+                    text-align: center;
+                    font-size: 0.8rem;
+                    color: #95a5a6;
+                    margin-top: 10px;
+                }
+
+                /* Responsive adjustments */
+                @media (max-width: 768px) {
+                    .large-number {
+                        font-size: 2.5rem;
+                    }
+                    
+                    .supporting-metrics {
+                        flex-direction: column;
+                        gap: 10px;
+                    }
+                    
+                    .geo-split {
+                        flex-direction: column;
+                        gap: 10px;
+                    }
+                    
+                    .community-metrics {
+                        gap: 10px;
+                    }
+                    
+                    .network-health-dashboard {
+                        padding: 10px;
+                    }
+                }
             </style>
         </head>
     {% endblock %}

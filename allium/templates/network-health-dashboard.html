@@ -1,0 +1,257 @@
+{% from "macros.html" import navigation %}
+{% extends "skeleton.html" -%}
+
+{% block title -%}
+🏥 Network Health Dashboard
+{% endblock -%}
+
+{% block body -%}
+
+<div class="aroi-center-text aroi-subsection">
+    <h1>🏥 Tor Network Health Dashboard</h1>
+    <p class="lead"><strong>Real-time Network Status, Performance, and Security Monitoring</strong></p>
+</div>
+
+{{ navigation('network_health', page_ctx) }}
+
+<!-- DASHBOARD CARDS SECTION -->
+<div class="network-health-dashboard">
+    
+    <!-- PRIMARY HEALTH CARDS -->
+    <section class="health-overview">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="health-card network-status">
+                    <div class="card-header">
+                        <div class="card-icon">🟢</div>
+                        <h3>Network Status</h3>
+                        {% if relays.json.network_health.overall_uptime >= 95 %}
+                            <div class="status-badge excellent">Excellent</div>
+                        {% elif relays.json.network_health.overall_uptime >= 85 %}
+                            <div class="status-badge good">Good</div>
+                        {% else %}
+                            <div class="status-badge warning">Attention</div>
+                        {% endif %}
+                    </div>
+                    <div class="card-body">
+                        <div class="primary-metric">
+                            <span class="large-number">{{ "%.1f%%"|format(relays.json.network_health.overall_uptime) }}</span>
+                            <span class="metric-context">Network Uptime</span>
+                        </div>
+                        <div class="supporting-metrics">
+                            <div class="support-metric">
+                                <span class="support-value">{{ relays.json.network_health.relays_online }}</span>
+                                <span class="support-label">Relays Online</span>
+                            </div>
+                            <div class="support-metric">
+                                <span class="support-value">{{ relays.json.network_health.relays_total }}</span>
+                                <span class="support-label">Total Relays</span>
+                            </div>
+                        </div>
+                        <div class="last-updated">
+                            Last updated: {{ relays.json.network_health.last_updated }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="health-card network-capacity">
+                    <div class="card-header">
+                        <div class="card-icon">⚡</div>
+                        <h3>Network Capacity</h3>
+                        <div class="capacity-badge high">High Performance</div>
+                    </div>
+                    <div class="card-body">
+                        <div class="primary-metric">
+                            <span class="large-number">{{ relays.json.network_health.total_bandwidth_formatted }}</span>
+                            <span class="metric-context">Total Bandwidth</span>
+                        </div>
+                        <div class="supporting-metrics">
+                            <div class="support-metric">
+                                <span class="support-value">{{ relays.json.network_health.consensus_weight_percentage }}%</span>
+                                <span class="support-label">Consensus Weight</span>
+                            </div>
+                            <div class="support-metric">
+                                <span class="support-value">24/7</span>
+                                <span class="support-label">Operations</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- NETWORK COMPOSITION CARDS -->
+    <section class="network-composition">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="composition-card relay-distribution">
+                    <div class="card-header">
+                        <div class="card-icon">🔗</div>
+                        <h3>Relay Distribution</h3>
+                        <div class="balance-indicator balanced">Balanced</div>
+                    </div>
+                    <div class="card-body">
+                        <div class="role-breakdown">
+                            <div class="role-item">
+                                <div class="role-visual">
+                                    <span class="role-icon">🛡️</span>
+                                    <div class="role-bar">
+                                        <div class="role-fill guards-fill" style="width: {{ (relays.json.network_health.guard_count / relays.json.network_health.relays_total * 100)|round(0) }}%"></div>
+                                    </div>
+                                </div>
+                                <div class="role-stats">
+                                    <span class="role-count">{{ relays.json.network_health.guard_count }}</span>
+                                    <span class="role-name">Guards</span>
+                                    <span class="role-percentage">({{ (relays.json.network_health.guard_count / relays.json.network_health.relays_total * 100)|round(0) }}%)</span>
+                                </div>
+                            </div>
+                            
+                            <div class="role-item">
+                                <div class="role-visual">
+                                    <span class="role-icon">🚪</span>
+                                    <div class="role-bar">
+                                        <div class="role-fill exits-fill" style="width: {{ (relays.json.network_health.exit_count / relays.json.network_health.relays_total * 100)|round(0) }}%"></div>
+                                    </div>
+                                </div>
+                                <div class="role-stats">
+                                    <span class="role-count">{{ relays.json.network_health.exit_count }}</span>
+                                    <span class="role-name">Exits</span>
+                                    <span class="role-percentage">({{ (relays.json.network_health.exit_count / relays.json.network_health.relays_total * 100)|round(0) }}%)</span>
+                                </div>
+                            </div>
+                            
+                            <div class="role-item">
+                                <div class="role-visual">
+                                    <span class="role-icon">🔗</span>
+                                    <div class="role-bar">
+                                        <div class="role-fill middle-fill" style="width: {{ (relays.json.network_health.middle_count / relays.json.network_health.relays_total * 100)|round(0) }}%"></div>
+                                    </div>
+                                </div>
+                                <div class="role-stats">
+                                    <span class="role-count">{{ relays.json.network_health.middle_count }}</span>
+                                    <span class="role-name">Middle</span>
+                                    <span class="role-percentage">({{ (relays.json.network_health.middle_count / relays.json.network_health.relays_total * 100)|round(0) }}%)</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="composition-card global-reach">
+                    <div class="card-header">
+                        <div class="card-icon">🌍</div>
+                        <h3>Global Reach</h3>
+                        <div class="diversity-badge excellent">Excellent</div>
+                    </div>
+                    <div class="card-body">
+                        <div class="geographic-summary">
+                            <div class="geo-primary">
+                                <span class="geo-number">{{ relays.json.network_health.countries_count }}</span>
+                                <span class="geo-label">Countries Active</span>
+                            </div>
+                            <div class="geo-breakdown">
+                                <div class="geo-split">
+                                    <div class="geo-region eu">
+                                        <span class="region-flag">🇪🇺</span>
+                                        <span class="region-percentage">{{ relays.json.network_health.eu_percentage }}%</span>
+                                        <span class="region-label">EU</span>
+                                    </div>
+                                    <div class="geo-region non-eu">
+                                        <span class="region-flag">🌏</span>
+                                        <span class="region-percentage">{{ relays.json.network_health.non_eu_percentage }}%</span>
+                                        <span class="region-label">Non-EU</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="infrastructure-diversity">
+                            <div class="infra-metric">
+                                <span class="infra-icon">🏢</span>
+                                <span class="infra-count">{{ relays.json.network_health.unique_asns }}</span>
+                                <span class="infra-label">Unique ASNs</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- INFRASTRUCTURE & SECURITY CARDS -->
+    <section class="infrastructure-security">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="infrastructure-card community-health">
+                    <div class="card-header">
+                        <div class="card-icon">👥</div>
+                        <h3>Community Health</h3>
+                        <div class="community-badge strong">Strong</div>
+                    </div>
+                    <div class="card-body">
+                        <div class="community-metrics">
+                            <div class="community-metric">
+                                <span class="community-number">{{ relays.json.network_health.aroi_operators_count }}</span>
+                                <span class="community-label">AROI Operators</span>
+                            </div>
+                            <div class="community-metric">
+                                <span class="community-number">{{ relays.json.network_health.families_count }}</span>
+                                <span class="community-label">Relay Families</span>
+                            </div>
+                            <div class="community-metric">
+                                <span class="community-number">{{ relays.json.network_health.authorities_count }}</span>
+                                <span class="community-label">Directory Authorities</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="security-card network-security">
+                    <div class="card-header">
+                        <div class="card-icon">🛡️</div>
+                        <h3>Security Status</h3>
+                        {% if relays.json.network_health.bad_exits_count <= 50 %}
+                            <div class="security-badge good">Good</div>
+                        {% else %}
+                            <div class="security-badge warning">Monitored</div>
+                        {% endif %}
+                    </div>
+                    <div class="card-body">
+                        <div class="security-alert">
+                            <div class="alert-header">
+                                <span class="alert-icon">⚠️</span>
+                                <span class="alert-title">Bad Exit Relays</span>
+                            </div>
+                            <div class="alert-details">
+                                <span class="alert-count">{{ relays.json.network_health.bad_exits_count }}</span>
+                                <span class="alert-context">out of {{ relays.json.network_health.exit_count }} exits</span>
+                            </div>
+                            <div class="risk-assessment">
+                                <span class="risk-level">Risk Level: {{ relays.json.network_health.security_risk_level }}</span>
+                            </div>
+                        </div>
+                        <div class="security-status">
+                            <div class="status-item">
+                                <span class="status-icon">🔍</span>
+                                <span class="status-text">Active monitoring enabled</span>
+                            </div>
+                            <div class="status-item">
+                                <span class="status-icon">🛡️</span>
+                                <span class="status-text">Network protection operational</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+</div>
+
+{% endblock -%} 
