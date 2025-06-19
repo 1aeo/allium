@@ -39,7 +39,14 @@ class TestContactTemplateIntegration(unittest.TestCase):
             'bandwidth': '150.0',
             'bandwidth_unit': 'MB/s',
             'consensus_weight_fraction': 0.025,  # 2.5%
-            'network_position': 'Mixed (5 total relays, 2 guards, 1 middle, 2 exits)',
+            'network_position': {
+                'label': 'mixed',
+                'percentage_breakdown': '40% guard, 20% middle, 40% exit',
+                'formatted_string': 'Mixed (5 total relays, 2 guards, 1 middle, 2 exits)',
+                'guard_percentage': 40,
+                'middle_percentage': 20,
+                'exit_percentage': 40
+            },
             'relays': {
                 'json': {
                     'relay_subset': [{

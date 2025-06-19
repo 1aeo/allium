@@ -340,8 +340,13 @@ class TestConsolidatedProcessing(unittest.TestCase):
             consolidated_uptime = consolidated_result['relay_uptime_data'].get(fingerprint, {}).get('1_month')
             if consolidated_uptime is not None:
                 self.assertAlmostEqual(
-                    individual_uptime, consolidated_uptime, places=2,
-                    f"Mismatch for {fingerprint}: individual={individual_uptime}, consolidated={consolidated_uptime}"
+                    individual_uptime,
+                    consolidated_uptime,
+                    places=2,
+                    msg=(
+                        f"Mismatch for {fingerprint}: individual={individual_uptime},"
+                        f" consolidated={consolidated_uptime}"
+                    )
                 )
     
     def test_consolidated_processing_with_flag_analysis(self):
