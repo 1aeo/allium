@@ -252,21 +252,7 @@ Network Health Dashboard
                     <span class="metric-value"><a href="{{ page_ctx.path_prefix }}misc/countries-by-bandwidth.html" style="color: inherit; text-decoration: none;">{{ "{:,}".format(relays.json.network_health.countries_count) }}</a></span>
                     <span class="metric-label">Unique Countries</span>
                 </div>
-                <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
-                    <div class="metric-item" title="Relays hosted in European Union countries. Shows political and geographic concentration.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.eu_relays_count) }} ({{ "%.1f%%"|format(relays.json.network_health.eu_relays_percentage) }})</span>
-                        <span class="metric-label">EU Relays</span>
-                    </div>
-                    <div class="metric-item" title="Relays hosted in non-European Union countries. Shows global distribution outside the EU.">
-                        <span class="metric-value"><a href="{{ page_ctx.path_prefix }}aroi-leaderboards.html#non_eu_leaders" style="color: inherit; text-decoration: none;">{{ "{:,}".format(relays.json.network_health.non_eu_relays_count) }}</a> ({{ "%.1f%%"|format(relays.json.network_health.non_eu_relays_percentage) }})</span>
-                        <span class="metric-label">Non-EU Relays</span>
-                    </div>
-                    <div class="metric-item" title="Relays in rare/frontier countries with few relays, a subset of non-EU segment. Important for global accessibility and censorship circumvention.">
-                        <span class="metric-value"><a href="{{ page_ctx.path_prefix }}aroi-leaderboards.html#frontier_builders" style="color: inherit; text-decoration: none;">{{ "{:,}".format(relays.json.network_health.rare_countries_relays) }}</a> ({{ "%.1f%%"|format(relays.json.network_health.rare_countries_relays_percentage) }})</span>
-                        <span class="metric-label">Rare Country Relays</span>
-                    </div>
-                </div>
-                <!-- Consensus Weight Row -->
+                <!-- First Row: EU/Non-EU/Rare Consensus Weight -->
                 <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
                     <div class="metric-item" title="Total consensus weight held by relays in European Union countries. Shows EU influence on network routing decisions.">
                         <span class="metric-value">{{ "%.1f%%"|format(relays.json.network_health.eu_consensus_weight_percentage) }}</span>
@@ -281,25 +267,30 @@ Network Health Dashboard
                         <span class="metric-label">Rare Countries Consensus Weight</span>
                     </div>
                 </div>
-                <!-- Geographic Analysis Row -->
-                <div class="metric-grid" style="grid-template-columns: repeat(1, 1fr);">
-                    <div class="metric-item" title="Geographic diversity analysis: concentration in top 3 countries, number of countries with >1% network share, and Five Eyes influence.">
-                        <span class="metric-value">{{ relays.json.network_health.geographic_diversity_top3 }}% in top 3 countries | {{ relays.json.network_health.geographic_diversity_significant_count }} countries have >1% of network | {{ relays.json.network_health.geographic_diversity_five_eyes }}% in Five Eyes countries</span>
-                        <span class="metric-label">Geographic Diversity</span>
+                <!-- Second Row: Five Eyes and Fourteen Eyes Consensus Weight -->
+                <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
+                    <div class="metric-item" title="Total consensus weight held by relays in Five Eyes intelligence alliance countries (US, UK, CA, AU, NZ). Shows Five Eyes influence on network routing decisions.">
+                        <span class="metric-value">{{ relays.json.network_health.jurisdiction_five_eyes }}%</span>
+                        <span class="metric-label">Five Eyes Consensus Weight</span>
+                    </div>
+                    <div class="metric-item" title="Total consensus weight held by relays in Fourteen Eyes intelligence alliance countries (Five Eyes plus DE, FR, IT, ES, NL, BE, DK, SE, NO). Shows extended intelligence alliance influence on network routing decisions.">
+                        <span class="metric-value">{{ relays.json.network_health.jurisdiction_fourteen_eyes }}%</span>
+                        <span class="metric-label">Fourteen Eyes Consensus Weight</span>
                     </div>
                 </div>
-                <!-- Jurisdiction Analysis Row -->
-                <div class="metric-grid" style="grid-template-columns: repeat(1, 1fr);">
-                    <div class="metric-item" title="Jurisdiction analysis showing Five Eyes and Fourteen Eyes intelligence alliance influence on network routing decisions.">
-                        <span class="metric-value">{{ relays.json.network_health.jurisdiction_five_eyes }}% Five Eyes influence | {{ relays.json.network_health.jurisdiction_fourteen_eyes }}% Fourteen Eyes</span>
-                        <span class="metric-label">Jurisdiction Analysis</span>
+                <!-- Third Row: EU/Non-EU/Rare Relay Count -->
+                <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
+                    <div class="metric-item" title="Relays hosted in European Union countries. Shows political and geographic concentration.">
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.eu_relays_count) }} ({{ "%.1f%%"|format(relays.json.network_health.eu_relays_percentage) }})</span>
+                        <span class="metric-label">EU Relays</span>
                     </div>
-                </div>
-                <!-- Regional Clustering Row -->
-                <div class="metric-grid" style="grid-template-columns: repeat(1, 1fr);">
-                    <div class="metric-item" title="Regional clustering analysis using HHI index. Shows geographic concentration and top regions by network weight. HHI: 0=perfect distribution, 1=complete concentration.">
-                        <span class="metric-value">{{ relays.json.network_health.regional_concentration_level }} regional concentration (HHI: {{ relays.json.network_health.regional_hhi }}) | Top regions: {{ relays.json.network_health.regional_top_3_breakdown }}</span>
-                        <span class="metric-label">Regional Clustering</span>
+                    <div class="metric-item" title="Relays hosted in non-European Union countries. Shows global distribution outside the EU.">
+                        <span class="metric-value"><a href="{{ page_ctx.path_prefix }}aroi-leaderboards.html#non_eu_leaders" style="color: inherit; text-decoration: none;">{{ "{:,}".format(relays.json.network_health.non_eu_relays_count) }}</a> ({{ "%.1f%%"|format(relays.json.network_health.non_eu_relays_percentage) }})</span>
+                        <span class="metric-label">Non-EU Relays</span>
+                    </div>
+                    <div class="metric-item" title="Relays in rare/frontier countries with few relays, a subset of non-EU segment. Important for global accessibility and censorship circumvention.">
+                        <span class="metric-value"><a href="{{ page_ctx.path_prefix }}aroi-leaderboards.html#frontier_builders" style="color: inherit; text-decoration: none;">{{ "{:,}".format(relays.json.network_health.rare_countries_relays) }}</a> ({{ "%.1f%%"|format(relays.json.network_health.rare_countries_relays_percentage) }})</span>
+                        <span class="metric-label">Rare Country Relays</span>
                     </div>
                 </div>
             </div>
