@@ -2696,6 +2696,7 @@ class Relays:
         relays_with_contact = relays_without_contact = 0
         unique_contacts = set()
         eu_relays = non_eu_relays = rare_countries_relays = 0
+        eu_consensus_weight = non_eu_consensus_weight = rare_countries_consensus_weight = 0
         offline_relays = overloaded_relays = hibernating_relays = 0
         new_relays_24h = new_relays_30d = new_relays_1y = new_relays_6m = 0
         unique_platforms = set()
@@ -2704,6 +2705,7 @@ class Relays:
         experimental_count = obsolete_count = outdated_count = 0
         total_consensus_weight = total_advertised_bandwidth = 0
         observed_advertised_diff_sum = observed_advertised_count = 0
+        observed_advertised_diff_values = []
         
         # Role-specific collectors - combined into single loop
         exit_cw_values = []
@@ -2793,8 +2795,10 @@ class Relays:
             total_advertised_bandwidth += advertised_bandwidth
             
             if bandwidth > 0 and advertised_bandwidth > 0:
-                observed_advertised_diff_sum += abs(bandwidth - advertised_bandwidth)
+                diff = abs(bandwidth - advertised_bandwidth)
+                observed_advertised_diff_sum += diff
                 observed_advertised_count += 1
+                observed_advertised_diff_values.append(diff)
             
             # Role-specific bandwidth and consensus weight - combined calculation
             if is_exit:
@@ -2838,11 +2842,14 @@ class Relays:
             if country and len(country) == 2:
                 if is_eu_political(country):
                     eu_relays += 1
+                    eu_consensus_weight += consensus_weight
                 else:
                     non_eu_relays += 1
+                    non_eu_consensus_weight += consensus_weight
                 
                 if country.lower() in valid_rare_countries or (not valid_rare_countries and is_frontier_country(country)):
                     rare_countries_relays += 1
+                    rare_countries_consensus_weight += consensus_weight
             
             # UPTIME CALCULATION - consolidated for all periods and roles
             if hasattr(self, 'uptime_data') and self.uptime_data:
@@ -2888,6 +2895,13 @@ class Relays:
             'eu_relays_percentage': (eu_relays / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
             'non_eu_relays_percentage': (non_eu_relays / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
             'rare_countries_relays_percentage': (rare_countries_relays / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
+            # Geographic consensus weight metrics
+            'eu_consensus_weight': eu_consensus_weight,
+            'non_eu_consensus_weight': non_eu_consensus_weight,
+            'rare_countries_consensus_weight': rare_countries_consensus_weight,
+            'eu_consensus_weight_percentage': (eu_consensus_weight / total_consensus_weight * 100) if total_consensus_weight > 0 else 0.0,
+            'non_eu_consensus_weight_percentage': (non_eu_consensus_weight / total_consensus_weight * 100) if total_consensus_weight > 0 else 0.0,
+            'rare_countries_consensus_weight_percentage': (rare_countries_consensus_weight / total_consensus_weight * 100) if total_consensus_weight > 0 else 0.0,
             # Add percentages for other relay counts
             'authorities_percentage': (authority_count / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
             'bad_exits_percentage': (bad_exit_count / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
@@ -2933,18 +2947,26 @@ class Relays:
             'outdated_percentage': (outdated_count / total_relays * 100) if total_relays > 0 else 0.0
         })
         
-        # Bandwidth utilization metrics
+        # Bandwidth utilization metrics - calculate mean and median for Obs to Adv Diff
         avg_obs_adv_diff_bytes = (
             (observed_advertised_diff_sum / observed_advertised_count) 
             if observed_advertised_count > 0 else 0
         )
+        median_obs_adv_diff_bytes = (
+            statistics.median(observed_advertised_diff_values)
+            if observed_advertised_diff_values else 0
+        )
         
         if self.use_bits:
             obs_adv_unit = self._determine_unit(avg_obs_adv_diff_bytes * 8)
-            health_metrics['avg_observed_advertised_diff_formatted'] = self._format_bandwidth_with_unit(avg_obs_adv_diff_bytes * 8, obs_adv_unit, decimal_places=0) + f" {obs_adv_unit}"
+            avg_formatted = self._format_bandwidth_with_unit(avg_obs_adv_diff_bytes * 8, obs_adv_unit, decimal_places=0) + f" {obs_adv_unit}"
+            median_formatted = self._format_bandwidth_with_unit(median_obs_adv_diff_bytes * 8, obs_adv_unit, decimal_places=0) + f" {obs_adv_unit}"
+            health_metrics['avg_observed_advertised_diff_formatted'] = f"{avg_formatted} | {median_formatted}"
         else:
             obs_adv_unit = self._determine_unit(avg_obs_adv_diff_bytes)
-            health_metrics['avg_observed_advertised_diff_formatted'] = self._format_bandwidth_with_unit(avg_obs_adv_diff_bytes, obs_adv_unit, decimal_places=0) + f" {obs_adv_unit}"
+            avg_formatted = self._format_bandwidth_with_unit(avg_obs_adv_diff_bytes, obs_adv_unit, decimal_places=0) + f" {obs_adv_unit}"
+            median_formatted = self._format_bandwidth_with_unit(median_obs_adv_diff_bytes, obs_adv_unit, decimal_places=0) + f" {obs_adv_unit}"
+            health_metrics['avg_observed_advertised_diff_formatted'] = f"{avg_formatted} | {median_formatted}"
         
         health_metrics['consensus_weight_bandwidth_ratio'] = (
             (total_consensus_weight / total_bandwidth) 
