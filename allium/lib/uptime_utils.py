@@ -614,8 +614,13 @@ def process_all_uptime_data_consolidated(all_relays, uptime_data, include_flag_a
                 two_sigma_low = max(0.0, mean - 2 * std_dev)
                 two_sigma_high = mean + 2 * std_dev
                 
+                # Calculate median for network health dashboard requirements
+                import statistics
+                median = statistics.median(values)
+                
                 period_stats = {
                     'mean': mean,
+                    'median': median,
                     'std_dev': std_dev,
                     'two_sigma_low': two_sigma_low,
                     'two_sigma_high': two_sigma_high,
@@ -649,8 +654,13 @@ def process_all_uptime_data_consolidated(all_relays, uptime_data, include_flag_a
                         two_sigma_low = max(0.0, mean - 2 * std_dev)
                         two_sigma_high = mean + 2 * std_dev
                         
+                        # Calculate median for network health dashboard requirements
+                        import statistics
+                        median = statistics.median(values)
+                        
                         period_stats = {
                             'mean': mean,
+                            'median': median,
                             'std_dev': std_dev,
                             'two_sigma_low': two_sigma_low,
                             'two_sigma_high': two_sigma_high,
