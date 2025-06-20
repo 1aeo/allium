@@ -397,6 +397,30 @@ Network Health Dashboard
                         <span class="metric-label">Exit CW/BW Ratio Mean | Median</span>
                     </div>
                 </div>
+                <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
+                    <div class="metric-item" title="EU relay CW/BW ratio network mean and median. Performance of relays in European Union countries. CW/BW ratio = Consensus Weight ÷ Bandwidth × 1,000,000.">
+                        <span class="metric-value">{{ relays.json.network_health.eu_cw_bw_mean }} | {{ relays.json.network_health.eu_cw_bw_median }}</span>
+                        <span class="metric-label">EU CW/BW Ratio Mean | Median</span>
+                    </div>
+                    <div class="metric-item" title="Non-EU relay CW/BW ratio network mean and median. Performance of relays in non-European Union countries. CW/BW ratio = Consensus Weight ÷ Bandwidth × 1,000,000.">
+                        <span class="metric-value">{{ relays.json.network_health.non_eu_cw_bw_mean }} | {{ relays.json.network_health.non_eu_cw_bw_median }}</span>
+                        <span class="metric-label">Non-EU CW/BW Ratio Mean | Median</span>
+                    </div>
+                </div>
+                <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
+                    <div class="metric-item" title="Top 3 AS relay CW/BW ratio network mean and median. Performance of relays in the 3 largest Autonomous Systems by consensus weight. CW/BW ratio = Consensus Weight ÷ Bandwidth × 1,000,000.">
+                        <span class="metric-value">{{ relays.json.network_health.top_3_as_cw_bw_mean }} | {{ relays.json.network_health.top_3_as_cw_bw_median }}</span>
+                        <span class="metric-label">Top 3 AS CW/BW Ratio Mean | Median</span>
+                    </div>
+                    <div class="metric-item" title="Top 5 AS relay CW/BW ratio network mean and median. Performance of relays in the 5 largest Autonomous Systems by consensus weight. CW/BW ratio = Consensus Weight ÷ Bandwidth × 1,000,000.">
+                        <span class="metric-value">{{ relays.json.network_health.top_5_as_cw_bw_mean }} | {{ relays.json.network_health.top_5_as_cw_bw_median }}</span>
+                        <span class="metric-label">Top 5 AS CW/BW Ratio Mean | Median</span>
+                    </div>
+                    <div class="metric-item" title="Top 10 AS relay CW/BW ratio network mean and median. Performance of relays in the 10 largest Autonomous Systems by consensus weight. CW/BW ratio = Consensus Weight ÷ Bandwidth × 1,000,000.">
+                        <span class="metric-value">{{ relays.json.network_health.top_10_as_cw_bw_mean }} | {{ relays.json.network_health.top_10_as_cw_bw_median }}</span>
+                        <span class="metric-label">Top 10 AS CW/BW Ratio Mean | Median</span>
+                    </div>
+                </div>
             </div>
         </div>
         

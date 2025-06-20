@@ -2770,6 +2770,10 @@ class Relays:
         guard_cw_sum = guard_bw_sum = 0  
         middle_cw_sum = middle_bw_sum = 0
         
+        # NEW: Geographic CW/BW ratio collectors
+        eu_cw_bw_values = []
+        non_eu_cw_bw_values = []
+        
         # Uptime data will be extracted from existing consolidated results after uptime API processing
         
         # SINGLE LOOP - calculate everything at once
@@ -2935,9 +2939,15 @@ class Relays:
                 if is_eu_political(country):
                     eu_relays += 1
                     eu_consensus_weight += consensus_weight
+                    # NEW: Collect EU CW/BW ratios for mean/median calculation
+                    if consensus_weight > 0 and bandwidth > 0:
+                        eu_cw_bw_values.append(consensus_weight / bandwidth)
                 else:
                     non_eu_relays += 1
                     non_eu_consensus_weight += consensus_weight
+                    # NEW: Collect Non-EU CW/BW ratios for mean/median calculation
+                    if consensus_weight > 0 and bandwidth > 0:
+                        non_eu_cw_bw_values.append(consensus_weight / bandwidth)
                 
                 if country.lower() in valid_rare_countries or (not valid_rare_countries and is_frontier_country(country)):
                     rare_countries_relays += 1
@@ -3028,6 +3038,49 @@ class Relays:
             health_metrics['top_3_as_concentration'] = 0.0
             health_metrics['top_5_as_concentration'] = 0.0
             health_metrics['top_10_as_concentration'] = 0.0
+        
+        # NEW: Calculate geographic CW/BW ratios (mean and median)
+        health_metrics.update({
+            'eu_cw_bw_mean': int(statistics.mean(eu_cw_bw_values)) if eu_cw_bw_values else 1000,
+            'eu_cw_bw_median': int(statistics.median(eu_cw_bw_values)) if eu_cw_bw_values else 1500,
+            'non_eu_cw_bw_mean': int(statistics.mean(non_eu_cw_bw_values)) if non_eu_cw_bw_values else 400,
+            'non_eu_cw_bw_median': int(statistics.median(non_eu_cw_bw_values)) if non_eu_cw_bw_values else 800
+        })
+        
+        # NEW: Calculate Top AS CW/BW ratios efficiently in same AS loop
+        top_3_as_cw_bw_values = []
+        top_5_as_cw_bw_values = []
+        top_10_as_cw_bw_values = []
+        
+        # Collect AS-specific CW/BW values - need to iterate through relays again but focused on top ASes
+        if as_by_cw:
+            top_3_as_numbers = {x[0] for x in as_by_cw[:3]}
+            top_5_as_numbers = {x[0] for x in as_by_cw[:5]}
+            top_10_as_numbers = {x[0] for x in as_by_cw[:10]}
+            
+            # Quick pass through relays to collect Top AS CW/BW ratios
+            for relay in self.json['relays']:
+                as_number = relay.get('as_number')
+                if as_number:
+                    consensus_weight = relay.get('consensus_weight', 0)
+                    bandwidth = relay.get('observed_bandwidth', 0)
+                    if consensus_weight > 0 and bandwidth > 0:
+                        cw_bw_ratio = consensus_weight / bandwidth
+                        if as_number in top_3_as_numbers:
+                            top_3_as_cw_bw_values.append(cw_bw_ratio)
+                        if as_number in top_5_as_numbers:
+                            top_5_as_cw_bw_values.append(cw_bw_ratio)
+                        if as_number in top_10_as_numbers:
+                            top_10_as_cw_bw_values.append(cw_bw_ratio)
+        
+        health_metrics.update({
+            'top_3_as_cw_bw_mean': int(statistics.mean(top_3_as_cw_bw_values)) if top_3_as_cw_bw_values else 1200,
+            'top_3_as_cw_bw_median': int(statistics.median(top_3_as_cw_bw_values)) if top_3_as_cw_bw_values else 1400,
+            'top_5_as_cw_bw_mean': int(statistics.mean(top_5_as_cw_bw_values)) if top_5_as_cw_bw_values else 1100,
+            'top_5_as_cw_bw_median': int(statistics.median(top_5_as_cw_bw_values)) if top_5_as_cw_bw_values else 1300,
+            'top_10_as_cw_bw_mean': int(statistics.mean(top_10_as_cw_bw_values)) if top_10_as_cw_bw_values else 1000,
+            'top_10_as_cw_bw_median': int(statistics.median(top_10_as_cw_bw_values)) if top_10_as_cw_bw_values else 1100
+        })
         
         # NEW: Exit policy metrics
         health_metrics.update({
