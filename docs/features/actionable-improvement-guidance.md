@@ -32,6 +32,8 @@ Based on the current AROI leaderboard implementation, we have access to the foll
 - `exit_count` - Number of exit relays
 - `guard_count` - Number of guard relays
 - `exit_consensus_weight` - Exit consensus weight percentage
+- `cw_bw_ratio` - Consensus weight to bandwidth efficiency ratio
+- `network_percentile` - Performance percentile ranking compared to network average
 
 #### **Diversity Metrics**
 - `diversity_score` - Combined geographic/platform/network diversity score

@@ -63,6 +63,8 @@ cd www && python3 -m http.server 8000
 - **Multi-factor analysis** (relay count, network %, geopolitical factors)
 - **Tier-based country rankings** (Legendary, Epic, Rare, Emerging, Common)
 - **Geopolitical awareness** in country scoring algorithms
+- **Performance efficiency analysis** with CW/BW ratio calculations, network comparisons, and percentile rankings
+- **Underutilized relay detection** identifying optimization opportunities for operators
 
 ## 🌐 API Data Sources
 
