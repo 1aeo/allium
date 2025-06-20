@@ -2842,13 +2842,16 @@ class Relays:
             if total_bandwidth > 0 else 0.0
         )
         
-        # Calculate role-specific CW/BW ratios
+        # Calculate role-specific CW/BW ratios and bandwidth values
         exit_cw_sum = exit_bw_sum = 0
         guard_cw_sum = guard_bw_sum = 0  
         middle_cw_sum = middle_bw_sum = 0
         exit_cw_values = []
         guard_cw_values = []
         middle_cw_values = []
+        exit_bw_values = []
+        guard_bw_values = []
+        middle_bw_values = []
         
         for relay in self.json['relays']:
             flags = relay.get('flags', [])
@@ -2865,14 +2868,17 @@ class Relays:
                     exit_cw_sum += consensus_weight
                     exit_bw_sum += bandwidth
                     exit_cw_values.append(cw_bw_ratio)
+                    exit_bw_values.append(bandwidth)
                 elif is_guard:
                     guard_cw_sum += consensus_weight
                     guard_bw_sum += bandwidth
                     guard_cw_values.append(cw_bw_ratio)
+                    guard_bw_values.append(bandwidth)
                 else:
                     middle_cw_sum += consensus_weight
                     middle_bw_sum += bandwidth
                     middle_cw_values.append(cw_bw_ratio)
+                    middle_bw_values.append(bandwidth)
         
         # Store overall ratios and averages/medians
         health_metrics['exit_cw_bw_overall'] = (exit_cw_sum / exit_bw_sum) if exit_bw_sum > 0 else 0.0
@@ -2886,6 +2892,15 @@ class Relays:
         health_metrics['exit_cw_bw_median'] = statistics.median(exit_cw_values) if exit_cw_values else 0.0
         health_metrics['guard_cw_bw_median'] = statistics.median(guard_cw_values) if guard_cw_values else 0.0
         health_metrics['middle_cw_bw_median'] = statistics.median(middle_cw_values) if middle_cw_values else 0.0
+        
+        # Calculate bandwidth mean and median per role
+        health_metrics['exit_bw_mean'] = statistics.mean(exit_bw_values) if exit_bw_values else 0.0
+        health_metrics['guard_bw_mean'] = statistics.mean(guard_bw_values) if guard_bw_values else 0.0
+        health_metrics['middle_bw_mean'] = statistics.mean(middle_bw_values) if middle_bw_values else 0.0
+        
+        health_metrics['exit_bw_median'] = statistics.median(exit_bw_values) if exit_bw_values else 0.0
+        health_metrics['guard_bw_median'] = statistics.median(guard_bw_values) if guard_bw_values else 0.0
+        health_metrics['middle_bw_median'] = statistics.median(middle_bw_values) if middle_bw_values else 0.0
         
         # CARD 2: BANDWIDTH - Format bandwidth (reuse existing formatting logic)
         if self.use_bits:
@@ -2944,10 +2959,22 @@ class Relays:
                             if is_bad_exit:
                                 bad_relay_uptime_values.append(avg_uptime)
             
-            health_metrics['exit_uptime'] = statistics.mean(exit_uptime_values) if exit_uptime_values else 0.0
-            health_metrics['guard_uptime'] = statistics.mean(guard_uptime_values) if guard_uptime_values else 0.0
-            health_metrics['middle_uptime'] = statistics.mean(middle_uptime_values) if middle_uptime_values else 0.0
-            health_metrics['bad_relay_uptime'] = statistics.mean(bad_relay_uptime_values) if bad_relay_uptime_values else 0.0
+            # Calculate both mean and median for role-specific uptime
+            health_metrics['exit_uptime_mean'] = statistics.mean(exit_uptime_values) if exit_uptime_values else 0.0
+            health_metrics['guard_uptime_mean'] = statistics.mean(guard_uptime_values) if guard_uptime_values else 0.0
+            health_metrics['middle_uptime_mean'] = statistics.mean(middle_uptime_values) if middle_uptime_values else 0.0
+            health_metrics['bad_relay_uptime_mean'] = statistics.mean(bad_relay_uptime_values) if bad_relay_uptime_values else 0.0
+            
+            health_metrics['exit_uptime_median'] = statistics.median(exit_uptime_values) if exit_uptime_values else 0.0
+            health_metrics['guard_uptime_median'] = statistics.median(guard_uptime_values) if guard_uptime_values else 0.0
+            health_metrics['middle_uptime_median'] = statistics.median(middle_uptime_values) if middle_uptime_values else 0.0
+            health_metrics['bad_relay_uptime_median'] = statistics.median(bad_relay_uptime_values) if bad_relay_uptime_values else 0.0
+            
+            # Keep legacy names for backward compatibility
+            health_metrics['exit_uptime'] = health_metrics['exit_uptime_mean']
+            health_metrics['guard_uptime'] = health_metrics['guard_uptime_mean']
+            health_metrics['middle_uptime'] = health_metrics['middle_uptime_mean']
+            health_metrics['bad_relay_uptime'] = health_metrics['bad_relay_uptime_mean']
             
             # NEW: Calculate detailed uptime for multiple time periods
             uptime_periods = ['1_month', '6_months', '1_year', '5_years']
@@ -2984,7 +3011,9 @@ class Relays:
         else:
             health_metrics.update({
                 'overall_uptime': 0.0, 'exit_uptime': 0.0, 'guard_uptime': 0.0, 
-                'middle_uptime': 0.0, 'bad_relay_uptime': 0.0, 'uptime_percentiles': None
+                'middle_uptime': 0.0, 'bad_relay_uptime': 0.0, 'uptime_percentiles': None,
+                'exit_uptime_mean': 0.0, 'guard_uptime_mean': 0.0, 'middle_uptime_mean': 0.0, 'bad_relay_uptime_mean': 0.0,
+                'exit_uptime_median': 0.0, 'guard_uptime_median': 0.0, 'middle_uptime_median': 0.0, 'bad_relay_uptime_median': 0.0
             })
             # Initialize detailed uptime metrics to 0 when no uptime data available
             uptime_periods = ['1_month', '6_months', '1_year', '5_years']

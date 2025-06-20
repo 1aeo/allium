@@ -111,6 +111,20 @@ Network Health Dashboard
                         <span class="metric-label">Middle BW</span>
                     </div>
                 </div>
+                <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
+                    <div class="metric-item" title="Mean and median bandwidth per Exit relay. Shows average capacity and typical relay size distribution.">
+                        <span class="metric-value">{{ "{:,.0f}".format(relays.json.network_health.exit_bw_mean / 1024) }} | {{ "{:,.0f}".format(relays.json.network_health.exit_bw_median / 1024) }} KB/s</span>
+                        <span class="metric-label">Exit Mean | Median</span>
+                    </div>
+                    <div class="metric-item" title="Mean and median bandwidth per Guard relay. Shows average capacity and typical relay size distribution.">
+                        <span class="metric-value">{{ "{:,.0f}".format(relays.json.network_health.guard_bw_mean / 1024) }} | {{ "{:,.0f}".format(relays.json.network_health.guard_bw_median / 1024) }} KB/s</span>
+                        <span class="metric-label">Guard Mean | Median</span>
+                    </div>
+                    <div class="metric-item" title="Mean and median bandwidth per Middle relay. Shows average capacity and typical relay size distribution.">
+                        <span class="metric-value">{{ "{:,.0f}".format(relays.json.network_health.middle_bw_mean / 1024) }} | {{ "{:,.0f}".format(relays.json.network_health.middle_bw_median / 1024) }} KB/s</span>
+                        <span class="metric-label">Middle Mean | Median</span>
+                    </div>
+                </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
                     <div class="metric-item" title="Average difference between observed and advertised bandwidth. Indicates relay capacity accuracy.">
                         <span class="metric-value">{{ "{:,.0f}".format(relays.json.network_health.avg_observed_advertised_diff) }} KB/s</span>
@@ -135,21 +149,21 @@ Network Health Dashboard
                     <span class="metric-label">Overall Uptime</span>
                 </div>
                 <div class="metric-grid">
-                    <div class="metric-item" title="Average uptime of Exit relays over 6 months. Critical for user experience and connection reliability.">
-                        <span class="metric-value">{{ "%.1f%%"|format(relays.json.network_health.exit_uptime) }}</span>
-                        <span class="metric-label">Exit Uptime</span>
+                    <div class="metric-item" title="Mean and median uptime of Exit relays over 6 months. Critical for user experience and connection reliability.">
+                        <span class="metric-value">{{ "%.1f"|format(relays.json.network_health.exit_uptime_mean) }}% | {{ "%.1f"|format(relays.json.network_health.exit_uptime_median) }}%</span>
+                        <span class="metric-label">Exit Mean | Median</span>
                     </div>
-                    <div class="metric-item" title="Average uptime of Guard relays over 6 months. Important for initial connection stability.">
-                        <span class="metric-value">{{ "%.1f%%"|format(relays.json.network_health.guard_uptime) }}</span>
-                        <span class="metric-label">Guard Uptime</span>
+                    <div class="metric-item" title="Mean and median uptime of Guard relays over 6 months. Important for initial connection stability.">
+                        <span class="metric-value">{{ "%.1f"|format(relays.json.network_health.guard_uptime_mean) }}% | {{ "%.1f"|format(relays.json.network_health.guard_uptime_median) }}%</span>
+                        <span class="metric-label">Guard Mean | Median</span>
                     </div>
-                    <div class="metric-item" title="Average uptime of Middle relays over 6 months. Affects overall network reliability.">
-                        <span class="metric-value">{{ "%.1f%%"|format(relays.json.network_health.middle_uptime) }}</span>
-                        <span class="metric-label">Middle Uptime</span>
+                    <div class="metric-item" title="Mean and median uptime of Middle relays over 6 months. Affects overall network reliability.">
+                        <span class="metric-value">{{ "%.1f"|format(relays.json.network_health.middle_uptime_mean) }}% | {{ "%.1f"|format(relays.json.network_health.middle_uptime_median) }}%</span>
+                        <span class="metric-label">Middle Mean | Median</span>
                     </div>
-                    <div class="metric-item" title="Average uptime of relays flagged as BadExit. Usually lower due to operational issues.">
-                        <span class="metric-value">{{ "%.1f%%"|format(relays.json.network_health.bad_relay_uptime) }}</span>
-                        <span class="metric-label">Bad Relay Uptime</span>
+                    <div class="metric-item" title="Mean and median uptime of relays flagged as BadExit. Usually lower due to operational issues.">
+                        <span class="metric-value">{{ "%.1f"|format(relays.json.network_health.bad_relay_uptime_mean) }}% | {{ "%.1f"|format(relays.json.network_health.bad_relay_uptime_median) }}%</span>
+                        <span class="metric-label">Bad Mean | Median</span>
                     </div>
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(4, 1fr);">
