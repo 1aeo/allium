@@ -2761,19 +2761,19 @@ class Relays:
         health_metrics['authorities_count'] = authority_count
         health_metrics['bad_exits_count'] = bad_exit_count
         
-        # CARD 2: BANDWIDTH COUNTS - Format bandwidth values
+        # CARD 2: BANDWIDTH COUNTS - Format bandwidth values (no decimal places, include units)
         if self.use_bits:
             unit = self._determine_unit(total_bandwidth * 8)
-            health_metrics['total_bandwidth_formatted'] = self._format_bandwidth_with_unit(total_bandwidth * 8, unit)
-            health_metrics['guard_bandwidth_formatted'] = self._format_bandwidth_with_unit(guard_bandwidth * 8, unit)
-            health_metrics['exit_bandwidth_formatted'] = self._format_bandwidth_with_unit(exit_bandwidth * 8, unit)
-            health_metrics['middle_bandwidth_formatted'] = self._format_bandwidth_with_unit(middle_bandwidth * 8, unit)
+            health_metrics['total_bandwidth_formatted'] = self._format_bandwidth_with_unit(total_bandwidth * 8, unit, decimal_places=0) + f" {unit}"
+            health_metrics['guard_bandwidth_formatted'] = self._format_bandwidth_with_unit(guard_bandwidth * 8, unit, decimal_places=0) + f" {unit}"
+            health_metrics['exit_bandwidth_formatted'] = self._format_bandwidth_with_unit(exit_bandwidth * 8, unit, decimal_places=0) + f" {unit}"
+            health_metrics['middle_bandwidth_formatted'] = self._format_bandwidth_with_unit(middle_bandwidth * 8, unit, decimal_places=0) + f" {unit}"
         else:
             unit = self._determine_unit(total_bandwidth)
-            health_metrics['total_bandwidth_formatted'] = self._format_bandwidth_with_unit(total_bandwidth, unit)
-            health_metrics['guard_bandwidth_formatted'] = self._format_bandwidth_with_unit(guard_bandwidth, unit)
-            health_metrics['exit_bandwidth_formatted'] = self._format_bandwidth_with_unit(exit_bandwidth, unit)
-            health_metrics['middle_bandwidth_formatted'] = self._format_bandwidth_with_unit(middle_bandwidth, unit)
+            health_metrics['total_bandwidth_formatted'] = self._format_bandwidth_with_unit(total_bandwidth, unit, decimal_places=0) + f" {unit}"
+            health_metrics['guard_bandwidth_formatted'] = self._format_bandwidth_with_unit(guard_bandwidth, unit, decimal_places=0) + f" {unit}"
+            health_metrics['exit_bandwidth_formatted'] = self._format_bandwidth_with_unit(exit_bandwidth, unit, decimal_places=0) + f" {unit}"
+            health_metrics['middle_bandwidth_formatted'] = self._format_bandwidth_with_unit(middle_bandwidth, unit, decimal_places=0) + f" {unit}"
         
         health_metrics['bandwidth_unit'] = unit
         

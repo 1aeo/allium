@@ -27,30 +27,30 @@
             </div>
             <div class="card-metrics">
                 <div class="metric-item primary">
-                    <span class="metric-value">{{ relays.json.network_health.relays_total }}</span>
+                    <span class="metric-value">{{ "{:,}".format(relays.json.network_health.relays_total) }}</span>
                     <span class="metric-label">Total Relays</span>
                 </div>
                 <div class="metric-grid">
                     <div class="metric-item">
-                        <span class="metric-value">{{ relays.json.network_health.exit_count }}</span>
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.exit_count) }}</span>
                         <span class="metric-label">Exit</span>
                     </div>
                     <div class="metric-item">
-                        <span class="metric-value">{{ relays.json.network_health.guard_count }}</span>
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.guard_count) }}</span>
                         <span class="metric-label">Guard</span>
                     </div>
                     <div class="metric-item">
-                        <span class="metric-value">{{ relays.json.network_health.middle_count }}</span>
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.middle_count) }}</span>
                         <span class="metric-label">Middle</span>
                     </div>
                     <div class="metric-item">
-                        <span class="metric-value">{{ relays.json.network_health.authorities_count }}</span>
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.authorities_count) }}</span>
                         <span class="metric-label">Authorities</span>
                     </div>
                 </div>
                 <div class="metric-grid" style="grid-template-columns: 1fr; margin-top: 5px;">
                     <div class="metric-item">
-                        <span class="metric-value">{{ relays.json.network_health.bad_exits_count }}</span>
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.bad_exits_count) }}</span>
                         <span class="metric-label">Bad Relays</span>
                     </div>
                 </div>
@@ -127,25 +127,25 @@
             </div>
             <div class="card-metrics">
                 <div class="metric-item primary">
-                    <span class="metric-value">{{ relays.json.network_health.aroi_operators_count }}</span>
+                    <span class="metric-value"><a href="{{ page_ctx.path_prefix }}misc/contacts-by-bandwidth.html" style="color: inherit; text-decoration: none;">{{ "{:,}".format(relays.json.network_health.aroi_operators_count) }}</a></span>
                     <span class="metric-label">Unique AROI</span>
                 </div>
                 <div class="metric-grid">
                     <div class="metric-item">
-                        <span class="metric-value">{{ relays.json.network_health.families_count }}</span>
+                        <span class="metric-value"><a href="{{ page_ctx.path_prefix }}misc/families-by-bandwidth.html" style="color: inherit; text-decoration: none;">{{ "{:,}".format(relays.json.network_health.families_count) }}</a></span>
                         <span class="metric-label">Families</span>
                     </div>
                     <div class="metric-item">
-                        <span class="metric-value">{{ relays.json.network_health.unique_contacts_count }}</span>
+                        <span class="metric-value"><a href="{{ page_ctx.path_prefix }}misc/contacts-by-bandwidth.html" style="color: inherit; text-decoration: none;">{{ "{:,}".format(relays.json.network_health.unique_contacts_count) }}</a></span>
                         <span class="metric-label">Contacts</span>
                     </div>
                     <div class="metric-item">
-                        <span class="metric-value">{{ relays.json.network_health.relays_with_family }}/{{ relays.json.network_health.relays_without_family }}</span>
-                        <span class="metric-label">With/Without Family</span>
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.relays_with_family) }}|{{ "{:,}".format(relays.json.network_health.relays_without_family) }}</span>
+                        <span class="metric-label">With|Without Family</span>
                     </div>
                     <div class="metric-item">
-                        <span class="metric-value">{{ relays.json.network_health.relays_with_contact }}/{{ relays.json.network_health.relays_without_contact }}</span>
-                        <span class="metric-label">With/Without Contact</span>
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.relays_with_contact) }}|{{ "{:,}".format(relays.json.network_health.relays_without_contact) }}</span>
+                        <span class="metric-label">With|Without Contact</span>
                     </div>
                 </div>
             </div>
@@ -158,16 +158,16 @@
             </div>
             <div class="card-metrics">
                 <div class="metric-item primary">
-                    <span class="metric-value">{{ relays.json.network_health.countries_count }}</span>
+                    <span class="metric-value">{{ "{:,}".format(relays.json.network_health.countries_count) }}</span>
                     <span class="metric-label">Unique Countries</span>
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
                     <div class="metric-item">
-                        <span class="metric-value">{{ relays.json.network_health.eu_relays_count }}/{{ relays.json.network_health.non_eu_relays_count }}</span>
-                        <span class="metric-label">EU/Non-EU Relays</span>
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.eu_relays_count) }}|{{ "{:,}".format(relays.json.network_health.non_eu_relays_count) }}</span>
+                        <span class="metric-label">EU|Non-EU Relays</span>
                     </div>
                     <div class="metric-item">
-                        <span class="metric-value">{{ relays.json.network_health.rare_countries_relays }}</span>
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.rare_countries_relays) }}</span>
                         <span class="metric-label">Rare Country Relays</span>
                     </div>
                 </div>
@@ -181,7 +181,7 @@
             </div>
             <div class="card-metrics">
                 <div class="metric-item primary">
-                    <span class="metric-value">{{ relays.json.network_health.unique_as_count }}</span>
+                    <span class="metric-value"><a href="{{ page_ctx.path_prefix }}misc/networks-by-bandwidth.html" style="color: inherit; text-decoration: none;">{{ "{:,}".format(relays.json.network_health.unique_as_count) }}</a></span>
                     <span class="metric-label">Unique AS</span>
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
