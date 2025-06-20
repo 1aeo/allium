@@ -281,6 +281,27 @@ Network Health Dashboard
                         <span class="metric-label">Rare Countries Consensus Weight</span>
                     </div>
                 </div>
+                <!-- Geographic Analysis Row -->
+                <div class="metric-grid" style="grid-template-columns: repeat(1, 1fr);">
+                    <div class="metric-item" title="Geographic diversity analysis: concentration in top 3 countries, number of countries with >1% network share, and Five Eyes influence.">
+                        <span class="metric-value">{{ relays.json.network_health.geographic_diversity_top3 }}% in top 3 countries | {{ relays.json.network_health.geographic_diversity_significant_count }} countries have >1% of network | {{ relays.json.network_health.geographic_diversity_five_eyes }}% in Five Eyes countries</span>
+                        <span class="metric-label">Geographic Diversity</span>
+                    </div>
+                </div>
+                <!-- Jurisdiction Analysis Row -->
+                <div class="metric-grid" style="grid-template-columns: repeat(1, 1fr);">
+                    <div class="metric-item" title="Jurisdiction analysis showing Five Eyes and Fourteen Eyes intelligence alliance influence on network routing decisions.">
+                        <span class="metric-value">{{ relays.json.network_health.jurisdiction_five_eyes }}% Five Eyes influence | {{ relays.json.network_health.jurisdiction_fourteen_eyes }}% Fourteen Eyes</span>
+                        <span class="metric-label">Jurisdiction Analysis</span>
+                    </div>
+                </div>
+                <!-- Regional Clustering Row -->
+                <div class="metric-grid" style="grid-template-columns: repeat(1, 1fr);">
+                    <div class="metric-item" title="Regional clustering analysis using HHI index. Shows geographic concentration and top regions by network weight. HHI: 0=perfect distribution, 1=complete concentration.">
+                        <span class="metric-value">{{ relays.json.network_health.regional_concentration_level }} regional concentration (HHI: {{ relays.json.network_health.regional_hhi }}) | Top regions: {{ relays.json.network_health.regional_top_3_breakdown }}</span>
+                        <span class="metric-label">Regional Clustering</span>
+                    </div>
+                </div>
             </div>
         </div>
         

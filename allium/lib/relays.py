@@ -2902,6 +2902,15 @@ class Relays:
             'eu_consensus_weight_percentage': (eu_consensus_weight / total_consensus_weight * 100) if total_consensus_weight > 0 else 0.0,
             'non_eu_consensus_weight_percentage': (non_eu_consensus_weight / total_consensus_weight * 100) if total_consensus_weight > 0 else 0.0,
             'rare_countries_consensus_weight_percentage': (rare_countries_consensus_weight / total_consensus_weight * 100) if total_consensus_weight > 0 else 0.0,
+            # Geographic analysis metrics from intelligence engine
+            'geographic_diversity_top3': self.json.get('smart_context', {}).get('concentration_patterns', {}).get('template_optimized', {}).get('countries_top_3_percentage', '0.0'),
+            'geographic_diversity_significant_count': self.json.get('smart_context', {}).get('concentration_patterns', {}).get('template_optimized', {}).get('countries_significant_count', 0),
+            'geographic_diversity_five_eyes': self.json.get('smart_context', {}).get('concentration_patterns', {}).get('template_optimized', {}).get('countries_five_eyes_percentage', '0.0'),
+            'jurisdiction_five_eyes': self.json.get('smart_context', {}).get('geographic_clustering', {}).get('template_optimized', {}).get('five_eyes_influence', '0.0'),
+            'jurisdiction_fourteen_eyes': self.json.get('smart_context', {}).get('geographic_clustering', {}).get('template_optimized', {}).get('fourteen_eyes_influence', '0.0'),
+            'regional_concentration_level': self.json.get('smart_context', {}).get('geographic_clustering', {}).get('template_optimized', {}).get('concentration_hhi_interpretation', 'UNKNOWN'),
+            'regional_hhi': self.json.get('smart_context', {}).get('geographic_clustering', {}).get('template_optimized', {}).get('regional_hhi', '0.000'),
+            'regional_top_3_breakdown': self.json.get('smart_context', {}).get('geographic_clustering', {}).get('template_optimized', {}).get('top_3_regions', 'Insufficient data'),
             # Add percentages for other relay counts
             'authorities_percentage': (authority_count / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
             'bad_exits_percentage': (bad_exit_count / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
