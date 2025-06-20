@@ -150,7 +150,7 @@ Network Health Dashboard
                 <h4>⏰ Relay Uptime</h4>
             </div>
             <div class="card-metrics">
-                <div class="metric-item primary" title="Average uptime percentage across all relays over the last month. Higher is better for network stability.">
+                <div class="metric-item primary" title="Average uptime percentage across all relays over the last month. Higher is better for network stability. 1M Mean by category: Exit {{ "%.1f%%"|format(relays.json.network_health.exit_uptime_1_month_mean) }}, Guard {{ "%.1f%%"|format(relays.json.network_health.guard_uptime_1_month_mean) }}, Middle {{ "%.1f%%"|format(relays.json.network_health.middle_uptime_1_month_mean) }}, Other {{ "%.1f%%"|format(relays.json.network_health.other_uptime_1_month_mean) }}.">
                     <span class="metric-value">{{ "%.1f%%"|format(relays.json.network_health.overall_uptime) }}</span>
                     <span class="metric-label">Overall Uptime (1M Mean)</span>
                 </div>
