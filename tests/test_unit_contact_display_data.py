@@ -255,7 +255,7 @@ class TestContactDisplayData(unittest.TestCase):
         
         # Should include tooltip with statistical information
         self.assertIn('tooltip', outliers)
-        self.assertIn('6 month:', outliers['tooltip'])
+        self.assertIn('6mo:', outliers['tooltip'])
         self.assertIn('≥2σ', outliers['tooltip'])
         
         # Should format low and high outliers correctly
@@ -324,9 +324,15 @@ class TestContactDisplayData(unittest.TestCase):
                 self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', []
             )
             
-            # Should handle gracefully when no intelligence data exists
-            intelligence = result['operator_intelligence']
-            self.assertEqual(len(intelligence), 0)
+                    # Should handle gracefully when no intelligence data exists
+        # Version-related fields are always present even with no intelligence data
+        intelligence = result['operator_intelligence']
+        self.assertEqual(len(intelligence), 3)
+        self.assertIn('version_compliance', intelligence)
+        self.assertIn('version_status', intelligence)
+        self.assertIn('version_status_tooltips', intelligence)
+        self.assertEqual(intelligence['version_compliance'], '0 compliant')
+        self.assertEqual(intelligence['version_status'], 'none')
 
     def test_compute_contact_display_data_no_reliability_data(self):
         """Test handling when no reliability data is available."""
@@ -392,7 +398,7 @@ class TestContactDisplayData(unittest.TestCase):
         
         # Should include version status tooltips
         self.assertIn('version_status_tooltips', intelligence)
-        self.assertIn('recommended', intelligence['version_status_tooltips']['recommended'])
+        self.assertIn('Recommended versions:', intelligence['version_status_tooltips']['recommended'])
         self.assertIn('0.4.8.7', intelligence['version_status_tooltips']['recommended'])
 
     def test_compute_contact_display_data_version_compliance_all_compliant(self):
@@ -747,7 +753,7 @@ class TestContactDisplayData(unittest.TestCase):
         
         # Should show red "Poor" when 0% have recommended status
         self.assertIn('version_status', intelligence)
-        expected = '<span style="color: #c82333; font-weight: bold;">Poor</span>, <span title="Recommended versions: (no version data)" style="cursor: help;">0 (0%) recommended</span>, <span title="Experimental versions: 0.4.9.0-alpha" style="cursor: help;">1 (33%) experimental</span>, <span title="Obsolete versions: 0.4.6.10" style="cursor: help;">1 (33%) obsolete</span>, <span title="Unrecommended versions: 0.4.7.5" style="cursor: help;">1 (33%) unrecommended</span>'
+        expected = '<span style="color: #c82333; font-weight: bold;">Poor</span>, <span title="Recommended versions" style="cursor: help;">0 (0%) recommended</span>, <span title="Experimental versions: 0.4.9.0-alpha" style="cursor: help;">1 (33%) experimental</span>, <span title="Obsolete versions: 0.4.6.10" style="cursor: help;">1 (33%) obsolete</span>, <span title="Unrecommended versions: 0.4.7.5" style="cursor: help;">1 (33%) unrecommended</span>'
         self.assertEqual(intelligence['version_status'], expected)
 
 

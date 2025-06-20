@@ -16,6 +16,7 @@ Welcome to the Allium project documentation. Allium generates static Tor relay m
 ### 🚀 Features & Functionality
 - **[AROI Leaderboard System](features/aroi-leaderboard/README.md)** - Autonomous Relay Operator Identification leaderboard
 - **[Smart Context Links](features/smart-context-links/README.md)** - Intelligent navigation and context system
+- **[Performance Insights](../README.md#intelligence-features-)** - CW/BW ratio analysis and network efficiency metrics
 - **[Country & Geographic Processing](features/geographic-processing.md)** - Country harmonization and geographic analysis
 
 ### 📊 Performance & Optimization

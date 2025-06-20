@@ -216,13 +216,12 @@ class Coordinator:
         relay_set.consensus_health_data = self.get_consensus_health_data()
         relay_set.collector_data = self.get_collector_data()
         
-        # CRITICAL FIX: Regenerate AROI leaderboards and network health metrics now that uptime data is available
-        # These were calculated during __init__ before uptime_data was attached
+        # CRITICAL FIX: Regenerate AROI leaderboards now that uptime data is available
+        # The leaderboards were calculated during __init__ before uptime_data was attached
         if uptime_data:
             relay_set._generate_aroi_leaderboards()
             # Reprocess uptime data for individual relays now that uptime_data is available
             relay_set._reprocess_uptime_data()
-            relay_set._calculate_network_health_metrics()  # Regenerate with uptime data (after _reprocess_uptime_data)
         
         # Update the relay_set's progress_step to match our current progress
         relay_set.progress_step = self.progress_step

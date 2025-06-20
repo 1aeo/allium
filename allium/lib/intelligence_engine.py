@@ -3,6 +3,9 @@ Tier 1 Intelligence Engine - Complete Implementation
 All calculations moved from Jinja2 templates to Python for maximum performance.
 """
 
+import statistics
+import math
+
 class IntelligenceEngine:
     """Complete Tier 1 Intelligence Engine - implements all design doc requirements"""
     
@@ -12,6 +15,96 @@ class IntelligenceEngine:
         self.sorted_data = relays_data.get('sorted', {})
         self.network_totals = relays_data.get('network_totals', {})
         self.family_stats = relays_data.get('family_statistics', {})
+        
+        # Pre-calculate network-wide performance data once (major optimization)
+        self._precompute_performance_data()
+        
+    def _precompute_performance_data(self):
+        """Pre-calculate network performance data to eliminate duplication"""
+        # Calculate network totals once (eliminates 5 loops per contact)
+        self.network_total_bandwidth = self.network_totals.get('total_network_bandwidth', 0)
+        self.guard_network_bandwidth = self.network_totals.get('total_guard_bandwidth', 0)
+        self.exit_network_bandwidth = self.network_totals.get('total_exit_bandwidth', 0)
+        self.network_total_consensus_weight = (
+            self.network_totals.get('guard_consensus_weight', 0) + 
+            self.network_totals.get('middle_consensus_weight', 0) + 
+            self.network_totals.get('exit_consensus_weight', 0)
+        )
+        self.guard_network_consensus_weight = self.network_totals.get('guard_consensus_weight', 0)
+        self.exit_network_consensus_weight = self.network_totals.get('exit_consensus_weight', 0)
+        
+        # Calculate network ratios once (reused in multiple methods)
+        self.overall_network_ratio = self._calculate_cw_bw_ratio(self.network_total_consensus_weight, self.network_total_bandwidth)
+        self.guard_network_ratio = self._calculate_cw_bw_ratio(self.guard_network_consensus_weight, self.guard_network_bandwidth)
+        self.exit_network_ratio = self._calculate_cw_bw_ratio(self.exit_network_consensus_weight, self.exit_network_bandwidth)
+        
+        # Pre-calculate underutilized fingerprints once (eliminates duplication)
+        self.underutilized_fingerprints = self._get_underutilized_fingerprints()
+        
+        # Pre-calculate network-wide relay ratios for percentile calculations once
+        self.all_relay_ratios, self.guard_relay_ratios, self.exit_relay_ratios = self._calculate_network_relay_ratios()
+        
+        # Calculate medians once (reused in multiple places)
+        self.overall_network_median = self._calculate_median(self.all_relay_ratios)
+        self.guard_network_median = self._calculate_median(self.guard_relay_ratios)
+        self.exit_network_median = self._calculate_median(self.exit_relay_ratios)
+        
+    def _calculate_cw_bw_ratio(self, consensus_weight, bandwidth):
+        """Centralized CW/BW ratio calculation - eliminates duplication"""
+        return consensus_weight / bandwidth * 1000000 if bandwidth > 0 else 0.0
+        
+    def _get_underutilized_fingerprints(self):
+        """Centralized underutilized relay detection - eliminates duplication"""
+        underutilized = set()
+        for relay in self.relays:
+            bandwidth = relay.get('observed_bandwidth', 0)
+            consensus_weight = relay.get('consensus_weight', 0)
+            if bandwidth > 10000000 and consensus_weight < bandwidth * 0.0000005:
+                underutilized.add(relay.get('fingerprint', ''))
+        return underutilized
+        
+    def _calculate_network_relay_ratios(self):
+        """Pre-calculate all network relay ratios once - major optimization"""
+        all_ratios, guard_ratios, exit_ratios = [], [], []
+        
+        for relay in self.relays:
+            bandwidth = relay.get('observed_bandwidth', 0)
+            consensus_weight = relay.get('consensus_weight', 0)
+            flags = relay.get('flags', [])
+            
+            if bandwidth > 0:
+                ratio = self._calculate_cw_bw_ratio(consensus_weight, bandwidth)
+                all_ratios.append(ratio)
+                
+                if 'Guard' in flags:
+                    guard_ratios.append(ratio)
+                if 'Exit' in flags:
+                    exit_ratios.append(ratio)
+        
+        # Sort once for all percentile calculations
+        all_ratios.sort()
+        guard_ratios.sort()
+        exit_ratios.sort()
+        
+        return all_ratios, guard_ratios, exit_ratios
+    
+    def _calculate_median(self, sorted_list):
+        """Centralized median calculation - eliminates duplication"""
+        if not sorted_list:
+            return 0
+        n = len(sorted_list)
+        if n % 2 == 0:
+            return (sorted_list[n//2 - 1] + sorted_list[n//2]) / 2
+        else:
+            return sorted_list[n//2]
+    
+    def _calculate_percentile_rank(self, value, sorted_ratio_list):
+        """Centralized percentile calculation - eliminates duplication"""
+        if not sorted_ratio_list or value == 0:
+            return 0
+        below_count = sum(1 for r in sorted_ratio_list if r < value)
+        percentile = (below_count / len(sorted_ratio_list)) * 100
+        return max(1, min(99, round(percentile)))
         
     def analyze_all_layers(self):
         """Execute all Tier 1 layers using existing data - no recalculation"""
@@ -178,268 +271,252 @@ class IntelligenceEngine:
         return {'template_optimized': template_values}
     
     def _layer7_performance_correlation(self):
-        """Layer 7: Complete performance analysis using existing network totals"""
+        """Layer 7: Complete performance analysis using pre-computed data"""
         template_values = {}
         
         # Use pre-computed measured percentage
         template_values['measured_percentage'] = f"{self.network_totals.get('measured_percentage', 0):.1f}"
         
-        # Count underutilized relays and create fingerprint list
-        underutilized_relays = []
-        for relay in self.relays:
-            bandwidth = relay.get('observed_bandwidth', 0)
-            consensus_weight = relay.get('consensus_weight', 0)
-            if bandwidth > 10000000 and consensus_weight < bandwidth * 0.0000005:  # 10MB+ but low weight
-                underutilized_relays.append(relay.get('fingerprint', ''))
+        # Use pre-computed underutilized relays
+        template_values['underutilized_count'] = len(self.underutilized_fingerprints)
+        template_values['underutilized_fingerprints'] = list(self.underutilized_fingerprints)
         
-        template_values['underutilized_count'] = len(underutilized_relays)
-        template_values['underutilized_fingerprints'] = underutilized_relays
-        
-        # Calculate efficiency ratio (simple average)
-        total_bandwidth = sum(relay.get('observed_bandwidth', 0) for relay in self.relays)
-        total_consensus_weight = sum(relay.get('consensus_weight', 0) for relay in self.relays)
-        if total_bandwidth > 0:
-            efficiency_ratio = total_consensus_weight / total_bandwidth * 1000000  # Scale for readability
-            template_values['efficiency_ratio'] = f"{efficiency_ratio:.2f}"
-        else:
-            template_values['efficiency_ratio'] = '0.00'
+        # Use pre-computed network ratio
+        template_values['efficiency_ratio'] = f"{self.overall_network_ratio:.2f}"
         
         return {'template_optimized': template_values}
     
     def _layer10_infrastructure_dependency(self):
-        """Layer 10: Infrastructure dependency analysis focusing on critical ASes and version synchronization"""
+        """Layer 10: Infrastructure dependency analysis"""
         template_values = {}
         
-        # Version diversity
-        versions = set(relay.get('version', 'Unknown') for relay in self.relays)
+        # Count unique versions
+        versions = set()
+        for relay in self.relays:
+            if relay.get('version'):
+                versions.add(relay.get('version'))
+        
         template_values['unique_versions'] = len(versions)
         
-        # Critical ASes analysis (ASes with >5% of network) and single points of failure
-        critical_as_list = []
-        critical_as_names = []
+        # Critical AS analysis (>5% of network)
+        critical_as = []
         if 'as' in self.sorted_data:
             for as_number, as_data in self.sorted_data['as'].items():
-                weight_fraction = as_data.get('consensus_weight_fraction', 0)
-                if weight_fraction > 0.05:  # >5% threshold
-                    as_name = as_data.get('as_name', f'AS{as_number}')
-                    critical_as_list.append(as_number)
-                    critical_as_names.append(f"AS{as_number} ({as_name[:30]}{'...' if len(as_name) > 30 else ''})")
+                if as_data.get('consensus_weight_fraction', 0) > 0.05:
+                    critical_as.append(as_number)
         
-        template_values['critical_as_count'] = len(critical_as_list)
-        template_values['critical_as_list'] = critical_as_names
+        template_values['critical_as_count'] = len(critical_as)
+        template_values['critical_as_list'] = critical_as
         
-        # Version synchronization risk with explanation
-        version_count = len(versions)
-        if version_count <= 3:
+        # Synchronization risk assessment
+        if len(versions) == 1:
             template_values['synchronization_risk'] = 'HIGH'
-            template_values['sync_risk_tooltip'] = f'Only {version_count} Tor versions detected - high risk of coordinated updates/vulnerabilities'
-        elif version_count <= 6:
+            template_values['sync_risk_tooltip'] = 'All relays running same version - high synchronization risk'
+        elif len(versions) <= 3:
             template_values['synchronization_risk'] = 'MEDIUM'
-            template_values['sync_risk_tooltip'] = f'{version_count} Tor versions detected - moderate diversity, some coordination risk'
+            template_values['sync_risk_tooltip'] = f'{len(versions)} versions - moderate synchronization risk'
         else:
             template_values['synchronization_risk'] = 'LOW'
-            template_values['sync_risk_tooltip'] = f'{version_count} Tor versions detected - good diversity, low coordination risk'
+            template_values['sync_risk_tooltip'] = f'{len(versions)} versions - low synchronization risk'
         
         return {'template_optimized': template_values}
     
     def _layer11_geographic_clustering(self):
-        """Layer 11: Complete geographic analysis with enhanced regional details"""
+        """Layer 11: Geographic clustering analysis"""
         template_values = {}
         
-        # Five/Fourteen Eyes analysis
-        five_eyes = {'us', 'gb', 'ca', 'au', 'nz'}
-        fourteen_eyes = five_eyes | {'de', 'fr', 'it', 'es', 'nl', 'be', 'dk', 'se', 'no'}
+        # Five Eyes and Fourteen Eyes analysis
+        five_eyes_codes = {'us', 'gb', 'ca', 'au', 'nz'}
+        fourteen_eyes_codes = five_eyes_codes.union({'de', 'fr', 'it', 'es', 'nl', 'be', 'dk', 'no', 'se'})
         
-        five_eyes_weight = fourteen_eyes_weight = 0
-        for country_code, country_data in self.sorted_data.get('country', {}).items():
-            weight = country_data.get('consensus_weight_fraction', 0)
-            if country_code.lower() in five_eyes:
-                five_eyes_weight += weight
-            if country_code.lower() in fourteen_eyes:
-                fourteen_eyes_weight += weight
+        five_eyes_weight = 0
+        fourteen_eyes_weight = 0
+        
+        if 'country' in self.sorted_data:
+            for country_code, country_data in self.sorted_data['country'].items():
+                weight = country_data.get('consensus_weight_fraction', 0)
+                if country_code.lower() in five_eyes_codes:
+                    five_eyes_weight += weight
+                if country_code.lower() in fourteen_eyes_codes:
+                    fourteen_eyes_weight += weight
         
         template_values['five_eyes_percentage'] = f"{five_eyes_weight * 100:.1f}"
         template_values['fourteen_eyes_percentage'] = f"{fourteen_eyes_weight * 100:.1f}"
         template_values['five_eyes_influence'] = f"{five_eyes_weight * 100:.1f}"
         template_values['fourteen_eyes_influence'] = f"{fourteen_eyes_weight * 100:.1f}"
         
-        # Regional HHI calculation with top 3 regions
-        regional_hhi, regional_stats = self._calculate_regional_hhi_detailed()
+        # Regional HHI calculation
+        regional_hhi = self._calculate_regional_hhi_detailed()
         template_values['regional_hhi'] = f"{regional_hhi:.3f}"
         
-        # HHI interpretation and tooltip
-        if regional_hhi > 0.25:
-            template_values['concentration_hhi_interpretation'] = 'HIGH'
-        elif regional_hhi > 0.15:
-            template_values['concentration_hhi_interpretation'] = 'MEDIUM'
-        else:
+        if regional_hhi < 0.15:
             template_values['concentration_hhi_interpretation'] = 'LOW'
+            template_values['hhi_tooltip'] = 'Low geographic concentration - good diversity'
+        elif regional_hhi < 0.25:
+            template_values['concentration_hhi_interpretation'] = 'MODERATE'
+            template_values['hhi_tooltip'] = 'Moderate geographic concentration'
+        else:
+            template_values['concentration_hhi_interpretation'] = 'HIGH'
+            template_values['hhi_tooltip'] = 'High geographic concentration - limited diversity'
         
-        # Enhanced tooltips and top regions
-        template_values['hhi_tooltip'] = f'Herfindahl-Hirschman Index measures concentration: 0=perfect distribution, 1=complete concentration. Current HHI: {regional_hhi:.3f}'
-        template_values['regional_concentration_tooltip'] = 'Regional distribution of Tor network capacity by geographic regions'
-        
-        # Top 3 regions by weight
-        top_regions = sorted(regional_stats.items(), key=lambda x: x[1], reverse=True)[:3]
-        top_3_text = ', '.join([f"{region.title().replace('_', ' ')}: {weight*100:.1f}%" for region, weight in top_regions if weight > 0])
-        template_values['top_3_regions'] = top_3_text if top_3_text else 'Insufficient data'
+        # Top 3 regions
+        if 'country' in self.sorted_data:
+            sorted_countries = sorted(self.sorted_data['country'].items(), 
+                                    key=lambda x: x[1].get('consensus_weight_fraction', 0), reverse=True)
+            top_3 = [f"{country[0].upper()}: {country[1].get('consensus_weight_fraction', 0) * 100:.1f}%" 
+                    for country in sorted_countries[:3]]
+            template_values['top_3_regions'] = ', '.join(top_3)
+            template_values['regional_concentration_tooltip'] = f"Top 3 countries: {', '.join(top_3)}"
+        else:
+            template_values['top_3_regions'] = 'No data'
+            template_values['regional_concentration_tooltip'] = 'Regional analysis unavailable'
         
         return {'template_optimized': template_values}
     
     def _layer13_capacity_distribution(self):
-        """Layer 13: Complete capacity analysis with Gini explanation"""
+        """Layer 13: Capacity distribution analysis"""
         template_values = {}
         
-        # Gini coefficient with enhanced tooltip
-        weights = [relay.get('consensus_weight_fraction', 0) for relay in self.relays if relay.get('consensus_weight_fraction', 0) > 0]
-        if weights:
-            gini = self._calculate_gini_coefficient(sorted(weights))
+        # Gini coefficient calculation
+        consensus_weights = [relay.get('consensus_weight', 0) for relay in self.relays]
+        consensus_weights = [w for w in consensus_weights if w > 0]  # Remove zero weights
+        
+        if len(consensus_weights) > 1:
+            gini = self._calculate_gini_coefficient(sorted(consensus_weights))
             template_values['gini_coefficient'] = f"{gini:.3f}"
-            template_values['diversity_status'] = 'HIGH' if gini > 0.6 else 'MEDIUM' if gini > 0.4 else 'LOW'
-            template_values['gini_tooltip'] = f'Gini coefficient measures inequality: 0=perfect equality, 1=complete inequality. Current: {gini:.3f} indicates {"high" if gini > 0.6 else "medium" if gini > 0.4 else "low"} capacity concentration among relays'
+            
+            if gini < 0.4:
+                template_values['diversity_status'] = 'EXCELLENT'
+                template_values['gini_tooltip'] = 'Low inequality - excellent capacity distribution'
+            elif gini < 0.6:
+                template_values['diversity_status'] = 'GOOD'
+                template_values['gini_tooltip'] = 'Moderate inequality - good capacity distribution'
+            else:
+                template_values['diversity_status'] = 'POOR'
+                template_values['gini_tooltip'] = 'High inequality - concentrated capacity distribution'
         else:
             template_values['gini_coefficient'] = '0.000'
             template_values['diversity_status'] = 'UNKNOWN'
-            template_values['gini_tooltip'] = 'Gini coefficient measures wealth inequality - unable to calculate due to insufficient data'
+            template_values['gini_tooltip'] = 'Insufficient data for Gini calculation'
         
-        # Role-specific capacity percentages
-        guard_weight = sum(relay.get('consensus_weight_fraction', 0) for relay in self.relays if 'Guard' in relay.get('flags', []))
-        exit_weight = sum(relay.get('consensus_weight_fraction', 0) for relay in self.relays if 'Exit' in relay.get('flags', []))
+        # Guard and Exit capacity analysis
+        guard_capacity = sum(relay.get('consensus_weight', 0) for relay in self.relays if 'Guard' in relay.get('flags', []))
+        exit_capacity = sum(relay.get('consensus_weight', 0) for relay in self.relays if 'Exit' in relay.get('flags', []))
+        total_capacity = sum(relay.get('consensus_weight', 0) for relay in self.relays)
         
-        template_values['guard_capacity_percentage'] = f"{guard_weight * 100:.1f}"
-        template_values['exit_capacity_percentage'] = f"{exit_weight * 100:.1f}"
-        
-        # Guard capacity status and tooltip
-        template_values['guard_capacity_status'] = 'HIGH' if guard_weight > 0.6 else 'MEDIUM' if guard_weight > 0.4 else 'LOW'
-        template_values['guard_capacity_tooltip'] = f'Guard capacity indicates availability of relays that can serve as entry points to the Tor network. Thresholds: HIGH >60%, MEDIUM 40-60%, LOW ≤40%. Current: {guard_weight * 100:.1f}%'
-        
-        # Exit capacity status and tooltip
-        template_values['exit_capacity_status'] = 'HIGH' if exit_weight > 0.2 else 'MEDIUM' if exit_weight > 0.1 else 'LOW'
-        template_values['exit_capacity_tooltip'] = f'Exit capacity indicates availability of relays that can serve as exit points from the Tor network. Thresholds: HIGH >20%, MEDIUM 10-20%, LOW ≤10%. Current: {exit_weight * 100:.1f}%'
+        if total_capacity > 0:
+            guard_percentage = (guard_capacity / total_capacity) * 100
+            exit_percentage = (exit_capacity / total_capacity) * 100
+            
+            template_values['guard_capacity_percentage'] = f"{guard_percentage:.1f}"
+            template_values['exit_capacity_percentage'] = f"{exit_percentage:.1f}"
+            
+            if exit_percentage < 10:
+                template_values['exit_capacity_status'] = 'CRITICAL'
+            elif exit_percentage < 20:
+                template_values['exit_capacity_status'] = 'LOW'
+            else:
+                template_values['exit_capacity_status'] = 'ADEQUATE'
+        else:
+            template_values['guard_capacity_percentage'] = '0.0'
+            template_values['exit_capacity_percentage'] = '0.0'
+            template_values['exit_capacity_status'] = 'UNKNOWN'
         
         return {'template_optimized': template_values}
     
     def _calculate_gini_coefficient(self, sorted_values):
-        """Calculate Gini coefficient efficiently"""
-        n = len(sorted_values)
-        if n <= 1:
+        """Calculate Gini coefficient for inequality measurement"""
+        if not sorted_values or len(sorted_values) < 2:
             return 0.0
         
+        n = len(sorted_values)
         total = sum(sorted_values)
+        
         if total == 0:
             return 0.0
         
-        gini_sum = sum((2 * (i + 1) - n - 1) * value for i, value in enumerate(sorted_values))
+        # Calculate Gini coefficient using the standard formula
+        cumulative_sum = 0
+        gini_sum = 0
+        
+        for i, value in enumerate(sorted_values):
+            cumulative_sum += value
+            gini_sum += (2 * (i + 1) - n - 1) * value
+        
         return gini_sum / (n * total)
     
     def _calculate_network_position(self, guard_count, middle_count, exit_count, total_relays):
-        """Calculate network position strategic label and formatted string"""
-        total_roles = guard_count + middle_count + exit_count
-        
-        if total_roles <= 0:
+        """Calculate network position classification"""
+        if total_relays == 0:
             return {
-                'label': 'no role data',
-                'formatted_string': f'no role data ({total_relays} total relays)'
+                'label': 'no-relays',
+                'formatted_string': 'No relays'
             }
         
-        # Calculate percentages
-        guard_pct = int(round(guard_count / total_roles * 100))
-        middle_pct = int(round(middle_count / total_roles * 100))
-        exit_pct = int(round(exit_count / total_roles * 100))
+        guard_pct = (guard_count / total_relays) * 100
+        middle_pct = (middle_count / total_relays) * 100
+        exit_pct = (exit_count / total_relays) * 100
         
-        # Determine strategic label using the same logic as template
-        if guard_count == total_roles:
-            label = 'guard-only'
-            percentage_breakdown = f'{guard_pct}% guard'
-        elif exit_count == total_roles:
-            label = 'exit-only'
-            percentage_breakdown = f'{exit_pct}% exit'
-        elif middle_count == total_roles:
-            label = 'middle-only'
-            percentage_breakdown = f'{middle_pct}% middle'
+        # Classification logic
+        if guard_pct == 100:
+            label = "guard-only"
+            position_label = "Guard-only"
+        elif exit_pct == 100:
+            label = "exit-only"
+            position_label = "Exit-only"
+        elif middle_pct == 100:
+            label = "middle-only"
+            position_label = "Middle-only"
         elif guard_pct > 60:
-            label = 'guard-focused'
-            percentage_breakdown = f'{guard_pct}% guard, {middle_pct}% middle, {exit_pct}% exit'
+            label = "guard-focused"
+            position_label = "Guard-focused"
         elif exit_pct > 40:
-            label = 'exit-focused'
-            percentage_breakdown = f'{guard_pct}% guard, {middle_pct}% middle, {exit_pct}% exit'
+            label = "exit-focused"
+            position_label = "Exit-focused"
         elif guard_pct > 20 and exit_pct > 20:
-            label = 'multi-role'
-            percentage_breakdown = f'{guard_pct}% guard, {middle_pct}% middle, {exit_pct}% exit'
+            label = "multi-role"
+            position_label = "Multi-role"
         else:
-            label = 'balanced'
-            percentage_breakdown = f'{guard_pct}% guard, {middle_pct}% middle, {exit_pct}% exit'
+            label = "balanced"
+            position_label = "Balanced"
         
-        # Create relay count description with proper pluralization - only include non-zero counts
-        relay_components = []
+        # Create detailed formatted string
+        position_components = []
         if guard_count > 0:
-            guard_desc = f'{guard_count} guard{"s" if guard_count != 1 else ""}'
-            relay_components.append(guard_desc)
+            guard_text = 'guard' if guard_count == 1 else 'guards'
+            position_components.append(f"{guard_count} {guard_text}")
         if middle_count > 0:
-            middle_desc = f'{middle_count} middle{"s" if middle_count != 1 else ""}'
-            relay_components.append(middle_desc)
+            middle_text = 'middle' if middle_count == 1 else 'middles'
+            position_components.append(f"{middle_count} {middle_text}")
         if exit_count > 0:
-            exit_desc = f'{exit_count} exit{"s" if exit_count != 1 else ""}'
-            relay_components.append(exit_desc)
+            exit_text = 'exit' if exit_count == 1 else 'exits'
+            position_components.append(f"{exit_count} {exit_text}")
         
-        # Join components with commas
-        relay_breakdown = ', '.join(relay_components) if relay_components else 'no relays'
-        
-        formatted_string = f'{label}, {percentage_breakdown} ({total_relays} total relays, {relay_breakdown})'
+        total_text = 'relay' if total_relays == 1 else 'relays'
+        components_text = ', ' + ', '.join(position_components) if position_components else ''
+        formatted_string = f"{position_label} ({total_relays} total {total_text}{components_text})"
         
         return {
             'label': label,
-            'percentage_breakdown': percentage_breakdown,
-            'formatted_string': formatted_string,
-            'guard_percentage': guard_pct,
-            'middle_percentage': middle_pct,
-            'exit_percentage': exit_pct
+            'formatted_string': formatted_string
         }
     
     def _calculate_regional_hhi_detailed(self):
-        """Calculate regional HHI with detailed regional statistics"""
+        """Calculate detailed regional HHI for geographic clustering"""
         if 'country' not in self.sorted_data:
-            return 0.0, {}
+            return 0.0
         
-        # Regional mapping (using centralized definitions)
-        from .country_utils import get_geographic_regions_for_analysis
-        regions = get_geographic_regions_for_analysis()
-        regions['other'] = set()  # Add 'other' category for unmatched countries
+        # Sum of squares of market shares
+        hhi = sum(country_data.get('consensus_weight_fraction', 0) ** 2 
+                 for country_data in self.sorted_data['country'].values())
         
-        regional_weights = {region: 0.0 for region in regions.keys()}
-        
-        for country_code, country_data in self.sorted_data['country'].items():
-            weight = country_data.get('consensus_weight_fraction', 0)
-            assigned = False
-            
-            for region, countries in regions.items():
-                if region != 'other' and country_code.lower() in countries:
-                    regional_weights[region] += weight
-                    assigned = True
-                    break
-            
-            if not assigned:
-                regional_weights['other'] += weight
-        
-        # Calculate HHI
-        hhi = sum(weight ** 2 for weight in regional_weights.values())
-        return hhi, regional_weights
-
+        return hhi
+    
     def _layer14_contact_intelligence(self):
-        """Layer 14: Contact-specific intelligence for Phase 1 + Phase 2 features"""
+        """Layer 14: Contact-specific intelligence using pre-computed data"""
         contact_intelligence = {}
         
-        # Get underutilized fingerprints for performance analysis (reuse existing calculation)
-        underutilized_fingerprints = set()
-        for relay in self.relays:
-            bandwidth = relay.get('observed_bandwidth', 0)
-            consensus_weight = relay.get('consensus_weight', 0)
-            if bandwidth > 10000000 and consensus_weight < bandwidth * 0.0000005:  # Same criteria as layer 7
-                underutilized_fingerprints.add(relay.get('fingerprint', ''))
-        
-
-        
-        # Process each contact
+        # Process each contact using pre-computed performance data
         if 'contact' in self.sorted_data:
             for contact_hash, contact_data in self.sorted_data['contact'].items():
                 # Get relays for this contact
@@ -472,16 +549,14 @@ class IntelligenceEngine:
                     network_rating = "Great"
                     portfolio_diversity = f"{network_rating}, {unique_as_count} network{'s' if unique_as_count != 1 else ''}"
                 
-
-                
-                # 3. Measurement Status
+                # 2. Measurement Status
                 measured_count = contact_data.get('measured_count', 0)
                 total_relays = len(contact_relays)
                 measurement_status = f"{measured_count}/{total_relays} relays measured by authorities"
                 
                 # PHASE 2 FEATURES (advanced analytics)
                 
-                # 4. Geographic Diversity Assessment (with consistent rating)
+                # 3. Geographic Diversity Assessment (with consistent rating)
                 countries = set(relay.get('country') for relay in contact_relays if relay.get('country'))
                 country_count = len(countries)
                 
@@ -495,24 +570,43 @@ class IntelligenceEngine:
                 
                 geo_risk = f"{geo_rating}, {country_count} countr{'y' if country_count == 1 else 'ies'}"
                 
-                # 5. Performance Insights
+                # 4. Performance Insights - using pre-computed data
                 contact_fingerprints = [relay.get('fingerprint') for relay in contact_relays if relay.get('fingerprint')]
-                underutilized_count = sum(1 for fp in contact_fingerprints if fp in underutilized_fingerprints)
+                underutilized_count = sum(1 for fp in contact_fingerprints if fp in self.underutilized_fingerprints)
+                underutilized_percentage = round((underutilized_count / total_relays * 100)) if total_relays > 0 else 0
+                contact_underutilized_fps = [fp for fp in contact_fingerprints if fp in self.underutilized_fingerprints][:2]
                 
-                # Get top 2 underutilized relay fingerprints for this contact
-                contact_underutilized_fps = [fp for fp in contact_fingerprints if fp in underutilized_fingerprints][:2]
+                # Calculate operator CW/BW ratios using centralized function
+                total_operator_bandwidth = sum(relay.get('observed_bandwidth', 0) for relay in contact_relays)
+                total_operator_consensus_weight = sum(relay.get('consensus_weight', 0) for relay in contact_relays)
                 
-                if total_relays > 0:
-                    if underutilized_count == 0:
-                        perf_status = "optimal efficiency"
-                    elif underutilized_count == total_relays:
-                        perf_status = "needs optimization"
-                    else:
-                        perf_status = "mixed performance"
-                else:
-                    perf_status = "no data"
+                # Calculate operator position-specific bandwidth and consensus weight
+                operator_guard_bandwidth = operator_guard_consensus_weight = 0
+                operator_exit_bandwidth = operator_exit_consensus_weight = 0
                 
-                # 6. Infrastructure Diversity Analysis (with consistent rating)
+                for relay in contact_relays:
+                    flags = relay.get('flags', [])
+                    bandwidth = relay.get('observed_bandwidth', 0)
+                    consensus_weight = relay.get('consensus_weight', 0)
+                    
+                    if 'Guard' in flags:
+                        operator_guard_bandwidth += bandwidth
+                        operator_guard_consensus_weight += consensus_weight
+                    if 'Exit' in flags:
+                        operator_exit_bandwidth += bandwidth
+                        operator_exit_consensus_weight += consensus_weight
+                
+                # Use centralized ratio calculation
+                operator_overall_ratio = self._calculate_cw_bw_ratio(total_operator_consensus_weight, total_operator_bandwidth)
+                operator_guard_ratio = self._calculate_cw_bw_ratio(operator_guard_consensus_weight, operator_guard_bandwidth)
+                operator_exit_ratio = self._calculate_cw_bw_ratio(operator_exit_consensus_weight, operator_exit_bandwidth)
+                
+                # Use pre-computed percentile calculations
+                operator_overall_pct = self._calculate_percentile_rank(operator_overall_ratio, self.all_relay_ratios)
+                operator_guard_pct = self._calculate_percentile_rank(operator_guard_ratio, self.guard_relay_ratios) if operator_guard_ratio > 0 else None
+                operator_exit_pct = self._calculate_percentile_rank(operator_exit_ratio, self.exit_relay_ratios) if operator_exit_ratio > 0 else None
+                
+                # 5. Infrastructure Diversity Analysis (with consistent rating)
                 platforms = set(relay.get('platform') for relay in contact_relays if relay.get('platform'))
                 versions = set(relay.get('version') for relay in contact_relays if relay.get('version'))
                 platform_count = len(platforms)
@@ -528,9 +622,7 @@ class IntelligenceEngine:
                 
                 infra_risk = f"{infra_rating}, {platform_count} platform{'s' if platform_count != 1 else ''}, {version_count} version{'s' if version_count != 1 else ''}"
                 
-
-                
-                # 8. Operational Maturity
+                # 6. Operational Maturity
                 first_seen_dates = [relay.get('first_seen') for relay in contact_relays if relay.get('first_seen')]
                 if first_seen_dates:
                     dates = [date.split(' ')[0] for date in first_seen_dates]
@@ -544,9 +636,9 @@ class IntelligenceEngine:
                 else:
                     maturity = "No timeline data"
                 
-                # Store complete intelligence for this contact (Phase 1 + Phase 2)
+                # Store complete intelligence for this contact
                 contact_intelligence[contact_hash] = {
-                    # Phase 1: Foundation metrics (moved from template)
+                    # Phase 1: Foundation metrics
                     'portfolio_diversity': portfolio_diversity,
                     'measurement_status': measurement_status,
                     
@@ -554,8 +646,21 @@ class IntelligenceEngine:
                     'geographic_countries': country_count,
                     'geographic_risk': geo_risk,
                     'performance_underutilized': underutilized_count,
+                    'performance_underutilized_percentage': underutilized_percentage,
                     'performance_underutilized_fps': contact_underutilized_fps,
-                    'performance_status': perf_status,
+                    'performance_operator_overall_ratio': f"{operator_overall_ratio:.0f}",
+                    'performance_operator_guard_ratio': f"{operator_guard_ratio:.0f}" if operator_guard_ratio > 0 else None,
+                    'performance_operator_exit_ratio': f"{operator_exit_ratio:.0f}" if operator_exit_ratio > 0 else None,
+                    'performance_network_overall_ratio': f"{self.overall_network_ratio:.0f}",
+                    'performance_network_guard_ratio': f"{self.guard_network_ratio:.0f}",
+                    'performance_network_exit_ratio': f"{self.exit_network_ratio:.0f}",
+                    'performance_network_overall_median': f"{self.overall_network_median:.0f}",
+                    'performance_network_guard_median': f"{self.guard_network_median:.0f}",
+                    'performance_network_exit_median': f"{self.exit_network_median:.0f}",
+                    'performance_operator_overall_pct': operator_overall_pct,
+                    'performance_operator_guard_pct': operator_guard_pct if operator_guard_ratio > 0 else None,
+                    'performance_operator_exit_pct': operator_exit_pct if operator_exit_ratio > 0 else None,
+                    'performance_relay_count': len(self.all_relay_ratios),
                     'infrastructure_platforms': platform_count,
                     'infrastructure_versions': version_count,
                     'infrastructure_risk': infra_risk,
