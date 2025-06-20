@@ -448,7 +448,10 @@ class IntelligenceEngine:
     def _calculate_network_position(self, guard_count, middle_count, exit_count, total_relays):
         """Calculate network position classification"""
         if total_relays == 0:
-            return "No relays"
+            return {
+                'label': 'no-relays',
+                'formatted_string': 'No relays'
+            }
         
         guard_pct = (guard_count / total_relays) * 100
         middle_pct = (middle_count / total_relays) * 100
@@ -456,19 +459,47 @@ class IntelligenceEngine:
         
         # Classification logic
         if guard_pct == 100:
-            return "Guard-only"
+            label = "guard-only"
+            position_label = "Guard-only"
         elif exit_pct == 100:
-            return "Exit-only"
+            label = "exit-only"
+            position_label = "Exit-only"
         elif middle_pct == 100:
-            return "Middle-only"
+            label = "middle-only"
+            position_label = "Middle-only"
         elif guard_pct > 60:
-            return "Guard-focused"
+            label = "guard-focused"
+            position_label = "Guard-focused"
         elif exit_pct > 40:
-            return "Exit-focused"
+            label = "exit-focused"
+            position_label = "Exit-focused"
         elif guard_pct > 20 and exit_pct > 20:
-            return "Multi-role"
+            label = "multi-role"
+            position_label = "Multi-role"
         else:
-            return "Balanced"
+            label = "balanced"
+            position_label = "Balanced"
+        
+        # Create detailed formatted string
+        position_components = []
+        if guard_count > 0:
+            guard_text = 'guard' if guard_count == 1 else 'guards'
+            position_components.append(f"{guard_count} {guard_text}")
+        if middle_count > 0:
+            middle_text = 'middle' if middle_count == 1 else 'middles'
+            position_components.append(f"{middle_count} {middle_text}")
+        if exit_count > 0:
+            exit_text = 'exit' if exit_count == 1 else 'exits'
+            position_components.append(f"{exit_count} {exit_text}")
+        
+        total_text = 'relay' if total_relays == 1 else 'relays'
+        components_text = ', ' + ', '.join(position_components) if position_components else ''
+        formatted_string = f"{position_label} ({total_relays} total {total_text}{components_text})"
+        
+        return {
+            'label': label,
+            'formatted_string': formatted_string
+        }
     
     def _calculate_regional_hhi_detailed(self):
         """Calculate detailed regional HHI for geographic clustering"""
