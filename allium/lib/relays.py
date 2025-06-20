@@ -990,10 +990,19 @@ class Relays:
             
         These totals are passed from _categorize to avoid re-iterating through all relays.
         """
+        # Calculate total consensus weight for overall fractions
+        total_consensus_weight = total_guard_cw + total_middle_cw + total_exit_cw
+        
         # Calculate fractions for each group using the provided network-wide totals
         for k in self.json["sorted"]:
             for v in self.json["sorted"][k]:
                 item = self.json["sorted"][k][v]
+                
+                # Calculate overall consensus weight fraction
+                if total_consensus_weight > 0:
+                    item["consensus_weight_fraction"] = item["consensus_weight"] / total_consensus_weight
+                else:
+                    item["consensus_weight_fraction"] = 0.0
                 
                 # Calculate fractions, avoiding division by zero
                 if total_guard_cw > 0:
@@ -2707,6 +2716,15 @@ class Relays:
         observed_advertised_diff_sum = observed_advertised_count = 0
         observed_advertised_diff_values = []
         
+        # NEW: Age calculations
+        relay_ages_days = []
+        
+        # NEW: Exit policy analysis
+        guard_exit_count = 0
+        restricted_exits = 0
+        web_traffic_exits = 0
+        unrestricted_exits = 0
+        
         # Role-specific collectors - combined into single loop
         exit_cw_values = []
         guard_cw_values = []
@@ -2725,55 +2743,98 @@ class Relays:
             for period in uptime_periods
         }
         
-        # SINGLE OPTIMIZED LOOP - calculate everything in one pass
+        # SINGLE LOOP - calculate everything at once
         for relay in self.json['relays']:
+            # Basic relay categorization
             flags = relay.get('flags', [])
-            bandwidth = relay.get('observed_bandwidth', 0)
-            consensus_weight = relay.get('consensus_weight', 0)
-            
-            # Basic flags and counts
-            is_exit = 'Exit' in flags
             is_guard = 'Guard' in flags
+            is_exit = 'Exit' in flags
+            is_authority = 'Authority' in flags
             is_bad_exit = 'BadExit' in flags
+            is_running = relay.get('running', True)
+            is_hibernating = relay.get('hibernating', False)
+            is_overloaded = bool(relay.get('overload_general', False) or 
+                                relay.get('overload_fd_exhausted', False) or 
+                                relay.get('overload_write_limit', False) or 
+                                relay.get('overload_read_limit', False))
             
-            if 'Authority' in flags:
+            # Counts
+            if is_authority:
                 authority_count += 1
             if is_bad_exit:
                 bad_exit_count += 1
-            
-            # Status checks
-            if not relay.get('running', False):
+            if not is_running:
                 offline_relays += 1
-            if relay.get('overload_general_timestamp'):
+            if is_overloaded:
                 overloaded_relays += 1
-            if relay.get('hibernating', False):
+            if is_hibernating:
                 hibernating_relays += 1
             
-            # Recent relay detection
+            # NEW: Guard+Exit flag combination
+            if is_guard and is_exit:
+                guard_exit_count += 1
+            
+            # NEW: Exit policy analysis
+            if is_exit:
+                # Basic exit policy analysis
+                exit_policy_summary = relay.get('exit_policy_summary', {})
+                ipv4_summary = exit_policy_summary.get('accept', [])
+                ipv6_summary = exit_policy_summary.get('accept6', [])
+                
+                # Check for web traffic (ports 80 and 443)
+                has_web_traffic = False
+                if ipv4_summary:
+                    for policy in ipv4_summary:
+                        if ('80' in policy or '443' in policy or 
+                            '1-65535' in policy or policy == '*:*'):
+                            has_web_traffic = True
+                            break
+                
+                if has_web_traffic:
+                    web_traffic_exits += 1
+                
+                # Check for unrestricted exits (accept all or most traffic)
+                is_unrestricted = False
+                if ipv4_summary:
+                    for policy in ipv4_summary:
+                        if (policy == '*:*' or '1-65535' in policy or 
+                            '1-' in policy or '*:1-65535' in policy):
+                            is_unrestricted = True
+                            break
+                
+                if is_unrestricted:
+                    unrestricted_exits += 1
+                else:
+                    restricted_exits += 1
+            
+            # NEW: Age calculation using first_seen
             first_seen_str = relay.get('first_seen', '')
             if first_seen_str:
                 try:
                     first_seen = datetime.datetime.strptime(first_seen_str, '%Y-%m-%d %H:%M:%S')
-                    if first_seen >= day_ago:
-                        new_relays_24h += 1
-                    if first_seen >= month_ago:
-                        new_relays_30d += 1
-                    if first_seen >= year_ago:
-                        new_relays_1y += 1
-                    if first_seen >= six_months_ago:
-                        new_relays_6m += 1
+                    age_days = (now - first_seen).days
+                    if age_days >= 0:  # Sanity check
+                        relay_ages_days.append(age_days)
+                        
+                        # Count new relays for existing metrics
+                        if first_seen >= day_ago:
+                            new_relays_24h += 1
+                        if first_seen >= month_ago:
+                            new_relays_30d += 1
+                        if first_seen >= year_ago:
+                            new_relays_1y += 1
+                        if first_seen >= six_months_ago:
+                            new_relays_6m += 1
                 except:
                     pass
             
             # Platform tracking
-            platform = relay.get('platform', '').strip()
-            if platform:
-                unique_platforms.add(platform)
-                main_platform = platform.split()[0] if platform else 'Unknown'
-                platform_counts[main_platform] = platform_counts.get(main_platform, 0) + 1
+            platform = relay.get('platform', 'Unknown')
+            unique_platforms.add(platform)
+            platform_counts[platform] = platform_counts.get(platform, 0) + 1
             
-            # Version compliance
-            recommended = relay.get('recommended_version', None)
+            # Version tracking
+            recommended = relay.get('recommended_version')
             version_status = relay.get('version_status', '').lower()
             
             if recommended is True:
@@ -2789,6 +2850,8 @@ class Relays:
                 outdated_count += 1
             
             # Bandwidth calculations
+            bandwidth = relay.get('observed_bandwidth', 0)
+            consensus_weight = relay.get('consensus_weight', 0)
             total_bandwidth += bandwidth
             advertised_bandwidth = relay.get('advertised_bandwidth', 0)
             total_consensus_weight += consensus_weight
@@ -2871,6 +2934,102 @@ class Relays:
                                     
                                     if is_bad_exit:
                                         uptime_collectors[period]['bad'].append(avg_uptime)
+        
+        # NEW: Calculate age statistics
+        def _format_age(days):
+            """Format age in days to 'Xy Zmo' format"""
+            if days < 30:
+                return f"{days}d"
+            elif days < 365:
+                months = days // 30
+                remaining_days = days % 30
+                if remaining_days == 0:
+                    return f"{months}mo"
+                else:
+                    return f"{months}mo {remaining_days}d"
+            else:
+                years = days // 365
+                remaining_days = days % 365
+                months = remaining_days // 30
+                if months == 0:
+                    return f"{years}y"
+                else:
+                    return f"{years}y {months}mo"
+        
+        if relay_ages_days:
+            mean_age_days = statistics.mean(relay_ages_days)
+            median_age_days = statistics.median(relay_ages_days)
+            health_metrics['network_mean_age_formatted'] = _format_age(int(mean_age_days))
+            health_metrics['network_median_age_formatted'] = _format_age(int(median_age_days))
+        else:
+            health_metrics['network_mean_age_formatted'] = "Unknown"
+            health_metrics['network_median_age_formatted'] = "Unknown"
+        
+        # NEW: Top 3 countries by consensus weight (reuse existing sorted data)
+        countries_by_cw = []
+        if 'country' in sorted_data:
+            for country_code, country_data in sorted_data['country'].items():
+                if len(country_code) == 2:  # Valid country code
+                    cw_fraction = country_data.get('consensus_weight_fraction', 0)
+                    if cw_fraction > 0:
+                        countries_by_cw.append((country_code.upper(), cw_fraction))
+        
+        countries_by_cw.sort(key=lambda x: x[1], reverse=True)
+        health_metrics['top_3_countries'] = []
+        for i, (country_code, cw_fraction) in enumerate(countries_by_cw[:3]):
+            health_metrics['top_3_countries'].append({
+                'rank': i + 1,
+                'country_code': country_code,
+                'consensus_weight_percentage': cw_fraction * 100
+            })
+        
+        # NEW: Top AS by consensus weight and concentration metrics
+        as_by_cw = []
+        if 'as' in sorted_data:
+            for as_number, as_data in sorted_data['as'].items():
+                cw_fraction = as_data.get('consensus_weight_fraction', 0)
+                if cw_fraction > 0:
+                    as_name = as_data.get('as_name', f'AS{as_number}')
+                    as_by_cw.append((as_number, as_name, cw_fraction))
+        
+        as_by_cw.sort(key=lambda x: x[2], reverse=True)
+        
+        # Top 3 AS details
+        health_metrics['top_3_as'] = []
+        for i, (as_number, as_name, cw_fraction) in enumerate(as_by_cw[:3]):
+            health_metrics['top_3_as'].append({
+                'rank': i + 1,
+                'as_number': as_number,
+                'as_name': as_name,
+                'as_name_truncated': as_name[:8] if len(as_name) > 8 else as_name,
+                'consensus_weight_percentage': cw_fraction * 100
+            })
+        
+        # AS concentration metrics
+        if as_by_cw:
+            top_3_cw = sum(x[2] for x in as_by_cw[:3])
+            top_5_cw = sum(x[2] for x in as_by_cw[:5])
+            top_10_cw = sum(x[2] for x in as_by_cw[:10])
+            
+            health_metrics['top_3_as_concentration'] = top_3_cw * 100
+            health_metrics['top_5_as_concentration'] = top_5_cw * 100
+            health_metrics['top_10_as_concentration'] = top_10_cw * 100
+        else:
+            health_metrics['top_3_as_concentration'] = 0.0
+            health_metrics['top_5_as_concentration'] = 0.0
+            health_metrics['top_10_as_concentration'] = 0.0
+        
+        # NEW: Exit policy metrics
+        health_metrics.update({
+            'guard_exit_count': guard_exit_count,
+            'unrestricted_exits': unrestricted_exits,
+            'restricted_exits': restricted_exits,
+            'web_traffic_exits': web_traffic_exits,
+            'unrestricted_exits_percentage': (unrestricted_exits / total_relays_count * 100) if total_relays_count > 0 else 0.0,
+            'restricted_exits_percentage': (restricted_exits / total_relays_count * 100) if total_relays_count > 0 else 0.0,
+            'web_traffic_exits_percentage': (web_traffic_exits / total_relays_count * 100) if total_relays_count > 0 else 0.0,
+            'guard_exit_percentage': (guard_exit_count / total_relays_count * 100) if total_relays_count > 0 else 0.0
+        })
         
         # STORE CALCULATED METRICS
         health_metrics.update({

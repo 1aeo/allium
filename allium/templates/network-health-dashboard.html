@@ -84,6 +84,12 @@ Network Health Dashboard
                         <span class="metric-label">New 1y</span>
                     </div>
                 </div>
+                <div class="metric-grid" style="grid-template-columns: repeat(1, 1fr);">
+                    <div class="metric-item" title="Mean and median age of all relays in the network calculated from first_seen timestamps. Shows network maturity and experience.">
+                        <span class="metric-value">{{ relays.json.network_health.network_mean_age_formatted }} | {{ relays.json.network_health.network_median_age_formatted }}</span>
+                        <span class="metric-label">Age (Mean | Median)</span>
+                    </div>
+                </div>
             </div>
         </div>
         
@@ -252,6 +258,15 @@ Network Health Dashboard
                     <span class="metric-value"><a href="{{ page_ctx.path_prefix }}misc/countries-by-bandwidth.html" style="color: inherit; text-decoration: none;">{{ "{:,}".format(relays.json.network_health.countries_count) }}</a></span>
                     <span class="metric-label">Unique Countries</span>
                 </div>
+                <!-- NEW: Top 3 Countries by Consensus Weight -->
+                <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
+                    {% for country in relays.json.network_health.top_3_countries %}
+                    <div class="metric-item" title="Country ranked #{{ country.rank }} by consensus weight concentration in the Tor network.">
+                        <span class="metric-value">{{ "%.1f%%"|format(country.consensus_weight_percentage) }} <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ country.country_code.lower() }}.png" alt="{{ country.country_code }}" style="width: 16px; height: 11px; margin-left: 3px;"> {{ country.country_code }}</span>
+                        <span class="metric-label">#{{ country.rank }} Country CW</span>
+                    </div>
+                    {% endfor %}
+                </div>
                 <!-- First Row: EU/Non-EU/Rare Consensus Weight -->
                 <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
                     <div class="metric-item" title="Total consensus weight held by relays in European Union countries. Shows EU influence on network routing decisions.">
@@ -305,6 +320,30 @@ Network Health Dashboard
                 <div class="metric-item primary" title="Unique Autonomous Systems hosting relays. Higher AS diversity reduces single points of failure and improves network resilience.">
                     <span class="metric-value"><a href="{{ page_ctx.path_prefix }}misc/networks-by-bandwidth.html" style="color: inherit; text-decoration: none;">{{ "{:,}".format(relays.json.network_health.unique_as_count) }}</a></span>
                     <span class="metric-label">Unique AS</span>
+                </div>
+                <!-- NEW: Top 3 AS by Consensus Weight -->
+                <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
+                    {% for as_info in relays.json.network_health.top_3_as %}
+                    <div class="metric-item" title="AS{{ as_info.as_number }} ({{ as_info.as_name }}) - Autonomous System ranked #{{ as_info.rank }} by consensus weight concentration.">
+                        <span class="metric-value">{{ "%.1f%%"|format(as_info.consensus_weight_percentage) }} {{ as_info.as_name_truncated }}</span>
+                        <span class="metric-label">#{{ as_info.rank }} AS CW</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                <!-- NEW: AS Concentration Metrics -->
+                <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
+                    <div class="metric-item" title="Total consensus weight held by the top 3 Autonomous Systems. Shows network concentration risk.">
+                        <span class="metric-value">{{ "%.1f%%"|format(relays.json.network_health.top_3_as_concentration) }}</span>
+                        <span class="metric-label">Top 3 AS CW Share</span>
+                    </div>
+                    <div class="metric-item" title="Total consensus weight held by the top 5 Autonomous Systems. Shows network concentration risk.">
+                        <span class="metric-value">{{ "%.1f%%"|format(relays.json.network_health.top_5_as_concentration) }}</span>
+                        <span class="metric-label">Top 5 AS CW Share</span>
+                    </div>
+                    <div class="metric-item" title="Total consensus weight held by the top 10 Autonomous Systems. Shows network concentration risk.">
+                        <span class="metric-value">{{ "%.1f%%"|format(relays.json.network_health.top_10_as_concentration) }}</span>
+                        <span class="metric-label">Top 10 AS CW Share</span>
+                    </div>
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
                     <div class="metric-item" title="Average number of Autonomous Systems per country. Indicates infrastructure diversity within countries.">
@@ -406,6 +445,40 @@ Network Health Dashboard
                     <div class="metric-item" title="Number of relays running outdated or unrecommended Tor versions. Should be upgraded for security.">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.outdated_count) }} ({{ "%.1f%%"|format(relays.json.network_health.outdated_percentage) }})</span>
                         <span class="metric-label">Outdated</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+    
+    <!-- FOURTH ROW -->
+    <div class="ribbon-row">
+        
+        <!-- CARD 10: EXIT POLICIES -->
+        <div class="ribbon-card exit-policies">
+            <div class="card-header">
+                <h4>🚪 Exit Policies</h4>
+            </div>
+            <div class="card-metrics">
+                <div class="metric-item primary" title="Number and percentage of exit relays without restrictions allowing all traffic. These relays provide maximum utility for Tor users.">
+                    <span class="metric-value">{{ "{:,}".format(relays.json.network_health.unrestricted_exits) }} ({{ "%.1f%%"|format(relays.json.network_health.unrestricted_exits_percentage) }})</span>
+                    <span class="metric-label">Relays without Restrictions</span>
+                </div>
+                <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
+                    <div class="metric-item" title="Number and percentage of exit relays with port restrictions. These relays block certain types of traffic based on destination port.">
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.restricted_exits) }} ({{ "%.1f%%"|format(relays.json.network_health.restricted_exits_percentage) }})</span>
+                        <span class="metric-label">with Port Restrictions</span>
+                    </div>
+                    <div class="metric-item" title="Number and percentage of exit relays that allow web traffic on ports 80 and 443. Essential for basic web browsing functionality.">
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.web_traffic_exits) }} ({{ "%.1f%%"|format(relays.json.network_health.web_traffic_exits_percentage) }})</span>
+                        <span class="metric-label">allow Web Traffic</span>
+                    </div>
+                </div>
+                <div class="metric-grid" style="grid-template-columns: repeat(1, 1fr);">
+                    <div class="metric-item" title="Number of relays with both Exit and Guard flags. These relays can serve as both entry and exit points in Tor circuits.">
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.guard_exit_count) }}</span>
+                        <span class="metric-label">Relays Exit + Guard Flags</span>
                     </div>
                 </div>
             </div>
