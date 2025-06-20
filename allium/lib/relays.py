@@ -3041,10 +3041,10 @@ class Relays:
         
         # NEW: Calculate geographic CW/BW ratios (mean and median)
         health_metrics.update({
-            'eu_cw_bw_mean': int(statistics.mean(eu_cw_bw_values)) if eu_cw_bw_values else 1000,
-            'eu_cw_bw_median': int(statistics.median(eu_cw_bw_values)) if eu_cw_bw_values else 1500,
-            'non_eu_cw_bw_mean': int(statistics.mean(non_eu_cw_bw_values)) if non_eu_cw_bw_values else 400,
-            'non_eu_cw_bw_median': int(statistics.median(non_eu_cw_bw_values)) if non_eu_cw_bw_values else 800
+            'eu_cw_bw_mean': int(statistics.mean(eu_cw_bw_values)) if eu_cw_bw_values else 0,
+            'eu_cw_bw_median': int(statistics.median(eu_cw_bw_values)) if eu_cw_bw_values else 0,
+            'non_eu_cw_bw_mean': int(statistics.mean(non_eu_cw_bw_values)) if non_eu_cw_bw_values else 0,
+            'non_eu_cw_bw_median': int(statistics.median(non_eu_cw_bw_values)) if non_eu_cw_bw_values else 0
         })
         
         # NEW: Calculate Top AS CW/BW ratios efficiently in same AS loop
@@ -3074,12 +3074,12 @@ class Relays:
                             top_10_as_cw_bw_values.append(cw_bw_ratio)
         
         health_metrics.update({
-            'top_3_as_cw_bw_mean': int(statistics.mean(top_3_as_cw_bw_values)) if top_3_as_cw_bw_values else 1200,
-            'top_3_as_cw_bw_median': int(statistics.median(top_3_as_cw_bw_values)) if top_3_as_cw_bw_values else 1400,
-            'top_5_as_cw_bw_mean': int(statistics.mean(top_5_as_cw_bw_values)) if top_5_as_cw_bw_values else 1100,
-            'top_5_as_cw_bw_median': int(statistics.median(top_5_as_cw_bw_values)) if top_5_as_cw_bw_values else 1300,
-            'top_10_as_cw_bw_mean': int(statistics.mean(top_10_as_cw_bw_values)) if top_10_as_cw_bw_values else 1000,
-            'top_10_as_cw_bw_median': int(statistics.median(top_10_as_cw_bw_values)) if top_10_as_cw_bw_values else 1100
+            'top_3_as_cw_bw_mean': int(statistics.mean(top_3_as_cw_bw_values)) if top_3_as_cw_bw_values else 0,
+            'top_3_as_cw_bw_median': int(statistics.median(top_3_as_cw_bw_values)) if top_3_as_cw_bw_values else 0,
+            'top_5_as_cw_bw_mean': int(statistics.mean(top_5_as_cw_bw_values)) if top_5_as_cw_bw_values else 0,
+            'top_5_as_cw_bw_median': int(statistics.median(top_5_as_cw_bw_values)) if top_5_as_cw_bw_values else 0,
+            'top_10_as_cw_bw_mean': int(statistics.mean(top_10_as_cw_bw_values)) if top_10_as_cw_bw_values else 0,
+            'top_10_as_cw_bw_median': int(statistics.median(top_10_as_cw_bw_values)) if top_10_as_cw_bw_values else 0
         })
         
         # NEW: Exit policy metrics
