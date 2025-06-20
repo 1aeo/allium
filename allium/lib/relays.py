@@ -180,8 +180,8 @@ class Relays:
         self._preprocess_template_data()  # Pre-compute template optimization data
         self._categorize()  # Then build categories with processed relay objects
         self._generate_aroi_leaderboards()  # Generate AROI operator leaderboards
+        self._generate_smart_context()  # Generate intelligence analysis (needed for CW/BW ratios)
         self._calculate_network_health_metrics()  # Calculate network health dashboard metrics (regenerated after uptime data)
-        self._generate_smart_context()  # Generate intelligence analysis
 
     def _log_progress(self, message, increment_step=False):
         """Log progress message using shared progress utility"""
