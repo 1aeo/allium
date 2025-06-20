@@ -47,6 +47,8 @@
                         <span class="metric-value">{{ relays.json.network_health.authorities_count }}</span>
                         <span class="metric-label">Authorities</span>
                     </div>
+                </div>
+                <div class="metric-grid" style="grid-template-columns: 1fr; margin-top: 5px;">
                     <div class="metric-item">
                         <span class="metric-value">{{ relays.json.network_health.bad_exits_count }}</span>
                         <span class="metric-label">Bad Relays</span>
@@ -65,7 +67,7 @@
                     <span class="metric-value">{{ relays.json.network_health.total_bandwidth_formatted }}</span>
                     <span class="metric-label">Total Bandwidth</span>
                 </div>
-                <div class="metric-grid">
+                <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
                     <div class="metric-item">
                         <span class="metric-value">{{ relays.json.network_health.exit_bandwidth_formatted }}</span>
                         <span class="metric-label">Exit BW</span>
@@ -159,7 +161,7 @@
                     <span class="metric-value">{{ relays.json.network_health.countries_count }}</span>
                     <span class="metric-label">Unique Countries</span>
                 </div>
-                <div class="metric-grid">
+                <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
                     <div class="metric-item">
                         <span class="metric-value">{{ relays.json.network_health.eu_relays_count }}/{{ relays.json.network_health.non_eu_relays_count }}</span>
                         <span class="metric-label">EU/Non-EU Relays</span>
@@ -182,7 +184,7 @@
                     <span class="metric-value">{{ relays.json.network_health.unique_as_count }}</span>
                     <span class="metric-label">Unique AS</span>
                 </div>
-                <div class="metric-grid">
+                <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
                     <div class="metric-item">
                         <span class="metric-value">{{ relays.json.network_health.avg_as_per_country }}</span>
                         <span class="metric-label">Avg AS/Country</span>

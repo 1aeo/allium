@@ -894,40 +894,40 @@
                 .network-health-ribbon {
                     max-width: 1400px;
                     margin: 0 auto;
-                    padding: 15px;
+                    padding: 7px;
                 }
 
                 .ribbon-row {
                     display: grid;
                     grid-template-columns: repeat(3, 1fr);
-                    gap: 15px;
-                    margin-bottom: 15px;
+                    gap: 7px;
+                    margin-bottom: 7px;
                 }
 
                 .ribbon-card {
                     background: white;
-                    border-radius: 8px;
-                    padding: 20px;
-                    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+                    border-radius: 6px;
+                    padding: 10px;
+                    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
                     border: 1px solid #e1e8ed;
                     transition: all 0.3s ease;
-                    min-height: 180px;
+                    min-height: 90px;
                 }
 
                 .ribbon-card:hover {
                     transform: translateY(-1px);
-                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+                    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
                 }
 
                 .ribbon-card .card-header {
-                    margin-bottom: 15px;
-                    padding-bottom: 10px;
+                    margin-bottom: 7px;
+                    padding-bottom: 5px;
                     border-bottom: 1px solid #f0f4f8;
                 }
 
                 .ribbon-card .card-header h4 {
                     margin: 0;
-                    font-size: 1.1rem;
+                    font-size: 2.2rem;
                     color: #2c3e50;
                     font-weight: 600;
                 }
@@ -935,60 +935,60 @@
                 .card-metrics {
                     display: flex;
                     flex-direction: column;
-                    gap: 12px;
+                    gap: 6px;
                 }
 
                 .metric-item.primary {
                     text-align: center;
-                    padding-bottom: 10px;
+                    padding-bottom: 5px;
                     border-bottom: 1px solid #f8fafc;
-                    margin-bottom: 8px;
+                    margin-bottom: 4px;
                 }
 
                 .metric-item.primary .metric-value {
                     display: block;
-                    font-size: 2.2rem;
+                    font-size: 4.4rem;
                     font-weight: bold;
                     color: #2c3e50;
-                    line-height: 1.1;
+                    line-height: 1.0;
                 }
 
                 .metric-item.primary .metric-label {
                     display: block;
-                    font-size: 1rem;
+                    font-size: 2.0rem;
                     color: #64748b;
                     text-transform: uppercase;
                     letter-spacing: 0.5px;
-                    margin-top: 4px;
+                    margin-top: 2px;
                     font-weight: 500;
                 }
 
                 .metric-grid {
                     display: grid;
-                    grid-template-columns: repeat(2, 1fr);
-                    gap: 10px;
+                    grid-template-columns: repeat(4, 1fr);
+                    gap: 5px;
                 }
 
                 .metric-grid .metric-item {
                     text-align: center;
-                    padding: 8px;
+                    padding: 4px;
                     background: #f8fafc;
-                    border-radius: 4px;
+                    border-radius: 3px;
                 }
 
                 .metric-grid .metric-value {
                     display: block;
-                    font-size: 1.1rem;
+                    font-size: 2.2rem;
                     font-weight: 600;
                     color: #374151;
-                    line-height: 1.1;
+                    line-height: 1.0;
                 }
 
                 .metric-grid .metric-label {
                     display: block;
-                    font-size: 0.85rem;
+                    font-size: 1.7rem;
                     color: #6b7280;
-                    margin-top: 3px;
+                    margin-top: 1px;
                     font-weight: 500;
                 }
 
@@ -1035,48 +1035,72 @@
                     .ribbon-row {
                         grid-template-columns: repeat(2, 1fr);
                     }
+                    
+                    .metric-grid {
+                        grid-template-columns: repeat(3, 1fr);
+                    }
                 }
 
                 @media (max-width: 768px) {
                     .ribbon-row {
                         grid-template-columns: 1fr;
-                        gap: 12px;
+                        gap: 6px;
                     }
                     
                     .network-health-ribbon {
-                        padding: 12px;
+                        padding: 6px;
                     }
 
                     .ribbon-card {
-                        padding: 16px;
-                        min-height: 160px;
+                        padding: 8px;
+                        min-height: 80px;
                     }
 
-                    .metric-item.primary .metric-value {
+                    .ribbon-card .card-header h4 {
                         font-size: 1.8rem;
                     }
 
+                    .metric-item.primary .metric-value {
+                        font-size: 3.6rem;
+                    }
+
+                    .metric-item.primary .metric-label {
+                        font-size: 1.6rem;
+                    }
+
                     .metric-grid {
-                        grid-template-columns: 1fr;
-                        gap: 8px;
+                        grid-template-columns: repeat(2, 1fr);
+                        gap: 4px;
+                    }
+
+                    .metric-grid .metric-value {
+                        font-size: 1.8rem;
+                    }
+
+                    .metric-grid .metric-label {
+                        font-size: 1.4rem;
                     }
                 }
 
                 @media (max-width: 480px) {
                     .ribbon-card .card-header h4 {
-                        font-size: 1rem;
-                    }
-
-                    .metric-item.primary .metric-value {
                         font-size: 1.6rem;
                     }
 
+                    .metric-item.primary .metric-value {
+                        font-size: 3.2rem;
+                    }
+
+                    .metric-item.primary .metric-label {
+                        font-size: 1.4rem;
+                    }
+
                     .metric-grid .metric-value {
-                        font-size: 1rem;
+                        font-size: 1.6rem;
                     }
 
                     .metric-grid .metric-label {
-                        font-size: 0.8rem;
+                        font-size: 1.2rem;
                     }
                 }
             </style>

@@ -2657,11 +2657,7 @@ class Relays:
         exit_bandwidth = 0   # All exits (including guard+exit)
         middle_bandwidth = 0 # Neither guard nor exit
         
-        # Uptime tracking by role (if uptime data available)
-        exit_uptime_values = []
-        guard_uptime_values = []  # Guards that are NOT exits
-        middle_uptime_values = []
-        bad_relay_uptime_values = []
+        # Uptime tracking will be done separately using proper utility functions
         
         # Family and contact tracking
         relays_with_family = 0
@@ -2725,33 +2721,7 @@ class Relays:
             else:  # primary_role_middle
                 middle_bandwidth += bandwidth
             
-            # Uptime data by role (if available)
-            if hasattr(self, 'uptime_data') and self.uptime_data:
-                fingerprint = relay.get('fingerprint', '')
-                if fingerprint:
-                    # Find uptime for this relay
-                    relay_uptime_data = None
-                    for uptime_relay in self.uptime_data.get('relays', []):
-                        if uptime_relay.get('fingerprint') == fingerprint:
-                            relay_uptime_data = uptime_relay
-                            break
-                    
-                    if relay_uptime_data and relay_uptime_data.get('uptime'):
-                        period_data = relay_uptime_data['uptime'].get('6_months', {})
-                        if period_data.get('values'):
-                            from .uptime_utils import calculate_relay_uptime_average
-                            avg_uptime = calculate_relay_uptime_average(period_data['values'])
-                            if avg_uptime > 0:  # Valid uptime data
-                                if primary_role_exit:
-                                    exit_uptime_values.append(avg_uptime)
-                                elif primary_role_guard:
-                                    guard_uptime_values.append(avg_uptime)
-                                else:  # primary_role_middle
-                                    middle_uptime_values.append(avg_uptime)
-                                
-                                # Track bad relay uptime
-                                if 'BadExit' in flags:
-                                    bad_relay_uptime_values.append(avg_uptime)
+            # Uptime data will be calculated separately after the main loop to use proper utility functions
             
             # Family and contact info
             effective_family = relay.get('effective_family', [])
@@ -2809,21 +2779,63 @@ class Relays:
         
         # CARD 3: RELAY UPTIME - Calculate actual uptime by role using real data
         if hasattr(self, 'uptime_data') and self.uptime_data:
-            # Calculate overall network uptime using existing function
-            from .uptime_utils import calculate_network_uptime_percentiles
-            network_uptime_stats = calculate_network_uptime_percentiles(self.uptime_data, '6_months')
-            if network_uptime_stats:
-                health_metrics['overall_uptime'] = network_uptime_stats['average']
-                health_metrics['uptime_percentiles'] = network_uptime_stats['percentiles']
+            # Use pre-calculated network uptime percentiles (already calculated in _reprocess_uptime_data)
+            from .uptime_utils import find_relay_uptime_data, calculate_relay_uptime_average
+            if hasattr(self, 'network_uptime_percentiles') and self.network_uptime_percentiles:
+                health_metrics['overall_uptime'] = self.network_uptime_percentiles['average']
+                health_metrics['uptime_percentiles'] = self.network_uptime_percentiles['percentiles']
             else:
                 health_metrics['overall_uptime'] = 0.0
                 health_metrics['uptime_percentiles'] = None
             
-            # Calculate role-specific uptime from actual data
+            # Calculate role-specific uptime using proper data structure
+            # Reset uptime tracking arrays
+            exit_uptime_values = []
+            guard_uptime_values = []
+            middle_uptime_values = []
+            bad_relay_uptime_values = []
+            
+            # Iterate through details API relays and find matching uptime data
+            for relay in self.json['relays']:
+                fingerprint = relay.get('fingerprint', '')
+                if not fingerprint:
+                    continue
+                
+                flags = relay.get('flags', [])
+                is_exit = 'Exit' in flags
+                is_guard = 'Guard' in flags
+                is_bad_exit = 'BadExit' in flags
+                
+                # Role classification: Exit > Guard > Middle
+                primary_role_exit = is_exit
+                primary_role_guard = is_guard and not is_exit
+                primary_role_middle = not is_exit and not is_guard
+                
+                # Find uptime data for this relay
+                relay_uptime_data = find_relay_uptime_data(fingerprint, self.uptime_data)
+                if relay_uptime_data and relay_uptime_data.get('uptime'):
+                    period_data = relay_uptime_data['uptime'].get('6_months', {})
+                    if period_data.get('values'):
+                        avg_uptime = calculate_relay_uptime_average(period_data['values'])
+                        if avg_uptime > 0:  # Valid uptime data
+                            if primary_role_exit:
+                                exit_uptime_values.append(avg_uptime)
+                            elif primary_role_guard:
+                                guard_uptime_values.append(avg_uptime)
+                            else:  # primary_role_middle
+                                middle_uptime_values.append(avg_uptime)
+                            
+                            # Track bad relay uptime
+                            if is_bad_exit:
+                                bad_relay_uptime_values.append(avg_uptime)
+            
+            # Calculate role-specific uptime averages
             health_metrics['exit_uptime'] = statistics.mean(exit_uptime_values) if exit_uptime_values else 0.0
             health_metrics['guard_uptime'] = statistics.mean(guard_uptime_values) if guard_uptime_values else 0.0
             health_metrics['middle_uptime'] = statistics.mean(middle_uptime_values) if middle_uptime_values else 0.0
             health_metrics['bad_relay_uptime'] = statistics.mean(bad_relay_uptime_values) if bad_relay_uptime_values else 0.0
+            
+
         else:
             # No uptime data available
             health_metrics['overall_uptime'] = 0.0
