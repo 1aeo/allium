@@ -180,7 +180,7 @@ class Relays:
         self._preprocess_template_data()  # Pre-compute template optimization data
         self._categorize()  # Then build categories with processed relay objects
         self._generate_aroi_leaderboards()  # Generate AROI operator leaderboards
-        self._calculate_network_health_metrics()  # Calculate network health dashboard metrics
+        # Network health metrics will be calculated after uptime data is attached (in _reprocess_uptime_data)
         self._generate_smart_context()  # Generate intelligence analysis
 
     def _log_progress(self, message, increment_step=False):
@@ -486,6 +486,10 @@ class Relays:
                 self._log_progress("Network percentiles calculation failed: insufficient data")
         else:
             self.network_uptime_percentiles = None
+        
+        # Calculate network health metrics now that uptime data is available
+        self._log_progress("Calculating network health dashboard metrics...")
+        self._calculate_network_health_metrics()
 
     def _apply_statistical_coloring(self, network_statistics):
         """
