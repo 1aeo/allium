@@ -269,15 +269,15 @@ Network Health Dashboard
                 </div>
                 <!-- First Row: EU/Non-EU/Rare Consensus Weight -->
                 <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
-                    <div class="metric-item" title="Total consensus weight held by relays in European Union countries. Shows EU influence on network routing decisions.">
+                    <div class="metric-item" title="Total consensus weight held by relays in European Union countries. Shows EU influence on network routing decisions. {{ "{:,}".format(relays.json.network_health.eu_relays_count) }} ({{ "%.1f%%"|format(relays.json.network_health.eu_relays_percentage) }}) are EU relays.">
                         <span class="metric-value">{{ "%.1f%%"|format(relays.json.network_health.eu_consensus_weight_percentage) }}</span>
                         <span class="metric-label">EU Consensus Weight</span>
                     </div>
-                    <div class="metric-item" title="Total consensus weight held by relays in non-European Union countries. Shows non-EU influence on network routing decisions.">
+                    <div class="metric-item" title="Total consensus weight held by relays in non-European Union countries. Shows non-EU influence on network routing decisions. {{ "{:,}".format(relays.json.network_health.non_eu_relays_count) }} ({{ "%.1f%%"|format(relays.json.network_health.non_eu_relays_percentage) }}) are non-EU relays.">
                         <span class="metric-value">{{ "%.1f%%"|format(relays.json.network_health.non_eu_consensus_weight_percentage) }}</span>
                         <span class="metric-label">Non-EU Consensus Weight</span>
                     </div>
-                    <div class="metric-item" title="Total consensus weight held by relays in rare/frontier countries. Shows frontier countries' influence on network routing decisions.">
+                    <div class="metric-item" title="Total consensus weight held by relays in rare/frontier countries. Shows frontier countries' influence on network routing decisions. {{ "{:,}".format(relays.json.network_health.rare_countries_relays) }} ({{ "%.1f%%"|format(relays.json.network_health.rare_countries_relays_percentage) }}) are rare country relays.">
                         <span class="metric-value">{{ "%.1f%%"|format(relays.json.network_health.rare_countries_consensus_weight_percentage) }}</span>
                         <span class="metric-label">Rare Countries Consensus Weight</span>
                     </div>
@@ -291,21 +291,6 @@ Network Health Dashboard
                     <div class="metric-item" title="Total consensus weight held by relays in Fourteen Eyes intelligence alliance countries (Five Eyes plus DE, FR, IT, ES, NL, BE, DK, SE, NO). Shows extended intelligence alliance influence on network routing decisions.">
                         <span class="metric-value">{{ relays.json.network_health.jurisdiction_fourteen_eyes }}%</span>
                         <span class="metric-label">Fourteen Eyes Consensus Weight</span>
-                    </div>
-                </div>
-                <!-- Third Row: EU/Non-EU/Rare Relay Count -->
-                <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
-                    <div class="metric-item" title="Relays hosted in European Union countries. Shows political and geographic concentration.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.eu_relays_count) }} ({{ "%.1f%%"|format(relays.json.network_health.eu_relays_percentage) }})</span>
-                        <span class="metric-label">EU Relays</span>
-                    </div>
-                    <div class="metric-item" title="Relays hosted in non-European Union countries. Shows global distribution outside the EU.">
-                        <span class="metric-value"><a href="{{ page_ctx.path_prefix }}aroi-leaderboards.html#non_eu_leaders" style="color: inherit; text-decoration: none;">{{ "{:,}".format(relays.json.network_health.non_eu_relays_count) }}</a> ({{ "%.1f%%"|format(relays.json.network_health.non_eu_relays_percentage) }})</span>
-                        <span class="metric-label">Non-EU Relays</span>
-                    </div>
-                    <div class="metric-item" title="Relays in rare/frontier countries with few relays, a subset of non-EU segment. Important for global accessibility and censorship circumvention.">
-                        <span class="metric-value"><a href="{{ page_ctx.path_prefix }}aroi-leaderboards.html#frontier_builders" style="color: inherit; text-decoration: none;">{{ "{:,}".format(relays.json.network_health.rare_countries_relays) }}</a> ({{ "%.1f%%"|format(relays.json.network_health.rare_countries_relays_percentage) }})</span>
-                        <span class="metric-label">Rare Country Relays</span>
                     </div>
                 </div>
             </div>
@@ -398,22 +383,18 @@ Network Health Dashboard
                 <h4>📈 Bandwidth Utilization</h4>
             </div>
             <div class="card-metrics">
-                <div class="metric-item primary" title="Overall ratio of consensus weight to bandwidth across the network. Indicates how efficiently bandwidth is being utilized.">
-                    <span class="metric-value">{{ "%.3f"|format(relays.json.network_health.consensus_weight_bandwidth_ratio) }}</span>
-                    <span class="metric-label">Overall CW/BW Ratio</span>
+                <div class="metric-item primary" title="Network-wide CW/BW ratio mean and median across all relays. CW/BW ratio = Consensus Weight ÷ Bandwidth × 1,000,000. Higher ratios indicate better network utilization per bandwidth contributed. Same calculation as Performance Insights in contact operator pages.">
+                    <span class="metric-value">{{ relays.json.network_health.cw_bw_ratio_overall_mean }} | {{ relays.json.network_health.cw_bw_ratio_overall_median }}</span>
+                    <span class="metric-label">CW/BW Ratio Network Mean | Median</span>
                 </div>
-                <div class="metric-grid">
-                    <div class="metric-item" title="Exit relay consensus weight to bandwidth ratio. Average per relay | Median per relay.">
-                        <span class="metric-value">{{ "%.3f"|format(relays.json.network_health.exit_cw_bw_avg) }} | {{ "%.3f"|format(relays.json.network_health.exit_cw_bw_median) }}</span>
-                        <span class="metric-label">Exit CW/BW Avg|Med</span>
+                <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
+                    <div class="metric-item" title="Guard relay CW/BW ratio network mean and median. Performance compared to all guard relays network-wide. Same calculation as Performance Insights in contact operator pages.">
+                        <span class="metric-value">{{ relays.json.network_health.cw_bw_ratio_guard_mean }} | {{ relays.json.network_health.cw_bw_ratio_guard_median }}</span>
+                        <span class="metric-label">Guard CW/BW Ratio Mean | Median</span>
                     </div>
-                    <div class="metric-item" title="Guard relay consensus weight to bandwidth ratio. Average per relay | Median per relay.">
-                        <span class="metric-value">{{ "%.3f"|format(relays.json.network_health.guard_cw_bw_avg) }} | {{ "%.3f"|format(relays.json.network_health.guard_cw_bw_median) }}</span>
-                        <span class="metric-label">Guard CW/BW Avg|Med</span>
-                    </div>
-                    <div class="metric-item" title="Middle relay consensus weight to bandwidth ratio. Average per relay | Median per relay.">
-                        <span class="metric-value">{{ "%.3f"|format(relays.json.network_health.middle_cw_bw_avg) }} | {{ "%.3f"|format(relays.json.network_health.middle_cw_bw_median) }}</span>
-                        <span class="metric-label">Middle CW/BW Avg|Med</span>
+                    <div class="metric-item" title="Exit relay CW/BW ratio network mean and median. Performance compared to all exit relays network-wide. Same calculation as Performance Insights in contact operator pages.">
+                        <span class="metric-value">{{ relays.json.network_health.cw_bw_ratio_exit_mean }} | {{ relays.json.network_health.cw_bw_ratio_exit_median }}</span>
+                        <span class="metric-label">Exit CW/BW Ratio Mean | Median</span>
                     </div>
                 </div>
             </div>
@@ -461,17 +442,17 @@ Network Health Dashboard
                 <h4>🚪 Exit Policies</h4>
             </div>
             <div class="card-metrics">
-                <div class="metric-item primary" title="Number and percentage of exit relays without restrictions allowing all traffic. These relays provide maximum utility for Tor users.">
-                    <span class="metric-value">{{ "{:,}".format(relays.json.network_health.unrestricted_exits) }} ({{ "%.1f%%"|format(relays.json.network_health.unrestricted_exits_percentage) }})</span>
+                <div class="metric-item primary" title="Number and percentage of exit relays without restrictions allowing all traffic. These relays provide maximum utility for Tor users. Percentage calculated based on total exit relays.">
+                    <span class="metric-value">{{ "{:,}".format(relays.json.network_health.unrestricted_exits) }} ({{ "%.1f%%"|format(relays.json.network_health.unrestricted_exits / relays.json.network_health.exit_count * 100) }})</span>
                     <span class="metric-label">Relays without Restrictions</span>
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
-                    <div class="metric-item" title="Number and percentage of exit relays with port restrictions. These relays block certain types of traffic based on destination port.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.restricted_exits) }} ({{ "%.1f%%"|format(relays.json.network_health.restricted_exits_percentage) }})</span>
+                    <div class="metric-item" title="Number and percentage of exit relays with port restrictions. These relays block certain types of traffic based on destination port. Percentage calculated based on total exit relays.">
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.restricted_exits) }} ({{ "%.1f%%"|format(relays.json.network_health.restricted_exits / relays.json.network_health.exit_count * 100) }})</span>
                         <span class="metric-label">with Port Restrictions</span>
                     </div>
-                    <div class="metric-item" title="Number and percentage of exit relays that allow web traffic on ports 80 and 443. Essential for basic web browsing functionality.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.web_traffic_exits) }} ({{ "%.1f%%"|format(relays.json.network_health.web_traffic_exits_percentage) }})</span>
+                    <div class="metric-item" title="Number and percentage of exit relays that allow web traffic on ports 80 and 443. Essential for basic web browsing functionality. Percentage calculated based on total exit relays.">
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.web_traffic_exits) }} ({{ "%.1f%%"|format(relays.json.network_health.web_traffic_exits / relays.json.network_health.exit_count * 100) }})</span>
                         <span class="metric-label">allow Web Traffic</span>
                     </div>
                 </div>

@@ -3302,5 +3302,49 @@ class Relays:
             'avg_families_per_as': round(health_metrics['families_count'] / as_count, 1) if as_count > 0 else 0.0
         })
         
+        # Add CW/BW ratio metrics from intelligence engine (same as contact performance insights)
+        if hasattr(self, 'json') and 'smart_context' in self.json:
+            # Extract contact intelligence data which contains network-wide CW/BW ratios
+            contact_intelligence = self.json['smart_context'].get('contact_intelligence', {}).get('template_optimized', {})
+            
+            # Find any contact's data to get the network-wide ratios (all contacts have same network values)
+            network_ratios = {}
+            for contact_hash, contact_data in contact_intelligence.items():
+                if isinstance(contact_data, dict):
+                    # Extract network-wide performance ratios
+                    if 'performance_network_overall_ratio' in contact_data:
+                        network_ratios['overall_ratio_mean'] = contact_data['performance_network_overall_ratio']
+                    if 'performance_network_overall_median' in contact_data:
+                        network_ratios['overall_ratio_median'] = contact_data['performance_network_overall_median']
+                    if 'performance_network_guard_ratio' in contact_data:
+                        network_ratios['guard_ratio_mean'] = contact_data['performance_network_guard_ratio']
+                    if 'performance_network_guard_median' in contact_data:
+                        network_ratios['guard_ratio_median'] = contact_data['performance_network_guard_median']
+                    if 'performance_network_exit_ratio' in contact_data:
+                        network_ratios['exit_ratio_mean'] = contact_data['performance_network_exit_ratio']
+                    if 'performance_network_exit_median' in contact_data:
+                        network_ratios['exit_ratio_median'] = contact_data['performance_network_exit_median']
+                    break  # Only need one contact since all have same network values
+            
+            # Add to health metrics with defaults if not found
+            health_metrics.update({
+                'cw_bw_ratio_overall_mean': network_ratios.get('overall_ratio_mean', '0'),
+                'cw_bw_ratio_overall_median': network_ratios.get('overall_ratio_median', '0'),
+                'cw_bw_ratio_guard_mean': network_ratios.get('guard_ratio_mean', '0'),
+                'cw_bw_ratio_guard_median': network_ratios.get('guard_ratio_median', '0'),
+                'cw_bw_ratio_exit_mean': network_ratios.get('exit_ratio_mean', '0'),
+                'cw_bw_ratio_exit_median': network_ratios.get('exit_ratio_median', '0')
+            })
+        else:
+            # Fallback when smart_context not available
+            health_metrics.update({
+                'cw_bw_ratio_overall_mean': '0',
+                'cw_bw_ratio_overall_median': '0',
+                'cw_bw_ratio_guard_mean': '0',
+                'cw_bw_ratio_guard_median': '0',
+                'cw_bw_ratio_exit_mean': '0',
+                'cw_bw_ratio_exit_median': '0'
+            })
+        
         # Store the complete health metrics
         self.json['network_health'] = health_metrics
