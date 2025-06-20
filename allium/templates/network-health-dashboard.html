@@ -352,7 +352,32 @@ Network Health Dashboard
     <!-- THIRD ROW -->
     <div class="ribbon-row">
         
-        <!-- CARD 7: BANDWIDTH UTILIZATION -->
+        <!-- CARD 7: UNIQUE OPERATING SYSTEMS -->
+        <div class="ribbon-card platform-counts">
+            <div class="card-header">
+                <h4>💻 Unique Operating Systems</h4>
+            </div>
+            <div class="card-metrics">
+                <div class="metric-item primary" title="Number of unique platform strings reported by relays. Shows diversity of operating systems and Tor versions.">
+                    <span class="metric-value">{{ "{:,}".format(relays.json.network_health.unique_platforms_count) }}</span>
+                    <span class="metric-label">Unique Operating Systems</span>
+                </div>
+                <div class="metric-grid">
+                    {% for platform, count, percentage in relays.json.network_health.platform_top3 %}
+                    <div class="metric-item" title="Number of relays running {{ platform }}. Top platforms by relay count.">
+                        <span class="metric-value">{{ "{:,}".format(count) }} ({{ "%.0f%%"|format(percentage) }})</span>
+                        <span class="metric-label">{{ platform }}</span>
+                    </div>
+                    {% endfor %}
+                    <div class="metric-item" title="Number of relays running all other platforms combined.">
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.platform_others) }} ({{ "%.0f%%"|format(relays.json.network_health.platform_others_percentage) }})</span>
+                        <span class="metric-label">Others</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- CARD 8: BANDWIDTH UTILIZATION -->
         <div class="ribbon-card bandwidth-utilization">
             <div class="card-header">
                 <h4>📈 Bandwidth Utilization</h4>
@@ -399,7 +424,7 @@ Network Health Dashboard
             </div>
         </div>
         
-        <!-- CARD 8: VERSION COMPLIANCE -->
+        <!-- CARD 9: VERSION COMPLIANCE -->
         <div class="ribbon-card version-compliance">
             <div class="card-header">
                 <h4>🔄 Version Compliance</h4>
@@ -425,31 +450,6 @@ Network Health Dashboard
                     <div class="metric-item" title="Number of relays running outdated or unrecommended Tor versions. Should be upgraded for security.">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.outdated_count) }} ({{ "%.1f%%"|format(relays.json.network_health.outdated_percentage) }})</span>
                         <span class="metric-label">Outdated</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- CARD 9: UNIQUE OPERATING SYSTEMS -->
-        <div class="ribbon-card platform-counts">
-            <div class="card-header">
-                <h4>💻 Unique Operating Systems</h4>
-            </div>
-            <div class="card-metrics">
-                <div class="metric-item primary" title="Number of unique platform strings reported by relays. Shows diversity of operating systems and Tor versions.">
-                    <span class="metric-value">{{ "{:,}".format(relays.json.network_health.unique_platforms_count) }}</span>
-                    <span class="metric-label">Unique Operating Systems</span>
-                </div>
-                <div class="metric-grid">
-                    {% for platform, count, percentage in relays.json.network_health.platform_top3 %}
-                    <div class="metric-item" title="Number of relays running {{ platform }}. Top platforms by relay count.">
-                        <span class="metric-value">{{ "{:,}".format(count) }} ({{ "%.0f%%"|format(percentage) }})</span>
-                        <span class="metric-label">{{ platform }}</span>
-                    </div>
-                    {% endfor %}
-                    <div class="metric-item" title="Number of relays running all other platforms combined.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.platform_others) }} ({{ "%.0f%%"|format(relays.json.network_health.platform_others_percentage) }})</span>
-                        <span class="metric-label">Others</span>
                     </div>
                 </div>
             </div>
