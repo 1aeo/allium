@@ -2,7 +2,7 @@
 {% extends "skeleton.html" -%}
 
 {% block title -%}
-🏥 Network Health Dashboard
+Network Health Dashboard
 {% endblock -%}
 
 {% block body -%}
@@ -14,7 +14,7 @@
 
 {{ navigation('network_health', page_ctx) }}
 
-<!-- COMPACT RIBBON DASHBOARD -->
+<!-- COMPREHENSIVE HEALTH DASHBOARD -->
 <div class="network-health-ribbon">
     
     <!-- FIRST ROW -->
@@ -26,32 +26,62 @@
                 <h4>📊 Relay Counts</h4>
             </div>
             <div class="card-metrics">
-                <div class="metric-item primary">
+                <div class="metric-item primary" title="Total number of Tor relays currently running in the network. Calculated by counting all active relays from Onionoo API.">
                     <span class="metric-value"><a href="{{ page_ctx.path_prefix }}misc/all.html" style="color: inherit; text-decoration: none;">{{ "{:,}".format(relays.json.network_health.relays_total) }}</a></span>
                     <span class="metric-label">Total Relays</span>
                 </div>
                 <div class="metric-grid">
-                    <div class="metric-item">
+                    <div class="metric-item" title="Exit relays allow traffic to leave the Tor network to the regular internet. Classified by Exit flag priority.">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.exit_count) }}</span>
                         <span class="metric-label">Exit</span>
                     </div>
-                    <div class="metric-item">
+                    <div class="metric-item" title="Guard relays are the first hop in Tor circuits. Classified by Guard flag when not Exit.">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.guard_count) }}</span>
                         <span class="metric-label">Guard</span>
                     </div>
-                    <div class="metric-item">
+                    <div class="metric-item" title="Middle relays forward traffic between other relays. Relays without Exit or Guard flags.">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.middle_count) }}</span>
                         <span class="metric-label">Middle</span>
                     </div>
-                    <div class="metric-item">
+                    <div class="metric-item" title="Directory authorities coordinate the Tor network consensus. Critical infrastructure nodes.">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.authorities_count) }}</span>
                         <span class="metric-label">Authorities</span>
                     </div>
                 </div>
-                <div class="metric-grid" style="grid-template-columns: 1fr; margin-top: 5px;">
-                    <div class="metric-item">
+                <div class="metric-grid">
+                    <div class="metric-item" title="Relays flagged as BadExit by directory authorities due to malicious behavior or policy violations.">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.bad_exits_count) }}</span>
                         <span class="metric-label">Bad Relays</span>
+                    </div>
+                    <div class="metric-item" title="Relays not currently running according to the latest consensus. Calculated from running=false in Onionoo.">
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.offline_relays) }}</span>
+                        <span class="metric-label">Offline</span>
+                    </div>
+                    <div class="metric-item" title="Relays reporting overload conditions like memory pressure, CPU exhaustion, or TCP port limits.">
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.overloaded_relays) }}</span>
+                        <span class="metric-label">Overloaded</span>
+                    </div>
+                    <div class="metric-item" title="Relays in hibernation mode, typically due to reaching bandwidth accounting limits.">
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.hibernating_relays) }}</span>
+                        <span class="metric-label">Hibernating</span>
+                    </div>
+                </div>
+                <div class="metric-grid">
+                    <div class="metric-item" title="New relays that first appeared in the network in the last 24 hours based on first_seen timestamp.">
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.new_relays_24h) }}</span>
+                        <span class="metric-label">New (24h)</span>
+                    </div>
+                    <div class="metric-item" title="New relays that first appeared in the network in the last 30 days based on first_seen timestamp.">
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.new_relays_30d) }}</span>
+                        <span class="metric-label">New (30d)</span>
+                    </div>
+                    <div class="metric-item" title="New relays that first appeared in the network in the last 6 months based on first_seen timestamp.">
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.new_relays_6m) }}</span>
+                        <span class="metric-label">New (6m)</span>
+                    </div>
+                    <div class="metric-item" title="Percentage of relays whose bandwidth is measured and verified by bandwidth authorities.">
+                        <span class="metric-value">{{ "%.1f%%"|format(relays.json.network_health.measured_percentage) }}</span>
+                        <span class="metric-label">Measured</span>
                     </div>
                 </div>
             </div>
@@ -63,22 +93,32 @@
                 <h4>⚡ Bandwidth Counts</h4>
             </div>
             <div class="card-metrics">
-                <div class="metric-item primary">
+                <div class="metric-item primary" title="Total observed bandwidth capacity across all relays. Sum of observed_bandwidth from all active relays.">
                     <span class="metric-value">{{ relays.json.network_health.total_bandwidth_formatted }}</span>
                     <span class="metric-label">Total Bandwidth</span>
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
-                    <div class="metric-item">
+                    <div class="metric-item" title="Total observed bandwidth of all Exit relays. Critical for network's ability to serve user traffic.">
                         <span class="metric-value">{{ relays.json.network_health.exit_bandwidth_formatted }}</span>
                         <span class="metric-label">Exit BW</span>
                     </div>
-                    <div class="metric-item">
+                    <div class="metric-item" title="Total observed bandwidth of all Guard relays. Important for network entry capacity.">
                         <span class="metric-value">{{ relays.json.network_health.guard_bandwidth_formatted }}</span>
                         <span class="metric-label">Guard BW</span>
                     </div>
-                    <div class="metric-item">
+                    <div class="metric-item" title="Total observed bandwidth of all Middle relays. Provides internal network relay capacity.">
                         <span class="metric-value">{{ relays.json.network_health.middle_bandwidth_formatted }}</span>
                         <span class="metric-label">Middle BW</span>
+                    </div>
+                </div>
+                <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
+                    <div class="metric-item" title="Average difference between observed and advertised bandwidth. Indicates relay capacity accuracy.">
+                        <span class="metric-value">{{ "{:,.0f}".format(relays.json.network_health.avg_observed_advertised_diff) }} KB/s</span>
+                        <span class="metric-label">Obs/Adv Diff</span>
+                    </div>
+                    <div class="metric-item" title="Number and percentage of relays with bandwidth measured by directory authorities for accuracy.">
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.measured_relays) }} ({{ "%.1f%%"|format(relays.json.network_health.measured_percentage) }})</span>
+                        <span class="metric-label">Measured Relays</span>
                     </div>
                 </div>
             </div>
@@ -90,26 +130,40 @@
                 <h4>⏰ Relay Uptime</h4>
             </div>
             <div class="card-metrics">
-                <div class="metric-item primary">
+                <div class="metric-item primary" title="Average uptime percentage across all relays over the last 6 months. Higher is better for network stability.">
                     <span class="metric-value">{{ "%.1f%%"|format(relays.json.network_health.overall_uptime) }}</span>
                     <span class="metric-label">Overall Uptime</span>
                 </div>
                 <div class="metric-grid">
-                    <div class="metric-item">
+                    <div class="metric-item" title="Average uptime of Exit relays over 6 months. Critical for user experience and connection reliability.">
                         <span class="metric-value">{{ "%.1f%%"|format(relays.json.network_health.exit_uptime) }}</span>
                         <span class="metric-label">Exit Uptime</span>
                     </div>
-                    <div class="metric-item">
+                    <div class="metric-item" title="Average uptime of Guard relays over 6 months. Important for initial connection stability.">
                         <span class="metric-value">{{ "%.1f%%"|format(relays.json.network_health.guard_uptime) }}</span>
                         <span class="metric-label">Guard Uptime</span>
                     </div>
-                    <div class="metric-item">
+                    <div class="metric-item" title="Average uptime of Middle relays over 6 months. Affects overall network reliability.">
                         <span class="metric-value">{{ "%.1f%%"|format(relays.json.network_health.middle_uptime) }}</span>
                         <span class="metric-label">Middle Uptime</span>
                     </div>
-                    <div class="metric-item">
+                    <div class="metric-item" title="Average uptime of relays flagged as BadExit. Usually lower due to operational issues.">
                         <span class="metric-value">{{ "%.1f%%"|format(relays.json.network_health.bad_relay_uptime) }}</span>
                         <span class="metric-label">Bad Relay Uptime</span>
+                    </div>
+                </div>
+                <div class="metric-grid" style="grid-template-columns: repeat(4, 1fr);">
+                    <div class="metric-item" title="Exit relay uptime over 1 month, 6 months, 1 year, and 5 years respectively.">
+                        <span class="metric-value">{{ "%.1f"|format(relays.json.network_health.exit_uptime_1_month) }}% | {{ "%.1f"|format(relays.json.network_health.exit_uptime_6_months) }}% | {{ "%.1f"|format(relays.json.network_health.exit_uptime_1_year) }}% | {{ "%.1f"|format(relays.json.network_health.exit_uptime_5_years) }}%</span>
+                        <span class="metric-label">Exit: 1M|6M|1Y|5Y</span>
+                    </div>
+                    <div class="metric-item" title="Guard relay uptime over 1 month, 6 months, 1 year, and 5 years respectively.">
+                        <span class="metric-value">{{ "%.1f"|format(relays.json.network_health.guard_uptime_1_month) }}% | {{ "%.1f"|format(relays.json.network_health.guard_uptime_6_months) }}% | {{ "%.1f"|format(relays.json.network_health.guard_uptime_1_year) }}% | {{ "%.1f"|format(relays.json.network_health.guard_uptime_5_years) }}%</span>
+                        <span class="metric-label">Guard: 1M|6M|1Y|5Y</span>
+                    </div>
+                    <div class="metric-item" title="Middle relay uptime over 1 month, 6 months, 1 year, and 5 years respectively.">
+                        <span class="metric-value">{{ "%.1f"|format(relays.json.network_health.middle_uptime_1_month) }}% | {{ "%.1f"|format(relays.json.network_health.middle_uptime_6_months) }}% | {{ "%.1f"|format(relays.json.network_health.middle_uptime_1_year) }}% | {{ "%.1f"|format(relays.json.network_health.middle_uptime_5_years) }}%</span>
+                        <span class="metric-label">Middle: 1M|6M|1Y|5Y</span>
                     </div>
                 </div>
             </div>
@@ -126,24 +180,24 @@
                 <h4>👥 Operator Participation</h4>
             </div>
             <div class="card-metrics">
-                <div class="metric-item primary">
+                <div class="metric-item primary" title="Unique AROI (Autonomous Relay Operator Identifiers) - distinct operators running relays. Higher diversity is better for decentralization.">
                     <span class="metric-value"><a href="{{ page_ctx.path_prefix }}misc/contacts-by-bandwidth.html" style="color: inherit; text-decoration: none;">{{ "{:,}".format(relays.json.network_health.aroi_operators_count) }}</a></span>
                     <span class="metric-label">Unique AROI</span>
                 </div>
                 <div class="metric-grid">
-                    <div class="metric-item">
+                    <div class="metric-item" title="Relay families - groups of relays operated by the same entity. Prevents clients from using multiple relays from same operator.">
                         <span class="metric-value"><a href="{{ page_ctx.path_prefix }}misc/families-by-bandwidth.html" style="color: inherit; text-decoration: none;">{{ "{:,}".format(relays.json.network_health.families_count) }}</a></span>
                         <span class="metric-label">Families</span>
                     </div>
-                    <div class="metric-item">
+                    <div class="metric-item" title="Unique contact addresses provided by relay operators. Important for network communication and accountability.">
                         <span class="metric-value"><a href="{{ page_ctx.path_prefix }}misc/contacts-by-bandwidth.html" style="color: inherit; text-decoration: none;">{{ "{:,}".format(relays.json.network_health.unique_contacts_count) }}</a></span>
                         <span class="metric-label">Contacts</span>
                     </div>
-                    <div class="metric-item">
+                    <div class="metric-item" title="Relays with family configuration vs those without. Family configuration helps prevent path selection issues.">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.relays_with_family) }} | {{ "{:,}".format(relays.json.network_health.relays_without_family) }}</span>
                         <span class="metric-label">With | Without Family</span>
                     </div>
-                    <div class="metric-item">
+                    <div class="metric-item" title="Relays with contact information vs those without. Contact info helps with network administration and abuse handling.">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.relays_with_contact) }} | {{ "{:,}".format(relays.json.network_health.relays_without_contact) }}</span>
                         <span class="metric-label">With | Without Contact</span>
                     </div>
@@ -157,16 +211,16 @@
                 <h4>🌍 Geographic Participation</h4>
             </div>
             <div class="card-metrics">
-                <div class="metric-item primary">
+                <div class="metric-item primary" title="Number of countries hosting Tor relays. Higher geographic diversity improves censorship resistance and network resilience.">
                     <span class="metric-value"><a href="{{ page_ctx.path_prefix }}misc/countries-by-bandwidth.html" style="color: inherit; text-decoration: none;">{{ "{:,}".format(relays.json.network_health.countries_count) }}</a></span>
                     <span class="metric-label">Unique Countries</span>
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
-                    <div class="metric-item">
+                    <div class="metric-item" title="Relays in European Union countries vs non-EU countries. Shows geographic distribution and political diversity.">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.eu_relays_count) }} | {{ "{:,}".format(relays.json.network_health.non_eu_relays_count) }}</span>
                         <span class="metric-label">EU | Non-EU Relays</span>
                     </div>
-                    <div class="metric-item">
+                    <div class="metric-item" title="Relays in rare/frontier countries with few relays. Important for global accessibility and censorship circumvention.">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.rare_countries_relays) }}</span>
                         <span class="metric-label">Rare Country Relays</span>
                     </div>
@@ -180,22 +234,110 @@
                 <h4>🏢 Provider Participation</h4>
             </div>
             <div class="card-metrics">
-                <div class="metric-item primary">
+                <div class="metric-item primary" title="Unique Autonomous Systems hosting relays. Higher AS diversity reduces single points of failure and improves network resilience.">
                     <span class="metric-value"><a href="{{ page_ctx.path_prefix }}misc/networks-by-bandwidth.html" style="color: inherit; text-decoration: none;">{{ "{:,}".format(relays.json.network_health.unique_as_count) }}</a></span>
                     <span class="metric-label">Unique AS</span>
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
-                    <div class="metric-item">
+                    <div class="metric-item" title="Average number of Autonomous Systems per country. Indicates infrastructure diversity within countries.">
                         <span class="metric-value">{{ relays.json.network_health.avg_as_per_country }}</span>
                         <span class="metric-label">Avg AS/Country</span>
                     </div>
-                    <div class="metric-item">
+                    <div class="metric-item" title="Average number of AROI operators per Autonomous System. Shows operator distribution across providers.">
                         <span class="metric-value">{{ relays.json.network_health.avg_aroi_per_as }}</span>
                         <span class="metric-label">Avg AROI/AS</span>
                     </div>
-                    <div class="metric-item">
+                    <div class="metric-item" title="Average number of relay families per Autonomous System. Indicates family distribution across providers.">
                         <span class="metric-value">{{ relays.json.network_health.avg_families_per_as }}</span>
                         <span class="metric-label">Avg Families/AS</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+    
+    <!-- THIRD ROW -->
+    <div class="ribbon-row">
+        
+        <!-- CARD 7: PLATFORM COUNTS -->
+        <div class="ribbon-card platform-counts">
+            <div class="card-header">
+                <h4>💻 Platform Counts</h4>
+            </div>
+            <div class="card-metrics">
+                <div class="metric-item primary" title="Number of unique platform strings reported by relays. Shows diversity of operating systems and Tor versions.">
+                    <span class="metric-value">{{ "{:,}".format(relays.json.network_health.unique_platforms_count) }}</span>
+                    <span class="metric-label">Unique Platforms</span>
+                </div>
+                <div class="metric-grid">
+                    {% for platform, count in relays.json.network_health.platform_top3 %}
+                    <div class="metric-item" title="Number of relays running {{ platform }}. Top platforms by relay count.">
+                        <span class="metric-value">{{ "{:,}".format(count) }}</span>
+                        <span class="metric-label">{{ platform }}</span>
+                    </div>
+                    {% endfor %}
+                    <div class="metric-item" title="Number of relays running all other platforms combined.">
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.platform_others) }}</span>
+                        <span class="metric-label">Others</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- CARD 8: BANDWIDTH UTILIZATION -->
+        <div class="ribbon-card bandwidth-utilization">
+            <div class="card-header">
+                <h4>📈 Bandwidth Utilization</h4>
+            </div>
+            <div class="card-metrics">
+                <div class="metric-item primary" title="Overall ratio of consensus weight to bandwidth across the network. Indicates how efficiently bandwidth is being utilized.">
+                    <span class="metric-value">{{ "%.3f"|format(relays.json.network_health.consensus_weight_bandwidth_ratio) }}</span>
+                    <span class="metric-label">Overall CW/BW Ratio</span>
+                </div>
+                <div class="metric-grid">
+                    <div class="metric-item" title="Exit relay consensus weight to bandwidth ratio. Average per relay | Median per relay.">
+                        <span class="metric-value">{{ "%.3f"|format(relays.json.network_health.exit_cw_bw_avg) }} | {{ "%.3f"|format(relays.json.network_health.exit_cw_bw_median) }}</span>
+                        <span class="metric-label">Exit CW/BW Avg|Med</span>
+                    </div>
+                    <div class="metric-item" title="Guard relay consensus weight to bandwidth ratio. Average per relay | Median per relay.">
+                        <span class="metric-value">{{ "%.3f"|format(relays.json.network_health.guard_cw_bw_avg) }} | {{ "%.3f"|format(relays.json.network_health.guard_cw_bw_median) }}</span>
+                        <span class="metric-label">Guard CW/BW Avg|Med</span>
+                    </div>
+                    <div class="metric-item" title="Middle relay consensus weight to bandwidth ratio. Average per relay | Median per relay.">
+                        <span class="metric-value">{{ "%.3f"|format(relays.json.network_health.middle_cw_bw_avg) }} | {{ "%.3f"|format(relays.json.network_health.middle_cw_bw_median) }}</span>
+                        <span class="metric-label">Middle CW/BW Avg|Med</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- CARD 9: VERSION COMPLIANCE -->
+        <div class="ribbon-card version-compliance">
+            <div class="card-header">
+                <h4>🔄 Version Compliance</h4>
+            </div>
+            <div class="card-metrics">
+                <div class="metric-item primary" title="Percentage of relays running Tor versions recommended by directory authorities. Higher is better for security.">
+                    <span class="metric-value">{{ "%.1f%%"|format(relays.json.network_health.recommended_version_percentage) }}</span>
+                    <span class="metric-label">Recommended Version %</span>
+                </div>
+                <div class="metric-grid">
+                    <div class="metric-item" title="Number of relays not running recommended Tor versions. May have security vulnerabilities.">
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.not_recommended_count) }}</span>
+                        <span class="metric-label">Not Recommended</span>
+                    </div>
+                    <div class="metric-item" title="Number of relays running experimental Tor versions. Newer than recommended versions.">
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.experimental_count) }}</span>
+                        <span class="metric-label">Experimental</span>
+                    </div>
+                    <div class="metric-item" title="Number of relays running obsolete Tor versions. Older than all recommended versions.">
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.obsolete_count) }}</span>
+                        <span class="metric-label">Obsolete</span>
+                    </div>
+                    <div class="metric-item" title="Number of relays running outdated or unrecommended Tor versions. Should be upgraded for security.">
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.outdated_count) }}</span>
+                        <span class="metric-label">Outdated</span>
                     </div>
                 </div>
             </div>
