@@ -150,40 +150,40 @@ Network Health Dashboard
                 <h4>⏰ Relay Uptime</h4>
             </div>
             <div class="card-metrics">
-                <div class="metric-item primary" title="Average uptime percentage across all relays over the last month. Higher is better for network stability. 1M Mean by category: Exit {{ "%.1f%%"|format(relays.json.network_health.exit_uptime_1_month_mean) }}, Guard {{ "%.1f%%"|format(relays.json.network_health.guard_uptime_1_month_mean) }}, Middle {{ "%.1f%%"|format(relays.json.network_health.middle_uptime_1_month_mean) }}, Other {{ "%.1f%%"|format(relays.json.network_health.other_uptime_1_month_mean) }}.">
+                <div class="metric-item primary" title="Average uptime percentage across all relays over the last month. Higher is better for network stability. 1mo Mean by category: Exit {{ "%.1f%%"|format(relays.json.network_health.exit_uptime_1_month_mean) }}, Guard {{ "%.1f%%"|format(relays.json.network_health.guard_uptime_1_month_mean) }}, Middle {{ "%.1f%%"|format(relays.json.network_health.middle_uptime_1_month_mean) }}, Other {{ "%.1f%%"|format(relays.json.network_health.other_uptime_1_month_mean) }}.">
                     <span class="metric-value">{{ "%.1f%%"|format(relays.json.network_health.overall_uptime) }}</span>
-                    <span class="metric-label">Overall Uptime (1M Mean)</span>
+                    <span class="metric-label">Overall Uptime (1mo Mean)</span>
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
                     <div class="metric-item" title="Mean and median uptime of Exit relays over 1 month. Critical for user experience and connection reliability.">
                         <span class="metric-value">{{ "%.1f"|format(relays.json.network_health.exit_uptime_1_month_mean) }}% | {{ "%.1f"|format(relays.json.network_health.exit_uptime_1_month_median) }}%</span>
-                        <span class="metric-label">Exit 1M (Mean | Median)</span>
+                        <span class="metric-label">Exit 1mo (Mean | Median)</span>
                     </div>
                     <div class="metric-item" title="Mean and median uptime of Guard relays over 1 month. Important for initial connection stability.">
                         <span class="metric-value">{{ "%.1f"|format(relays.json.network_health.guard_uptime_1_month_mean) }}% | {{ "%.1f"|format(relays.json.network_health.guard_uptime_1_month_median) }}%</span>
-                        <span class="metric-label">Guard 1M (Mean | Median)</span>
+                        <span class="metric-label">Guard 1mo (Mean | Median)</span>
                     </div>
                     <div class="metric-item" title="Mean and median uptime of Middle relays over 1 month. Affects overall network reliability.">
                         <span class="metric-value">{{ "%.1f"|format(relays.json.network_health.middle_uptime_1_month_mean) }}% | {{ "%.1f"|format(relays.json.network_health.middle_uptime_1_month_median) }}%</span>
-                        <span class="metric-label">Middle 1M (Mean | Median)</span>
+                        <span class="metric-label">Middle 1mo (Mean | Median)</span>
                     </div>
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(1, 1fr);">
                     <div class="metric-item" title="Exit relay uptime over 1 month, 6 months, 1 year, and 5 years respectively.">
                         <span class="metric-value">{{ "%.1f"|format(relays.json.network_health.exit_uptime_1_month) }}% | {{ "%.1f"|format(relays.json.network_health.exit_uptime_mean) }}% | {{ "%.1f"|format(relays.json.network_health.exit_uptime_1_year) }}% | {{ "%.1f"|format(relays.json.network_health.exit_uptime_5_years) }}%</span>
-                        <span class="metric-label">Exit: 1M | 6M | 1Y | 5Y (Mean)</span>
+                        <span class="metric-label">Exit: 1mo | 6mo | 1y | 5y (Mean)</span>
                     </div>
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(1, 1fr);">
                     <div class="metric-item" title="Guard relay uptime over 1 month, 6 months, 1 year, and 5 years respectively.">
                         <span class="metric-value">{{ "%.1f"|format(relays.json.network_health.guard_uptime_1_month) }}% | {{ "%.1f"|format(relays.json.network_health.guard_uptime_mean) }}% | {{ "%.1f"|format(relays.json.network_health.guard_uptime_1_year) }}% | {{ "%.1f"|format(relays.json.network_health.guard_uptime_5_years) }}%</span>
-                        <span class="metric-label">Guard: 1M | 6M | 1Y | 5Y (Mean)</span>
+                        <span class="metric-label">Guard: 1mo | 6mo | 1y | 5y (Mean)</span>
                     </div>
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(1, 1fr);">
                     <div class="metric-item" title="Middle relay uptime over 1 month, 6 months, 1 year, and 5 years respectively.">
                         <span class="metric-value">{{ "%.1f"|format(relays.json.network_health.middle_uptime_1_month) }}% | {{ "%.1f"|format(relays.json.network_health.middle_uptime_mean) }}% | {{ "%.1f"|format(relays.json.network_health.middle_uptime_1_year) }}% | {{ "%.1f"|format(relays.json.network_health.middle_uptime_5_years) }}%</span>
-                        <span class="metric-label">Middle: 1M | 6M | 1Y | 5Y (Mean)</span>
+                        <span class="metric-label">Middle: 1mo | 6mo | 1y | 5y (Mean)</span>
                     </div>
                 </div>
             </div>
