@@ -2880,9 +2880,9 @@ class Relays:
             'eu_relays_count': eu_relays,
             'non_eu_relays_count': non_eu_relays,
             'rare_countries_relays': rare_countries_relays,
-            'eu_relays_percentage': (eu_relays / total_relays * 100) if total_relays > 0 else 0.0,
-            'non_eu_relays_percentage': (non_eu_relays / total_relays * 100) if total_relays > 0 else 0.0,
-            'rare_countries_relays_percentage': (rare_countries_relays / total_relays * 100) if total_relays > 0 else 0.0
+            'eu_relays_percentage': (eu_relays / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
+            'non_eu_relays_percentage': (non_eu_relays / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
+            'rare_countries_relays_percentage': (rare_countries_relays / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0
         })
         
         # Platform metrics with percentages
