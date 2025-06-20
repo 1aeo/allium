@@ -429,6 +429,24 @@ class IntelligenceEngine:
         """Layer 14: Contact-specific intelligence for Phase 1 + Phase 2 features"""
         contact_intelligence = {}
         
+        # Get network totals from pre-calculated values (performance optimization)
+        # This eliminates 5 expensive loops per contact (was recalculating network totals every time)
+        network_total_bandwidth = self.network_totals.get('total_network_bandwidth', 0)
+        guard_network_bandwidth = self.network_totals.get('total_guard_bandwidth', 0)
+        exit_network_bandwidth = self.network_totals.get('total_exit_bandwidth', 0)
+        network_total_consensus_weight = (
+            self.network_totals.get('guard_consensus_weight', 0) + 
+            self.network_totals.get('middle_consensus_weight', 0) + 
+            self.network_totals.get('exit_consensus_weight', 0)
+        )
+        guard_network_consensus_weight = self.network_totals.get('guard_consensus_weight', 0)
+        exit_network_consensus_weight = self.network_totals.get('exit_consensus_weight', 0)
+        
+        # Calculate network ratios once (instead of per contact - major performance gain)
+        overall_network_ratio = network_total_consensus_weight / network_total_bandwidth * 1000000 if network_total_bandwidth > 0 else 0.0
+        guard_network_ratio = guard_network_consensus_weight / guard_network_bandwidth * 1000000 if guard_network_bandwidth > 0 else 0.0
+        exit_network_ratio = exit_network_consensus_weight / exit_network_bandwidth * 1000000 if exit_network_bandwidth > 0 else 0.0
+        
         # Get underutilized fingerprints for performance analysis (reuse existing calculation)
         underutilized_fingerprints = set()
         for relay in self.relays:
@@ -437,6 +455,54 @@ class IntelligenceEngine:
             if bandwidth > 10000000 and consensus_weight < bandwidth * 0.0000005:  # Same criteria as layer 7
                 underutilized_fingerprints.add(relay.get('fingerprint', ''))
         
+        # Pre-calculate network-wide relay ratios for percentile calculations (performance optimization)
+        # This avoids recalculating the same ratios for every contact
+        all_relay_ratios = []
+        guard_relay_ratios = []
+        exit_relay_ratios = []
+        
+        for relay in self.relays:
+            bandwidth = relay.get('observed_bandwidth', 0)
+            consensus_weight = relay.get('consensus_weight', 0)
+            flags = relay.get('flags', [])
+            
+            if bandwidth > 0:  # Only include relays with bandwidth
+                ratio = consensus_weight / bandwidth * 1000000
+                all_relay_ratios.append(ratio)
+                
+                if 'Guard' in flags:
+                    guard_relay_ratios.append(ratio)
+                if 'Exit' in flags:
+                    exit_relay_ratios.append(ratio)
+        
+        # Sort once for all percentile calculations
+        all_relay_ratios.sort()
+        guard_relay_ratios.sort()
+        exit_relay_ratios.sort()
+        
+        # Calculate medians for network ratios
+        def calculate_median(sorted_list):
+            if not sorted_list:
+                return 0
+            n = len(sorted_list)
+            if n % 2 == 0:
+                return (sorted_list[n//2 - 1] + sorted_list[n//2]) / 2
+            else:
+                return sorted_list[n//2]
+        
+        overall_network_median = calculate_median(all_relay_ratios)
+        guard_network_median = calculate_median(guard_relay_ratios)
+        exit_network_median = calculate_median(exit_relay_ratios)
+        
+        # Helper function for percentile calculation
+        def calculate_percentile_rank(value, sorted_ratio_list):
+            if not sorted_ratio_list or value == 0:
+                return 0
+            # Find how many ratios are below this value
+            below_count = sum(1 for r in sorted_ratio_list if r < value)
+            # Calculate percentile rank
+            percentile = (below_count / len(sorted_ratio_list)) * 100
+            return max(1, min(99, round(percentile)))  # Cap between 1-99
 
         
         # Process each contact
@@ -495,22 +561,49 @@ class IntelligenceEngine:
                 
                 geo_risk = f"{geo_rating}, {country_count} countr{'y' if country_count == 1 else 'ies'}"
                 
-                # 5. Performance Insights
+                # 5. Performance Insights - CW/BW ratio calculations
                 contact_fingerprints = [relay.get('fingerprint') for relay in contact_relays if relay.get('fingerprint')]
                 underutilized_count = sum(1 for fp in contact_fingerprints if fp in underutilized_fingerprints)
+                
+                # Calculate underutilized percentage (reuse existing total_relays calculation)
+                underutilized_percentage = round((underutilized_count / total_relays * 100)) if total_relays > 0 else 0
                 
                 # Get top 2 underutilized relay fingerprints for this contact
                 contact_underutilized_fps = [fp for fp in contact_fingerprints if fp in underutilized_fingerprints][:2]
                 
-                if total_relays > 0:
-                    if underutilized_count == 0:
-                        perf_status = "optimal efficiency"
-                    elif underutilized_count == total_relays:
-                        perf_status = "needs optimization"
-                    else:
-                        perf_status = "mixed performance"
-                else:
-                    perf_status = "no data"
+                # Calculate operator CW/BW ratio and position-specific ratios
+                total_operator_bandwidth = sum(relay.get('observed_bandwidth', 0) for relay in contact_relays)
+                total_operator_consensus_weight = sum(relay.get('consensus_weight', 0) for relay in contact_relays)
+                
+                # Calculate operator position-specific bandwidth and consensus weight
+                operator_guard_bandwidth = 0
+                operator_guard_consensus_weight = 0
+                operator_exit_bandwidth = 0
+                operator_exit_consensus_weight = 0
+                
+                for relay in contact_relays:
+                    flags = relay.get('flags', [])
+                    bandwidth = relay.get('observed_bandwidth', 0)
+                    consensus_weight = relay.get('consensus_weight', 0)
+                    
+                    if 'Guard' in flags:
+                        operator_guard_bandwidth += bandwidth
+                        operator_guard_consensus_weight += consensus_weight
+                    if 'Exit' in flags:
+                        operator_exit_bandwidth += bandwidth
+                        operator_exit_consensus_weight += consensus_weight
+                
+                # Calculate operator ratios
+                operator_overall_ratio = total_operator_consensus_weight / total_operator_bandwidth * 1000000 if total_operator_bandwidth > 0 else 0.0
+                operator_guard_ratio = operator_guard_consensus_weight / operator_guard_bandwidth * 1000000 if operator_guard_bandwidth > 0 else 0.0
+                operator_exit_ratio = operator_exit_consensus_weight / operator_exit_bandwidth * 1000000 if operator_exit_bandwidth > 0 else 0.0
+                
+                # Use pre-calculated network ratios (performance optimization - eliminates 5 loops per contact)
+                
+                # Calculate real percentiles using pre-calculated network ratios (optimized)
+                operator_overall_pct = calculate_percentile_rank(operator_overall_ratio, all_relay_ratios)
+                operator_guard_pct = calculate_percentile_rank(operator_guard_ratio, guard_relay_ratios) if operator_guard_ratio > 0 else None
+                operator_exit_pct = calculate_percentile_rank(operator_exit_ratio, exit_relay_ratios) if operator_exit_ratio > 0 else None
                 
                 # 6. Infrastructure Diversity Analysis (with consistent rating)
                 platforms = set(relay.get('platform') for relay in contact_relays if relay.get('platform'))
@@ -554,8 +647,21 @@ class IntelligenceEngine:
                     'geographic_countries': country_count,
                     'geographic_risk': geo_risk,
                     'performance_underutilized': underutilized_count,
+                    'performance_underutilized_percentage': underutilized_percentage,
                     'performance_underutilized_fps': contact_underutilized_fps,
-                    'performance_status': perf_status,
+                    'performance_operator_overall_ratio': f"{operator_overall_ratio:.0f}",
+                    'performance_operator_guard_ratio': f"{operator_guard_ratio:.0f}" if operator_guard_ratio > 0 else None,
+                    'performance_operator_exit_ratio': f"{operator_exit_ratio:.0f}" if operator_exit_ratio > 0 else None,
+                    'performance_network_overall_ratio': f"{overall_network_ratio:.0f}",
+                    'performance_network_guard_ratio': f"{guard_network_ratio:.0f}",
+                    'performance_network_exit_ratio': f"{exit_network_ratio:.0f}",
+                    'performance_network_overall_median': f"{overall_network_median:.0f}",
+                    'performance_network_guard_median': f"{guard_network_median:.0f}",
+                    'performance_network_exit_median': f"{exit_network_median:.0f}",
+                    'performance_operator_overall_pct': operator_overall_pct,
+                    'performance_operator_guard_pct': operator_guard_pct if operator_guard_ratio > 0 else None,
+                    'performance_operator_exit_pct': operator_exit_pct if operator_exit_ratio > 0 else None,
+                    'performance_relay_count': len(all_relay_ratios),
                     'infrastructure_platforms': platform_count,
                     'infrastructure_versions': version_count,
                     'infrastructure_risk': infra_risk,

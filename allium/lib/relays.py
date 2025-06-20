@@ -735,12 +735,18 @@ class Relays:
         total_middle_cw = 0  
         total_exit_cw = 0
         
+        # Bandwidth totals (for CW/BW ratio calculations - optimization for intelligence_engine.py)
+        total_network_bandwidth = 0
+        total_guard_bandwidth = 0
+        total_exit_bandwidth = 0
+        
         # Bandwidth measured tracking
         measured_relays = 0
         
         for relay in self.json['relays']:
             flags = relay.get('flags', [])
             consensus_weight = relay.get('consensus_weight', 0)
+            observed_bandwidth = relay.get('observed_bandwidth', 0)
             
             is_guard = 'Guard' in flags
             is_exit = 'Exit' in flags
@@ -748,6 +754,13 @@ class Relays:
             # Count relays measured by >= 3 bandwidth authorities
             if relay.get('measured') is True:
                 measured_relays += 1
+            
+            # Bandwidth totals (new - for performance optimization)
+            total_network_bandwidth += observed_bandwidth
+            if is_guard:
+                total_guard_bandwidth += observed_bandwidth
+            if is_exit:
+                total_exit_bandwidth += observed_bandwidth
             
             # Consensus weight calculations (existing logic - matches primary role assignment)
             if is_exit:
@@ -809,7 +822,12 @@ class Relays:
             # Consensus weights (unchanged)
             'guard_consensus_weight': total_guard_cw,
             'middle_consensus_weight': total_middle_cw,
-            'exit_consensus_weight': total_exit_cw
+            'exit_consensus_weight': total_exit_cw,
+            
+            # Bandwidth totals (new - for CW/BW ratio performance optimization)
+            'total_network_bandwidth': total_network_bandwidth,
+            'total_guard_bandwidth': total_guard_bandwidth,
+            'total_exit_bandwidth': total_exit_bandwidth
         }
         
         return total_guard_cw, total_middle_cw, total_exit_cw
@@ -1953,7 +1971,22 @@ class Relays:
                 intelligence_formatted['measurement_status'] = contact_intel.get('measurement_status', '')
                 intelligence_formatted['performance_status'] = contact_intel.get('performance_status', '')
                 intelligence_formatted['performance_underutilized'] = contact_intel.get('performance_underutilized', 0)
+                intelligence_formatted['performance_underutilized_percentage'] = contact_intel.get('performance_underutilized_percentage', 0)
                 intelligence_formatted['performance_underutilized_fps'] = contact_intel.get('performance_underutilized_fps', [])
+                # Add new CW/BW ratio fields
+                intelligence_formatted['performance_operator_overall_ratio'] = contact_intel.get('performance_operator_overall_ratio', '')
+                intelligence_formatted['performance_operator_guard_ratio'] = contact_intel.get('performance_operator_guard_ratio', '')
+                intelligence_formatted['performance_operator_exit_ratio'] = contact_intel.get('performance_operator_exit_ratio', '')
+                intelligence_formatted['performance_network_overall_ratio'] = contact_intel.get('performance_network_overall_ratio', '')
+                intelligence_formatted['performance_network_guard_ratio'] = contact_intel.get('performance_network_guard_ratio', '')
+                intelligence_formatted['performance_network_exit_ratio'] = contact_intel.get('performance_network_exit_ratio', '')
+                intelligence_formatted['performance_network_overall_median'] = contact_intel.get('performance_network_overall_median', '')
+                intelligence_formatted['performance_network_guard_median'] = contact_intel.get('performance_network_guard_median', '')
+                intelligence_formatted['performance_network_exit_median'] = contact_intel.get('performance_network_exit_median', '')
+                intelligence_formatted['performance_operator_overall_pct'] = contact_intel.get('performance_operator_overall_pct', '')
+                intelligence_formatted['performance_operator_guard_pct'] = contact_intel.get('performance_operator_guard_pct', '')
+                intelligence_formatted['performance_operator_exit_pct'] = contact_intel.get('performance_operator_exit_pct', '')
+                intelligence_formatted['performance_relay_count'] = contact_intel.get('performance_relay_count', 0)
                 intelligence_formatted['maturity'] = contact_intel.get('maturity', '')
         
         # 4. Version compliance and version status counting (reuse existing relay counting patterns)
