@@ -222,6 +222,8 @@ class Coordinator:
             relay_set._generate_aroi_leaderboards()
             # Reprocess uptime data for individual relays now that uptime_data is available
             relay_set._reprocess_uptime_data()
+            # Recalculate network health metrics now that uptime data is available
+            relay_set._calculate_network_health_metrics()
         
         # Update the relay_set's progress_step to match our current progress
         relay_set.progress_step = self.progress_step
