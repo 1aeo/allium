@@ -3326,12 +3326,11 @@ class Relays:
             flag_mapping = {
                 'exit': 'Exit',
                 'guard': 'Guard', 
-                'middle': 'Running',  # Use Running flag for middle relays (most comprehensive)
-                'bad': 'Running'  # Use Running for bad relays as fallback
+                'middle': 'Running'  # Use Running flag for middle relays (most comprehensive)
             }
             
             for period in ['1_month', '6_months', '1_year', '5_years']:
-                for role in ['exit', 'guard', 'middle', 'bad']:
+                for role in ['exit', 'guard', 'middle']:
                     flag_name = flag_mapping[role]
                     
                     # Try to get flag-specific statistics first
@@ -3361,18 +3360,14 @@ class Relays:
             health_metrics['exit_uptime'] = health_metrics.get('exit_uptime_mean', 0.0)
             health_metrics['guard_uptime'] = health_metrics.get('guard_uptime_mean', 0.0)
             health_metrics['middle_uptime'] = health_metrics.get('middle_uptime_mean', 0.0)
-            health_metrics['bad_relay_uptime'] = health_metrics.get('bad_uptime_mean', 0.0)
-            health_metrics['bad_relay_uptime_mean'] = health_metrics.get('bad_uptime_mean', 0.0)
-            health_metrics['bad_relay_uptime_median'] = health_metrics.get('bad_uptime_median', 0.0)
             
         else:
             # Initialize to 0 when no consolidated uptime results available
             uptime_periods = ['1_month', '6_months', '1_year', '5_years']
-            base_keys = ['exit_uptime', 'guard_uptime', 'middle_uptime', 'bad_relay_uptime']
-            mean_median_keys = ['exit_uptime_mean', 'guard_uptime_mean', 'middle_uptime_mean', 'bad_relay_uptime_mean',
-                               'exit_uptime_median', 'guard_uptime_median', 'middle_uptime_median', 'bad_relay_uptime_median',
-                               'bad_uptime_mean', 'bad_uptime_median']
-            period_keys = [f'{role}_uptime_{period}' for period in uptime_periods for role in ['exit', 'guard', 'middle', 'bad']]
+            base_keys = ['exit_uptime', 'guard_uptime', 'middle_uptime']
+            mean_median_keys = ['exit_uptime_mean', 'guard_uptime_mean', 'middle_uptime_mean',
+                               'exit_uptime_median', 'guard_uptime_median', 'middle_uptime_median']
+            period_keys = [f'{role}_uptime_{period}' for period in uptime_periods for role in ['exit', 'guard', 'middle']]
             
             for key in base_keys + mean_median_keys + period_keys:
                 health_metrics[key] = 0.0
