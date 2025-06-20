@@ -2641,8 +2641,9 @@ class Relays:
         sorted_data = self.json['sorted']
         
         # REUSE EXISTING DATA - no recalculation needed
+        total_relays_count = network_totals['total_relays']
         health_metrics = {
-            'relays_total': network_totals['total_relays'],
+            'relays_total': total_relays_count,
             'guard_count': network_totals['guard_count'],
             'middle_count': network_totals['middle_count'], 
             'exit_count': network_totals['exit_count'],
@@ -2650,7 +2651,11 @@ class Relays:
             'measured_percentage': network_totals['measured_percentage'],
             'countries_count': len(sorted_data.get('country', {})),
             'unique_as_count': len(sorted_data.get('as', {})),
-            'families_count': len(sorted_data.get('family', {}))
+            'families_count': len(sorted_data.get('family', {})),
+            # Add percentages for relay counts
+            'guard_percentage': (network_totals['guard_count'] / total_relays_count * 100) if total_relays_count > 0 else 0.0,
+            'middle_percentage': (network_totals['middle_count'] / total_relays_count * 100) if total_relays_count > 0 else 0.0,
+            'exit_percentage': (network_totals['exit_count'] / total_relays_count * 100) if total_relays_count > 0 else 0.0
         }
         
         # AROI operators - reuse existing calculation
@@ -2882,7 +2887,17 @@ class Relays:
             'rare_countries_relays': rare_countries_relays,
             'eu_relays_percentage': (eu_relays / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
             'non_eu_relays_percentage': (non_eu_relays / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
-            'rare_countries_relays_percentage': (rare_countries_relays / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0
+            'rare_countries_relays_percentage': (rare_countries_relays / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
+            # Add percentages for other relay counts
+            'authorities_percentage': (authority_count / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
+            'bad_exits_percentage': (bad_exit_count / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
+            'offline_relays_percentage': (offline_relays / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
+            'overloaded_relays_percentage': (overloaded_relays / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
+            'hibernating_relays_percentage': (hibernating_relays / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
+            'new_relays_24h_percentage': (new_relays_24h / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
+            'new_relays_30d_percentage': (new_relays_30d / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
+            'new_relays_1y_percentage': (new_relays_1y / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
+            'new_relays_6m_percentage': (new_relays_6m / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0
         })
         
         # Platform metrics with percentages
@@ -2955,11 +2970,32 @@ class Relays:
             'middle_bw_median': statistics.median(middle_bw_values) if middle_bw_values else 0.0
         })
         
-        # PRE-CALCULATE BANDWIDTH MEAN/MEDIAN WITH PROPER UNITS - follow same unit system as other bandwidth metrics
-        # Format using the same unit system as total bandwidth to maintain consistency
+        # PRE-CALCULATE BANDWIDTH MEAN/MEDIAN WITH PROPER UNITS - avoid showing 0 values
+        # Check if any mean/median would show as 0 with the main unit, if so use smaller unit for all
         if self.use_bits:
-            # For bits, use total_bandwidth * 8 to determine unit
-            unit = self._determine_unit(total_bandwidth * 8)
+            # For bits, check if any value would round to 0 with Gbit/s
+            base_unit = self._determine_unit(total_bandwidth * 8)
+            test_values = [
+                health_metrics['exit_bw_mean'] * 8,
+                health_metrics['exit_bw_median'] * 8,
+                health_metrics['guard_bw_mean'] * 8,
+                health_metrics['guard_bw_median'] * 8,
+                health_metrics['middle_bw_mean'] * 8,
+                health_metrics['middle_bw_median'] * 8
+            ]
+            
+            # Check if any would format to 0 with the base unit
+            use_smaller_unit = False
+            for value in test_values:
+                if value > 0:  # Only check non-zero values
+                    formatted_val = self._format_bandwidth_with_unit(value, base_unit, decimal_places=0)
+                    if float(formatted_val) == 0:
+                        use_smaller_unit = True
+                        break
+            
+            # Use Mbit/s if any would show as 0 Gbit/s
+            unit = 'Mbit/s' if (use_smaller_unit and base_unit == 'Gbit/s') else base_unit
+            
             exit_mean_formatted = self._format_bandwidth_with_unit(health_metrics['exit_bw_mean'] * 8, unit, decimal_places=0) + f" {unit}"
             exit_median_formatted = self._format_bandwidth_with_unit(health_metrics['exit_bw_median'] * 8, unit, decimal_places=0) + f" {unit}"
             guard_mean_formatted = self._format_bandwidth_with_unit(health_metrics['guard_bw_mean'] * 8, unit, decimal_places=0) + f" {unit}"
@@ -2967,8 +3003,29 @@ class Relays:
             middle_mean_formatted = self._format_bandwidth_with_unit(health_metrics['middle_bw_mean'] * 8, unit, decimal_places=0) + f" {unit}"
             middle_median_formatted = self._format_bandwidth_with_unit(health_metrics['middle_bw_median'] * 8, unit, decimal_places=0) + f" {unit}"
         else:
-            # For bytes, use total_bandwidth to determine unit
-            unit = self._determine_unit(total_bandwidth)
+            # For bytes, check if any value would round to 0 with GB/s
+            base_unit = self._determine_unit(total_bandwidth)
+            test_values = [
+                health_metrics['exit_bw_mean'],
+                health_metrics['exit_bw_median'],
+                health_metrics['guard_bw_mean'],
+                health_metrics['guard_bw_median'],
+                health_metrics['middle_bw_mean'],
+                health_metrics['middle_bw_median']
+            ]
+            
+            # Check if any would format to 0 with the base unit
+            use_smaller_unit = False
+            for value in test_values:
+                if value > 0:  # Only check non-zero values
+                    formatted_val = self._format_bandwidth_with_unit(value, base_unit, decimal_places=0)
+                    if float(formatted_val) == 0:
+                        use_smaller_unit = True
+                        break
+            
+            # Use MB/s if any would show as 0 GB/s
+            unit = 'MB/s' if (use_smaller_unit and base_unit == 'GB/s') else base_unit
+            
             exit_mean_formatted = self._format_bandwidth_with_unit(health_metrics['exit_bw_mean'], unit, decimal_places=0) + f" {unit}"
             exit_median_formatted = self._format_bandwidth_with_unit(health_metrics['exit_bw_median'], unit, decimal_places=0) + f" {unit}"
             guard_mean_formatted = self._format_bandwidth_with_unit(health_metrics['guard_bw_mean'], unit, decimal_places=0) + f" {unit}"
