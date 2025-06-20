@@ -113,15 +113,15 @@ Network Health Dashboard
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
                     <div class="metric-item" title="Mean and median bandwidth per Exit relay. Shows average capacity and typical relay size distribution.">
-                        <span class="metric-value">{{ "{:,.0f}".format(relays.json.network_health.exit_bw_mean / 1024) }} | {{ "{:,.0f}".format(relays.json.network_health.exit_bw_median / 1024) }} KB/s</span>
+                        <span class="metric-value">{{ "{:,.0f}".format(relays.json.network_health.exit_bw_mean_kb) }} | {{ "{:,.0f}".format(relays.json.network_health.exit_bw_median_kb) }} KB/s</span>
                         <span class="metric-label">Exit Mean | Median</span>
                     </div>
                     <div class="metric-item" title="Mean and median bandwidth per Guard relay. Shows average capacity and typical relay size distribution.">
-                        <span class="metric-value">{{ "{:,.0f}".format(relays.json.network_health.guard_bw_mean / 1024) }} | {{ "{:,.0f}".format(relays.json.network_health.guard_bw_median / 1024) }} KB/s</span>
+                        <span class="metric-value">{{ "{:,.0f}".format(relays.json.network_health.guard_bw_mean_kb) }} | {{ "{:,.0f}".format(relays.json.network_health.guard_bw_median_kb) }} KB/s</span>
                         <span class="metric-label">Guard Mean | Median</span>
                     </div>
                     <div class="metric-item" title="Mean and median bandwidth per Middle relay. Shows average capacity and typical relay size distribution.">
-                        <span class="metric-value">{{ "{:,.0f}".format(relays.json.network_health.middle_bw_mean / 1024) }} | {{ "{:,.0f}".format(relays.json.network_health.middle_bw_median / 1024) }} KB/s</span>
+                        <span class="metric-value">{{ "{:,.0f}".format(relays.json.network_health.middle_bw_mean_kb) }} | {{ "{:,.0f}".format(relays.json.network_health.middle_bw_median_kb) }} KB/s</span>
                         <span class="metric-label">Middle Mean | Median</span>
                     </div>
                 </div>

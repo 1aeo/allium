@@ -2622,20 +2622,16 @@ class Relays:
 
     def _calculate_network_health_metrics(self):
         """
-        Calculate network health metrics by maximally reusing existing calculations.
+        ULTRA-OPTIMIZED: Calculate network health metrics in single pass with maximum reuse.
         
-        OPTIMIZATION: Reuses data already calculated during categorization to avoid 
-        redundant loops through all relays. Only calculates what's not already available.
-        
-        Leverages:
-        - network_totals: relay counts, bandwidth, authority/bad exit counts  
-        - sorted data: countries, AS, contacts, families from categorization
-        - network_uptime_percentiles: pre-calculated uptime data
-        - AROI leaderboards: operator counts
-        
-        Stores result in self.json['network_health'] for template access.
+        OPTIMIZATIONS APPLIED:
+        1. Single loop through relays instead of 3 separate loops
+        2. Reuse existing network_totals and sorted data 
+        3. Pre-calculate all Jinja2 template values
+        4. Consolidate uptime calculations for all periods
+        5. Use existing data structures where possible
         """
-        # Ensure prerequisites are available (should already be calculated)
+        # Ensure prerequisites are available
         if 'network_totals' not in self.json:
             self._calculate_network_totals()
         if 'sorted' not in self.json:
@@ -2644,46 +2640,39 @@ class Relays:
         network_totals = self.json['network_totals']
         sorted_data = self.json['sorted']
         
-        # CARD 1: RELAY COUNTS - Reuse network_totals (already calculated with proper priority)
+        # REUSE EXISTING DATA - no recalculation needed
         health_metrics = {
             'relays_total': network_totals['total_relays'],
             'guard_count': network_totals['guard_count'],
             'middle_count': network_totals['middle_count'], 
             'exit_count': network_totals['exit_count'],
             'measured_relays': network_totals['measured_relays'],
-            'measured_percentage': network_totals['measured_percentage']
+            'measured_percentage': network_totals['measured_percentage'],
+            'countries_count': len(sorted_data.get('country', {})),
+            'unique_as_count': len(sorted_data.get('as', {})),
+            'families_count': len(sorted_data.get('family', {}))
         }
         
-        # OPTIMIZED SINGLE PASS: Only calculate what's not available in existing data
-        # Calculate authority/bad exit counts + bandwidth + family/contact/geo data in one pass
-        authority_count = bad_exit_count = 0
-        total_bandwidth = guard_bandwidth = exit_bandwidth = middle_bandwidth = 0
-        relays_with_family = relays_without_family = 0
-        relays_with_contact = relays_without_contact = 0
-        unique_contacts = set()
-        eu_relays = non_eu_relays = rare_countries_relays = 0
+        # AROI operators - reuse existing calculation
+        if hasattr(self, 'json') and 'aroi_leaderboards' in self.json:
+            aroi_summary = self.json['aroi_leaderboards'].get('summary', {})
+            health_metrics['aroi_operators_count'] = aroi_summary.get('total_operators', 0)
+        else:
+            health_metrics['aroi_operators_count'] = len(sorted_data.get('contact', {}))
         
-        # NEW METRICS: Additional counters for extended dashboard
-        offline_relays = overloaded_relays = hibernating_relays = 0
-        new_relays_24h = new_relays_30d = new_relays_6m = 0
-        unique_platforms = set()
-        platform_counts = {}
-        recommended_version_count = not_recommended_count = 0
-        experimental_count = obsolete_count = outdated_count = 0
-        total_consensus_weight = total_advertised_bandwidth = 0
-        observed_advertised_diff_sum = observed_advertised_count = 0
+        # Import modules once
+        import statistics
+        import datetime
+        from .country_utils import is_eu_political, is_frontier_country
+        from .uptime_utils import find_relay_uptime_data, calculate_relay_uptime_average
         
         # Time calculations for new relay detection
-        import datetime
         now = datetime.datetime.utcnow()
         day_ago = now - datetime.timedelta(days=1)
         month_ago = now - datetime.timedelta(days=30)
         six_months_ago = now - datetime.timedelta(days=180)
         
-        # Import utilities once
-        from .country_utils import is_eu_political, is_frontier_country
-        
-        # Get rare countries from existing sorted data (avoid recalculation)
+        # Get rare countries once
         valid_rare_countries = set()
         try:
             if 'country' in sorted_data:
@@ -2694,17 +2683,57 @@ class Relays:
         except:
             pass
         
-        # SINGLE OPTIMIZED LOOP - Calculate only what's needed
+        # Initialize all counters and collectors for SINGLE LOOP
+        authority_count = bad_exit_count = 0
+        total_bandwidth = guard_bandwidth = exit_bandwidth = middle_bandwidth = 0
+        relays_with_family = relays_without_family = 0
+        relays_with_contact = relays_without_contact = 0
+        unique_contacts = set()
+        eu_relays = non_eu_relays = rare_countries_relays = 0
+        offline_relays = overloaded_relays = hibernating_relays = 0
+        new_relays_24h = new_relays_30d = new_relays_6m = 0
+        unique_platforms = set()
+        platform_counts = {}
+        recommended_version_count = not_recommended_count = 0
+        experimental_count = obsolete_count = outdated_count = 0
+        total_consensus_weight = total_advertised_bandwidth = 0
+        observed_advertised_diff_sum = observed_advertised_count = 0
+        
+        # Role-specific collectors - combined into single loop
+        exit_cw_values = []
+        guard_cw_values = []
+        middle_cw_values = []
+        exit_bw_values = []
+        guard_bw_values = []
+        middle_bw_values = []
+        exit_cw_sum = exit_bw_sum = 0
+        guard_cw_sum = guard_bw_sum = 0  
+        middle_cw_sum = middle_bw_sum = 0
+        
+        # Uptime collectors for all periods - consolidated
+        uptime_periods = ['1_month', '6_months', '1_year', '5_years']
+        uptime_collectors = {
+            period: {'exit': [], 'guard': [], 'middle': [], 'bad': []} 
+            for period in uptime_periods
+        }
+        
+        # SINGLE OPTIMIZED LOOP - calculate everything in one pass
         for relay in self.json['relays']:
             flags = relay.get('flags', [])
+            bandwidth = relay.get('observed_bandwidth', 0)
+            consensus_weight = relay.get('consensus_weight', 0)
             
-            # Authority and bad exit counts (not available elsewhere)
+            # Basic flags and counts
+            is_exit = 'Exit' in flags
+            is_guard = 'Guard' in flags
+            is_bad_exit = 'BadExit' in flags
+            
             if 'Authority' in flags:
                 authority_count += 1
-            if 'BadExit' in flags:
+            if is_bad_exit:
                 bad_exit_count += 1
             
-            # NEW: Offline, overloaded, hibernating relays
+            # Status checks
             if not relay.get('running', False):
                 offline_relays += 1
             if relay.get('overload_general_timestamp'):
@@ -2712,7 +2741,7 @@ class Relays:
             if relay.get('hibernating', False):
                 hibernating_relays += 1
             
-            # NEW: Recent relay detection
+            # Recent relay detection
             first_seen_str = relay.get('first_seen', '')
             if first_seen_str:
                 try:
@@ -2726,15 +2755,14 @@ class Relays:
                 except:
                     pass
             
-            # NEW: Platform tracking
+            # Platform tracking
             platform = relay.get('platform', '').strip()
             if platform:
                 unique_platforms.add(platform)
-                # Extract main platform (first part before version)
                 main_platform = platform.split()[0] if platform else 'Unknown'
                 platform_counts[main_platform] = platform_counts.get(main_platform, 0) + 1
             
-            # NEW: Version compliance tracking
+            # Version compliance
             recommended = relay.get('recommended_version', None)
             version_status = relay.get('version_status', '').lower()
             
@@ -2750,12 +2778,8 @@ class Relays:
             elif version_status in ['unrecommended', 'old']:
                 outdated_count += 1
             
-            # Bandwidth by role (matches existing role classification logic)
-            bandwidth = relay.get('observed_bandwidth', 0)
+            # Bandwidth calculations
             total_bandwidth += bandwidth
-            
-            # NEW: Consensus weight and bandwidth utilization tracking
-            consensus_weight = relay.get('consensus_weight', 0)
             advertised_bandwidth = relay.get('advertised_bandwidth', 0)
             total_consensus_weight += consensus_weight
             total_advertised_bandwidth += advertised_bandwidth
@@ -2764,23 +2788,36 @@ class Relays:
                 observed_advertised_diff_sum += abs(bandwidth - advertised_bandwidth)
                 observed_advertised_count += 1
             
-            is_exit = 'Exit' in flags
-            is_guard = 'Guard' in flags
+            # Role-specific bandwidth and consensus weight - combined calculation
             if is_exit:
                 exit_bandwidth += bandwidth
+                if consensus_weight > 0 and bandwidth > 0:
+                    exit_cw_sum += consensus_weight
+                    exit_bw_sum += bandwidth
+                    exit_cw_values.append(consensus_weight / bandwidth)
+                    exit_bw_values.append(bandwidth)
             elif is_guard:
                 guard_bandwidth += bandwidth
+                if consensus_weight > 0 and bandwidth > 0:
+                    guard_cw_sum += consensus_weight
+                    guard_bw_sum += bandwidth
+                    guard_cw_values.append(consensus_weight / bandwidth)
+                    guard_bw_values.append(bandwidth)
             else:
                 middle_bandwidth += bandwidth
+                if consensus_weight > 0 and bandwidth > 0:
+                    middle_cw_sum += consensus_weight
+                    middle_bw_sum += bandwidth
+                    middle_cw_values.append(consensus_weight / bandwidth)
+                    middle_bw_values.append(bandwidth)
             
-            # Family info (not efficiently available elsewhere)
+            # Family and contact info
             effective_family = relay.get('effective_family', [])
             if effective_family and len(effective_family) > 1:
                 relays_with_family += 1
             else:
                 relays_without_family += 1
             
-            # Contact info (unique contacts not available elsewhere)
             contact = relay.get('contact', '').strip()
             unique_contacts.add(contact)
             if contact:
@@ -2788,7 +2825,7 @@ class Relays:
             else:
                 relays_without_contact += 1
             
-            # Geographic data (EU/rare countries not in sorted data)
+            # Geographic data
             country = relay.get('country', '').upper()
             if country and len(country) == 2:
                 if is_eu_political(country):
@@ -2798,66 +2835,88 @@ class Relays:
                 
                 if country.lower() in valid_rare_countries or (not valid_rare_countries and is_frontier_country(country)):
                     rare_countries_relays += 1
+            
+            # UPTIME CALCULATION - consolidated for all periods and roles
+            if hasattr(self, 'uptime_data') and self.uptime_data:
+                fingerprint = relay.get('fingerprint', '')
+                if fingerprint:
+                    relay_uptime_data = find_relay_uptime_data(fingerprint, self.uptime_data)
+                    if relay_uptime_data and relay_uptime_data.get('uptime'):
+                        for period in uptime_periods:
+                            period_data = relay_uptime_data['uptime'].get(period, {})
+                            if period_data.get('values'):
+                                avg_uptime = calculate_relay_uptime_average(period_data['values'])
+                                if avg_uptime > 0:
+                                    if is_exit:
+                                        uptime_collectors[period]['exit'].append(avg_uptime)
+                                    elif is_guard:
+                                        uptime_collectors[period]['guard'].append(avg_uptime)
+                                    else:
+                                        uptime_collectors[period]['middle'].append(avg_uptime)
+                                    
+                                    if is_bad_exit:
+                                        uptime_collectors[period]['bad'].append(avg_uptime)
         
-        # Store calculated counts
-        health_metrics['authorities_count'] = authority_count
-        health_metrics['bad_exits_count'] = bad_exit_count
+        # STORE CALCULATED METRICS
+        health_metrics.update({
+            'authorities_count': authority_count,
+            'bad_exits_count': bad_exit_count,
+            'offline_relays': offline_relays,
+            'overloaded_relays': overloaded_relays,
+            'hibernating_relays': hibernating_relays,
+            'new_relays_24h': new_relays_24h,
+            'new_relays_30d': new_relays_30d,
+            'new_relays_6m': new_relays_6m,
+            'unique_platforms_count': len(unique_platforms),
+            'unique_contacts_count': len(unique_contacts),
+            'relays_with_family': relays_with_family,
+            'relays_without_family': relays_without_family,
+            'relays_with_contact': relays_with_contact,
+            'relays_without_contact': relays_without_contact,
+            'eu_relays_count': eu_relays,
+            'non_eu_relays_count': non_eu_relays,
+            'rare_countries_relays': rare_countries_relays
+        })
         
-        # NEW METRICS: Store additional calculated counts
-        health_metrics['offline_relays'] = offline_relays
-        health_metrics['overloaded_relays'] = overloaded_relays
-        health_metrics['hibernating_relays'] = hibernating_relays
-        health_metrics['new_relays_24h'] = new_relays_24h
-        health_metrics['new_relays_30d'] = new_relays_30d
-        health_metrics['new_relays_6m'] = new_relays_6m
-        
-        # Platform metrics
-        health_metrics['unique_platforms_count'] = len(unique_platforms)
-        # Get top 3 platforms and "others" with percentages
+        # Platform metrics with percentages
+        total_relays = health_metrics['relays_total']
         sorted_platforms = sorted(platform_counts.items(), key=lambda x: x[1], reverse=True)
         top_platforms = sorted_platforms[:3]
         others_count = sum(count for _, count in sorted_platforms[3:])
         
-        # Add percentage calculations for platforms
-        total_relays = health_metrics['relays_total']
         top_platforms_with_pct = []
         for platform, count in top_platforms:
             percentage = (count / total_relays * 100) if total_relays > 0 else 0.0
             top_platforms_with_pct.append((platform, count, percentage))
         
-        others_percentage = (others_count / total_relays * 100) if total_relays > 0 else 0.0
-        
         health_metrics['platform_top3'] = top_platforms_with_pct
         health_metrics['platform_others'] = others_count
-        health_metrics['platform_others_percentage'] = others_percentage
+        health_metrics['platform_others_percentage'] = (others_count / total_relays * 100) if total_relays > 0 else 0.0
         
-        # Version compliance metrics
+        # Version compliance with percentages
         total_with_version_info = recommended_version_count + not_recommended_count
-        total_relays = health_metrics['relays_total']
+        health_metrics.update({
+            'recommended_version_percentage': (
+                (recommended_version_count / total_with_version_info * 100) 
+                if total_with_version_info > 0 else 0.0
+            ),
+            'recommended_version_count': recommended_version_count,
+            'not_recommended_count': not_recommended_count,
+            'experimental_count': experimental_count,
+            'obsolete_count': obsolete_count,
+            'outdated_count': outdated_count,
+            'not_recommended_percentage': (not_recommended_count / total_relays * 100) if total_relays > 0 else 0.0,
+            'experimental_percentage': (experimental_count / total_relays * 100) if total_relays > 0 else 0.0,
+            'obsolete_percentage': (obsolete_count / total_relays * 100) if total_relays > 0 else 0.0,
+            'outdated_percentage': (outdated_count / total_relays * 100) if total_relays > 0 else 0.0
+        })
         
-        health_metrics['recommended_version_percentage'] = (
-            (recommended_version_count / total_with_version_info * 100) 
-            if total_with_version_info > 0 else 0.0
-        )
-        health_metrics['recommended_version_count'] = recommended_version_count
-        health_metrics['not_recommended_count'] = not_recommended_count
-        health_metrics['experimental_count'] = experimental_count
-        health_metrics['obsolete_count'] = obsolete_count
-        health_metrics['outdated_count'] = outdated_count
-        
-        # Add percentage calculations for version compliance
-        health_metrics['not_recommended_percentage'] = (not_recommended_count / total_relays * 100) if total_relays > 0 else 0.0
-        health_metrics['experimental_percentage'] = (experimental_count / total_relays * 100) if total_relays > 0 else 0.0
-        health_metrics['obsolete_percentage'] = (obsolete_count / total_relays * 100) if total_relays > 0 else 0.0
-        health_metrics['outdated_percentage'] = (outdated_count / total_relays * 100) if total_relays > 0 else 0.0
-        
-        # Bandwidth utilization metrics - format with proper unit
+        # Bandwidth utilization metrics
         avg_obs_adv_diff_bytes = (
             (observed_advertised_diff_sum / observed_advertised_count) 
             if observed_advertised_count > 0 else 0
         )
         
-        # Format obs/adv diff using the same unit system as other bandwidth metrics
         if self.use_bits:
             obs_adv_unit = self._determine_unit(avg_obs_adv_diff_bytes * 8)
             health_metrics['avg_observed_advertised_diff_formatted'] = self._format_bandwidth_with_unit(avg_obs_adv_diff_bytes * 8, obs_adv_unit, decimal_places=0) + f" {obs_adv_unit}"
@@ -2865,74 +2924,41 @@ class Relays:
             obs_adv_unit = self._determine_unit(avg_obs_adv_diff_bytes)
             health_metrics['avg_observed_advertised_diff_formatted'] = self._format_bandwidth_with_unit(avg_obs_adv_diff_bytes, obs_adv_unit, decimal_places=0) + f" {obs_adv_unit}"
         
-        # Keep legacy raw value for backward compatibility
-        health_metrics['avg_observed_advertised_diff'] = avg_obs_adv_diff_bytes
         health_metrics['consensus_weight_bandwidth_ratio'] = (
             (total_consensus_weight / total_bandwidth) 
             if total_bandwidth > 0 else 0.0
         )
         
-        # Calculate role-specific CW/BW ratios and bandwidth values
-        exit_cw_sum = exit_bw_sum = 0
-        guard_cw_sum = guard_bw_sum = 0  
-        middle_cw_sum = middle_bw_sum = 0
-        exit_cw_values = []
-        guard_cw_values = []
-        middle_cw_values = []
-        exit_bw_values = []
-        guard_bw_values = []
-        middle_bw_values = []
+        # Role-specific CW/BW ratios and bandwidth statistics
+        health_metrics.update({
+            'exit_cw_bw_overall': (exit_cw_sum / exit_bw_sum) if exit_bw_sum > 0 else 0.0,
+            'guard_cw_bw_overall': (guard_cw_sum / guard_bw_sum) if guard_bw_sum > 0 else 0.0,
+            'middle_cw_bw_overall': (middle_cw_sum / middle_bw_sum) if middle_bw_sum > 0 else 0.0,
+            'exit_cw_bw_avg': statistics.mean(exit_cw_values) if exit_cw_values else 0.0,
+            'guard_cw_bw_avg': statistics.mean(guard_cw_values) if guard_cw_values else 0.0,
+            'middle_cw_bw_avg': statistics.mean(middle_cw_values) if middle_cw_values else 0.0,
+            'exit_cw_bw_median': statistics.median(exit_cw_values) if exit_cw_values else 0.0,
+            'guard_cw_bw_median': statistics.median(guard_cw_values) if guard_cw_values else 0.0,
+            'middle_cw_bw_median': statistics.median(middle_cw_values) if middle_cw_values else 0.0,
+            'exit_bw_mean': statistics.mean(exit_bw_values) if exit_bw_values else 0.0,
+            'guard_bw_mean': statistics.mean(guard_bw_values) if guard_bw_values else 0.0,
+            'middle_bw_mean': statistics.mean(middle_bw_values) if middle_bw_values else 0.0,
+            'exit_bw_median': statistics.median(exit_bw_values) if exit_bw_values else 0.0,
+            'guard_bw_median': statistics.median(guard_bw_values) if guard_bw_values else 0.0,
+            'middle_bw_median': statistics.median(middle_bw_values) if middle_bw_values else 0.0
+        })
         
-        for relay in self.json['relays']:
-            flags = relay.get('flags', [])
-            consensus_weight = relay.get('consensus_weight', 0)
-            bandwidth = relay.get('observed_bandwidth', 0)
-            
-            if bandwidth > 0 and consensus_weight > 0:
-                cw_bw_ratio = consensus_weight / bandwidth
-                
-                is_exit = 'Exit' in flags
-                is_guard = 'Guard' in flags
-                
-                if is_exit:
-                    exit_cw_sum += consensus_weight
-                    exit_bw_sum += bandwidth
-                    exit_cw_values.append(cw_bw_ratio)
-                    exit_bw_values.append(bandwidth)
-                elif is_guard:
-                    guard_cw_sum += consensus_weight
-                    guard_bw_sum += bandwidth
-                    guard_cw_values.append(cw_bw_ratio)
-                    guard_bw_values.append(bandwidth)
-                else:
-                    middle_cw_sum += consensus_weight
-                    middle_bw_sum += bandwidth
-                    middle_cw_values.append(cw_bw_ratio)
-                    middle_bw_values.append(bandwidth)
+        # PRE-CALCULATE JINJA2 TEMPLATE VALUES - eliminate template calculations
+        health_metrics.update({
+            'exit_bw_mean_kb': round(health_metrics['exit_bw_mean'] / 1024, 0) if health_metrics['exit_bw_mean'] > 0 else 0,
+            'exit_bw_median_kb': round(health_metrics['exit_bw_median'] / 1024, 0) if health_metrics['exit_bw_median'] > 0 else 0,
+            'guard_bw_mean_kb': round(health_metrics['guard_bw_mean'] / 1024, 0) if health_metrics['guard_bw_mean'] > 0 else 0,
+            'guard_bw_median_kb': round(health_metrics['guard_bw_median'] / 1024, 0) if health_metrics['guard_bw_median'] > 0 else 0,
+            'middle_bw_mean_kb': round(health_metrics['middle_bw_mean'] / 1024, 0) if health_metrics['middle_bw_mean'] > 0 else 0,
+            'middle_bw_median_kb': round(health_metrics['middle_bw_median'] / 1024, 0) if health_metrics['middle_bw_median'] > 0 else 0
+        })
         
-        # Store overall ratios and averages/medians
-        health_metrics['exit_cw_bw_overall'] = (exit_cw_sum / exit_bw_sum) if exit_bw_sum > 0 else 0.0
-        health_metrics['guard_cw_bw_overall'] = (guard_cw_sum / guard_bw_sum) if guard_bw_sum > 0 else 0.0
-        health_metrics['middle_cw_bw_overall'] = (middle_cw_sum / middle_bw_sum) if middle_bw_sum > 0 else 0.0
-        
-        health_metrics['exit_cw_bw_avg'] = statistics.mean(exit_cw_values) if exit_cw_values else 0.0
-        health_metrics['guard_cw_bw_avg'] = statistics.mean(guard_cw_values) if guard_cw_values else 0.0
-        health_metrics['middle_cw_bw_avg'] = statistics.mean(middle_cw_values) if middle_cw_values else 0.0
-        
-        health_metrics['exit_cw_bw_median'] = statistics.median(exit_cw_values) if exit_cw_values else 0.0
-        health_metrics['guard_cw_bw_median'] = statistics.median(guard_cw_values) if guard_cw_values else 0.0
-        health_metrics['middle_cw_bw_median'] = statistics.median(middle_cw_values) if middle_cw_values else 0.0
-        
-        # Calculate bandwidth mean and median per role
-        health_metrics['exit_bw_mean'] = statistics.mean(exit_bw_values) if exit_bw_values else 0.0
-        health_metrics['guard_bw_mean'] = statistics.mean(guard_bw_values) if guard_bw_values else 0.0
-        health_metrics['middle_bw_mean'] = statistics.mean(middle_bw_values) if middle_bw_values else 0.0
-        
-        health_metrics['exit_bw_median'] = statistics.median(exit_bw_values) if exit_bw_values else 0.0
-        health_metrics['guard_bw_median'] = statistics.median(guard_bw_values) if guard_bw_values else 0.0
-        health_metrics['middle_bw_median'] = statistics.median(middle_bw_values) if middle_bw_values else 0.0
-        
-        # CARD 2: BANDWIDTH - Format bandwidth (reuse existing formatting logic)
+        # Bandwidth formatting with proper units
         if self.use_bits:
             unit = self._determine_unit(total_bandwidth * 8)
             health_metrics['total_bandwidth_formatted'] = self._format_bandwidth_with_unit(total_bandwidth * 8, unit, decimal_places=0) + f" {unit}"
@@ -2946,7 +2972,7 @@ class Relays:
             health_metrics['exit_bandwidth_formatted'] = self._format_bandwidth_with_unit(exit_bandwidth, unit, decimal_places=0) + f" {unit}"
             health_metrics['middle_bandwidth_formatted'] = self._format_bandwidth_with_unit(middle_bandwidth, unit, decimal_places=0) + f" {unit}"
         
-        # CARD 3: UPTIME - Reuse pre-calculated network uptime percentiles + calculate role-specific
+        # Uptime metrics - consolidated calculation for all periods and roles
         if hasattr(self, 'uptime_data') and self.uptime_data:
             if hasattr(self, 'network_uptime_percentiles') and self.network_uptime_percentiles:
                 health_metrics['overall_uptime'] = self.network_uptime_percentiles['average']
@@ -2955,140 +2981,52 @@ class Relays:
                 health_metrics['overall_uptime'] = 0.0
                 health_metrics['uptime_percentiles'] = None
             
-            # Calculate role-specific uptime (unavoidable second loop, but optimized)
-            from .uptime_utils import find_relay_uptime_data, calculate_relay_uptime_average
+            # Process all uptime periods and roles in one calculation
+            for period in uptime_periods:
+                for role in ['exit', 'guard', 'middle', 'bad']:
+                    values = uptime_collectors[period][role]
+                    mean_key = f'{role}_uptime_mean' if period == '6_months' else f'{role}_uptime_{period}'
+                    median_key = f'{role}_uptime_median' if period == '6_months' else f'{role}_uptime_{period}_median'
+                    
+                    health_metrics[mean_key] = statistics.mean(values) if values else 0.0
+                    if period == '6_months':  # Only calculate median for 6_months to maintain compatibility
+                        health_metrics[median_key] = statistics.median(values) if values else 0.0
             
-            exit_uptime_values = []
-            guard_uptime_values = []
-            middle_uptime_values = []
-            bad_relay_uptime_values = []
-            
-            for relay in self.json['relays']:
-                fingerprint = relay.get('fingerprint', '')
-                if not fingerprint:
-                    continue
-                
-                flags = relay.get('flags', [])
-                is_exit = 'Exit' in flags
-                is_guard = 'Guard' in flags
-                is_bad_exit = 'BadExit' in flags
-                
-                relay_uptime_data = find_relay_uptime_data(fingerprint, self.uptime_data)
-                if relay_uptime_data and relay_uptime_data.get('uptime'):
-                    period_data = relay_uptime_data['uptime'].get('6_months', {})
-                    if period_data.get('values'):
-                        avg_uptime = calculate_relay_uptime_average(period_data['values'])
-                        if avg_uptime > 0:
-                            if is_exit:
-                                exit_uptime_values.append(avg_uptime)
-                            elif is_guard:
-                                guard_uptime_values.append(avg_uptime)
-                            else:
-                                middle_uptime_values.append(avg_uptime)
-                            
-                            if is_bad_exit:
-                                bad_relay_uptime_values.append(avg_uptime)
-            
-            # Calculate both mean and median for role-specific uptime
-            health_metrics['exit_uptime_mean'] = statistics.mean(exit_uptime_values) if exit_uptime_values else 0.0
-            health_metrics['guard_uptime_mean'] = statistics.mean(guard_uptime_values) if guard_uptime_values else 0.0
-            health_metrics['middle_uptime_mean'] = statistics.mean(middle_uptime_values) if middle_uptime_values else 0.0
-            health_metrics['bad_relay_uptime_mean'] = statistics.mean(bad_relay_uptime_values) if bad_relay_uptime_values else 0.0
-            
-            health_metrics['exit_uptime_median'] = statistics.median(exit_uptime_values) if exit_uptime_values else 0.0
-            health_metrics['guard_uptime_median'] = statistics.median(guard_uptime_values) if guard_uptime_values else 0.0
-            health_metrics['middle_uptime_median'] = statistics.median(middle_uptime_values) if middle_uptime_values else 0.0
-            health_metrics['bad_relay_uptime_median'] = statistics.median(bad_relay_uptime_values) if bad_relay_uptime_values else 0.0
-            
-            # Keep legacy names for backward compatibility
+            # Backward compatibility aliases
             health_metrics['exit_uptime'] = health_metrics['exit_uptime_mean']
             health_metrics['guard_uptime'] = health_metrics['guard_uptime_mean']
             health_metrics['middle_uptime'] = health_metrics['middle_uptime_mean']
-            health_metrics['bad_relay_uptime'] = health_metrics['bad_relay_uptime_mean']
+            health_metrics['bad_relay_uptime'] = health_metrics['bad_uptime_mean']
+            health_metrics['bad_relay_uptime_mean'] = health_metrics['bad_uptime_mean']
+            health_metrics['bad_relay_uptime_median'] = health_metrics['bad_uptime_median']
             
-            # NEW: Calculate detailed uptime for multiple time periods
-            uptime_periods = ['1_month', '6_months', '1_year', '5_years']
-            for period in uptime_periods:
-                exit_values = []
-                guard_values = []
-                middle_values = []
-                
-                for relay in self.json['relays']:
-                    fingerprint = relay.get('fingerprint', '')
-                    if not fingerprint:
-                        continue
-                    
-                    flags = relay.get('flags', [])
-                    is_exit = 'Exit' in flags
-                    is_guard = 'Guard' in flags
-                    
-                    relay_uptime_data = find_relay_uptime_data(fingerprint, self.uptime_data)
-                    if relay_uptime_data and relay_uptime_data.get('uptime'):
-                        period_data = relay_uptime_data['uptime'].get(period, {})
-                        if period_data.get('values'):
-                            avg_uptime = calculate_relay_uptime_average(period_data['values'])
-                            if avg_uptime > 0:
-                                if is_exit:
-                                    exit_values.append(avg_uptime)
-                                elif is_guard:
-                                    guard_values.append(avg_uptime)
-                                else:
-                                    middle_values.append(avg_uptime)
-                
-                health_metrics[f'exit_uptime_{period}'] = statistics.mean(exit_values) if exit_values else 0.0
-                health_metrics[f'guard_uptime_{period}'] = statistics.mean(guard_values) if guard_values else 0.0
-                health_metrics[f'middle_uptime_{period}'] = statistics.mean(middle_values) if middle_values else 0.0
         else:
-            health_metrics.update({
-                'overall_uptime': 0.0, 'exit_uptime': 0.0, 'guard_uptime': 0.0, 
-                'middle_uptime': 0.0, 'bad_relay_uptime': 0.0, 'uptime_percentiles': None,
-                'exit_uptime_mean': 0.0, 'guard_uptime_mean': 0.0, 'middle_uptime_mean': 0.0, 'bad_relay_uptime_mean': 0.0,
-                'exit_uptime_median': 0.0, 'guard_uptime_median': 0.0, 'middle_uptime_median': 0.0, 'bad_relay_uptime_median': 0.0
-            })
-            # Initialize detailed uptime metrics to 0 when no uptime data available
-            uptime_periods = ['1_month', '6_months', '1_year', '5_years']
-            for period in uptime_periods:
-                health_metrics[f'exit_uptime_{period}'] = 0.0
-                health_metrics[f'guard_uptime_{period}'] = 0.0
-                health_metrics[f'middle_uptime_{period}'] = 0.0
+            # Initialize to 0 when no uptime data available
+            base_keys = ['overall_uptime', 'exit_uptime', 'guard_uptime', 'middle_uptime', 'bad_relay_uptime', 'uptime_percentiles']
+            mean_median_keys = ['exit_uptime_mean', 'guard_uptime_mean', 'middle_uptime_mean', 'bad_relay_uptime_mean',
+                               'exit_uptime_median', 'guard_uptime_median', 'middle_uptime_median', 'bad_relay_uptime_median']
+            period_keys = [f'{role}_uptime_{period}' for period in uptime_periods for role in ['exit', 'guard', 'middle']]
+            
+            for key in base_keys + mean_median_keys + period_keys:
+                health_metrics[key] = 0.0 if 'percentiles' not in key else None
         
-        # CARD 4: OPERATOR PARTICIPATION - Reuse existing calculations
-        if hasattr(self, 'json') and 'aroi_leaderboards' in self.json:
-            aroi_summary = self.json['aroi_leaderboards'].get('summary', {})
-            health_metrics['aroi_operators_count'] = aroi_summary.get('total_operators', 0)
-        else:
-            health_metrics['aroi_operators_count'] = len(sorted_data.get('contact', {}))
+        # Percentage calculations for participation metrics
+        health_metrics.update({
+            'relays_with_family_percentage': (relays_with_family / total_relays * 100) if total_relays > 0 else 0.0,
+            'relays_without_family_percentage': (relays_without_family / total_relays * 100) if total_relays > 0 else 0.0,
+            'relays_with_contact_percentage': (relays_with_contact / total_relays * 100) if total_relays > 0 else 0.0,
+            'relays_without_contact_percentage': (relays_without_contact / total_relays * 100) if total_relays > 0 else 0.0
+        })
         
-        health_metrics['families_count'] = len(sorted_data.get('family', {}))
-        health_metrics['unique_contacts_count'] = len(unique_contacts)
-        health_metrics['relays_with_family'] = relays_with_family
-        health_metrics['relays_without_family'] = relays_without_family
-        health_metrics['relays_with_contact'] = relays_with_contact
-        health_metrics['relays_without_contact'] = relays_without_contact
-        
-        # Add percentage calculations for operator participation
-        total_relays = health_metrics['relays_total']
-        health_metrics['relays_with_family_percentage'] = (relays_with_family / total_relays * 100) if total_relays > 0 else 0.0
-        health_metrics['relays_without_family_percentage'] = (relays_without_family / total_relays * 100) if total_relays > 0 else 0.0
-        health_metrics['relays_with_contact_percentage'] = (relays_with_contact / total_relays * 100) if total_relays > 0 else 0.0
-        health_metrics['relays_without_contact_percentage'] = (relays_without_contact / total_relays * 100) if total_relays > 0 else 0.0
-        
-        # CARD 5: GEOGRAPHIC PARTICIPATION - Reuse sorted data where possible
-        health_metrics['countries_count'] = len(sorted_data.get('country', {}))
-        health_metrics['eu_relays_count'] = eu_relays
-        health_metrics['non_eu_relays_count'] = non_eu_relays
-        health_metrics['rare_countries_relays'] = rare_countries_relays
-        
-        # CARD 6: PROVIDER PARTICIPATION - Reuse sorted data
-        health_metrics['unique_as_count'] = len(sorted_data.get('as', {}))
-        
-        # Calculate averages (minimal computation)
+        # Final calculations - reuse existing data
         countries_count = health_metrics['countries_count']
         as_count = health_metrics['unique_as_count']
         
-        health_metrics['avg_as_per_country'] = round(as_count / countries_count, 1) if countries_count > 0 else 0.0
-        health_metrics['avg_aroi_per_as'] = round(health_metrics['aroi_operators_count'] / as_count, 1) if as_count > 0 else 0.0
-        health_metrics['avg_families_per_as'] = round(health_metrics['families_count'] / as_count, 1) if as_count > 0 else 0.0
+        health_metrics.update({
+            'avg_as_per_country': round(as_count / countries_count, 1) if countries_count > 0 else 0.0,
+            'avg_aroi_per_as': round(health_metrics['aroi_operators_count'] / as_count, 1) if as_count > 0 else 0.0,
+            'avg_families_per_as': round(health_metrics['families_count'] / as_count, 1) if as_count > 0 else 0.0
+        })
         
         # Store the complete health metrics
         self.json['network_health'] = health_metrics
