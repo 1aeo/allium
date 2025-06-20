@@ -3309,70 +3309,111 @@ class Relays:
             health_metrics['exit_bandwidth_formatted'] = self._format_bandwidth_with_unit(exit_bandwidth, unit, decimal_places=0) + f" {unit}"
             health_metrics['middle_bandwidth_formatted'] = self._format_bandwidth_with_unit(middle_bandwidth, unit, decimal_places=0) + f" {unit}"
         
-        # Uptime metrics - reuse existing consolidated results and network percentiles
-        if hasattr(self, 'network_uptime_percentiles') and self.network_uptime_percentiles:
-            health_metrics['overall_uptime'] = self.network_uptime_percentiles['average']
-            health_metrics['uptime_percentiles'] = self.network_uptime_percentiles['percentiles']
-        else:
-            health_metrics['overall_uptime'] = 0.0
-            health_metrics['uptime_percentiles'] = None
-        
-        # Extract role-specific uptime metrics from existing consolidated results
+        # Uptime metrics - fix mathematical inconsistencies
         if hasattr(self, '_consolidated_uptime_results') and self._consolidated_uptime_results:
             network_statistics = self._consolidated_uptime_results.get('network_statistics', {})
             network_flag_statistics = self._consolidated_uptime_results.get('network_flag_statistics', {})
             
-            # Use flag-specific statistics for proper role-based metrics
-            flag_mapping = {
-                'exit': 'Exit',
-                'guard': 'Guard', 
-                'middle': 'Running',  # Use Running flag for middle relays (most comprehensive)
-                'bad': 'Running'  # Use Running for bad relays as fallback
-            }
+            # Use consistent calculation base for overall uptime (6-month period network mean)
+            if network_statistics.get('6_months', {}).get('mean') is not None:
+                health_metrics['overall_uptime'] = network_statistics['6_months']['mean']
+            elif hasattr(self, 'network_uptime_percentiles') and self.network_uptime_percentiles:
+                health_metrics['overall_uptime'] = self.network_uptime_percentiles['average']
+            else:
+                health_metrics['overall_uptime'] = 0.0
+                
+            # Store uptime percentiles if available
+            if hasattr(self, 'network_uptime_percentiles') and self.network_uptime_percentiles:
+                health_metrics['uptime_percentiles'] = self.network_uptime_percentiles['percentiles']
+            else:
+                health_metrics['uptime_percentiles'] = None
             
-            for period in ['1_month', '6_months', '1_year', '5_years']:
-                for role in ['exit', 'guard', 'middle', 'bad']:
-                    flag_name = flag_mapping[role]
-                    
-                    # Try to get flag-specific statistics first
-                    flag_stats = network_flag_statistics.get(flag_name, {}).get(period, {})
-                    
-                    if flag_stats and flag_stats.get('mean') is not None:
-                        mean_uptime = flag_stats['mean']
-                        median_uptime = flag_stats.get('median', mean_uptime)  # Use median if available
+            # Calculate role-specific uptime with proper role filtering
+            role_specific_stats = {}
+            
+            # Calculate role-specific uptime by filtering relays and computing directly
+            exit_uptimes = []
+            guard_uptimes = []
+            middle_uptimes = []
+            
+            for relay in self.json['relays']:
+                flags = relay.get('flags', [])
+                is_exit = 'Exit' in flags
+                is_guard = 'Guard' in flags
+                
+                # Get 6-month uptime for this relay if available
+                uptime_percentages = relay.get('uptime_percentages', {})
+                six_month_uptime = uptime_percentages.get('6_months', 0.0)
+                
+                if six_month_uptime > 0:  # Only include relays with uptime data
+                    if is_exit:
+                        exit_uptimes.append(six_month_uptime)
+                    elif is_guard:
+                        guard_uptimes.append(six_month_uptime)
                     else:
-                        # Fallback to network-wide statistics if flag-specific not available
-                        period_stats = network_statistics.get(period, {})
-                        if period_stats and period_stats.get('mean') is not None:
-                            mean_uptime = period_stats['mean']
-                            median_uptime = period_stats.get('median', mean_uptime)
+                        middle_uptimes.append(six_month_uptime)
+            
+            # Calculate statistics if we have data
+            if exit_uptimes:
+                health_metrics['exit_uptime_mean'] = statistics.mean(exit_uptimes)
+                health_metrics['exit_uptime_median'] = statistics.median(exit_uptimes)
+            else:
+                health_metrics['exit_uptime_mean'] = 0.0
+                health_metrics['exit_uptime_median'] = 0.0
+                
+            if guard_uptimes:
+                health_metrics['guard_uptime_mean'] = statistics.mean(guard_uptimes)
+                health_metrics['guard_uptime_median'] = statistics.median(guard_uptimes)
+            else:
+                health_metrics['guard_uptime_mean'] = 0.0
+                health_metrics['guard_uptime_median'] = 0.0
+                
+            if middle_uptimes:
+                health_metrics['middle_uptime_mean'] = statistics.mean(middle_uptimes)
+                health_metrics['middle_uptime_median'] = statistics.median(middle_uptimes)
+            else:
+                health_metrics['middle_uptime_mean'] = 0.0
+                health_metrics['middle_uptime_median'] = 0.0
+            
+            # Calculate multi-period statistics for each role using same filtering
+            for period in ['1_month', '1_year', '5_years']:
+                period_exit_uptimes = []
+                period_guard_uptimes = []
+                period_middle_uptimes = []
+                
+                for relay in self.json['relays']:
+                    flags = relay.get('flags', [])
+                    is_exit = 'Exit' in flags
+                    is_guard = 'Guard' in flags
+                    
+                    uptime_percentages = relay.get('uptime_percentages', {})
+                    period_uptime = uptime_percentages.get(period, 0.0)
+                    
+                    if period_uptime > 0:
+                        if is_exit:
+                            period_exit_uptimes.append(period_uptime)
+                        elif is_guard:
+                            period_guard_uptimes.append(period_uptime)
                         else:
-                            mean_uptime = 0.0
-                            median_uptime = 0.0
-                    
-                    # Set role-specific values
-                    if period == '6_months':
-                        health_metrics[f'{role}_uptime_mean'] = mean_uptime
-                        health_metrics[f'{role}_uptime_median'] = median_uptime
-                    else:
-                        health_metrics[f'{role}_uptime_{period}'] = mean_uptime
+                            period_middle_uptimes.append(period_uptime)
+                
+                # Set period-specific means
+                health_metrics[f'exit_uptime_{period}'] = statistics.mean(period_exit_uptimes) if period_exit_uptimes else 0.0
+                health_metrics[f'guard_uptime_{period}'] = statistics.mean(period_guard_uptimes) if period_guard_uptimes else 0.0
+                health_metrics[f'middle_uptime_{period}'] = statistics.mean(period_middle_uptimes) if period_middle_uptimes else 0.0
             
-            # Backward compatibility aliases for 6-month period
-            health_metrics['exit_uptime'] = health_metrics.get('exit_uptime_mean', 0.0)
-            health_metrics['guard_uptime'] = health_metrics.get('guard_uptime_mean', 0.0)
-            health_metrics['middle_uptime'] = health_metrics.get('middle_uptime_mean', 0.0)
-            health_metrics['bad_relay_uptime'] = health_metrics.get('bad_uptime_mean', 0.0)
-            health_metrics['bad_relay_uptime_mean'] = health_metrics.get('bad_uptime_mean', 0.0)
-            health_metrics['bad_relay_uptime_median'] = health_metrics.get('bad_uptime_median', 0.0)
+            # Backward compatibility aliases for 6-month period  
+            health_metrics['exit_uptime'] = health_metrics['exit_uptime_mean']
+            health_metrics['guard_uptime'] = health_metrics['guard_uptime_mean']
+            health_metrics['middle_uptime'] = health_metrics['middle_uptime_mean']
             
         else:
             # Initialize to 0 when no consolidated uptime results available
             uptime_periods = ['1_month', '6_months', '1_year', '5_years']
-            base_keys = ['exit_uptime', 'guard_uptime', 'middle_uptime', 'bad_relay_uptime']
-            mean_median_keys = ['exit_uptime_mean', 'guard_uptime_mean', 'middle_uptime_mean', 'bad_relay_uptime_mean',
-                               'exit_uptime_median', 'guard_uptime_median', 'middle_uptime_median', 'bad_relay_uptime_median',
-                               'bad_uptime_mean', 'bad_uptime_median']
-            period_keys = [f'{role}_uptime_{period}' for period in uptime_periods for role in ['exit', 'guard', 'middle', 'bad']]
+            base_keys = ['exit_uptime', 'guard_uptime', 'middle_uptime']
+            mean_median_keys = ['exit_uptime_mean', 'guard_uptime_mean', 'middle_uptime_mean',
+                               'exit_uptime_median', 'guard_uptime_median', 'middle_uptime_median']
+            period_keys = [f'{role}_uptime_{period}' for period in uptime_periods for role in ['exit', 'guard', 'middle']]
             
             for key in base_keys + mean_median_keys + period_keys:
                 health_metrics[key] = 0.0
