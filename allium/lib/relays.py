@@ -2941,13 +2941,13 @@ class Relays:
                     eu_consensus_weight += consensus_weight
                     # NEW: Collect EU CW/BW ratios for mean/median calculation
                     if consensus_weight > 0 and bandwidth > 0:
-                        eu_cw_bw_values.append(consensus_weight / bandwidth)
+                        eu_cw_bw_values.append(consensus_weight / bandwidth * 1000000)
                 else:
                     non_eu_relays += 1
                     non_eu_consensus_weight += consensus_weight
                     # NEW: Collect Non-EU CW/BW ratios for mean/median calculation
                     if consensus_weight > 0 and bandwidth > 0:
-                        non_eu_cw_bw_values.append(consensus_weight / bandwidth)
+                        non_eu_cw_bw_values.append(consensus_weight / bandwidth * 1000000)
                 
                 if country.lower() in valid_rare_countries or (not valid_rare_countries and is_frontier_country(country)):
                     rare_countries_relays += 1
@@ -3060,12 +3060,12 @@ class Relays:
             
             # Quick pass through relays to collect Top AS CW/BW ratios
             for relay in self.json['relays']:
-                as_number = relay.get('as_number')
+                as_number = relay.get('as')
                 if as_number:
                     consensus_weight = relay.get('consensus_weight', 0)
                     bandwidth = relay.get('observed_bandwidth', 0)
                     if consensus_weight > 0 and bandwidth > 0:
-                        cw_bw_ratio = consensus_weight / bandwidth
+                        cw_bw_ratio = consensus_weight / bandwidth * 1000000
                         if as_number in top_3_as_numbers:
                             top_3_as_cw_bw_values.append(cw_bw_ratio)
                         if as_number in top_5_as_numbers:
