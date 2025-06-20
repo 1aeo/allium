@@ -100,15 +100,15 @@ Network Health Dashboard
                 <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
                     <div class="metric-item" title="Total observed bandwidth of all Exit relays. Critical for network's ability to serve user traffic.">
                         <span class="metric-value">{{ relays.json.network_health.exit_bandwidth_formatted }}</span>
-                        <span class="metric-label">Exit BW</span>
+                        <span class="metric-label">Exit BW Total</span>
                     </div>
                     <div class="metric-item" title="Total observed bandwidth of all Guard relays. Important for network entry capacity.">
                         <span class="metric-value">{{ relays.json.network_health.guard_bandwidth_formatted }}</span>
-                        <span class="metric-label">Guard BW</span>
+                        <span class="metric-label">Guard BW Total</span>
                     </div>
                     <div class="metric-item" title="Total observed bandwidth of all Middle relays. Provides internal network relay capacity.">
                         <span class="metric-value">{{ relays.json.network_health.middle_bandwidth_formatted }}</span>
-                        <span class="metric-label">Middle BW</span>
+                        <span class="metric-label">Middle BW Total</span>
                     </div>
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
@@ -128,7 +128,7 @@ Network Health Dashboard
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
                     <div class="metric-item" title="Mean and median difference between observed and advertised bandwidth. Indicates relay capacity accuracy.">
                         <span class="metric-value">{{ relays.json.network_health.avg_observed_advertised_diff_formatted }}</span>
-                        <span class="metric-label">Obs to Adv Diff</span>
+                        <span class="metric-label">Obs to Adv Diff (Mean | Median)</span>
                     </div>
                     <div class="metric-item" title="Number and percentage of relays with bandwidth measured by directory authorities for accuracy.">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.measured_relays) }} ({{ "%.1f%%"|format(relays.json.network_health.measured_percentage) }})</span>
