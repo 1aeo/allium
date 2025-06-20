@@ -2670,6 +2670,7 @@ class Relays:
         now = datetime.datetime.utcnow()
         day_ago = now - datetime.timedelta(days=1)
         month_ago = now - datetime.timedelta(days=30)
+        year_ago = now - datetime.timedelta(days=365)
         six_months_ago = now - datetime.timedelta(days=180)
         
         # Get rare countries once
@@ -2691,7 +2692,7 @@ class Relays:
         unique_contacts = set()
         eu_relays = non_eu_relays = rare_countries_relays = 0
         offline_relays = overloaded_relays = hibernating_relays = 0
-        new_relays_24h = new_relays_30d = new_relays_6m = 0
+        new_relays_24h = new_relays_30d = new_relays_1y = new_relays_6m = 0
         unique_platforms = set()
         platform_counts = {}
         recommended_version_count = not_recommended_count = 0
@@ -2750,6 +2751,8 @@ class Relays:
                         new_relays_24h += 1
                     if first_seen >= month_ago:
                         new_relays_30d += 1
+                    if first_seen >= year_ago:
+                        new_relays_1y += 1
                     if first_seen >= six_months_ago:
                         new_relays_6m += 1
                 except:
@@ -2866,6 +2869,7 @@ class Relays:
             'hibernating_relays': hibernating_relays,
             'new_relays_24h': new_relays_24h,
             'new_relays_30d': new_relays_30d,
+            'new_relays_1y': new_relays_1y,
             'new_relays_6m': new_relays_6m,
             'unique_platforms_count': len(unique_platforms),
             'unique_contacts_count': len(unique_contacts),
@@ -2875,7 +2879,10 @@ class Relays:
             'relays_without_contact': relays_without_contact,
             'eu_relays_count': eu_relays,
             'non_eu_relays_count': non_eu_relays,
-            'rare_countries_relays': rare_countries_relays
+            'rare_countries_relays': rare_countries_relays,
+            'eu_relays_percentage': (eu_relays / total_relays * 100) if total_relays > 0 else 0.0,
+            'non_eu_relays_percentage': (non_eu_relays / total_relays * 100) if total_relays > 0 else 0.0,
+            'rare_countries_relays_percentage': (rare_countries_relays / total_relays * 100) if total_relays > 0 else 0.0
         })
         
         # Platform metrics with percentages
@@ -2948,14 +2955,34 @@ class Relays:
             'middle_bw_median': statistics.median(middle_bw_values) if middle_bw_values else 0.0
         })
         
-        # PRE-CALCULATE JINJA2 TEMPLATE VALUES - eliminate template calculations
+        # PRE-CALCULATE BANDWIDTH MEAN/MEDIAN WITH PROPER UNITS - follow same unit system as other bandwidth metrics
+        # Format using the same unit system as total bandwidth to maintain consistency
+        if self.use_bits:
+            # For bits, use total_bandwidth * 8 to determine unit
+            unit = self._determine_unit(total_bandwidth * 8)
+            exit_mean_formatted = self._format_bandwidth_with_unit(health_metrics['exit_bw_mean'] * 8, unit, decimal_places=0) + f" {unit}"
+            exit_median_formatted = self._format_bandwidth_with_unit(health_metrics['exit_bw_median'] * 8, unit, decimal_places=0) + f" {unit}"
+            guard_mean_formatted = self._format_bandwidth_with_unit(health_metrics['guard_bw_mean'] * 8, unit, decimal_places=0) + f" {unit}"
+            guard_median_formatted = self._format_bandwidth_with_unit(health_metrics['guard_bw_median'] * 8, unit, decimal_places=0) + f" {unit}"
+            middle_mean_formatted = self._format_bandwidth_with_unit(health_metrics['middle_bw_mean'] * 8, unit, decimal_places=0) + f" {unit}"
+            middle_median_formatted = self._format_bandwidth_with_unit(health_metrics['middle_bw_median'] * 8, unit, decimal_places=0) + f" {unit}"
+        else:
+            # For bytes, use total_bandwidth to determine unit
+            unit = self._determine_unit(total_bandwidth)
+            exit_mean_formatted = self._format_bandwidth_with_unit(health_metrics['exit_bw_mean'], unit, decimal_places=0) + f" {unit}"
+            exit_median_formatted = self._format_bandwidth_with_unit(health_metrics['exit_bw_median'], unit, decimal_places=0) + f" {unit}"
+            guard_mean_formatted = self._format_bandwidth_with_unit(health_metrics['guard_bw_mean'], unit, decimal_places=0) + f" {unit}"
+            guard_median_formatted = self._format_bandwidth_with_unit(health_metrics['guard_bw_median'], unit, decimal_places=0) + f" {unit}"
+            middle_mean_formatted = self._format_bandwidth_with_unit(health_metrics['middle_bw_mean'], unit, decimal_places=0) + f" {unit}"
+            middle_median_formatted = self._format_bandwidth_with_unit(health_metrics['middle_bw_median'], unit, decimal_places=0) + f" {unit}"
+        
         health_metrics.update({
-            'exit_bw_mean_kb': round(health_metrics['exit_bw_mean'] / 1024, 0) if health_metrics['exit_bw_mean'] > 0 else 0,
-            'exit_bw_median_kb': round(health_metrics['exit_bw_median'] / 1024, 0) if health_metrics['exit_bw_median'] > 0 else 0,
-            'guard_bw_mean_kb': round(health_metrics['guard_bw_mean'] / 1024, 0) if health_metrics['guard_bw_mean'] > 0 else 0,
-            'guard_bw_median_kb': round(health_metrics['guard_bw_median'] / 1024, 0) if health_metrics['guard_bw_median'] > 0 else 0,
-            'middle_bw_mean_kb': round(health_metrics['middle_bw_mean'] / 1024, 0) if health_metrics['middle_bw_mean'] > 0 else 0,
-            'middle_bw_median_kb': round(health_metrics['middle_bw_median'] / 1024, 0) if health_metrics['middle_bw_median'] > 0 else 0
+            'exit_bw_mean_formatted': exit_mean_formatted,
+            'exit_bw_median_formatted': exit_median_formatted,
+            'guard_bw_mean_formatted': guard_mean_formatted,
+            'guard_bw_median_formatted': guard_median_formatted,
+            'middle_bw_mean_formatted': middle_mean_formatted,
+            'middle_bw_median_formatted': middle_median_formatted
         })
         
         # Bandwidth formatting with proper units

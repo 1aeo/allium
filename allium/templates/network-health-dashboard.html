@@ -71,17 +71,17 @@ Network Health Dashboard
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.new_relays_24h) }}</span>
                         <span class="metric-label">New (24h)</span>
                     </div>
-                    <div class="metric-item" title="New relays that first appeared in the network in the last 30 days based on first_seen timestamp.">
+                    <div class="metric-item" title="New relays that first appeared in the network in the last month based on first_seen timestamp.">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.new_relays_30d) }}</span>
-                        <span class="metric-label">New (30d)</span>
+                        <span class="metric-label">New (1mo)</span>
+                    </div>
+                    <div class="metric-item" title="New relays that first appeared in the network in the last year based on first_seen timestamp.">
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.new_relays_1y) }}</span>
+                        <span class="metric-label">New (1y)</span>
                     </div>
                     <div class="metric-item" title="New relays that first appeared in the network in the last 6 months based on first_seen timestamp.">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.new_relays_6m) }}</span>
                         <span class="metric-label">New (6m)</span>
-                    </div>
-                    <div class="metric-item" title="Relays whose advertised bandwidth is measured and verified by bandwidth authorities.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.measured_relays) }} ({{ "%.1f%%"|format(relays.json.network_health.measured_percentage) }})</span>
-                        <span class="metric-label">Measured</span>
                     </div>
                 </div>
             </div>
@@ -113,15 +113,15 @@ Network Health Dashboard
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
                     <div class="metric-item" title="Mean and median bandwidth per Exit relay. Shows average capacity and typical relay size distribution.">
-                        <span class="metric-value">{{ "{:,.0f}".format(relays.json.network_health.exit_bw_mean_kb) }} | {{ "{:,.0f}".format(relays.json.network_health.exit_bw_median_kb) }} KB/s</span>
+                        <span class="metric-value">{{ relays.json.network_health.exit_bw_mean_formatted }} | {{ relays.json.network_health.exit_bw_median_formatted }}</span>
                         <span class="metric-label">Exit Mean | Median</span>
                     </div>
                     <div class="metric-item" title="Mean and median bandwidth per Guard relay. Shows average capacity and typical relay size distribution.">
-                        <span class="metric-value">{{ "{:,.0f}".format(relays.json.network_health.guard_bw_mean_kb) }} | {{ "{:,.0f}".format(relays.json.network_health.guard_bw_median_kb) }} KB/s</span>
+                        <span class="metric-value">{{ relays.json.network_health.guard_bw_mean_formatted }} | {{ relays.json.network_health.guard_bw_median_formatted }}</span>
                         <span class="metric-label">Guard Mean | Median</span>
                     </div>
                     <div class="metric-item" title="Mean and median bandwidth per Middle relay. Shows average capacity and typical relay size distribution.">
-                        <span class="metric-value">{{ "{:,.0f}".format(relays.json.network_health.middle_bw_mean_kb) }} | {{ "{:,.0f}".format(relays.json.network_health.middle_bw_median_kb) }} KB/s</span>
+                        <span class="metric-value">{{ relays.json.network_health.middle_bw_mean_formatted }} | {{ relays.json.network_health.middle_bw_median_formatted }}</span>
                         <span class="metric-label">Middle Mean | Median</span>
                     </div>
                 </div>
@@ -198,12 +198,12 @@ Network Health Dashboard
                 <h4>👥 Operator Participation</h4>
             </div>
             <div class="card-metrics">
+                <div class="metric-item primary" title="Total number of unique AROI (Autonomous Relay Operator Identifiers) - distinct operators running relays.">
+                    <span class="metric-value"><a href="{{ page_ctx.path_prefix }}misc/contacts-by-bandwidth.html" style="color: inherit; text-decoration: none;">{{ "{:,}".format(relays.json.network_health.aroi_operators_count) }}</a></span>
+                    <span class="metric-label">Total AROI</span>
+                </div>
                 <!-- AROI Row -->
-                <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
-                    <div class="metric-item" title="Total number of unique AROI (Autonomous Relay Operator Identifiers) - distinct operators running relays.">
-                        <span class="metric-value"><a href="{{ page_ctx.path_prefix }}misc/contacts-by-bandwidth.html" style="color: inherit; text-decoration: none;">{{ "{:,}".format(relays.json.network_health.aroi_operators_count) }}</a></span>
-                        <span class="metric-label">Total AROI</span>
-                    </div>
+                <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
                     <div class="metric-item" title="Relays with AROI contact information vs those without. AROI helps with network administration and accountability.">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.relays_with_contact) }} ({{ "%.1f%%"|format(relays.json.network_health.relays_with_contact_percentage) }})</span>
                         <span class="metric-label">With AROI</span>
@@ -256,13 +256,17 @@ Network Health Dashboard
                     <span class="metric-value"><a href="{{ page_ctx.path_prefix }}misc/countries-by-bandwidth.html" style="color: inherit; text-decoration: none;">{{ "{:,}".format(relays.json.network_health.countries_count) }}</a></span>
                     <span class="metric-label">Unique Countries</span>
                 </div>
-                <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
-                    <div class="metric-item" title="Relays in European Union countries vs non-EU countries. Shows geographic distribution and political diversity.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.eu_relays_count) }} | {{ "{:,}".format(relays.json.network_health.non_eu_relays_count) }}</span>
-                        <span class="metric-label">EU | Non-EU Relays</span>
+                <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
+                    <div class="metric-item" title="Relays hosted in European Union countries. Shows political and geographic concentration.">
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.eu_relays_count) }} ({{ "%.1f%%"|format(relays.json.network_health.eu_relays_percentage) }})</span>
+                        <span class="metric-label">EU Relays</span>
+                    </div>
+                    <div class="metric-item" title="Relays hosted in non-European Union countries. Shows global distribution outside the EU.">
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.non_eu_relays_count) }} ({{ "%.1f%%"|format(relays.json.network_health.non_eu_relays_percentage) }})</span>
+                        <span class="metric-label">Non-EU Relays</span>
                     </div>
                     <div class="metric-item" title="Relays in rare/frontier countries with few relays. Important for global accessibility and censorship circumvention.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.rare_countries_relays) }}</span>
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.rare_countries_relays) }} ({{ "%.1f%%"|format(relays.json.network_health.rare_countries_relays_percentage) }})</span>
                         <span class="metric-label">Rare Country Relays</span>
                     </div>
                 </div>
