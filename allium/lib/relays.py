@@ -2622,26 +2622,31 @@ class Relays:
 
     def _calculate_network_health_metrics(self):
         """
-        Calculate comprehensive network health metrics by reusing existing calculations.
+        Calculate network health metrics by maximally reusing existing calculations.
         
-        Leverages existing functions for maximum efficiency and consistency:
-        - _calculate_network_totals() for role distribution  
-        - calculate_network_uptime_percentiles() for uptime data
-        - Country/ASN data from existing categorization
-        - AROI data from existing processing
+        OPTIMIZATION: Reuses data already calculated during categorization to avoid 
+        redundant loops through all relays. Only calculates what's not already available.
+        
+        Leverages:
+        - network_totals: relay counts, bandwidth, authority/bad exit counts  
+        - sorted data: countries, AS, contacts, families from categorization
+        - network_uptime_percentiles: pre-calculated uptime data
+        - AROI leaderboards: operator counts
         
         Stores result in self.json['network_health'] for template access.
         """
-        # Ensure network totals are calculated first (reuse existing calculation)
+        # Ensure prerequisites are available (should already be calculated)
         if 'network_totals' not in self.json:
             self._calculate_network_totals()
+        if 'sorted' not in self.json:
+            self._categorize()
         
         network_totals = self.json['network_totals']
+        sorted_data = self.json['sorted']
         
-        # Start with basic relay counts (already calculated with proper exit > guard > middle priority)
+        # CARD 1: RELAY COUNTS - Reuse network_totals (already calculated with proper priority)
         health_metrics = {
             'relays_total': network_totals['total_relays'],
-            'relays_online': network_totals['total_relays'],  # All relays in dataset are considered online
             'guard_count': network_totals['guard_count'],
             'middle_count': network_totals['middle_count'], 
             'exit_count': network_totals['exit_count'],
@@ -2649,119 +2654,83 @@ class Relays:
             'measured_percentage': network_totals['measured_percentage']
         }
         
-        # SINGLE PASS THROUGH RELAYS: Calculate all metrics in one loop to minimize iterations
-        authority_count = 0
-        bad_exit_count = 0
-        total_bandwidth = 0
-        guard_bandwidth = 0  # Guards that are NOT exits
-        exit_bandwidth = 0   # All exits (including guard+exit)
-        middle_bandwidth = 0 # Neither guard nor exit
-        
-        # Uptime tracking will be done separately using proper utility functions
-        
-        # Family and contact tracking
-        relays_with_family = 0
-        relays_without_family = 0
-        relays_with_contact = 0
-        relays_without_contact = 0
+        # OPTIMIZED SINGLE PASS: Only calculate what's not available in existing data
+        # Calculate authority/bad exit counts + bandwidth + family/contact/geo data in one pass
+        authority_count = bad_exit_count = 0
+        total_bandwidth = guard_bandwidth = exit_bandwidth = middle_bandwidth = 0
+        relays_with_family = relays_without_family = 0
+        relays_with_contact = relays_without_contact = 0
         unique_contacts = set()
+        eu_relays = non_eu_relays = rare_countries_relays = 0
         
-        # Geographic tracking
-        countries_set = set()
-        eu_relays = 0
-        non_eu_relays = 0
-        rare_countries_relays = 0
-        
-        # ASN tracking
-        asns_set = set()
-        
-        # Import utilities we need
+        # Import utilities once
         from .country_utils import is_eu_political, is_frontier_country
         
-        # Get rare countries data if available (reuse existing calculation from leaderboards)
+        # Get rare countries from existing sorted data (avoid recalculation)
         valid_rare_countries = set()
         try:
-            if 'sorted' in self.json and 'country' in self.json['sorted']:
+            if 'country' in sorted_data:
                 from .country_utils import get_rare_countries_weighted_with_existing_data
-                country_data = self.json['sorted']['country']
-                all_rare_countries = get_rare_countries_weighted_with_existing_data(country_data, len(self.json['relays']))
-                valid_rare_countries = {country.lower() for country in all_rare_countries if len(country) == 2 and country.isalpha()}
+                all_rare_countries = get_rare_countries_weighted_with_existing_data(
+                    sorted_data['country'], network_totals['total_relays'])
+                valid_rare_countries = {c.lower() for c in all_rare_countries if len(c) == 2 and c.isalpha()}
         except:
-            # Fallback to frontier countries if rare countries calculation fails
             pass
         
-        # SINGLE LOOP THROUGH ALL RELAYS - Calculate everything at once
+        # SINGLE OPTIMIZED LOOP - Calculate only what's needed
         for relay in self.json['relays']:
             flags = relay.get('flags', [])
             
-            # Role classification: Exit > Guard > Middle (matches existing _calculate_network_totals logic)
-            is_exit = 'Exit' in flags
-            is_guard = 'Guard' in flags
-            is_middle = not is_exit and not is_guard
-            
-            # For bandwidth and uptime calculations, use primary role (exit > guard > middle)
-            primary_role_exit = is_exit
-            primary_role_guard = is_guard and not is_exit
-            primary_role_middle = not is_exit and not is_guard
-            
-            # Authority and bad exit counts
+            # Authority and bad exit counts (not available elsewhere)
             if 'Authority' in flags:
                 authority_count += 1
             if 'BadExit' in flags:
                 bad_exit_count += 1
             
-            # Bandwidth by role (proper exit > guard > middle classification)
+            # Bandwidth by role (matches existing role classification logic)
             bandwidth = relay.get('observed_bandwidth', 0)
             total_bandwidth += bandwidth
             
-            if primary_role_exit:
+            is_exit = 'Exit' in flags
+            is_guard = 'Guard' in flags
+            if is_exit:
                 exit_bandwidth += bandwidth
-            elif primary_role_guard:
+            elif is_guard:
                 guard_bandwidth += bandwidth
-            else:  # primary_role_middle
+            else:
                 middle_bandwidth += bandwidth
             
-            # Uptime data will be calculated separately after the main loop to use proper utility functions
-            
-            # Family and contact info
+            # Family info (not efficiently available elsewhere)
             effective_family = relay.get('effective_family', [])
             if effective_family and len(effective_family) > 1:
                 relays_with_family += 1
             else:
                 relays_without_family += 1
             
+            # Contact info (unique contacts not available elsewhere)
             contact = relay.get('contact', '').strip()
-            unique_contacts.add(contact)  # Include empty strings
+            unique_contacts.add(contact)
             if contact:
                 relays_with_contact += 1
             else:
                 relays_without_contact += 1
             
-            # Geographic data
+            # Geographic data (EU/rare countries not in sorted data)
             country = relay.get('country', '').upper()
             if country and len(country) == 2:
-                countries_set.add(country)
-                
-                # EU vs Non-EU
                 if is_eu_political(country):
                     eu_relays += 1
                 else:
                     non_eu_relays += 1
                 
-                # Rare countries
                 if country.lower() in valid_rare_countries or (not valid_rare_countries and is_frontier_country(country)):
                     rare_countries_relays += 1
-            
-            # ASN data
-            asn = relay.get('as', '')
-            if asn:
-                asns_set.add(asn)
         
-        # Store authority and bad exit counts
+        # Store calculated counts
         health_metrics['authorities_count'] = authority_count
         health_metrics['bad_exits_count'] = bad_exit_count
         
-        # CARD 2: BANDWIDTH COUNTS - Format bandwidth values (no decimal places, include units)
+        # CARD 2: BANDWIDTH - Format bandwidth (reuse existing formatting logic)
         if self.use_bits:
             unit = self._determine_unit(total_bandwidth * 8)
             health_metrics['total_bandwidth_formatted'] = self._format_bandwidth_with_unit(total_bandwidth * 8, unit, decimal_places=0) + f" {unit}"
@@ -2775,12 +2744,8 @@ class Relays:
             health_metrics['exit_bandwidth_formatted'] = self._format_bandwidth_with_unit(exit_bandwidth, unit, decimal_places=0) + f" {unit}"
             health_metrics['middle_bandwidth_formatted'] = self._format_bandwidth_with_unit(middle_bandwidth, unit, decimal_places=0) + f" {unit}"
         
-        health_metrics['bandwidth_unit'] = unit
-        
-        # CARD 3: RELAY UPTIME - Calculate actual uptime by role using real data
+        # CARD 3: UPTIME - Reuse pre-calculated network uptime percentiles + calculate role-specific
         if hasattr(self, 'uptime_data') and self.uptime_data:
-            # Use pre-calculated network uptime percentiles (calculated in _reprocess_uptime_data)
-            from .uptime_utils import find_relay_uptime_data, calculate_relay_uptime_average
             if hasattr(self, 'network_uptime_percentiles') and self.network_uptime_percentiles:
                 health_metrics['overall_uptime'] = self.network_uptime_percentiles['average']
                 health_metrics['uptime_percentiles'] = self.network_uptime_percentiles['percentiles']
@@ -2788,14 +2753,15 @@ class Relays:
                 health_metrics['overall_uptime'] = 0.0
                 health_metrics['uptime_percentiles'] = None
             
-            # Calculate role-specific uptime using proper data structure
-            # Reset uptime tracking arrays
+            # Calculate role-specific uptime (unavoidable second loop, but optimized)
+            from .uptime_utils import find_relay_uptime_data, calculate_relay_uptime_average
+            import statistics
+            
             exit_uptime_values = []
             guard_uptime_values = []
             middle_uptime_values = []
             bad_relay_uptime_values = []
             
-            # Iterate through details API relays and find matching uptime data
             for relay in self.json['relays']:
                 fingerprint = relay.get('fingerprint', '')
                 if not fingerprint:
@@ -2806,98 +2772,62 @@ class Relays:
                 is_guard = 'Guard' in flags
                 is_bad_exit = 'BadExit' in flags
                 
-                # Role classification: Exit > Guard > Middle
-                primary_role_exit = is_exit
-                primary_role_guard = is_guard and not is_exit
-                primary_role_middle = not is_exit and not is_guard
-                
-                # Find uptime data for this relay
                 relay_uptime_data = find_relay_uptime_data(fingerprint, self.uptime_data)
                 if relay_uptime_data and relay_uptime_data.get('uptime'):
                     period_data = relay_uptime_data['uptime'].get('6_months', {})
                     if period_data.get('values'):
                         avg_uptime = calculate_relay_uptime_average(period_data['values'])
-                        if avg_uptime > 0:  # Valid uptime data
-                            if primary_role_exit:
+                        if avg_uptime > 0:
+                            if is_exit:
                                 exit_uptime_values.append(avg_uptime)
-                            elif primary_role_guard:
+                            elif is_guard:
                                 guard_uptime_values.append(avg_uptime)
-                            else:  # primary_role_middle
+                            else:
                                 middle_uptime_values.append(avg_uptime)
                             
-                            # Track bad relay uptime
                             if is_bad_exit:
                                 bad_relay_uptime_values.append(avg_uptime)
             
-            # Calculate role-specific uptime averages
             health_metrics['exit_uptime'] = statistics.mean(exit_uptime_values) if exit_uptime_values else 0.0
             health_metrics['guard_uptime'] = statistics.mean(guard_uptime_values) if guard_uptime_values else 0.0
             health_metrics['middle_uptime'] = statistics.mean(middle_uptime_values) if middle_uptime_values else 0.0
             health_metrics['bad_relay_uptime'] = statistics.mean(bad_relay_uptime_values) if bad_relay_uptime_values else 0.0
-            
-
         else:
-            # No uptime data available
-            health_metrics['overall_uptime'] = 0.0
-            health_metrics['exit_uptime'] = 0.0
-            health_metrics['guard_uptime'] = 0.0
-            health_metrics['middle_uptime'] = 0.0
-            health_metrics['bad_relay_uptime'] = 0.0
-            health_metrics['uptime_percentiles'] = None
+            health_metrics.update({
+                'overall_uptime': 0.0, 'exit_uptime': 0.0, 'guard_uptime': 0.0, 
+                'middle_uptime': 0.0, 'bad_relay_uptime': 0.0, 'uptime_percentiles': None
+            })
         
-        # CARD 4: OPERATOR PARTICIPATION - Use actual calculated data
+        # CARD 4: OPERATOR PARTICIPATION - Reuse existing calculations
         if hasattr(self, 'json') and 'aroi_leaderboards' in self.json:
             aroi_summary = self.json['aroi_leaderboards'].get('summary', {})
             health_metrics['aroi_operators_count'] = aroi_summary.get('total_operators', 0)
         else:
-            # Fallback: count unique contacts from existing data
-            if 'sorted' in self.json and 'contact' in self.json['sorted']:
-                health_metrics['aroi_operators_count'] = len(self.json['sorted']['contact'])
-            else:
-                health_metrics['aroi_operators_count'] = 0
+            health_metrics['aroi_operators_count'] = len(sorted_data.get('contact', {}))
         
-        # Family count from existing sorted data
-        if 'sorted' in self.json and 'family' in self.json['sorted']:
-            health_metrics['families_count'] = len(self.json['sorted']['family'])
-        else:
-            health_metrics['families_count'] = 0
-        
-        # Contact and family statistics from our single-pass calculation
+        health_metrics['families_count'] = len(sorted_data.get('family', {}))
         health_metrics['unique_contacts_count'] = len(unique_contacts)
         health_metrics['relays_with_family'] = relays_with_family
         health_metrics['relays_without_family'] = relays_without_family
         health_metrics['relays_with_contact'] = relays_with_contact
         health_metrics['relays_without_contact'] = relays_without_contact
         
-        # CARD 5: GEOGRAPHIC PARTICIPATION - Use calculated data
-        health_metrics['countries_count'] = len(countries_set)
+        # CARD 5: GEOGRAPHIC PARTICIPATION - Reuse sorted data where possible
+        health_metrics['countries_count'] = len(sorted_data.get('country', {}))
         health_metrics['eu_relays_count'] = eu_relays
         health_metrics['non_eu_relays_count'] = non_eu_relays
         health_metrics['rare_countries_relays'] = rare_countries_relays
         
-        total_geo_relays = eu_relays + non_eu_relays
-        if total_geo_relays > 0:
-            health_metrics['eu_percentage'] = round((eu_relays / total_geo_relays) * 100, 1)
-            health_metrics['non_eu_percentage'] = round((non_eu_relays / total_geo_relays) * 100, 1)
-        else:
-            health_metrics['eu_percentage'] = 0.0
-            health_metrics['non_eu_percentage'] = 0.0
+        # CARD 6: PROVIDER PARTICIPATION - Reuse sorted data
+        health_metrics['unique_as_count'] = len(sorted_data.get('as', {}))
         
-        # CARD 6: PROVIDER PARTICIPATION - Use calculated ASN data
-        health_metrics['unique_as_count'] = len(asns_set)
+        # Calculate averages (minimal computation)
+        countries_count = health_metrics['countries_count']
+        as_count = health_metrics['unique_as_count']
         
-        # Calculate averages
-        if len(countries_set) > 0:
-            health_metrics['avg_as_per_country'] = round(len(asns_set) / len(countries_set), 1)
-        else:
-            health_metrics['avg_as_per_country'] = 0.0
-        
-        if len(asns_set) > 0:
-            health_metrics['avg_aroi_per_as'] = round(health_metrics['aroi_operators_count'] / len(asns_set), 1)
-            health_metrics['avg_families_per_as'] = round(health_metrics['families_count'] / len(asns_set), 1)
-        else:
-            health_metrics['avg_aroi_per_as'] = 0.0
-            health_metrics['avg_families_per_as'] = 0.0
+        health_metrics['avg_as_per_country'] = round(as_count / countries_count, 1) if countries_count > 0 else 0.0
+        health_metrics['avg_aroi_per_as'] = round(health_metrics['aroi_operators_count'] / as_count, 1) if as_count > 0 else 0.0
+        health_metrics['avg_families_per_as'] = round(health_metrics['families_count'] / as_count, 1) if as_count > 0 else 0.0
         
         # Store the complete health metrics
         self.json['network_health'] = health_metrics
