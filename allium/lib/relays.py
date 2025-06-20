@@ -2813,15 +2813,28 @@ class Relays:
         
         # Platform metrics
         health_metrics['unique_platforms_count'] = len(unique_platforms)
-        # Get top 3 platforms and "others"
+        # Get top 3 platforms and "others" with percentages
         sorted_platforms = sorted(platform_counts.items(), key=lambda x: x[1], reverse=True)
         top_platforms = sorted_platforms[:3]
         others_count = sum(count for _, count in sorted_platforms[3:])
-        health_metrics['platform_top3'] = top_platforms
+        
+        # Add percentage calculations for platforms
+        total_relays = health_metrics['relays_total']
+        top_platforms_with_pct = []
+        for platform, count in top_platforms:
+            percentage = (count / total_relays * 100) if total_relays > 0 else 0.0
+            top_platforms_with_pct.append((platform, count, percentage))
+        
+        others_percentage = (others_count / total_relays * 100) if total_relays > 0 else 0.0
+        
+        health_metrics['platform_top3'] = top_platforms_with_pct
         health_metrics['platform_others'] = others_count
+        health_metrics['platform_others_percentage'] = others_percentage
         
         # Version compliance metrics
         total_with_version_info = recommended_version_count + not_recommended_count
+        total_relays = health_metrics['relays_total']
+        
         health_metrics['recommended_version_percentage'] = (
             (recommended_version_count / total_with_version_info * 100) 
             if total_with_version_info > 0 else 0.0
@@ -2832,11 +2845,28 @@ class Relays:
         health_metrics['obsolete_count'] = obsolete_count
         health_metrics['outdated_count'] = outdated_count
         
-        # Bandwidth utilization metrics
-        health_metrics['avg_observed_advertised_diff'] = (
+        # Add percentage calculations for version compliance
+        health_metrics['not_recommended_percentage'] = (not_recommended_count / total_relays * 100) if total_relays > 0 else 0.0
+        health_metrics['experimental_percentage'] = (experimental_count / total_relays * 100) if total_relays > 0 else 0.0
+        health_metrics['obsolete_percentage'] = (obsolete_count / total_relays * 100) if total_relays > 0 else 0.0
+        health_metrics['outdated_percentage'] = (outdated_count / total_relays * 100) if total_relays > 0 else 0.0
+        
+        # Bandwidth utilization metrics - format with proper unit
+        avg_obs_adv_diff_bytes = (
             (observed_advertised_diff_sum / observed_advertised_count) 
             if observed_advertised_count > 0 else 0
         )
+        
+        # Format obs/adv diff using the same unit system as other bandwidth metrics
+        if self.use_bits:
+            obs_adv_unit = self._determine_unit(avg_obs_adv_diff_bytes * 8)
+            health_metrics['avg_observed_advertised_diff_formatted'] = self._format_bandwidth_with_unit(avg_obs_adv_diff_bytes * 8, obs_adv_unit, decimal_places=0) + f" {obs_adv_unit}"
+        else:
+            obs_adv_unit = self._determine_unit(avg_obs_adv_diff_bytes)
+            health_metrics['avg_observed_advertised_diff_formatted'] = self._format_bandwidth_with_unit(avg_obs_adv_diff_bytes, obs_adv_unit, decimal_places=0) + f" {obs_adv_unit}"
+        
+        # Keep legacy raw value for backward compatibility
+        health_metrics['avg_observed_advertised_diff'] = avg_obs_adv_diff_bytes
         health_metrics['consensus_weight_bandwidth_ratio'] = (
             (total_consensus_weight / total_bandwidth) 
             if total_bandwidth > 0 else 0.0
@@ -3035,6 +3065,13 @@ class Relays:
         health_metrics['relays_without_family'] = relays_without_family
         health_metrics['relays_with_contact'] = relays_with_contact
         health_metrics['relays_without_contact'] = relays_without_contact
+        
+        # Add percentage calculations for operator participation
+        total_relays = health_metrics['relays_total']
+        health_metrics['relays_with_family_percentage'] = (relays_with_family / total_relays * 100) if total_relays > 0 else 0.0
+        health_metrics['relays_without_family_percentage'] = (relays_without_family / total_relays * 100) if total_relays > 0 else 0.0
+        health_metrics['relays_with_contact_percentage'] = (relays_with_contact / total_relays * 100) if total_relays > 0 else 0.0
+        health_metrics['relays_without_contact_percentage'] = (relays_without_contact / total_relays * 100) if total_relays > 0 else 0.0
         
         # CARD 5: GEOGRAPHIC PARTICIPATION - Reuse sorted data where possible
         health_metrics['countries_count'] = len(sorted_data.get('country', {}))
