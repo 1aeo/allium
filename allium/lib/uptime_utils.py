@@ -673,10 +673,56 @@ def process_all_uptime_data_consolidated(all_relays, uptime_data, include_flag_a
                 else:
                     network_flag_statistics[flag][period] = None
     
+    # Calculate middle relay statistics (non-Exit, non-Guard relays) for network health dashboard
+    # This consolidates all role-specific calculations in one place following DRY principle
+    network_middle_statistics = {}
+    for period in ['1_month', '6_months', '1_year', '5_years']:
+        middle_uptime_values = []
+        
+        # Collect middle relay uptime values for this period
+        for fingerprint, relay_data in relay_uptime_data.items():
+            relay_obj = relay_data['relay_obj']
+            if relay_obj:  # Only process relays that are in our relay set
+                flags = relay_obj.get('flags', [])
+                is_exit = 'Exit' in flags
+                is_guard = 'Guard' in flags
+                
+                # Middle relays are those that are neither Exit nor Guard (same logic as contact pages)
+                if not is_exit and not is_guard:
+                    uptime_value = relay_data['uptime_percentages'].get(period, 0.0)
+                    if uptime_value > 0:  # Only include relays with actual uptime data
+                        middle_uptime_values.append(uptime_value)
+        
+        # Calculate statistics for middle relays
+        if len(middle_uptime_values) >= 3:
+            try:
+                import statistics
+                mean = statistics.mean(middle_uptime_values)
+                median = statistics.median(middle_uptime_values)
+                std_dev = statistics.stdev(middle_uptime_values) if len(middle_uptime_values) > 1 else 0
+                
+                # Set lower bound of 0 for two_sigma_low since negative uptimes are impossible
+                two_sigma_low = max(0.0, mean - 2 * std_dev)
+                two_sigma_high = mean + 2 * std_dev
+                
+                network_middle_statistics[period] = {
+                    'mean': mean,
+                    'median': median,
+                    'std_dev': std_dev,
+                    'two_sigma_low': two_sigma_low,
+                    'two_sigma_high': two_sigma_high,
+                    'count': len(middle_uptime_values)
+                }
+            except Exception:
+                network_middle_statistics[period] = None
+        else:
+            network_middle_statistics[period] = None
+    
     return {
         'relay_uptime_data': relay_uptime_data,
         'network_statistics': network_statistics,
         'network_flag_statistics': network_flag_statistics if include_flag_analysis else None,
+        'network_middle_statistics': network_middle_statistics,
         'processing_summary': {
             'total_relays_processed': len(relay_uptime_data),
             'network_relays_with_uptime': len([r for r in relay_uptime_data.values() if any(p > 0 for p in r['uptime_percentages'].values())]),

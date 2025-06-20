@@ -3313,6 +3313,7 @@ class Relays:
         if hasattr(self, '_consolidated_uptime_results') and self._consolidated_uptime_results:
             network_statistics = self._consolidated_uptime_results.get('network_statistics', {})
             network_flag_statistics = self._consolidated_uptime_results.get('network_flag_statistics', {})
+            network_middle_statistics = self._consolidated_uptime_results.get('network_middle_statistics', {})
             
             # Use 1-month network mean for overall uptime as requested
             if network_statistics.get('1_month', {}).get('mean') is not None:
@@ -3328,14 +3329,11 @@ class Relays:
             else:
                 health_metrics['uptime_percentiles'] = None
             
-            # Reuse existing role-specific calculations from network flag statistics
-            # This reuses the exact same calculation logic as contact page reliability sections
+            # Reuse all existing role-specific calculations from consolidated uptime processing
+            # This follows DRY/DIY principle by using already computed statistics
             # Exit and Guard statistics come from flag-specific network statistics
-            # Middle statistics are calculated from all non-Exit, non-Guard relays
+            # Middle statistics come from consolidated middle relay calculations
             
-            import statistics
-            
-            # For Exit and Guard: use existing flag-specific network statistics
             for period in ['1_month', '6_months', '1_year', '5_years']:
                 # Exit relay statistics - reuse existing calculation
                 if network_flag_statistics.get('Exit', {}).get(period, {}).get('mean') is not None:
@@ -3353,29 +3351,15 @@ class Relays:
                     guard_mean = 0.0
                     guard_median = 0.0
                 
-                # Middle relay statistics - calculate from non-Exit, non-Guard relays
-                # This matches the existing logic used in contact page calculations
-                middle_uptime_values = []
-                for relay in self.json['relays']:
-                    flags = relay.get('flags', [])
-                    is_exit = 'Exit' in flags
-                    is_guard = 'Guard' in flags
-                    
-                    # Middle relays are those that are neither Exit nor Guard
-                    if not is_exit and not is_guard:
-                        uptime_percentages = relay.get('uptime_percentages', {})
-                        uptime_value = uptime_percentages.get(period, 0.0)
-                        if uptime_value > 0:  # Only include relays with actual uptime data
-                            middle_uptime_values.append(uptime_value)
-                
-                if middle_uptime_values:
-                    middle_mean = statistics.mean(middle_uptime_values)
-                    middle_median = statistics.median(middle_uptime_values)
+                # Middle relay statistics - reuse existing consolidated calculation
+                if network_middle_statistics.get(period, {}).get('mean') is not None:
+                    middle_mean = network_middle_statistics[period]['mean']
+                    middle_median = network_middle_statistics[period].get('median', middle_mean)
                 else:
                     middle_mean = 0.0
                     middle_median = 0.0
                 
-                # Set values using the same naming as before but with existing calculations
+                # Set values using the same naming as before but with all consolidated calculations
                 if period == '1_month':
                     health_metrics['exit_uptime_1_month_mean'] = exit_mean
                     health_metrics['exit_uptime_1_month_median'] = exit_median
