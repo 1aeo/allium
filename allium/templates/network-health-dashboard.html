@@ -27,12 +27,12 @@ Network Health Dashboard
             </div>
             <div class="card-metrics">
                 <div class="metric-item primary" title="Total number of Tor relays currently running in the network. Calculated by counting all active relays from Onionoo API.">
-                    <span class="metric-value"><a href="{{ page_ctx.path_prefix }}misc/all.html" style="color: inherit; text-decoration: none;">{{ "{:,}".format(relays.json.network_health.relays_total) }}</a></span>
+                    <span class="metric-value"><a href="{{ page_ctx.path_prefix }}misc/all.html" style="color: inherit; text-decoration: none;">{{ relays.json.network_health.relays_total_formatted }}</a></span>
                     <span class="metric-label">Total Relays</span>
                 </div>
                 <div class="metric-grid">
                     <div class="metric-item" title="Exit relays allow traffic to leave the Tor network to the regular internet. Classified by Exit flag priority.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.exit_count) }} ({{ "%.1f%%"|format(relays.json.network_health.exit_percentage) }})</span>
+                        <span class="metric-value">{{ relays.json.network_health.exit_count_with_percentage }}</span>
                         <span class="metric-label">Exit</span>
                     </div>
                     <div class="metric-item" title="Guard relays are the first hop in Tor circuits. Classified by Guard flag when not Exit.">
@@ -150,8 +150,8 @@ Network Health Dashboard
                 <h4>⏰ Relay Uptime</h4>
             </div>
             <div class="card-metrics">
-                <div class="metric-item primary" title="Average uptime percentage across all relays over the last month. Higher is better for network stability. 1mo Mean by category: Exit {{ "%.1f%%"|format(relays.json.network_health.exit_uptime_1_month_mean) }}, Guard {{ "%.1f%%"|format(relays.json.network_health.guard_uptime_1_month_mean) }}, Middle {{ "%.1f%%"|format(relays.json.network_health.middle_uptime_1_month_mean) }}, Other {{ "%.1f%%"|format(relays.json.network_health.other_uptime_1_month_mean) }}.">
-                    <span class="metric-value">{{ "%.1f%%"|format(relays.json.network_health.overall_uptime) }}</span>
+                <div class="metric-item primary" title="Average uptime percentage across all relays over the last month. Higher is better for network stability. 1mo Mean by category: Exit {{ relays.json.network_health.exit_uptime_1_month_mean_formatted }}, Guard {{ relays.json.network_health.guard_uptime_1_month_mean_formatted }}, Middle {{ relays.json.network_health.middle_uptime_1_month_mean_formatted }}, Other {{ relays.json.network_health.other_uptime_1_month_mean_formatted }}.">
+                    <span class="metric-value">{{ relays.json.network_health.overall_uptime_formatted }}</span>
                     <span class="metric-label">Overall Uptime (1mo Mean)</span>
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
@@ -170,7 +170,7 @@ Network Health Dashboard
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(1, 1fr);">
                     <div class="metric-item" title="Exit relay uptime over 1 month, 6 months, 1 year, and 5 years respectively.">
-                        <span class="metric-value">{{ "%.1f"|format(relays.json.network_health.exit_uptime_1_month) }}% | {{ "%.1f"|format(relays.json.network_health.exit_uptime_mean) }}% | {{ "%.1f"|format(relays.json.network_health.exit_uptime_1_year) }}% | {{ "%.1f"|format(relays.json.network_health.exit_uptime_5_years) }}%</span>
+                        <span class="metric-value">{{ relays.json.network_health.exit_uptime_series_formatted }}</span>
                         <span class="metric-label">Exit: 1mo | 6mo | 1y | 5y (Mean)</span>
                     </div>
                 </div>
@@ -441,9 +441,9 @@ Network Health Dashboard
                     <span class="metric-label">Unique Operating Systems</span>
                 </div>
                 <div class="metric-grid">
-                    {% for platform, count, percentage in relays.json.network_health.platform_top3 %}
+                    {% for platform, count_formatted, percentage_formatted in relays.json.network_health.platform_top3_formatted %}
                     <div class="metric-item" title="Number of relays running {{ platform }}. Top platforms by relay count.">
-                        <span class="metric-value">{{ "{:,}".format(count) }} ({{ "%.0f%%"|format(percentage) }})</span>
+                        <span class="metric-value">{{ count_formatted }} ({{ percentage_formatted }})</span>
                         <span class="metric-label">{{ platform }}</span>
                     </div>
                     {% endfor %}
