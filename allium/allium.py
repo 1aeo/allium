@@ -281,6 +281,8 @@ if __name__ == "__main__":
     if args.progress:
         print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Generating network health dashboard...")
     health_ctx = get_page_context('index', 'home', {'page_name': 'Network Health Dashboard'})
+    # Add timestamp for the dashboard
+    health_ctx['timestamp_str'] = RELAY_SET.timestamp
     RELAY_SET.write_misc(template="network-health-dashboard.html", path="network-health.html", page_ctx=health_ctx)
     if args.progress:
         print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Generated network health dashboard")
