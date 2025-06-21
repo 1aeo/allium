@@ -470,18 +470,24 @@ Network Health Dashboard
                 <h4>🚪 Exit Policies</h4>
             </div>
             <div class="card-metrics">
-                <div class="metric-item primary" title="Number and percentage of exit relays without restrictions allowing all traffic. These relays provide maximum utility for Tor users. Percentage calculated based on total exit relays.">
-                    <span class="metric-value">{{ "{:,}".format(relays.json.network_health.unrestricted_exits) }} ({{ "%.1f%%"|format(relays.json.network_health.unrestricted_exits / relays.json.network_health.exit_count * 100) }})</span>
-                    <span class="metric-label">Relays without Port Restrictions</span>
+                <div class="metric-item primary" title="Number and percentage of exit relays without ANY restrictions - neither port restrictions nor public IP address restrictions. These relays provide maximum utility for Tor users, allowing unrestricted access to all public internet resources.">
+                    <span class="metric-value">{{ "{:,}".format(relays.json.network_health.unrestricted_and_no_ip_restrictions) }} ({{ "%.1f%%"|format(relays.json.network_health.unrestricted_and_no_ip_restrictions_percentage) }})</span>
+                    <span class="metric-label">Completely Unrestricted Relays</span>
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
-                    <div class="metric-item" title="Number and percentage of exit relays with port restrictions. These relays block certain types of traffic based on destination port. Percentage calculated based on total exit relays.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.restricted_exits) }} ({{ "%.1f%%"|format(relays.json.network_health.restricted_exits / relays.json.network_health.exit_count * 100) }})</span>
+                    <div class="metric-item" title="Number and percentage of exit relays without port restrictions, allowing all traffic to any destination port. These relays provide comprehensive port access for Tor users.">
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.unrestricted_exits) }} ({{ "%.1f%%"|format(relays.json.network_health.unrestricted_exits_percentage) }})</span>
+                        <span class="metric-label">without Port Restrictions</span>
+                    </div>
+                    <div class="metric-item" title="Number and percentage of exit relays with port restrictions. These relays block certain types of traffic based on destination port.">
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.restricted_exits) }} ({{ "%.1f%%"|format(relays.json.network_health.restricted_exits_percentage) }})</span>
                         <span class="metric-label">with Port Restrictions</span>
                     </div>
-                    <div class="metric-item" title="Number and percentage of exit relays that allow web traffic on ports 80 and 443. Essential for basic web browsing functionality. Percentage calculated based on total exit relays.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.web_traffic_exits) }} ({{ "%.1f%%"|format(relays.json.network_health.web_traffic_exits / relays.json.network_health.exit_count * 100) }})</span>
-                        <span class="metric-label">allow Web Traffic</span>
+                </div>
+                <div class="metric-grid" style="grid-template-columns: repeat(1, 1fr);">
+                    <div class="metric-item" title="Number and percentage of exit relays that allow web traffic on ports 80 and 443. Essential for basic web browsing functionality.">
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.web_traffic_exits) }} ({{ "%.1f%%"|format(relays.json.network_health.web_traffic_exits_percentage) }})</span>
+                        <span class="metric-label">allow Web Traffic (ports 80, 443)</span>
                     </div>
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">

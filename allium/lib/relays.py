@@ -2981,6 +2981,7 @@ class Relays:
         unrestricted_exits = 0
         ip_unrestricted_exits = 0
         ip_restricted_exits = 0
+        unrestricted_and_no_ip_restrictions = 0  # NEW: Combined metric for both no port AND no IP restrictions
         
         # Role-specific collectors - combined into single loop
         exit_cw_values = []
@@ -3125,6 +3126,10 @@ class Relays:
                     ip_restricted_exits += 1
                 else:
                     ip_unrestricted_exits += 1
+                
+                # NEW: Track exits with BOTH no port restrictions AND no IP restrictions
+                if is_unrestricted and not has_ip_restrictions:
+                    unrestricted_and_no_ip_restrictions += 1
             
             # NEW: Age calculation using first_seen
             first_seen_str = relay.get('first_seen', '')
@@ -3371,7 +3376,8 @@ class Relays:
             'top_10_as_cw_bw_median': int(statistics.median(top_10_as_cw_bw_values)) if top_10_as_cw_bw_values else 0
         })
         
-        # NEW: Exit policy metrics
+        # NEW: Exit policy metrics (FIXED: use exit_count for percentage calculations)
+        exit_count = network_totals['exit_count']
         health_metrics.update({
             'guard_exit_count': guard_exit_count,
             'unrestricted_exits': unrestricted_exits,
@@ -3379,12 +3385,16 @@ class Relays:
             'web_traffic_exits': web_traffic_exits,
             'ip_unrestricted_exits': ip_unrestricted_exits,
             'ip_restricted_exits': ip_restricted_exits,
-            'unrestricted_exits_percentage': (unrestricted_exits / total_relays_count * 100) if total_relays_count > 0 else 0.0,
-            'restricted_exits_percentage': (restricted_exits / total_relays_count * 100) if total_relays_count > 0 else 0.0,
-            'web_traffic_exits_percentage': (web_traffic_exits / total_relays_count * 100) if total_relays_count > 0 else 0.0,
+            'unrestricted_and_no_ip_restrictions': unrestricted_and_no_ip_restrictions,  # NEW: Combined metric
+            # FIXED: Port restriction percentages use total_relays_count (applies to all relays)
+            'unrestricted_exits_percentage': (unrestricted_exits / exit_count * 100) if exit_count > 0 else 0.0,
+            'restricted_exits_percentage': (restricted_exits / exit_count * 100) if exit_count > 0 else 0.0,
+            'web_traffic_exits_percentage': (web_traffic_exits / exit_count * 100) if exit_count > 0 else 0.0,
             'guard_exit_percentage': (guard_exit_count / total_relays_count * 100) if total_relays_count > 0 else 0.0,
-            'ip_unrestricted_exits_percentage': (ip_unrestricted_exits / total_relays_count * 100) if total_relays_count > 0 else 0.0,
-            'ip_restricted_exits_percentage': (ip_restricted_exits / total_relays_count * 100) if total_relays_count > 0 else 0.0
+            # FIXED: IP restriction percentages use exit_count (applies only to exit relays)
+            'ip_unrestricted_exits_percentage': (ip_unrestricted_exits / exit_count * 100) if exit_count > 0 else 0.0,
+            'ip_restricted_exits_percentage': (ip_restricted_exits / exit_count * 100) if exit_count > 0 else 0.0,
+            'unrestricted_and_no_ip_restrictions_percentage': (unrestricted_and_no_ip_restrictions / exit_count * 100) if exit_count > 0 else 0.0
         })
         
         # STORE CALCULATED METRICS
