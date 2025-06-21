@@ -92,8 +92,8 @@ def is_private_ip_address(ip_str):
     # Remove CIDR notation if present
     ip_clean = ip_str.split('/')[0].strip()
     
-    # Handle IPv6 addresses
-    if ':' in ip_clean and '::' in ip_clean or ip_clean.count(':') >= 2:
+    # Handle IPv6 addresses (detect by having multiple colons or double colon)
+    if ':' in ip_clean and ('::' in ip_clean or ip_clean.count(':') >= 2):
         # Basic IPv6 private range detection
         ip_lower = ip_clean.lower()
         
@@ -3077,7 +3077,23 @@ class Relays:
                         # Check if this policy has IP address restrictions on public addresses
                         # Policy format is generally "IP:PORT" or "*:PORT"
                         if ':' in policy:
-                            ip_part = policy.split(':')[0]
+                            # Handle IPv6 addresses in IPv4 summary (can happen with dual-stack)
+                            if '::' in policy or policy.count(':') > 1:
+                                # IPv6 format - need careful parsing
+                                if policy.startswith('[') and ']:' in policy:
+                                    # Format: [IPv6]:PORT
+                                    ip_part = policy[1:policy.find(']:')]
+                                else:
+                                    # Format: IPv6:PORT - take everything before the last colon
+                                    parts = policy.rsplit(':', 1)
+                                    if len(parts) == 2:
+                                        ip_part = parts[0]
+                                    else:
+                                        continue  # Skip malformed policies
+                            else:
+                                # IPv4 format
+                                ip_part = policy.split(':')[0]
+                            
                             # If IP part is not '*' and it's a public IP address, it's a restriction
                             if ip_part != '*' and not is_private_ip_address(ip_part):
                                 has_ip_restrictions = True
