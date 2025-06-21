@@ -2732,25 +2732,28 @@ class Relays:
             'non_eu_consensus_weight_percentage', 'rare_countries_consensus_weight_percentage',
             'eu_relays_percentage', 'non_eu_relays_percentage', 'rare_countries_relays_percentage',
             'top_3_as_concentration', 'top_5_as_concentration', 'top_10_as_concentration',
-            'overall_uptime', 'exit_uptime_1_month_mean', 'guard_uptime_1_month_mean',
-            'middle_uptime_1_month_mean', 'exit_uptime_1_month_median', 'guard_uptime_1_month_median',
-            'middle_uptime_1_month_median',
-            # NEW: Additional flag uptime percentages
-            'authority_uptime_1_month_mean', 'authority_uptime_1_month_median',
-            'v2dir_uptime_1_month_mean', 'v2dir_uptime_1_month_median',
-            'hsdir_uptime_1_month_mean', 'hsdir_uptime_1_month_median'
+            # REFACTORED: Generate percentage format keys using consistent pattern
+            'overall_uptime'
         ]
+        
+        # Add 1_month period formatting keys (used directly in templates) 
+        roles = ['exit', 'guard', 'middle', 'authority', 'v2dir', 'hsdir']
+        statistics = ['mean', 'median']
+        for role in roles:
+            for stat in statistics:
+                percentage_format_keys.append(f'{role}_uptime_1_month_{stat}')
         
         for key in percentage_format_keys:
             if key in health_metrics:
                 health_metrics[f'{key}_formatted'] = f"{health_metrics[key]:.1f}%"
         
         # Format uptime time series data (4+ format operations eliminated)
+        # Using consistent naming pattern: {role}_uptime_{period}_mean
         uptime_series_keys = [
-            ('exit_uptime_1_month', 'exit_uptime_mean', 'exit_uptime_1_year', 'exit_uptime_5_years'),
-            ('guard_uptime_1_month', 'guard_uptime_mean', 'guard_uptime_1_year', 'guard_uptime_5_years'),
-            ('middle_uptime_1_month', 'middle_uptime_mean', 'middle_uptime_1_year', 'middle_uptime_5_years'),
-            ('authority_uptime_1_month', 'authority_uptime_mean', 'authority_uptime_1_year', 'authority_uptime_5_years')
+            ('exit_uptime_1_month_mean', 'exit_uptime_6_months_mean', 'exit_uptime_1_year_mean', 'exit_uptime_5_years_mean'),
+            ('guard_uptime_1_month_mean', 'guard_uptime_6_months_mean', 'guard_uptime_1_year_mean', 'guard_uptime_5_years_mean'),
+            ('middle_uptime_1_month_mean', 'middle_uptime_6_months_mean', 'middle_uptime_1_year_mean', 'middle_uptime_5_years_mean'),
+            ('authority_uptime_1_month_mean', 'authority_uptime_6_months_mean', 'authority_uptime_1_year_mean', 'authority_uptime_5_years_mean')
         ]
         
         for keys in uptime_series_keys:
@@ -3648,88 +3651,36 @@ class Relays:
                     hsdir_mean = 0.0
                     hsdir_median = 0.0
                 
-                # Set values using the same naming as before but with all consolidated calculations
-                if period == '1_month':
-                    health_metrics['exit_uptime_1_month_mean'] = exit_mean
-                    health_metrics['exit_uptime_1_month_median'] = exit_median
-                    health_metrics['guard_uptime_1_month_mean'] = guard_mean
-                    health_metrics['guard_uptime_1_month_median'] = guard_median
-                    health_metrics['middle_uptime_1_month_mean'] = middle_mean
-                    health_metrics['middle_uptime_1_month_median'] = middle_median
-                    health_metrics['other_uptime_1_month_mean'] = other_mean
-                    health_metrics['other_uptime_1_month_median'] = other_median
-                    # NEW: Additional flag-specific uptime metrics for 1 month
-                    health_metrics['authority_uptime_1_month_mean'] = authority_mean
-                    health_metrics['authority_uptime_1_month_median'] = authority_median
-                    health_metrics['v2dir_uptime_1_month_mean'] = v2dir_mean
-                    health_metrics['v2dir_uptime_1_month_median'] = v2dir_median
-                    health_metrics['hsdir_uptime_1_month_mean'] = hsdir_mean
-                    health_metrics['hsdir_uptime_1_month_median'] = hsdir_median
-                    # For backward compatibility and template usage
-                    health_metrics['exit_uptime_1_month'] = exit_mean
-                    health_metrics['guard_uptime_1_month'] = guard_mean
-                    health_metrics['middle_uptime_1_month'] = middle_mean
-                    health_metrics['other_uptime_1_month'] = other_mean
-                elif period == '6_months':
-                    health_metrics['exit_uptime_mean'] = exit_mean
-                    health_metrics['exit_uptime_median'] = exit_median
-                    health_metrics['guard_uptime_mean'] = guard_mean
-                    health_metrics['guard_uptime_median'] = guard_median
-                    health_metrics['middle_uptime_mean'] = middle_mean
-                    health_metrics['middle_uptime_median'] = middle_median
-                    health_metrics['other_uptime_mean'] = other_mean
-                    health_metrics['other_uptime_median'] = other_median
-                    # NEW: Additional flag-specific uptime metrics for 6 months (authority_uptime_mean)
-                    health_metrics['authority_uptime_mean'] = authority_mean
-                    health_metrics['authority_uptime_median'] = authority_median
-                    health_metrics['v2dir_uptime_mean'] = v2dir_mean
-                    health_metrics['v2dir_uptime_median'] = v2dir_median
-                    health_metrics['hsdir_uptime_mean'] = hsdir_mean
-                    health_metrics['hsdir_uptime_median'] = hsdir_median
-                    # Backward compatibility
-                    health_metrics['exit_uptime'] = exit_mean
-                    health_metrics['guard_uptime'] = guard_mean
-                    health_metrics['middle_uptime'] = middle_mean
-                    health_metrics['other_uptime'] = other_mean
-                else:
-                    health_metrics[f'exit_uptime_{period}'] = exit_mean
-                    health_metrics[f'guard_uptime_{period}'] = guard_mean
-                    health_metrics[f'middle_uptime_{period}'] = middle_mean
-                    health_metrics[f'other_uptime_{period}'] = other_mean
-                    # Add mean/median for other periods if needed later
-                    health_metrics[f'exit_uptime_{period}_mean'] = exit_mean
-                    health_metrics[f'exit_uptime_{period}_median'] = exit_median
-                    health_metrics[f'guard_uptime_{period}_mean'] = guard_mean
-                    health_metrics[f'guard_uptime_{period}_median'] = guard_median
-                    health_metrics[f'middle_uptime_{period}_mean'] = middle_mean
-                    health_metrics[f'middle_uptime_{period}_median'] = middle_median
-                    health_metrics[f'other_uptime_{period}_mean'] = other_mean
-                    health_metrics[f'other_uptime_{period}_median'] = other_median
-                    # NEW: Additional flag-specific uptime metrics for other periods
-                    health_metrics[f'authority_uptime_{period}'] = authority_mean
-                    health_metrics[f'authority_uptime_{period}_mean'] = authority_mean
-                    health_metrics[f'authority_uptime_{period}_median'] = authority_median
+                # REFACTORED: Consistent naming pattern for all periods - {role}_uptime_{period}_{statistic}
+                # Eliminates redundant variables and special cases for better maintainability
+                role_data = [
+                    ('exit', exit_mean, exit_median),
+                    ('guard', guard_mean, guard_median),
+                    ('middle', middle_mean, middle_median),
+                    ('other', other_mean, other_median),
+                    ('authority', authority_mean, authority_median),
+                    ('v2dir', v2dir_mean, v2dir_median),
+                    ('hsdir', hsdir_mean, hsdir_median)
+                ]
+                
+                for role, mean_val, median_val in role_data:
+                    health_metrics[f'{role}_uptime_{period}_mean'] = mean_val
+                    health_metrics[f'{role}_uptime_{period}_median'] = median_val
             
         else:
             # Initialize to 0 when no consolidated uptime results available
             health_metrics['overall_uptime'] = 0.0
             health_metrics['uptime_percentiles'] = None
             
+            # REFACTORED: Consistent fallback initialization using unified pattern
             uptime_periods = ['1_month', '6_months', '1_year', '5_years']
-            base_keys = ['exit_uptime', 'guard_uptime', 'middle_uptime', 'other_uptime']
-            mean_median_keys = ['exit_uptime_mean', 'guard_uptime_mean', 'middle_uptime_mean', 'other_uptime_mean',
-                               'exit_uptime_median', 'guard_uptime_median', 'middle_uptime_median', 'other_uptime_median',
-                               'exit_uptime_1_month_mean', 'guard_uptime_1_month_mean', 'middle_uptime_1_month_mean', 'other_uptime_1_month_mean',
-                               'exit_uptime_1_month_median', 'guard_uptime_1_month_median', 'middle_uptime_1_month_median', 'other_uptime_1_month_median',
-                               # NEW: Additional flag-specific uptime keys
-                               'authority_uptime_1_month_mean', 'authority_uptime_1_month_median',
-                               'v2dir_uptime_1_month_mean', 'v2dir_uptime_1_month_median',
-                               'hsdir_uptime_1_month_mean', 'hsdir_uptime_1_month_median']
-            period_keys = [f'{role}_uptime_{period}' for period in uptime_periods for role in ['exit', 'guard', 'middle', 'other', 'authority']]
-            additional_period_keys = [f'{role}_uptime_{period}_mean' for period in uptime_periods for role in ['exit', 'guard', 'middle', 'other', 'authority']]
-            additional_period_keys += [f'{role}_uptime_{period}_median' for period in uptime_periods for role in ['exit', 'guard', 'middle', 'other', 'authority']]
+            roles = ['exit', 'guard', 'middle', 'other', 'authority', 'v2dir', 'hsdir']
+            statistics = ['mean', 'median']
             
-            for key in base_keys + mean_median_keys + period_keys + additional_period_keys:
+            # Generate all uptime keys using consistent pattern: {role}_uptime_{period}_{statistic}
+            uptime_keys = [f'{role}_uptime_{period}_{stat}' for role in roles for period in uptime_periods for stat in statistics]
+            
+            for key in uptime_keys:
                 health_metrics[key] = 0.0
         
         # Percentage calculations for participation metrics

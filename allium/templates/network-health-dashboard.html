@@ -247,13 +247,13 @@ Network Health Dashboard
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(1, 1fr);">
                     <div class="metric-item" title="Guard relay uptime over 1 month, 6 months, 1 year, and 5 years respectively.">
-                        <span class="metric-value">{{ "%.1f"|format(relays.json.network_health.guard_uptime_1_month) }}% | {{ "%.1f"|format(relays.json.network_health.guard_uptime_mean) }}% | {{ "%.1f"|format(relays.json.network_health.guard_uptime_1_year) }}% | {{ "%.1f"|format(relays.json.network_health.guard_uptime_5_years) }}%</span>
+                        <span class="metric-value">{{ relays.json.network_health.guard_uptime_series_formatted }}</span>
                         <span class="metric-label">Guard: 1mo | 6mo | 1y | 5y (Mean)</span>
                     </div>
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(1, 1fr);">
                     <div class="metric-item" title="Middle relay uptime over 1 month, 6 months, 1 year, and 5 years respectively.">
-                        <span class="metric-value">{{ "%.1f"|format(relays.json.network_health.middle_uptime_1_month) }}% | {{ "%.1f"|format(relays.json.network_health.middle_uptime_mean) }}% | {{ "%.1f"|format(relays.json.network_health.middle_uptime_1_year) }}% | {{ "%.1f"|format(relays.json.network_health.middle_uptime_5_years) }}%</span>
+                        <span class="metric-value">{{ relays.json.network_health.middle_uptime_series_formatted }}</span>
                         <span class="metric-label">Middle: 1mo | 6mo | 1y | 5y (Mean)</span>
                     </div>
                 </div>
