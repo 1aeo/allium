@@ -69,11 +69,12 @@ def is_private_ip_address(ip_str):
     restriction for exit relays.
     
     Detects private IPv4 ranges:
-    - 192.168.0.0/16 (192.168.x.x)
+    - 0.0.0.0/8 (IANA special use - "this network")
     - 10.0.0.0/8 (10.x.x.x)
-    - 172.16.0.0/12 (172.16.x.x - 172.31.x.x)
     - 127.0.0.0/8 (localhost)
     - 169.254.0.0/16 (link-local)
+    - 172.16.0.0/12 (172.16.x.x - 172.31.x.x)
+    - 192.168.0.0/16 (192.168.x.x)
     
     And private IPv6 ranges:
     - ::1 (localhost)
@@ -126,16 +127,12 @@ def is_private_ip_address(ip_str):
             return False  # Invalid octet values
         
         # Check private ranges
+        # 0.0.0.0/8 (IANA special use - "this network")
+        if o1 == 0:
+            return True
+        
         # 10.0.0.0/8 (10.x.x.x)
         if o1 == 10:
-            return True
-        
-        # 192.168.0.0/16 (192.168.x.x)
-        if o1 == 192 and o2 == 168:
-            return True
-        
-        # 172.16.0.0/12 (172.16.x.x - 172.31.x.x)
-        if o1 == 172 and 16 <= o2 <= 31:
             return True
         
         # 127.0.0.0/8 (localhost)
@@ -144,6 +141,14 @@ def is_private_ip_address(ip_str):
         
         # 169.254.0.0/16 (link-local)
         if o1 == 169 and o2 == 254:
+            return True
+        
+        # 172.16.0.0/12 (172.16.x.x - 172.31.x.x)
+        if o1 == 172 and 16 <= o2 <= 31:
+            return True
+        
+        # 192.168.0.0/16 (192.168.x.x)
+        if o1 == 192 and o2 == 168:
             return True
         
         return False  # Public IPv4 address
