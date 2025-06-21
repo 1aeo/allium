@@ -136,6 +136,16 @@ Network Health Dashboard
                     </div>
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
+                    <div class="metric-item" title="Total observed bandwidth of relays supporting both IPv4 and IPv6 protocols. Dual-stack bandwidth provides maximum connectivity capacity.">
+                        <span class="metric-value">{{ relays.json.network_health.both_ipv4_ipv6_bandwidth_formatted }} ({{ "%.1f%%"|format(relays.json.network_health.both_ipv4_ipv6_bandwidth_percentage) }})</span>
+                        <span class="metric-label">Bandwidth with IPv4 & IPv6</span>
+                    </div>
+                    <div class="metric-item" title="Total observed bandwidth of relays supporting only IPv4 protocol. These relays cannot provide IPv6 connectivity.">
+                        <span class="metric-value">{{ relays.json.network_health.ipv4_only_bandwidth_formatted }} ({{ "%.1f%%"|format(relays.json.network_health.ipv4_only_bandwidth_percentage) }})</span>
+                        <span class="metric-label">Bandwidth IPv4 Only</span>
+                    </div>
+                </div>
+                <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
                     <div class="metric-item" title="Number and percentage of relays supporting both IPv4 and IPv6 protocols. Dual-stack relays provide maximum connectivity.">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.both_ipv4_ipv6_relays) }} ({{ "%.1f%%"|format(relays.json.network_health.both_ipv4_ipv6_relays_percentage) }})</span>
                         <span class="metric-label">Relays with IPv4 & IPv6</span>

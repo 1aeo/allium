@@ -2809,7 +2809,7 @@ class Relays:
             'recommended_version_count', 'not_recommended_count', 'experimental_count', 
             'obsolete_count', 'outdated_count', 'guard_exit_count', 'unrestricted_exits',
             'restricted_exits', 'web_traffic_exits', 'eu_relays_count', 'non_eu_relays_count',
-            'rare_countries_relays'
+            'rare_countries_relays', 'ipv4_only_relays', 'both_ipv4_ipv6_relays'
         ]
         
         for key in integer_format_keys:
@@ -2831,7 +2831,8 @@ class Relays:
             'top_3_as_concentration', 'top_5_as_concentration', 'top_10_as_concentration',
             'overall_uptime', 'exit_uptime_1_month_mean', 'guard_uptime_1_month_mean',
             'middle_uptime_1_month_mean', 'exit_uptime_1_month_median', 'guard_uptime_1_month_median',
-            'middle_uptime_1_month_median'
+            'middle_uptime_1_month_median', 'ipv4_only_relays_percentage', 'both_ipv4_ipv6_relays_percentage',
+            'ipv4_only_bandwidth_percentage', 'both_ipv4_ipv6_bandwidth_percentage'
         ]
         
         for key in percentage_format_keys:
@@ -3018,6 +3019,10 @@ class Relays:
         # NEW: IPv6 support analysis - relay-level counters
         ipv4_only_relays = 0
         both_ipv4_ipv6_relays = 0
+        
+        # NEW: IPv6 support analysis - bandwidth-level counters
+        ipv4_only_bandwidth = 0
+        both_ipv4_ipv6_bandwidth = 0
         
         # NEW: IPv6 support analysis - country-level collections
         ipv4_only_countries = {}  # country -> count
@@ -3253,8 +3258,10 @@ class Relays:
             # Count relay-level IPv6 support
             if ipv6_support == 'ipv4_only':
                 ipv4_only_relays += 1
+                ipv4_only_bandwidth += bandwidth
             elif ipv6_support == 'both':
                 both_ipv4_ipv6_relays += 1
+                both_ipv4_ipv6_bandwidth += bandwidth
             
             # Country-level IPv6 support tracking
             if country and len(country) == 2:
@@ -3485,6 +3492,14 @@ class Relays:
             'both_ipv4_ipv6_relays_percentage': (both_ipv4_ipv6_relays / total_relays_count * 100) if total_relays_count > 0 else 0.0
         })
         
+        # NEW: IPv6 support metrics - bandwidth-level statistics
+        health_metrics.update({
+            'ipv4_only_bandwidth': ipv4_only_bandwidth,
+            'both_ipv4_ipv6_bandwidth': both_ipv4_ipv6_bandwidth,
+            'ipv4_only_bandwidth_percentage': (ipv4_only_bandwidth / total_bandwidth * 100) if total_bandwidth > 0 else 0.0,
+            'both_ipv4_ipv6_bandwidth_percentage': (both_ipv4_ipv6_bandwidth / total_bandwidth * 100) if total_bandwidth > 0 else 0.0
+        })
+        
         # NEW: IPv6 support metrics - operator-level statistics
         health_metrics.update({
             'ipv4_only_operators': len(ipv4_only_operators),
@@ -3686,12 +3701,18 @@ class Relays:
             health_metrics['guard_bandwidth_formatted'] = self._format_bandwidth_with_unit(guard_bandwidth * 8, unit, decimal_places=0) + f" {unit}"
             health_metrics['exit_bandwidth_formatted'] = self._format_bandwidth_with_unit(exit_bandwidth * 8, unit, decimal_places=0) + f" {unit}"
             health_metrics['middle_bandwidth_formatted'] = self._format_bandwidth_with_unit(middle_bandwidth * 8, unit, decimal_places=0) + f" {unit}"
+            # NEW: IPv6 bandwidth formatting (bits)
+            health_metrics['ipv4_only_bandwidth_formatted'] = self._format_bandwidth_with_unit(ipv4_only_bandwidth * 8, unit, decimal_places=0) + f" {unit}"
+            health_metrics['both_ipv4_ipv6_bandwidth_formatted'] = self._format_bandwidth_with_unit(both_ipv4_ipv6_bandwidth * 8, unit, decimal_places=0) + f" {unit}"
         else:
             unit = self._determine_unit(total_bandwidth)
             health_metrics['total_bandwidth_formatted'] = self._format_bandwidth_with_unit(total_bandwidth, unit, decimal_places=0) + f" {unit}"
             health_metrics['guard_bandwidth_formatted'] = self._format_bandwidth_with_unit(guard_bandwidth, unit, decimal_places=0) + f" {unit}"
             health_metrics['exit_bandwidth_formatted'] = self._format_bandwidth_with_unit(exit_bandwidth, unit, decimal_places=0) + f" {unit}"
             health_metrics['middle_bandwidth_formatted'] = self._format_bandwidth_with_unit(middle_bandwidth, unit, decimal_places=0) + f" {unit}"
+            # NEW: IPv6 bandwidth formatting (bytes)
+            health_metrics['ipv4_only_bandwidth_formatted'] = self._format_bandwidth_with_unit(ipv4_only_bandwidth, unit, decimal_places=0) + f" {unit}"
+            health_metrics['both_ipv4_ipv6_bandwidth_formatted'] = self._format_bandwidth_with_unit(both_ipv4_ipv6_bandwidth, unit, decimal_places=0) + f" {unit}"
         
         # Uptime metrics - reuse existing consolidated uptime calculations for efficiency
         if hasattr(self, '_consolidated_uptime_results') and self._consolidated_uptime_results:
