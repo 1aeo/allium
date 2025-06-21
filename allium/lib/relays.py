@@ -3679,6 +3679,13 @@ class Relays:
                     health_metrics['middle_uptime_median'] = middle_median
                     health_metrics['other_uptime_mean'] = other_mean
                     health_metrics['other_uptime_median'] = other_median
+                    # NEW: Additional flag-specific uptime metrics for 6 months (authority_uptime_mean)
+                    health_metrics['authority_uptime_mean'] = authority_mean
+                    health_metrics['authority_uptime_median'] = authority_median
+                    health_metrics['v2dir_uptime_mean'] = v2dir_mean
+                    health_metrics['v2dir_uptime_median'] = v2dir_median
+                    health_metrics['hsdir_uptime_mean'] = hsdir_mean
+                    health_metrics['hsdir_uptime_median'] = hsdir_median
                     # Backward compatibility
                     health_metrics['exit_uptime'] = exit_mean
                     health_metrics['guard_uptime'] = guard_mean
