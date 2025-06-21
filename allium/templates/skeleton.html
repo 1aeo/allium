@@ -992,6 +992,24 @@
                     font-weight: 500;
                 }
 
+                /* Vertical centering for metric items to handle variable text lines */
+                .metric-item {
+                    display: flex !important;
+                    flex-direction: column !important;
+                    justify-content: center !important;
+                    align-items: center !important;
+                    text-align: center !important;
+                    min-height: 80px !important;
+                }
+
+                .metric-item .metric-value {
+                    margin-bottom: 4px !important;
+                }
+
+                .metric-item .metric-label {
+                    margin-top: 4px !important;
+                }
+
                 /* Card-specific colors and styling */
                 .ribbon-card.relay-counts .metric-item.primary .metric-value {
                     color: #059669;
