@@ -135,7 +135,7 @@ Network Health Dashboard
                         <span class="metric-label">Middle Mean | Median</span>
                     </div>
                 </div>
-                <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
+                <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
                     <div class="metric-item" title="Number and percentage of relays supporting both IPv4 and IPv6 protocols. Dual-stack relays provide maximum connectivity.">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.both_ipv4_ipv6_relays) }} ({{ "%.1f%%"|format(relays.json.network_health.both_ipv4_ipv6_relays_percentage) }})</span>
                         <span class="metric-label">Relays with IPv4 & IPv6</span>
@@ -143,10 +143,6 @@ Network Health Dashboard
                     <div class="metric-item" title="Number and percentage of relays supporting only IPv4 protocol. These relays cannot connect to IPv6-only destinations.">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.ipv4_only_relays) }} ({{ "%.1f%%"|format(relays.json.network_health.ipv4_only_relays_percentage) }})</span>
                         <span class="metric-label">Only IPv4</span>
-                    </div>
-                    <div class="metric-item" title="Number and percentage of relays supporting only IPv6 protocol. These relays cannot connect to IPv4-only destinations.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.ipv6_only_relays) }} ({{ "%.1f%%"|format(relays.json.network_health.ipv6_only_relays_percentage) }})</span>
-                        <span class="metric-label">Only IPv6</span>
                     </div>
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
@@ -264,7 +260,7 @@ Network Health Dashboard
                     </div>
                 </div>
                 <!-- IPv6 Row -->
-                <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
+                <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
                     <div class="metric-item" title="Number and percentage of AROI operators running at least one relay with both IPv4 and IPv6 support.">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.both_ipv4_ipv6_operators) }} ({{ "%.1f%%"|format(relays.json.network_health.both_ipv4_ipv6_operators_percentage) }})</span>
                         <span class="metric-label">Total AROI with IPv4 & IPv6</span>
@@ -272,10 +268,6 @@ Network Health Dashboard
                     <div class="metric-item" title="Number and percentage of AROI operators running at least one relay with IPv4-only support.">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.ipv4_only_operators) }} ({{ "%.1f%%"|format(relays.json.network_health.ipv4_only_operators_percentage) }})</span>
                         <span class="metric-label">with IPv4 Only</span>
-                    </div>
-                    <div class="metric-item" title="Number and percentage of AROI operators running at least one relay with IPv6-only support.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.ipv6_only_operators) }} ({{ "%.1f%%"|format(relays.json.network_health.ipv6_only_operators_percentage) }})</span>
-                        <span class="metric-label">with IPv6 Only</span>
                     </div>
                 </div>
             </div>
@@ -327,7 +319,7 @@ Network Health Dashboard
                     </div>
                 </div>
                 <!-- IPv6 Country Row -->
-                <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
+                <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
                     <div class="metric-item" title="Top country with the highest number of relays supporting both IPv4 and IPv6 protocols.">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.top_both_ipv4_ipv6_country_count) }} ({{ "%.1f%%"|format(relays.json.network_health.top_both_ipv4_ipv6_country_percentage) }}) <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ relays.json.network_health.top_both_ipv4_ipv6_country.lower() }}.png" alt="{{ relays.json.network_health.top_both_ipv4_ipv6_country }}" style="width: 16px; height: 11px; margin-left: 3px;"> {{ relays.json.network_health.top_both_ipv4_ipv6_country }}</span>
                         <span class="metric-label">#1 Country IPv4 & IPv6</span>
@@ -335,10 +327,6 @@ Network Health Dashboard
                     <div class="metric-item" title="Top country with the highest number of relays supporting IPv4-only protocol.">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.top_ipv4_only_country_count) }} ({{ "%.1f%%"|format(relays.json.network_health.top_ipv4_only_country_percentage) }}) <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ relays.json.network_health.top_ipv4_only_country.lower() }}.png" alt="{{ relays.json.network_health.top_ipv4_only_country }}" style="width: 16px; height: 11px; margin-left: 3px;"> {{ relays.json.network_health.top_ipv4_only_country }}</span>
                         <span class="metric-label">#1 Country IPv4</span>
-                    </div>
-                    <div class="metric-item" title="Top country with the highest number of relays supporting IPv6-only protocol.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.top_ipv6_only_country_count) }} ({{ "%.1f%%"|format(relays.json.network_health.top_ipv6_only_country_percentage) }}) <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ relays.json.network_health.top_ipv6_only_country.lower() }}.png" alt="{{ relays.json.network_health.top_ipv6_only_country }}" style="width: 16px; height: 11px; margin-left: 3px;"> {{ relays.json.network_health.top_ipv6_only_country }}</span>
-                        <span class="metric-label">#1 Country IPv6</span>
                     </div>
                 </div>
             </div>
@@ -393,7 +381,7 @@ Network Health Dashboard
                     </div>
                 </div>
                 <!-- IPv6 AS Row -->
-                <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
+                <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
                     <div class="metric-item" title="Autonomous System with the highest number of relays supporting both IPv4 and IPv6 protocols.">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.top_both_ipv4_ipv6_as_count) }} ({{ "%.1f%%"|format(relays.json.network_health.top_both_ipv4_ipv6_as_percentage) }}) {{ relays.json.network_health.top_both_ipv4_ipv6_as_name }}</span>
                         <span class="metric-label">#1 AS IPv4 & IPv6</span>
@@ -401,10 +389,6 @@ Network Health Dashboard
                     <div class="metric-item" title="Autonomous System with the highest number of relays supporting IPv4-only protocol.">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.top_ipv4_only_as_count) }} ({{ "%.1f%%"|format(relays.json.network_health.top_ipv4_only_as_percentage) }}) {{ relays.json.network_health.top_ipv4_only_as_name }}</span>
                         <span class="metric-label">#1 AS IPv4</span>
-                    </div>
-                    <div class="metric-item" title="Autonomous System with the highest number of relays supporting IPv6-only protocol.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.top_ipv6_only_as_count) }} ({{ "%.1f%%"|format(relays.json.network_health.top_ipv6_only_as_percentage) }}) {{ relays.json.network_health.top_ipv6_only_as_name }}</span>
-                        <span class="metric-label">#1 AS IPv6</span>
                     </div>
                 </div>
             </div>
