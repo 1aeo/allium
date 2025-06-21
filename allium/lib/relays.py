@@ -157,14 +157,44 @@ def is_private_ip_address(ip_str):
         return False  # If parsing fails, assume public
 
 
+def parse_onionoo_timestamp(timestamp_str):
+    """Parse Onionoo timestamp string into datetime object"""
+    from datetime import datetime, timezone
+    try:
+        timestamp = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
+        return timestamp.replace(tzinfo=timezone.utc)
+    except (ValueError, TypeError):
+        return None
+
+def create_time_thresholds():
+    """Create common time threshold calculations used across the codebase"""
+    from datetime import datetime, timedelta
+    now = datetime.utcnow()
+    return {
+        'now': now,
+        'day_ago': now - timedelta(days=1),
+        'month_ago': now - timedelta(days=30),
+        'six_months_ago': now - timedelta(days=180),
+        'year_ago': now - timedelta(days=365)
+    }
+
+def format_timestamp_gmt(timestamp=None):
+    """Format timestamp as GMT string for HTTP headers and display"""
+    import time
+    if timestamp is None:
+        timestamp = time.time()
+    return time.strftime("%a, %d %b %Y %H:%M:%S GMT", time.gmtime(timestamp))
+
 def format_time_ago(timestamp_str):
     """Format timestamp as multi-unit time ago (e.g., '2y 3m 2w ago')"""
-    from datetime import datetime, timezone
+    from datetime import timezone, datetime
     
     try:
-        # Parse the timestamp string
-        timestamp = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
-        timestamp = timestamp.replace(tzinfo=timezone.utc)
+        # Use centralized parsing
+        timestamp = parse_onionoo_timestamp(timestamp_str)
+        if timestamp is None:
+            return "unknown"
+            
         now = datetime.now(timezone.utc)
         
         # Calculate time difference
@@ -262,10 +292,8 @@ class Relays:
         if self.json is None:
             return
         
-        # Generate timestamp for compatibility
-        self.timestamp = time.strftime(
-            "%a, %d %b %Y %H:%M:%S GMT", time.gmtime(time.time())
-        )
+        # Generate timestamp for compatibility - use centralized function
+        self.timestamp = format_timestamp_gmt()
 
         self._fix_missing_observed_bandwidth()
         self._sort_by_observed_bandwidth()
@@ -803,9 +831,7 @@ class Relays:
         to onionoo via If-Modified-Since header during fetch() if exists
         """
         timestamp = time.time()
-        f_timestamp = time.strftime(
-            "%a, %d %b %Y %H:%M:%S GMT", time.gmtime(timestamp)
-        )
+        f_timestamp = format_timestamp_gmt(timestamp)
         if self.json is not None:
             with open(self.ts_file, "w", encoding="utf8") as ts_file:
                 ts_file.write(f_timestamp)
@@ -1457,66 +1483,8 @@ class Relays:
 
     def _format_time_ago(self, timestamp_str):
         """Format timestamp as multi-unit time ago (e.g., '2y 3m 2w ago')"""
-        from datetime import datetime, timezone
-        
-        try:
-            # Parse the timestamp string
-            timestamp = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
-            timestamp = timestamp.replace(tzinfo=timezone.utc)
-            now = datetime.now(timezone.utc)
-            
-            # Calculate time difference
-            diff = now - timestamp
-            total_seconds = int(diff.total_seconds())
-            
-            if total_seconds < 0:
-                return "in the future"
-            
-            # Time unit calculations
-            years = total_seconds // (365 * 24 * 3600)
-            remainder = total_seconds % (365 * 24 * 3600)
-            
-            months = remainder // (30 * 24 * 3600)
-            remainder = remainder % (30 * 24 * 3600)
-            
-            weeks = remainder // (7 * 24 * 3600)
-            remainder = remainder % (7 * 24 * 3600)
-            
-            days = remainder // (24 * 3600)
-            remainder = remainder % (24 * 3600)
-            
-            hours = remainder // 3600
-            remainder = remainder % 3600
-            
-            minutes = remainder // 60
-            seconds = remainder % 60
-            
-            # Build the result with up to 3 largest units
-            parts = []
-            units = [
-                (years, 'y'),
-                (months, 'mo'),
-                (weeks, 'w'),
-                (days, 'd'),
-                (hours, 'h'),
-                (minutes, 'm'),
-                (seconds, 's')
-            ]
-            
-            # Take the 3 largest non-zero units
-            for value, unit in units:
-                if value > 0:
-                    parts.append(f"{value}{unit}")
-                if len(parts) == 3:
-                    break
-            
-            if not parts:
-                return "just now"
-            
-            return " ".join(parts) + " ago"
-            
-        except (ValueError, TypeError):
-            return "unknown"
+        # Use the module-level function to avoid code duplication
+        return format_time_ago(timestamp_str)
 
     def get_detail_page_context(self, category, value):
         """Generate page context with correct breadcrumb data for detail pages"""
@@ -2940,12 +2908,13 @@ class Relays:
         from .country_utils import is_eu_political, is_frontier_country
         from .uptime_utils import find_relay_uptime_data, calculate_relay_uptime_average
         
-        # Time calculations for new relay detection
-        now = datetime.datetime.utcnow()
-        day_ago = now - datetime.timedelta(days=1)
-        month_ago = now - datetime.timedelta(days=30)
-        year_ago = now - datetime.timedelta(days=365)
-        six_months_ago = now - datetime.timedelta(days=180)
+        # Time calculations for new relay detection - use centralized function
+        time_thresholds = create_time_thresholds()
+        now = time_thresholds['now']
+        day_ago = time_thresholds['day_ago']
+        month_ago = time_thresholds['month_ago']
+        year_ago = time_thresholds['year_ago']
+        six_months_ago = time_thresholds['six_months_ago']
         
         # Get rare countries once
         valid_rare_countries = set()
@@ -2981,12 +2950,12 @@ class Relays:
         
         # NEW: Exit policy analysis
         guard_exit_count = 0
-        restricted_exits = 0
-        web_traffic_exits = 0
-        unrestricted_exits = 0
+        port_restricted_exits = 0
+        port_unrestricted_exits = 0
         ip_unrestricted_exits = 0
         ip_restricted_exits = 0
-        unrestricted_and_no_ip_restrictions = 0  # NEW: Combined metric for both no port AND no IP restrictions
+        no_port_restrictions_and_no_ip_restrictions = 0  # NEW: Combined metric for both no port AND no IP restrictions
+        web_traffic_exits = 0
         
         # Role-specific collectors - combined into single loop
         exit_cw_values = []
@@ -3047,30 +3016,30 @@ class Relays:
                 ipv6_summary = exit_policy_summary.get('accept6', [])
                 
                 # Check for web traffic (ports 80 and 443)
-                has_web_traffic = False
+                has_web_traffic_ports = False
                 if ipv4_summary:
                     for policy in ipv4_summary:
                         if ('80' in policy or '443' in policy or 
                             '1-65535' in policy or policy == '*:*'):
-                            has_web_traffic = True
+                            has_web_traffic_ports = True
                             break
                 
-                if has_web_traffic:
+                if has_web_traffic_ports:
                     web_traffic_exits += 1
                 
                 # Check for unrestricted exits (accept all or most traffic)
-                is_unrestricted = False
+                is_port_unrestricted = False
                 if ipv4_summary:
                     for policy in ipv4_summary:
                         if (policy == '*:*' or '1-65535' in policy or 
                             '1-' in policy or '*:1-65535' in policy):
-                            is_unrestricted = True
+                            is_port_unrestricted = True
                             break
                 
-                if is_unrestricted:
-                    unrestricted_exits += 1
+                if is_port_unrestricted:
+                    port_unrestricted_exits += 1
                 else:
-                    restricted_exits += 1
+                    port_restricted_exits += 1
                 
                 # Check for IP address restrictions (excluding private/local IP ranges)
                 # An exit relay has IP address restrictions only if it restricts public IP addresses
@@ -3097,29 +3066,29 @@ class Relays:
                     ip_unrestricted_exits += 1
                 
                 # NEW: Track exits with BOTH no port restrictions AND no IP restrictions
-                if is_unrestricted and not has_ip_restrictions:
-                    unrestricted_and_no_ip_restrictions += 1
+                if is_port_unrestricted and not has_ip_restrictions:
+                    no_port_restrictions_and_no_ip_restrictions += 1
             
-            # NEW: Age calculation using first_seen
+            # NEW: Age calculation using first_seen - use centralized parsing
             first_seen_str = relay.get('first_seen', '')
             if first_seen_str:
-                try:
-                    first_seen = datetime.datetime.strptime(first_seen_str, '%Y-%m-%d %H:%M:%S')
-                    age_days = (now - first_seen).days
+                first_seen = parse_onionoo_timestamp(first_seen_str)
+                if first_seen:
+                    # Convert to naive datetime for comparison (since time_thresholds use naive datetimes)
+                    first_seen_naive = first_seen.replace(tzinfo=None)
+                    age_days = (now - first_seen_naive).days
                     if age_days >= 0:  # Sanity check
                         relay_ages_days.append(age_days)
                         
                         # Count new relays for existing metrics
-                        if first_seen >= day_ago:
+                        if first_seen_naive >= day_ago:
                             new_relays_24h += 1
-                        if first_seen >= month_ago:
+                        if first_seen_naive >= month_ago:
                             new_relays_30d += 1
-                        if first_seen >= year_ago:
+                        if first_seen_naive >= year_ago:
                             new_relays_1y += 1
-                        if first_seen >= six_months_ago:
+                        if first_seen_naive >= six_months_ago:
                             new_relays_6m += 1
-                except:
-                    pass
             
             # Platform tracking
             platform = relay.get('platform', 'Unknown')
@@ -3349,21 +3318,21 @@ class Relays:
         exit_count = network_totals['exit_count']
         health_metrics.update({
             'guard_exit_count': guard_exit_count,
-            'unrestricted_exits': unrestricted_exits,
-            'restricted_exits': restricted_exits,
+            'unrestricted_exits': port_unrestricted_exits,
+            'restricted_exits': port_restricted_exits,
             'web_traffic_exits': web_traffic_exits,
             'ip_unrestricted_exits': ip_unrestricted_exits,
             'ip_restricted_exits': ip_restricted_exits,
-            'unrestricted_and_no_ip_restrictions': unrestricted_and_no_ip_restrictions,  # NEW: Combined metric
+            'unrestricted_and_no_ip_restrictions': no_port_restrictions_and_no_ip_restrictions,  # NEW: Combined metric
             # FIXED: Port restriction percentages use total_relays_count (applies to all relays)
-            'unrestricted_exits_percentage': (unrestricted_exits / exit_count * 100) if exit_count > 0 else 0.0,
-            'restricted_exits_percentage': (restricted_exits / exit_count * 100) if exit_count > 0 else 0.0,
+            'unrestricted_exits_percentage': (port_unrestricted_exits / exit_count * 100) if exit_count > 0 else 0.0,
+            'restricted_exits_percentage': (port_restricted_exits / exit_count * 100) if exit_count > 0 else 0.0,
             'web_traffic_exits_percentage': (web_traffic_exits / exit_count * 100) if exit_count > 0 else 0.0,
             'guard_exit_percentage': (guard_exit_count / total_relays_count * 100) if total_relays_count > 0 else 0.0,
             # FIXED: IP restriction percentages use exit_count (applies only to exit relays)
             'ip_unrestricted_exits_percentage': (ip_unrestricted_exits / exit_count * 100) if exit_count > 0 else 0.0,
             'ip_restricted_exits_percentage': (ip_restricted_exits / exit_count * 100) if exit_count > 0 else 0.0,
-            'unrestricted_and_no_ip_restrictions_percentage': (unrestricted_and_no_ip_restrictions / exit_count * 100) if exit_count > 0 else 0.0
+            'unrestricted_and_no_ip_restrictions_percentage': (no_port_restrictions_and_no_ip_restrictions / exit_count * 100) if exit_count > 0 else 0.0
         })
         
         # STORE CALCULATED METRICS
