@@ -62,6 +62,96 @@ def format_bandwidth_with_unit(bandwidth_bytes, unit, decimal_places=2):
     value = bandwidth_bytes / divisor
     return f"{value:.{decimal_places}f}"
 
+def is_private_ip_address(ip_str):
+    """
+    Compute-efficient helper function to determine if an IP address or CIDR range
+    represents a private/local IP address that should not be counted as a meaningful
+    restriction for exit relays.
+    
+    Detects private IPv4 ranges:
+    - 192.168.0.0/16 (192.168.x.x)
+    - 10.0.0.0/8 (10.x.x.x)
+    - 172.16.0.0/12 (172.16.x.x - 172.31.x.x)
+    - 127.0.0.0/8 (localhost)
+    - 169.254.0.0/16 (link-local)
+    
+    And private IPv6 ranges:
+    - ::1 (localhost)
+    - fc00::/7 (unique local addresses - fc00:: to fdff::)
+    - fe80::/10 (link-local)
+    
+    Args:
+        ip_str (str): IP address string, can include CIDR notation (e.g., "192.168.1.0/24")
+    
+    Returns:
+        bool: True if the IP address/range is private/local, False if public
+    """
+    if not ip_str or ip_str == '*':
+        return False  # Wildcard is not private
+    
+    # Remove CIDR notation if present
+    ip_clean = ip_str.split('/')[0].strip()
+    
+    # Handle IPv6 addresses
+    if ':' in ip_clean and '::' in ip_clean or ip_clean.count(':') >= 2:
+        # Basic IPv6 private range detection
+        ip_lower = ip_clean.lower()
+        
+        # Localhost
+        if ip_lower == '::1':
+            return True
+        
+        # Unique local addresses (fc00::/7)
+        if ip_lower.startswith('fc') or ip_lower.startswith('fd'):
+            return True
+        
+        # Link-local addresses (fe80::/10)
+        if ip_lower.startswith('fe8') or ip_lower.startswith('fe9') or \
+           ip_lower.startswith('fea') or ip_lower.startswith('feb'):
+            return True
+        
+        return False  # Other IPv6 addresses considered public
+    
+    # Handle IPv4 addresses
+    try:
+        # Split IP into octets
+        octets = ip_clean.split('.')
+        if len(octets) != 4:
+            return False  # Invalid IPv4 format
+        
+        # Convert to integers for comparison
+        try:
+            o1, o2, o3, o4 = [int(octet) for octet in octets]
+        except ValueError:
+            return False  # Invalid octet values
+        
+        # Check private ranges
+        # 10.0.0.0/8 (10.x.x.x)
+        if o1 == 10:
+            return True
+        
+        # 192.168.0.0/16 (192.168.x.x)
+        if o1 == 192 and o2 == 168:
+            return True
+        
+        # 172.16.0.0/12 (172.16.x.x - 172.31.x.x)
+        if o1 == 172 and 16 <= o2 <= 31:
+            return True
+        
+        # 127.0.0.0/8 (localhost)
+        if o1 == 127:
+            return True
+        
+        # 169.254.0.0/16 (link-local)
+        if o1 == 169 and o2 == 254:
+            return True
+        
+        return False  # Public IPv4 address
+        
+    except Exception:
+        return False  # If parsing fails, assume public
+
+
 def format_time_ago(timestamp_str):
     """Format timestamp as multi-unit time ago (e.g., '2y 3m 2w ago')"""
     from datetime import datetime, timezone
@@ -2976,29 +3066,42 @@ class Relays:
                 else:
                     restricted_exits += 1
                 
-                # NEW: Check for IP address restrictions
-                # An exit relay has no IP address restrictions if it accepts from all IP addresses (*)
-                # It has IP restrictions if it has specific IP address/range restrictions
+                # NEW: Check for IP address restrictions (excluding private/local IP ranges)
+                # An exit relay has IP address restrictions only if it restricts public IP addresses
+                # Restrictions on private/local IP ranges (192.168.x, 10.x, etc.) are not counted
+                # as meaningful restrictions since they don't limit access to public internet resources
                 has_ip_restrictions = False
                 
                 if ipv4_summary:
                     for policy in ipv4_summary:
-                        # Check if this policy has IP address restrictions
+                        # Check if this policy has IP address restrictions on public addresses
                         # Policy format is generally "IP:PORT" or "*:PORT"
                         if ':' in policy:
                             ip_part = policy.split(':')[0]
-                            # If IP part is not '*', it has IP restrictions
-                            if ip_part != '*':
+                            # If IP part is not '*' and it's a public IP address, it's a restriction
+                            if ip_part != '*' and not is_private_ip_address(ip_part):
                                 has_ip_restrictions = True
                                 break
                 
-                # Also check IPv6 policies for IP restrictions
+                # Also check IPv6 policies for IP restrictions on public addresses
                 if not has_ip_restrictions and ipv6_summary:
                     for policy in ipv6_summary:
                         if ':' in policy:
-                            # IPv6 format can be complex, but if it's not '*', it's restricted
-                            ip_part = policy.split(':')[0]
-                            if ip_part != '*':
+                            # IPv6 format can be complex - need to extract IP part carefully
+                            # Handle both "[IPv6]:PORT" and "IPv6:PORT" formats
+                            if policy.startswith('[') and ']:' in policy:
+                                # Format: [IPv6]:PORT
+                                ip_part = policy[1:policy.find(']:')]
+                            else:
+                                # Format: IPv6:PORT - take everything before the last colon
+                                parts = policy.rsplit(':', 1)
+                                if len(parts) == 2:
+                                    ip_part = parts[0]
+                                else:
+                                    continue  # Skip malformed policies
+                            
+                            # If IP part is not '*' and it's a public IP address, it's a restriction
+                            if ip_part != '*' and not is_private_ip_address(ip_part):
                                 has_ip_restrictions = True
                                 break
                 

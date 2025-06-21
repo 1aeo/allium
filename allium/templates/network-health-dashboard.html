@@ -485,13 +485,13 @@ Network Health Dashboard
                     </div>
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
-                    <div class="metric-item" title="Number and percentage of exit relays without IP address restrictions allowing connections from any IP address. These relays accept traffic from all source IP addresses.">
+                    <div class="metric-item" title="Number and percentage of exit relays without public IP address restrictions. These relays accept traffic from any public IP address (restrictions on private IP ranges like 192.168.x, 10.x are not counted).">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.ip_unrestricted_exits) }} ({{ "%.1f%%"|format(relays.json.network_health.ip_unrestricted_exits_percentage) }})</span>
-                        <span class="metric-label">without IP Restrictions</span>
+                        <span class="metric-label">without Public IP Restrictions</span>
                     </div>
-                    <div class="metric-item" title="Number and percentage of exit relays with IP address restrictions limiting connections from specific IP addresses or ranges. These relays only accept traffic from certain source IP addresses.">
+                    <div class="metric-item" title="Number and percentage of exit relays with public IP address restrictions limiting connections from specific public IP addresses or ranges. Restrictions on private IP ranges (192.168.x, 10.x, 127.x, etc.) are not counted as they don't limit access to public internet resources.">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.ip_restricted_exits) }} ({{ "%.1f%%"|format(relays.json.network_health.ip_restricted_exits_percentage) }})</span>
-                        <span class="metric-label">with IP Restrictions</span>
+                        <span class="metric-label">with Public IP Restrictions</span>
                     </div>
                 </div>
             </div>
