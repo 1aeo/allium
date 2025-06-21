@@ -49,6 +49,10 @@ Network Health Dashboard
                     </div>
                 </div>
                 <div class="metric-grid">
+                    <div class="metric-item" title="Relays with both Exit and Guard flags. These relays can serve as both entry and exit points in Tor circuits.">
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.guard_exit_count) }} ({{ "%.1f%%"|format(relays.json.network_health.guard_exit_percentage) }})</span>
+                        <span class="metric-label">Exit + Guard</span>
+                    </div>
                     <div class="metric-item" title="Relays flagged as BadExit by directory authorities due to malicious behavior or policy violations.">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.bad_exits_count) }} ({{ "%.1f%%"|format(relays.json.network_health.bad_exits_percentage) }})</span>
                         <span class="metric-label">Bad Relays</span>
@@ -468,7 +472,7 @@ Network Health Dashboard
             <div class="card-metrics">
                 <div class="metric-item primary" title="Number and percentage of exit relays without restrictions allowing all traffic. These relays provide maximum utility for Tor users. Percentage calculated based on total exit relays.">
                     <span class="metric-value">{{ "{:,}".format(relays.json.network_health.unrestricted_exits) }} ({{ "%.1f%%"|format(relays.json.network_health.unrestricted_exits / relays.json.network_health.exit_count * 100) }})</span>
-                    <span class="metric-label">Relays without Restrictions</span>
+                    <span class="metric-label">Relays without Port Restrictions</span>
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
                     <div class="metric-item" title="Number and percentage of exit relays with port restrictions. These relays block certain types of traffic based on destination port. Percentage calculated based on total exit relays.">
@@ -480,10 +484,14 @@ Network Health Dashboard
                         <span class="metric-label">allow Web Traffic</span>
                     </div>
                 </div>
-                <div class="metric-grid" style="grid-template-columns: repeat(1, 1fr);">
-                    <div class="metric-item" title="Number of relays with both Exit and Guard flags. These relays can serve as both entry and exit points in Tor circuits.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.guard_exit_count) }}</span>
-                        <span class="metric-label">Relays Exit + Guard Flags</span>
+                <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
+                    <div class="metric-item" title="Number and percentage of exit relays without IP address restrictions allowing connections from any IP address. These relays accept traffic from all source IP addresses.">
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.ip_unrestricted_exits) }} ({{ "%.1f%%"|format(relays.json.network_health.ip_unrestricted_exits_percentage) }})</span>
+                        <span class="metric-label">without IP Restrictions</span>
+                    </div>
+                    <div class="metric-item" title="Number and percentage of exit relays with IP address restrictions limiting connections from specific IP addresses or ranges. These relays only accept traffic from certain source IP addresses.">
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.ip_restricted_exits) }} ({{ "%.1f%%"|format(relays.json.network_health.ip_restricted_exits_percentage) }})</span>
+                        <span class="metric-label">with IP Restrictions</span>
                     </div>
                 </div>
             </div>

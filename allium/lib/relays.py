@@ -2889,6 +2889,8 @@ class Relays:
         restricted_exits = 0
         web_traffic_exits = 0
         unrestricted_exits = 0
+        ip_unrestricted_exits = 0
+        ip_restricted_exits = 0
         
         # Role-specific collectors - combined into single loop
         exit_cw_values = []
@@ -2973,6 +2975,37 @@ class Relays:
                     unrestricted_exits += 1
                 else:
                     restricted_exits += 1
+                
+                # NEW: Check for IP address restrictions
+                # An exit relay has no IP address restrictions if it accepts from all IP addresses (*)
+                # It has IP restrictions if it has specific IP address/range restrictions
+                has_ip_restrictions = False
+                
+                if ipv4_summary:
+                    for policy in ipv4_summary:
+                        # Check if this policy has IP address restrictions
+                        # Policy format is generally "IP:PORT" or "*:PORT"
+                        if ':' in policy:
+                            ip_part = policy.split(':')[0]
+                            # If IP part is not '*', it has IP restrictions
+                            if ip_part != '*':
+                                has_ip_restrictions = True
+                                break
+                
+                # Also check IPv6 policies for IP restrictions
+                if not has_ip_restrictions and ipv6_summary:
+                    for policy in ipv6_summary:
+                        if ':' in policy:
+                            # IPv6 format can be complex, but if it's not '*', it's restricted
+                            ip_part = policy.split(':')[0]
+                            if ip_part != '*':
+                                has_ip_restrictions = True
+                                break
+                
+                if has_ip_restrictions:
+                    ip_restricted_exits += 1
+                else:
+                    ip_unrestricted_exits += 1
             
             # NEW: Age calculation using first_seen
             first_seen_str = relay.get('first_seen', '')
@@ -3225,10 +3258,14 @@ class Relays:
             'unrestricted_exits': unrestricted_exits,
             'restricted_exits': restricted_exits,
             'web_traffic_exits': web_traffic_exits,
+            'ip_unrestricted_exits': ip_unrestricted_exits,
+            'ip_restricted_exits': ip_restricted_exits,
             'unrestricted_exits_percentage': (unrestricted_exits / total_relays_count * 100) if total_relays_count > 0 else 0.0,
             'restricted_exits_percentage': (restricted_exits / total_relays_count * 100) if total_relays_count > 0 else 0.0,
             'web_traffic_exits_percentage': (web_traffic_exits / total_relays_count * 100) if total_relays_count > 0 else 0.0,
-            'guard_exit_percentage': (guard_exit_count / total_relays_count * 100) if total_relays_count > 0 else 0.0
+            'guard_exit_percentage': (guard_exit_count / total_relays_count * 100) if total_relays_count > 0 else 0.0,
+            'ip_unrestricted_exits_percentage': (ip_unrestricted_exits / total_relays_count * 100) if total_relays_count > 0 else 0.0,
+            'ip_restricted_exits_percentage': (ip_restricted_exits / total_relays_count * 100) if total_relays_count > 0 else 0.0
         })
         
         # STORE CALCULATED METRICS
