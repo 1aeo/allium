@@ -1334,10 +1334,31 @@ class Relays:
         raise ValueError(f"Unknown unit: {unit}")
 
     def _format_bandwidth_with_unit(self, bandwidth_bytes, unit, decimal_places=2):
-        """Format bandwidth using specified unit with configurable decimal places"""
-        divisor = self._get_divisor_for_unit(unit)
-        value = bandwidth_bytes / divisor
-        return f"{value:.{decimal_places}f}"
+        """
+        OPTIMIZATION: Inline division and formatting to eliminate function call overhead.
+        
+        This function is called thousands of times during site generation (contact pages,
+        templates, network health dashboard). Eliminating the _get_divisor_for_unit() 
+        function call and inlining the dictionary lookup provides measurable speedup.
+        """
+        # OPTIMIZATION: Inline dictionary lookup instead of function call
+        divisors = {
+            # Bits (convert bytes to bits, then to unit)
+            "Gbit/s": 125000000,   # 1000000000 / 8
+            "Mbit/s": 125000,      # 1000000 / 8  
+            "Kbit/s": 125,         # 1000 / 8
+            # Bytes  
+            "GB/s": 1000000000,
+            "MB/s": 1000000,
+            "KB/s": 1000
+        }
+        
+        # OPTIMIZATION: Single lookup + division + format in one efficient operation
+        if unit in divisors:
+            value = bandwidth_bytes / divisors[unit]
+            return f"{value:.{decimal_places}f}"
+        else:
+            raise ValueError(f"Unknown unit: {unit}")
 
     def _format_time_ago(self, timestamp_str):
         """Format timestamp as multi-unit time ago (e.g., '2y 3m 2w ago')"""
