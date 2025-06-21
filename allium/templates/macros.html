@@ -59,6 +59,9 @@
             
             <div class="navbar-collapse" id="main-navbar">
                 <ul class="nav navbar-nav">
+                    <li class="{% if active_section == 'network_health' %}active{% endif %}">
+                        <a href="{{ page_ctx.path_prefix }}network-health.html">Network Health</a>
+                    </li>
                     <li class="{% if active_section == 'aroi' %}active{% endif %}">
                         <a href="{{ page_ctx.path_prefix }}index.html">Operator Champions</a>
                     </li>

@@ -26,6 +26,9 @@ def calculate_relay_uptime_average(uptime_values):
     """
     Calculate average uptime from a list of raw Onionoo uptime values.
     
+    OPTIMIZATION: Single-pass calculation eliminates redundant iterations
+    through uptime data (filter + sum + len → single loop).
+    
     Args:
         uptime_values (list): List of raw uptime values (0-999 scale)
         
@@ -35,18 +38,22 @@ def calculate_relay_uptime_average(uptime_values):
     if not uptime_values:
         return 0.0
     
-    # Filter out None values and invalid values
-    valid_values = [v for v in uptime_values if v is not None and isinstance(v, (int, float)) and 0 <= v <= 999]
-    if not valid_values:
+    # OPTIMIZATION: Single pass - filter, count, and sum simultaneously
+    # Eliminates 3 separate iterations (list comprehension, sum(), len())
+    total = 0
+    count = 0
+    for v in uptime_values:
+        if v is not None and isinstance(v, (int, float)) and 0 <= v <= 999:
+            total += v
+            count += 1
+    
+    # Early exit for insufficient data (same threshold as before)
+    if count < 30:  # Need at least 30 data points (1 month of daily data)
         return 0.0
     
-    # Require minimum data points for reliable calculation
-    if len(valid_values) < 30:  # Need at least 30 data points (1 month of daily data)
-        return 0.0
-    
-    # Calculate average and normalize to percentage
-    avg_raw = sum(valid_values) / len(valid_values)
-    percentage = normalize_uptime_value(avg_raw)
+    # Calculate average and normalize to percentage in single step
+    avg_raw = total / count
+    percentage = avg_raw / 999 * 100  # Inline normalize_uptime_value for efficiency
     
     # Only include relays with minimal uptime (> 1%) to exclude completely offline relays
     # We include all operational relays, including problem ones, as they represent the real
@@ -84,6 +91,9 @@ def extract_relay_uptime_for_period(operator_relays, uptime_data, time_period):
     
     This is the core shared logic used by both AROI leaderboards and contact page reliability.
     
+    OPTIMIZATION: Creates fingerprint-to-uptime mapping once (O(m)) instead of 
+    repeated linear searches (O(n*m)) for massive performance improvement.
+    
     Args:
         operator_relays (list): List of relay objects for the operator
         uptime_data (dict): Uptime data from Onionoo API
@@ -95,6 +105,16 @@ def extract_relay_uptime_for_period(operator_relays, uptime_data, time_period):
     uptime_values = []
     relay_breakdown = {}
     
+    # OPTIMIZATION: Build fingerprint-to-uptime mapping ONCE (O(m) instead of O(n*m))
+    # This eliminates the repeated linear searches through uptime_data for each operator relay
+    uptime_map = {}
+    if uptime_data and uptime_data.get('relays'):
+        for uptime_relay in uptime_data['relays']:
+            fingerprint = uptime_relay.get('fingerprint')
+            if fingerprint:
+                uptime_map[fingerprint] = uptime_relay
+    
+    # Process operator relays with O(1) lookups instead of O(m) searches
     for relay in operator_relays:
         fingerprint = relay.get('fingerprint', '')
         nickname = relay.get('nickname', 'Unknown')
@@ -102,21 +122,25 @@ def extract_relay_uptime_for_period(operator_relays, uptime_data, time_period):
         if not fingerprint:
             continue
             
-        # Find uptime data for this relay
-        relay_uptime = find_relay_uptime_data(fingerprint, uptime_data)
+        # OPTIMIZATION: O(1) dictionary lookup instead of O(m) linear search
+        relay_uptime = uptime_map.get(fingerprint)
         
         if relay_uptime and relay_uptime.get('uptime'):
             period_data = relay_uptime['uptime'].get(time_period, {})
             if period_data.get('values'):
-                # Calculate average uptime using shared utility
+                # Calculate average uptime using optimized shared utility
                 avg_uptime = calculate_relay_uptime_average(period_data['values'])
                 if avg_uptime > 0:  # Only include relays with valid uptime data
                     uptime_values.append(avg_uptime)
+                    
+                    # OPTIMIZATION: Avoid redundant list comprehension - count non-None values efficiently
+                    data_points = sum(1 for v in period_data['values'] if v is not None)
+                    
                     relay_breakdown[fingerprint] = {
                         'nickname': nickname,
                         'fingerprint': fingerprint,
                         'uptime': avg_uptime,
-                        'data_points': len([v for v in period_data['values'] if v is not None])
+                        'data_points': data_points
                     }
     
     return {
@@ -495,6 +519,51 @@ def calculate_statistical_outliers(uptime_values, relay_breakdown, std_dev_thres
         return {'low_outliers': [], 'high_outliers': []}
 
 
+def _calculate_period_statistics(values):
+    """
+    OPTIMIZATION: Centralized statistical calculation function to eliminate code duplication.
+    
+    Replaces 4 identical statistical calculation blocks with a single reusable function.
+    
+    Args:
+        values (list): List of uptime values for statistical analysis
+        
+    Returns:
+        dict: Statistical metrics including mean, median, std_dev, and outlier thresholds
+    """
+    if len(values) < 3:
+        return None
+        
+    try:
+        total_sum = sum(values)
+        count = len(values)
+        sum_of_squares = sum(x ** 2 for x in values)
+        
+        # Calculate statistical thresholds for outlier detection
+        mean = total_sum / count
+        variance = (sum_of_squares / count) - (mean ** 2)
+        std_dev = math.sqrt(max(0, variance))  # Ensure non-negative variance
+        
+        # Set lower bound of 0 for two_sigma_low since negative uptimes are impossible
+        two_sigma_low = max(0.0, mean - 2 * std_dev)
+        two_sigma_high = mean + 2 * std_dev
+        
+        # Calculate median for network health dashboard requirements
+        import statistics
+        median = statistics.median(values)
+        
+        return {
+            'mean': mean,
+            'median': median,
+            'std_dev': std_dev,
+            'two_sigma_low': two_sigma_low,
+            'two_sigma_high': two_sigma_high,
+            'count': count
+        }
+    except Exception:
+        return None
+
+
 def process_all_uptime_data_consolidated(all_relays, uptime_data, include_flag_analysis=True):
     """
     Consolidated uptime data processing function that extracts all uptime-related data
@@ -595,78 +664,102 @@ def process_all_uptime_data_consolidated(all_relays, uptime_data, include_flag_a
             'relay_obj': relay_obj  # Store reference for easy access
         }
     
-    # Calculate network statistics for outlier detection
+    # Calculate network statistics for outlier detection using centralized function
     network_statistics = {}
     for period in ['1_month', '6_months', '1_year', '5_years']:
         values = network_uptime_values[period]
-        if len(values) >= 3:
-            try:
-                total_sum = sum(values)
-                count = len(values)
-                sum_of_squares = sum(x ** 2 for x in values)
-                
-                # Calculate statistical thresholds for outlier detection
-                mean = total_sum / count
-                variance = (sum_of_squares / count) - (mean ** 2)
-                std_dev = math.sqrt(max(0, variance))  # Ensure non-negative variance
-                
-                # Set lower bound of 0 for two_sigma_low since negative uptimes are impossible
-                two_sigma_low = max(0.0, mean - 2 * std_dev)
-                two_sigma_high = mean + 2 * std_dev
-                
-                period_stats = {
-                    'mean': mean,
-                    'std_dev': std_dev,
-                    'two_sigma_low': two_sigma_low,
-                    'two_sigma_high': two_sigma_high,
-                    'count': count
-                }
-                
-                network_statistics[period] = period_stats
-            except Exception:
-                network_statistics[period] = None
-        else:
-            network_statistics[period] = None
+        # OPTIMIZATION: Use centralized statistical calculation function
+        network_statistics[period] = _calculate_period_statistics(values)
     
-    # Calculate network flag statistics (if flag analysis enabled)
+    # Calculate network flag statistics using centralized function (if flag analysis enabled)
     network_flag_statistics = {}
     if include_flag_analysis:
         for flag, periods_data in network_flag_data.items():
             network_flag_statistics[flag] = {}
             for period, values in periods_data.items():
-                if len(values) >= 3:
-                    try:
-                        total_sum = sum(values)
-                        count = len(values)
-                        sum_of_squares = sum(x ** 2 for x in values)
-                        
-                        # Calculate statistical thresholds for outlier detection
-                        mean = total_sum / count
-                        variance = (sum_of_squares / count) - (mean ** 2)
-                        std_dev = math.sqrt(max(0, variance))  # Ensure non-negative variance
-                        
-                        # Set lower bound of 0 for two_sigma_low since negative uptimes are impossible
-                        two_sigma_low = max(0.0, mean - 2 * std_dev)
-                        two_sigma_high = mean + 2 * std_dev
-                        
-                        period_stats = {
-                            'mean': mean,
-                            'std_dev': std_dev,
-                            'two_sigma_low': two_sigma_low,
-                            'two_sigma_high': two_sigma_high,
-                            'count': count
-                        }
-                        
-                        network_flag_statistics[flag][period] = period_stats
-                    except Exception:
-                        network_flag_statistics[flag][period] = None
-                else:
-                    network_flag_statistics[flag][period] = None
+                # OPTIMIZATION: Use centralized statistical calculation function
+                network_flag_statistics[flag][period] = _calculate_period_statistics(values)
+    
+    # Calculate middle relay statistics (non-Exit, non-Guard relays) for network health dashboard
+    # This consolidates all role-specific calculations in one place following DRY principle
+    network_middle_statistics = {}
+    for period in ['1_month', '6_months', '1_year', '5_years']:
+        middle_uptime_values = []
+        
+        # Collect middle relay uptime values for this period
+        for fingerprint, relay_data in relay_uptime_data.items():
+            relay_obj = relay_data['relay_obj']
+            if relay_obj:  # Only process relays that are in our relay set
+                flags = relay_obj.get('flags', [])
+                is_exit = 'Exit' in flags
+                is_guard = 'Guard' in flags
+                
+                # Middle relays are those that are neither Exit nor Guard (same logic as contact pages)
+                if not is_exit and not is_guard:
+                    uptime_value = relay_data['uptime_percentages'].get(period, 0.0)
+                    if uptime_value > 0:  # Only include relays with actual uptime data
+                        middle_uptime_values.append(uptime_value)
+        
+        # OPTIMIZATION: Use centralized statistical calculation function
+        network_middle_statistics[period] = _calculate_period_statistics(middle_uptime_values)
+    
+    # Calculate other relay statistics (non-Exit, non-Guard, non-Middle relays) for network health dashboard
+    # "Other" category includes: Directory Authorities, Bad Relays, Unflagged relays, Special status relays
+    # This follows the same pattern as middle relay calculations for consistency
+    network_other_statistics = {}
+    for period in ['1_month', '6_months', '1_year', '5_years']:
+        other_uptime_values = []
+        
+        # Collect other relay uptime values for this period
+        for fingerprint, relay_data in relay_uptime_data.items():
+            relay_obj = relay_data['relay_obj']
+            if relay_obj:  # Only process relays that are in our relay set
+                flags = relay_obj.get('flags', [])
+                is_exit = 'Exit' in flags
+                is_guard = 'Guard' in flags
+                is_authority = 'Authority' in flags
+                is_bad_exit = 'BadExit' in flags
+                
+                # Determine if this relay belongs to "other" category
+                is_other = False
+                
+                # Directory Authorities - high priority special relays
+                if is_authority:
+                    is_other = True
+                
+                # Bad relays - flagged relays with potentially different uptime patterns
+                elif is_bad_exit:
+                    is_other = True
+                
+                # Unflagged relays - relays with no major flags (not Exit, Guard, Authority, or BadExit)
+                elif not is_exit and not is_guard and not is_authority and not is_bad_exit:
+                    # Check if relay has no significant flags at all or only minor flags
+                    significant_flags = {'Exit', 'Guard', 'Authority', 'BadExit', 'HSDir', 'Fast', 'Stable', 'Running', 'Valid'}
+                    relay_flags = set(flags)
+                    has_significant_flags = bool(relay_flags.intersection(significant_flags))
+                    if not has_significant_flags:
+                        is_other = True
+                
+                # Special status relays - relays with unique flag combinations not covered by Exit/Guard/Middle
+                # This covers edge cases like relays that might have unusual flag combinations
+                elif not is_exit and not is_guard and (is_authority or is_bad_exit):
+                    is_other = True
+                
+                # Include relays in "other" category that have uptime data
+                if is_other:
+                    uptime_value = relay_data['uptime_percentages'].get(period, 0.0)
+                    if uptime_value > 0:  # Only include relays with actual uptime data
+                        other_uptime_values.append(uptime_value)
+        
+        # OPTIMIZATION: Use centralized statistical calculation function
+        network_other_statistics[period] = _calculate_period_statistics(other_uptime_values)
     
     return {
         'relay_uptime_data': relay_uptime_data,
         'network_statistics': network_statistics,
         'network_flag_statistics': network_flag_statistics if include_flag_analysis else None,
+        'network_middle_statistics': network_middle_statistics,
+        'network_other_statistics': network_other_statistics,
         'processing_summary': {
             'total_relays_processed': len(relay_uptime_data),
             'network_relays_with_uptime': len([r for r in relay_uptime_data.values() if any(p > 0 for p in r['uptime_percentages'].values())]),
