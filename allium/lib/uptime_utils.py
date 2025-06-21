@@ -26,6 +26,9 @@ def calculate_relay_uptime_average(uptime_values):
     """
     Calculate average uptime from a list of raw Onionoo uptime values.
     
+    OPTIMIZATION: Single-pass calculation eliminates redundant iterations
+    through uptime data (filter + sum + len → single loop).
+    
     Args:
         uptime_values (list): List of raw uptime values (0-999 scale)
         
@@ -35,18 +38,22 @@ def calculate_relay_uptime_average(uptime_values):
     if not uptime_values:
         return 0.0
     
-    # Filter out None values and invalid values
-    valid_values = [v for v in uptime_values if v is not None and isinstance(v, (int, float)) and 0 <= v <= 999]
-    if not valid_values:
+    # OPTIMIZATION: Single pass - filter, count, and sum simultaneously
+    # Eliminates 3 separate iterations (list comprehension, sum(), len())
+    total = 0
+    count = 0
+    for v in uptime_values:
+        if v is not None and isinstance(v, (int, float)) and 0 <= v <= 999:
+            total += v
+            count += 1
+    
+    # Early exit for insufficient data (same threshold as before)
+    if count < 30:  # Need at least 30 data points (1 month of daily data)
         return 0.0
     
-    # Require minimum data points for reliable calculation
-    if len(valid_values) < 30:  # Need at least 30 data points (1 month of daily data)
-        return 0.0
-    
-    # Calculate average and normalize to percentage
-    avg_raw = sum(valid_values) / len(valid_values)
-    percentage = normalize_uptime_value(avg_raw)
+    # Calculate average and normalize to percentage in single step
+    avg_raw = total / count
+    percentage = avg_raw / 999 * 100  # Inline normalize_uptime_value for efficiency
     
     # Only include relays with minimal uptime (> 1%) to exclude completely offline relays
     # We include all operational relays, including problem ones, as they represent the real
@@ -121,15 +128,19 @@ def extract_relay_uptime_for_period(operator_relays, uptime_data, time_period):
         if relay_uptime and relay_uptime.get('uptime'):
             period_data = relay_uptime['uptime'].get(time_period, {})
             if period_data.get('values'):
-                # Calculate average uptime using shared utility
+                # Calculate average uptime using optimized shared utility
                 avg_uptime = calculate_relay_uptime_average(period_data['values'])
                 if avg_uptime > 0:  # Only include relays with valid uptime data
                     uptime_values.append(avg_uptime)
+                    
+                    # OPTIMIZATION: Avoid redundant list comprehension - count non-None values efficiently
+                    data_points = sum(1 for v in period_data['values'] if v is not None)
+                    
                     relay_breakdown[fingerprint] = {
                         'nickname': nickname,
                         'fingerprint': fingerprint,
                         'uptime': avg_uptime,
-                        'data_points': len([v for v in period_data['values'] if v is not None])
+                        'data_points': data_points
                     }
     
     return {
