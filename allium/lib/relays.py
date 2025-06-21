@@ -2761,7 +2761,9 @@ class Relays:
         # Format all number values with comma separators (16+ format operations eliminated)
         integer_format_keys = [
             'relays_total', 'exit_count', 'guard_count', 'middle_count', 'authorities_count',
-            'bad_exits_count', 'offline_relays', 'overloaded_relays', 'hibernating_relays',
+            'bad_exits_count', 'offline_relays', 'overloaded_relays',  # REMOVED: hibernating_relays
+            # NEW: Additional flag counts
+            'fast_count', 'stable_count', 'v2dir_count', 'hsdir_count', 'stabledesc_count', 'sybil_count',
             'new_relays_24h', 'new_relays_30d', 'new_relays_6m', 'new_relays_1y',
             'measured_relays', 'aroi_operators_count', 'relays_with_contact', 'relays_without_contact',
             'families_count', 'relays_with_family', 'relays_without_family', 'unique_contacts_count',
@@ -2780,7 +2782,11 @@ class Relays:
         percentage_format_keys = [
             'exit_percentage', 'guard_percentage', 'middle_percentage', 'authorities_percentage',
             'bad_exits_percentage', 'offline_relays_percentage', 'overloaded_relays_percentage',
-            'hibernating_relays_percentage', 'new_relays_24h_percentage', 'new_relays_30d_percentage',
+            # REMOVED: 'hibernating_relays_percentage',
+            # NEW: Additional flag percentages
+            'fast_percentage', 'stable_percentage', 'v2dir_percentage', 'hsdir_percentage',
+            'stabledesc_percentage', 'sybil_percentage',
+            'new_relays_24h_percentage', 'new_relays_30d_percentage',
             'new_relays_6m_percentage', 'new_relays_1y_percentage', 'measured_percentage',
             'relays_with_contact_percentage', 'relays_without_contact_percentage',
             'relays_with_family_percentage', 'relays_without_family_percentage',
@@ -2789,20 +2795,28 @@ class Relays:
             'non_eu_consensus_weight_percentage', 'rare_countries_consensus_weight_percentage',
             'eu_relays_percentage', 'non_eu_relays_percentage', 'rare_countries_relays_percentage',
             'top_3_as_concentration', 'top_5_as_concentration', 'top_10_as_concentration',
-            'overall_uptime', 'exit_uptime_1_month_mean', 'guard_uptime_1_month_mean',
-            'middle_uptime_1_month_mean', 'exit_uptime_1_month_median', 'guard_uptime_1_month_median',
-            'middle_uptime_1_month_median'
+            # REFACTORED: Generate percentage format keys using consistent pattern
+            'overall_uptime'
         ]
+        
+        # Add 1_month period formatting keys (used directly in templates) 
+        roles = ['exit', 'guard', 'middle', 'authority', 'v2dir', 'hsdir']
+        statistics = ['mean', 'median']
+        for role in roles:
+            for stat in statistics:
+                percentage_format_keys.append(f'{role}_uptime_1_month_{stat}')
         
         for key in percentage_format_keys:
             if key in health_metrics:
                 health_metrics[f'{key}_formatted'] = f"{health_metrics[key]:.1f}%"
         
         # Format uptime time series data (4+ format operations eliminated)
+        # Using consistent naming pattern: {role}_uptime_{period}_mean
         uptime_series_keys = [
-            ('exit_uptime_1_month', 'exit_uptime_mean', 'exit_uptime_1_year', 'exit_uptime_5_years'),
-            ('guard_uptime_1_month', 'guard_uptime_mean', 'guard_uptime_1_year', 'guard_uptime_5_years'),
-            ('middle_uptime_1_month', 'middle_uptime_mean', 'middle_uptime_1_year', 'middle_uptime_5_years')
+            ('exit_uptime_1_month_mean', 'exit_uptime_6_months_mean', 'exit_uptime_1_year_mean', 'exit_uptime_5_years_mean'),
+            ('guard_uptime_1_month_mean', 'guard_uptime_6_months_mean', 'guard_uptime_1_year_mean', 'guard_uptime_5_years_mean'),
+            ('middle_uptime_1_month_mean', 'middle_uptime_6_months_mean', 'middle_uptime_1_year_mean', 'middle_uptime_5_years_mean'),
+            ('authority_uptime_1_month_mean', 'authority_uptime_6_months_mean', 'authority_uptime_1_year_mean', 'authority_uptime_5_years_mean')
         ]
         
         for keys in uptime_series_keys:
@@ -2846,6 +2860,13 @@ class Relays:
             ('middle_count', 'middle_percentage', 'middle_count_with_percentage'),
             ('authorities_count', 'authorities_percentage', 'authorities_count_with_percentage'),
             ('bad_exits_count', 'bad_exits_percentage', 'bad_exits_count_with_percentage'),
+            # NEW: Additional flag count + percentage combinations
+            ('fast_count', 'fast_percentage', 'fast_count_with_percentage'),
+            ('stable_count', 'stable_percentage', 'stable_count_with_percentage'),
+            ('v2dir_count', 'v2dir_percentage', 'v2dir_count_with_percentage'),
+            ('hsdir_count', 'hsdir_percentage', 'hsdir_count_with_percentage'),
+            ('stabledesc_count', 'stabledesc_percentage', 'stabledesc_count_with_percentage'),
+            ('sybil_count', 'sybil_percentage', 'sybil_count_with_percentage'),
             ('offline_relays', 'offline_relays_percentage', 'offline_relays_with_percentage'),
             ('measured_relays', 'measured_percentage', 'measured_relays_with_percentage'),
             ('relays_with_contact', 'relays_with_contact_percentage', 'relays_with_contact_formatted')
@@ -2929,13 +2950,22 @@ class Relays:
         
         # Initialize all counters and collectors for SINGLE LOOP
         authority_count = bad_exit_count = 0
+        # NEW: Additional flag counts
+        fast_count = stable_count = v2dir_count = hsdir_count = 0
+        stabledesc_count = sybil_count = 0
         total_bandwidth = guard_bandwidth = exit_bandwidth = middle_bandwidth = 0
+        # NEW: Additional flag-specific bandwidth collectors
+        fast_bandwidth_values = []
+        stable_bandwidth_values = []
+        authority_bandwidth_values = []
+        v2dir_bandwidth_values = []
+        hsdir_bandwidth_values = []
         relays_with_family = relays_without_family = 0
         relays_with_contact = relays_without_contact = 0
         unique_contacts = set()
         eu_relays = non_eu_relays = rare_countries_relays = 0
         eu_consensus_weight = non_eu_consensus_weight = rare_countries_consensus_weight = 0
-        offline_relays = overloaded_relays = hibernating_relays = 0
+        offline_relays = overloaded_relays = 0  # REMOVED: hibernating_relays
         new_relays_24h = new_relays_30d = new_relays_1y = new_relays_6m = 0
         unique_platforms = set()
         platform_counts = {}
@@ -2985,8 +3015,15 @@ class Relays:
             is_exit = 'Exit' in flags
             is_authority = 'Authority' in flags
             is_bad_exit = 'BadExit' in flags
+            # NEW: Additional flag checks
+            is_fast = 'Fast' in flags
+            is_stable = 'Stable' in flags
+            is_v2dir = 'V2Dir' in flags
+            is_hsdir = 'HSDir' in flags
+            is_stabledesc = 'StableDesc' in flags
+            is_sybil = 'Sybil' in flags
             is_running = relay.get('running', True)
-            is_hibernating = relay.get('hibernating', False)
+            # REMOVED: is_hibernating
             is_overloaded = bool(relay.get('overload_general', False) or 
                                 relay.get('overload_fd_exhausted', False) or 
                                 relay.get('overload_write_limit', False) or 
@@ -2997,12 +3034,24 @@ class Relays:
                 authority_count += 1
             if is_bad_exit:
                 bad_exit_count += 1
+            # NEW: Additional flag counts
+            if is_fast:
+                fast_count += 1
+            if is_stable:
+                stable_count += 1
+            if is_v2dir:
+                v2dir_count += 1
+            if is_hsdir:
+                hsdir_count += 1
+            if is_stabledesc:
+                stabledesc_count += 1
+            if is_sybil:
+                sybil_count += 1
             if not is_running:
                 offline_relays += 1
             if is_overloaded:
                 overloaded_relays += 1
-            if is_hibernating:
-                hibernating_relays += 1
+            # REMOVED: hibernating count
             
             # NEW: Guard+Exit flag combination
             if is_guard and is_exit:
@@ -3147,6 +3196,19 @@ class Relays:
                     middle_bw_sum += bandwidth
                     middle_cw_values.append(consensus_weight / bandwidth)
                     middle_bw_values.append(bandwidth)
+            
+            # NEW: Flag-specific bandwidth collection for additional metrics
+            if bandwidth > 0:  # Only collect bandwidth for relays with actual bandwidth
+                if is_fast:
+                    fast_bandwidth_values.append(bandwidth)
+                if is_stable:
+                    stable_bandwidth_values.append(bandwidth)
+                if is_authority:
+                    authority_bandwidth_values.append(bandwidth)
+                if is_v2dir:
+                    v2dir_bandwidth_values.append(bandwidth)
+                if is_hsdir:
+                    hsdir_bandwidth_values.append(bandwidth)
             
             # Family and contact info
             effective_family = relay.get('effective_family', [])
@@ -3339,9 +3401,16 @@ class Relays:
         health_metrics.update({
             'authorities_count': authority_count,
             'bad_exits_count': bad_exit_count,
+            # NEW: Additional flag counts
+            'fast_count': fast_count,
+            'stable_count': stable_count,
+            'v2dir_count': v2dir_count,
+            'hsdir_count': hsdir_count,
+            'stabledesc_count': stabledesc_count,
+            'sybil_count': sybil_count,
             'offline_relays': offline_relays,
             'overloaded_relays': overloaded_relays,
-            'hibernating_relays': hibernating_relays,
+            # REMOVED: 'hibernating_relays': hibernating_relays,
             'new_relays_24h': new_relays_24h,
             'new_relays_30d': new_relays_30d,
             'new_relays_1y': new_relays_1y,
@@ -3377,9 +3446,16 @@ class Relays:
             # Add percentages for other relay counts
             'authorities_percentage': (authority_count / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
             'bad_exits_percentage': (bad_exit_count / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
+            # NEW: Additional flag percentages
+            'fast_percentage': (fast_count / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
+            'stable_percentage': (stable_count / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
+            'v2dir_percentage': (v2dir_count / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
+            'hsdir_percentage': (hsdir_count / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
+            'stabledesc_percentage': (stabledesc_count / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
+            'sybil_percentage': (sybil_count / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
             'offline_relays_percentage': (offline_relays / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
             'overloaded_relays_percentage': (overloaded_relays / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
-            'hibernating_relays_percentage': (hibernating_relays / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
+            # REMOVED: 'hibernating_relays_percentage': (hibernating_relays / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
             'new_relays_24h_percentage': (new_relays_24h / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
             'new_relays_30d_percentage': (new_relays_30d / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
             'new_relays_1y_percentage': (new_relays_1y / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
@@ -3461,7 +3537,18 @@ class Relays:
             'middle_bw_mean': statistics.mean(middle_bw_values) if middle_bw_values else 0.0,
             'exit_bw_median': statistics.median(exit_bw_values) if exit_bw_values else 0.0,
             'guard_bw_median': statistics.median(guard_bw_values) if guard_bw_values else 0.0,
-            'middle_bw_median': statistics.median(middle_bw_values) if middle_bw_values else 0.0
+            'middle_bw_median': statistics.median(middle_bw_values) if middle_bw_values else 0.0,
+            # NEW: Flag-specific bandwidth statistics
+            'fast_bw_mean': statistics.mean(fast_bandwidth_values) if fast_bandwidth_values else 0.0,
+            'fast_bw_median': statistics.median(fast_bandwidth_values) if fast_bandwidth_values else 0.0,
+            'stable_bw_mean': statistics.mean(stable_bandwidth_values) if stable_bandwidth_values else 0.0,
+            'stable_bw_median': statistics.median(stable_bandwidth_values) if stable_bandwidth_values else 0.0,
+            'authority_bw_mean': statistics.mean(authority_bandwidth_values) if authority_bandwidth_values else 0.0,
+            'authority_bw_median': statistics.median(authority_bandwidth_values) if authority_bandwidth_values else 0.0,
+            'v2dir_bw_mean': statistics.mean(v2dir_bandwidth_values) if v2dir_bandwidth_values else 0.0,
+            'v2dir_bw_median': statistics.median(v2dir_bandwidth_values) if v2dir_bandwidth_values else 0.0,
+            'hsdir_bw_mean': statistics.mean(hsdir_bandwidth_values) if hsdir_bandwidth_values else 0.0,
+            'hsdir_bw_median': statistics.median(hsdir_bandwidth_values) if hsdir_bandwidth_values else 0.0
         })
         
         # PRE-CALCULATE BANDWIDTH MEAN/MEDIAN WITH PROPER UNITS - avoid showing 0 values
@@ -3496,6 +3583,17 @@ class Relays:
             guard_median_formatted = self._format_bandwidth_with_unit(health_metrics['guard_bw_median'] * 8, unit, decimal_places=0) + f" {unit}"
             middle_mean_formatted = self._format_bandwidth_with_unit(health_metrics['middle_bw_mean'] * 8, unit, decimal_places=0) + f" {unit}"
             middle_median_formatted = self._format_bandwidth_with_unit(health_metrics['middle_bw_median'] * 8, unit, decimal_places=0) + f" {unit}"
+            # NEW: Additional flag-specific bandwidth formatting
+            fast_mean_formatted = self._format_bandwidth_with_unit(health_metrics['fast_bw_mean'] * 8, unit, decimal_places=0) + f" {unit}"
+            fast_median_formatted = self._format_bandwidth_with_unit(health_metrics['fast_bw_median'] * 8, unit, decimal_places=0) + f" {unit}"
+            stable_mean_formatted = self._format_bandwidth_with_unit(health_metrics['stable_bw_mean'] * 8, unit, decimal_places=0) + f" {unit}"
+            stable_median_formatted = self._format_bandwidth_with_unit(health_metrics['stable_bw_median'] * 8, unit, decimal_places=0) + f" {unit}"
+            authority_mean_formatted = self._format_bandwidth_with_unit(health_metrics['authority_bw_mean'] * 8, unit, decimal_places=0) + f" {unit}"
+            authority_median_formatted = self._format_bandwidth_with_unit(health_metrics['authority_bw_median'] * 8, unit, decimal_places=0) + f" {unit}"
+            v2dir_mean_formatted = self._format_bandwidth_with_unit(health_metrics['v2dir_bw_mean'] * 8, unit, decimal_places=0) + f" {unit}"
+            v2dir_median_formatted = self._format_bandwidth_with_unit(health_metrics['v2dir_bw_median'] * 8, unit, decimal_places=0) + f" {unit}"
+            hsdir_mean_formatted = self._format_bandwidth_with_unit(health_metrics['hsdir_bw_mean'] * 8, unit, decimal_places=0) + f" {unit}"
+            hsdir_median_formatted = self._format_bandwidth_with_unit(health_metrics['hsdir_bw_median'] * 8, unit, decimal_places=0) + f" {unit}"
         else:
             # For bytes, check if any value would round to 0 with GB/s
             base_unit = self._determine_unit(total_bandwidth)
@@ -3526,6 +3624,17 @@ class Relays:
             guard_median_formatted = self._format_bandwidth_with_unit(health_metrics['guard_bw_median'], unit, decimal_places=0) + f" {unit}"
             middle_mean_formatted = self._format_bandwidth_with_unit(health_metrics['middle_bw_mean'], unit, decimal_places=0) + f" {unit}"
             middle_median_formatted = self._format_bandwidth_with_unit(health_metrics['middle_bw_median'], unit, decimal_places=0) + f" {unit}"
+            # NEW: Additional flag-specific bandwidth formatting (bytes)
+            fast_mean_formatted = self._format_bandwidth_with_unit(health_metrics['fast_bw_mean'], unit, decimal_places=0) + f" {unit}"
+            fast_median_formatted = self._format_bandwidth_with_unit(health_metrics['fast_bw_median'], unit, decimal_places=0) + f" {unit}"
+            stable_mean_formatted = self._format_bandwidth_with_unit(health_metrics['stable_bw_mean'], unit, decimal_places=0) + f" {unit}"
+            stable_median_formatted = self._format_bandwidth_with_unit(health_metrics['stable_bw_median'], unit, decimal_places=0) + f" {unit}"
+            authority_mean_formatted = self._format_bandwidth_with_unit(health_metrics['authority_bw_mean'], unit, decimal_places=0) + f" {unit}"
+            authority_median_formatted = self._format_bandwidth_with_unit(health_metrics['authority_bw_median'], unit, decimal_places=0) + f" {unit}"
+            v2dir_mean_formatted = self._format_bandwidth_with_unit(health_metrics['v2dir_bw_mean'], unit, decimal_places=0) + f" {unit}"
+            v2dir_median_formatted = self._format_bandwidth_with_unit(health_metrics['v2dir_bw_median'], unit, decimal_places=0) + f" {unit}"
+            hsdir_mean_formatted = self._format_bandwidth_with_unit(health_metrics['hsdir_bw_mean'], unit, decimal_places=0) + f" {unit}"
+            hsdir_median_formatted = self._format_bandwidth_with_unit(health_metrics['hsdir_bw_median'], unit, decimal_places=0) + f" {unit}"
         
         health_metrics.update({
             'exit_bw_mean_formatted': exit_mean_formatted,
@@ -3533,7 +3642,18 @@ class Relays:
             'guard_bw_mean_formatted': guard_mean_formatted,
             'guard_bw_median_formatted': guard_median_formatted,
             'middle_bw_mean_formatted': middle_mean_formatted,
-            'middle_bw_median_formatted': middle_median_formatted
+            'middle_bw_median_formatted': middle_median_formatted,
+            # NEW: Additional flag-specific bandwidth formatted values
+            'fast_bw_mean_formatted': fast_mean_formatted,
+            'fast_bw_median_formatted': fast_median_formatted,
+            'stable_bw_mean_formatted': stable_mean_formatted,
+            'stable_bw_median_formatted': stable_median_formatted,
+            'authority_bw_mean_formatted': authority_mean_formatted,
+            'authority_bw_median_formatted': authority_median_formatted,
+            'v2dir_bw_mean_formatted': v2dir_mean_formatted,
+            'v2dir_bw_median_formatted': v2dir_median_formatted,
+            'hsdir_bw_mean_formatted': hsdir_mean_formatted,
+            'hsdir_bw_median_formatted': hsdir_median_formatted
         })
         
         # Bandwidth formatting with proper units
@@ -3610,66 +3730,61 @@ class Relays:
                     other_mean = 0.0
                     other_median = 0.0
                 
-                # Set values using the same naming as before but with all consolidated calculations
-                if period == '1_month':
-                    health_metrics['exit_uptime_1_month_mean'] = exit_mean
-                    health_metrics['exit_uptime_1_month_median'] = exit_median
-                    health_metrics['guard_uptime_1_month_mean'] = guard_mean
-                    health_metrics['guard_uptime_1_month_median'] = guard_median
-                    health_metrics['middle_uptime_1_month_mean'] = middle_mean
-                    health_metrics['middle_uptime_1_month_median'] = middle_median
-                    health_metrics['other_uptime_1_month_mean'] = other_mean
-                    health_metrics['other_uptime_1_month_median'] = other_median
-                    # For backward compatibility and template usage
-                    health_metrics['exit_uptime_1_month'] = exit_mean
-                    health_metrics['guard_uptime_1_month'] = guard_mean
-                    health_metrics['middle_uptime_1_month'] = middle_mean
-                    health_metrics['other_uptime_1_month'] = other_mean
-                elif period == '6_months':
-                    health_metrics['exit_uptime_mean'] = exit_mean
-                    health_metrics['exit_uptime_median'] = exit_median
-                    health_metrics['guard_uptime_mean'] = guard_mean
-                    health_metrics['guard_uptime_median'] = guard_median
-                    health_metrics['middle_uptime_mean'] = middle_mean
-                    health_metrics['middle_uptime_median'] = middle_median
-                    health_metrics['other_uptime_mean'] = other_mean
-                    health_metrics['other_uptime_median'] = other_median
-                    # Backward compatibility
-                    health_metrics['exit_uptime'] = exit_mean
-                    health_metrics['guard_uptime'] = guard_mean
-                    health_metrics['middle_uptime'] = middle_mean
-                    health_metrics['other_uptime'] = other_mean
+                # NEW: Additional flag-specific uptime calculations
+                # Authority uptime statistics
+                if network_flag_statistics.get('Authority', {}).get(period, {}).get('mean') is not None:
+                    authority_mean = network_flag_statistics['Authority'][period]['mean']
+                    authority_median = network_flag_statistics['Authority'][period].get('median', authority_mean)
                 else:
-                    health_metrics[f'exit_uptime_{period}'] = exit_mean
-                    health_metrics[f'guard_uptime_{period}'] = guard_mean
-                    health_metrics[f'middle_uptime_{period}'] = middle_mean
-                    health_metrics[f'other_uptime_{period}'] = other_mean
-                    # Add mean/median for other periods if needed later
-                    health_metrics[f'exit_uptime_{period}_mean'] = exit_mean
-                    health_metrics[f'exit_uptime_{period}_median'] = exit_median
-                    health_metrics[f'guard_uptime_{period}_mean'] = guard_mean
-                    health_metrics[f'guard_uptime_{period}_median'] = guard_median
-                    health_metrics[f'middle_uptime_{period}_mean'] = middle_mean
-                    health_metrics[f'middle_uptime_{period}_median'] = middle_median
-                    health_metrics[f'other_uptime_{period}_mean'] = other_mean
-                    health_metrics[f'other_uptime_{period}_median'] = other_median
+                    authority_mean = 0.0
+                    authority_median = 0.0
+                
+                # V2Dir uptime statistics
+                if network_flag_statistics.get('V2Dir', {}).get(period, {}).get('mean') is not None:
+                    v2dir_mean = network_flag_statistics['V2Dir'][period]['mean']
+                    v2dir_median = network_flag_statistics['V2Dir'][period].get('median', v2dir_mean)
+                else:
+                    v2dir_mean = 0.0
+                    v2dir_median = 0.0
+                
+                # HSDir uptime statistics
+                if network_flag_statistics.get('HSDir', {}).get(period, {}).get('mean') is not None:
+                    hsdir_mean = network_flag_statistics['HSDir'][period]['mean']
+                    hsdir_median = network_flag_statistics['HSDir'][period].get('median', hsdir_mean)
+                else:
+                    hsdir_mean = 0.0
+                    hsdir_median = 0.0
+                
+                # REFACTORED: Consistent naming pattern for all periods - {role}_uptime_{period}_{statistic}
+                # Eliminates redundant variables and special cases for better maintainability
+                role_data = [
+                    ('exit', exit_mean, exit_median),
+                    ('guard', guard_mean, guard_median),
+                    ('middle', middle_mean, middle_median),
+                    ('other', other_mean, other_median),
+                    ('authority', authority_mean, authority_median),
+                    ('v2dir', v2dir_mean, v2dir_median),
+                    ('hsdir', hsdir_mean, hsdir_median)
+                ]
+                
+                for role, mean_val, median_val in role_data:
+                    health_metrics[f'{role}_uptime_{period}_mean'] = mean_val
+                    health_metrics[f'{role}_uptime_{period}_median'] = median_val
             
         else:
             # Initialize to 0 when no consolidated uptime results available
             health_metrics['overall_uptime'] = 0.0
             health_metrics['uptime_percentiles'] = None
             
+            # REFACTORED: Consistent fallback initialization using unified pattern
             uptime_periods = ['1_month', '6_months', '1_year', '5_years']
-            base_keys = ['exit_uptime', 'guard_uptime', 'middle_uptime', 'other_uptime']
-            mean_median_keys = ['exit_uptime_mean', 'guard_uptime_mean', 'middle_uptime_mean', 'other_uptime_mean',
-                               'exit_uptime_median', 'guard_uptime_median', 'middle_uptime_median', 'other_uptime_median',
-                               'exit_uptime_1_month_mean', 'guard_uptime_1_month_mean', 'middle_uptime_1_month_mean', 'other_uptime_1_month_mean',
-                               'exit_uptime_1_month_median', 'guard_uptime_1_month_median', 'middle_uptime_1_month_median', 'other_uptime_1_month_median']
-            period_keys = [f'{role}_uptime_{period}' for period in uptime_periods for role in ['exit', 'guard', 'middle', 'other']]
-            additional_period_keys = [f'{role}_uptime_{period}_mean' for period in uptime_periods for role in ['exit', 'guard', 'middle', 'other']]
-            additional_period_keys += [f'{role}_uptime_{period}_median' for period in uptime_periods for role in ['exit', 'guard', 'middle', 'other']]
+            roles = ['exit', 'guard', 'middle', 'other', 'authority', 'v2dir', 'hsdir']
+            statistics = ['mean', 'median']
             
-            for key in base_keys + mean_median_keys + period_keys + additional_period_keys:
+            # Generate all uptime keys using consistent pattern: {role}_uptime_{period}_{statistic}
+            uptime_keys = [f'{role}_uptime_{period}_{stat}' for role in roles for period in uptime_periods for stat in statistics]
+            
+            for key in uptime_keys:
                 health_metrics[key] = 0.0
         
         # Percentage calculations for participation metrics

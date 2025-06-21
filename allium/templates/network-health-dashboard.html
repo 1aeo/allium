@@ -31,45 +31,74 @@ Network Health Dashboard
                     <span class="metric-label">Total Relays</span>
                 </div>
                 <div class="metric-grid">
-                    <div class="metric-item" title="Exit relays allow traffic to leave the Tor network to the regular internet. Classified by Exit flag priority.">
+                    <div class="metric-item" title="Exit relays allow traffic to leave the Tor network to the regular internet. Must allow exits to at least one /8 address space on ports 80 and 443.">
                         <span class="metric-value">{{ relays.json.network_health.exit_count_with_percentage }}</span>
                         <span class="metric-label">Exit</span>
                     </div>
-                    <div class="metric-item" title="Guard relays are the first hop in Tor circuits. Classified by Guard flag when not Exit.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.guard_count) }} ({{ "%.1f%%"|format(relays.json.network_health.guard_percentage) }})</span>
+                    <div class="metric-item" title="Guard relays serve as entry points into the Tor network. Must be Fast, Stable, and meet specific uptime and bandwidth requirements.">
+                        <span class="metric-value">{{ relays.json.network_health.guard_count_with_percentage }}</span>
                         <span class="metric-label">Guard</span>
                     </div>
-                    <div class="metric-item" title="Middle relays forward traffic between other relays. Relays without Exit or Guard flags.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.middle_count) }} ({{ "%.1f%%"|format(relays.json.network_health.middle_percentage) }})</span>
+                    <div class="metric-item" title="Middle relays forward traffic between other relays within the Tor network. Cannot be used as entry or exit points.">
+                        <span class="metric-value">{{ relays.json.network_health.middle_count_with_percentage }}</span>
                         <span class="metric-label">Middle</span>
                     </div>
-                    <div class="metric-item" title="Directory authorities coordinate the Tor network consensus. Critical infrastructure nodes.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.authorities_count) }} ({{ "%.1f%%"|format(relays.json.network_health.authorities_percentage) }})</span>
-                        <span class="metric-label">Authorities</span>
-                    </div>
-                </div>
-                <div class="metric-grid">
-                    <div class="metric-item" title="Relays with both Exit and Guard flags. These relays can serve as both entry and exit points in Tor circuits.">
+                    <div class="metric-item" title="Relays with both Exit and Guard flags can serve as both entry and exit points. Provides maximum utility to the network.">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.guard_exit_count) }} ({{ "%.1f%%"|format(relays.json.network_health.guard_exit_percentage) }})</span>
                         <span class="metric-label">Exit + Guard</span>
                     </div>
-                    <div class="metric-item" title="Relays flagged as BadExit by directory authorities due to malicious behavior or policy violations.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.bad_exits_count) }} ({{ "%.1f%%"|format(relays.json.network_health.bad_exits_percentage) }})</span>
-                        <span class="metric-label">Bad Relays</span>
+                </div>
+                <div class="metric-grid">
+                    <div class="metric-item" title="Fast relays have sufficient bandwidth to be useful for high-speed circuits. Determined by being in the top 7/8ths for bandwidth or at least 100KB/s.">
+                        <span class="metric-value">{{ relays.json.network_health.fast_count_with_percentage }}</span>
+                        <span class="metric-label">Fast</span>
                     </div>
-                    <div class="metric-item" title="Relays not currently running according to the latest consensus. Calculated from running=false in Onionoo.">
+                    <div class="metric-item" title="Stable relays have maintained high uptime and reliability over time. Essential for network stability and long-lived circuits.">
+                        <span class="metric-value">{{ relays.json.network_health.stable_count_with_percentage }}</span>
+                        <span class="metric-label">Stable</span>
+                    </div>
+                    <div class="metric-item" title="Measured relays have bandwidth measured by directory authorities for accuracy. Provides more reliable bandwidth estimates than self-reported values.">
+                        <span class="metric-value">{{ relays.json.network_health.measured_relays_with_percentage }}</span>
+                        <span class="metric-label">Measured</span>
+                    </div>
+                    <div class="metric-item" title="Offline relays are not currently running according to the latest consensus. These relays are temporarily unavailable to the network.">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.offline_relays) }} ({{ "%.1f%%"|format(relays.json.network_health.offline_relays_percentage) }})</span>
                         <span class="metric-label">Offline</span>
                     </div>
-                    <div class="metric-item" title="Relays reporting overload conditions like memory pressure, CPU exhaustion, or TCP port limits.">
+                </div>
+                <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
+                    <div class="metric-item" title="Directory authorities coordinate the Tor network by creating the consensus document. Critical infrastructure nodes that vote on relay flags and network parameters.">
+                        <span class="metric-value">{{ relays.json.network_health.authorities_count_with_percentage }}</span>
+                        <span class="metric-label">Directory Authorities</span>
+                    </div>
+                    <div class="metric-item" title="V2Dir relays serve directory information including consensus documents and relay descriptors. Essential for network discovery and connectivity.">
+                        <span class="metric-value">{{ relays.json.network_health.v2dir_count_with_percentage }}</span>
+                        <span class="metric-label">V2Dir</span>
+                    </div>
+                    <div class="metric-item" title="HSDir relays store and serve hidden service descriptors, enabling access to onion services. Requires Stable and Fast flags plus 96+ hours uptime.">
+                        <span class="metric-value">{{ relays.json.network_health.hsdir_count_with_percentage }}</span>
+                        <span class="metric-label">HSDir</span>
+                    </div>
+                </div>
+                <div class="metric-grid">
+                    <div class="metric-item" title="BadExit relays are flagged by authorities when misconfigured or malicious. These relays cannot be used as exit points for security reasons.">
+                        <span class="metric-value">{{ relays.json.network_health.bad_exits_count_with_percentage }}</span>
+                        <span class="metric-label">Bad Relays</span>
+                    </div>
+                    <div class="metric-item" title="StaleDesc relays have published descriptors over 18 hours old. These relays may have outdated information about their capabilities.">
+                        <span class="metric-value">{{ relays.json.network_health.stabledesc_count_with_percentage }}</span>
+                        <span class="metric-label">StaleDesc</span>
+                    </div>
+                    <div class="metric-item" title="Sybil relays are flagged as potentially belonging to the same operator when more than 2 relays share an IP address. Helps prevent network control attacks.">
+                        <span class="metric-value">{{ relays.json.network_health.sybil_count_with_percentage }}</span>
+                        <span class="metric-label">Sybil</span>
+                    </div>
+                    <div class="metric-item" title="Overloaded relays are experiencing resource constraints like memory pressure, CPU exhaustion, or TCP port limits. May impact network performance.">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.overloaded_relays) }} ({{ "%.1f%%"|format(relays.json.network_health.overloaded_relays_percentage) }})</span>
                         <span class="metric-label">Overloaded</span>
                     </div>
-                    <div class="metric-item" title="Relays in hibernation mode, typically due to reaching bandwidth accounting limits.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.hibernating_relays) }} ({{ "%.1f%%"|format(relays.json.network_health.hibernating_relays_percentage) }})</span>
-                        <span class="metric-label">Hibernating</span>
-                    </div>
                 </div>
+
                 <div class="metric-grid">
                     <div class="metric-item" title="New relays that first appeared in the network in the last 24 hours based on first_seen timestamp.">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.new_relays_24h) }} ({{ "%.1f%%"|format(relays.json.network_health.new_relays_24h_percentage) }})</span>
@@ -136,6 +165,30 @@ Network Health Dashboard
                     </div>
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
+                    <div class="metric-item" title="Mean and median bandwidth per Fast relay. Shows performance characteristics of fast relays.">
+                        <span class="metric-value">{{ relays.json.network_health.fast_bw_mean_formatted }} | {{ relays.json.network_health.fast_bw_median_formatted }}</span>
+                        <span class="metric-label">Fast Mean | Median</span>
+                    </div>
+                    <div class="metric-item" title="Mean and median bandwidth per Stable relay. Shows performance characteristics of stable relays.">
+                        <span class="metric-value">{{ relays.json.network_health.stable_bw_mean_formatted }} | {{ relays.json.network_health.stable_bw_median_formatted }}</span>
+                        <span class="metric-label">Stable Mean | Median</span>
+                    </div>
+                </div>
+                <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
+                    <div class="metric-item" title="Mean and median bandwidth per Directory Authority. Shows infrastructure capacity of critical nodes.">
+                        <span class="metric-value">{{ relays.json.network_health.authority_bw_mean_formatted }} | {{ relays.json.network_health.authority_bw_median_formatted }}</span>
+                        <span class="metric-label">Authority Mean | Median</span>
+                    </div>
+                    <div class="metric-item" title="Mean and median bandwidth per V2Dir relay. Shows directory service capacity.">
+                        <span class="metric-value">{{ relays.json.network_health.v2dir_bw_mean_formatted }} | {{ relays.json.network_health.v2dir_bw_median_formatted }}</span>
+                        <span class="metric-label">V2Dir Mean | Median</span>
+                    </div>
+                    <div class="metric-item" title="Mean and median bandwidth per HSDir relay. Shows hidden service directory capacity.">
+                        <span class="metric-value">{{ relays.json.network_health.hsdir_bw_mean_formatted }} | {{ relays.json.network_health.hsdir_bw_median_formatted }}</span>
+                        <span class="metric-label">HSDir Mean | Median</span>
+                    </div>
+                </div>
+                <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
                     <div class="metric-item" title="Mean and median difference between observed and advertised bandwidth. Indicates relay capacity accuracy.">
                         <span class="metric-value">{{ relays.json.network_health.avg_observed_advertised_diff_formatted }}</span>
                         <span class="metric-label">Obs to Adv Diff (Mean | Median)</span>
@@ -172,6 +225,20 @@ Network Health Dashboard
                         <span class="metric-label">Middle 1mo (Mean | Median)</span>
                     </div>
                 </div>
+                <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
+                    <div class="metric-item" title="Mean and median uptime of Directory Authority relays over 1 month. Critical infrastructure uptime for network coordination.">
+                        <span class="metric-value">{{ "%.1f"|format(relays.json.network_health.authority_uptime_1_month_mean) }}% | {{ "%.1f"|format(relays.json.network_health.authority_uptime_1_month_median) }}%</span>
+                        <span class="metric-label">Authority 1mo (Mean | Median)</span>
+                    </div>
+                    <div class="metric-item" title="Mean and median uptime of V2Dir relays over 1 month. Directory service reliability for clients and relays.">
+                        <span class="metric-value">{{ "%.1f"|format(relays.json.network_health.v2dir_uptime_1_month_mean) }}% | {{ "%.1f"|format(relays.json.network_health.v2dir_uptime_1_month_median) }}%</span>
+                        <span class="metric-label">V2Dir 1mo (Mean | Median)</span>
+                    </div>
+                    <div class="metric-item" title="Mean and median uptime of HSDir relays over 1 month. Hidden service directory availability.">
+                        <span class="metric-value">{{ "%.1f"|format(relays.json.network_health.hsdir_uptime_1_month_mean) }}% | {{ "%.1f"|format(relays.json.network_health.hsdir_uptime_1_month_median) }}%</span>
+                        <span class="metric-label">HSDir 1mo (Mean | Median)</span>
+                    </div>
+                </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(1, 1fr);">
                     <div class="metric-item" title="Exit relay uptime over 1 month, 6 months, 1 year, and 5 years respectively.">
                         <span class="metric-value">{{ relays.json.network_health.exit_uptime_series_formatted }}</span>
@@ -180,14 +247,20 @@ Network Health Dashboard
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(1, 1fr);">
                     <div class="metric-item" title="Guard relay uptime over 1 month, 6 months, 1 year, and 5 years respectively.">
-                        <span class="metric-value">{{ "%.1f"|format(relays.json.network_health.guard_uptime_1_month) }}% | {{ "%.1f"|format(relays.json.network_health.guard_uptime_mean) }}% | {{ "%.1f"|format(relays.json.network_health.guard_uptime_1_year) }}% | {{ "%.1f"|format(relays.json.network_health.guard_uptime_5_years) }}%</span>
+                        <span class="metric-value">{{ relays.json.network_health.guard_uptime_series_formatted }}</span>
                         <span class="metric-label">Guard: 1mo | 6mo | 1y | 5y (Mean)</span>
                     </div>
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(1, 1fr);">
                     <div class="metric-item" title="Middle relay uptime over 1 month, 6 months, 1 year, and 5 years respectively.">
-                        <span class="metric-value">{{ "%.1f"|format(relays.json.network_health.middle_uptime_1_month) }}% | {{ "%.1f"|format(relays.json.network_health.middle_uptime_mean) }}% | {{ "%.1f"|format(relays.json.network_health.middle_uptime_1_year) }}% | {{ "%.1f"|format(relays.json.network_health.middle_uptime_5_years) }}%</span>
+                        <span class="metric-value">{{ relays.json.network_health.middle_uptime_series_formatted }}</span>
                         <span class="metric-label">Middle: 1mo | 6mo | 1y | 5y (Mean)</span>
+                    </div>
+                </div>
+                <div class="metric-grid" style="grid-template-columns: repeat(1, 1fr);">
+                    <div class="metric-item" title="Directory Authority relay uptime over 1 month, 6 months, 1 year, and 5 years respectively. Critical infrastructure uptime for network coordination.">
+                        <span class="metric-value">{{ relays.json.network_health.authority_uptime_series_formatted }}</span>
+                        <span class="metric-label">Authority: 1mo | 6mo | 1y | 5y (Mean)</span>
                     </div>
                 </div>
             </div>
