@@ -263,9 +263,12 @@ def determine_unit_filter(bandwidth_bytes, use_bits=False):
     return determine_unit(bandwidth_bytes, use_bits)
 
 def format_bandwidth_filter(bandwidth_bytes, unit=None, use_bits=False, decimal_places=2):
-    """Filter that determines unit and formats bandwidth in one step"""
+    """
+    Format bandwidth for display with unit and optional unit specification.
+    """
     if unit is None:
-        unit = determine_unit(bandwidth_bytes, use_bits)
+        unit = determine_unit_filter(bandwidth_bytes, use_bits)
+    
     return format_bandwidth_with_unit(bandwidth_bytes, unit, decimal_places)
 
 # Add custom filters to the Jinja2 environment
@@ -273,6 +276,43 @@ ENV.filters['determine_unit'] = determine_unit_filter
 ENV.filters['format_bandwidth_with_unit'] = format_bandwidth_with_unit
 ENV.filters['format_bandwidth'] = format_bandwidth_filter
 ENV.filters['format_time_ago'] = format_time_ago
+
+def determine_ipv6_support(or_addresses):
+    """
+    Helper function to determine IPv6 support status based on or_addresses.
+    
+    Args:
+        or_addresses (list): List of address:port strings from onionoo
+        
+    Returns:
+        str: 'ipv4_only', 'ipv6_only', 'both', or 'none'
+    """
+    if not or_addresses:
+        return 'none'
+        
+    has_ipv4 = False
+    has_ipv6 = False
+    
+    for address in or_addresses:
+        # Handle IPv6 addresses in brackets like [2001:db8::1]:9001
+        if address.startswith('[') and ']:' in address:
+            # This is an IPv6 address with port in brackets
+            has_ipv6 = True
+        elif '::' in address or (address.count(':') > 1 and '.' not in address):
+            # This is an IPv6 address (double colon or multiple colons without dots)
+            has_ipv6 = True
+        elif '.' in address and address.count(':') <= 1:
+            # This is an IPv4 address (has dots and at most one colon for port)
+            has_ipv4 = True
+    
+    if has_ipv4 and has_ipv6:
+        return 'both'
+    elif has_ipv4:
+        return 'ipv4_only'
+    elif has_ipv6:
+        return 'ipv6_only'
+    else:
+        return 'none'
 
 class Relays:
     """Relay class consisting of processing routines and onionoo data"""
@@ -2975,6 +3015,26 @@ class Relays:
         # OPTIMIZATION: AS-specific CW/BW collectors (eliminates need for separate relay loop)
         as_cw_bw_data = {}  # as_number -> [cw_bw_ratios]
         
+        # NEW: IPv6 support analysis - relay-level counters
+        ipv4_only_relays = 0
+        ipv6_only_relays = 0
+        both_ipv4_ipv6_relays = 0
+        
+        # NEW: IPv6 support analysis - country-level collections
+        ipv4_only_countries = {}  # country -> count
+        ipv6_only_countries = {}  # country -> count
+        both_ipv4_ipv6_countries = {}  # country -> count
+        
+        # NEW: IPv6 support analysis - AS-level collections
+        ipv4_only_as = {}  # as_number -> count
+        ipv6_only_as = {}  # as_number -> count
+        both_ipv4_ipv6_as = {}  # as_number -> count
+        
+        # NEW: IPv6 support analysis - operator-level collections
+        ipv4_only_operators = set()  # contact_hashes that have any ipv4-only relay
+        ipv6_only_operators = set()  # contact_hashes that have any ipv6-only relay
+        both_ipv4_ipv6_operators = set()  # contact_hashes that have any dual-stack relay
+        
         # Uptime data will be extracted from existing consolidated results after uptime API processing
         
         # SINGLE LOOP - calculate everything at once
@@ -3190,6 +3250,49 @@ class Relays:
                     as_cw_bw_data[as_number] = []
                 as_cw_bw_data[as_number].append(cw_bw_ratio)
             
+            # NEW: IPv6 support analysis - determine IP version support for this relay
+            or_addresses = relay.get('or_addresses', [])
+            ipv6_support = determine_ipv6_support(or_addresses)
+            
+            # Count relay-level IPv6 support
+            if ipv6_support == 'ipv4_only':
+                ipv4_only_relays += 1
+            elif ipv6_support == 'ipv6_only':
+                ipv6_only_relays += 1
+            elif ipv6_support == 'both':
+                both_ipv4_ipv6_relays += 1
+            
+            # Country-level IPv6 support tracking
+            if country and len(country) == 2:
+                if ipv6_support == 'ipv4_only':
+                    ipv4_only_countries[country] = ipv4_only_countries.get(country, 0) + 1
+                elif ipv6_support == 'ipv6_only':
+                    ipv6_only_countries[country] = ipv6_only_countries.get(country, 0) + 1
+                elif ipv6_support == 'both':
+                    both_ipv4_ipv6_countries[country] = both_ipv4_ipv6_countries.get(country, 0) + 1
+            
+            # AS-level IPv6 support tracking
+            if as_number:
+                if ipv6_support == 'ipv4_only':
+                    ipv4_only_as[as_number] = ipv4_only_as.get(as_number, 0) + 1
+                elif ipv6_support == 'ipv6_only':
+                    ipv6_only_as[as_number] = ipv6_only_as.get(as_number, 0) + 1
+                elif ipv6_support == 'both':
+                    both_ipv4_ipv6_as[as_number] = both_ipv4_ipv6_as.get(as_number, 0) + 1
+            
+            # Operator-level IPv6 support tracking (uses contact hash from existing processing)
+            contact_hash = relay.get('hashed_contact')
+            if contact_hash:
+                if ipv6_support == 'ipv4_only':
+                    ipv4_only_operators.add(contact_hash)
+                elif ipv6_support == 'ipv6_only':
+                    ipv6_only_operators.add(contact_hash)
+                elif ipv6_support == 'both':
+                    both_ipv4_ipv6_operators.add(contact_hash)
+            
+            # Skip uptime calculation here - will use existing consolidated results
+        
+        # NEW: Calculate age statistics
             # Skip uptime calculation here - will use existing consolidated results
         
         # NEW: Calculate age statistics
@@ -3384,6 +3487,71 @@ class Relays:
             'new_relays_30d_percentage': (new_relays_30d / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
             'new_relays_1y_percentage': (new_relays_1y / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
             'new_relays_6m_percentage': (new_relays_6m / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0
+        })
+        
+        # NEW: IPv6 support metrics - relay-level statistics
+        health_metrics.update({
+            'ipv4_only_relays': ipv4_only_relays,
+            'ipv6_only_relays': ipv6_only_relays,
+            'both_ipv4_ipv6_relays': both_ipv4_ipv6_relays,
+            'ipv4_only_relays_percentage': (ipv4_only_relays / total_relays_count * 100) if total_relays_count > 0 else 0.0,
+            'ipv6_only_relays_percentage': (ipv6_only_relays / total_relays_count * 100) if total_relays_count > 0 else 0.0,
+            'both_ipv4_ipv6_relays_percentage': (both_ipv4_ipv6_relays / total_relays_count * 100) if total_relays_count > 0 else 0.0
+        })
+        
+        # NEW: IPv6 support metrics - operator-level statistics
+        health_metrics.update({
+            'ipv4_only_operators': len(ipv4_only_operators),
+            'ipv6_only_operators': len(ipv6_only_operators),
+            'both_ipv4_ipv6_operators': len(both_ipv4_ipv6_operators),
+            'ipv4_only_operators_percentage': (len(ipv4_only_operators) / health_metrics['aroi_operators_count'] * 100) if health_metrics['aroi_operators_count'] > 0 else 0.0,
+            'ipv6_only_operators_percentage': (len(ipv6_only_operators) / health_metrics['aroi_operators_count'] * 100) if health_metrics['aroi_operators_count'] > 0 else 0.0,
+            'both_ipv4_ipv6_operators_percentage': (len(both_ipv4_ipv6_operators) / health_metrics['aroi_operators_count'] * 100) if health_metrics['aroi_operators_count'] > 0 else 0.0
+        })
+        
+        # NEW: IPv6 support metrics - top country analysis
+        # Find top country for each IPv6 category
+        top_ipv4_only_country = max(ipv4_only_countries.items(), key=lambda x: x[1]) if ipv4_only_countries else ('N/A', 0)
+        top_ipv6_only_country = max(ipv6_only_countries.items(), key=lambda x: x[1]) if ipv6_only_countries else ('N/A', 0)
+        top_both_country = max(both_ipv4_ipv6_countries.items(), key=lambda x: x[1]) if both_ipv4_ipv6_countries else ('N/A', 0)
+        
+        health_metrics.update({
+            'top_ipv4_only_country': top_ipv4_only_country[0],
+            'top_ipv4_only_country_count': top_ipv4_only_country[1],
+            'top_ipv4_only_country_percentage': (top_ipv4_only_country[1] / total_relays_count * 100) if total_relays_count > 0 else 0.0,
+            'top_ipv6_only_country': top_ipv6_only_country[0],
+            'top_ipv6_only_country_count': top_ipv6_only_country[1],
+            'top_ipv6_only_country_percentage': (top_ipv6_only_country[1] / total_relays_count * 100) if total_relays_count > 0 else 0.0,
+            'top_both_ipv4_ipv6_country': top_both_country[0],
+            'top_both_ipv4_ipv6_country_count': top_both_country[1],
+            'top_both_ipv4_ipv6_country_percentage': (top_both_country[1] / total_relays_count * 100) if total_relays_count > 0 else 0.0
+        })
+        
+        # NEW: IPv6 support metrics - top AS analysis
+        # Find top AS for each IPv6 category
+        top_ipv4_only_as = max(ipv4_only_as.items(), key=lambda x: x[1]) if ipv4_only_as else (None, 0)
+        top_ipv6_only_as = max(ipv6_only_as.items(), key=lambda x: x[1]) if ipv6_only_as else (None, 0)
+        top_both_as = max(both_ipv4_ipv6_as.items(), key=lambda x: x[1]) if both_ipv4_ipv6_as else (None, 0)
+        
+        # Get AS names from sorted data
+        as_names = {}
+        if 'as' in sorted_data:
+            for as_number, as_data in sorted_data['as'].items():
+                as_names[as_number] = as_data.get('as_name', f'AS{as_number}')
+        
+        health_metrics.update({
+            'top_ipv4_only_as_number': top_ipv4_only_as[0],
+            'top_ipv4_only_as_name': as_names.get(top_ipv4_only_as[0], 'Unknown') if top_ipv4_only_as[0] else 'N/A',
+            'top_ipv4_only_as_count': top_ipv4_only_as[1],
+            'top_ipv4_only_as_percentage': (top_ipv4_only_as[1] / total_relays_count * 100) if total_relays_count > 0 else 0.0,
+            'top_ipv6_only_as_number': top_ipv6_only_as[0],
+            'top_ipv6_only_as_name': as_names.get(top_ipv6_only_as[0], 'Unknown') if top_ipv6_only_as[0] else 'N/A',
+            'top_ipv6_only_as_count': top_ipv6_only_as[1],
+            'top_ipv6_only_as_percentage': (top_ipv6_only_as[1] / total_relays_count * 100) if total_relays_count > 0 else 0.0,
+            'top_both_ipv4_ipv6_as_number': top_both_as[0],
+            'top_both_ipv4_ipv6_as_name': as_names.get(top_both_as[0], 'Unknown') if top_both_as[0] else 'N/A',
+            'top_both_ipv4_ipv6_as_count': top_both_as[1],
+            'top_both_ipv4_ipv6_as_percentage': (top_both_as[1] / total_relays_count * 100) if total_relays_count > 0 else 0.0
         })
         
         # Platform metrics with percentages
