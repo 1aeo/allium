@@ -2795,6 +2795,9 @@ class Relays:
         eu_cw_bw_values = []
         non_eu_cw_bw_values = []
         
+        # OPTIMIZATION: AS-specific CW/BW collectors (eliminates need for separate relay loop)
+        as_cw_bw_data = {}  # as_number -> [cw_bw_ratios]
+        
         # Uptime data will be extracted from existing consolidated results after uptime API processing
         
         # SINGLE LOOP - calculate everything at once
@@ -2973,6 +2976,14 @@ class Relays:
                 if country.lower() in valid_rare_countries or (not valid_rare_countries and is_frontier_country(country)):
                     rare_countries_relays += 1
                     rare_countries_consensus_weight += consensus_weight
+                    
+            # OPTIMIZATION: AS-specific CW/BW collection (eliminates separate loop)
+            as_number = relay.get('as')
+            if as_number and consensus_weight > 0 and bandwidth > 0:
+                cw_bw_ratio = consensus_weight / bandwidth * 1000000
+                if as_number not in as_cw_bw_data:
+                    as_cw_bw_data[as_number] = []
+                as_cw_bw_data[as_number].append(cw_bw_ratio)
             
             # Skip uptime calculation here - will use existing consolidated results
         
@@ -3068,31 +3079,26 @@ class Relays:
             'non_eu_cw_bw_median': int(statistics.median(non_eu_cw_bw_values)) if non_eu_cw_bw_values else 0
         })
         
-        # NEW: Calculate Top AS CW/BW ratios efficiently in same AS loop
+        # OPTIMIZATION: Extract Top AS CW/BW values from collected data (eliminates extra loop)
+        # Extract data for top ASes using the as_cw_bw_data collected in the main relay loop above
         top_3_as_cw_bw_values = []
         top_5_as_cw_bw_values = []
         top_10_as_cw_bw_values = []
         
-        # Collect AS-specific CW/BW values - need to iterate through relays again but focused on top ASes
         if as_by_cw:
+            # Get AS numbers for top ASes
             top_3_as_numbers = {x[0] for x in as_by_cw[:3]}
             top_5_as_numbers = {x[0] for x in as_by_cw[:5]}
             top_10_as_numbers = {x[0] for x in as_by_cw[:10]}
             
-            # Quick pass through relays to collect Top AS CW/BW ratios
-            for relay in self.json['relays']:
-                as_number = relay.get('as')
-                if as_number:
-                    consensus_weight = relay.get('consensus_weight', 0)
-                    bandwidth = relay.get('observed_bandwidth', 0)
-                    if consensus_weight > 0 and bandwidth > 0:
-                        cw_bw_ratio = consensus_weight / bandwidth * 1000000
-                        if as_number in top_3_as_numbers:
-                            top_3_as_cw_bw_values.append(cw_bw_ratio)
-                        if as_number in top_5_as_numbers:
-                            top_5_as_cw_bw_values.append(cw_bw_ratio)
-                        if as_number in top_10_as_numbers:
-                            top_10_as_cw_bw_values.append(cw_bw_ratio)
+            # Extract CW/BW ratios from collected data
+            for as_number, cw_bw_ratios in as_cw_bw_data.items():
+                if as_number in top_3_as_numbers:
+                    top_3_as_cw_bw_values.extend(cw_bw_ratios)
+                if as_number in top_5_as_numbers:
+                    top_5_as_cw_bw_values.extend(cw_bw_ratios)
+                if as_number in top_10_as_numbers:
+                    top_10_as_cw_bw_values.extend(cw_bw_ratios)
         
         health_metrics.update({
             'top_3_as_cw_bw_mean': int(statistics.mean(top_3_as_cw_bw_values)) if top_3_as_cw_bw_values else 0,
