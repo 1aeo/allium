@@ -2749,7 +2749,8 @@ class Relays:
         uptime_series_keys = [
             ('exit_uptime_1_month', 'exit_uptime_mean', 'exit_uptime_1_year', 'exit_uptime_5_years'),
             ('guard_uptime_1_month', 'guard_uptime_mean', 'guard_uptime_1_year', 'guard_uptime_5_years'),
-            ('middle_uptime_1_month', 'middle_uptime_mean', 'middle_uptime_1_year', 'middle_uptime_5_years')
+            ('middle_uptime_1_month', 'middle_uptime_mean', 'middle_uptime_1_year', 'middle_uptime_5_years'),
+            ('authority_uptime_1_month', 'authority_uptime_mean', 'authority_uptime_1_year', 'authority_uptime_5_years')
         ]
         
         for keys in uptime_series_keys:
@@ -3697,6 +3698,10 @@ class Relays:
                     health_metrics[f'middle_uptime_{period}_median'] = middle_median
                     health_metrics[f'other_uptime_{period}_mean'] = other_mean
                     health_metrics[f'other_uptime_{period}_median'] = other_median
+                    # NEW: Additional flag-specific uptime metrics for other periods
+                    health_metrics[f'authority_uptime_{period}'] = authority_mean
+                    health_metrics[f'authority_uptime_{period}_mean'] = authority_mean
+                    health_metrics[f'authority_uptime_{period}_median'] = authority_median
             
         else:
             # Initialize to 0 when no consolidated uptime results available
@@ -3713,9 +3718,9 @@ class Relays:
                                'authority_uptime_1_month_mean', 'authority_uptime_1_month_median',
                                'v2dir_uptime_1_month_mean', 'v2dir_uptime_1_month_median',
                                'hsdir_uptime_1_month_mean', 'hsdir_uptime_1_month_median']
-            period_keys = [f'{role}_uptime_{period}' for period in uptime_periods for role in ['exit', 'guard', 'middle', 'other']]
-            additional_period_keys = [f'{role}_uptime_{period}_mean' for period in uptime_periods for role in ['exit', 'guard', 'middle', 'other']]
-            additional_period_keys += [f'{role}_uptime_{period}_median' for period in uptime_periods for role in ['exit', 'guard', 'middle', 'other']]
+            period_keys = [f'{role}_uptime_{period}' for period in uptime_periods for role in ['exit', 'guard', 'middle', 'other', 'authority']]
+            additional_period_keys = [f'{role}_uptime_{period}_mean' for period in uptime_periods for role in ['exit', 'guard', 'middle', 'other', 'authority']]
+            additional_period_keys += [f'{role}_uptime_{period}_median' for period in uptime_periods for role in ['exit', 'guard', 'middle', 'other', 'authority']]
             
             for key in base_keys + mean_median_keys + period_keys + additional_period_keys:
                 health_metrics[key] = 0.0
