@@ -84,6 +84,9 @@ def extract_relay_uptime_for_period(operator_relays, uptime_data, time_period):
     
     This is the core shared logic used by both AROI leaderboards and contact page reliability.
     
+    OPTIMIZATION: Creates fingerprint-to-uptime mapping once (O(m)) instead of 
+    repeated linear searches (O(n*m)) for massive performance improvement.
+    
     Args:
         operator_relays (list): List of relay objects for the operator
         uptime_data (dict): Uptime data from Onionoo API
@@ -95,6 +98,16 @@ def extract_relay_uptime_for_period(operator_relays, uptime_data, time_period):
     uptime_values = []
     relay_breakdown = {}
     
+    # OPTIMIZATION: Build fingerprint-to-uptime mapping ONCE (O(m) instead of O(n*m))
+    # This eliminates the repeated linear searches through uptime_data for each operator relay
+    uptime_map = {}
+    if uptime_data and uptime_data.get('relays'):
+        for uptime_relay in uptime_data['relays']:
+            fingerprint = uptime_relay.get('fingerprint')
+            if fingerprint:
+                uptime_map[fingerprint] = uptime_relay
+    
+    # Process operator relays with O(1) lookups instead of O(m) searches
     for relay in operator_relays:
         fingerprint = relay.get('fingerprint', '')
         nickname = relay.get('nickname', 'Unknown')
@@ -102,8 +115,8 @@ def extract_relay_uptime_for_period(operator_relays, uptime_data, time_period):
         if not fingerprint:
             continue
             
-        # Find uptime data for this relay
-        relay_uptime = find_relay_uptime_data(fingerprint, uptime_data)
+        # OPTIMIZATION: O(1) dictionary lookup instead of O(m) linear search
+        relay_uptime = uptime_map.get(fingerprint)
         
         if relay_uptime and relay_uptime.get('uptime'):
             period_data = relay_uptime['uptime'].get(time_period, {})
