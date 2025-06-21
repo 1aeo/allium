@@ -3067,57 +3067,21 @@ class Relays:
                 else:
                     restricted_exits += 1
                 
-                # NEW: Check for IP address restrictions (excluding private/local IP ranges)
+                # Check for IP address restrictions (excluding private/local IP ranges)
                 # An exit relay has IP address restrictions only if it restricts public IP addresses
                 # Restrictions on private/local IP ranges (192.168.x, 10.x, etc.) are not counted
                 # as meaningful restrictions since they don't limit access to public internet resources
                 has_ip_restrictions = False
                 
-                if ipv4_summary:
-                    for policy in ipv4_summary:
-                        # Check if this policy has IP address restrictions on public addresses
-                        # Policy format is generally "IP:PORT" or "*:PORT"
-                        if ':' in policy:
-                            # Handle IPv6 addresses in IPv4 summary (can happen with dual-stack)
-                            if '::' in policy or policy.count(':') > 1:
-                                # IPv6 format - need careful parsing
-                                if policy.startswith('[') and ']:' in policy:
-                                    # Format: [IPv6]:PORT
-                                    ip_part = policy[1:policy.find(']:')]
-                                else:
-                                    # Format: IPv6:PORT - take everything before the last colon
-                                    parts = policy.rsplit(':', 1)
-                                    if len(parts) == 2:
-                                        ip_part = parts[0]
-                                    else:
-                                        continue  # Skip malformed policies
-                            else:
-                                # IPv4 format
-                                ip_part = policy.split(':')[0]
-                            
-                            # If IP part is not '*' and it's a public IP address, it's a restriction
-                            if ip_part != '*' and not is_private_ip_address(ip_part):
-                                has_ip_restrictions = True
-                                break
-                
-                # Also check IPv6 policies for IP restrictions on public addresses
-                if not has_ip_restrictions and ipv6_summary:
-                    for policy in ipv6_summary:
-                        if ':' in policy:
-                            # IPv6 format can be complex - need to extract IP part carefully
-                            # Handle both "[IPv6]:PORT" and "IPv6:PORT" formats
-                            if policy.startswith('[') and ']:' in policy:
-                                # Format: [IPv6]:PORT
-                                ip_part = policy[1:policy.find(']:')]
-                            else:
-                                # Format: IPv6:PORT - take everything before the last colon
-                                parts = policy.rsplit(':', 1)
-                                if len(parts) == 2:
-                                    ip_part = parts[0]
-                                else:
-                                    continue  # Skip malformed policies
-                            
-                            # If IP part is not '*' and it's a public IP address, it's a restriction
+                # Check full exit_policy for reject rules with public IP restrictions
+                exit_policy = relay.get('exit_policy', [])
+                for rule in exit_policy:
+                    if rule.startswith('reject ') and ':' in rule:
+                        # Extract IP part from "reject IP:PORT" rule
+                        rule_part = rule[7:]  # Remove "reject "
+                        if ':' in rule_part:
+                            ip_part = rule_part.split(':')[0]
+                            # If it's not a wildcard and not a private IP, it's a public IP restriction
                             if ip_part != '*' and not is_private_ip_address(ip_part):
                                 has_ip_restrictions = True
                                 break
