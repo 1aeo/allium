@@ -519,6 +519,51 @@ def calculate_statistical_outliers(uptime_values, relay_breakdown, std_dev_thres
         return {'low_outliers': [], 'high_outliers': []}
 
 
+def _calculate_period_statistics(values):
+    """
+    OPTIMIZATION: Centralized statistical calculation function to eliminate code duplication.
+    
+    Replaces 4 identical statistical calculation blocks with a single reusable function.
+    
+    Args:
+        values (list): List of uptime values for statistical analysis
+        
+    Returns:
+        dict: Statistical metrics including mean, median, std_dev, and outlier thresholds
+    """
+    if len(values) < 3:
+        return None
+        
+    try:
+        total_sum = sum(values)
+        count = len(values)
+        sum_of_squares = sum(x ** 2 for x in values)
+        
+        # Calculate statistical thresholds for outlier detection
+        mean = total_sum / count
+        variance = (sum_of_squares / count) - (mean ** 2)
+        std_dev = math.sqrt(max(0, variance))  # Ensure non-negative variance
+        
+        # Set lower bound of 0 for two_sigma_low since negative uptimes are impossible
+        two_sigma_low = max(0.0, mean - 2 * std_dev)
+        two_sigma_high = mean + 2 * std_dev
+        
+        # Calculate median for network health dashboard requirements
+        import statistics
+        median = statistics.median(values)
+        
+        return {
+            'mean': mean,
+            'median': median,
+            'std_dev': std_dev,
+            'two_sigma_low': two_sigma_low,
+            'two_sigma_high': two_sigma_high,
+            'count': count
+        }
+    except Exception:
+        return None
+
+
 def process_all_uptime_data_consolidated(all_relays, uptime_data, include_flag_analysis=True):
     """
     Consolidated uptime data processing function that extracts all uptime-related data
@@ -619,83 +664,21 @@ def process_all_uptime_data_consolidated(all_relays, uptime_data, include_flag_a
             'relay_obj': relay_obj  # Store reference for easy access
         }
     
-    # Calculate network statistics for outlier detection
+    # Calculate network statistics for outlier detection using centralized function
     network_statistics = {}
     for period in ['1_month', '6_months', '1_year', '5_years']:
         values = network_uptime_values[period]
-        if len(values) >= 3:
-            try:
-                total_sum = sum(values)
-                count = len(values)
-                sum_of_squares = sum(x ** 2 for x in values)
-                
-                # Calculate statistical thresholds for outlier detection
-                mean = total_sum / count
-                variance = (sum_of_squares / count) - (mean ** 2)
-                std_dev = math.sqrt(max(0, variance))  # Ensure non-negative variance
-                
-                # Set lower bound of 0 for two_sigma_low since negative uptimes are impossible
-                two_sigma_low = max(0.0, mean - 2 * std_dev)
-                two_sigma_high = mean + 2 * std_dev
-                
-                # Calculate median for network health dashboard requirements
-                import statistics
-                median = statistics.median(values)
-                
-                period_stats = {
-                    'mean': mean,
-                    'median': median,
-                    'std_dev': std_dev,
-                    'two_sigma_low': two_sigma_low,
-                    'two_sigma_high': two_sigma_high,
-                    'count': count
-                }
-                
-                network_statistics[period] = period_stats
-            except Exception:
-                network_statistics[period] = None
-        else:
-            network_statistics[period] = None
+        # OPTIMIZATION: Use centralized statistical calculation function
+        network_statistics[period] = _calculate_period_statistics(values)
     
-    # Calculate network flag statistics (if flag analysis enabled)
+    # Calculate network flag statistics using centralized function (if flag analysis enabled)
     network_flag_statistics = {}
     if include_flag_analysis:
         for flag, periods_data in network_flag_data.items():
             network_flag_statistics[flag] = {}
             for period, values in periods_data.items():
-                if len(values) >= 3:
-                    try:
-                        total_sum = sum(values)
-                        count = len(values)
-                        sum_of_squares = sum(x ** 2 for x in values)
-                        
-                        # Calculate statistical thresholds for outlier detection
-                        mean = total_sum / count
-                        variance = (sum_of_squares / count) - (mean ** 2)
-                        std_dev = math.sqrt(max(0, variance))  # Ensure non-negative variance
-                        
-                        # Set lower bound of 0 for two_sigma_low since negative uptimes are impossible
-                        two_sigma_low = max(0.0, mean - 2 * std_dev)
-                        two_sigma_high = mean + 2 * std_dev
-                        
-                        # Calculate median for network health dashboard requirements
-                        import statistics
-                        median = statistics.median(values)
-                        
-                        period_stats = {
-                            'mean': mean,
-                            'median': median,
-                            'std_dev': std_dev,
-                            'two_sigma_low': two_sigma_low,
-                            'two_sigma_high': two_sigma_high,
-                            'count': count
-                        }
-                        
-                        network_flag_statistics[flag][period] = period_stats
-                    except Exception:
-                        network_flag_statistics[flag][period] = None
-                else:
-                    network_flag_statistics[flag][period] = None
+                # OPTIMIZATION: Use centralized statistical calculation function
+                network_flag_statistics[flag][period] = _calculate_period_statistics(values)
     
     # Calculate middle relay statistics (non-Exit, non-Guard relays) for network health dashboard
     # This consolidates all role-specific calculations in one place following DRY principle
@@ -717,30 +700,8 @@ def process_all_uptime_data_consolidated(all_relays, uptime_data, include_flag_a
                     if uptime_value > 0:  # Only include relays with actual uptime data
                         middle_uptime_values.append(uptime_value)
         
-        # Calculate statistics for middle relays
-        if len(middle_uptime_values) >= 3:
-            try:
-                import statistics
-                mean = statistics.mean(middle_uptime_values)
-                median = statistics.median(middle_uptime_values)
-                std_dev = statistics.stdev(middle_uptime_values) if len(middle_uptime_values) > 1 else 0
-                
-                # Set lower bound of 0 for two_sigma_low since negative uptimes are impossible
-                two_sigma_low = max(0.0, mean - 2 * std_dev)
-                two_sigma_high = mean + 2 * std_dev
-                
-                network_middle_statistics[period] = {
-                    'mean': mean,
-                    'median': median,
-                    'std_dev': std_dev,
-                    'two_sigma_low': two_sigma_low,
-                    'two_sigma_high': two_sigma_high,
-                    'count': len(middle_uptime_values)
-                }
-            except Exception:
-                network_middle_statistics[period] = None
-        else:
-            network_middle_statistics[period] = None
+        # OPTIMIZATION: Use centralized statistical calculation function
+        network_middle_statistics[period] = _calculate_period_statistics(middle_uptime_values)
     
     # Calculate other relay statistics (non-Exit, non-Guard, non-Middle relays) for network health dashboard
     # "Other" category includes: Directory Authorities, Bad Relays, Unflagged relays, Special status relays
@@ -790,30 +751,8 @@ def process_all_uptime_data_consolidated(all_relays, uptime_data, include_flag_a
                     if uptime_value > 0:  # Only include relays with actual uptime data
                         other_uptime_values.append(uptime_value)
         
-        # Calculate statistics for other relays
-        if len(other_uptime_values) >= 3:
-            try:
-                import statistics
-                mean = statistics.mean(other_uptime_values)
-                median = statistics.median(other_uptime_values)
-                std_dev = statistics.stdev(other_uptime_values) if len(other_uptime_values) > 1 else 0
-                
-                # Set lower bound of 0 for two_sigma_low since negative uptimes are impossible
-                two_sigma_low = max(0.0, mean - 2 * std_dev)
-                two_sigma_high = mean + 2 * std_dev
-                
-                network_other_statistics[period] = {
-                    'mean': mean,
-                    'median': median,
-                    'std_dev': std_dev,
-                    'two_sigma_low': two_sigma_low,
-                    'two_sigma_high': two_sigma_high,
-                    'count': len(other_uptime_values)
-                }
-            except Exception:
-                network_other_statistics[period] = None
-        else:
-            network_other_statistics[period] = None
+        # OPTIMIZATION: Use centralized statistical calculation function
+        network_other_statistics[period] = _calculate_period_statistics(other_uptime_values)
     
     return {
         'relay_uptime_data': relay_uptime_data,
