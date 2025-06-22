@@ -3341,7 +3341,7 @@ class Relays:
                     both_ipv4_ipv6_as[as_number] = both_ipv4_ipv6_as.get(as_number, 0) + 1
             
             # Operator-level IPv6 support tracking (uses contact hash from existing processing)
-            contact_hash = relay.get('hashed_contact')
+            contact_hash = relay.get('contact_md5')
             if contact_hash:
                 if ipv6_support == 'ipv4_only':
                     ipv4_only_operators.add(contact_hash)
@@ -3419,7 +3419,7 @@ class Relays:
                 'rank': i + 1,
                 'as_number': as_number,
                 'as_name': as_name,
-                'as_name_truncated': as_name[:8] if len(as_name) > 8 else as_name,
+                'as_name_truncated': as_name[:8] if as_name and len(as_name) > 8 else (as_name or f'AS{as_number}'),
                 'consensus_weight_percentage': cw_fraction * 100
             })
         
