@@ -184,7 +184,13 @@
                     {%- endif %}
                 </td>
                 <td>{{ authority.version if authority.version else "Unknown" }}</td>
-                <td>{{ authority.platform if authority.platform else "Unknown" }}</td>
+                <td>
+                    {% if authority.platform -%}
+                        <a href="{{ page_ctx.path_prefix }}platform/{{ authority.platform|escape }}/">{{ authority.platform|escape }}</a>
+                    {% else -%}
+                        Unknown
+                    {%- endif %}
+                </td>
                 <td>
                     {% if authority.recommended_version is not none -%}
                         {% if authority.recommended_version -%}
