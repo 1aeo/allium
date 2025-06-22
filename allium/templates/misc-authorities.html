@@ -8,7 +8,7 @@
         Directory Authorities by Network Health
     </h2>
     
-    {{ navigation('authorities', is_misc_page=true) }}
+    {{ navigation('authorities', page_ctx) }}
     
     <p>
         Directory authorities vote on the status of relays in the Tor network and provide bandwidth measurements. Monitor their health and consensus participation.
@@ -141,23 +141,23 @@
                     {%- endif %}
                 </td>
                 <td>
-                    {% if authority.uptime_1month is not none -%}
-                        {{ "%.1f%%"|format(authority.uptime_1month) }}
+                    {% if authority.uptime_percentages and authority.uptime_percentages.get('1_month') is not none -%}
+                        {{ "%.1f%%"|format(authority.uptime_percentages['1_month']) }}
                     {% else -%}
                         N/A
                     {%- endif %} / 
-                    {% if authority.uptime_6months is not none -%}
-                        {{ "%.1f%%"|format(authority.uptime_6months) }}
+                    {% if authority.uptime_percentages and authority.uptime_percentages.get('6_months') is not none -%}
+                        {{ "%.1f%%"|format(authority.uptime_percentages['6_months']) }}
                     {% else -%}
                         N/A
                     {%- endif %} / 
-                    {% if authority.uptime_1year is not none -%}
-                        {{ "%.1f%%"|format(authority.uptime_1year) }}
+                    {% if authority.uptime_percentages and authority.uptime_percentages.get('1_year') is not none -%}
+                        {{ "%.1f%%"|format(authority.uptime_percentages['1_year']) }}
                     {% else -%}
                         N/A
                     {%- endif %} / 
-                    {% if authority.uptime_5years is not none -%}
-                        {{ "%.1f%%"|format(authority.uptime_5years) }}
+                    {% if authority.uptime_percentages and authority.uptime_percentages.get('5_years') is not none -%}
+                        {{ "%.1f%%"|format(authority.uptime_percentages['5_years']) }}
                     {% else -%}
                         N/A
                     {%- endif %}
