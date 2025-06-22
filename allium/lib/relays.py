@@ -1477,14 +1477,13 @@ class Relays:
         
         # Reuse existing consolidated uptime results (already computed)
         authority_network_stats = {}
+        above_average_uptime = []
+        below_average_uptime = []
+        problem_uptime = []
+        
         if hasattr(self, '_consolidated_uptime_results'):
             network_flag_stats = self._consolidated_uptime_results.get('network_flag_statistics', {})
             authority_network_stats = network_flag_stats.get('Authority', {})
-            
-            # Add z-scores using existing infrastructure (same pattern as contact pages)
-            above_average_uptime = []
-            below_average_uptime = []
-            problem_uptime = []
             
             for authority in authorities:
                 uptime_1month = authority.get('uptime_percentages', {}).get('1_month', 0.0)
@@ -1513,6 +1512,11 @@ class Relays:
                 else:
                     authority['uptime_zscore'] = None
                     authority['uptime_outlier_status'] = 'insufficient_data'
+        else:
+            # No uptime data available - ensure all authorities have required attributes
+            for authority in authorities:
+                authority['uptime_zscore'] = None
+                authority['uptime_outlier_status'] = 'insufficient_data'
         
         return {
             'authorities_data': authorities,
