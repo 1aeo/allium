@@ -539,6 +539,12 @@ def _calculate_aroi_leaderboards(relays_instance):
                 metrics['exit_bandwidth'], exit_bandwidth_unit, decimal_places=1
             )
             
+            # Format guard-specific bandwidth for guard categories (guard_authority, guard_operators)
+            guard_bandwidth_unit = relays_instance._determine_unit(metrics['guard_bandwidth'])
+            formatted_guard_bandwidth = relays_instance._format_bandwidth_with_unit(
+                metrics['guard_bandwidth'], guard_bandwidth_unit, decimal_places=1
+            )
+            
             # Calculate geographic achievement for non_eu_leaders category
             geographic_achievement = ""
             geographic_breakdown_details = ""
@@ -718,6 +724,8 @@ def _calculate_aroi_leaderboards(relays_instance):
                 'bandwidth_unit': bandwidth_unit,
                 'exit_bandwidth': formatted_exit_bandwidth,
                 'exit_bandwidth_unit': exit_bandwidth_unit,
+                'guard_bandwidth': formatted_guard_bandwidth,
+                'guard_bandwidth_unit': guard_bandwidth_unit,
                 'total_consensus_weight_pct': f"{metrics['total_consensus_weight'] * 100:.2f}%",
                 'exit_consensus_weight_pct': f"{metrics['exit_consensus_weight'] * 100:.2f}%",
                 'guard_consensus_weight_pct': f"{metrics['guard_consensus_weight'] * 100:.2f}%",
