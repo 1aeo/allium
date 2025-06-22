@@ -38,8 +38,8 @@
 </nav>
 {%- endmacro %}
 
-{% macro navigation(active_section, page_ctx={'path_prefix': ''}) -%}
-    {% if page_ctx.breadcrumb_type and page_ctx.breadcrumb_data %}
+{% macro navigation(active_section, page_ctx={'path_prefix': ''}, show_breadcrumbs=true) -%}
+    {% if show_breadcrumbs and page_ctx.breadcrumb_type and page_ctx.breadcrumb_data %}
         {{ breadcrumbs(page_ctx.breadcrumb_type, page_ctx.breadcrumb_data, page_ctx.path_prefix) }}
     {% endif %}
     <nav class="navbar navbar-default" style="margin-bottom: 20px;">

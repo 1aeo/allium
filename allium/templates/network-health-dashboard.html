@@ -12,7 +12,7 @@ Network Health Dashboard
     <p class="lead"><strong>Real-time Overview Metrics</strong></p>
 </div>
 
-{{ navigation('network_health', page_ctx) }}
+{{ navigation('network_health', page_ctx, show_breadcrumbs=false) }}
 
 <!-- COMPREHENSIVE HEALTH DASHBOARD -->
 <div class="network-health-ribbon">
@@ -409,7 +409,7 @@ Network Health Dashboard
                     </div>
                     <div class="metric-item" title="Top country with the highest number of relays supporting IPv4-only protocol.">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.top_ipv4_only_country_count) }} ({{ "%.1f%%"|format(relays.json.network_health.top_ipv4_only_country_percentage) }}) <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ relays.json.network_health.top_ipv4_only_country.lower() }}.png" alt="{{ relays.json.network_health.top_ipv4_only_country }}" style="width: 16px; height: 11px; margin-left: 3px;"> {{ relays.json.network_health.top_ipv4_only_country }}</span>
-                        <span class="metric-label">#1 Country IPv4</span>
+                        <span class="metric-label">#1 Country IPv4 Only</span>
                     </div>
                 </div>
             </div>
@@ -471,7 +471,7 @@ Network Health Dashboard
                     </div>
                     <div class="metric-item" title="Autonomous System with the highest number of relays supporting IPv4-only protocol.">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.top_ipv4_only_as_count) }} ({{ "%.1f%%"|format(relays.json.network_health.top_ipv4_only_as_percentage) }}) {{ relays.json.network_health.top_ipv4_only_as_name }}</span>
-                        <span class="metric-label">#1 AS IPv4</span>
+                        <span class="metric-label">#1 AS IPv4 Only</span>
                     </div>
                 </div>
             </div>
