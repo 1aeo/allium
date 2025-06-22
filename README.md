@@ -65,6 +65,10 @@ cd www && python3 -m http.server 8000
 - **Geographic and provider diversity** with concentration risk analysis
 - **Performance analytics** with CW/BW ratio calculations and percentile rankings
 
+### Directory Authorities Monitoring 🏛️
+- **Authority health tracking** with uptime statistics and Z-score outlier detection
+- **Network consensus monitoring** displaying authority status, geographic distribution, and performance metrics
+
 ### Intelligence Features 🧠
 - **Dynamic classification system** replacing hardcoded country lists
 - **Multi-factor analysis** (relay count, network %, geopolitical factors)
@@ -166,6 +170,7 @@ allium integrates with multiple Tor Project APIs:
 - **Operator profiles** - Achievement metrics and diversity scoring
 - **Geographic summaries** - Country-level statistics
 - **Network Health Dashboard** - Real-time network monitoring and analysis
+- **Directory Authorities** - Consensus health tracking with uptime analysis and version compliance monitoring
 
 ## 🌍 AROI Leaderboards
 

@@ -419,6 +419,82 @@ class TestDirectoryAuthorities(unittest.TestCase):
         # Note: The actual implementation may not set these fields if uptime data is missing
         # The test focuses on proper handling without errors
 
+    def test_zscore_calculation(self):
+        """Test Z-score calculation for authority uptime analysis"""
+        # Create mock data with authorities having different uptimes
+        mock_authorities_data = {
+            "relays": [
+                {
+                    "nickname": "good_auth",
+                    "fingerprint": "GOOD1234567890ABCD1234567890ABCD12345678",
+                    "running": True,
+                    "flags": ["Authority", "Running"],
+                    "uptime_percentages": {"1_month": 99.5},  # High uptime
+                    "observed_bandwidth": 1000000,
+                    "first_seen": "2024-01-01 00:00:00",
+                    "platform": "Tor 0.4.8.12 on Linux",
+                    "consensus_weight": 3000
+                },
+                {
+                    "nickname": "avg_auth", 
+                    "fingerprint": "AVG1234567890ABCD1234567890ABCD12345678",
+                    "running": True,
+                    "flags": ["Authority", "Running"],
+                    "uptime_percentages": {"1_month": 98.0},  # Average uptime
+                    "observed_bandwidth": 1000000,
+                    "first_seen": "2024-01-01 00:00:00",
+                    "platform": "Tor 0.4.8.12 on Linux",
+                    "consensus_weight": 3000
+                },
+                {
+                    "nickname": "poor_auth",
+                    "fingerprint": "POOR1234567890ABCD1234567890ABCD12345678", 
+                    "running": True,
+                    "flags": ["Authority", "Running"],
+                    "uptime_percentages": {"1_month": 95.0},  # Poor uptime
+                    "observed_bandwidth": 1000000,
+                    "first_seen": "2024-01-01 00:00:00",
+                    "platform": "Tor 0.4.8.12 on Linux",
+                    "consensus_weight": 3000
+                }
+            ]
+        }
+        
+        relays = Relays(self.test_dir, self.test_onionoo_url, mock_authorities_data)
+        
+        # Mock consolidated uptime results to enable Z-score calculation
+        relays._consolidated_uptime_results = {
+            "network_flag_statistics": {
+                "Authority": {
+                    "1_month": {
+                        "mean": 97.5,
+                        "std_dev": 1.5,
+                        "two_sigma_low": 94.5,
+                        "two_sigma_high": 100.5
+                    }
+                }
+            }
+        }
+        
+        authorities_info = relays._get_directory_authorities_data()
+        authorities = authorities_info['authorities_data']
+        
+        # Test Z-score calculation and classification
+        good_auth = next(auth for auth in authorities if auth['nickname'] == 'good_auth')
+        avg_auth = next(auth for auth in authorities if auth['nickname'] == 'avg_auth')
+        poor_auth = next(auth for auth in authorities if auth['nickname'] == 'poor_auth')
+        
+        # Z-scores should be calculated
+        self.assertIsNotNone(good_auth['uptime_zscore'])
+        self.assertIsNotNone(avg_auth['uptime_zscore'])
+        self.assertIsNotNone(poor_auth['uptime_zscore'])
+        
+        # Good authority should have positive Z-score
+        self.assertGreater(good_auth['uptime_zscore'], 0)
+        
+        # Poor authority should have negative Z-score
+        self.assertLess(poor_auth['uptime_zscore'], 0)
+
     def test_version_compliance_check(self):
         """Test version compliance logic - DISABLED: Version compliance commented out until consensus-health data available"""
         # This test is commented out since version compliance is disabled
@@ -476,6 +552,47 @@ class TestDirectoryAuthorities(unittest.TestCase):
         self.assertEqual(len(authorities_info['authorities_data']), 0)
 
 
+    def test_template_validation(self):
+        """Test that authorities template renders with minimal data"""
+        # Minimal authority data for template testing
+        minimal_authority_data = {
+            "relays": [{
+                "nickname": "test_auth",
+                "fingerprint": "ABCD1234567890ABCD1234567890ABCD12345678",
+                "running": True,
+                "flags": ["Authority", "Running"],
+                "first_seen": "2024-01-01 00:00:00",
+                "platform": "Tor 0.4.8.12 on Linux",
+                "observed_bandwidth": 1000000,
+                "consensus_weight": 3000
+            }]
+        }
+        
+        relays = Relays(self.test_dir, self.test_onionoo_url, minimal_authority_data)
+        
+        # Test template compilation and rendering
+        try:
+            relays.write_misc(
+                template="misc-authorities.html",
+                path="misc/authorities.html"
+            )
+            
+            # Verify output file was created and has content
+            output_file = os.path.join(self.test_dir, "misc", "authorities.html")
+            self.assertTrue(os.path.exists(output_file))
+            
+            with open(output_file, 'r') as f:
+                content = f.read()
+                
+            # Basic content validation
+            self.assertIn("test_auth", content)
+            self.assertIn("Directory Authorities", content)
+            self.assertIn("authorities currently active", content)
+            
+        except Exception as e:
+            self.fail(f"Template rendering failed: {e}")
+
+
 class TestAuthorityIntegration(unittest.TestCase):
     """Integration tests for directory authorities in full Allium workflow"""
     
@@ -494,7 +611,9 @@ class TestAuthorityIntegration(unittest.TestCase):
                     "running": True,
                     "observed_bandwidth": 1000000,
                     "flags": ["Running", "Valid"],
-                    "first_seen": "2024-01-01 00:00:00"
+                    "first_seen": "2024-01-01 00:00:00",
+                    "platform": "Tor 0.4.8.12 on Linux",
+                    "consensus_weight": 3000
                 }
             ]
         }

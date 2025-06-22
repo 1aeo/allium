@@ -10,6 +10,9 @@ This section contains detailed technical implementation reports and development 
 - [`security-fixes-report.md`](security-fixes-report.md) - Security vulnerability fixes and patches applied
 - [`weighted-scoring-report.md`](weighted-scoring-report.md) - AROI weighted scoring algorithm implementation
 
+### **Feature Implementation Reports**
+- [`directory-authorities-implementation.md`](directory-authorities-implementation.md) - Directory authorities monitoring system implementation
+
 ## 🎯 Purpose
 
 This documentation section provides:
