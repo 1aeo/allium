@@ -145,6 +145,7 @@
                                  title="{{ authority.country_name }}"
                                  alt="{{ authority.country_name }}">
                         </a>
+                        {{ authority.country|upper }}
                     {% else -%}
                         Unknown
                     {%- endif %}
