@@ -29,28 +29,28 @@
                 {% set non_compliant_authorities = relays.authorities_data | selectattr('recommended_version', 'equalto', false) | list %}
                 {{ compliant_authorities|length }}/{{ relays.authorities_summary.total_authorities }} authorities on recommended version
             </li>
-            <li style="margin: 5px 0;"><strong>Version Non-Compliance:</strong> {{ non_compliant_authorities|length }}/{{ relays.authorities_summary.total_authorities }} authorities outdated</li>
-            <li style="margin: 5px 0;"><strong>Uptime (1 month):</strong> 
-                {% if relays.authorities_summary.above_average_uptime -%}
-                    <span style="color: green; font-weight: bold;">Above average: 
-                    {% for auth in relays.authorities_summary.above_average_uptime -%}
-                        {{ auth.nickname }} (Z: {{ "%.1f"|format(auth.uptime_zscore) }}){% if not loop.last %}, {% endif %}
-                    {%- endfor %}</span>
-                {%- endif %}
-                {% if relays.authorities_summary.above_average_uptime and (relays.authorities_summary.below_average_uptime or relays.authorities_summary.problem_uptime) %} | {% endif %}
-                {% if relays.authorities_summary.below_average_uptime -%}
-                    <span style="color: #ff8c00; font-weight: bold;">Below average: 
-                    {% for auth in relays.authorities_summary.below_average_uptime -%}
-                        {{ auth.nickname }} (Z: {{ "%.1f"|format(auth.uptime_zscore) }}){% if not loop.last %}, {% endif %}
-                    {%- endfor %}</span>
-                {%- endif %}
-                {% if relays.authorities_summary.below_average_uptime and relays.authorities_summary.problem_uptime %} | {% endif %}
-                {% if relays.authorities_summary.problem_uptime -%}
-                    <span style="color: red; font-weight: bold;">Problem: 
-                    {% for auth in relays.authorities_summary.problem_uptime -%}
-                        {{ auth.nickname }} (Z: {{ "%.1f"|format(auth.uptime_zscore) }}){% if not loop.last %}, {% endif %}
-                    {%- endfor %}</span>
-                {%- endif %}
+            <li style="margin: 5px 0;"><strong>Version Non-Compliant:</strong> {{ non_compliant_authorities|length }}/{{ relays.authorities_summary.total_authorities }} authorities not on recommended version</li>
+            <li style="margin: 5px 0;"><strong>Uptime (1M):</strong>
+                <ul style="margin-left: 20px; margin-top: 5px;">
+                    {% if relays.authorities_summary.above_average_uptime -%}
+                        <li><span style="color: green; font-weight: bold;">Above average: 
+                        {% for auth in relays.authorities_summary.above_average_uptime -%}
+                            {{ auth.nickname }} (Z: {{ "%.1f"|format(auth.uptime_zscore) }}){% if not loop.last %}, {% endif %}
+                        {%- endfor %}</span></li>
+                    {%- endif %}
+                    {% if relays.authorities_summary.below_average_uptime -%}
+                        <li><span style="color: #ff8c00; font-weight: bold;">Below average: 
+                        {% for auth in relays.authorities_summary.below_average_uptime -%}
+                            {{ auth.nickname }} (Z: {{ "%.1f"|format(auth.uptime_zscore) }}){% if not loop.last %}, {% endif %}
+                        {%- endfor %}</span></li>
+                    {%- endif %}
+                    {% if relays.authorities_summary.problem_uptime -%}
+                        <li><span style="color: red; font-weight: bold;">Problem: 
+                        {% for auth in relays.authorities_summary.problem_uptime -%}
+                            {{ auth.nickname }} (Z: {{ "%.1f"|format(auth.uptime_zscore) }}){% if not loop.last %}, {% endif %}
+                        {%- endfor %}</span></li>
+                    {%- endif %}
+                </ul>
             </li>
         </ul>
     </div>
@@ -99,10 +99,10 @@
             <th>AS Number</th>
             <th>AS Name</th>
             <th>Country</th>
-            <th>Uptime (1mo/6mo/1yr/5yr)</th>
+            <th title="Percentage of time authority was online over 1 month, 6 months, 1 year, and 5 years periods">Uptime (1M/6M/1Y/5Y)</th>
             <th>Version</th>
             <th>Platform</th>
-            <th>Rec. Ver.</th>
+            <th title="Version compliance: ✅ = On recommended version, ❌ = Not on recommended version">Rec. Ver.</th>
             <th>First Seen</th>
             <th>Last Restarted</th>
         </tr>
@@ -111,7 +111,7 @@
             <tr>
                 {% set is_problematic = not authority.running or (authority.uptime_zscore and authority.uptime_zscore <= -2.0) -%}
                 <td>
-                    <a href="{{ path_prefix }}relay/{{ authority.fingerprint }}.html" 
+                    <a href="{{ page_ctx.path_prefix }}relay/{{ authority.fingerprint }}/" 
                        {% if is_problematic %}style="color: #dc3545; font-weight: bold; text-decoration: underline;"
                        {% else %}style="text-decoration: underline;"{% endif %}>
                         {{ authority.nickname }}
@@ -124,33 +124,49 @@
                         <span style="color: red; font-weight: bold;">🔴 Offline (last seen: {{ authority.last_seen }})</span>
                     {%- endif %}
                 </td>
-                <td>{{ authority.as if authority.as else "N/A" }}</td>
-                <td>{{ authority.as_name if authority.as_name else "Unknown" }}</td>
                 <td>
-                    {% if authority.country_name -%}
-                        🌍 {{ authority.country_name }}
+                    {% if authority.as -%}
+                        <a href="{{ page_ctx.path_prefix }}as/{{ authority.as }}/">{{ authority.as }}</a>
+                    {% else -%}
+                        N/A
+                    {%- endif %}
+                </td>
+                <td>
+                    {% if authority.as_name -%}
+                        <a href="https://bgp.tools/{{ authority.as }}" title="{{ authority.as_name }}">{{ authority.as_name|truncate(length=20) }}</a>
+                    {% else -%}
+                        Unknown
+                    {%- endif %}
+                </td>
+                <td>
+                    {% if authority.country -%}
+                        <a href="{{ page_ctx.path_prefix }}country/{{ authority.country }}/">
+                            <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ authority.country }}.png"
+                                 title="{{ authority.country_name }}"
+                                 alt="{{ authority.country_name }}">
+                        </a>
                     {% else -%}
                         Unknown
                     {%- endif %}
                 </td>
                 <td>
                     {% if authority.uptime_percentages and authority.uptime_percentages.get('1_month') is not none -%}
-                        {{ "%.1f%%"|format(authority.uptime_percentages['1_month']) }}
+                        <span title="1 month uptime: {{ "%.1f%%"|format(authority.uptime_percentages['1_month']) }}">{{ "%.1f%%"|format(authority.uptime_percentages['1_month']) }}</span>
                     {% else -%}
                         N/A
                     {%- endif %} / 
                     {% if authority.uptime_percentages and authority.uptime_percentages.get('6_months') is not none -%}
-                        {{ "%.1f%%"|format(authority.uptime_percentages['6_months']) }}
+                        <span title="6 month uptime: {{ "%.1f%%"|format(authority.uptime_percentages['6_months']) }}">{{ "%.1f%%"|format(authority.uptime_percentages['6_months']) }}</span>
                     {% else -%}
                         N/A
                     {%- endif %} / 
                     {% if authority.uptime_percentages and authority.uptime_percentages.get('1_year') is not none -%}
-                        {{ "%.1f%%"|format(authority.uptime_percentages['1_year']) }}
+                        <span title="1 year uptime: {{ "%.1f%%"|format(authority.uptime_percentages['1_year']) }}">{{ "%.1f%%"|format(authority.uptime_percentages['1_year']) }}</span>
                     {% else -%}
                         N/A
                     {%- endif %} / 
                     {% if authority.uptime_percentages and authority.uptime_percentages.get('5_years') is not none -%}
-                        {{ "%.1f%%"|format(authority.uptime_percentages['5_years']) }}
+                        <span title="5 year uptime: {{ "%.1f%%"|format(authority.uptime_percentages['5_years']) }}">{{ "%.1f%%"|format(authority.uptime_percentages['5_years']) }}</span>
                     {% else -%}
                         N/A
                     {%- endif %}
@@ -162,7 +178,8 @@
                             style="color: red; font-weight: bold;"
                         {% else -%}
                             style="color: #ff8c00; font-weight: bold;"
-                        {%- endif %}>Z: {{ "%.1f"|format(authority.uptime_zscore) }}</span>
+                        {%- endif %}
+                        title="Z-score: Statistical measure of how far this authority's uptime deviates from the average. Values below -2.0 indicate significantly poor uptime.">Z: {{ "%.1f"|format(authority.uptime_zscore) }}</span>
                     {%- endif %}
                 </td>
                 <td>{{ authority.version if authority.version else "Unknown" }}</td>
@@ -170,15 +187,21 @@
                 <td>
                     {% if authority.recommended_version is not none -%}
                         {% if authority.recommended_version -%}
-                            <span style="color: green; font-weight: bold;">✅</span>
+                            <span style="color: green; font-weight: bold;" title="Running recommended version">✅</span>
                         {% else -%}
-                            <span style="color: red; font-weight: bold;">❌</span>
+                            <span style="color: red; font-weight: bold;" title="Not running recommended version">❌</span>
                         {%- endif %}
                     {% else -%}
                         Unknown
                     {%- endif %}
                 </td>
-                <td>{{ authority.first_seen.split(' ')[0] if authority.first_seen else "Unknown" }}</td>
+                <td>
+                    {% if authority.first_seen -%}
+                        <a href="{{ page_ctx.path_prefix }}first_seen/{{ authority.first_seen.split(' ')[0].replace('-', '') }}/" title="{{ authority.first_seen }}">{{ authority.first_seen.split(' ')[0] }}</a>
+                    {% else -%}
+                        Unknown
+                    {%- endif %}
+                </td>
                 <td>{{ authority.last_restarted.split(' ')[0] if authority.last_restarted else "Unknown" }}</td>
             </tr>
         {% endfor -%}
@@ -191,11 +214,11 @@
     <div style="background: #f0f0f0; padding: 15px; border-radius: 6px;">
         <h4>Legend:</h4>
         <ul style="margin: 0; padding-left: 20px;">
-            <li><strong>Uptime (1mo/6mo/1yr/5yr):</strong> Percentage of time authority was online over 1 month, 6 months, 1 year, and 5 years periods</li>
-            <li><strong>Uptime Z-Score:</strong> Based on 1-month uptime compared to other authorities. <span style="color: green; font-weight: bold;">Green (above average)</span>, <span style="color: #ff8c00; font-weight: bold;">Yellow (normal)</span>, <span style="color: red; font-weight: bold;">Red (below -2.0)</span></li>
+            <li><strong>Uptime (1M/6M/1Y/5Y):</strong> Percentage of time authority was online over 1 month, 6 months, 1 year, and 5 years periods</li>
+            <li><strong>Uptime Z-Score:</strong> Statistical measure comparing this authority's 1-month uptime to other authorities. <span style="color: green; font-weight: bold;">Green (above average)</span>, <span style="color: #ff8c00; font-weight: bold;">Yellow (normal)</span>, <span style="color: red; font-weight: bold;">Red (significantly below average, ≤-2.0)</span></li>
             <li><strong>Version:</strong> Current Tor software version running on the authority</li>
             <li><strong>Platform:</strong> Full platform description including Tor version and operating system</li>
-            <li><strong>Rec. Ver.:</strong> Recommended version compliance. <span style="color: green; font-weight: bold;">✅ = On recommended version</span>, <span style="color: red; font-weight: bold;">❌ = Outdated version</span></li>
+            <li><strong>Rec. Ver.:</strong> Recommended version compliance. <span style="color: green; font-weight: bold;">✅ = On recommended version</span>, <span style="color: red; font-weight: bold;">❌ = Not on recommended version</span></li>
             <li><strong>First Seen:</strong> When this authority first appeared in the directory consensus</li>
             <li><strong>Last Restarted:</strong> When the authority software was last restarted</li>
         </ul>
