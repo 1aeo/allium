@@ -58,6 +58,13 @@ cd www && python3 -m http.server 8000
 - **Template optimization** with logic moved from Jinja2 to Python for better performance
 - **Pre-computed display data** reducing template rendering complexity
 
+### Network Health Dashboard 📊
+- **Comprehensive network monitoring** with 10-card dashboard layout
+- **Real-time network metrics** including relay counts, bandwidth stats, uptime analysis
+- **IPv6 adoption tracking** at relay, operator, and network levels
+- **Geographic and provider diversity** with concentration risk analysis
+- **Performance analytics** with CW/BW ratio calculations and percentile rankings
+
 ### Intelligence Features 🧠
 - **Dynamic classification system** replacing hardcoded country lists
 - **Multi-factor analysis** (relay count, network %, geopolitical factors)
@@ -158,6 +165,7 @@ allium integrates with multiple Tor Project APIs:
 - **Per-relay details** - Complete technical specifications
 - **Operator profiles** - Achievement metrics and diversity scoring
 - **Geographic summaries** - Country-level statistics
+- **Network Health Dashboard** - Real-time network monitoring and analysis
 
 ## 🌍 AROI Leaderboards
 

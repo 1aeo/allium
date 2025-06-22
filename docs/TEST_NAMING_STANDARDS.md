@@ -32,6 +32,7 @@ test_[test_type]_[component]_[context].py
    - `mock_data` - Tests using mock/simulated data
    - `performance` - Performance and benchmarking tests
    - `edge_cases` - Edge case and error condition tests
+   - `network_health` - Network health dashboard tests
 
 ### Test File Examples
 
