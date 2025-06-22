@@ -1,0 +1,225 @@
+{% from "macros.html" import navigation %}
+{% extends "skeleton.html" -%}
+{% block title -%}
+    Relay Radar :: Directory Authorities by Network Health
+{% endblock -%}
+{% block body -%}
+    <h2>
+        Directory Authorities by Network Health
+    </h2>
+    
+    {{ navigation('authorities', page_ctx) }}
+    
+    <p>
+        Directory authorities vote on the status of relays in the Tor network and provide bandwidth measurements. Monitor their health and consensus participation.
+    </p>
+
+    <ul style="margin-bottom: 15px;">
+        <li><strong>Directory Authorities:</strong> {{ relays.authorities_summary.total_authorities }} authorities currently active</li>
+        <li><strong>Version Compliance:</strong> 
+            {% set compliant_authorities = relays.authorities_data | selectattr('recommended_version', 'equalto', true) | list %}
+            {% set non_compliant_authorities = relays.authorities_data | selectattr('recommended_version', 'equalto', false) | list %}
+            {{ compliant_authorities|length }}/{{ relays.authorities_summary.total_authorities }} on recommended version | {{ non_compliant_authorities|length }}/{{ relays.authorities_summary.total_authorities }} non-compliant
+        </li>
+        <li><strong>Uptime Status (1M):</strong> 
+            {% if relays.authorities_summary.above_average_uptime -%}
+                <span style="color: green; font-weight: bold;">{{ relays.authorities_summary.above_average_uptime|length }} above average</span>
+            {% else -%}
+                <span style="color: green; font-weight: bold;">0 above average</span>
+            {%- endif %} | 
+            {% if relays.authorities_summary.below_average_uptime -%}
+                <span style="color: #ff8c00; font-weight: bold;">{{ relays.authorities_summary.below_average_uptime|length }} below average</span>
+            {% else -%}
+                <span style="color: #ff8c00; font-weight: bold;">0 below average</span>
+            {%- endif %} | 
+            {% if relays.authorities_summary.problem_uptime -%}
+                <span style="color: red; font-weight: bold;">{{ relays.authorities_summary.problem_uptime|length }} problematic</span>
+            {% else -%}
+                <span style="color: red; font-weight: bold;">0 problematic</span>
+            {%- endif %}
+        </li>
+        <li><strong>Key:</strong> BW = Observed Bandwidth, CW = Consensus Weight, Z = Z-score (statistical uptime deviation)</li>
+    </ul>
+
+    <br>
+
+    <!-- MAIN AUTHORITY TABLE -->
+    <h3>Directory Authority Status</h3>
+    <br>
+    
+    <p class="text-muted" style="margin-bottom: 15px;">
+    <small>Last updated: {{ relays.timestamp }}. Refreshed every 30 minutes from the Tor directory authorities via <a href="https://onionoo.torproject.org/">Tor Project's onionoo API</a>.</small>
+    </p>
+    
+    <!-- UPTIME DATA STATUS NOTIFICATION -->
+    {% if relays.uptime_metadata -%}
+        {% if relays.uptime_metadata.status == 'not_modified' -%}
+            <div style="background: #fff3cd; border: 1px solid #ffeaa7; color: #856404; padding: 10px; border-radius: 5px; margin-bottom: 15px;">
+                <strong>ℹ️ Uptime Data Status:</strong> 
+                {% if relays.uptime_metadata.last_updated -%}
+                    Uptime statistics unchanged since last check. Last updated: <strong>{{ relays.uptime_metadata.last_updated }}</strong>
+                {% else -%}
+                    Uptime statistics unchanged since last check.
+                {%- endif %}
+                <br><small>This means the uptime data shown below may not reflect the most recent changes.</small>
+            </div>
+        {% elif relays.uptime_metadata.status == 'error' -%}
+            <div style="background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; padding: 10px; border-radius: 5px; margin-bottom: 15px;">
+                <strong>⚠️ Uptime Data Error:</strong> {{ relays.uptime_metadata.message }}
+                <br><small>Uptime statistics may be unavailable or incomplete.</small>
+            </div>
+        {% elif relays.uptime_metadata.status == 'success' and relays.uptime_metadata.last_updated -%}
+            <div style="background: #d1edff; border: 1px solid #bee5eb; color: #0c5460; padding: 10px; border-radius: 5px; margin-bottom: 15px;">
+                <strong>✅ Uptime Data Fresh:</strong> Successfully updated {{ relays.uptime_metadata.last_updated }}
+                {% if relays.uptime_metadata.authorities_count -%}
+                    ({{ relays.uptime_metadata.authorities_count }} authorities)
+                {%- endif %}
+            </div>
+        {%- endif %}
+    {%- endif %}
+    
+    <table class="table table-condensed" style="font-size: 13px;">
+        <tr>
+            <th>Authority Name</th>
+            <th>Online Status</th>
+            <th>AS Number</th>
+            <th>AS Name</th>
+            <th>Country</th>
+            <th title="Percentage of time authority was online over 1 month, 6 months, 1 year, and 5 years periods">Uptime (1M/6M/1Y/5Y)</th>
+            <th>Version</th>
+            <th>Platform</th>
+            <th title="Version compliance: ✅ = On recommended version, ❌ = Not on recommended version">Rec. Ver.</th>
+            <th>First Seen</th>
+            <th>Last Restarted</th>
+        </tr>
+        <tbody>
+        {% for authority in relays.authorities_data -%}
+            <tr>
+                {% set is_problematic = not authority.running or (authority.uptime_zscore and authority.uptime_zscore <= -2.0) -%}
+                <td>
+                    <a href="{{ page_ctx.path_prefix }}relay/{{ authority.fingerprint }}/" 
+                       {% if is_problematic %}style="color: #dc3545; font-weight: bold; text-decoration: underline;"
+                       {% else %}style="text-decoration: underline;"{% endif %}>
+                        {{ authority.nickname }}
+                    </a>
+                </td>
+                <td>
+                    {% if authority.running -%}
+                        <span style="color: green; font-weight: bold;">🟢 Online</span>
+                    {% else -%}
+                        <span style="color: red; font-weight: bold;">🔴 Offline (last seen: {{ authority.last_seen }})</span>
+                    {%- endif %}
+                </td>
+                <td>
+                    {% if authority.as -%}
+                        <a href="{{ page_ctx.path_prefix }}as/{{ authority.as }}/">{{ authority.as }}</a>
+                    {% else -%}
+                        N/A
+                    {%- endif %}
+                </td>
+                <td>
+                    {% if authority.as_name -%}
+                        <a href="https://bgp.tools/{{ authority.as }}" title="{{ authority.as_name }}">{{ authority.as_name|truncate(length=20) }}</a>
+                    {% else -%}
+                        Unknown
+                    {%- endif %}
+                </td>
+                <td>
+                    {% if authority.country -%}
+                        <a href="{{ page_ctx.path_prefix }}country/{{ authority.country }}/">
+                            <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ authority.country }}.png"
+                                 title="{{ authority.country_name }}"
+                                 alt="{{ authority.country_name }}">
+                        </a>
+                        {{ authority.country|upper }}
+                    {% else -%}
+                        Unknown
+                    {%- endif %}
+                </td>
+                <td>
+                    {% if authority.uptime_percentages and authority.uptime_percentages.get('1_month') is not none -%}
+                        <span title="1 month uptime: {{ "%.1f%%"|format(authority.uptime_percentages['1_month']) }}">{{ "%.1f%%"|format(authority.uptime_percentages['1_month']) }}</span>
+                    {% else -%}
+                        N/A
+                    {%- endif %} / 
+                    {% if authority.uptime_percentages and authority.uptime_percentages.get('6_months') is not none -%}
+                        <span title="6 month uptime: {{ "%.1f%%"|format(authority.uptime_percentages['6_months']) }}">{{ "%.1f%%"|format(authority.uptime_percentages['6_months']) }}</span>
+                    {% else -%}
+                        N/A
+                    {%- endif %} / 
+                    {% if authority.uptime_percentages and authority.uptime_percentages.get('1_year') is not none -%}
+                        <span title="1 year uptime: {{ "%.1f%%"|format(authority.uptime_percentages['1_year']) }}">{{ "%.1f%%"|format(authority.uptime_percentages['1_year']) }}</span>
+                    {% else -%}
+                        N/A
+                    {%- endif %} / 
+                    {% if authority.uptime_percentages and authority.uptime_percentages.get('5_years') is not none -%}
+                        <span title="5 year uptime: {{ "%.1f%%"|format(authority.uptime_percentages['5_years']) }}">{{ "%.1f%%"|format(authority.uptime_percentages['5_years']) }}</span>
+                    {% else -%}
+                        N/A
+                    {%- endif %}
+                    {% if authority.uptime_zscore is not none -%}
+                        | <span 
+                        {% if authority.uptime_zscore > 0.3 -%}
+                            style="color: green; font-weight: bold;"
+                        {% elif authority.uptime_zscore <= -2.0 -%}
+                            style="color: red; font-weight: bold;"
+                        {% else -%}
+                            style="color: #ff8c00; font-weight: bold;"
+                        {%- endif %}
+                        title="Z-score: Statistical measure of how far this authority's uptime deviates from the average. Values below -2.0 indicate significantly poor uptime.">Z: {{ "%.1f"|format(authority.uptime_zscore) }}</span>
+                    {%- endif %}
+                </td>
+                <td>{{ authority.version if authority.version else "Unknown" }}</td>
+                <td>
+                    {% if authority.platform -%}
+                        <a href="{{ page_ctx.path_prefix }}platform/{{ authority.platform|escape }}/">{{ authority.platform|escape }}</a>
+                    {% else -%}
+                        Unknown
+                    {%- endif %}
+                </td>
+                <td>
+                    {% if authority.recommended_version is not none -%}
+                        {% if authority.recommended_version -%}
+                            <span style="color: green; font-weight: bold;" title="Running recommended version">✅</span>
+                        {% else -%}
+                            <span style="color: red; font-weight: bold;" title="Not running recommended version">❌</span>
+                        {%- endif %}
+                    {% else -%}
+                        Unknown
+                    {%- endif %}
+                </td>
+                <td>
+                    {% if authority.first_seen -%}
+                        <a href="{{ page_ctx.path_prefix }}first_seen/{{ authority.first_seen.split(' ')[0].replace('-', '') }}/" title="{{ authority.first_seen }}">{{ authority.first_seen.split(' ')[0] }}</a>
+                    {% else -%}
+                        Unknown
+                    {%- endif %}
+                </td>
+                <td>{{ authority.last_restarted.split(' ')[0] if authority.last_restarted else "Unknown" }}</td>
+            </tr>
+        {% endfor -%}
+        </tbody>
+    </table>
+
+    <br><br>
+
+    <!-- LEGEND/NOTES -->
+    <div style="background: #f0f0f0; padding: 15px; border-radius: 6px;">
+        <h4>Legend:</h4>
+        <ul style="margin: 0; padding-left: 20px;">
+            <li><strong>Uptime (1M/6M/1Y/5Y):</strong> Percentage of time authority was online over 1 month, 6 months, 1 year, and 5 years periods</li>
+            <li><strong>Uptime Z-Score:</strong> Statistical measure comparing this authority's 1-month uptime to other authorities. <span style="color: green; font-weight: bold;">Green (above average)</span>, <span style="color: #ff8c00; font-weight: bold;">Yellow (normal)</span>, <span style="color: red; font-weight: bold;">Red (significantly below average, ≤-2.0)</span></li>
+            <li><strong>Version:</strong> Current Tor software version running on the authority</li>
+            <li><strong>Platform:</strong> Full platform description including Tor version and operating system</li>
+            <li><strong>Rec. Ver.:</strong> Recommended version compliance. <span style="color: green; font-weight: bold;">✅ = On recommended version</span>, <span style="color: red; font-weight: bold;">❌ = Not on recommended version</span></li>
+            <li><strong>First Seen:</strong> When this authority first appeared in the directory consensus</li>
+            <li><strong>Last Restarted:</strong> When the authority software was last restarted</li>
+        </ul>
+    </div>
+
+    <!-- FOOTER -->
+    <br><br>
+    <p><i>Data sources: Onionoo API</i></p>
+    <p><i>Last updated: {{ relays.timestamp }} (updates every 15 minutes)</i></p>
+
+{% endblock -%} 

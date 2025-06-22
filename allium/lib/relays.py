@@ -1452,6 +1452,13 @@ class Relays:
                 'large_family_count': 0
             })
             template_vars.update(family_stats)
+        elif template.name == "misc-authorities.html":
+            # Reuse existing authority uptime data from consolidated processing
+            authorities_data = self._get_directory_authorities_data()
+            # Set attributes as expected by template
+            self.authorities_data = authorities_data['authorities_data']
+            self.authorities_summary = authorities_data['authorities_summary']
+            template_vars.update(authorities_data)
         
         template_render = template.render(**template_vars)
         output = os.path.join(self.output_dir, path)
@@ -1459,6 +1466,69 @@ class Relays:
 
         with open(output, "w", encoding="utf8") as html:
             html.write(template_render)
+
+    def _get_directory_authorities_data(self):
+        """
+        Prepare directory authorities data for template rendering.
+        Reuses existing authority uptime calculations and z-score infrastructure.
+        """
+        # Filter authorities from existing relay data (no new processing)
+        authorities = [relay for relay in self.json["relays"] if 'Authority' in relay.get('flags', [])]
+        
+        # Reuse existing consolidated uptime results (already computed)
+        authority_network_stats = {}
+        above_average_uptime = []
+        below_average_uptime = []
+        problem_uptime = []
+        
+        if hasattr(self, '_consolidated_uptime_results'):
+            network_flag_stats = self._consolidated_uptime_results.get('network_flag_statistics', {})
+            authority_network_stats = network_flag_stats.get('Authority', {})
+            
+            for authority in authorities:
+                uptime_1month = authority.get('uptime_percentages', {}).get('1_month', 0.0)
+                period_stats = authority_network_stats.get('1_month', {})
+                
+                if period_stats and period_stats.get('std_dev', 0) > 0 and uptime_1month > 0:
+                    mean = period_stats['mean']
+                    std_dev = period_stats['std_dev']
+                    authority['uptime_zscore'] = (uptime_1month - mean) / std_dev
+                    
+                    # Categorize authorities by uptime performance (reuse z-score calculation)
+                    if authority['uptime_zscore'] > 0.3:
+                        above_average_uptime.append(authority)
+                    elif authority['uptime_zscore'] <= -2.0:
+                        problem_uptime.append(authority)
+                    else:
+                        below_average_uptime.append(authority)
+                    
+                    # Add outlier classification using existing thresholds
+                    if uptime_1month <= period_stats.get('two_sigma_low', 0):
+                        authority['uptime_outlier_status'] = 'low_outlier'
+                    elif uptime_1month >= period_stats.get('two_sigma_high', float('inf')):
+                        authority['uptime_outlier_status'] = 'high_outlier'
+                    else:
+                        authority['uptime_outlier_status'] = 'normal'
+                else:
+                    authority['uptime_zscore'] = None
+                    authority['uptime_outlier_status'] = 'insufficient_data'
+        else:
+            # No uptime data available - ensure all authorities have required attributes
+            for authority in authorities:
+                authority['uptime_zscore'] = None
+                authority['uptime_outlier_status'] = 'insufficient_data'
+        
+        return {
+            'authorities_data': authorities,
+            'authorities_summary': {
+                'total_authorities': len(authorities),
+                'above_average_uptime': above_average_uptime,
+                'below_average_uptime': below_average_uptime,
+                'problem_uptime': problem_uptime
+            },
+            'authority_network_stats': authority_network_stats,  # Include for template access
+            'uptime_metadata': getattr(self, 'uptime_data', {}).get('relays_published', 'Unknown')
+        }
 
     def _determine_unit(self, bandwidth_bytes):
         """Determine unit - simple threshold checking"""

@@ -349,6 +349,18 @@ if __name__ == "__main__":
 
     if args.progress:
         print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Generated 6 miscellaneous sorted pages")
+
+    # directory authorities page  
+    if args.progress:
+        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Generating directory authorities monitoring page...")
+    authorities_ctx = get_page_context('misc', 'misc_listing', {'page_name': 'Directory Authorities'})
+    RELAY_SET.write_misc(
+        template="misc-authorities.html",
+        path="misc/authorities.html",
+        page_ctx=authorities_ctx,
+    )
+    if args.progress:
+        print(f"[{time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}] [{(progress_step := progress_step + 1)}/{total_steps}] [{get_memory_usage()}] Progress: Generated directory authorities monitoring page")
     # onionoo keys used to generate pages by unique value; e.g. AS43350
     keys = [
         "as",
