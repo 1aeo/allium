@@ -14,46 +14,32 @@
         Directory authorities vote on the status of relays in the Tor network and provide bandwidth measurements. Monitor their health and consensus participation.
     </p>
 
-    <!-- CONSENSUS HEALTH SUMMARY SECTION -->
-    <div style="background: #e8f4fd; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
-        <h3>Network Summary</h3>
-        <ul>
-            <li><strong>Relays:</strong> {{ relays.json['relays']|length }} total</li>
-            <li><strong>Directory Authorities:</strong> {{ relays.authorities_summary.total_authorities }} authorities</li>
-        </ul>
-        
-        <h4>Directory Authority Metrics</h4>
-        <ul>
-            <li style="margin: 5px 0;"><strong>Version Compliance:</strong> 
-                {% set compliant_authorities = relays.authorities_data | selectattr('recommended_version', 'equalto', true) | list %}
-                {% set non_compliant_authorities = relays.authorities_data | selectattr('recommended_version', 'equalto', false) | list %}
-                {{ compliant_authorities|length }}/{{ relays.authorities_summary.total_authorities }} authorities on recommended version
-            </li>
-            <li style="margin: 5px 0;"><strong>Version Non-Compliant:</strong> {{ non_compliant_authorities|length }}/{{ relays.authorities_summary.total_authorities }} authorities not on recommended version</li>
-            <li style="margin: 5px 0;"><strong>Uptime (1M):</strong>
-                <ul style="margin-left: 20px; margin-top: 5px;">
-                    {% if relays.authorities_summary.above_average_uptime -%}
-                        <li><span style="color: green; font-weight: bold;">Above average: 
-                        {% for auth in relays.authorities_summary.above_average_uptime -%}
-                            {{ auth.nickname }} (Z: {{ "%.1f"|format(auth.uptime_zscore) }}){% if not loop.last %}, {% endif %}
-                        {%- endfor %}</span></li>
-                    {%- endif %}
-                    {% if relays.authorities_summary.below_average_uptime -%}
-                        <li><span style="color: #ff8c00; font-weight: bold;">Below average: 
-                        {% for auth in relays.authorities_summary.below_average_uptime -%}
-                            {{ auth.nickname }} (Z: {{ "%.1f"|format(auth.uptime_zscore) }}){% if not loop.last %}, {% endif %}
-                        {%- endfor %}</span></li>
-                    {%- endif %}
-                    {% if relays.authorities_summary.problem_uptime -%}
-                        <li><span style="color: red; font-weight: bold;">Problem: 
-                        {% for auth in relays.authorities_summary.problem_uptime -%}
-                            {{ auth.nickname }} (Z: {{ "%.1f"|format(auth.uptime_zscore) }}){% if not loop.last %}, {% endif %}
-                        {%- endfor %}</span></li>
-                    {%- endif %}
-                </ul>
-            </li>
-        </ul>
-    </div>
+    <ul style="margin-bottom: 15px;">
+        <li><strong>Directory Authorities:</strong> {{ relays.authorities_summary.total_authorities }} authorities currently active</li>
+        <li><strong>Version Compliance:</strong> 
+            {% set compliant_authorities = relays.authorities_data | selectattr('recommended_version', 'equalto', true) | list %}
+            {% set non_compliant_authorities = relays.authorities_data | selectattr('recommended_version', 'equalto', false) | list %}
+            {{ compliant_authorities|length }}/{{ relays.authorities_summary.total_authorities }} on recommended version | {{ non_compliant_authorities|length }}/{{ relays.authorities_summary.total_authorities }} non-compliant
+        </li>
+        <li><strong>Uptime Status (1M):</strong> 
+            {% if relays.authorities_summary.above_average_uptime -%}
+                <span style="color: green; font-weight: bold;">{{ relays.authorities_summary.above_average_uptime|length }} above average</span>
+            {% else -%}
+                <span style="color: green; font-weight: bold;">0 above average</span>
+            {%- endif %} | 
+            {% if relays.authorities_summary.below_average_uptime -%}
+                <span style="color: #ff8c00; font-weight: bold;">{{ relays.authorities_summary.below_average_uptime|length }} below average</span>
+            {% else -%}
+                <span style="color: #ff8c00; font-weight: bold;">0 below average</span>
+            {%- endif %} | 
+            {% if relays.authorities_summary.problem_uptime -%}
+                <span style="color: red; font-weight: bold;">{{ relays.authorities_summary.problem_uptime|length }} problematic</span>
+            {% else -%}
+                <span style="color: red; font-weight: bold;">0 problematic</span>
+            {%- endif %}
+        </li>
+        <li><strong>Key:</strong> BW = Observed Bandwidth, CW = Consensus Weight, Z = Z-score (statistical uptime deviation)</li>
+    </ul>
 
     <br>
 
