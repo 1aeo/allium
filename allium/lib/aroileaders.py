@@ -213,6 +213,9 @@ def _calculate_aroi_leaderboards(relays_instance):
         # === USE EXISTING CALCULATIONS (NO DUPLICATION) ===
         # All basic metrics are already computed in contact_data
         total_bandwidth = contact_data.get('bandwidth', 0)
+        exit_bandwidth = contact_data.get('exit_bandwidth', 0)
+        guard_bandwidth = contact_data.get('guard_bandwidth', 0)
+        middle_bandwidth = contact_data.get('middle_bandwidth', 0)
         total_consensus_weight = contact_data.get('consensus_weight_fraction', 0.0)
         guard_count = contact_data.get('guard_count', 0)
         exit_count = contact_data.get('exit_count', 0)
@@ -374,6 +377,9 @@ def _calculate_aroi_leaderboards(relays_instance):
             'contact_info': contact_info,
             'total_relays': total_relays,
             'total_bandwidth': total_bandwidth,
+            'exit_bandwidth': exit_bandwidth,
+            'guard_bandwidth': guard_bandwidth,
+            'middle_bandwidth': middle_bandwidth,
             'total_consensus_weight': total_consensus_weight,
             'guard_count': guard_count,
             'exit_count': exit_count,
@@ -525,6 +531,12 @@ def _calculate_aroi_leaderboards(relays_instance):
             bandwidth_unit = relays_instance._determine_unit(metrics['total_bandwidth'])
             formatted_bandwidth = relays_instance._format_bandwidth_with_unit(
                 metrics['total_bandwidth'], bandwidth_unit, decimal_places=1
+            )
+            
+            # Format exit-specific bandwidth for exit categories (exit_authority, exit_operators)
+            exit_bandwidth_unit = relays_instance._determine_unit(metrics['exit_bandwidth'])
+            formatted_exit_bandwidth = relays_instance._format_bandwidth_with_unit(
+                metrics['exit_bandwidth'], exit_bandwidth_unit, decimal_places=1
             )
             
             # Calculate geographic achievement for non_eu_leaders category
@@ -704,6 +716,8 @@ def _calculate_aroi_leaderboards(relays_instance):
                 'total_relays': metrics['total_relays'],
                 'total_bandwidth': formatted_bandwidth,
                 'bandwidth_unit': bandwidth_unit,
+                'exit_bandwidth': formatted_exit_bandwidth,
+                'exit_bandwidth_unit': exit_bandwidth_unit,
                 'total_consensus_weight_pct': f"{metrics['total_consensus_weight'] * 100:.2f}%",
                 'exit_consensus_weight_pct': f"{metrics['exit_consensus_weight'] * 100:.2f}%",
                 'guard_consensus_weight_pct': f"{metrics['guard_consensus_weight'] * 100:.2f}%",
