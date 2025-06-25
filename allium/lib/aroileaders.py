@@ -237,7 +237,75 @@ def _calculate_aroi_leaderboards(relays_instance):
         non_linux_count = sum(1 for relay in operator_relays 
                              if relay.get('platform') and not relay.get('platform', '').startswith('Linux'))
         
-
+        # === IPv4/IPv6 UNIQUE ADDRESS CALCULATIONS (NEW) ===
+        # Extract unique IPv4 and IPv6 addresses from all operator relays
+        unique_ipv4_addresses = set()
+        unique_ipv6_addresses = set()
+        ipv4_relay_count = 0
+        ipv6_relay_count = 0
+        ipv4_total_bandwidth = 0
+        ipv6_total_bandwidth = 0
+        ipv4_total_consensus_weight = 0.0
+        ipv6_total_consensus_weight = 0.0
+        ipv4_guard_count = 0
+        ipv4_exit_count = 0
+        ipv4_middle_count = 0
+        ipv6_guard_count = 0
+        ipv6_exit_count = 0
+        ipv6_middle_count = 0
+        
+        for relay in operator_relays:
+            or_addresses = relay.get('or_addresses', [])
+            relay_bandwidth = relay.get('observed_bandwidth', 0)
+            relay_consensus_weight = relay.get('consensus_weight', 0)
+            relay_flags = relay.get('flags', [])
+            
+            has_ipv4 = False
+            has_ipv6 = False
+            
+            for address in or_addresses:
+                # Extract IP from address:port format, reusing existing logic pattern
+                if address.startswith('[') and ']:' in address:
+                    # IPv6 address in brackets like [2001:db8::1]:9001
+                    ip_part = address.split(']:')[0][1:]  # Remove brackets and port
+                    unique_ipv6_addresses.add(ip_part)
+                    has_ipv6 = True
+                elif '::' in address or (address.count(':') > 1 and '.' not in address):
+                    # IPv6 address without port brackets
+                    ip_part = address.split(':')[0] if ':' in address else address
+                    unique_ipv6_addresses.add(ip_part)
+                    has_ipv6 = True
+                elif '.' in address and address.count(':') <= 1:
+                    # IPv4 address like 192.168.1.1:9001
+                    ip_part = address.split(':')[0]  # Remove port
+                    unique_ipv4_addresses.add(ip_part)
+                    has_ipv4 = True
+            
+            # Count relays and aggregate metrics by IP type
+            if has_ipv4:
+                ipv4_relay_count += 1
+                ipv4_total_bandwidth += relay_bandwidth
+                ipv4_total_consensus_weight += relay_consensus_weight
+                if 'Guard' in relay_flags:
+                    ipv4_guard_count += 1
+                if 'Exit' in relay_flags:
+                    ipv4_exit_count += 1
+                if 'Guard' not in relay_flags and 'Exit' not in relay_flags:
+                    ipv4_middle_count += 1
+            
+            if has_ipv6:
+                ipv6_relay_count += 1
+                ipv6_total_bandwidth += relay_bandwidth
+                ipv6_total_consensus_weight += relay_consensus_weight
+                if 'Guard' in relay_flags:
+                    ipv6_guard_count += 1
+                if 'Exit' in relay_flags:
+                    ipv6_exit_count += 1
+                if 'Guard' not in relay_flags and 'Exit' not in relay_flags:
+                    ipv6_middle_count += 1
+        
+        unique_ipv4_count = len(unique_ipv4_addresses)
+        unique_ipv6_count = len(unique_ipv6_addresses)
         
         # Non-EU country detection (using centralized utilities)
         operator_countries = [relay.get('country') for relay in operator_relays if relay.get('country')]
@@ -422,6 +490,22 @@ def _calculate_aroi_leaderboards(relays_instance):
             'reliability_5y_valid_relays': reliability_5y['valid_relays'],
             'reliability_5y_breakdown': reliability_5y['breakdown'],
             
+            # === IPv4/IPv6 UNIQUE ADDRESS METRICS (NEW) ===
+            'unique_ipv4_count': unique_ipv4_count,
+            'unique_ipv6_count': unique_ipv6_count,
+            'ipv4_relay_count': ipv4_relay_count,
+            'ipv6_relay_count': ipv6_relay_count,
+            'ipv4_total_bandwidth': ipv4_total_bandwidth,
+            'ipv6_total_bandwidth': ipv6_total_bandwidth,
+            'ipv4_total_consensus_weight': ipv4_total_consensus_weight,
+            'ipv6_total_consensus_weight': ipv6_total_consensus_weight,
+            'ipv4_guard_count': ipv4_guard_count,
+            'ipv4_exit_count': ipv4_exit_count,
+            'ipv4_middle_count': ipv4_middle_count,
+            'ipv6_guard_count': ipv6_guard_count,
+            'ipv6_exit_count': ipv6_exit_count,
+            'ipv6_middle_count': ipv6_middle_count,
+            
             # Keep minimal relay data for potential future use
             'relays': operator_relays
         }
@@ -519,6 +603,20 @@ def _calculate_aroi_leaderboards(relays_instance):
     leaderboards['network_veterans'] = sorted(
         aroi_operators.items(),
         key=lambda x: x[1]['veteran_score'],
+        reverse=True
+    )[:50]
+    
+    # 14. IPv4 Address Leaders - Unique IPv4 Addresses per Operator (new calculation)
+    leaderboards['ipv4_leaders'] = sorted(
+        aroi_operators.items(),
+        key=lambda x: x[1]['unique_ipv4_count'],
+        reverse=True
+    )[:50]
+    
+    # 15. IPv6 Address Leaders - Unique IPv6 Addresses per Operator (new calculation)
+    leaderboards['ipv6_leaders'] = sorted(
+        aroi_operators.items(),
+        key=lambda x: x[1]['unique_ipv6_count'],
         reverse=True
     )[:50]
     
@@ -700,6 +798,48 @@ def _calculate_aroi_leaderboards(relays_instance):
                 
                 # Create short version for table display (simplified, no weight)
                 reliability_details_short = f"{reliability_average:.1f}% avg"
+            
+            # Format IPv4/IPv6 specific details for IP address categories (NEW)
+            ipv4_achievement_title = ""
+            ipv6_achievement_title = ""
+            ip_address_details = ""
+            ip_address_tooltip = ""
+            
+            if category == 'ipv4_leaders':
+                # Add achievement titles for top 3 IPv4 leaders
+                if rank == 1:
+                    ipv4_achievement_title = "🥇 IPv4 Legend"
+                elif rank == 2:
+                    ipv4_achievement_title = "🥈 IPv4 Master"
+                elif rank == 3:
+                    ipv4_achievement_title = "🥉 IPv4 Champion"
+                
+                # Format IPv4 bandwidth with unit (reuse existing formatters)
+                ipv4_bandwidth_unit = relays_instance._determine_unit(metrics['ipv4_total_bandwidth'])
+                formatted_ipv4_bandwidth = relays_instance._format_bandwidth_with_unit(
+                    metrics['ipv4_total_bandwidth'], ipv4_bandwidth_unit, decimal_places=1
+                )
+                
+                ip_address_details = f"{metrics['unique_ipv4_count']} unique IPv4"
+                ip_address_tooltip = f"IPv4 Infrastructure: {metrics['unique_ipv4_count']} unique addresses across {metrics['ipv4_relay_count']} relays with {formatted_ipv4_bandwidth} {ipv4_bandwidth_unit} bandwidth"
+                
+            elif category == 'ipv6_leaders':
+                # Add achievement titles for top 3 IPv6 leaders
+                if rank == 1:
+                    ipv6_achievement_title = "🥇 IPv6 Legend"
+                elif rank == 2:
+                    ipv6_achievement_title = "🥈 IPv6 Master"
+                elif rank == 3:
+                    ipv6_achievement_title = "🥉 IPv6 Champion"
+                
+                # Format IPv6 bandwidth with unit (reuse existing formatters)
+                ipv6_bandwidth_unit = relays_instance._determine_unit(metrics['ipv6_total_bandwidth'])
+                formatted_ipv6_bandwidth = relays_instance._format_bandwidth_with_unit(
+                    metrics['ipv6_total_bandwidth'], ipv6_bandwidth_unit, decimal_places=1
+                )
+                
+                ip_address_details = f"{metrics['unique_ipv6_count']} unique IPv6"
+                ip_address_tooltip = f"IPv6 Infrastructure: {metrics['unique_ipv6_count']} unique addresses across {metrics['ipv6_relay_count']} relays with {formatted_ipv6_bandwidth} {ipv6_bandwidth_unit} bandwidth"
 
             
             display_name = metrics['aroi_domain'] if metrics['aroi_domain'] and metrics['aroi_domain'] != 'none' else operator_key
@@ -773,6 +913,26 @@ def _calculate_aroi_leaderboards(relays_instance):
                 'reliability_weight': f"{reliability_weight:.1f}x",
                 'reliability_details_short': reliability_details_short,
                 'reliability_tooltip': reliability_tooltip,
+                
+                # === IPv4/IPv6 ADDRESS FIELDS (NEW) ===
+                'unique_ipv4_count': metrics['unique_ipv4_count'],
+                'unique_ipv6_count': metrics['unique_ipv6_count'],
+                'ipv4_relay_count': metrics['ipv4_relay_count'],
+                'ipv6_relay_count': metrics['ipv6_relay_count'],
+                'ipv4_total_bandwidth': metrics['ipv4_total_bandwidth'],
+                'ipv6_total_bandwidth': metrics['ipv6_total_bandwidth'],
+                'ipv4_total_consensus_weight_pct': f"{metrics['ipv4_total_consensus_weight'] * 100:.2f}%",
+                'ipv6_total_consensus_weight_pct': f"{metrics['ipv6_total_consensus_weight'] * 100:.2f}%",
+                'ipv4_guard_count': metrics['ipv4_guard_count'],
+                'ipv4_exit_count': metrics['ipv4_exit_count'],
+                'ipv4_middle_count': metrics['ipv4_middle_count'],
+                'ipv6_guard_count': metrics['ipv6_guard_count'],
+                'ipv6_exit_count': metrics['ipv6_exit_count'],
+                'ipv6_middle_count': metrics['ipv6_middle_count'],
+                'ipv4_achievement_title': ipv4_achievement_title,
+                'ipv6_achievement_title': ipv6_achievement_title,
+                'ip_address_details': ip_address_details,
+                'ip_address_tooltip': ip_address_tooltip,
             }
             formatted_data.append(formatted_entry)
         
@@ -815,7 +975,9 @@ def _calculate_aroi_leaderboards(relays_instance):
             'platform_diversity': 'Platform Diversity (Non-Linux Heroes)',
             'non_eu_leaders': 'Geographic Champions (Non-EU Leaders)',
             'frontier_builders': 'Frontier Builders (Rare Countries)',
-            'network_veterans': 'Network Veterans'
+            'network_veterans': 'Network Veterans',
+            'ipv4_leaders': 'IPv4 Address Leaders',
+            'ipv6_leaders': 'IPv6 Address Leaders'
         }
     }
     
