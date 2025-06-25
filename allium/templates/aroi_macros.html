@@ -36,6 +36,10 @@
                             <span title="6-month average uptime reliability score (25+ relays)">{{ champion.reliability_score }} reliability</span>
                         {% elif category_key == "legacy_titans" %}
                             <span title="5-year average uptime reliability score (25+ relays)">{{ champion.reliability_score }} legacy score</span>
+                        {% elif category_key == "ipv4_leaders" %}
+                            <span title="Number of unique IPv4 addresses across relay infrastructure">{{ champion.unique_ipv4_count }} unique IPv4</span>
+                        {% elif category_key == "ipv6_leaders" %}
+                            <span title="Number of unique IPv6 addresses across relay infrastructure">{{ champion.unique_ipv6_count }} unique IPv6</span>
                         {% endif %}
                     </p>
                     <small>
@@ -87,6 +91,10 @@
                                 <span title="Dynamic achievement title for platform diversity leadership">{{ entry.platform_hero_title }}</span>
                             {% elif performance_type == "frontier_builders" and entry.frontier_achievement_title %}
                                 <span title="Dynamic achievement title for frontier expansion">{{ entry.frontier_achievement_title }}</span>
+                            {% elif performance_type == "ipv4_leaders" and entry.ipv4_achievement_title %}
+                                <span title="Dynamic achievement title for IPv4 infrastructure leadership">{{ entry.ipv4_achievement_title }}</span>
+                            {% elif performance_type == "ipv6_leaders" and entry.ipv6_achievement_title %}
+                                <span title="Dynamic achievement title for IPv6 infrastructure leadership">{{ entry.ipv6_achievement_title }}</span>
                             {% else %}
                                 <span title="Achievement level for rank {{ entry.rank }} in {{ performance_type.replace('_', ' ').title() }} category">
                                 {% if entry.rank == 1 %}{{ achievements[0] }}
@@ -123,6 +131,10 @@
                                 <span title="{{ entry.reliability_tooltip }}">{{ entry.reliability_average }} avg</span>
                             {% elif performance_type == "legacy_titans" %}
                                 <span title="{{ entry.reliability_tooltip }}">{{ entry.reliability_average }} avg</span>
+                            {% elif performance_type == "ipv4_leaders" %}
+                                <span title="{{ entry.ip_address_tooltip }}">{{ entry.unique_ipv4_count }} unique IPv4 addresses</span>
+                            {% elif performance_type == "ipv6_leaders" %}
+                                <span title="{{ entry.ip_address_tooltip }}">{{ entry.unique_ipv6_count }} unique IPv6 addresses</span>
                             {% endif %}
                         </td>
                     </tr>
@@ -167,6 +179,8 @@
         {%- elif category_key == 'network_veterans' -%}veteran scores calculated as (earliest relay start date × total relay count). Formula: veteran_score = days_since_first_relay × total_relays. Recognizes operators who have been contributing to the Tor network for the longest time with sustained relay operations
         {%- elif category_key == 'reliability_masters' -%}6-month average uptime reliability scores from Onionoo API data for operators with 25+ relays. Formula: reliability_score = average_6_month_uptime. Measures operational excellence and network reliability over recent 6-month period using simple average uptime percentages
         {%- elif category_key == 'legacy_titans' -%}5-year average uptime reliability scores from Onionoo API data for operators with 25+ relays. Formula: reliability_score = average_5_year_uptime. Measures long-term operational stability and reliability over 5-year historical period using simple average uptime percentages
+        {%- elif category_key == 'ipv4_leaders' -%}quantity of unique IPv4 addresses per operator across their relay infrastructure. Measures IPv4 address diversity and network distribution capabilities
+        {%- elif category_key == 'ipv6_leaders' -%}quantity of unique IPv6 addresses per operator across their relay infrastructure. Measures IPv6 adoption and modern network infrastructure capabilities
         {%- endif -%}">{% if emoji %}{{ emoji }} {% endif %}{{ category_name }}</h3>
         {% if category_data %}
         <div class="table-responsive">
@@ -186,7 +200,7 @@
                         {%- elif category_key == 'network_veterans' -%}veteran score calculation: days since first relay start date × total relay count. Higher scores indicate longer network service with more relays
                         {%- elif category_key == 'reliability_masters' -%}6-month reliability score: simple average uptime percentage from Onionoo API (25+ relays). Measures recent operational excellence and network reliability
                         {%- elif category_key == 'legacy_titans' -%}5-year reliability score: simple average uptime percentage from Onionoo API (25+ relays). Measures long-term operational stability and historical reliability
-                        {%- endif -%}">{% if category_key == 'platform_diversity' %}Non Linux Relays{% elif category_key == 'non_eu_leaders' %}Non-EU Relays{% elif category_key == 'frontier_builders' %}Rare Relays{% elif category_key == 'reliability_masters' %}Reliability Score{% elif category_key == 'legacy_titans' %}Legacy Score{% else %}Key Metric{% endif %}</th>
+                                            {%- endif -%}">{% if category_key == 'platform_diversity' %}Non Linux Relays{% elif category_key == 'non_eu_leaders' %}Non-EU Relays{% elif category_key == 'frontier_builders' %}Rare Relays{% elif category_key == 'reliability_masters' %}Reliability Score{% elif category_key == 'legacy_titans' %}Legacy Score{% else %}Key Metric{% endif %}</th>
                         <th title="Total observed bandwidth capacity in {% if use_bits %}bits per second{% else %}bytes per second{% endif %}">Bandwidth</th>
                         {% if category_key != 'platform_diversity' %}
                         <th title="{% if category_key == 'network_veterans' %}Geographic distribution: number of countries with relay operations. Geographic diversity demonstrates network resilience and reduces single-point-of-failure risks{% elif category_key == 'reliability_masters' %}Geographic distribution: number of countries with relay operations. Geographic diversity for reliability indicates distributed operational infrastructure{% elif category_key == 'legacy_titans' %}Geographic distribution: number of countries with relay operations. Geographic diversity for long-term operators shows sustained international presence{% else %}Number of countries with relay operations{% endif %}">Countries</th>
@@ -207,7 +221,7 @@
                         <td>{{ rank_badge(entry.rank) }}</td>
                         <td>{{ operator_link(entry, page_ctx) }}</td>
                         {% if category_key != 'platform_diversity' and category_key != 'non_eu_leaders' and category_key != 'frontier_builders' %}
-                        <td title="Active relays currently contributing to Tor network">{{ entry.total_relays }}</td>
+                                            <td title="Active relays currently contributing to Tor network">{{ entry.total_relays }}</td>
                         {% endif %}
                         <td>
                             <strong>
@@ -238,6 +252,8 @@
                             {% elif category_key == 'non_eu_leaders' %}<span title="{{ entry.geographic_breakdown_tooltip }}">{{ entry.geographic_breakdown_details if entry.geographic_breakdown_details else 'Global expansion' }}</span>
                             {% elif category_key == 'frontier_builders' %}<span title="{{ entry.rare_country_tooltip }}">{{ entry.rare_country_details if entry.rare_country_details else 'Frontier presence' }}</span>
                             {% elif category_key == 'network_veterans' %}<span title="Network longevity specialization: {{ entry.veteran_tooltip if entry.veteran_tooltip else 'This operator has been contributing to the Tor network for an extended period, demonstrating long-term commitment and operational stability' }}">{{ entry.veteran_details_short if entry.veteran_details_short else 'Network longevity' }}</span>
+                            {% elif category_key == 'ipv4_leaders' %}<span title="{{ entry.ip_address_tooltip }}">{{ entry.ip_address_details if entry.ip_address_details else 'IPv4 infrastructure' }}</span>
+                            {% elif category_key == 'ipv6_leaders' %}<span title="{{ entry.ip_address_tooltip }}">{{ entry.ip_address_details if entry.ip_address_details else 'IPv6 infrastructure' }}</span>
                             {% endif %}
                         </td>
                         {% endif %}
@@ -778,6 +794,60 @@
                         {% endif %}
                     </td>
                     {% endif %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endmacro %}
+
+
+
+{# IPv4/IPv6 Address Leaders Table Macro #}
+{% macro ipv4_ipv6_table_paginated(category_key, category_data, page_ctx, use_bits=false) %}
+    <div class="table-responsive">
+        <table class="table table-striped table-condensed aroi-rankings-table aroi-ip-address-table">
+            <thead>
+                <tr>
+                    <th title="Position in {{ 'IPv4' if category_key == 'ipv4_leaders' else 'IPv6' }} address leaders leaderboard">Rank</th>
+                    <th title="Authenticated Relay Operator Identifier following ContactInfo specification">Operator (AROI)</th>
+                    <th title="Number of unique {{ 'IPv4' if category_key == 'ipv4_leaders' else 'IPv6' }} addresses used across relay infrastructure">Unique {{ 'IPv4' if category_key == 'ipv4_leaders' else 'IPv6' }}</th>
+                    <th title="Number of relays using {{ 'IPv4' if category_key == 'ipv4_leaders' else 'IPv6' }} addresses">Relays</th>
+                    <th title="Total bandwidth capacity on relays using {{ 'IPv4' if category_key == 'ipv4_leaders' else 'IPv6' }} addresses">Bandwidth</th>
+                    <th title="Consensus weight percentage on relays using {{ 'IPv4' if category_key == 'ipv4_leaders' else 'IPv6' }} addresses">Consensus Weight</th>
+                    <th title="Number of guard relays using {{ 'IPv4' if category_key == 'ipv4_leaders' else 'IPv6' }} addresses">Guard</th>
+                    <th title="Number of exit relays using {{ 'IPv4' if category_key == 'ipv4_leaders' else 'IPv6' }} addresses">Exit</th>
+                    <th title="Number of middle relays using {{ 'IPv4' if category_key == 'ipv4_leaders' else 'IPv6' }} addresses">Middle</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in category_data %}
+                <tr>
+                    <td>{{ rank_badge(entry.rank) }}</td>
+                    <td>{{ operator_link(entry, page_ctx) }}</td>
+                    <td>
+                        <strong title="{{ entry.ip_address_tooltip if entry.ip_address_tooltip else 'Unique ' + ('IPv4' if category_key == 'ipv4_leaders' else 'IPv6') + ' addresses used across relay infrastructure' }}">
+                            {% if category_key == 'ipv4_leaders' %}{{ entry.unique_ipv4_count }}{% else %}{{ entry.unique_ipv6_count }}{% endif %}
+                        </strong>
+                    </td>
+                    <td title="Active relays using {{ 'IPv4' if category_key == 'ipv4_leaders' else 'IPv6' }} addresses">
+                        {% if category_key == 'ipv4_leaders' %}{{ entry.ipv4_relay_count }}{% else %}{{ entry.ipv6_relay_count }}{% endif %}
+                    </td>
+                    <td title="Bandwidth capacity on {{ 'IPv4' if category_key == 'ipv4_leaders' else 'IPv6' }} relays in {% if use_bits %}bits per second{% else %}bytes per second{% endif %}">
+                        {{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}
+                    </td>
+                    <td title="Consensus weight percentage on {{ 'IPv4' if category_key == 'ipv4_leaders' else 'IPv6' }} relays">
+                        {% if category_key == 'ipv4_leaders' %}{{ entry.ipv4_total_consensus_weight_pct }}{% else %}{{ entry.ipv6_total_consensus_weight_pct }}{% endif %}
+                    </td>
+                    <td title="Guard relays using {{ 'IPv4' if category_key == 'ipv4_leaders' else 'IPv6' }} addresses">
+                        {% if category_key == 'ipv4_leaders' %}{{ entry.ipv4_guard_count }}{% else %}{{ entry.ipv6_guard_count }}{% endif %}
+                    </td>
+                    <td title="Exit relays using {{ 'IPv4' if category_key == 'ipv4_leaders' else 'IPv6' }} addresses">
+                        {% if category_key == 'ipv4_leaders' %}{{ entry.ipv4_exit_count }}{% else %}{{ entry.ipv6_exit_count }}{% endif %}
+                    </td>
+                    <td title="Middle relays using {{ 'IPv4' if category_key == 'ipv4_leaders' else 'IPv6' }} addresses">
+                        {% if category_key == 'ipv4_leaders' %}{{ entry.ipv4_middle_count }}{% else %}{{ entry.ipv6_middle_count }}{% endif %}
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
