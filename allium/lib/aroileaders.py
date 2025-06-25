@@ -282,26 +282,29 @@ def _calculate_aroi_leaderboards(relays_instance):
                     has_ipv4 = True
             
             # Count relays and aggregate metrics by IP type
+            # Use Exit > Guard > Middle priority logic (consistent with relays.py)
             if has_ipv4:
                 ipv4_relay_count += 1
                 ipv4_total_bandwidth += relay_bandwidth
                 ipv4_total_consensus_weight += relay_consensus_weight
-                if 'Guard' in relay_flags:
-                    ipv4_guard_count += 1
+                # Primary role assignment (Exit > Guard > Middle priority)
                 if 'Exit' in relay_flags:
                     ipv4_exit_count += 1
-                if 'Guard' not in relay_flags and 'Exit' not in relay_flags:
+                elif 'Guard' in relay_flags:
+                    ipv4_guard_count += 1
+                else:
                     ipv4_middle_count += 1
             
             if has_ipv6:
                 ipv6_relay_count += 1
                 ipv6_total_bandwidth += relay_bandwidth
                 ipv6_total_consensus_weight += relay_consensus_weight
-                if 'Guard' in relay_flags:
-                    ipv6_guard_count += 1
+                # Primary role assignment (Exit > Guard > Middle priority)
                 if 'Exit' in relay_flags:
                     ipv6_exit_count += 1
-                if 'Guard' not in relay_flags and 'Exit' not in relay_flags:
+                elif 'Guard' in relay_flags:
+                    ipv6_guard_count += 1
+                else:
                     ipv6_middle_count += 1
         
         unique_ipv4_count = len(unique_ipv4_addresses)

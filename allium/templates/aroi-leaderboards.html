@@ -1,5 +1,5 @@
 {% from "macros.html" import navigation %}
-{% from "aroi_macros.html" import champion_badge, top3_table, ranking_table_row, operator_link, rank_badge, generic_ranking_table, top5_paginated_ranking_table, bandwidth_table_headers, bandwidth_table_complete, consensus_weight_table_complete, exit_authority_table_complete, guard_authority_table_complete, exit_operators_table_complete, guard_operators_table_complete, generic_ranking_table_paginated, ipv4_ipv6_table_paginated %}
+{% from "aroi_macros.html" import champion_badge, top3_table, ranking_table_row, operator_link, rank_badge, generic_ranking_table, top5_paginated_ranking_table, bandwidth_table_headers, bandwidth_table_complete, consensus_weight_table_complete, exit_authority_table_complete, guard_authority_table_complete, exit_operators_table_complete, guard_operators_table_complete, generic_ranking_table_paginated, ipv4_ipv6_table_paginated, ipv4_ipv6_section_paginated %}
 {% extends "skeleton.html" -%}
 {% block title -%}
     🏆 Tor Network Operator Champion Dashboard
@@ -468,93 +468,11 @@
         </section>
     {% endfor %}
 
-    <!-- IPv4 Address Leaders - Dedicated Section -->
-    {% set ipv4_category_name = relays.json.aroi_leaderboards.summary.categories.ipv4_leaders %}
-    {% set ipv4_category_data = relays.json.aroi_leaderboards.leaderboards.ipv4_leaders %}
-    
-    <section id="ipv4_leaders" class="aroi-section">
-        <h3 title="Operators ranked by quantity of unique IPv4 addresses per operator across their relay infrastructure. Measures IPv4 address diversity and network distribution capabilities">🌐 {{ ipv4_category_name }}</h3>
-        {% if ipv4_category_data %}
-        
-        <!-- Page 1: Ranks 1-10 -->
-        <div id="ipv4_leaders-1-10" class="pagination-section">
-            <h4>🌐 Ranks 1-10</h4>
-            {{ ipv4_ipv6_table_paginated('ipv4_leaders', ipv4_category_data[:10], page_ctx, relays.use_bits) }}
-        </div>
-        
-        <!-- Page 2: Ranks 11-20 (only show if data exists) -->
-        {% if ipv4_category_data|length > 10 %}
-        <div id="ipv4_leaders-11-20" class="pagination-section">
-            <h4>🌐 Ranks 11-20</h4>
-            {{ ipv4_ipv6_table_paginated('ipv4_leaders', ipv4_category_data[10:20], page_ctx, relays.use_bits) }}
-        </div>
-        {% endif %}
-        
-        <!-- Page 3: Ranks 21-25 (only show if data exists) -->
-        {% if ipv4_category_data|length > 20 %}
-        <div id="ipv4_leaders-21-25" class="pagination-section">
-            <h4>🌐 Ranks 21-25</h4>
-            {{ ipv4_ipv6_table_paginated('ipv4_leaders', ipv4_category_data[20:25], page_ctx, relays.use_bits) }}
-        </div>
-        {% endif %}
-        
-        <!-- Pagination Navigation -->
-        <div class="pagination-nav-bottom">
-            <a href="#ipv4_leaders-1-10">1-10</a>
-            {% if ipv4_category_data|length > 10 %}<a href="#ipv4_leaders-11-20">11-20</a>{% endif %}
-            {% if ipv4_category_data|length > 20 %}<a href="#ipv4_leaders-21-25">21-25</a>{% endif %}
-        </div>
-        
-        {% else %}
-        <div class="alert alert-warning">
-            <p>No data available for {{ ipv4_category_name }}.</p>
-        </div>
-        {% endif %}
-    </section>
+    <!-- IPv4 Address Leaders - Optimized Unified Section -->
+    {{ ipv4_ipv6_section_paginated('ipv4_leaders', relays.json.aroi_leaderboards.summary.categories.ipv4_leaders, relays.json.aroi_leaderboards.leaderboards.ipv4_leaders, '🌐', 'Operators ranked by quantity of unique IPv4 addresses per operator across their relay infrastructure. Measures IPv4 address diversity and network distribution capabilities', page_ctx, relays.use_bits) }}
 
-    <!-- IPv6 Address Leaders - Dedicated Section -->
-    {% set ipv6_category_name = relays.json.aroi_leaderboards.summary.categories.ipv6_leaders %}
-    {% set ipv6_category_data = relays.json.aroi_leaderboards.leaderboards.ipv6_leaders %}
-    
-    <section id="ipv6_leaders" class="aroi-section">
-        <h3 title="Operators ranked by quantity of unique IPv6 addresses per operator across their relay infrastructure. Measures IPv6 adoption and modern network infrastructure capabilities">🔮 {{ ipv6_category_name }}</h3>
-        {% if ipv6_category_data %}
-        
-        <!-- Page 1: Ranks 1-10 -->
-        <div id="ipv6_leaders-1-10" class="pagination-section">
-            <h4>🔮 Ranks 1-10</h4>
-            {{ ipv4_ipv6_table_paginated('ipv6_leaders', ipv6_category_data[:10], page_ctx, relays.use_bits) }}
-        </div>
-        
-        <!-- Page 2: Ranks 11-20 (only show if data exists) -->
-        {% if ipv6_category_data|length > 10 %}
-        <div id="ipv6_leaders-11-20" class="pagination-section">
-            <h4>🔮 Ranks 11-20</h4>
-            {{ ipv4_ipv6_table_paginated('ipv6_leaders', ipv6_category_data[10:20], page_ctx, relays.use_bits) }}
-        </div>
-        {% endif %}
-        
-        <!-- Page 3: Ranks 21-25 (only show if data exists) -->
-        {% if ipv6_category_data|length > 20 %}
-        <div id="ipv6_leaders-21-25" class="pagination-section">
-            <h4>🔮 Ranks 21-25</h4>
-            {{ ipv4_ipv6_table_paginated('ipv6_leaders', ipv6_category_data[20:25], page_ctx, relays.use_bits) }}
-        </div>
-        {% endif %}
-        
-        <!-- Pagination Navigation -->
-        <div class="pagination-nav-bottom">
-            <a href="#ipv6_leaders-1-10">1-10</a>
-            {% if ipv6_category_data|length > 10 %}<a href="#ipv6_leaders-11-20">11-20</a>{% endif %}
-            {% if ipv6_category_data|length > 20 %}<a href="#ipv6_leaders-21-25">21-25</a>{% endif %}
-        </div>
-        
-        {% else %}
-        <div class="alert alert-warning">
-            <p>No data available for {{ ipv6_category_name }}.</p>
-        </div>
-        {% endif %}
-    </section>
+    <!-- IPv6 Address Leaders - Optimized Unified Section -->
+    {{ ipv4_ipv6_section_paginated('ipv6_leaders', relays.json.aroi_leaderboards.summary.categories.ipv6_leaders, relays.json.aroi_leaderboards.leaderboards.ipv6_leaders, '🔮', 'Operators ranked by quantity of unique IPv6 addresses per operator across their relay infrastructure. Measures IPv6 adoption and modern network infrastructure capabilities', page_ctx, relays.use_bits) }}
 
 </section>
 
