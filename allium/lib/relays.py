@@ -1527,7 +1527,7 @@ class Relays:
                 'problem_uptime': problem_uptime
             },
             'authority_network_stats': authority_network_stats,  # Include for template access
-            'uptime_metadata': getattr(self, 'uptime_data', {}).get('relays_published', 'Unknown')
+            'uptime_metadata': (getattr(self, 'uptime_data', {}) or {}).get('relays_published', 'Unknown')
         }
 
     def _determine_unit(self, bandwidth_bytes):
