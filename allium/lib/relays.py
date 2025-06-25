@@ -1665,6 +1665,8 @@ class Relays:
         io_time = 0
         
         for v in sorted_values:
+            # Sanitize the value to prevent directory traversal attacks
+            v = v.replace("..", "").replace("/", "_")
             i = self.json["sorted"][k][v]
             members = []
 
