@@ -1947,25 +1947,31 @@ class Relays:
         Returns:
             dict: Category display information
         """
+        # DRY helper function: when name and title are identical
+        def _info(name, emoji):
+            return {'name': name, 'emoji': emoji, 'title': name}
+        
         category_info = {
-            'bandwidth': {'name': 'Bandwidth Champion', 'emoji': '🚀', 'title': 'Bandwidth Champion'},
-                    'consensus_weight': {'name': 'Network Heavyweight', 'emoji': '⚖️', 'title': 'Network Heavyweight'},
-        'exit_authority': {'name': 'Exit Heavyweight Master', 'emoji': '🚪', 'title': 'Exit Heavyweight Master'},
-        'guard_authority': {'name': 'Guard Heavyweight Master', 'emoji': '🛡️', 'title': 'Guard Heavyweight Master'},
-        'exit_operators': {'name': 'Exit Champion', 'emoji': '🚪', 'title': 'Exit Champion'},
-        'guard_operators': {'name': 'Guard Gatekeepers', 'emoji': '🛡️', 'title': 'Guard Gatekeepers'},
-            'most_diverse': {'name': 'Diversity Master', 'emoji': '🌈', 'title': 'Diversity Master'},
-            'platform_diversity': {'name': 'Platform Hero', 'emoji': '💻', 'title': 'Platform Hero'},
-            'non_eu_leaders': {'name': 'Non-EU Leader', 'emoji': '🌍', 'title': 'Non-EU Leader'},
-            'frontier_builders': {'name': 'Frontier Builder', 'emoji': '🏴‍☠️', 'title': 'Frontier Builder'},
-            'network_veterans': {'name': 'Network Veteran', 'emoji': '🏆', 'title': 'Network Veteran'},
-            'reliability_masters': {'name': 'Reliability Master', 'emoji': '⏰', 'title': 'Reliability Master'},
-            'legacy_titans': {'name': 'Legacy Titan', 'emoji': '👑', 'title': 'Legacy Titan'},
-            'ipv4_leaders': {'name': 'IPv4 Address Leaders', 'emoji': '🌐', 'title': 'IPv4 Address Leaders'},
-            'ipv6_leaders': {'name': 'IPv6 Address Leaders', 'emoji': '🔮', 'title': 'IPv6 Address Leaders'}
+            'bandwidth': _info('Bandwidth Champion', '🚀'),
+            'consensus_weight': _info('Network Heavyweight', '⚖️'),
+            'exit_authority': _info('Exit Heavyweight Master', '🚪'),
+            'guard_authority': _info('Guard Heavyweight Master', '🛡️'),
+            'exit_operators': _info('Exit Champion', '🚪'),
+            'guard_operators': _info('Guard Gatekeepers', '🛡️'),
+            'most_diverse': _info('Diversity Master', '🌈'),
+            'platform_diversity': _info('Platform Hero', '💻'),
+            'non_eu_leaders': _info('Non-EU Leader', '🌍'),
+            'frontier_builders': _info('Frontier Builder', '🏴‍☠️'),
+            'network_veterans': _info('Network Veteran', '🏆'),
+            'reliability_masters': _info('Reliability Master', '⏰'),
+            'legacy_titans': _info('Legacy Titan', '👑'),
+            'ipv4_leaders': _info('IPv4 Address Leaders', '🌐'),
+            'ipv6_leaders': _info('IPv6 Address Leaders', '🔮')
         }
         
-        return category_info.get(category, {'name': category.replace('_', ' ').title(), 'emoji': '🏅', 'title': category.replace('_', ' ').title()})
+        # Default for unknown categories
+        default_name = category.replace('_', ' ').title()
+        return category_info.get(category, _info(default_name, '🏅'))
 
     def _calculate_operator_reliability(self, contact_hash, operator_relays):
         """
