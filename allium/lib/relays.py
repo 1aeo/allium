@@ -1960,7 +1960,9 @@ class Relays:
             'frontier_builders': {'name': 'Frontier Builder', 'emoji': '🏴‍☠️', 'title': 'Frontier Builder'},
             'network_veterans': {'name': 'Network Veteran', 'emoji': '🏆', 'title': 'Network Veteran'},
             'reliability_masters': {'name': 'Reliability Master', 'emoji': '⏰', 'title': 'Reliability Master'},
-            'legacy_titans': {'name': 'Legacy Titan', 'emoji': '👑', 'title': 'Legacy Titan'}
+            'legacy_titans': {'name': 'Legacy Titan', 'emoji': '👑', 'title': 'Legacy Titan'},
+            'ipv4_leaders': {'name': 'IPv4 Address Leaders', 'emoji': '🌐', 'title': 'IPv4 Address Leaders'},
+            'ipv6_leaders': {'name': 'IPv6 Address Leaders', 'emoji': '🔮', 'title': 'IPv6 Address Leaders'}
         }
         
         return category_info.get(category, {'name': category.replace('_', ' ').title(), 'emoji': '🏅', 'title': category.replace('_', ' ').title()})

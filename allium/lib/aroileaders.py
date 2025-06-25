@@ -257,7 +257,7 @@ def _calculate_aroi_leaderboards(relays_instance):
         for relay in operator_relays:
             or_addresses = relay.get('or_addresses', [])
             relay_bandwidth = relay.get('observed_bandwidth', 0)
-            relay_consensus_weight = relay.get('consensus_weight', 0)
+            relay_consensus_weight = relay.get('consensus_weight_fraction', 0)
             relay_flags = relay.get('flags', [])
             
             has_ipv4 = False
