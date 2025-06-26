@@ -122,7 +122,7 @@
                             {% elif performance_type == "platform_diversity" %}
                                 <span title="Non-Linux relays promoting OS diversity and total bandwidth capacity">{{ entry.non_linux_count }} non-Linux relays, {{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</span>
                             {% elif performance_type == "non_eu_leaders" %}
-                                <span title="Geographic expansion beyond EU with bandwidth contribution">{{ entry.country_count }} countries, {{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</span>
+                                <span title="Non-EU relays expanding Tor network beyond European Union concentration. This is the primary ranking metric for Global Expansion Leaders.">{{ entry.non_eu_count }} non-EU relays in {{ entry.country_count }} countries</span>
                             {% elif performance_type == "frontier_builders" %}
                                 <span title="{{ entry.rare_country_tooltip }}">{{ entry.relays_in_rare_countries }} relays in {{ entry.rare_country_count }} rare countries</span>
                             {% elif performance_type == "network_veterans" %}
