@@ -10,6 +10,7 @@ import hashlib
 from collections import defaultdict
 import re
 import html
+import ipaddress
 
 # Import centralized country utilities
 from .country_utils import (
@@ -90,6 +91,45 @@ def _calculate_reliability_score(operator_relays, uptime_data, time_period):
         'breakdown': breakdown
     }
 
+
+def _safe_parse_ip_address(address_string):
+    """
+    Safely parse IP address from or_addresses string with validation.
+    Returns tuple (ip_address, ip_version) or (None, None) if invalid.
+    
+    Security: Validates all input against Python's ipaddress module to prevent
+    injection attacks through malformed address strings.
+    """
+    if not address_string or not isinstance(address_string, str):
+        return None, None
+    
+    try:
+        # Handle IPv6 with brackets like [2001:db8::1]:9001
+        if address_string.startswith('[') and ']:' in address_string:
+            ip_part = address_string.split(']:')[0][1:]  # Remove brackets and port
+            parsed_ip = ipaddress.ip_address(ip_part)
+            return str(parsed_ip), 6 if isinstance(parsed_ip, ipaddress.IPv6Address) else 4
+        
+        # Handle addresses with colons (could be IPv4:port or IPv6)
+        elif ':' in address_string:
+            # Try parsing as IPv6 first (since IPv6 has multiple colons)
+            try:
+                parsed_ip = ipaddress.ip_address(address_string)
+                return str(parsed_ip), 6 if isinstance(parsed_ip, ipaddress.IPv6Address) else 4
+            except (ValueError, ipaddress.AddressValueError):
+                # Not a bare IPv6, try as IPv4:port
+                ip_part = address_string.split(':')[0]
+                parsed_ip = ipaddress.ip_address(ip_part)
+                return str(parsed_ip), 6 if isinstance(parsed_ip, ipaddress.IPv6Address) else 4
+        
+        # Handle bare IP address without port
+        else:
+            parsed_ip = ipaddress.ip_address(address_string)
+            return str(parsed_ip), 6 if isinstance(parsed_ip, ipaddress.IPv6Address) else 4
+            
+    except (ValueError, ipaddress.AddressValueError):
+        # Invalid IP address format - silently skip
+        return None, None
 
 def _format_breakdown_details(breakdown_items, max_chars, formatter_func=None):
     """
@@ -264,22 +304,15 @@ def _calculate_aroi_leaderboards(relays_instance):
             has_ipv6 = False
             
             for address in or_addresses:
-                # Extract IP from address:port format, reusing existing logic pattern
-                if address.startswith('[') and ']:' in address:
-                    # IPv6 address in brackets like [2001:db8::1]:9001
-                    ip_part = address.split(']:')[0][1:]  # Remove brackets and port
-                    unique_ipv6_addresses.add(ip_part)
-                    has_ipv6 = True
-                elif '::' in address or (address.count(':') > 1 and '.' not in address):
-                    # IPv6 address without port brackets
-                    ip_part = address.split(':')[0] if ':' in address else address
-                    unique_ipv6_addresses.add(ip_part)
-                    has_ipv6 = True
-                elif '.' in address and address.count(':') <= 1:
-                    # IPv4 address like 192.168.1.1:9001
-                    ip_part = address.split(':')[0]  # Remove port
-                    unique_ipv4_addresses.add(ip_part)
-                    has_ipv4 = True
+                # Safely parse IP address with validation to prevent injection attacks
+                parsed_ip, ip_version = _safe_parse_ip_address(address)
+                if parsed_ip and ip_version:
+                    if ip_version == 4:
+                        unique_ipv4_addresses.add(parsed_ip)
+                        has_ipv4 = True
+                    elif ip_version == 6:
+                        unique_ipv6_addresses.add(parsed_ip)
+                        has_ipv6 = True
             
             # Count relays and aggregate metrics by IP type
             # Use Exit > Guard > Middle priority logic (consistent with relays.py)
