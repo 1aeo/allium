@@ -14,10 +14,11 @@ import time
 import urllib.request
 from shutil import rmtree
 from jinja2 import Environment, FileSystemLoader
-from .aroileaders import _calculate_aroi_leaderboards
+from .aroileaders import _calculate_aroi_leaderboards, _safe_parse_ip_address
 from .progress import log_progress, get_memory_usage
 import logging
 import statistics
+from datetime import datetime, timedelta
 
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
 
@@ -66,7 +67,7 @@ def is_private_ip_address(ip_str):
     """
     Compute-efficient helper function to determine if an IP address or CIDR range
     represents a private/local IP address that should not be counted as a meaningful
-    restriction for exit relays.
+    restriction for exit relays. Uses safe IP parsing for validation and follows DRY principles.
     
     Detects private IPv4 ranges:
     - 0.0.0.0/8 (IANA special use - "this network")
@@ -93,65 +94,19 @@ def is_private_ip_address(ip_str):
     # Remove CIDR notation if present
     ip_clean = ip_str.split('/')[0].strip()
     
-    # Handle IPv6 addresses (detect by having multiple colons or double colon)
-    if ':' in ip_clean and ('::' in ip_clean or ip_clean.count(':') >= 2):
-        # Basic IPv6 private range detection
-        ip_lower = ip_clean.lower()
-        
-        # Localhost
-        if ip_lower == '::1':
-            return True
-        
-        # Unique local addresses (fc00::/7)
-        if ip_lower.startswith('fc') or ip_lower.startswith('fd'):
-            return True
-        
-        # Link-local addresses (fe80::/10)
-        if ip_lower.startswith('fe8') or ip_lower.startswith('fe9') or \
-           ip_lower.startswith('fea') or ip_lower.startswith('feb'):
-            return True
-        
-        return False  # Other IPv6 addresses considered public
+    # Use safe IP parsing for validation and version detection
+    parsed_ip, ip_version = _safe_parse_ip_address(ip_clean)
     
-    # Handle IPv4 addresses
+    if not parsed_ip:
+        return False  # Invalid IP address, assume public
+    
+    # Import ipaddress module for proper range checking
+    import ipaddress
     try:
-        # Split IP into octets
-        octets = ip_clean.split('.')
-        if len(octets) != 4:
-            return False  # Invalid IPv4 format
+        ip_obj = ipaddress.ip_address(parsed_ip)
         
-        # Convert to integers for comparison
-        try:
-            o1, o2, o3, o4 = [int(octet) for octet in octets]
-        except ValueError:
-            return False  # Invalid octet values
-        
-        # Check private ranges
-        # 0.0.0.0/8 (IANA special use - "this network")
-        if o1 == 0:
-            return True
-        
-        # 10.0.0.0/8 (10.x.x.x)
-        if o1 == 10:
-            return True
-        
-        # 127.0.0.0/8 (localhost)
-        if o1 == 127:
-            return True
-        
-        # 169.254.0.0/16 (link-local)
-        if o1 == 169 and o2 == 254:
-            return True
-        
-        # 172.16.0.0/12 (172.16.x.x - 172.31.x.x)
-        if o1 == 172 and 16 <= o2 <= 31:
-            return True
-        
-        # 192.168.0.0/16 (192.168.x.x)
-        if o1 == 192 and o2 == 168:
-            return True
-        
-        return False  # Public IPv4 address
+        # Use Python's built-in private detection
+        return ip_obj.is_private
         
     except Exception:
         return False  # If parsing fails, assume public
@@ -280,6 +235,7 @@ ENV.filters['format_time_ago'] = format_time_ago
 def determine_ipv6_support(or_addresses):
     """
     Helper function to determine IPv6 support status based on or_addresses.
+    Uses safe IP parsing for validation and follows DRY principles.
     
     Args:
         or_addresses (list): List of address:port strings from onionoo
@@ -294,16 +250,14 @@ def determine_ipv6_support(or_addresses):
     has_ipv6 = False
     
     for address in or_addresses:
-        # Handle IPv6 addresses in brackets like [2001:db8::1]:9001
-        if address.startswith('[') and ']:' in address:
-            # This is an IPv6 address with port in brackets
-            has_ipv6 = True
-        elif '::' in address or (address.count(':') > 1 and '.' not in address):
-            # This is an IPv6 address (double colon or multiple colons without dots)
-            has_ipv6 = True
-        elif '.' in address and address.count(':') <= 1:
-            # This is an IPv4 address (has dots and at most one colon for port)
-            has_ipv4 = True
+        # Use safe IP parsing for validation and IP version detection
+        parsed_ip, ip_version = _safe_parse_ip_address(address)
+        
+        if parsed_ip:  # Valid IP address parsed
+            if ip_version == 4:
+                has_ipv4 = True
+            elif ip_version == 6:
+                has_ipv6 = True
     
     if has_ipv4 and has_ipv6:
         return 'both'
@@ -527,9 +481,11 @@ class Relays:
                 relay["last_restarted_ago"] = "unknown"
                 relay["last_restarted_date"] = "unknown"
                 
-            # Optimization 7: Pre-parse IP addresses (string operations)
+            # Optimization 7: Pre-parse IP addresses using safe parsing for validation
             if relay.get("or_addresses") and len(relay["or_addresses"]) > 0:
-                relay["ip_address"] = relay["or_addresses"][0].split(':', 1)[0]
+                # Use safe IP parsing to extract IP address properly
+                parsed_ip, _ = _safe_parse_ip_address(relay["or_addresses"][0])
+                relay["ip_address"] = parsed_ip if parsed_ip else "unknown"
             else:
                 relay["ip_address"] = "unknown"
                 
@@ -3242,12 +3198,13 @@ class Relays:
                 exit_policy = relay.get('exit_policy', [])
                 for rule in exit_policy:
                     if rule.startswith('reject ') and ':' in rule:
-                        # Extract IP part from "reject IP:PORT" rule
+                        # Extract IP part from "reject IP:PORT" rule using safe parsing
                         rule_part = rule[7:]  # Remove "reject "
                         if ':' in rule_part:
-                            ip_part = rule_part.split(':')[0]
-                            # If it's not a wildcard and not a private IP, it's a public IP restriction
-                            if ip_part != '*' and not is_private_ip_address(ip_part):
+                            # Use safe IP parsing to extract IP part
+                            parsed_ip, _ = _safe_parse_ip_address(rule_part)
+                            # If it's a valid IP and not a private IP, it's a public IP restriction
+                            if parsed_ip and not is_private_ip_address(parsed_ip):
                                 has_ip_restrictions = True
                                 break
                 
