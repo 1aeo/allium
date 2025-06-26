@@ -239,65 +239,115 @@
                     width: 22%; /* Specialization - Increased from 15% (+7% from reductions) */
                 }
 
-                /* AROI Champion Badge Styles */
+                /* AROI Champion Badge Styles - Harmonized Color Tier System */
+                
+                /* Authority/Network Control (Gold/Orange spectrum) */
                 .aroi-champion-platinum {
                     background: linear-gradient(45deg, #FFD700, #FFA500);
                     color: #000;
+                    box-shadow: 0 2px 6px rgba(255, 215, 0, 0.25);
                 }
                 
                 .aroi-champion-network {
-                    background: linear-gradient(45deg, #f7b731, #fc4a1a);
-                    color: #fff;
+                    background: linear-gradient(45deg, #FFB300, #FF8C00);
+                    color: #000;
+                    box-shadow: 0 2px 6px rgba(255, 179, 0, 0.25);
                 }
                 
-                .aroi-champion-exit {
-                    background: linear-gradient(45deg, #FF6B6B, #FF8E53);
+                .aroi-champion-exit-authority {
+                    background: linear-gradient(45deg, #FFAA00, #FF9500);
+                    color: #000;
+                    box-shadow: 0 2px 6px rgba(255, 170, 0, 0.25);
+                }
+                
+                .aroi-champion-guard-authority {
+                    background: linear-gradient(45deg, #FF6B35, #F7931E);
                     color: #fff;
+                    box-shadow: 0 2px 6px rgba(255, 107, 53, 0.25);
                 }
                 
                 .aroi-champion-guard {
-                    background: linear-gradient(45deg, #4ECDC4, #44A08D);
+                    background: linear-gradient(45deg, #E67E22, #D35400);
                     color: #fff;
+                    box-shadow: 0 2px 6px rgba(230, 126, 34, 0.25);
                 }
                 
-                .aroi-champion-diversity {
-                    background: linear-gradient(45deg, #A8E6CF, #56AB2F);
-                    color: #000;
+                .aroi-champion-exit {
+                    background: linear-gradient(45deg, #FF8C42, #FF7315);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(255, 140, 66, 0.25);
                 }
                 
+                /* Innovation & Technology (Purple/Blue spectrum) */
                 .aroi-champion-platform {
-                    background: linear-gradient(45deg, #74b9ff, #0984e3);
+                    background: linear-gradient(45deg, #a29bfe, #6c5ce7);
                     color: #fff;
+                    box-shadow: 0 2px 6px rgba(162, 155, 254, 0.25);
                 }
                 
-                .aroi-champion-bsd {
-                    background: linear-gradient(45deg, #667eea, #764ba2);
+                .aroi-champion-ipv4 {
+                    background: linear-gradient(45deg, #0984e3, #74b9ff);
                     color: #fff;
+                    box-shadow: 0 2px 6px rgba(9, 132, 227, 0.25);
+                }
+                
+                .aroi-champion-ipv6 {
+                    background: linear-gradient(45deg, #6c5ce7, #a29bfe);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(108, 92, 231, 0.25);
+                }
+                
+
+                
+                /* Diversity & Growth (Green spectrum) */
+                .aroi-champion-diversity {
+                    background: linear-gradient(45deg, #00b894, #55a3ff);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(0, 184, 148, 0.25);
                 }
                 
                 .aroi-champion-global {
-                    background: linear-gradient(45deg, #00b894, #00a085);
-                    color: #fff;
+                    background: linear-gradient(45deg, #00cec9, #55efc4);
+                    color: #000;
+                    box-shadow: 0 2px 6px rgba(0, 206, 201, 0.25);
                 }
                 
                 .aroi-champion-frontier {
-                    background: linear-gradient(45deg, #ffecd2, #fcb69f);
-                    color: #000;
-                }
-                
-                .aroi-champion-reliability {
-                    background: linear-gradient(45deg, #a8edea, #fed6e3);
-                    color: #000;
-                }
-                
-                .aroi-champion-efficiency {
-                    background: linear-gradient(45deg, #f093fb, #f5576c);
+                    background: linear-gradient(45deg, #27ae60, #2ecc71);
                     color: #fff;
+                    box-shadow: 0 2px 6px rgba(39, 174, 96, 0.25);
+                }
+                
+                /* Reliability & Legacy (Earth tones) */
+                .aroi-champion-reliability {
+                    background: linear-gradient(45deg, #8b7355, #a0845c);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(139, 115, 85, 0.25);
                 }
                 
                 .aroi-champion-veteran {
                     background: linear-gradient(45deg, #cd7f32, #b8860b);
                     color: #fff;
+                    box-shadow: 0 2px 6px rgba(205, 127, 50, 0.25);
+                }
+                
+                /* Legacy compatibility class */
+                .aroi-champion-legacy {
+                    background: linear-gradient(45deg, #8b4513, #a0522d);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(139, 69, 19, 0.25);
+                }
+                
+
+                
+                /* Enhanced hover effects for all badges */
+                .aroi-champion-badge .panel-body {
+                    transition: transform 0.2s ease, box-shadow 0.2s ease;
+                }
+                
+                .aroi-champion-badge .panel-body:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
                 }
 
                 /* AROI Ranking Badge Styles */
