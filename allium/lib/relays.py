@@ -397,12 +397,41 @@ class Relays:
 
     def _add_hashed_contact(self):
         """
-        Adds a hashed contact key/value for every relay
+        Adds a hashed contact key/value for every relay.
+        Groups operators by AROI domain before hashing so that operators with the same
+        AROI domain get a unified contact hash and single contact detail page.
         """
+        from collections import defaultdict
+        
+        # Group relays by AROI domain (or individual contact for non-AROI)
+        domain_to_relays = defaultdict(list)
+        
         for idx, relay in enumerate(self.json["relays"]):
             contact = relay.get("contact", "")
-            # Hash the original contact info
-            self.json["relays"][idx]["contact_md5"] = hashlib.md5(contact.encode("utf-8")).hexdigest()
+            aroi_domain = self._simple_aroi_parsing(contact)
+            
+            # Use AROI domain as key if available, otherwise use contact hash as key
+            if aroi_domain and aroi_domain != "none" and contact.strip():
+                group_key = f"aroi_domain:{aroi_domain}"
+            else:
+                # Use contact string itself as key for individual operators
+                group_key = f"individual_contact:{contact}"
+            
+            domain_to_relays[group_key].append((idx, relay, contact))
+        
+        # Create hashes for each group
+        for group_key, relay_group in domain_to_relays.items():
+            if group_key.startswith("aroi_domain:"):
+                # AROI domain group - use unified hash based on domain
+                unified_hash = hashlib.md5(group_key.encode("utf-8")).hexdigest()
+            else:
+                # Individual contact - use original contact string for hash
+                _, contact = group_key.split(":", 1)
+                unified_hash = hashlib.md5(contact.encode("utf-8")).hexdigest()
+            
+            # Apply hash to all relays in group
+            for idx, relay, contact in relay_group:
+                self.json["relays"][idx]["contact_md5"] = unified_hash
 
     def _preprocess_template_data(self):
         """
@@ -1099,8 +1128,8 @@ class Relays:
                 relay, idx, "first_seen", relay["first_seen"].split(" ")[0], cw
             )
 
-            c_str = relay.get("contact", "").encode("utf-8")
-            c_hash = hashlib.md5(c_str).hexdigest()
+            # Use the pre-computed contact_md5 which includes unified AROI domain grouping
+            c_hash = relay.get("contact_md5", "")
             self._sort(relay, idx, "contact", c_hash, cw)
 
         # Calculate consensus weight fractions using the totals we accumulated above
