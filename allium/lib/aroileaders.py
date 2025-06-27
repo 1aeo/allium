@@ -214,6 +214,7 @@ def _calculate_aroi_leaderboards(relays_instance):
     
     # Build AROI operator data by processing contacts
     aroi_operators = {}
+    operator_key_collision_tracker = {}  # Track operator key usage for collision detection
     
     for contact_hash, contact_data in contacts.items():
         # Get AROI domain and contact info from first relay in this contact group
@@ -235,20 +236,53 @@ def _calculate_aroi_leaderboards(relays_instance):
         if len(contact_info.strip()) < 3:
             continue
             
-        # Use AROI domain as key if available, otherwise use first 24 chars of contact_info
+        # FIXED: Generate unique operator keys to prevent contact hash collisions
+        # Each contact hash should have its own entry in the leaderboard
+        base_operator_key = None
         if aroi_domain and aroi_domain != 'none':
-            operator_key = aroi_domain
+            base_operator_key = aroi_domain
         else:
             # Use first 30 characters of contact info for better readability (extended from 24)
             if contact_info and len(contact_info.strip()) > 0:
                 clean_contact = contact_info.strip()
                 if len(clean_contact) > 30:
-                    operator_key = clean_contact[:30] + '...'
+                    base_operator_key = clean_contact[:30] + '...'
                 else:
-                    operator_key = clean_contact
+                    base_operator_key = clean_contact
             else:
                 # Fallback to contact hash only if no contact info available
-                operator_key = f"contact_{contact_hash[:8]}"
+                base_operator_key = f"contact_{contact_hash[:8]}"
+        
+        # COLLISION DETECTION AND RESOLUTION:
+        # Check if this base operator key is already in use by another contact hash
+        if base_operator_key in operator_key_collision_tracker:
+            existing_contact_hash = operator_key_collision_tracker[base_operator_key]
+            if existing_contact_hash != contact_hash:
+                # Collision detected! Same operator key for different contact hashes
+                print(f"⚠️  AROI Key Collision: '{base_operator_key}' used by both contact {existing_contact_hash[:8]} and {contact_hash[:8]}")
+                
+                # Resolve collision by making keys unique with contact hash suffix
+                operator_key = f"{base_operator_key}#{contact_hash[:8]}"
+                
+                # Also update the existing colliding entry to have unique key
+                existing_entry_key = f"{base_operator_key}#{existing_contact_hash[:8]}"
+                if base_operator_key in aroi_operators:
+                    # Move existing entry to unique key
+                    aroi_operators[existing_entry_key] = aroi_operators[base_operator_key]
+                    aroi_operators[existing_entry_key]['operator_key'] = existing_entry_key
+                    del aroi_operators[base_operator_key]
+                
+                # Update collision tracker
+                operator_key_collision_tracker[existing_entry_key] = existing_contact_hash
+                operator_key_collision_tracker[operator_key] = contact_hash
+                del operator_key_collision_tracker[base_operator_key]
+            else:
+                # Same contact hash, same key - this shouldn't happen but handle gracefully
+                operator_key = base_operator_key
+        else:
+            # No collision, use base key
+            operator_key = base_operator_key
+            operator_key_collision_tracker[operator_key] = contact_hash
         
         # === USE EXISTING CALCULATIONS (NO DUPLICATION) ===
         # All basic metrics are already computed in contact_data
@@ -475,6 +509,11 @@ def _calculate_aroi_leaderboards(relays_instance):
         
         # Store operator data (mix of existing + new calculations)
         aroi_operators[operator_key] = {
+            # === OPERATOR KEY TRACKING (NEW - for transparency and debugging) ===
+            'operator_key': operator_key,  # Final resolved operator key used in leaderboards
+            'base_operator_key': base_operator_key,  # Original key before collision resolution
+            'had_key_collision': '#' in operator_key,  # True if this entry had a key collision
+            
             # === EXISTING CALCULATIONS (REUSED) ===
             'aroi_domain': aroi_domain,
             'contact_hash': contact_hash,
@@ -1016,6 +1055,21 @@ def _calculate_aroi_leaderboards(relays_instance):
             'ipv6_leaders': 'IPv6 Address Leaders'
         }
     }
+    
+    # Calculate collision statistics for monitoring and debugging
+    collision_count = sum(1 for op in aroi_operators.values() if op['had_key_collision'])
+    
+    # Add collision statistics to summary
+    summary_stats['collision_statistics'] = {
+        'total_collisions_detected': collision_count,
+        'collision_percentage': f"{(collision_count / total_operators * 100):.1f}%" if total_operators > 0 else "0.0%"
+    }
+    
+    # Log collision summary for monitoring
+    if collision_count > 0:
+        print(f"✅ AROI Key Collision Resolution: {collision_count} collisions detected and resolved out of {total_operators} operators ({collision_count / total_operators * 100:.1f}%)")
+    else:
+        print(f"✅ AROI Key Processing: No collisions detected among {total_operators} operators")
     
     return {
         'leaderboards': formatted_leaderboards,
