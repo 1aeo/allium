@@ -95,5 +95,95 @@ These MVs stream-insert as soon as rows land in `relay_snapshot`, ensuring O(1) 
 * **`consensus_params`** table (global key-value per hour) still under evaluation; not included yet.
 
 
+## 7. Comparison with the proposed `relay_measurements` wide table
+
+| Aspect | Our `relay_snapshot` (v2) | Proposed `relay_measurements` (user) |
+|--------|---------------------------|--------------------------------------|
+| Storage model | Append-only, one row per relay per consensus hour | Append-only, one row per relay per consensus (same) |
+| Column count | ~35 core columns (+ Nested & Arrays) | 150+ columns incl. many derived metrics |
+| Custom types | Built-in FixedString/LowCardinality | Adds named aliases (`RelayFingerprint`, etc.) – syntactic sugar |
+| Flags | Array + Nested per-auth flags | UInt8 columns for each consensus flag + `authority_flags` bitmap |
+| Bandwidth | Consensus BW + observed + measured | Adds rate/burst, advertised, shared, unmeasured flags |
+| Exit policy | Raw compressed string | Adds parsed summaries + port booleans |
+| Operator/contact parsing | Single string column | Multiple parsed & hashed contact fields |
+| Aggregates | Separate materialised views | Repeated network-level totals inside every row (duplication) |
+| External data | Only consensus & descriptor | Includes Onionoo-style long-term uptime stats (not in raw data) |
+
+### Strengths
+* **`relay_snapshot`** – lean, time-series friendly, easy to extend, avoids duplication, relies solely on raw descriptor data.
+* **`relay_measurements`** – richer semantics (rate/burst, exit-policy flags, parsed contacts) and handy custom types for clarity.
+
+### Weaknesses
+* `relay_snapshot` misses some descriptor fields that are available today (rate/burst, IPv6 OR addresses).
+* `relay_measurements` repeats network-level aggregates each row (storage bloat) and includes metrics (e.g. 1-year uptime) that require historical aggregation or Onionoo – not present in today's raw feeds.
+
+## 8. Hybrid Schema v3 – recommended
+We keep the **immutable hourly snapshot** philosophy, add the *real* extra fields available today, and push heavy derived metrics into **separate materialised views** rather than bloating the base table.
+
+```sql
+-- Custom aliases for readability
+CREATE TYPE IF NOT EXISTS RelayFingerprint AS FixedString(20);
+CREATE TYPE IF NOT EXISTS Ed25519Key      AS FixedString(32);
+CREATE TYPE IF NOT EXISTS DescriptorDigest AS FixedString(20);
+
+CREATE TABLE relay_snapshot_v3 (
+    ts              DateTime,               -- consensus valid-after
+    fingerprint     RelayFingerprint,
+    ed25519_key     Ed25519Key,
+    nickname        LowCardinality(String),
+    address_v4      IPv4,
+    address_v6      Nullable(IPv6),
+    or_port         UInt16,
+    dir_port        UInt16,
+    or_addresses    Array(String),          -- extra addresses from descriptor
+
+    -- Descriptor linkage
+    desc_digest     DescriptorDigest,
+    desc_published  DateTime,
+
+    -- Flags
+    flags           Array(String),          -- agreed flags
+    flags_by_auth   Nested(auth String, flags Array(String)),
+
+    -- Bandwidth
+    bw_consensus    UInt32,                 -- w Bandwidth
+    bw_rate         UInt64,                 -- descriptor rate
+    bw_burst        UInt64,                 -- descriptor burst
+    bw_observed     UInt64,                 -- descriptor observed
+    bw_measured     Nullable(UInt32),       -- bwauth (historical backfill)
+
+    cw              UInt32,                 -- consensus weight
+
+    -- Uptime / lifecycle
+    uptime_seconds  Nullable(UInt32),
+    first_seen      DateTime,
+    last_restarted  Nullable(DateTime),
+    last_ip_change  Nullable(DateTime),
+
+    -- Contact & version (raw)
+    contact_raw     String CODEC(ZSTD),
+    version         LowCardinality(String),
+
+    -- Geo / AS
+    country         FixedString(2),
+    asn             UInt32,
+
+    -- Families
+    family          Array(RelayFingerprint),
+
+    INDEX idx_ts_fpr (fingerprint, ts) TYPE minmax GRANULARITY 1
+) ENGINE = MergeTree
+PARTITION BY toYYYYMM(ts)
+ORDER BY (fingerprint, ts);
+```
+
+### Derived & Aggregated Layers
+1. **Contact & Operator MV** – parses `contact_raw` into `email_domain`, `pgp_fpr`, etc.  
+2. **Exit-Policy MV** – stores boolean port flags & policy category.  
+3. **Network-wide stats MV** – hourly totals, guard/exit counts, weight sums.  
+4. **Long-term uptime MV** – computes 1-, 3-, 12-month uptime % from `relay_snapshot_v3`; no Onionoo needed.
+
+This keeps the base table lean (~65 columns) while still exposing the richer analytics of the wide schema through MVs that can be backfilled or recalculated cheaply.
+
 ---
-*Schema validated against consensus (`…/consensuses/2025-06-25-17-00-00-consensus`) and server/extra-info descriptors (`…/server-descriptors/2025-06-25-18-04-04-server-descriptors`) fetched 2025-06-25 18:15 UTC.*
+*Validated against real files dated 2025-06-25 18:15 UTC; only fields present in the consensus and descriptor corpus have been included.*
