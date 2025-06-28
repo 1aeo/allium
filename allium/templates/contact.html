@@ -38,8 +38,20 @@
                     <li><strong>Contact:</strong> {{ contact }}</li>
                     {% endif %}
                     <li><strong>Hash:</strong> {{ contact_hash }}</li>
-                    {% if relays.json['relay_subset'][0]['country'] %}
-                    <li><strong>Country:</strong> 
+                    {% if primary_country_data %}
+                    <li><strong>Countries:</strong> 
+                        {% for country_info in primary_country_data.all_countries %}
+                            <a href="{{ page_ctx.path_prefix }}country/{{ country_info.country }}/" style="color: #337ab7; text-decoration: none;">
+                                <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ country_info.country }}.png" 
+                                     title="{{ primary_country_data.tooltip }}" 
+                                     alt="{{ country_info.country_name }}" 
+                                     style="width: 16px; height: 12px; margin-right: 5px; vertical-align: middle;">
+                                {{ country_info.country_name }} ({{ country_info.relay_count }})
+                            </a>{% if not loop.last %}, {% endif %}
+                        {% endfor %}
+                    </li>
+                    {% elif relays.json['relay_subset'][0]['country'] %}
+                    <li><strong>Countries:</strong> 
                         <a href="{{ page_ctx.path_prefix }}country/{{ relays.json['relay_subset'][0]['country'] }}/" style="color: #337ab7; text-decoration: none;">
                             <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ relays.json['relay_subset'][0]['country'] }}.png" 
                                  title="{{ relays.json['relay_subset'][0]['country_name'] if relays.json['relay_subset'][0]['country_name'] else relays.json['relay_subset'][0]['country']|upper }}" 
