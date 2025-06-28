@@ -187,3 +187,54 @@ This keeps the base table lean (~65 columns) while still exposing the richer ana
 
 ---
 *Validated against real files dated 2025-06-25 18:15 UTC; only fields present in the consensus and descriptor corpus have been included.*
+
+## 9. Design Q&A (based on real relay *lilpeep* 2025-06-28 20:00 UTC)
+
+| Question | Recommendation | Rationale |
+|-----------|----------------|-----------|
+| **One big table vs multiple smaller tables?** | **Two fact tables** – `relay_snapshot_v3` (consensus-agreed state) **and** `authority_vote_snapshot` (one row per authority, per relay, per hour).  Dimension tables (countries, AS, versions) optional. | Keeps the common case ("what does the network think?") fast, while still storing per-authority nuance without bloating the primary table. Both are append-only MergeTrees and share the same partition key `(toYYYYMM(ts))`.  Joins are cheap on keyed columns. |
+| **Immutable or mutable rows?** | **Immutable** (append-only) | Guarantees auditability and enables time-series functions (`runningDifference`, `windowFunnel`, etc.) with no Merge-on-Write penalty. |
+| **How to store 8 authority votes + consensus?** | Use a **Nested structure** in the per-authority table: <br>`authority_vote_snapshot` with columns `(ts, fingerprint, auth, flags Array(String), bw UInt32, measured_bw UInt32, vote_params Map(String,String))`.  <br> Alternate between array aggregation (`groupArray`) or JOIN to enrich the base snapshot. | A single row with 9 × columns would explode in width and waste space for nulls; Nested rows are naturally sparse and vectorised in ClickHouse. |
+| **Bandwidth records** | Consensus BW lives in `relay_snapshot_v3`.  Per-authority `bw` and `measured_bw` go to `authority_vote_snapshot`.  The separate SBWS `bandwidths` files (once per bwauth) feed into the same table. |
+| **Extra-info histories** | `bw_read`, `bw_write`, etc. remain in base table (latest slot only).  Full 5-bucket histories are stored in their own `relay_history_gorilla` table using `AggregateFunction(quantileTDigest(0.5), UInt64)` if long-term high-resolution is required. |
+| **Contact parsing & enrichment** | Done in a *materialised view* (`mv_contact_enriched`) so raw text is retained. |
+| **IPv6 & multi-OR addresses** | Stored as `address_v6` and `or_addresses Array(String)` already in v3. |
+| **Compression codecs** | `ZSTD` for text blobs, `Delta, Gorilla` for numeric series. |
+| **Additional decisions met** | 1. Use `SparseMergeTree` for authority table to skip absent columns. <br>2. Enable `vertical merge` optimisation (CH ≥23.4) for wide rows. <br>3. Add projection `SELECT ts, fingerprint, arrayJoin(flags) AS flag` to accelerate flag counts. |
+
+### Example – how *lilpeep* would appear
+
+```sql
+-- Consensus snapshot row (relay_snapshot_v3)
+┌ ts                  │ fingerprint                  │ nickname │ address_v4 │ or_port │ flags               │ bw_consensus │ cw │ …
+│ 2025-06-28 20:00:00 │ 3D0D3172FA0C11AC7206883832F │ lilpeep  │ 64.65.62.38 │ 443     │ ['Fast','HSDir', …] │ 2400         │ 2400 │ …
+└─────────────────────┴──────────────────────────────┴──────────┴────────────┴─────────┴─────────────────────┴──────────────┴──────┘
+
+-- Individual authority votes (authority_vote_snapshot)
+┌ ts                  │ fingerprint │ auth      │ flags                             │ bw │ measured_bw │
+│ 2025-06-28 20:00:00 │ 3D0D…       │ moria     │ ['Fast','Running','Stable',…]     │ 5555│ 5300        │
+│ 2025-06-28 20:00:00 │ 3D0D…       │ gabelmoo  │ ['Fast','HSDir','Running',…]      │ 5555│ 3100        │
+│ … 6 more rows …                                                                                           │
+└─────────────────────┴─────────────┴───────────┴────────────────────────────────────┴─────┴──────────────┘
+```
+
+## 10. `authority_vote_snapshot` Definition
+
+```sql
+CREATE TABLE authority_vote_snapshot (
+    ts          DateTime,              -- same consensus valid-after
+    fingerprint RelayFingerprint,
+    auth        LowCardinality(String),-- nickname of voting authority
+    flags       Array(String),         -- flags this authority assigned
+    bw          UInt32,                -- Bandwidth=<N>
+    measured_bw Nullable(UInt32),      -- Measured=<N> if present
+    vote_params Map(String,String)     -- pr params, wfu, tk, mtbf, etc.
+) ENGINE = MergeTree
+PARTITION BY toYYYYMM(ts)
+ORDER BY (fingerprint, auth, ts);
+```
+
+Materialised views aggregate these rows back into the base snapshot when you need "all 8 flags" as arrays.
+
+---
+*All field choices verified against the real lilpeep consensus/vote/descriptor/extra-info lines dated 2025-06-28 20:00 UTC.*
