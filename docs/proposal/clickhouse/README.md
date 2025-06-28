@@ -4,7 +4,7 @@ This branch contains a comprehensive proposal for integrating ClickHouse databas
 
 ## Branch Contents
 
-### 1. [PROPOSAL_CLICKHOUSE_ANALYTICS.md](PROPOSAL_CLICKHOUSE_ANALYTICS.md)
+### 1. [clickhouse_opus_overview.md](docs/proposal/clickhouse/clickhouse_opus_overview.md)
 The main proposal document outlining:
 - Executive summary of the ClickHouse integration
 - Data architecture for 18+ years of Tor network data (2007-2025)
@@ -13,7 +13,7 @@ The main proposal document outlining:
 - Implementation strategy with 4-phase rollout plan
 - Performance projections and technical benefits
 
-### 2. [TECHNICAL_SPEC_INGESTION.md](TECHNICAL_SPEC_INGESTION.md)
+### 2. [TECHNICAL_SPEC_INGESTION.md](docs/proposal/clickhouse/TECHNICAL_SPEC_INGESTION.md)
 Detailed technical specification covering:
 - Data ingestion pipeline architecture
 - Parsing logic for consensus files, server descriptors, extra-info, and bandwidth files
