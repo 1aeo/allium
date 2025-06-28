@@ -1015,6 +1015,10 @@ class Relays:
                 "unique_as_set": set(),  # Track unique AS numbers for families
                 "measured_count": 0,  # Track measured relays for families and contacts
             }
+            
+            # Initialize country counting for contacts
+            if k == "contact":
+                self.json["sorted"][k][v]["country_counts"] = {}
 
         bw = relay["observed_bandwidth"]
         # Use the consensus weight passed from _categorize (no repeated dict lookup)
@@ -1077,6 +1081,11 @@ class Relays:
             self.json["sorted"][k][v]["contact"] = relay.get("contact", "")
             self.json["sorted"][k][v]["contact_md5"] = relay.get("contact_md5", "")
             self.json["sorted"][k][v]["aroi_domain"] = relay.get("aroi_domain", "")
+            
+            # Track country counts for contacts (primary country calculation)
+            if k == "contact" and (country := relay.get("country")):
+                self.json["sorted"][k][v]["country_counts"][country] = \
+                    self.json["sorted"][k][v]["country_counts"].get(country, 0) + 1
 
             # Track unique AS numbers for this family/contact/country/platform/network
             relay_as = relay.get("as")
@@ -1142,6 +1151,9 @@ class Relays:
         
         # Convert unique AS sets to counts for families, contacts, countries, platforms, and networks
         self._finalize_unique_as_counts()
+        
+        # Calculate primary countries for contacts after all relay processing is complete
+        self._calculate_primary_countries()
 
     def _calculate_consensus_weight_fractions(self, total_guard_cw, total_middle_cw, total_exit_cw):
         """
@@ -1357,6 +1369,48 @@ class Relays:
                             del data["unique_family_set"]
                         else:
                             data["unique_family_count"] = 0
+
+    def _calculate_primary_countries(self):
+        """
+        Calculate primary country data and complete country list for each contact based on relay counts.
+        Called after all relay processing is complete in _categorize().
+        """
+        if "contact" not in self.json["sorted"]:
+            return
+            
+        for contact_hash, contact_data in self.json["sorted"]["contact"].items():
+            country_counts = contact_data.get("country_counts", {})
+            
+            if country_counts:
+                # Sort countries by relay count (highest to lowest) and build final list in one pass
+                sorted_countries = sorted(country_counts.items(), key=lambda x: x[1], reverse=True)
+                primary_country_code, primary_country_relay_count = sorted_countries[0]
+                total_relay_count = len(contact_data["relays"])
+                
+                # Build country list with names in single pass - reuse existing relay data
+                country_names = {}
+                for relay_idx in contact_data["relays"]:
+                    country = self.json["relays"][relay_idx].get("country")
+                    if country and country not in country_names:
+                        country_names[country] = self.json["relays"][relay_idx].get("country_name") or country.upper()
+                
+                # Build final data structure directly
+                primary_country_name = country_names.get(primary_country_code, primary_country_code.upper())
+                contact_data["primary_country_data"] = {
+                    'country': primary_country_code,
+                    'country_name': primary_country_name,
+                    'relay_count': primary_country_relay_count,
+                    'total_relays': total_relay_count,
+                    'tooltip': f"All {total_relay_count} relays in {primary_country_name}" if len(sorted_countries) == 1 
+                              else f"Primary country: {primary_country_relay_count} of {total_relay_count} relays in {primary_country_name}",
+                    'all_countries': [{'country': code, 'country_name': country_names.get(code, code.upper()), 'relay_count': count}
+                                    for code, count in sorted_countries]
+                }
+            else:
+                contact_data["primary_country_data"] = None
+                
+            # Clean up temporary country_counts to save memory
+            del contact_data["country_counts"]
 
     def _generate_aroi_leaderboards(self):
         """
@@ -1735,6 +1789,7 @@ class Relays:
             contact_rankings = []
             operator_reliability = None
             contact_display_data = None
+            primary_country_data = None
             if k == "contact":
                 contact_rankings = self._generate_contact_rankings(v)
                 # Calculate operator reliability statistics
@@ -1745,6 +1800,8 @@ class Relays:
                 )
                 # Store contact_display_data in the contact structure for relay pages to access
                 i['contact_display_data'] = contact_display_data
+                # Get primary country data for this contact
+                primary_country_data = i.get("primary_country_data")
             
             # Time the template rendering
             render_start = time.time()
@@ -1771,6 +1828,7 @@ class Relays:
                 contact_rankings=contact_rankings,  # AROI leaderboard rankings for this contact
                 operator_reliability=operator_reliability,  # Operator reliability statistics for contact pages
                 contact_display_data=contact_display_data,  # Pre-computed contact-specific display data
+                primary_country_data=primary_country_data,  # Primary country data for contact pages
                 # Template optimizations - pre-computed values to avoid expensive Jinja2 operations for all page types
                 consensus_weight_percentage=f"{i['consensus_weight_fraction'] * 100:.2f}%",
                 guard_consensus_weight_percentage=f"{i['guard_consensus_weight_fraction'] * 100:.2f}%",
