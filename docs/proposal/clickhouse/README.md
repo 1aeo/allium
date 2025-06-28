@@ -13,7 +13,7 @@ The main proposal document outlining:
 - Implementation strategy with 4-phase rollout plan
 - Performance projections and technical benefits
 
-### 2. [improved_time_series_schema.md](improved_time_series_schema.md) ⭐ **NEW**
+### 2. [improved_time_series_schema.md](improved_time_series_schema.md)
 Enhanced time-series schema based on real Tor descriptor data analysis:
 - **Core Tables**: 6 specialized time-series tables capturing relay status, authority measurements, bandwidth data, descriptors, extra info, and GeoIP
 - **Materialized Views**: 5 pre-aggregated views for relay lifecycle, network health, operator analytics, AS metrics, and country statistics
@@ -21,7 +21,23 @@ Enhanced time-series schema based on real Tor descriptor data analysis:
 - **Query Examples**: Production-ready queries for common analytics use cases
 - **Performance Optimizations**: Compression, indexing, and partitioning strategies
 
-### 3. [TECHNICAL_SPEC_INGESTION.md](docs/proposal/clickhouse/TECHNICAL_SPEC_INGESTION.md)
+### 3. [optimal_timeseries_schema_design.md](optimal_timeseries_schema_design.md) ⭐ **NEWEST**
+The definitive schema design based on real relay data (lilpeep example) addressing key design questions:
+- **Design Decisions**: Comprehensive rationale for schema choices
+- **Hybrid Approach**: Main measurements table + supporting tables
+- **Authority Data**: Innovative bitmap encoding for per-authority flags and measurements
+- **Storage Optimization**: Binary fingerprints, materialized columns, strategic denormalization
+- **Query Examples**: Complex queries showing authority disagreements, network health analysis
+- **Performance**: 90% space reduction for flags, 50% for fingerprints, ~25GB/year for 9000 relays
+
+Key innovations:
+- Per-authority flag columns using bitmaps (flags_moria1, flags_gabelmoo, etc.)
+- Separate bandwidth measurements per authority
+- Nested structure for variable authority statistics
+- Binary encoding for fingerprints and keys
+- Materialized columns for common flag queries
+
+### 4. [TECHNICAL_SPEC_INGESTION.md](docs/proposal/clickhouse/TECHNICAL_SPEC_INGESTION.md)
 Detailed technical specification covering:
 - Data ingestion pipeline architecture
 - Parsing logic for consensus files, server descriptors, extra-info, and bandwidth files
@@ -31,7 +47,7 @@ Detailed technical specification covering:
 - Error handling and recovery mechanisms
 - Storage optimization with partitioning and compression
 
-## Key Schema Improvements
+## Key Schema Design Decisions
 
 ### Time-Series Focus
 The improved schema treats Tor network data as time-series data with:
@@ -40,22 +56,31 @@ The improved schema treats Tor network data as time-series data with:
 - **Lifecycle analysis** including first seen, last seen, restarts, and IP changes
 - **Historical aggregations** by operator, AS, country, and version
 
+### Optimal Design Principles
+Based on extensive analysis:
+1. **Hybrid table structure** - Main measurements + supporting tables
+2. **Immutable design** - No updates, only inserts
+3. **Smart denormalization** - Balance between query speed and storage
+4. **Binary encoding** - 50% space savings on fingerprints
+5. **Bitmap flags** - 90% space savings on flag arrays
+6. **Per-authority columns** - Fast queries on authority opinions
+
 ### Core Tables Structure
 
-1. **relay_status_series** - Main time-series table with hourly relay status
-2. **authority_measurements** - Per-authority views and measurements
-3. **bandwidth_measurements** - Detailed bandwidth authority scanner results
-4. **relay_descriptors** - Extended relay information (contact, family, platform)
-5. **relay_extra_info** - Statistical data (connection stats, exit traffic by port)
-6. **geoip_data** - IP geolocation enrichment table
+1. **relay_measurements** - Main time-series table with hourly snapshots including all authority data
+2. **relay_descriptors** - Detailed relay info (updates less frequently)
+3. **bandwidth_measurements** - Scanner measurement details
+4. **relay_extra_info** - Statistical data from extra-info descriptors
+5. **network_stats_hourly** - Pre-aggregated network statistics
+6. **relay_lifecycle** - Pre-computed relay history tracking
 
-### Materialized Views for Fast Analytics
+### Capturing Authority Opinions
 
-1. **relay_lifecycle** - Tracks relay history, restarts, IP changes
-2. **network_health_hourly** - Network-wide statistics and trends
-3. **operator_metrics_daily** - Operator performance aggregations
-4. **as_metrics_daily** - AS-level concentration and diversity
-5. **country_metrics_daily** - Geographic distribution analytics
+The schema captures both individual directory authority opinions and consensus:
+- 8 authority flag columns (flags_moria1, flags_gabelmoo, etc.) as bitmaps
+- 8 authority bandwidth measurements (bw_measured_moria1, etc.)
+- Consensus flags and bandwidth as separate fields
+- Authority statistics in nested structure for flexibility
 
 ## Key Highlights
 
@@ -88,29 +113,34 @@ The improved schema treats Tor network data as time-series data with:
 - **Extra Info**: ~300GB compressed
 - **Bandwidth Files**: ~50GB compressed
 - **Total in ClickHouse**: ~50-100GB (10-30x compression)
+- **Optimal schema**: ~25GB/year for 9000 relays
 
 ### Performance Targets
 - Full network history scan: <1 second
 - Complex aggregations: <100ms
 - Real-time dashboard updates: <50ms
 - Ingestion rate: 100k+ consensus records/second
+- Authority disagreement analysis: <200ms
 
 ## Benefits for Tor Network
 
 1. **For Relay Operators**:
    - Historical performance tracking with complete relay lifecycle
+   - Authority voting patterns and disagreement analysis
    - Predictive analytics for planning and optimization
    - Achievement recognition system with historical leaderboards
    - Comparative analysis with network averages over time
 
 2. **For Tor Project**:
    - Network health monitoring with anomaly detection
+   - Authority consensus analysis and voting patterns
    - Trend analysis for strategic planning
    - Early warning system for network issues
    - Data-driven decision making with historical context
 
 3. **For Researchers**:
    - 18+ years of network evolution data
+   - Directory authority behavior analysis
    - Geographic and political correlation analysis
    - Network resilience studies
    - Decentralization progress tracking
@@ -135,32 +165,48 @@ The proposal follows a phased approach:
 ### Relay Performance History
 ```sql
 SELECT 
-    consensus_time,
+    measurement_hour,
     nickname,
-    consensus_flags,
     consensus_weight,
-    concat(toString(ip), ':', toString(or_port)) as address
-FROM relay_status_series
-WHERE fingerprint = 'YOUR_RELAY_FINGERPRINT'
-ORDER BY consensus_time DESC;
+    decode_flags(consensus_flags) as consensus_flags,
+    concat(toString(ipv4), ':', toString(or_port)) as address
+FROM relay_measurements
+WHERE fingerprint = hex_to_fingerprint('YOUR_RELAY_FINGERPRINT_HEX')
+ORDER BY measurement_hour DESC;
+```
+
+### Authority Disagreement Analysis
+```sql
+SELECT 
+    measurement_hour,
+    countDistinct([flags_moria1, flags_gabelmoo, flags_dannenberg, 
+                   flags_maatuska, flags_faravahar, flags_longclaw, 
+                   flags_bastet]) as flag_disagreement_count,
+    arrayFilter(x -> x > 0, [bw_measured_moria1, bw_measured_gabelmoo, 
+                             bw_measured_dannenberg]) as bandwidth_measurements
+FROM relay_measurements
+WHERE fingerprint = hex_to_fingerprint('3D0D3172FA0C11AC7206883832F65BB8695CB1DF')
+ORDER BY measurement_hour DESC
+LIMIT 24;
 ```
 
 ### Top Operators by Contribution
 ```sql
 SELECT
-    contact,
-    sum(relay_count) as total_relays,
-    sum(total_bandwidth) as bandwidth_contributed
-FROM operator_metrics_daily
-WHERE date >= today() - INTERVAL 30 DAY
-GROUP BY contact
-ORDER BY bandwidth_contributed DESC
+    d.contact,
+    count(DISTINCT m.fingerprint) as relay_count,
+    sum(m.consensus_weight) as total_consensus_weight
+FROM relay_measurements m
+INNER JOIN relay_descriptors d ON m.descriptor_digest = d.descriptor_digest
+WHERE m.measurement_hour >= now() - INTERVAL 30 DAY
+GROUP BY d.contact
+ORDER BY total_consensus_weight DESC
 LIMIT 100;
 ```
 
 ## Next Steps
 
-1. Review and approve the improved time-series schema
+1. Review and approve the optimal time-series schema design
 2. Set up development ClickHouse instance
 3. Begin historical data collection from collector.torproject.org
 4. Implement data ingestion pipeline with new schema
@@ -169,4 +215,4 @@ LIMIT 100;
 
 ---
 
-**Note**: The improved schema is based on analysis of real Tor consensus and descriptor formats from collector.torproject.org (June 2025 data), ensuring all features are technically feasible with actually available data.
+**Note**: The optimal schema is based on analysis of real Tor consensus and descriptor formats from collector.torproject.org (June 2025 data), ensuring all features are technically feasible with actually available data. The lilpeep relay data was used as a concrete example to validate all schema design decisions.
