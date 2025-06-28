@@ -49,41 +49,61 @@ This proposal outlines a comprehensive strategy to integrate ClickHouse database
 - **Column-optimized**: Custom data types and compression for storage efficiency
 - **Materialized views**: Pre-computed aggregations for instant dashboard queries
 
-#### ClickHouse Schema Design
+#### ClickHouse Schema Design Based on Real CollecTor Data
 
 ```sql
 -- Custom data types for optimal storage and performance
-CREATE TYPE IF NOT EXISTS RelayFingerprint AS FixedString(20);  -- 20 bytes for SHA-1 binary
-CREATE TYPE IF NOT EXISTS ContactHash AS FixedString(16);       -- 16 bytes for MD5 binary
+CREATE TYPE IF NOT EXISTS RelayFingerprint AS FixedString(20);    -- 20 bytes for SHA-1 binary
+CREATE TYPE IF NOT EXISTS Ed25519Key AS FixedString(32);          -- 32 bytes for Ed25519 keys
+CREATE TYPE IF NOT EXISTS ContactHash AS FixedString(16);         -- 16 bytes for MD5 binary
+CREATE TYPE IF NOT EXISTS DescriptorDigest AS FixedString(20);    -- 20 bytes for descriptor hash
 
--- Single wide measurement table - each row is a complete relay observation
+-- Core relay measurements table - each row is a complete relay state observation from consensus
 CREATE TABLE relay_measurements (
-    -- Time and identification
-    measurement_time DateTime64(3),
-    consensus_valid_after DateTime,
-    relay_fingerprint RelayFingerprint,
-    relay_nickname LowCardinality(String),
+    -- === TEMPORAL IDENTIFICATION ===
+    measurement_time DateTime64(3),                               -- When this measurement was taken
+    consensus_valid_after DateTime,                               -- Consensus document timestamp
+    consensus_fresh_until DateTime,                               -- When consensus expires
+    consensus_method UInt8,                                       -- Consensus method used
     
-    -- Network identity
-    ip_address IPv4,
-    ipv6_address Nullable(IPv6),
-    or_port UInt16,
-    dir_port UInt16,
+    -- === RELAY IDENTIFICATION ===
+    relay_fingerprint RelayFingerprint,                           -- RSA identity key fingerprint (binary)
+    relay_ed25519_key Ed25519Key,                                 -- Ed25519 master identity key
+    relay_nickname LowCardinality(String),                        -- Current nickname in this consensus
+    descriptor_digest DescriptorDigest,                           -- Hash of server descriptor
+    descriptor_published DateTime,                                -- When server descriptor was published
     
-    -- Bandwidth measurements (bytes/second)
-    observed_bandwidth UInt64,
-    advertised_bandwidth UInt64,
-    bandwidth_rate UInt64,
-    bandwidth_burst UInt64,
+    -- === NETWORK CONNECTIVITY ===
+    ipv4_address IPv4,                                           -- Primary IPv4 address
+    ipv6_address Nullable(IPv6),                                 -- IPv6 address if available
+    or_port UInt16,                                              -- Onion Router port
+    dir_port UInt16,                                             -- Directory port (0 if none)
+    or_addresses Array(String),                                  -- Additional OR addresses from descriptor
     
-    -- Consensus weights (raw values)
-    consensus_weight UInt64,
-    consensus_weight_fraction Float64,
-    guard_probability Float64,
-    middle_probability Float64,
-    exit_probability Float64,
+    -- === BANDWIDTH MEASUREMENTS ===
+    -- From server descriptor
+    bandwidth_rate UInt64,                                       -- Sustained rate (bytes/sec)
+    bandwidth_burst UInt64,                                      -- Burst capacity (bytes/sec)  
+    bandwidth_observed UInt64,                                   -- Observed bandwidth (bytes/sec)
+    bandwidth_advertised UInt64,                                 -- Advertised bandwidth (bytes/sec)
     
-    -- Flags as bitmap for efficient storage and queries
+    -- From consensus (bandwidth authorities measurements)
+    bandwidth_measured UInt64,                                   -- Measured by bandwidth authorities
+    bandwidth_unmeasured UInt8,                                  -- 1 if not measured by >=3 authorities
+    bandwidth_shared UInt64,                                     -- Shared bandwidth in consensus
+    
+    -- === CONSENSUS PARTICIPATION ===
+    consensus_weight UInt64,                                     -- Raw consensus weight value
+    consensus_weight_fraction Float64,                           -- Fraction of total network CW
+    measured_by_authorities UInt8,                               -- Number of authorities that measured
+    
+    -- Guard/Middle/Exit probabilities from consensus
+    guard_probability Float64,                                   -- Probability as guard
+    middle_probability Float64,                                  -- Probability as middle
+    exit_probability Float64,                                    -- Probability as exit
+    
+    -- === DIRECTORY AUTHORITY FLAGS (per authority + consensus) ===
+    -- Consensus flags (final agreed flags)
     flag_authority UInt8,
     flag_bad_exit UInt8,
     flag_exit UInt8,
@@ -96,216 +116,471 @@ CREATE TABLE relay_measurements (
     flag_unnamed UInt8,
     flag_valid UInt8,
     flag_v2dir UInt8,
+    flag_sybil UInt8,
+    flag_stable_desc UInt8,
+    flag_middle_only UInt8,
     
-    -- Geographic and network data
-    country_code FixedString(2),
-    as_number UInt32,
-    as_name LowCardinality(String),
+    -- Per-authority flags (array of 9 authorities, each UInt16 bitmap)
+    authority_flags Array(UInt16),                               -- Flags per authority for analysis
+    authority_count UInt8,                                       -- Number of authorities that voted
     
-    -- Platform and version (efficient storage)
-    platform_os LowCardinality(String),
-    platform_version LowCardinality(String),
-    tor_version LowCardinality(String),
-    version_status LowCardinality(String),  -- recommended, obsolete, etc.
+    -- === PERFORMANCE METRICS ===
+    -- Relay lifecycle
+    first_seen DateTime,                                          -- First appearance in consensus
+    last_restarted Nullable(DateTime),                           -- Last restart timestamp
+    last_changed_address Nullable(DateTime),                     -- Last IP address change
+    uptime_seconds Nullable(UInt32),                            -- Uptime in seconds
     
-    -- Contact and family
-    contact_hash ContactHash,
-    contact_raw String CODEC(ZSTD),  -- Compressed storage for full contact
-    aroi_domain LowCardinality(String),
-    family_fingerprints Array(RelayFingerprint),
-    effective_family_count UInt16,
+    -- Historical reliability (from Onionoo-style data)
+    uptime_1_month Nullable(Float32),                           -- 1-month uptime percentage
+    uptime_3_months Nullable(Float32),                          -- 3-month uptime percentage  
+    uptime_1_year Nullable(Float32),                            -- 1-year uptime percentage
+    uptime_5_years Nullable(Float32),                           -- 5-year uptime percentage
     
-    -- Lifecycle tracking
-    first_seen DateTime,
-    last_seen DateTime,
-    is_first_measurement UInt8,
-    is_last_measurement UInt8,
-    days_since_first_seen UInt32,
+    -- === GEOGRAPHIC & NETWORK CLASSIFICATION ===
+    country_code FixedString(2),                                -- ISO country code
+    country_name LowCardinality(String),                        -- Full country name
+    as_number UInt32,                                           -- Autonomous System number
+    as_name LowCardinality(String),                            -- AS organization name
+    as_type LowCardinality(String),                            -- Hosting, ISP, etc.
     
-    -- Exit policy summary (for quick filtering)
-    allows_port_80 UInt8,
-    allows_port_443 UInt8,
-    exit_policy_summary String CODEC(ZSTD),
+    -- === PLATFORM & SOFTWARE ===
+    platform_raw String CODEC(ZSTD),                           -- Full platform string from descriptor
+    tor_version LowCardinality(String),                         -- Parsed Tor version
+    tor_version_major UInt8,                                    -- Major version (0)
+    tor_version_minor UInt8,                                    -- Minor version (4)
+    tor_version_micro UInt8,                                    -- Micro version (8)
+    operating_system LowCardinality(String),                    -- Linux, Windows, FreeBSD, etc.
+    os_version LowCardinality(String),                          -- OS version if parseable
+    version_recommended UInt8,                                  -- 1 if recommended, 0 if not
+    version_status LowCardinality(String),                      -- "recommended", "obsolete", etc.
     
-    -- Additional measurements
-    uptime_1_month Nullable(Float32),
-    uptime_3_months Nullable(Float32),
-    uptime_1_year Nullable(Float32),
+    -- === CONTACT & OPERATOR INFORMATION ===
+    contact_raw String CODEC(ZSTD),                            -- Full contact string
+    contact_hash ContactHash,                                   -- MD5 hash for grouping
+    contact_aroi LowCardinality(String),                       -- Extracted AROI domain
+    contact_email LowCardinality(String),                      -- Extracted email domain
+    contact_pgp_key String CODEC(ZSTD),                        -- PGP key if present
     
-    -- Network position context (denormalized for performance)
-    total_network_consensus_weight UInt64,
-    total_network_bandwidth UInt64,
-    network_relay_count UInt32
+    -- === FAMILY RELATIONSHIPS ===
+    family_declared Array(RelayFingerprint),                    -- Declared family members
+    family_effective Array(RelayFingerprint),                   -- Effective family (mutual)
+    family_certificate_present UInt8,                           -- 1 if has family certificate
+    family_cert_digest Nullable(FixedString(32)),              -- SHA256 of family cert
+    
+    -- === EXIT POLICY ANALYSIS ===
+    exit_policy_raw String CODEC(ZSTD),                        -- Full exit policy
+    exit_policy_summary String CODEC(ZSTD),                    -- Compressed summary
+    exit_policy_v4_summary String CODEC(ZSTD),                 -- IPv4 summary
+    exit_policy_v6_summary String CODEC(ZSTD),                 -- IPv6 summary
+    
+    -- Quick exit policy flags for common ports
+    allows_port_22 UInt8,      -- SSH
+    allows_port_53 UInt8,      -- DNS  
+    allows_port_80 UInt8,      -- HTTP
+    allows_port_110 UInt8,     -- POP3
+    allows_port_143 UInt8,     -- IMAP
+    allows_port_443 UInt8,     -- HTTPS
+    allows_port_993 UInt8,     -- IMAPS
+    allows_port_995 UInt8,     -- POP3S
+    
+    -- Exit policy categories
+    is_exit_unrestricted UInt8,                                 -- Allows most ports
+    is_exit_web_only UInt8,                                     -- Only 80/443
+    is_exit_mail_only UInt8,                                    -- Only mail ports
+    has_ipv4_restrictions UInt8,                                -- Has IP restrictions
+    has_ipv6_restrictions UInt8,                                -- Has IPv6 restrictions
+    
+    -- === CRYPTOGRAPHIC KEYS ===
+    onion_key_rsa String CODEC(ZSTD),                          -- RSA onion key (deprecated)
+    ntor_onion_key FixedString(32),                            -- Curve25519 ntor key
+    ed25519_signing_cert String CODEC(ZSTD),                   -- Ed25519 certificate
+    
+    -- === NETWORK CONTEXT (denormalized for performance) ===
+    total_network_consensus_weight UInt64,                      -- Total CW in this consensus
+    total_network_bandwidth UInt64,                             -- Total observed bandwidth  
+    total_network_relays UInt32,                                -- Total relay count
+    network_guard_relays UInt32,                                -- Guard relay count
+    network_exit_relays UInt32,                                 -- Exit relay count
+    network_unique_countries UInt32,                            -- Countries represented
+    network_unique_as_count UInt32,                             -- Unique AS count
+    
+    -- === DATA PROVENANCE ===
+    data_source LowCardinality(String),                         -- "consensus", "descriptor", "onionoo"
+    processing_version UInt8,                                   -- Schema version for migrations
+    ingestion_time DateTime DEFAULT now()                       -- When row was inserted
     
 ) ENGINE = MergeTree()
-PARTITION BY toYYYYMM(measurement_time)
+PARTITION BY toYYYYMM(measurement_time) 
 ORDER BY (relay_fingerprint, measurement_time)
-SETTINGS index_granularity = 8192;
+SETTINGS index_granularity = 8192,
+         allow_nullable_key = 1;
 
--- Materialized views for common aggregation patterns
+-- === MATERIALIZED VIEWS FOR COMMON AGGREGATIONS ===
 
--- Latest state per relay (for current status queries)
-CREATE MATERIALIZED VIEW relay_latest_state
+-- Current relay state (replacing MergeTree with latest data)
+CREATE MATERIALIZED VIEW current_relay_state
 ENGINE = ReplacingMergeTree(measurement_time)
 ORDER BY relay_fingerprint
+POPULATE
 AS SELECT 
     relay_fingerprint,
-    argMax(measurement_time, measurement_time) as last_measurement,
+    argMax(measurement_time, measurement_time) as last_seen,
     argMax(relay_nickname, measurement_time) as current_nickname,
-    argMax(observed_bandwidth, measurement_time) as current_bandwidth,
+    argMax(bandwidth_observed, measurement_time) as current_bandwidth,
     argMax(consensus_weight, measurement_time) as current_consensus_weight,
     argMax(flag_running, measurement_time) as is_running,
+    argMax(flag_guard, measurement_time) as is_guard,
+    argMax(flag_exit, measurement_time) as is_exit,
     argMax(country_code, measurement_time) as current_country,
-    argMax(contact_hash, measurement_time) as current_contact_hash
+    argMax(contact_hash, measurement_time) as current_contact_hash,
+    argMax(contact_aroi, measurement_time) as current_aroi,
+    argMax(tor_version, measurement_time) as current_tor_version,
+    argMax(version_recommended, measurement_time) as version_is_recommended
 FROM relay_measurements
 GROUP BY relay_fingerprint;
 
--- Hourly network aggregates (for network health dashboard)
-CREATE MATERIALIZED VIEW network_hourly_stats
+-- Hourly network health metrics (for dashboards)
+CREATE MATERIALIZED VIEW network_hourly_health
 ENGINE = SummingMergeTree()
-ORDER BY measurement_hour
+ORDER BY consensus_hour
+POPULATE  
 AS SELECT 
-    toStartOfHour(measurement_time) as measurement_hour,
-    count() as total_measurements,
+    toStartOfHour(consensus_valid_after) as consensus_hour,
+    count() as total_relay_observations,
     uniq(relay_fingerprint) as unique_relays,
-    sum(observed_bandwidth) as total_bandwidth,
+    
+    -- Bandwidth aggregations
+    sum(bandwidth_observed) as total_observed_bandwidth,
+    sum(bandwidth_measured) as total_measured_bandwidth,
+    avg(bandwidth_observed) as avg_observed_bandwidth,
+    
+    -- Consensus weight aggregations  
     sum(consensus_weight) as total_consensus_weight,
-    sum(flag_guard) as guard_count,
-    sum(flag_exit) as exit_count,
-    sum(flag_running) as running_count,
+    avg(consensus_weight_fraction) as avg_consensus_weight_fraction,
+    
+    -- Flag-based counts
+    sum(flag_running) as running_relays,
+    sum(flag_guard) as guard_relays,
+    sum(flag_exit) as exit_relays,
+    sum(flag_stable) as stable_relays,
+    sum(flag_fast) as fast_relays,
+    sum(flag_valid) as valid_relays,
+    sum(flag_bad_exit) as bad_exit_relays,
+    sum(flag_authority) as authority_relays,
+    
+    -- Geographic diversity
     uniq(country_code) as unique_countries,
-    uniq(as_number) as unique_as_count
+    uniq(as_number) as unique_as_numbers,
+    
+    -- Platform diversity
+    uniq(operating_system) as unique_operating_systems,
+    uniq(tor_version) as unique_tor_versions,
+    sum(version_recommended) as recommended_version_relays,
+    
+    -- Exit policy analysis
+    sum(allows_port_80) as http_exits,
+    sum(allows_port_443) as https_exits,
+    sum(is_exit_unrestricted) as unrestricted_exits,
+    
+    -- Contact/operator metrics
+    uniq(contact_hash) as unique_operators,
+    uniqIf(contact_hash, contact_aroi != '') as aroi_operators
+    
 FROM relay_measurements
-GROUP BY measurement_hour;
+GROUP BY consensus_hour;
 
--- Daily operator aggregates (for AROI leaderboards)
-CREATE MATERIALIZED VIEW operator_daily_stats
+-- Daily operator performance (for AROI leaderboards)
+CREATE MATERIALIZED VIEW operator_daily_performance
 ENGINE = SummingMergeTree()
 ORDER BY (measurement_date, contact_hash)
+POPULATE
 AS SELECT 
-    toDate(measurement_time) as measurement_date,
+    toDate(consensus_valid_after) as measurement_date,
     contact_hash,
-    any(aroi_domain) as aroi_domain,
-    count() as total_measurements,
+    
+    -- Operator identification
+    any(contact_aroi) as aroi_domain,
+    any(contact_raw) as contact_info,
+    
+    -- Relay counts and types
     uniq(relay_fingerprint) as relay_count,
-    sum(observed_bandwidth) as total_bandwidth,
+    sum(flag_guard) as guard_relay_count,
+    sum(flag_exit) as exit_relay_count,
+    sum(flag_running) as running_relay_count,
+    sum(flag_stable) as stable_relay_count,
+    
+    -- Performance metrics
+    sum(bandwidth_observed) as total_bandwidth,
     sum(consensus_weight) as total_consensus_weight,
-    sum(flag_guard) as guard_count,
-    sum(flag_exit) as exit_count,
+    avg(consensus_weight_fraction) as avg_consensus_weight_fraction,
+    sum(bandwidth_measured) as total_measured_bandwidth,
+    
+    -- Diversity metrics
     uniq(country_code) as country_count,
     uniq(as_number) as as_count,
-    uniq(platform_os) as platform_count
+    uniq(operating_system) as platform_count,
+    uniq(tor_version) as version_count,
+    
+    -- Geographic presence
+    groupArray(country_code) as countries,
+    groupArray(as_number) as as_numbers,
+    
+    -- Reliability metrics
+    avg(uptime_1_month) as avg_uptime_1month,
+    avg(uptime_1_year) as avg_uptime_1year,
+    min(first_seen) as earliest_first_seen,
+    
+    -- Exit capabilities
+    sum(allows_port_80) as http_exit_count,
+    sum(allows_port_443) as https_exit_count,
+    sum(is_exit_unrestricted) as unrestricted_exit_count
+    
 FROM relay_measurements
-WHERE contact_hash != '\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0'  -- Exclude empty contacts
+WHERE contact_hash != unhex('00000000000000000000000000000000')  -- Exclude empty contacts
 GROUP BY measurement_date, contact_hash;
 
--- Indexes for common query patterns
-CREATE INDEX idx_country ON relay_measurements (country_code) TYPE bloom_filter(0.01);
-CREATE INDEX idx_as ON relay_measurements (as_number) TYPE bloom_filter(0.01);
-CREATE INDEX idx_flags ON relay_measurements (flag_guard, flag_exit, flag_running) TYPE bloom_filter(0.01);
+-- Daily exit policy analysis
+CREATE MATERIALIZED VIEW exit_policy_daily_analysis  
+ENGINE = SummingMergeTree()
+ORDER BY measurement_date
+POPULATE
+AS SELECT
+    toDate(consensus_valid_after) as measurement_date,
+    
+    -- Total exit counts
+    sum(flag_exit) as total_exits,
+    
+    -- Port-specific exits
+    sum(allows_port_22) as ssh_exits,
+    sum(allows_port_53) as dns_exits, 
+    sum(allows_port_80) as http_exits,
+    sum(allows_port_443) as https_exits,
+    sum(allows_port_993) as imaps_exits,
+    
+    -- Policy categories
+    sum(is_exit_unrestricted) as unrestricted_exits,
+    sum(is_exit_web_only) as web_only_exits,
+    sum(is_exit_mail_only) as mail_only_exits,
+    sum(has_ipv4_restrictions) as ipv4_restricted_exits,
+    sum(has_ipv6_restrictions) as ipv6_restricted_exits,
+    
+    -- Geographic distribution of exits
+    uniqIf(country_code, flag_exit = 1) as exit_countries,
+    uniqIf(as_number, flag_exit = 1) as exit_as_numbers
+    
+FROM relay_measurements
+GROUP BY measurement_date;
 
--- Projection for time-series aggregations (ClickHouse 22+)
-ALTER TABLE relay_measurements ADD PROJECTION bandwidth_time_series (
+-- === INDEXES FOR QUERY OPTIMIZATION ===
+CREATE INDEX idx_country_code ON relay_measurements (country_code) TYPE bloom_filter(0.01);
+CREATE INDEX idx_as_number ON relay_measurements (as_number) TYPE bloom_filter(0.01);
+CREATE INDEX idx_tor_version ON relay_measurements (tor_version) TYPE bloom_filter(0.01);
+CREATE INDEX idx_contact_aroi ON relay_measurements (contact_aroi) TYPE bloom_filter(0.01);
+CREATE INDEX idx_flags_composite ON relay_measurements (flag_running, flag_guard, flag_exit, flag_stable) TYPE bloom_filter(0.01);
+
+-- === PROJECTIONS FOR TIME-SERIES PERFORMANCE ===
+ALTER TABLE relay_measurements ADD PROJECTION daily_bandwidth_projection (
     SELECT 
-        toStartOfDay(measurement_time) as day,
+        toDate(consensus_valid_after) as date,
         relay_fingerprint,
-        avg(observed_bandwidth) as avg_bandwidth,
-        max(observed_bandwidth) as max_bandwidth,
-        avg(consensus_weight) as avg_consensus_weight
-    GROUP BY day, relay_fingerprint
+        contact_hash,
+        avg(bandwidth_observed) as avg_bandwidth,
+        max(bandwidth_observed) as max_bandwidth,
+        avg(consensus_weight) as avg_consensus_weight,
+        sum(flag_running) as uptime_hours
+    GROUP BY date, relay_fingerprint, contact_hash
+);
+
+ALTER TABLE relay_measurements ADD PROJECTION operator_performance_projection (
+    SELECT
+        toStartOfMonth(consensus_valid_after) as month,
+        contact_hash,
+        contact_aroi,
+        uniq(relay_fingerprint) as relay_count,
+        sum(bandwidth_observed) as total_bandwidth,
+        sum(consensus_weight) as total_consensus_weight,
+        uniq(country_code) as country_diversity,
+        avg(uptime_1_month) as avg_reliability
+    GROUP BY month, contact_hash, contact_aroi
 );
 ```
 
-### Example Analytical Queries
+### Example Analytical Queries Based on Real Data
 
 ```sql
--- 1. Bandwidth evolution for a specific operator over time
+-- 1. Operator bandwidth evolution with consensus weight correlation
 SELECT 
-    toStartOfMonth(measurement_time) as month,
-    sum(observed_bandwidth) / 1e9 as total_gbps,
+    toStartOfMonth(consensus_valid_after) as month,
+    contact_aroi as operator,
+    sum(bandwidth_observed) / 1e9 as total_gbps,
+    sum(bandwidth_measured) / 1e9 as measured_gbps,
     uniq(relay_fingerprint) as relay_count,
-    sum(consensus_weight) / sum(total_network_consensus_weight) * 100 as network_share_pct
+    avg(consensus_weight_fraction) * 100 as avg_network_influence_pct,
+    uniq(country_code) as country_diversity,
+    sum(flag_guard) as guard_relays,
+    sum(flag_exit) as exit_relays
 FROM relay_measurements 
-WHERE contact_hash = unhex('1234567890abcdef1234567890abcdef')
-    AND measurement_time >= now() - INTERVAL 2 YEAR
-GROUP BY month
+WHERE contact_aroi = 'torservers.net'  -- Real operator example
+    AND consensus_valid_after >= now() - INTERVAL 2 YEAR
+    AND flag_running = 1
+GROUP BY month, contact_aroi
 ORDER BY month;
 
--- 2. Find relays with anomalous bandwidth patterns (sudden drops/spikes)
-WITH relay_bandwidth AS (
-    SELECT 
-        relay_fingerprint,
-        measurement_time,
-        observed_bandwidth,
-        lag(observed_bandwidth, 1) OVER (PARTITION BY relay_fingerprint ORDER BY measurement_time) as prev_bandwidth
-    FROM relay_measurements 
-    WHERE measurement_time >= now() - INTERVAL 7 DAY
-)
+-- 2. Authority disagreement analysis - find relays with inconsistent flags
 SELECT 
     relay_fingerprint,
-    measurement_time,
-    observed_bandwidth / 1e6 as current_mbps,
-    prev_bandwidth / 1e6 as prev_mbps,
-    (observed_bandwidth - prev_bandwidth) / prev_bandwidth * 100 as change_pct
-FROM relay_bandwidth
-WHERE abs(change_pct) > 50 AND prev_bandwidth > 1e6  -- >50% change, >1 MB/s baseline
-ORDER BY abs(change_pct) DESC;
-
--- 3. Top operators by consensus weight growth in last 6 months
-SELECT 
-    contact_hash,
-    any(aroi_domain) as operator,
-    sum(total_consensus_weight) as current_weight,
-    sum(total_consensus_weight) - sumIf(total_consensus_weight, measurement_date < today() - 180) as growth,
-    growth / sumIf(total_consensus_weight, measurement_date < today() - 180) * 100 as growth_pct
-FROM operator_daily_stats
-WHERE measurement_date >= today() - 180
-GROUP BY contact_hash
-HAVING growth_pct > 10  -- >10% growth
-ORDER BY growth DESC;
-
--- 4. Geographic diversity trends over time
-SELECT 
-    measurement_hour,
-    unique_countries,
-    unique_relays,
-    unique_countries / unique_relays * 100 as countries_per_100_relays,
-    entropy(groupArray(relay_count)) as geographic_entropy  -- Higher = more diverse
-FROM (
-    SELECT 
-        toStartOfDay(measurement_time) as measurement_hour,
-        country_code,
-        uniq(relay_fingerprint) as relay_count
-    FROM relay_measurements
-    WHERE measurement_time >= now() - INTERVAL 1 YEAR
-    GROUP BY measurement_hour, country_code
-) grouped_by_country
-JOIN (
-    SELECT 
-        toStartOfDay(measurement_time) as measurement_hour,
-        uniq(country_code) as unique_countries,
-        uniq(relay_fingerprint) as unique_relays
-    FROM relay_measurements
-    WHERE measurement_time >= now() - INTERVAL 1 YEAR
-    GROUP BY measurement_hour
-) network_stats USING measurement_hour
-GROUP BY measurement_hour, unique_countries, unique_relays
-ORDER BY measurement_hour;
-
--- 5. Relay churn analysis - identify operators with high turnover
-SELECT 
-    contact_hash,
-    any(aroi_domain) as operator,
-    uniq(relay_fingerprint) as total_unique_relays,
-    uniqIf(relay_fingerprint, is_first_measurement = 1) as new_relays,
-    uniqIf(relay_fingerprint, is_last_measurement = 1) as departed_relays,
-    (new_relays + departed_relays) / total_unique_relays as churn_rate
+    relay_nickname,
+    consensus_valid_after,
+    authority_count,
+    flag_running,
+    flag_guard,
+    flag_exit,
+    -- Decode authority-specific flags to see disagreements
+    arraySum(authority_flags) as total_authority_votes,
+    authority_count,
+    contact_aroi
 FROM relay_measurements
-WHERE measurement_time >= now() - INTERVAL 90 DAY
-    AND contact_hash != '\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0'
-GROUP BY contact_hash
-HAVING total_unique_relays >= 5  -- Only operators with 5+ relays
-ORDER BY churn_rate DESC;
+WHERE consensus_valid_after >= now() - INTERVAL 7 DAY
+    AND authority_count >= 7  -- Most authorities voted
+    AND (flag_running != (arraySum(authority_flags) > authority_count/2))  -- Disagreement
+ORDER BY consensus_valid_after DESC, authority_count DESC;
+
+-- 3. Exit policy evolution analysis with geographic correlation
+SELECT 
+    toDate(consensus_valid_after) as date,
+    country_code,
+    count(*) as total_exits,
+    sum(is_exit_unrestricted) as unrestricted_exits,
+    sum(allows_port_80) as http_exits,
+    sum(allows_port_443) as https_exits,
+    sum(allows_port_22) as ssh_exits,
+    avg(bandwidth_observed) / 1e6 as avg_exit_bandwidth_mbps,
+    sum(bandwidth_observed) / 1e9 as total_exit_bandwidth_gbps
+FROM relay_measurements
+WHERE flag_exit = 1 
+    AND consensus_valid_after >= now() - INTERVAL 1 YEAR
+    AND flag_running = 1
+GROUP BY date, country_code
+HAVING total_exits >= 5  -- Countries with meaningful exit presence
+ORDER BY date DESC, total_exit_bandwidth_gbps DESC;
+
+-- 4. Platform diversity and version upgrade patterns
+SELECT 
+    toStartOfMonth(consensus_valid_after) as month,
+    operating_system,
+    tor_version,
+    count(*) as relay_count,
+    sum(bandwidth_observed) / 1e9 as total_bandwidth_gbps,
+    sum(version_recommended) as recommended_count,
+    sum(version_recommended) / count(*) * 100 as recommended_percentage,
+    uniq(contact_hash) as unique_operators
+FROM relay_measurements
+WHERE consensus_valid_after >= now() - INTERVAL 1 YEAR
+    AND flag_running = 1
+GROUP BY month, operating_system, tor_version
+HAVING relay_count >= 10  -- Significant versions only
+ORDER BY month DESC, total_bandwidth_gbps DESC;
+
+-- 5. AROI operator performance benchmarking with reliability scoring
+SELECT 
+    contact_aroi as operator,
+    uniq(relay_fingerprint) as total_relays,
+    sum(bandwidth_observed) / 1e9 as total_bandwidth_gbps,
+    sum(consensus_weight_fraction) * 100 as network_influence_pct,
+    uniq(country_code) as geographic_diversity,
+    uniq(as_number) as network_diversity,
+    
+    -- Reliability metrics
+    avg(uptime_1_month) as avg_monthly_uptime,
+    avg(uptime_1_year) as avg_yearly_uptime,
+    min(first_seen) as operator_first_seen,
+    dateDiff('day', min(first_seen), now()) as operator_age_days,
+    
+    -- Exit capabilities
+    sum(flag_exit) as exit_relays,
+    sum(is_exit_unrestricted) as unrestricted_exits,
+    sum(allows_port_80 * flag_exit) as http_exits,
+    
+    -- Performance efficiency (CW/BW ratio)
+    sum(consensus_weight) / sum(bandwidth_observed) * 1e6 as cw_bw_efficiency
+FROM relay_measurements
+WHERE consensus_valid_after >= now() - INTERVAL 30 DAY  -- Last 30 days
+    AND contact_aroi != ''  -- Only AROI operators
+    AND flag_running = 1
+GROUP BY contact_aroi
+HAVING total_relays >= 3  -- Meaningful operators only
+ORDER BY network_influence_pct DESC
+LIMIT 25;
+
+-- 6. Network concentration risk analysis by AS and geography
+WITH top_as_analysis AS (
+    SELECT 
+        as_number,
+        as_name,
+        sum(bandwidth_observed) / 1e9 as total_bandwidth_gbps,
+        sum(consensus_weight_fraction) * 100 as network_influence_pct,
+        uniq(relay_fingerprint) as relay_count,
+        uniq(contact_hash) as operator_count,
+        uniq(country_code) as country_presence
+    FROM relay_measurements
+    WHERE consensus_valid_after >= now() - INTERVAL 7 DAY
+        AND flag_running = 1
+    GROUP BY as_number, as_name
+    ORDER BY network_influence_pct DESC
+    LIMIT 20
+),
+geographic_concentration AS (
+    SELECT 
+        country_code,
+        sum(bandwidth_observed) / 1e9 as country_bandwidth_gbps,
+        sum(consensus_weight_fraction) * 100 as country_influence_pct,
+        uniq(as_number) as as_diversity
+    FROM relay_measurements
+    WHERE consensus_valid_after >= now() - INTERVAL 7 DAY
+        AND flag_running = 1
+    GROUP BY country_code
+    ORDER BY country_influence_pct DESC
+    LIMIT 10
+)
+SELECT 
+    'AS Concentration Risk' as analysis_type,
+    as_number as identifier,
+    as_name as name,
+    total_bandwidth_gbps as bandwidth_gbps,
+    network_influence_pct,
+    relay_count,
+    operator_count as diversity_metric
+FROM top_as_analysis
+UNION ALL
+SELECT 
+    'Geographic Concentration Risk' as analysis_type,
+    country_code as identifier,
+    country_code as name,  -- Could join with country names table
+    country_bandwidth_gbps as bandwidth_gbps,
+    country_influence_pct as network_influence_pct,
+    NULL as relay_count,
+    as_diversity as diversity_metric
+FROM geographic_concentration
+ORDER BY network_influence_pct DESC;
+
+-- 7. Historical consensus weight redistribution analysis
+SELECT 
+    toStartOfMonth(consensus_valid_after) as month,
+    contact_aroi,
+    sum(consensus_weight_fraction) * 100 as monthly_influence,
+    lag(sum(consensus_weight_fraction) * 100, 1) OVER (
+        PARTITION BY contact_aroi 
+        ORDER BY toStartOfMonth(consensus_valid_after)
+    ) as prev_month_influence,
+    monthly_influence - prev_month_influence as influence_change
+FROM relay_measurements
+WHERE consensus_valid_after >= now() - INTERVAL 1 YEAR
+    AND contact_aroi != ''
+    AND flag_running = 1
+GROUP BY month, contact_aroi
+HAVING monthly_influence > 0.5  -- Operators with >0.5% network influence
+ORDER BY month DESC, abs(influence_change) DESC;
 ```
 
 ## 🏆 Top 20 ClickHouse Analytics Enhancements
@@ -524,14 +799,31 @@ ORDER BY churn_rate DESC;
 
 ## 💰 Resource Requirements
 
-### Infrastructure
-- **ClickHouse Cluster**: 3-node setup with 64GB RAM, 2TB NVMe SSD each
-- **Data Storage**: 
-  - Historical data (2007-2025): ~2TB compressed with ZSTD
-  - Annual growth: ~200GB/year (consensus every hour = ~8760 measurements/relay/year)
-  - With ~8000 relays: ~70M measurements/year
-- **Processing Power**: 32-core CPU for parallel data ingestion and complex aggregations
-- **Network**: 10Gbps for initial data migration from CollecTor archives
+### Infrastructure Requirements (Updated Based on Real Data Analysis)
+
+- **ClickHouse Cluster**: 5-node cluster for production reliability
+  - **Master nodes** (3): 128GB RAM, 4TB NVMe SSD, 64 CPU cores each  
+  - **Replica nodes** (2): 64GB RAM, 2TB NVMe SSD, 32 CPU cores each
+  
+- **Data Storage Calculations**:
+  - **Raw consensus data**: ~3.5MB per consensus × 24 hours × 365 days = ~30GB/year
+  - **Per-relay measurements**: ~8000 relays × 24 measurements/day × 365 days = ~70M measurements/year
+  - **Row size estimate**: ~2KB per measurement (all fields) = ~140GB/year uncompressed
+  - **With ZSTD compression**: ~35GB/year compressed (4:1 ratio)
+  - **Historical backfill (2007-2025)**: ~630GB compressed
+  - **Materialized views storage**: ~20% additional = ~150GB additional
+  - **Total storage needed**: ~1TB for historical + ongoing data
+
+- **Processing Requirements**:
+  - **Ingestion rate**: 8000 relays × 24 measurements/day = ~2.2 measurements/second (low)
+  - **Historical backfill**: Process 18 years of data over 2-week period = ~500K measurements/minute
+  - **Query performance target**: <1 second for dashboard queries, <10 seconds for complex analytics
+  - **Concurrent users**: 50-100 analysts and dashboards
+
+- **Network Requirements**:
+  - **CollecTor sync**: Download ~3.5MB every hour = minimal bandwidth
+  - **Historical migration**: Download ~50GB CollecTor archives over 1 month
+  - **User queries**: 1-10MB per complex query × 100 concurrent = moderate bandwidth
 
 ### Development
 - **Backend Development**: 3-4 months full-time equivalent
