@@ -406,6 +406,315 @@ ALTER TABLE relay_measurements ADD PROJECTION operator_performance_projection (
 );
 ```
 
+## 🔧 ClickHouse Schema Design Decisions
+
+### Critical Design Questions & Answers
+
+#### Q1: One Big Table vs Multiple Smaller Tables?
+**Answer: One Big Wide Table** ✅
+
+**Reasoning**:
+- **Better compression**: Related time-series data compresses better together
+- **Fewer JOINs**: Eliminates expensive JOIN operations for analytics
+- **Simpler queries**: All relay data available in single table scan
+- **Better performance**: ClickHouse optimized for wide tables with columnar storage
+- **Atomic consistency**: Each row represents complete relay state at point in time
+
+#### Q2: Immutable per Relay per Time Period or Mutable?
+**Answer: Immutable** ✅
+
+**Reasoning**:
+- **Perfect for time-series**: Each consensus creates new immutable snapshot
+- **Historical integrity**: Can analyze exactly what network looked like at any point
+- **No UPDATE complexity**: Only INSERT operations needed
+- **Better compression**: Immutable data compresses more efficiently
+- **Audit trail**: Complete history preserved for analysis
+
+#### Q3: One Row per Relay per Hour with All Directory Authority Information?
+**Answer: Yes, with Hybrid Storage Approach** ✅
+
+**Reasoning**:
+- **Single source of truth**: Each row = complete relay state at consensus time
+- **Efficient analytics**: Time-series queries don't need complex aggregation
+- **Authority analysis**: Can analyze both consensus and per-authority differences
+
+#### Q4: Nested Arrays vs Separate Columns for Directory Authority Data?
+**Answer: Hybrid Approach - Consensus Flags as Columns + Authority Data as Structured** ✅
+
+**Reasoning**:
+- **Fast filtering**: Individual flag columns (UInt8) for consensus flags
+- **Authority analysis**: Structured approach for per-authority data
+- **Query efficiency**: Common queries on consensus flags are fastest
+- **Detailed analysis**: Authority disagreement analysis still possible
+
+### Optimal Schema Design Based on Real Data
+
+```sql
+-- Custom types optimized for Tor data
+CREATE TYPE RelayFingerprint AS FixedString(20);     -- SHA-1 binary (40 hex chars / 2)
+CREATE TYPE Ed25519Key AS FixedString(32);           -- Ed25519 key binary
+CREATE TYPE AuthorityID AS Enum8(
+    'moria1' = 1, 'maatuska' = 2, 'gabelmoo' = 3, 'dannenberg' = 4,
+    'longclaw' = 5, 'dizum' = 6, 'bastet' = 7, 'faravahar' = 8
+);
+
+-- Single wide table capturing complete relay state per consensus
+CREATE TABLE relay_consensus_measurements (
+    -- === TEMPORAL DIMENSIONS ===
+    consensus_time DateTime64(3),                    -- Consensus valid-after timestamp  
+    consensus_fresh_until DateTime,                  -- When consensus expires
+    consensus_valid_until DateTime,                  -- Hard expiry time
+    
+    -- === RELAY IDENTIFICATION ===
+    fingerprint RelayFingerprint,                    -- RSA identity (binary)
+    ed25519_master_key Ed25519Key,                   -- Ed25519 identity (binary)
+    nickname LowCardinality(String),                 -- Current nickname
+    descriptor_digest FixedString(20),               -- Server descriptor hash
+    descriptor_published DateTime,                   -- Descriptor timestamp
+    
+    -- === NETWORK CONNECTIVITY ===
+    ipv4_address IPv4,                               -- Primary IPv4
+    ipv6_address Nullable(IPv6),                     -- IPv6 if available
+    or_port UInt16,                                  -- OR port (usually 443)
+    dir_port UInt16,                                 -- Directory port (0 if none)
+    
+    -- === CONSENSUS FLAGS (FINAL AGREED) ===
+    -- Individual columns for fast filtering (from consensus 's' line)
+    flag_fast UInt8,
+    flag_guard UInt8, 
+    flag_exit UInt8,
+    flag_stable UInt8,
+    flag_running UInt8,
+    flag_valid UInt8,
+    flag_hsdir UInt8,
+    flag_v2dir UInt8,
+    flag_authority UInt8,
+    flag_bad_exit UInt8,
+    flag_named UInt8,
+    flag_unnamed UInt8,
+    flag_middle_only UInt8,
+    
+    -- === BANDWIDTH MEASUREMENTS ===
+    -- From consensus 'w' line
+    consensus_bandwidth UInt32,                      -- Agreed bandwidth (KB/s)
+    consensus_weight UInt64,                         -- Computed consensus weight
+    
+    -- From bandwidth authority files (when available)
+    measured_bandwidth UInt32,                       -- bw= from bandwidth files
+    measured_bandwidth_mean UInt64,                  -- bw_mean= (bytes/s)
+    measured_bandwidth_median UInt64,                -- bw_median= (bytes/s)
+    bandwidth_is_unmeasured UInt8,                   -- From bandwidth authority
+    
+    -- From server descriptor 'bandwidth' line  
+    descriptor_bandwidth_rate UInt64,                -- Sustained rate (bytes/s)
+    descriptor_bandwidth_burst UInt64,               -- Burst rate (bytes/s)
+    descriptor_bandwidth_observed UInt64,            -- Observed rate (bytes/s)
+    
+    -- === DIRECTORY AUTHORITY ANALYSIS ===
+    -- Per-authority voting data for disagreement analysis
+    authority_data Nested(
+        authority_id AuthorityID,
+        flags Array(LowCardinality(String)),          -- Flags assigned by this authority
+        measured_bandwidth UInt32,                    -- This authority's measurement
+        has_measurement UInt8,                        -- 1 if authority measured
+        voting_weight UInt16                          -- Authority's voting weight
+    ),
+    
+    -- Authority participation metrics
+    total_authorities_voting UInt8,                  -- Number of authorities that voted
+    authorities_agreeing_running UInt8,             -- How many said Running
+    authorities_agreeing_guard UInt8,               -- How many said Guard  
+    authorities_agreeing_exit UInt8,                -- How many said Exit
+    
+    -- === RELAY PERFORMANCE METRICS ===
+    -- From server descriptor
+    uptime_seconds UInt32,                           -- Uptime from descriptor
+    platform LowCardinality(String),                -- Platform string
+    tor_version LowCardinality(String),              -- Tor version
+    
+    -- From bandwidth authority measurements
+    bandwidth_measurement_success_rate Float32,      -- Success rate for measurements
+    bandwidth_stream_ratio Float32,                  -- r_strm from bandwidth files
+    bandwidth_error_rate Float32,                    -- Error ratio
+    
+    -- === PROTOCOLS & CAPABILITIES ===
+    protocols Map(String, String),                   -- From 'pr' line: {Cons: "1-2", ...}
+    
+    -- === EXIT POLICY ===
+    exit_policy_summary String CODEC(ZSTD),         -- From 'p' line (compressed)
+    exit_policy_allows_80 UInt8,                    -- Quick HTTP check
+    exit_policy_allows_443 UInt8,                   -- Quick HTTPS check
+    exit_policy_allows_22 UInt8,                    -- Quick SSH check
+    
+    -- === CONTACT & OPERATOR ===
+    contact_line String CODEC(ZSTD),                -- Full contact string
+    contact_email_domain LowCardinality(String),    -- Extracted email domain
+    contact_aroi LowCardinality(String),            -- AROI operator identifier
+    
+    -- === FAMILY RELATIONSHIPS ===
+    family_fingerprints Array(RelayFingerprint),    -- Declared family members
+    family_count UInt16,                            -- Number of family members
+    
+    -- === GEOGRAPHIC & NETWORK ===
+    country_code FixedString(2),                    -- ISO country code  
+    asn UInt32,                                     -- Autonomous System Number
+    as_organization LowCardinality(String),         -- AS organization name
+    
+    -- === TRAFFIC STATISTICS (from extra-info) ===
+    -- Only latest values to avoid huge arrays
+    read_bytes_last_hour UInt64,                    -- Most recent read-history value
+    write_bytes_last_hour UInt64,                   -- Most recent write-history value
+    dirreq_read_last_hour UInt64,                   -- Directory request read
+    dirreq_write_last_hour UInt64,                  -- Directory request write
+    
+    -- Hidden service statistics (privacy-safe aggregated values)
+    hidserv_v3_cells_relayed UInt64,               -- V3 onion service cells
+    hidserv_v3_onions_seen UInt32,                 -- V3 onions seen (privacy safe)
+    
+    -- === NETWORK CONTEXT ===
+    total_consensus_weight_network UInt64,          -- Total network consensus weight
+    total_relays_network UInt32,                   -- Total relays in consensus
+    total_guard_relays_network UInt32,             -- Total guard relays
+    total_exit_relays_network UInt32,              -- Total exit relays
+    
+    -- === METADATA ===
+    processing_timestamp DateTime DEFAULT now(),    -- When row was created
+    data_completeness_score UInt8                   -- 0-100 based on available data sources
+
+) ENGINE = MergeTree()
+PARTITION BY toYYYYMM(consensus_time)
+ORDER BY (fingerprint, consensus_time)
+SETTINGS 
+    index_granularity = 8192,
+    allow_nullable_key = 1;
+
+-- Indexes for common query patterns
+CREATE INDEX idx_flags ON relay_consensus_measurements 
+    (flag_running, flag_guard, flag_exit, flag_stable) TYPE bloom_filter(0.01);
+    
+CREATE INDEX idx_operator ON relay_consensus_measurements 
+    (contact_aroi) TYPE bloom_filter(0.01);
+    
+CREATE INDEX idx_network ON relay_consensus_measurements 
+    (country_code, asn) TYPE bloom_filter(0.01);
+
+-- Materialized view for authority disagreement analysis
+CREATE MATERIALIZED VIEW authority_disagreement_analysis
+ENGINE = SummingMergeTree()
+ORDER BY (consensus_time, fingerprint)
+AS SELECT
+    consensus_time,
+    fingerprint,
+    nickname,
+    
+    -- Flag disagreement metrics
+    abs(toInt16(authorities_agreeing_running) - toInt16(total_authorities_voting * flag_running)) as running_disagreement,
+    abs(toInt16(authorities_agreeing_guard) - toInt16(total_authorities_voting * flag_guard)) as guard_disagreement,
+    abs(toInt16(authorities_agreeing_exit) - toInt16(total_authorities_voting * flag_exit)) as exit_disagreement,
+    
+    -- Bandwidth measurement variance
+    arrayReduce('stddevPop', authority_data.measured_bandwidth) as bandwidth_measurement_variance,
+    length(authority_data.authority_id) as authorities_measured_bandwidth,
+    
+    contact_aroi
+FROM relay_consensus_measurements
+WHERE total_authorities_voting >= 6;  -- Only when most authorities voted
+```
+
+### Key Design Decisions Explained
+
+#### 1. **Authority Data Storage Strategy**
+- **Consensus flags**: Individual UInt8 columns for fastest filtering
+- **Per-authority details**: Nested structure for detailed analysis
+- **Disagreement tracking**: Dedicated fields for authority agreement counts
+- **Performance**: Can query consensus flags without touching authority data
+
+#### 2. **Data Type Optimization** 
+- **RelayFingerprint**: FixedString(20) for binary SHA-1 (50% space savings)
+- **AuthorityID**: Enum8 for authority identification (1 byte vs strings)
+- **Compressed strings**: ZSTD compression for large text fields
+- **LowCardinality**: For repeated values like versions, platforms
+
+#### 3. **Bandwidth Data Strategy**
+- **Multiple sources**: Consensus, bandwidth authorities, descriptors
+- **Measurement quality**: Track which authorities measured vs estimated
+- **Performance metrics**: Success rates and error tracking from bandwidth files
+
+#### 4. **Query Optimization Features**
+- **Partitioning**: By month for time-range queries
+- **Primary key**: (fingerprint, consensus_time) for relay time-series
+- **Bloom filters**: For categorical filtering (flags, operators, countries)
+- **Projections**: Pre-computed aggregations for common patterns
+
+### Example Queries Using Real lilpeep Data
+
+```sql
+-- 1. Authority disagreement analysis for lilpeep
+SELECT 
+    consensus_time,
+    nickname,
+    flag_hsdir as consensus_hsdir,
+    arrayExists(x -> x = 'HSDir', arrayConcat(authority_data.flags)) as some_auth_voted_hsdir,
+    authorities_agreeing_running,
+    total_authorities_voting,
+    authority_data.authority_id as authorities,
+    authority_data.flags as authority_flags
+FROM relay_consensus_measurements 
+WHERE fingerprint = unhex('3D0D3172FA0C11AC7206883832F65BB8695CB1DF')
+    AND consensus_time >= '2025-06-28 19:00:00'
+    AND consensus_time <= '2025-06-28 21:00:00';
+
+-- 2. Bandwidth measurement variance across authorities for lilpeep
+SELECT 
+    consensus_time,
+    consensus_bandwidth,
+    measured_bandwidth,
+    authority_data.authority_id as authorities,
+    authority_data.measured_bandwidth as auth_measurements,
+    descriptor_bandwidth_observed / 1000 as descriptor_bw_kbps,
+    arrayReduce('avg', authority_data.measured_bandwidth) as avg_authority_measurement,
+    arrayReduce('stddevPop', authority_data.measured_bandwidth) as measurement_variance
+FROM relay_consensus_measurements
+WHERE fingerprint = unhex('3D0D3172FA0C11AC7206883832F65BB8695CB1DF')
+    AND consensus_time >= '2025-06-28 19:00:00'
+ORDER BY consensus_time;
+
+-- 3. Network-wide authority disagreement patterns
+SELECT 
+    consensus_time,
+    countIf(running_disagreement > 2) as relays_running_disagreement,
+    countIf(guard_disagreement > 2) as relays_guard_disagreement,
+    countIf(bandwidth_measurement_variance > 1000) as relays_bw_variance,
+    avg(bandwidth_measurement_variance) as avg_bw_measurement_variance,
+    total_relays_network
+FROM authority_disagreement_analysis
+WHERE consensus_time >= today() - 7
+GROUP BY consensus_time
+ORDER BY consensus_time;
+```
+
+### Additional Schema Questions Answered
+
+#### Q5: How to handle 8 directory authorities + 1 consensus efficiently?
+**Solution**: Store consensus as primary columns, authorities in nested structure
+- Fast queries on consensus data (90% of use cases)
+- Detailed authority analysis when needed (10% of use cases)
+- Authority disagreement pre-computed in materialized view
+
+#### Q6: How to handle missing data across sources?
+**Solution**: Nullable fields + data completeness scoring
+- Track which data sources were available for each measurement
+- Score from 0-100 based on available data (consensus=40, descriptors=30, bandwidth=20, extra-info=10)
+- Enable data quality analysis and gap identification
+
+#### Q7: How to optimize for both current state and historical analysis?
+**Solution**: Materialized views + projections
+- Current state view with latest data per relay
+- Historical projections for time-series aggregations
+- Authority analysis view for consensus health monitoring
+
+This schema design optimally handles the real-world complexity of Tor data while maintaining excellent query performance for both simple dashboard queries and complex analytical research.
+
 ### Example Analytical Queries Based on Real Data
 
 ```sql
