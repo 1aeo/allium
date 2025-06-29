@@ -42,21 +42,21 @@ CREATE TABLE relay_measurements
 (
 
     -- === TIME ===
-    ingest_measurement_time DateTime64(3)
+    ingest_measurement_time DateTime64(3) CODEC(DoubleDelta, ZSTD)
       COMMENT 'Snapshot ingestion time | measurement_time | system',
-    consensus_valid_after   DateTime
+    consensus_valid_after   DateTime CODEC(DoubleDelta, ZSTD)
       COMMENT 'Valid-after timestamp | valid-after | 2025-06-28-20-00-00-consensus',
-    consensus_fresh_until   DateTime
+    consensus_fresh_until   DateTime CODEC(DoubleDelta, ZSTD)
       COMMENT 'Fresh-until timestamp | fresh-until | 2025-06-28-20-00-00-consensus',
-    consensus_valid_until   DateTime
+    consensus_valid_until   DateTime CODEC(DoubleDelta, ZSTD)
       COMMENT 'Valid-until timestamp | valid-until | 2025-06-28-20-00-00-consensus',
-    descriptor_source_time   DateTime
+    descriptor_source_time   DateTime CODEC(DoubleDelta, ZSTD)
       COMMENT 'Descriptor file timestamp | file-timestamp | 2025-06-28-08-22-37-server-descriptors',
-    vote_source_time         DateTime
+    vote_source_time         DateTime CODEC(DoubleDelta, ZSTD)
       COMMENT 'Vote file timestamp | file-timestamp | vote-<authority>-2025-06-28-20-00-00',
-    bandwidth_source_time    DateTime
+    bandwidth_source_time    DateTime CODEC(DoubleDelta, ZSTD)
       COMMENT 'Bandwidth file timestamp | file-timestamp | 2025-06-28-19-51-50-bandwidth-<digest>',
-    extra_info_source_time   DateTime
+    extra_info_source_time   DateTime CODEC(DoubleDelta, ZSTD)
       COMMENT 'Extra-info file timestamp | file-timestamp | 2025-06-28-08-22-37-extra-infos',
 
     -- === IDENTIFIERS ===
@@ -82,7 +82,7 @@ CREATE TABLE relay_measurements
       COMMENT 'Dir port | r <Dir port> | 2025-06-28-20-00-00-consensus',
     consensus_flags_mask           UInt32
       COMMENT 'Consensus flags mask | s <flags> | 2025-06-28-20-00-00-consensus',
-    consensus_bandwidth           UInt32
+    consensus_bandwidth           UInt32 CODEC(DoubleDelta, ZSTD)
       COMMENT 'Consensus bandwidth | Bandwidth | 2025-06-28-20-00-00-consensus',
     consensus_protocols           Map(String, String)
       COMMENT 'Protocol ranges | pr | 2025-06-28-20-00-00-consensus',
@@ -120,23 +120,23 @@ CREATE TABLE relay_measurements
     )    COMMENT 'Per authority vote | multiple | vote',
 
     -- === BANDWIDTH & HISTORY ===
-    descriptor_bandwidth_avg      UInt64
+    descriptor_bandwidth_avg      UInt64 CODEC(DoubleDelta, ZSTD)
       COMMENT 'Sustained rate | bandwidth avg | 2025-06-28-08-22-37-server-descriptors',
-    descriptor_bandwidth_burst    UInt64
+    descriptor_bandwidth_burst    UInt64 CODEC(DoubleDelta, ZSTD)
       COMMENT 'Burst capacity | bandwidth burst | 2025-06-28-08-22-37-server-descriptors',
-    descriptor_bandwidth_observed UInt64
+    descriptor_bandwidth_observed UInt64 CODEC(DoubleDelta, ZSTD)
       COMMENT 'Observed bandwidth | bandwidth observed | 2025-06-28-08-22-37-server-descriptors',
-    extra_info_bandwidth_read     UInt64
+    extra_info_bandwidth_read     UInt64 CODEC(DoubleDelta, ZSTD)
       COMMENT 'Latest read history | read-history | 2025-06-28-08-22-37-extra-infos',
-    extra_info_bandwidth_write    UInt64
+    extra_info_bandwidth_write    UInt64 CODEC(DoubleDelta, ZSTD)
       COMMENT 'Latest write history | write-history | 2025-06-28-08-22-37-extra-infos',
 
     -- === BANDWIDTH FILE METRICS ===
-    bandwidth_measured         UInt32
+    bandwidth_measured         UInt32 CODEC(DoubleDelta, ZSTD)
       COMMENT 'Measured rate | bw | 2025-06-28-19-51-50-bandwidth-<digest>',
-    bandwidth_mean             UInt64
+    bandwidth_mean             UInt64 CODEC(DoubleDelta, ZSTD)
       COMMENT 'Mean rate | bw_mean | 2025-06-28-19-51-50-bandwidth-<digest>',
-    bandwidth_median           UInt64
+    bandwidth_median           UInt64 CODEC(DoubleDelta, ZSTD)
       COMMENT 'Median rate | bw_median | 2025-06-28-19-51-50-bandwidth-<digest>',
     bandwidth_success_count    UInt32
       COMMENT 'Successful measures | success | 2025-06-28-19-51-50-bandwidth-<digest>',
@@ -205,9 +205,26 @@ CREATE TABLE relay_measurements
     extra_info_source             String
       COMMENT 'Extra-info filename | filename | 2025-06-28-08-22-37-extra-infos',
 
+    -- === MATERIALIZED FLAG COLUMNS ===
+    is_exit                       UInt8 MATERIALIZED (consensus_flags_mask & (1 << 0)) > 0
+      COMMENT 'Computed: has Exit flag | materialized | system',
+    is_guard                      UInt8 MATERIALIZED (consensus_flags_mask & (1 << 1)) > 0
+      COMMENT 'Computed: has Guard flag | materialized | system',
+    is_fast                       UInt8 MATERIALIZED (consensus_flags_mask & (1 << 2)) > 0
+      COMMENT 'Computed: has Fast flag | materialized | system',
+    is_running                    UInt8 MATERIALIZED (consensus_flags_mask & (1 << 4)) > 0
+      COMMENT 'Computed: has Running flag | materialized | system',
+    is_stable                     UInt8 MATERIALIZED (consensus_flags_mask & (1 << 5)) > 0
+      COMMENT 'Computed: has Stable flag | materialized | system',
+    is_valid                      UInt8 MATERIALIZED (consensus_flags_mask & (1 << 6)) > 0
+      COMMENT 'Computed: has Valid flag | materialized | system',
+
     -- === INDEXES ===
     INDEX idx_fpr_ts (descriptor_fingerprint, ingest_measurement_time) TYPE bloom_filter GRANULARITY 1,
-    INDEX idx_country (geo_country_code) TYPE minmax GRANULARITY 4
+    INDEX idx_country (geo_country_code) TYPE minmax GRANULARITY 4,
+    INDEX idx_flags (consensus_flags_mask) TYPE bloom_filter GRANULARITY 4,
+    INDEX idx_bandwidth (consensus_bandwidth) TYPE minmax GRANULARITY 4,
+    INDEX idx_nickname (consensus_nickname) TYPE bloom_filter GRANULARITY 4
 )
 ENGINE = MergeTree
 PARTITION BY toYYYYMM(ingest_measurement_time)
