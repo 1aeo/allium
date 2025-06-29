@@ -1,3 +1,29 @@
+/* ---------- 1. DIMENSION LOOK‑UPS ---------- */
+
+/* Bit positions of every Tor consensus flag */
+CREATE TABLE flag_names
+(
+    bit_position UInt8,
+    flag_name LowCardinality(String),
+    PRIMARY KEY bit_position
+) ENGINE = TinyLog;
+
+INSERT INTO flag_names VALUES
+(0,'Exit'),(1,'Guard'),(2,'Fast'),(3,'HSDir'),
+(4,'Running'),(5,'Stable'),(6,'Valid'),(7,'V2Dir'),
+(8,'Authority'),(9,'BadExit'),(10,'Unnamed'),
+(11,'Named'),(12,'Sybil'),(13,'StableDesc');   -- 14..15 spare
+
+/* Optional dictionary for fast reverse lookup */
+CREATE DICTIONARY dict_flag_by_bit
+(
+    bit_position UInt8, flag_name String
+)
+PRIMARY KEY bit_position
+SOURCE(CLICKHOUSE(TABLE 'flag_names'))
+LAYOUT(FLAT);
+
+/* ---------- 2. FACT – HOURLY CONSENSUS SNAPSHOT ---------- */
 -- ClickHouse schema for full relay state snapshots
 -- Data sources are noted per column with comments including: description | source field name | source file name
 
@@ -43,8 +69,8 @@ CREATE TABLE relay_measurements
       COMMENT 'OR port | r <OR port> | 2025-06-28-20-00-00-consensus',
     consensus_dir_port            UInt16                                 -- "Dir port"               | r <Dir port>    | 2025-06-28-20-00-00-consensus
       COMMENT 'Dir port | r <Dir port> | 2025-06-28-20-00-00-consensus',
-    consensus_flags               Array(String)                          -- "Final flags"            | s <flags>        | 2025-06-28-20-00-00-consensus
-      COMMENT 'Final flags | s <flags> | 2025-06-28-20-00-00-consensus',
+    consensus_flags_mask           UInt16                                 -- "Consensus flags mask"    | s <flags>       | 2025-06-28-20-00-00-consensus
+      COMMENT 'Consensus flags mask | s <flags> | 2025-06-28-20-00-00-consensus',
     consensus_bandwidth           UInt32                                 -- "Consensus bandwidth"    | Bandwidth        | 2025-06-28-20-00-00-consensus
       COMMENT 'Consensus bandwidth | Bandwidth | 2025-06-28-20-00-00-consensus',
     consensus_protocols           Map(String, String)                   -- "Protocol ranges"        | pr               | 2025-06-28-20-00-00-consensus
@@ -58,8 +84,8 @@ CREATE TABLE relay_measurements
     vote_by_auth Nested(
       vote_authority              LowCardinality(String)                 -- "Authority name"         | vote header      | vote-<authority>-2025-06-28-20-00-00
         COMMENT 'Authority name | vote header | vote-<authority>-2025-06-28-20-00-00',
-      vote_flags                  Array(String)                          -- "Flags voted"            | s <flags>        | vote-<authority>-2025-06-28-20-00-00
-        COMMENT 'Flags voted | s <flags> | vote-<authority>-2025-06-28-20-00-00',
+      vote_flags_mask              UInt16                                 -- "Vote flags mask"        | s <flags>        | vote-<authority>-2025-06-28-20-00-00
+        COMMENT 'Vote flags mask | s <flags> | vote-<authority>-2025-06-28-20-00-00',
       vote_bw_reported            UInt32                                 -- "Reported bandwidth"     | w Bandwidth       | vote-<authority>-2025-06-28-20-00-00
         COMMENT 'Reported bandwidth | w Bandwidth | vote-<authority>-2025-06-28-20-00-00',
       vote_bw_measured            UInt32                                 -- "Measured bandwidth"     | Measured          | vote-<authority>-2025-06-28-20-00-00
