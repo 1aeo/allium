@@ -92,24 +92,32 @@ CREATE TABLE relay_measurements
       COMMENT 'Policy summary | p | 2025-06-28-20-00-00-consensus',
 
     -- === VOTES ===
-    vote_by_auth Nested(
-      vote_authority              LowCardinality(String)                 -- "Authority name"         | vote header      | vote-<authority>-2025-06-28-20-00-00
-        COMMENT 'Authority name | vote header | vote-<authority>-2025-06-28-20-00-00',
-      vote_flags_mask              UInt8                                 -- "Vote flags mask"        | s <flags>        | vote-<authority>-2025-06-28-20-00-00                                 -- "Vote flags mask"        | s <flags>        | vote-<authority>-2025-06-28-20-00-00
-        COMMENT 'Vote flags mask | s <flags> | vote-<authority>-2025-06-28-20-00-00',
-      vote_bw_reported            UInt32                                 -- "Reported bandwidth"     | w Bandwidth       | vote-<authority>-2025-06-28-20-00-00
-        COMMENT 'Scaled bandwidth | w Bandwidth | vote-<authority>-2025-06-28-20-00-00',
-      vote_bw_measured            UInt32                                 -- "Measured bandwidth"     | Measured          | vote-<authority>-2025-06-28-20-00-00
-        COMMENT 'Measured bandwidth | Measured | vote-<authority>-2025-06-28-20-00-00',
-      vote_stats_wfu              Float32                                -- "Weighted fraction uptime"| stats wfu       | vote-<authority>-2025-06-28-20-00-00
-        COMMENT 'Weighted fraction uptime | stats wfu | vote-<authority>-2025-06-28-20-00-00',
-      vote_stats_tk               UInt32                                 -- "Time key"                | stats tk         | vote-<authority>-2025-06-28-20-00-00
-        COMMENT 'Time key | stats tk | vote-<authority>-2025-06-28-20-00-00',
-      vote_stats_mtbf             UInt32                                 -- "Mean time between failures"| stats mtbf    | vote-<authority>-2025-06-28-20-00-00
-        COMMENT 'Mean time between failures | stats mtbf | vote-<authority>-2025-06-28-20-00-00',
-      vote_published              DateTime                               -- "Vote publish time"      | published         | vote-<authority>-2025-06-28-20-00-00
-        COMMENT 'Vote publish time | published | vote-<authority>-2025-06-28-20-00-00'
-    ),
+vote_by_auth Nested(
+    vote_authority          LowCardinality(String)
+        COMMENT 'Authority name | auth | vote',
+    vote_flags_mask         UInt16
+        COMMENT 'Vote flags mask | s <flags> | vote',
+    vote_bw_reported        UInt32
+        COMMENT 'Reported bandwidth | w Bandwidth | vote',
+    vote_bw_measured        UInt32
+        COMMENT 'Measured bandwidth | Measured | vote',
+    vote_stats_wfu          Float32
+        COMMENT 'Weighted fraction uptime | stats wfu | vote',
+    vote_stats_tk           UInt32
+        COMMENT 'Time key | stats tk | vote',
+    vote_stats_mtbf         UInt32
+        COMMENT 'Mean time between failures | stats mtbf | vote',
+    vote_ed25519_key        FixedString(32)
+        COMMENT 'Authority Ed25519 ID | id ed25519 | vote',
+    vote_methods            Array(UInt8)                           -- "Consensus methods"       | consensus-methods | vote-<authority>-2025-06-28-20-00-00
+        COMMENT 'Consensus methods | consensus-methods | vote-<authority>-2025-06-28-20-00-00',
+    vote_valid_after        DateTime
+        COMMENT 'Vote valid-after | valid-after | vote',
+    vote_fresh_until        DateTime
+        COMMENT 'Vote fresh-until | fresh-until | vote',
+    vote_valid_until        DateTime
+        COMMENT 'Vote valid-until | valid-until | vote'
+)    COMMENT 'Per authority vote | multiple | vote',
 
     -- === BANDWIDTH & HISTORY ===
     descriptor_bandwidth_avg      UInt64                                 -- "Sustained rate"         | bandwidth avg     | 2025-06-28-08-22-37-server-descriptors
