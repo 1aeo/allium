@@ -3,7 +3,7 @@
 /* Bit positions of every Tor consensus flag | flag mapping | system */
 CREATE TABLE flag_names
 (
-    bit_position UInt8
+    bit_position UInt32
       COMMENT 'Flag bit position | bit_position | system',
     flag_name    LowCardinality(String)
       COMMENT 'Flag name | known-flags | consensus',
@@ -25,7 +25,7 @@ INSERT INTO flag_names VALUES
 
 CREATE DICTIONARY dict_flag_by_bit
 (
-    bit_position UInt8
+    bit_position UInt32
       COMMENT 'Flag bit position | bit_position | system',
     flag_name    String
       COMMENT 'Flag name | known-flags | consensus'
@@ -80,7 +80,7 @@ CREATE TABLE relay_measurements
       COMMENT 'OR port | r <OR port> | 2025-06-28-20-00-00-consensus',
     consensus_dir_port            UInt16
       COMMENT 'Dir port | r <Dir port> | 2025-06-28-20-00-00-consensus',
-    consensus_flags_mask           UInt8
+    consensus_flags_mask           UInt32
       COMMENT 'Consensus flags mask | s <flags> | 2025-06-28-20-00-00-consensus',
     consensus_bandwidth           UInt32
       COMMENT 'Consensus bandwidth | Bandwidth | 2025-06-28-20-00-00-consensus',
@@ -95,7 +95,7 @@ CREATE TABLE relay_measurements
     vote_by_auth Nested(
         vote_authority          LowCardinality(String)
             COMMENT 'Authority name | auth | vote',
-        vote_flags_mask         UInt8
+        vote_flags_mask         UInt32
             COMMENT 'Vote flags mask | s <flags> | vote',
         vote_bw_reported        UInt32
             COMMENT 'Reported bandwidth | w Bandwidth | vote',
