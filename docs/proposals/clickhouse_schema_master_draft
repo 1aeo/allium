@@ -70,7 +70,7 @@ CREATE TABLE relay_measurements
       COMMENT 'Consensus method | consensus-method | 2025-06-28-20-00-00-consensus',
     consensus_nickname            LowCardinality(String)                 -- "Relay nickname"         | r <nickname>    | 2025-06-28-20-00-00-consensus
       COMMENT 'Relay nickname | r <nickname> | 2025-06-28-20-00-00-consensus',
-    consensus_ipv4_address        IPv4                                    -- "IPv4 address"           | r <IP>          | 2025-06-28-20-00-00-consensus
+    consensus_ipv4_address       Nullable(IPv4)                         -- "IPv4 address"           | r <IP>          | 2025-06-28-20-00-00-consensus                                    -- "IPv4 address"           | r <IP>          | 2025-06-28-20-00-00-consensus
       COMMENT 'IPv4 address | r <IP> | 2025-06-28-20-00-00-consensus',
     consensus_ipv6_address        Nullable(IPv6)                         -- "IPv6 address"           | r <IP6>         | 2025-06-28-20-00-00-consensus
       COMMENT 'IPv6 address | r <IP6> | 2025-06-28-20-00-00-consensus',
