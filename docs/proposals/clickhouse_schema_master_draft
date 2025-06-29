@@ -3,7 +3,7 @@
 /* Bit positions of every Tor consensus flag | flag mapping | system */
 CREATE TABLE flag_names
 (
-    bit_position UInt8        -- "Flag bit position" | bit_position | system        -- "Flag bit position" | bit_position | system
+    bit_position UInt8        -- "Flag bit position" | bit_position | system
       COMMENT 'Flag bit position | bit_position | system',
     flag_name    LowCardinality(String)  -- "Flag name"  | known-flags   | consensus
       COMMENT 'Flag name | known-flags | consensus',
@@ -25,8 +25,10 @@ INSERT INTO flag_names VALUES
 
 CREATE DICT_FLAG_BY_BIT
 (
-    bit_position UInt8,        -- "Flag bit position" | bit_position | system,        -- "Flag bit position" | bit_position | system
+    bit_position UInt8        -- "Flag bit position" | bit_position | system
+      COMMENT 'Flag bit position | bit_position | system',
     flag_name     String       -- "Flag name"         | known-flags   | consensus
+      COMMENT 'Flag name | known-flags | consensus'
 )
 PRIMARY KEY bit_position
 SOURCE(CLICKHOUSE(TABLE 'flag_names'))
@@ -96,7 +98,7 @@ CREATE TABLE relay_measurements
       vote_flags_mask              UInt8                                 -- "Vote flags mask"        | s <flags>        | vote-<authority>-2025-06-28-20-00-00                                 -- "Vote flags mask"        | s <flags>        | vote-<authority>-2025-06-28-20-00-00
         COMMENT 'Vote flags mask | s <flags> | vote-<authority>-2025-06-28-20-00-00',
       vote_bw_reported            UInt32                                 -- "Reported bandwidth"     | w Bandwidth       | vote-<authority>-2025-06-28-20-00-00
-        COMMENT 'Reported bandwidth | w Bandwidth | vote-<authority>-2025-06-28-20-00-00',
+        COMMENT 'Scaled bandwidth | w Bandwidth | vote-<authority>-2025-06-28-20-00-00',
       vote_bw_measured            UInt32                                 -- "Measured bandwidth"     | Measured          | vote-<authority>-2025-06-28-20-00-00
         COMMENT 'Measured bandwidth | Measured | vote-<authority>-2025-06-28-20-00-00',
       vote_stats_wfu              Float32                                -- "Weighted fraction uptime"| stats wfu       | vote-<authority>-2025-06-28-20-00-00
