@@ -1,23 +1,32 @@
 /* ---------- 1. DIMENSION LOOK‑UPS ---------- */
 
-/* Bit positions of every Tor consensus flag */
+/* Bit positions of every Tor consensus flag | flag mapping | system */
 CREATE TABLE flag_names
 (
-    bit_position UInt8,
-    flag_name LowCardinality(String),
+    bit_position UInt8        -- "Flag bit position" | bit_position | system        -- "Flag bit position" | bit_position | system
+      COMMENT 'Flag bit position | bit_position | system',
+    flag_name    LowCardinality(String)  -- "Flag name"  | known-flags   | consensus
+      COMMENT 'Flag name | known-flags | consensus',
     PRIMARY KEY bit_position
 ) ENGINE = TinyLog;
 
+/* Insert known (in use) flags from Tor spec as of 2025-06-29 (bits 0-14), and placeholders for future bits (14-20) */
 INSERT INTO flag_names VALUES
+-- Current spec flags (in use) as of 2025-06-29:
 (0,'Exit'),(1,'Guard'),(2,'Fast'),(3,'HSDir'),
 (4,'Running'),(5,'Stable'),(6,'Valid'),(7,'V2Dir'),
 (8,'Authority'),(9,'BadExit'),(10,'Unnamed'),
-(11,'Named'),(12,'Sybil'),(13,'StableDesc');   -- 14..15 spare
+(11,'Named'),(12,'Sybil'),(13,'StaleDesc'),
+(14,'MiddleOnly'),(15,'NoEdConsensus'),
+-- Placeholder flags for future bits:
+(16,'FallbackDir'),(17,'ReachableIPv6'),
+(18,'NoIPv6Consensus'),(19,'Unmeasured'),
+(20,'DescriptorMismatch');
 
-/* Optional dictionary for fast reverse lookup */
-CREATE DICTIONARY dict_flag_by_bit
+CREATE DICT_FLAG_BY_BIT
 (
-    bit_position UInt8, flag_name String
+    bit_position UInt8,        -- "Flag bit position" | bit_position | system,        -- "Flag bit position" | bit_position | system
+    flag_name     String       -- "Flag name"         | known-flags   | consensus
 )
 PRIMARY KEY bit_position
 SOURCE(CLICKHOUSE(TABLE 'flag_names'))
@@ -69,7 +78,7 @@ CREATE TABLE relay_measurements
       COMMENT 'OR port | r <OR port> | 2025-06-28-20-00-00-consensus',
     consensus_dir_port            UInt16                                 -- "Dir port"               | r <Dir port>    | 2025-06-28-20-00-00-consensus
       COMMENT 'Dir port | r <Dir port> | 2025-06-28-20-00-00-consensus',
-    consensus_flags_mask           UInt16                                 -- "Consensus flags mask"    | s <flags>       | 2025-06-28-20-00-00-consensus
+    consensus_flags_mask           UInt8                                 -- "Consensus flags mask"    | s <flags>       | 2025-06-28-20-00-00-consensus                                 -- "Consensus flags mask"    | s <flags>       | 2025-06-28-20-00-00-consensus
       COMMENT 'Consensus flags mask | s <flags> | 2025-06-28-20-00-00-consensus',
     consensus_bandwidth           UInt32                                 -- "Consensus bandwidth"    | Bandwidth        | 2025-06-28-20-00-00-consensus
       COMMENT 'Consensus bandwidth | Bandwidth | 2025-06-28-20-00-00-consensus',
@@ -84,7 +93,7 @@ CREATE TABLE relay_measurements
     vote_by_auth Nested(
       vote_authority              LowCardinality(String)                 -- "Authority name"         | vote header      | vote-<authority>-2025-06-28-20-00-00
         COMMENT 'Authority name | vote header | vote-<authority>-2025-06-28-20-00-00',
-      vote_flags_mask              UInt16                                 -- "Vote flags mask"        | s <flags>        | vote-<authority>-2025-06-28-20-00-00
+      vote_flags_mask              UInt8                                 -- "Vote flags mask"        | s <flags>        | vote-<authority>-2025-06-28-20-00-00                                 -- "Vote flags mask"        | s <flags>        | vote-<authority>-2025-06-28-20-00-00
         COMMENT 'Vote flags mask | s <flags> | vote-<authority>-2025-06-28-20-00-00',
       vote_bw_reported            UInt32                                 -- "Reported bandwidth"     | w Bandwidth       | vote-<authority>-2025-06-28-20-00-00
         COMMENT 'Reported bandwidth | w Bandwidth | vote-<authority>-2025-06-28-20-00-00',
