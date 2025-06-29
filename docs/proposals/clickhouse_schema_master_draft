@@ -92,32 +92,32 @@ CREATE TABLE relay_measurements
       COMMENT 'Policy summary | p | 2025-06-28-20-00-00-consensus',
 
     -- === VOTES ===
-vote_by_auth Nested(
-    vote_authority          LowCardinality(String)
-        COMMENT 'Authority name | auth | vote',
-    vote_flags_mask         UInt8
-        COMMENT 'Vote flags mask | s <flags> | vote',
-    vote_bw_reported        UInt32
-        COMMENT 'Reported bandwidth | w Bandwidth | vote',
-    vote_bw_measured        UInt32
-        COMMENT 'Measured bandwidth | Measured | vote',
-    vote_stats_wfu          Float32
-        COMMENT 'Weighted fraction uptime | stats wfu | vote',
-    vote_stats_tk           UInt32
-        COMMENT 'Time key | stats tk | vote',
-    vote_stats_mtbf         UInt32
-        COMMENT 'Mean time between failures | stats mtbf | vote',
-    vote_ed25519_key        FixedString(32)
-        COMMENT 'Authority Ed25519 ID | id ed25519 | vote',
-    vote_methods            Array(UInt8)
-        COMMENT 'Consensus methods | consensus-methods | vote-<authority>-2025-06-28-20-00-00',
-    vote_valid_after        DateTime
-        COMMENT 'Vote valid-after | valid-after | vote',
-    vote_fresh_until        DateTime
-        COMMENT 'Vote fresh-until | fresh-until | vote',
-    vote_valid_until        DateTime
-        COMMENT 'Vote valid-until | valid-until | vote'
-)    COMMENT 'Per authority vote | multiple | vote',
+    vote_by_auth Nested(
+        vote_authority          LowCardinality(String)
+            COMMENT 'Authority name | auth | vote',
+        vote_flags_mask         UInt8
+            COMMENT 'Vote flags mask | s <flags> | vote',
+        vote_bw_reported        UInt32
+            COMMENT 'Reported bandwidth | w Bandwidth | vote',
+        vote_bw_measured        UInt32
+            COMMENT 'Measured bandwidth | Measured | vote',
+        vote_stats_wfu          Float32
+            COMMENT 'Weighted fraction uptime | stats wfu | vote',
+        vote_stats_tk           UInt32
+            COMMENT 'Time key | stats tk | vote',
+        vote_stats_mtbf         UInt32
+            COMMENT 'Mean time between failures | stats mtbf | vote',
+        vote_ed25519_key        FixedString(32)
+            COMMENT 'Authority Ed25519 ID | id ed25519 | vote',
+        vote_methods            Array(UInt8)
+            COMMENT 'Consensus methods | consensus-methods | vote-<authority>-2025-06-28-20-00-00',
+        vote_valid_after        DateTime
+            COMMENT 'Vote valid-after | valid-after | vote',
+        vote_fresh_until        DateTime
+            COMMENT 'Vote fresh-until | fresh-until | vote',
+        vote_valid_until        DateTime
+            COMMENT 'Vote valid-until | valid-until | vote'
+    )    COMMENT 'Per authority vote | multiple | vote',
 
     -- === BANDWIDTH & HISTORY ===
     descriptor_bandwidth_avg      UInt64
@@ -129,6 +129,7 @@ vote_by_auth Nested(
     extra_info_bandwidth_read     UInt64
       COMMENT 'Latest read history | read-history | 2025-06-28-08-22-37-extra-infos',
     extra_info_bandwidth_write    UInt64
+      COMMENT 'Latest write history | write-history | 2025-06-28-08-22-37-extra-infos',
 
     -- === BANDWIDTH FILE METRICS ===
     bandwidth_measured         UInt32
