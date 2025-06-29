@@ -3,9 +3,9 @@
 /* Bit positions of every Tor consensus flag | flag mapping | system */
 CREATE TABLE flag_names
 (
-    bit_position UInt8        -- "Flag bit position" | bit_position | system
+    bit_position UInt8
       COMMENT 'Flag bit position | bit_position | system',
-    flag_name    LowCardinality(String)  -- "Flag name"  | known-flags   | consensus
+    flag_name LowCardinality(String)
       COMMENT 'Flag name | known-flags | consensus',
     PRIMARY KEY bit_position
 ) ENGINE = TinyLog;
@@ -23,11 +23,11 @@ INSERT INTO flag_names VALUES
 (18,'NoIPv6Consensus'),(19,'Unmeasured'),
 (20,'DescriptorMismatch');
 
-CREATE DICT_FLAG_BY_BIT
+CREATE DICTIONARY dict_flag_by_bit
 (
-    bit_position UInt8        -- "Flag bit position" | bit_position | system
+    bit_position UInt8
       COMMENT 'Flag bit position | bit_position | system',
-    flag_name     String       -- "Flag name"         | known-flags   | consensus
+    flag_name String
       COMMENT 'Flag name | known-flags | consensus'
 )
 PRIMARY KEY bit_position
