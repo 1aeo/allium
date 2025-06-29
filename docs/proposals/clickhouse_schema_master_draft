@@ -5,7 +5,7 @@ CREATE TABLE flag_names
 (
     bit_position UInt8
       COMMENT 'Flag bit position | bit_position | system',
-    flag_name LowCardinality(String)
+    flag_name    LowCardinality(String)
       COMMENT 'Flag name | known-flags | consensus',
     PRIMARY KEY bit_position
 ) ENGINE = TinyLog;
@@ -27,7 +27,7 @@ CREATE DICTIONARY dict_flag_by_bit
 (
     bit_position UInt8
       COMMENT 'Flag bit position | bit_position | system',
-    flag_name String
+    flag_name    String
       COMMENT 'Flag name | known-flags | consensus'
 )
 PRIMARY KEY bit_position
@@ -42,60 +42,60 @@ CREATE TABLE relay_measurements
 (
 
     -- === TIME ===
-    ingest_measurement_time      DateTime64(3)                           -- "Snapshot ingestion time" | measurement_time | system
+    ingest_measurement_time DateTime64(3)
       COMMENT 'Snapshot ingestion time | measurement_time | system',
-    consensus_valid_after        DateTime                                -- "Valid-after timestamp"   | valid-after     | 2025-06-28-20-00-00-consensus
+    consensus_valid_after   DateTime
       COMMENT 'Valid-after timestamp | valid-after | 2025-06-28-20-00-00-consensus',
-    consensus_fresh_until        DateTime                                -- "Fresh-until timestamp"   | fresh-until     | 2025-06-28-20-00-00-consensus
+    consensus_fresh_until   DateTime
       COMMENT 'Fresh-until timestamp | fresh-until | 2025-06-28-20-00-00-consensus',
-    consensus_valid_until        DateTime                                -- "Valid-until timestamp"   | valid-until     | 2025-06-28-20-00-00-consensus
+    consensus_valid_until   DateTime
       COMMENT 'Valid-until timestamp | valid-until | 2025-06-28-20-00-00-consensus',
-    descriptor_source_time        DateTime                                -- "Descriptor file timestamp" | file-timestamp | 2025-06-28-08-22-37-server-descriptors
+    descriptor_source_time   DateTime
       COMMENT 'Descriptor file timestamp | file-timestamp | 2025-06-28-08-22-37-server-descriptors',
-    vote_source_time              DateTime                                -- "Vote file timestamp"     | file-timestamp | vote-<authority>-2025-06-28-20-00-00
+    vote_source_time         DateTime
       COMMENT 'Vote file timestamp | file-timestamp | vote-<authority>-2025-06-28-20-00-00',
-    bandwidth_source_time         DateTime                                -- "Bandwidth file timestamp"| file-timestamp | 2025-06-28-19-51-50-bandwidth-<digest>
+    bandwidth_source_time    DateTime
       COMMENT 'Bandwidth file timestamp | file-timestamp | 2025-06-28-19-51-50-bandwidth-<digest>',
-    extra_info_source_time        DateTime                                -- "Extra-info file timestamp"| file-timestamp | 2025-06-28-08-22-37-extra-infos
+    extra_info_source_time   DateTime
       COMMENT 'Extra-info file timestamp | file-timestamp | 2025-06-28-08-22-37-extra-infos',
 
     -- === IDENTIFIERS ===
-    descriptor_fingerprint        FixedString(20)                         -- "RSA identity fingerprint" | fingerprint     | 2025-06-28-08-22-37-server-descriptors
+    descriptor_fingerprint        FixedString(20)
       COMMENT 'RSA identity fingerprint | fingerprint | 2025-06-28-08-22-37-server-descriptors',
-    descriptor_ed25519_master_key FixedString(32)                         -- "Ed25519 identity key"    | master-key-ed25519 | 2025-06-28-08-22-37-server-descriptors
+    descriptor_ed25519_master_key FixedString(32)
       COMMENT 'Ed25519 identity key | master-key-ed25519 | 2025-06-28-08-22-37-server-descriptors',
-    descriptor_digest             FixedString(20)                         -- "Descriptor digest"       | second fingerprint in 'r' line | 2025-06-28-20-00-00-consensus
+    descriptor_digest             FixedString(20)
       COMMENT 'Descriptor digest | second fingerprint in r-line | 2025-06-28-20-00-00-consensus',
 
     -- === CONSENSUS ATTRIBUTES ===
-    consensus_method             UInt8                                   -- "Consensus method"       | consensus-method | 2025-06-28-20-00-00-consensus
+    consensus_method             UInt8
       COMMENT 'Consensus method | consensus-method | 2025-06-28-20-00-00-consensus',
-    consensus_nickname            LowCardinality(String)                 -- "Relay nickname"         | r <nickname>    | 2025-06-28-20-00-00-consensus
+    consensus_nickname            LowCardinality(String)
       COMMENT 'Relay nickname | r <nickname> | 2025-06-28-20-00-00-consensus',
-    consensus_ipv4_address       Nullable(IPv4)                         -- "IPv4 address"           | r <IP>          | 2025-06-28-20-00-00-consensus                                    -- "IPv4 address"           | r <IP>          | 2025-06-28-20-00-00-consensus
+    consensus_ipv4_address       Nullable(IPv4)
       COMMENT 'IPv4 address | r <IP> | 2025-06-28-20-00-00-consensus',
-    consensus_ipv6_address        Nullable(IPv6)                         -- "IPv6 address"           | r <IP6>         | 2025-06-28-20-00-00-consensus
+    consensus_ipv6_address        Nullable(IPv6)
       COMMENT 'IPv6 address | r <IP6> | 2025-06-28-20-00-00-consensus',
-    consensus_or_port             UInt16                                 -- "OR port"                | r <OR port>     | 2025-06-28-20-00-00-consensus
+    consensus_or_port             UInt16
       COMMENT 'OR port | r <OR port> | 2025-06-28-20-00-00-consensus',
-    consensus_dir_port            UInt16                                 -- "Dir port"               | r <Dir port>    | 2025-06-28-20-00-00-consensus
+    consensus_dir_port            UInt16
       COMMENT 'Dir port | r <Dir port> | 2025-06-28-20-00-00-consensus',
-    consensus_flags_mask           UInt8                                 -- "Consensus flags mask"    | s <flags>       | 2025-06-28-20-00-00-consensus                                 -- "Consensus flags mask"    | s <flags>       | 2025-06-28-20-00-00-consensus
+    consensus_flags_mask           UInt8
       COMMENT 'Consensus flags mask | s <flags> | 2025-06-28-20-00-00-consensus',
-    consensus_bandwidth           UInt32                                 -- "Consensus bandwidth"    | Bandwidth        | 2025-06-28-20-00-00-consensus
+    consensus_bandwidth           UInt32
       COMMENT 'Consensus bandwidth | Bandwidth | 2025-06-28-20-00-00-consensus',
-    consensus_protocols           Map(String, String)                   -- "Protocol ranges"        | pr               | 2025-06-28-20-00-00-consensus
+    consensus_protocols           Map(String, String)
       COMMENT 'Protocol ranges | pr | 2025-06-28-20-00-00-consensus',
-    consensus_exit_policy_raw     String CODEC(ZSTD)                    -- "Full exit policy"       | p                | 2025-06-28-20-00-00-consensus
+    consensus_exit_policy_raw     String CODEC(ZSTD)
       COMMENT 'Full exit policy | p | 2025-06-28-20-00-00-consensus',
-    consensus_exit_policy_summary String CODEC(ZSTD)                    -- "Policy summary"         | p                | 2025-06-28-20-00-00-consensus
+    consensus_exit_policy_summary String CODEC(ZSTD)
       COMMENT 'Policy summary | p | 2025-06-28-20-00-00-consensus',
 
     -- === VOTES ===
 vote_by_auth Nested(
     vote_authority          LowCardinality(String)
         COMMENT 'Authority name | auth | vote',
-    vote_flags_mask         UInt16
+    vote_flags_mask         UInt8
         COMMENT 'Vote flags mask | s <flags> | vote',
     vote_bw_reported        UInt32
         COMMENT 'Reported bandwidth | w Bandwidth | vote',
@@ -109,7 +109,7 @@ vote_by_auth Nested(
         COMMENT 'Mean time between failures | stats mtbf | vote',
     vote_ed25519_key        FixedString(32)
         COMMENT 'Authority Ed25519 ID | id ed25519 | vote',
-    vote_methods            Array(UInt8)                           -- "Consensus methods"       | consensus-methods | vote-<authority>-2025-06-28-20-00-00
+    vote_methods            Array(UInt8)
         COMMENT 'Consensus methods | consensus-methods | vote-<authority>-2025-06-28-20-00-00',
     vote_valid_after        DateTime
         COMMENT 'Vote valid-after | valid-after | vote',
@@ -120,88 +120,88 @@ vote_by_auth Nested(
 )    COMMENT 'Per authority vote | multiple | vote',
 
     -- === BANDWIDTH & HISTORY ===
-    descriptor_bandwidth_avg      UInt64                                 -- "Sustained rate"         | bandwidth avg     | 2025-06-28-08-22-37-server-descriptors
+    descriptor_bandwidth_avg      UInt64
       COMMENT 'Sustained rate | bandwidth avg | 2025-06-28-08-22-37-server-descriptors',
-    descriptor_bandwidth_burst    UInt64                                 -- "Burst capacity"         | bandwidth burst   | 2025-06-28-08-22-37-server-descriptors
+    descriptor_bandwidth_burst    UInt64
       COMMENT 'Burst capacity | bandwidth burst | 2025-06-28-08-22-37-server-descriptors',
-    descriptor_bandwidth_observed UInt64                                 -- "Observed bandwidth"     | bandwidth observed| 2025-06-28-08-22-37-server-descriptors
+    descriptor_bandwidth_observed UInt64
       COMMENT 'Observed bandwidth | bandwidth observed | 2025-06-28-08-22-37-server-descriptors',
-    extra_info_bandwidth_read     UInt64                                 -- "Latest read history"    | read-history      | 2025-06-28-08-22-37-extra-infos
+    extra_info_bandwidth_read     UInt64
       COMMENT 'Latest read history | read-history | 2025-06-28-08-22-37-extra-infos',
-    extra_info_bandwidth_write    UInt64                                 -- "Latest write history"   | write-history     | 2025-06-28-08-22-37-extra-infos',
+    extra_info_bandwidth_write    UInt64
 
     -- === BANDWIDTH FILE METRICS ===
-    bandwidth_measured         UInt32  -- "Measured rate"          | bw                           | bandwidth file
+    bandwidth_measured         UInt32
       COMMENT 'Measured rate | bw | 2025-06-28-19-51-50-bandwidth-<digest>',
-    bandwidth_mean             UInt64  -- "Mean rate measured KB/s"              | bw_mean                      | bandwidth file
+    bandwidth_mean             UInt64
       COMMENT 'Mean rate | bw_mean | 2025-06-28-19-51-50-bandwidth-<digest>',
-    bandwidth_median           UInt64  -- "Median rate measured KB/s"            | bw_median                    | bandwidth file
+    bandwidth_median           UInt64
       COMMENT 'Median rate | bw_median | 2025-06-28-19-51-50-bandwidth-<digest>',
-    bandwidth_success_count    UInt32  -- "Successful measures"    | success                      | bandwidth file
+    bandwidth_success_count    UInt32
       COMMENT 'Successful measures | success | 2025-06-28-19-51-50-bandwidth-<digest>',
-    bandwidth_consensus_count  UInt32  -- "Consensus appearances"  | relay_in_recent_consensus_count | bandwidth file
+    bandwidth_consensus_count  UInt32
       COMMENT 'Consensus appearances | relay_in_recent_consensus_count | 2025-06-28-19-51-50-bandwidth-<digest>',
-    bandwidth_attempt_count    UInt32  -- "Measurement attempts"    | relay_recent_measurement_attempt_count | bandwidth file
+    bandwidth_attempt_count    UInt32
       COMMENT 'Measurement attempts | relay_recent_measurement_attempt_count | 2025-06-28-19-51-50-bandwidth-<digest>',
-    bandwidth_priority_count   UInt32  -- "Priority list uses"     | relay_recent_priority_list_count | bandwidth file
+    bandwidth_priority_count   UInt32
       COMMENT 'Priority list uses | relay_recent_priority_list_count | 2025-06-28-19-51-50-bandwidth-<digest>',
-    bandwidth_r_strm           Float32 -- "Stream success rate"     | r_strm                       | bandwidth file
+    bandwidth_r_strm           Float32
       COMMENT 'Stream success rate | r_strm | 2025-06-28-19-51-50-bandwidth-<digest>',
-    bandwidth_r_strm_filt      Float32 -- "Filtered stream rate"    | r_strm_filt                  | bandwidth file
+    bandwidth_r_strm_filt      Float32
       COMMENT 'Filtered stream rate | r_strm_filt | 2025-06-28-19-51-50-bandwidth-<digest>',
-    bandwidth_error_circ       UInt32  -- "Circuit error count"    | error_circ                   | bandwidth file
+    bandwidth_error_circ       UInt32
       COMMENT 'Circuit error count | error_circ | 2025-06-28-19-51-50-bandwidth-<digest>',
-    bandwidth_error_stream     UInt32  -- "Stream error count"     | error_stream                 | bandwidth file
+    bandwidth_error_stream     UInt32
       COMMENT 'Stream error count | error_stream | 2025-06-28-19-51-50-bandwidth-<digest>',
-    bandwidth_error_destination UInt32 -- "Destination errors"      | error_destination            | bandwidth file
+    bandwidth_error_destination UInt32
       COMMENT 'Destination errors | error_destination | 2025-06-28-19-51-50-bandwidth-<digest>',
-    bandwidth_error_second_relay UInt32 -- "Second relay errors"     | error_second_relay           | bandwidth file
+    bandwidth_error_second_relay UInt32
       COMMENT 'Second relay errors | error_second_relay | 2025-06-28-19-51-50-bandwidth-<digest>',
-    bandwidth_error_misc       UInt32  -- "Miscellaneous errors"     | error_misc                   | bandwidth file
+    bandwidth_error_misc         UInt32
       COMMENT 'Miscellaneous errors | error_misc | 2025-06-28-19-51-50-bandwidth-<digest>',
-    bandwidth_error_total      UInt32  -- "Total error count"       | error_circ+error_stream+error_destination+error_second_relay+error_misc | bandwidth file
+    bandwidth_error_total        UInt32
       COMMENT 'Total error count | error_circ+error_stream+error_destination+error_second_relay+error_misc | 2025-06-28-19-51-50-bandwidth-<digest>',
-    bandwidth_xoff_recv        UInt32  -- "XOFF packets recv"       | xoff_recv                   | bandwidth file
+    bandwidth_xoff_recv          UInt32
       COMMENT 'XOFF packets recv | xoff_recv | 2025-06-28-19-51-50-bandwidth-<digest>',
-    bandwidth_xoff_sent        UInt32  -- "XOFF packets sent"       | xoff_sent                   | bandwidth file
+    bandwidth_xoff_sent          UInt32
       COMMENT 'XOFF packets sent | xoff_sent | 2025-06-28-19-51-50-bandwidth-<digest>',
 
--- === UPTIME ===
-    descriptor_uptime_seconds     UInt32                                 -- "Uptime seconds"         | uptime            | 2025-06-28-08-22-37-server-descriptors
+    -- === UPTIME ===
+    descriptor_uptime_seconds     UInt32
       COMMENT 'Uptime seconds | uptime | 2025-06-28-08-22-37-server-descriptors',
 
     -- === GEO & ASN ===
-    geo_country_code              FixedString(2)                        -- "Country code"           | GeoLite2 country_iso_code| GeoLite2 DB
+    geo_country_code              FixedString(2)
       COMMENT 'Country code | GeoLite2 country_iso_code | GeoLite2 DB',
-    geo_as_number                 UInt32                                 -- "ASN number"             | GeoLite2 autonomous_system_number| GeoLite2 DB
+    geo_as_number                 UInt32
       COMMENT 'ASN number | GeoLite2 autonomous_system_number | GeoLite2 DB',
 
     -- === PLATFORM & VERSION ===
-    descriptor_platform_raw       String CODEC(ZSTD)                    -- "Platform string"        | platform          | 2025-06-28-08-22-37-server-descriptors
+    descriptor_platform_raw       String CODEC(ZSTD)
       COMMENT 'Platform string | platform | 2025-06-28-08-22-37-server-descriptors',
-    descriptor_tor_version        LowCardinality(String)                 -- "Tor version"            | v                 | 2025-06-28-20-00-00-consensus & 2025-06-28-08-22-37-server-descriptors
+    descriptor_tor_version        LowCardinality(String)
       COMMENT 'Tor version | v | 2025-06-28-20-00-00-consensus & 2025-06-28-08-22-37-server-descriptors',
 
     -- === CONTACT & FAMILY ===
-    descriptor_contact_raw        String CODEC(ZSTD)                    -- "Contact info"           | contact           | 2025-06-28-08-22-37-server-descriptors
+    descriptor_contact_raw        String CODEC(ZSTD)
       COMMENT 'Contact info | contact | 2025-06-28-08-22-37-server-descriptors',
-    descriptor_declared_family_list Array(FixedString(20))              -- "Declared family"         | family            | 2025-06-28-08-22-37-server-descriptors
+    descriptor_declared_family_list Array(FixedString(20))
       COMMENT 'Declared family | family | 2025-06-28-08-22-37-server-descriptors',
 
     -- === AROI DOMAIN ===
-    ingest_AROI_domain            LowCardinality(String)                 -- "AROI domain parsed"    | AROI_domain       | parsed from contact
+    ingest_AROI_domain            LowCardinality(String)
       COMMENT 'AROI domain parsed | AROI_domain | parsed from contact',
 
     -- === SOURCE IDENTIFIERS ===
-    consensus_source              String                                 -- "Consensus filename"     | filename          | 2025-06-28-20-00-00-consensus
+    consensus_source              String
       COMMENT 'Consensus filename | filename | 2025-06-28-20-00-00-consensus',
-    descriptor_source             String                                 -- "Descriptor filename"    | filename          | 2025-06-28-08-22-37-server-descriptors
+    descriptor_source             String
       COMMENT 'Descriptor filename | filename | 2025-06-28-08-22-37-server-descriptors',
-    vote_source                   String                                 -- "Vote filename"          | filename          | vote-<authority>-2025-06-28-20-00-00
+    vote_source                   String
       COMMENT 'Vote filename | filename | vote-<authority>-2025-06-28-20-00-00',
-    bandwidth_source              String                                 -- "Bandwidth filename"     | filename          | 2025-06-28-19-51-50-bandwidth-<digest>
+    bandwidth_source              String
       COMMENT 'Bandwidth filename | filename | 2025-06-28-19-51-50-bandwidth-<digest>',
-    extra_info_source             String                                 -- "Extra-info filename"    | filename          | 2025-06-28-08-22-37-extra-infos
+    extra_info_source             String
       COMMENT 'Extra-info filename | filename | 2025-06-28-08-22-37-extra-infos',
 
     -- === INDEXES ===
