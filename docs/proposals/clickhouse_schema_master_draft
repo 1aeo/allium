@@ -88,9 +88,9 @@ CREATE TABLE relay_measurements
     -- === BANDWIDTH FILE METRICS ===
     bandwidth_measured         UInt32  -- "Measured rate"          | bw                           | bandwidth file
       COMMENT 'Measured rate | bw | 2025-06-28-19-51-50-bandwidth-<digest>',
-    bandwidth_mean             UInt64  -- "Mean rate"              | bw_mean                      | bandwidth file
+    bandwidth_mean             UInt64  -- "Mean rate measured KB/s"              | bw_mean                      | bandwidth file
       COMMENT 'Mean rate | bw_mean | 2025-06-28-19-51-50-bandwidth-<digest>',
-    bandwidth_median           UInt64  -- "Median rate"            | bw_median                    | bandwidth file
+    bandwidth_median           UInt64  -- "Median rate measured KB/s"            | bw_median                    | bandwidth file
       COMMENT 'Median rate | bw_median | 2025-06-28-19-51-50-bandwidth-<digest>',
     bandwidth_success_count    UInt32  -- "Successful measures"    | success                      | bandwidth file
       COMMENT 'Successful measures | success | 2025-06-28-19-51-50-bandwidth-<digest>',
@@ -119,7 +119,7 @@ CREATE TABLE relay_measurements
     bandwidth_xoff_recv        UInt32  -- "XOFF packets recv"       | xoff_recv                   | bandwidth file
       COMMENT 'XOFF packets recv | xoff_recv | 2025-06-28-19-51-50-bandwidth-<digest>',
     bandwidth_xoff_sent        UInt32  -- "XOFF packets sent"       | xoff_sent                   | bandwidth file
-      COMMENT 'XOFF packets sent | xoff_sent | 2025-06-28-19-51-50-bandwidth-<digest>', 2025-06-28-19-51-50-bandwidth-<digest>',
+      COMMENT 'XOFF packets sent | xoff_sent | 2025-06-28-19-51-50-bandwidth-<digest>',
 
 -- === UPTIME ===
     descriptor_uptime_seconds     UInt32                                 -- "Uptime seconds"         | uptime            | 2025-06-28-08-22-37-server-descriptors
