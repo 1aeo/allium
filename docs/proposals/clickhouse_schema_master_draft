@@ -1,0 +1,138 @@
+-- ClickHouse schema for full relay state snapshots
+-- Data sources are noted per column with comments including: description | source field name | source file name
+
+CREATE TABLE relay_measurements
+(
+    -- === TIME ===
+    ingest_measurement_time      DateTime64(3)                           -- "Snapshot ingestion time" | measurement_time | system
+      COMMENT 'Snapshot ingestion time | measurement_time | system',
+    consensus_valid_after        DateTime                                -- "Valid-after timestamp"   | valid-after     | 2025-06-28-20-00-00-consensus
+      COMMENT 'Valid-after timestamp | valid-after | 2025-06-28-20-00-00-consensus',
+    consensus_fresh_until        DateTime                                -- "Fresh-until timestamp"   | fresh-until     | 2025-06-28-20-00-00-consensus
+      COMMENT 'Fresh-until timestamp | fresh-until | 2025-06-28-20-00-00-consensus',
+    consensus_valid_until        DateTime                                -- "Valid-until timestamp"   | valid-until     | 2025-06-28-20-00-00-consensus
+      COMMENT 'Valid-until timestamp | valid-until | 2025-06-28-20-00-00-consensus',
+    descriptor_source_time        DateTime                                -- "Descriptor file timestamp" | file-timestamp | 2025-06-28-08-22-37-server-descriptors
+      COMMENT 'Descriptor file timestamp | file-timestamp | 2025-06-28-08-22-37-server-descriptors',
+    vote_source_time              DateTime                                -- "Vote file timestamp"     | file-timestamp | vote-<authority>-2025-06-28-20-00-00
+      COMMENT 'Vote file timestamp | file-timestamp | vote-<authority>-2025-06-28-20-00-00',
+    bandwidth_source_time         DateTime                                -- "Bandwidth file timestamp"| file-timestamp | 2025-06-28-19-51-50-bandwidth-<digest>
+      COMMENT 'Bandwidth file timestamp | file-timestamp | 2025-06-28-19-51-50-bandwidth-<digest>',
+    extra_info_source_time        DateTime                                -- "Extra-info file timestamp"| file-timestamp | 2025-06-28-08-22-37-extra-infos
+      COMMENT 'Extra-info file timestamp | file-timestamp | 2025-06-28-08-22-37-extra-infos',
+
+    -- === IDENTIFIERS ===
+    descriptor_fingerprint        FixedString(20)                         -- "RSA identity fingerprint" | fingerprint     | 2025-06-28-08-22-37-server-descriptors
+      COMMENT 'RSA identity fingerprint | fingerprint | 2025-06-28-08-22-37-server-descriptors',
+    descriptor_ed25519_master_key FixedString(32)                         -- "Ed25519 identity key"    | master-key-ed25519 | 2025-06-28-08-22-37-server-descriptors
+      COMMENT 'Ed25519 identity key | master-key-ed25519 | 2025-06-28-08-22-37-server-descriptors',
+    descriptor_digest             FixedString(20)                         -- "Descriptor digest"       | second fingerprint in 'r' line | 2025-06-28-20-00-00-consensus
+      COMMENT 'Descriptor digest | second fingerprint in r-line | 2025-06-28-20-00-00-consensus',
+
+    -- === CONSENSUS ATTRIBUTES ===
+    consensus_method             UInt8                                   -- "Consensus method"       | consensus-method | 2025-06-28-20-00-00-consensus
+      COMMENT 'Consensus method | consensus-method | 2025-06-28-20-00-00-consensus',
+    consensus_nickname            LowCardinality(String)                 -- "Relay nickname"         | r <nickname>    | 2025-06-28-20-00-00-consensus
+      COMMENT 'Relay nickname | r <nickname> | 2025-06-28-20-00-00-consensus',
+    consensus_ipv4_address        IPv4                                    -- "IPv4 address"           | r <IP>          | 2025-06-28-20-00-00-consensus
+      COMMENT 'IPv4 address | r <IP> | 2025-06-28-20-00-00-consensus',
+    consensus_ipv6_address        Nullable(IPv6)                         -- "IPv6 address"           | r <IP6>         | 2025-06-28-20-00-00-consensus
+      COMMENT 'IPv6 address | r <IP6> | 2025-06-28-20-00-00-consensus',
+    consensus_or_port             UInt16                                 -- "OR port"                | r <OR port>     | 2025-06-28-20-00-00-consensus
+      COMMENT 'OR port | r <OR port> | 2025-06-28-20-00-00-consensus',
+    consensus_dir_port            UInt16                                 -- "Dir port"               | r <Dir port>    | 2025-06-28-20-00-00-consensus
+      COMMENT 'Dir port | r <Dir port> | 2025-06-28-20-00-00-consensus',
+    consensus_flags               Array(String)                          -- "Final flags"            | s <flags>        | 2025-06-28-20-00-00-consensus
+      COMMENT 'Final flags | s <flags> | 2025-06-28-20-00-00-consensus',
+    consensus_bandwidth           UInt32                                 -- "Consensus bandwidth"    | Bandwidth        | 2025-06-28-20-00-00-consensus
+      COMMENT 'Consensus bandwidth | Bandwidth | 2025-06-28-20-00-00-consensus',
+    consensus_protocols           Map(String, String)                   -- "Protocol ranges"        | pr               | 2025-06-28-20-00-00-consensus
+      COMMENT 'Protocol ranges | pr | 2025-06-28-20-00-00-consensus',
+    consensus_exit_policy_raw     String CODEC(ZSTD)                    -- "Full exit policy"       | p                | 2025-06-28-20-00-00-consensus
+      COMMENT 'Full exit policy | p | 2025-06-28-20-00-00-consensus',
+    consensus_exit_policy_summary String CODEC(ZSTD)                    -- "Policy summary"         | p                | 2025-06-28-20-00-00-consensus
+      COMMENT 'Policy summary | p | 2025-06-28-20-00-00-consensus',
+
+    -- === VOTES ===
+    vote_by_auth Nested(
+      vote_authority              LowCardinality(String)                 -- "Authority name"         | vote header      | vote-<authority>-2025-06-28-20-00-00
+        COMMENT 'Authority name | vote header | vote-<authority>-2025-06-28-20-00-00',
+      vote_flags                  Array(String)                          -- "Flags voted"            | s <flags>        | vote-<authority>-2025-06-28-20-00-00
+        COMMENT 'Flags voted | s <flags> | vote-<authority>-2025-06-28-20-00-00',
+      vote_bw_reported            UInt32                                 -- "Reported bandwidth"     | w Bandwidth       | vote-<authority>-2025-06-28-20-00-00
+        COMMENT 'Reported bandwidth | w Bandwidth | vote-<authority>-2025-06-28-20-00-00',
+      vote_bw_measured            UInt32                                 -- "Measured bandwidth"     | Measured          | vote-<authority>-2025-06-28-20-00-00
+        COMMENT 'Measured bandwidth | Measured | vote-<authority>-2025-06-28-20-00-00',
+      vote_stats_wfu              Float32                                -- "Weighted fraction uptime"| stats wfu       | vote-<authority>-2025-06-28-20-00-00
+        COMMENT 'Weighted fraction uptime | stats wfu | vote-<authority>-2025-06-28-20-00-00',
+      vote_stats_tk               UInt32                                 -- "Time key"                | stats tk         | vote-<authority>-2025-06-28-20-00-00
+        COMMENT 'Time key | stats tk | vote-<authority>-2025-06-28-20-00-00',
+      vote_stats_mtbf             UInt32                                 -- "Mean time between failures"| stats mtbf    | vote-<authority>-2025-06-28-20-00-00
+        COMMENT 'Mean time between failures | stats mtbf | vote-<authority>-2025-06-28-20-00-00',
+      vote_published              DateTime                               -- "Vote publish time"      | published         | vote-<authority>-2025-06-28-20-00-00
+        COMMENT 'Vote publish time | published | vote-<authority>-2025-06-28-20-00-00'
+    ),
+
+    -- === BANDWIDTH & HISTORY ===
+    descriptor_bandwidth_avg      UInt64                                 -- "Sustained rate"         | bandwidth avg     | 2025-06-28-08-22-37-server-descriptors
+      COMMENT 'Sustained rate | bandwidth avg | 2025-06-28-08-22-37-server-descriptors',
+    descriptor_bandwidth_burst    UInt64                                 -- "Burst capacity"         | bandwidth burst   | 2025-06-28-08-22-37-server-descriptors
+      COMMENT 'Burst capacity | bandwidth burst | 2025-06-28-08-22-37-server-descriptors',
+    descriptor_bandwidth_observed UInt64                                 -- "Observed bandwidth"     | bandwidth observed| 2025-06-28-08-22-37-server-descriptors
+      COMMENT 'Observed bandwidth | bandwidth observed | 2025-06-28-08-22-37-server-descriptors',
+    extra_info_bandwidth_read     UInt64                                 -- "Latest read history"    | read-history      | 2025-06-28-08-22-37-extra-infos
+      COMMENT 'Latest read history | read-history | 2025-06-28-08-22-37-extra-infos',
+    extra_info_bandwidth_write    UInt64                                 -- "Latest write history"   | write-history     | 2025-06-28-08-22-37-extra-infos
+      COMMENT 'Latest write history | write-history | 2025-06-28-08-22-37-extra-infos',
+
+    -- === UPTIME ===
+    descriptor_uptime_seconds     UInt32                                 -- "Uptime seconds"         | uptime            | 2025-06-28-08-22-37-server-descriptors
+      COMMENT 'Uptime seconds | uptime | 2025-06-28-08-22-37-server-descriptors',
+
+    -- === GEO & ASN ===
+    geo_country_code              FixedString(2)                        -- "Country code"           | GeoLite2 country_iso_code| GeoLite2 DB
+      COMMENT 'Country code | GeoLite2 country_iso_code | GeoLite2 DB',
+    geo_as_number                 UInt32                                 -- "ASN number"             | GeoLite2 autonomous_system_number| GeoLite2 DB
+      COMMENT 'ASN number | GeoLite2 autonomous_system_number | GeoLite2 DB',
+
+    -- === PLATFORM & VERSION ===
+    descriptor_platform_raw       String CODEC(ZSTD)                    -- "Platform string"        | platform          | 2025-06-28-08-22-37-server-descriptors
+      COMMENT 'Platform string | platform | 2025-06-28-08-22-37-server-descriptors',
+    descriptor_tor_version        LowCardinality(String)                 -- "Tor version"            | v                 | 2025-06-28-20-00-00-consensus & 2025-06-28-08-22-37-server-descriptors
+      COMMENT 'Tor version | v | 2025-06-28-20-00-00-consensus & 2025-06-28-08-22-37-server-descriptors',
+
+    -- === CONTACT & FAMILY ===
+    descriptor_contact_raw        String CODEC(ZSTD)                    -- "Contact info"           | contact           | 2025-06-28-08-22-37-server-descriptors
+      COMMENT 'Contact info | contact | 2025-06-28-08-22-37-server-descriptors',
+    descriptor_declared_family_list Array(FixedString(20))              -- "Declared family"         | family            | 2025-06-28-08-22-37-server-descriptors
+      COMMENT 'Declared family | family | 2025-06-28-08-22-37-server-descriptors',
+
+    -- === AROI DOMAIN ===
+    ingest_AROI_domain            LowCardinality(String)                 -- "AROI domain parsed"    | AROI_domain       | parsed from contact
+      COMMENT 'AROI domain parsed | AROI_domain | parsed from contact',
+
+    -- === SOURCE IDENTIFIERS ===
+    consensus_source              String                                 -- "Consensus filename"     | filename          | 2025-06-28-20-00-00-consensus
+      COMMENT 'Consensus filename | filename | 2025-06-28-20-00-00-consensus',
+    descriptor_source             String                                 -- "Descriptor filename"    | filename          | 2025-06-28-08-22-37-server-descriptors
+      COMMENT 'Descriptor filename | filename | 2025-06-28-08-22-37-server-descriptors',
+    vote_source                   String                                 -- "Vote filename"          | filename          | vote-<authority>-2025-06-28-20-00-00
+      COMMENT 'Vote filename | filename | vote-<authority>-2025-06-28-20-00-00',
+    bandwidth_source              String                                 -- "Bandwidth filename"     | filename          | 2025-06-28-19-51-50-bandwidth-<digest>
+      COMMENT 'Bandwidth filename | filename | 2025-06-28-19-51-50-bandwidth-<digest>',
+    extra_info_source             String                                 -- "Extra-info filename"    | filename          | 2025-06-28-08-22-37-extra-infos
+      COMMENT 'Extra-info filename | filename | 2025-06-28-08-22-37-extra-infos',
+
+    -- === DATA PROVENANCE ===
+    system_ingestion_time         DateTime DEFAULT now()                -- "Row insertion time"     | ingestion_time    | system
+      COMMENT 'Row insertion time | ingestion_time | system',
+
+    -- === INDEXES ===
+    INDEX idx_fpr_ts (descriptor_fingerprint, ingest_measurement_time) TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_country (geo_country_code) TYPE minmax GRANULARITY 4
+)
+ENGINE = MergeTree
+PARTITION BY toYYYYMM(ingest_measurement_time)
+ORDER BY (descriptor_fingerprint, ingest_measurement_time)
+TTL ingest_measurement_time + INTERVAL 5 YEAR
+SETTINGS index_granularity = 8192;
