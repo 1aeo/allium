@@ -3,6 +3,7 @@
 
 CREATE TABLE relay_measurements
 (
+
     -- === TIME ===
     ingest_measurement_time      DateTime64(3)                           -- "Snapshot ingestion time" | measurement_time | system
       COMMENT 'Snapshot ingestion time | measurement_time | system',
@@ -82,8 +83,36 @@ CREATE TABLE relay_measurements
       COMMENT 'Observed bandwidth | bandwidth observed | 2025-06-28-08-22-37-server-descriptors',
     extra_info_bandwidth_read     UInt64                                 -- "Latest read history"    | read-history      | 2025-06-28-08-22-37-extra-infos
       COMMENT 'Latest read history | read-history | 2025-06-28-08-22-37-extra-infos',
-    extra_info_bandwidth_write    UInt64                                 -- "Latest write history"   | write-history     | 2025-06-28-08-22-37-extra-infos
-      COMMENT 'Latest write history | write-history | 2025-06-28-08-22-37-extra-infos',
+    extra_info_bandwidth_write    UInt64                                 -- "Latest write history"   | write-history     | 2025-06-28-08-22-37-extra-infos',
+
+    -- === BANDWIDTH FILE METRICS ===
+    bandwidth_measured             UInt32                                 -- "Authority measured rate" | bw                           | bandwidth file
+      COMMENT 'Authority measured rate | bw | 2025-06-28-19-51-50-bandwidth-<digest>',
+    bandwidth_mean                 UInt64                                 -- "Mean measured KB/s"      | bw_mean                      | bandwidth file
+      COMMENT 'Mean measured KB/s | bw_mean | 2025-06-28-19-51-50-bandwidth-<digest>',
+    bandwidth_median               UInt64                                 -- "Median measured KB/s"    | bw_median                    | bandwidth file
+      COMMENT 'Median measured KB/s | bw_median | 2025-06-28-19-51-50-bandwidth-<digest>',
+    bandwidth_success_count        UInt32                                 -- "Measurement successes"   | success                      | bandwidth file
+      COMMENT 'Measurement successes | success | 2025-06-28-19-51-50-bandwidth-<digest>',
+    bandwidth_consensus_count      UInt32                                 -- "Consensus appear count"  | relay_in_recent_consensus_count | bandwidth file
+      COMMENT 'Consensus appear count | relay_in_recent_consensus_count | 2025-06-28-19-51-50-bandwidth-<digest>',
+    bandwidth_r_strm               Float32                                -- "Stream success rate"     | r_strm                       | bandwidth file
+      COMMENT 'Stream success rate | r_strm | 2025-06-28-19-51-50-bandwidth-<digest>',
+    bandwidth_r_strm_filt          Float32                                -- "Filtered stream rate"    | r_strm_filt                  | bandwidth file
+      COMMENT 'Filtered stream rate | r_strm_filt | 2025-06-28-19-51-50-bandwidth-<digest>',
+    bandwidth_error_circ           UInt32                                 -- "Circuit errors"          | error_circ                   | bandwidth file
+      COMMENT 'Circuit errors | error_circ | 2025-06-28-19-51-50-bandwidth-<digest>',
+    bandwidth_error_stream         UInt32                                 -- "Stream errors"           | error_stream                 | bandwidth file
+      COMMENT 'Stream errors | error_stream | 2025-06-28-19-51-50-bandwidth-<digest>',
+    bandwidth_error_destination    UInt32                                 -- "Destination errors"      | error_destination            | bandwidth file
+      COMMENT 'Destination errors | error_destination | 2025-06-28-19-51-50-bandwidth-<digest>',
+    bandwidth_error_second_relay   UInt32                                 -- "Second relay errors"     | error_second_relay           | bandwidth file
+      COMMENT 'Second relay errors | error_second_relay | 2025-06-28-19-51-50-bandwidth-<digest>',
+    bandwidth_error_misc           UInt32                                 -- "Misc errors"             | error_misc                   | bandwidth file
+      COMMENT 'Misc errors | error_misc | 2025-06-28-19-51-50-bandwidth-<digest>',
+    bandwidth_error_stream_total   UInt32                                 -- "Total error count"       | error_stream + error_*       | bandwidth file
+      COMMENT 'Total error count | error_stream + error_* | 2025-06-28-19-51-50-bandwidth-<digest>',
+
 
     -- === UPTIME ===
     descriptor_uptime_seconds     UInt32                                 -- "Uptime seconds"         | uptime            | 2025-06-28-08-22-37-server-descriptors
@@ -122,10 +151,6 @@ CREATE TABLE relay_measurements
       COMMENT 'Bandwidth filename | filename | 2025-06-28-19-51-50-bandwidth-<digest>',
     extra_info_source             String                                 -- "Extra-info filename"    | filename          | 2025-06-28-08-22-37-extra-infos
       COMMENT 'Extra-info filename | filename | 2025-06-28-08-22-37-extra-infos',
-
-    -- === DATA PROVENANCE ===
-    system_ingestion_time         DateTime DEFAULT now()                -- "Row insertion time"     | ingestion_time    | system
-      COMMENT 'Row insertion time | ingestion_time | system',
 
     -- === INDEXES ===
     INDEX idx_fpr_ts (descriptor_fingerprint, ingest_measurement_time) TYPE bloom_filter GRANULARITY 1,
