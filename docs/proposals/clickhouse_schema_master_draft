@@ -1,3 +1,14 @@
+/* ---------- 0. EXAMPLE SOURCE FILES ---------- */
+-- Consensus file: 2025-06-28-20-00-00-consensus https://collector.torproject.org/recent/relay-descriptors/consensuses/2025-06-28-20-00-00-consensus
+-- Vote file: vote-<authority>-2025-06-28-20-00-00
+    -- moria: https://collector.torproject.org/recent/relay-descriptors/votes/2025-06-28-20-00-00-vote-F533C81CEF0BC0267857C99B2F471ADF249FA232-F7A2D7D9F52137D155EE84C1AF0B6BC34A6B509B
+    -- gabelmoo: https://collector.torproject.org/recent/relay-descriptors/votes/2025-06-28-20-00-00-vote-F533C81CEF0BC0267857C99B2F471ADF249FA232-F7A2D7D9F52137D155EE84C1AF0B6BC34A6B509B
+-- Server descriptor file: 2025-06-28-08-22-37-server-descriptors https://collector.torproject.org/recent/relay-descriptors/server-descriptors/2025-06-28-08-22-37-server-descriptors
+-- Bandwidth file: 2025-06-28-19-51-50-bandwidth-<digest>
+    -- Example 1: https://collector.torproject.org/recent/relay-descriptors/bandwidths/2025-06-28-19-41-01-bandwidth-89C7C210312ECB21F74C0D6DCB83FC5119D67F5DE95A268D8B0AF934D843E42D
+    -- maatuska: https://collector.torproject.org/recent/relay-descriptors/bandwidths/2025-06-28-19-51-50-bandwidth-765440120D06D9039E265D11DE45F98ACF665F89F68F1B0B4EF11CE7777EB609
+-- Extra-info file: 2025-06-28-08-22-37-extra-infos https://collector.torproject.org/recent/relay-descriptors/extra-infos/2025-06-28-08-22-37-extra-infos
+
 /* ----------  1. FILE‑LEVEL METADATA  ---------- */
 CREATE TABLE file_meta
 (
