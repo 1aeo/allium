@@ -361,3 +361,71 @@ PRIMARY KEY (descriptor_fingerprint, ingest_measurement_time)
 -- TTL removed to retain all historical data
     -- TTL ingest_measurement_time + INTERVAL 5 YEAR
 SETTINGS index_granularity = 8192;
+
+
+/*  ----------  4. SIDE-TABLES -------------------------- */
+/* ----------- 4.1 DIRECTORY‑REQUEST STATS – FULL  ----------  */
+CREATE TABLE relay_dirreq_stats
+(
+    ingest_measurement_time DateTime
+        COMMENT 'Snapshot ingestion time | measurement_time | system',
+
+    descriptor_fingerprint FixedString(20)
+        COMMENT 'Relay fingerprint | fingerprint | server-descriptor',
+
+    -- ==================  24‑h HISTORY  ==================
+    dirreq_write_history Array(UInt64) CODEC(ZSTD)
+        COMMENT 'Write hist bytes | dirreq-write-history | extra-info',
+    dirreq_read_history  Array(UInt64) CODEC(ZSTD)
+        COMMENT 'Read hist bytes  | dirreq-read-history  | extra-info',
+
+    -- ===========  COUNTS BY COUNTRY (maps) ==============
+    dirreq_v2_ips  Map(String, UInt32)
+        COMMENT 'v2 IPs by CC   | dirreq-v2-ips  | extra-info',
+    dirreq_v3_ips  Map(String, UInt32)
+        COMMENT 'v3 IPs by CC   | dirreq-v3-ips  | extra-info',
+    dirreq_v2_reqs Map(String, UInt32)
+        COMMENT 'v2 requests CC | dirreq-v2-reqs | extra-info',
+    dirreq_v3_reqs Map(String, UInt32)
+        COMMENT 'v3 requests CC | dirreq-v3-reqs | extra-info',
+
+    -- ============  RESPONSE HISTOGRAMS  =================
+    dirreq_v2_resp Map(String, UInt32)
+        COMMENT 'v2 response map | dirreq-v2-resp | extra-info',
+    dirreq_v3_resp Map(String, UInt32)
+        COMMENT 'v3 response map | dirreq-v3-resp | extra-info',
+
+    -- ============  DOWNLOAD OUTCOMES  ===================
+    dirreq_v2_direct_dl    Map(String, UInt32)
+        COMMENT 'v2 direct DL   | dirreq-v2-direct-dl    | extra-info',
+    dirreq_v2_tunneled_dl  Map(String, UInt32)
+        COMMENT 'v2 tunneled DL | dirreq-v2-tunneled-dl  | extra-info',
+    dirreq_v3_direct_dl    Map(String, UInt32)
+        COMMENT 'v3 direct DL   | dirreq-v3-direct-dl    | extra-info',
+    dirreq_v3_tunneled_dl  Map(String, UInt32)
+        COMMENT 'v3 tunneled DL | dirreq-v3-tunneled-dl  | extra-info',
+
+    -- === INDEXES ===
+    INDEX idx_time (ingest_measurement_time) TYPE minmax GRANULARITY 4
+)
+ENGINE = MergeTree()
+PARTITION BY toYYYYMM(ingest_measurement_time)
+ORDER BY (descriptor_fingerprint, ingest_measurement_time)
+PRIMARY KEY (descriptor_fingerprint, ingest_measurement_time);
+
+/*
+-- HOW TO JOIN WITH relay_measurements:
+
+SELECT
+    m.consensus_valid_after,
+    sum(d.dirreq_v3_resp['ok'])        AS v3_ok,
+    sum(d.dirreq_v3_resp['not-modified']) AS v3_notmod,
+    quantile(0.5)(arrayElement(d.dirreq_write_history, 5)) AS median_v4_bytes
+FROM relay_measurements AS m
+INNER JOIN relay_dirreq_stats d
+  ON  m.descriptor_fingerprint   = d.descriptor_fingerprint
+  AND m.ingest_measurement_time  = d.ingest_measurement_time
+WHERE m.consensus_valid_after >= today() - INTERVAL 30 DAY
+GROUP BY m.consensus_valid_after
+ORDER BY m.consensus_valid_after;
+*/
