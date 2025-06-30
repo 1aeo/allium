@@ -154,6 +154,8 @@ CREATE TABLE relay_measurements
       COMMENT 'Relay nickname | r <nickname> | 2025-06-28-20-00-00-consensus',
     consensus_published_time      DateTime CODEC(DoubleDelta, ZSTD)
       COMMENT 'Per-relay published time | r line timestamp | 2025-06-28-20-00-00-consensus',
+    descriptor_uptime_seconds     UInt32
+      COMMENT 'Uptime seconds | uptime | 2025-06-28-08-22-37-server-descriptors',
     consensus_ipv4_address       Nullable(IPv4)
       COMMENT 'IPv4 address | r <IP> | 2025-06-28-20-00-00-consensus',
     consensus_ipv6_address        Nullable(IPv6)
@@ -287,10 +289,6 @@ CREATE TABLE relay_measurements
       COMMENT 'XOFF packets recv | xoff_recv | 2025-06-28-19-51-50-bandwidth-<digest>',
     bandwidth_xoff_sent          UInt32
       COMMENT 'XOFF packets sent | xoff_sent | 2025-06-28-19-51-50-bandwidth-<digest>',
-
-    -- === UPTIME ===
-    descriptor_uptime_seconds     UInt32
-      COMMENT 'Uptime seconds | uptime | 2025-06-28-08-22-37-server-descriptors',
 
     -- === RELAY STATUS ===
     descriptor_overload_general   UInt8 DEFAULT 0
