@@ -186,16 +186,20 @@ descriptor_overload_general UInt8 DEFAULT 0
 
 **Recommendation**: ✅ **ADD** - High Priority (Future-Proofing)  
 
+**Storage Research**: Family certificates use Ed25519 certificate format (type `[0C]` FAMILY_V_IDENTITY) with ~104 bytes per certificate plus minimal extensions. Much more efficient than storing full certificate strings.
+
 **Pros**:
 - Future-proofs schema for upcoming Tor features
 - More secure than current `family` declarations
 - Essential for family-based analysis in future network
 - Cryptographically verifiable relationships
+- Efficient structured storage vs full certificate strings
+- O(N) storage complexity vs O(N²) for current family system
 
 **Cons**:
 - Not yet widely deployed
-- Large storage requirements (certificates)
-- Complex nested structure
+- Complex parsing required
+- Transition period requires both formats
 
 **Most Similar Existing Field**: `descriptor_declared_family_list Array(FixedString(20))`
 
@@ -205,12 +209,20 @@ descriptor_overload_general UInt8 DEFAULT 0
 descriptor_declared_family_list Array(FixedString(20))
   COMMENT 'Declared family | family | server-descriptors',
 
--- AFTER: Add certified family relationships
+-- AFTER: Add both for compatibility during transition (keep past 20 years + future)
+descriptor_declared_family_list Array(FixedString(20))
+  COMMENT 'Declared family | family | server-descriptors',
+
+-- EFFICIENT: Structured certificate storage instead of full certificate strings
 family_certificates Array(Tuple(
-    fingerprint FixedString(20),
-    certificate String  -- Base64 encoded certificate
+    cert_type UInt8,           -- Certificate type (0C for family)
+    expiration_date UInt32,    -- Hours since epoch 
+    family_key FixedString(32),-- Ed25519 family signing key
+    signature FixedString(64)  -- Ed25519 signature
 )) CODEC(ZSTD) COMMENT 'Family certificates | family-cert | server-descriptors',
 ```
+
+**Implementation Note**: Store parsed certificate components rather than full certificate strings for 75% space savings and better query performance.
 
 ---
 

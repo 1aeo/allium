@@ -135,6 +135,36 @@ CREATE TABLE relay_measurements
     consensus_exit_policy_summary String CODEC(ZSTD)
       COMMENT 'Policy summary | p | 2025-06-28-20-00-00-consensus',
 
+    -- === CONSENSUS METADATA ===
+    consensus_parameters          Map(String, String) CODEC(ZSTD)
+      COMMENT 'Consensus parameters | params | 2025-06-28-20-00-00-consensus',
+
+    -- === BANDWIDTH WEIGHTS ===
+    bandwidth_weight_Wgg          UInt32
+      COMMENT 'Guard-Guard weight | Wgg | 2025-06-28-20-00-00-consensus',
+    bandwidth_weight_Wgd          UInt32
+      COMMENT 'Guard-non-Guard weight | Wgd | 2025-06-28-20-00-00-consensus',
+    bandwidth_weight_Wmg          UInt32
+      COMMENT 'Middle-Guard weight | Wmg | 2025-06-28-20-00-00-consensus',
+    bandwidth_weight_Wmd          UInt32
+      COMMENT 'Middle-non-Guard weight | Wmd | 2025-06-28-20-00-00-consensus',
+    bandwidth_weight_Wee          UInt32
+      COMMENT 'Exit-Exit weight | Wee | 2025-06-28-20-00-00-consensus',
+    bandwidth_weight_Wed          UInt32
+      COMMENT 'Exit-non-Exit weight | Wed | 2025-06-28-20-00-00-consensus',
+    bandwidth_weight_Wme          UInt32
+      COMMENT 'Middle-Exit weight | Wme | 2025-06-28-20-00-00-consensus',
+    bandwidth_weight_Wmt          UInt32
+      COMMENT 'Middle weight | Wmt | 2025-06-28-20-00-00-consensus',
+    bandwidth_weight_Wtg          UInt32
+      COMMENT 'Guard throttling weight | Wtg | 2025-06-28-20-00-00-consensus',
+    bandwidth_weight_Wte          UInt32
+      COMMENT 'Exit throttling weight | Wte | 2025-06-28-20-00-00-consensus',
+    bandwidth_weight_Wtm          UInt32
+      COMMENT 'Middle throttling weight | Wtm | 2025-06-28-20-00-00-consensus',
+    bandwidth_weight_Wdb          UInt32
+      COMMENT 'Directory bandwidth weight | Wdb | 2025-06-28-20-00-00-consensus',
+
     -- === VOTES ===
     vote_by_auth Nested(
         vote_authority          LowCardinality(String)
@@ -222,18 +252,35 @@ CREATE TABLE relay_measurements
       COMMENT 'Country code | GeoLite2 country_iso_code | GeoLite2 DB',
     geo_as_number                 UInt32
       COMMENT 'ASN number | GeoLite2 autonomous_system_number | GeoLite2 DB',
+    geo_database_version          LowCardinality(String)
+      COMMENT 'GeoIP database version | system | GeoLite2 DB metadata',
+    geo_database_date             Date
+      COMMENT 'GeoIP database date | system | GeoLite2 DB metadata',
 
     -- === PLATFORM & VERSION ===
     descriptor_platform_raw       String CODEC(ZSTD)
       COMMENT 'Platform string | platform | 2025-06-28-08-22-37-server-descriptors',
     descriptor_tor_version        LowCardinality(String)
       COMMENT 'Tor version | v | 2025-06-28-20-00-00-consensus & 2025-06-28-08-22-37-server-descriptors',
+    descriptor_os_name            LowCardinality(String)
+      COMMENT 'Operating system | parsed from platform | 2025-06-28-08-22-37-server-descriptors',
 
     -- === CONTACT & FAMILY ===
     descriptor_contact_raw        String CODEC(ZSTD)
       COMMENT 'Contact info | contact | 2025-06-28-08-22-37-server-descriptors',
     descriptor_declared_family_list Array(FixedString(20))
       COMMENT 'Declared family | family | 2025-06-28-08-22-37-server-descriptors',
+
+    -- === ADDITIONAL CONNECTIVITY ===
+    additional_or_addresses       Array(Tuple(
+                                      address IPv6,  -- Supports both IPv4 and IPv6
+                                      port UInt16
+                                  ))
+      COMMENT 'Additional OR addresses | or-address | 2025-06-28-08-22-37-server-descriptors',
+
+    -- === RELAY STATUS ===
+    descriptor_overload_general   UInt8 DEFAULT 0
+      COMMENT 'General overload flag | overload-general | 2025-06-28-08-22-37-server-descriptors',
 
     -- === AROI DOMAIN ===
     ingest_AROI_domain            LowCardinality(String)
