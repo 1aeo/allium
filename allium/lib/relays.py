@@ -3205,7 +3205,7 @@ class Relays:
             is_stable = 'Stable' in flags
             is_v2dir = 'V2Dir' in flags
             is_hsdir = 'HSDir' in flags
-            is_stabledesc = 'StableDesc' in flags
+            is_stabledesc = 'StaleDesc' in flags
             is_sybil = 'Sybil' in flags
             is_running = relay.get('running', True)
             # REMOVED: is_hibernating
