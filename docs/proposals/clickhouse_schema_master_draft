@@ -212,12 +212,16 @@ CREATE TABLE relay_measurements
     vote_by_auth Nested(
         vote_authority          LowCardinality(String)
             COMMENT 'Authority name | auth | vote',
+        vote_authority_fingerprint FixedString(40)
+            COMMENT 'Authority RSA fingerprint | fingerprint | vote',
         vote_flags_mask         UInt32
             COMMENT 'Vote flags mask | s <flags> | vote',
         vote_bw_reported        UInt32
             COMMENT 'Reported bandwidth | w Bandwidth | vote',
         vote_bw_measured        UInt32
             COMMENT 'Measured bandwidth | Measured | vote',
+        vote_unmeasured         UInt8
+            COMMENT 'Authority unmeasured flag | Unmeasured= | vote',
         vote_exit_policy_summary String CODEC(ZSTD)
             COMMENT 'Exit policy summary | p | vote',
         vote_stats_wfu          Float32
