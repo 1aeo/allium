@@ -171,10 +171,8 @@ CREATE TABLE relay_measurements
       COMMENT 'Consensus bandwidth | Bandwidth | 2025-06-28-20-00-00-consensus',
     consensus_protocols           Map(String, String)
       COMMENT 'Protocol ranges | pr | 2025-06-28-20-00-00-consensus',
-    consensus_exit_policy_raw     String CODEC(ZSTD)
-      COMMENT 'Full exit policy | p | 2025-06-28-20-00-00-consensus',
-    consensus_exit_policy_summary String CODEC(ZSTD)
-      COMMENT 'Policy summary | p | 2025-06-28-20-00-00-consensus',
+    consensus_exit_policy         String CODEC(ZSTD)
+      COMMENT 'Exit policy | p | 2025-06-28-20-00-00-consensus',
 
     -- === CONSENSUS METADATA ===
     consensus_parameters          Map(String, String) CODEC(ZSTD)
@@ -217,7 +215,7 @@ CREATE TABLE relay_measurements
         vote_bw_measured        UInt32
             COMMENT 'Measured bandwidth | Measured | vote',
         vote_exit_policy_summary String CODEC(ZSTD)
-            COMMENT 'Policy summary | p | vote',
+            COMMENT 'Exit policy summary | p | vote',
         vote_stats_wfu          Float32
             COMMENT 'Weighted fraction uptime | stats wfu | vote',
         vote_stats_tk           UInt32
@@ -247,6 +245,10 @@ CREATE TABLE relay_measurements
       COMMENT 'Latest read history | read-history | 2025-06-28-08-22-37-extra-infos',
     extra_info_bandwidth_write    UInt64 CODEC(DoubleDelta, ZSTD)
       COMMENT 'Latest write history | write-history | 2025-06-28-08-22-37-extra-infos',
+    extra_info_ipv6_bandwidth_read  UInt64 CODEC(DoubleDelta, ZSTD)
+      COMMENT 'Latest IPv6 read | ipv6-read-history | 2025-06-28-08-22-37-extra-infos',
+    extra_info_ipv6_bandwidth_write UInt64 CODEC(DoubleDelta, ZSTD)
+      COMMENT 'Latest IPv6 write | ipv6-write-history | 2025-06-28-08-22-37-extra-infos',
 
     -- === BANDWIDTH FILE METRICS ===
     bandwidth_measured         UInt32 CODEC(DoubleDelta, ZSTD)
