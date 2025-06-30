@@ -226,9 +226,10 @@ CREATE TABLE relay_measurements
     INDEX idx_bandwidth (consensus_bandwidth) TYPE minmax GRANULARITY 4,
     INDEX idx_nickname (consensus_nickname) TYPE bloom_filter GRANULARITY 4
 )
-ENGINE = MergeTree
+ENGINE = MergeTree()
 PARTITION BY toYYYYMM(ingest_measurement_time)
 ORDER BY (descriptor_fingerprint, ingest_measurement_time)
+PRIMARY KEY (descriptor_fingerprint, ingest_measurement_time)
 -- TTL removed to retain all historical data
     -- TTL ingest_measurement_time + INTERVAL 5 YEAR
 SETTINGS index_granularity = 8192;
