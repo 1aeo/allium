@@ -41,6 +41,7 @@ ENGINE = MergeTree
 PARTITION BY toYYYYMM(file_timestamp)
 ORDER BY (file_type, file_timestamp);
 -- JOIN ... USING(file_name) for look‑ups in relay_measurements, i.e. relay_measurements.consensus_source, vote_source, etc.
+-- JOIN relay_measurements ON relay_measurements.vote_source = file_meta.file_name to reach any of the header fields without duplicating them in every relay row.
 
 /* ---------- 2. DIMENSION LOOK‑UPS ---------- */
 
