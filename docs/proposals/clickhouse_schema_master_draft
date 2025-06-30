@@ -124,6 +124,11 @@ CREATE TABLE relay_measurements
       COMMENT 'OR port | r <OR port> | 2025-06-28-20-00-00-consensus',
     consensus_dir_port            UInt16
       COMMENT 'Dir port | r <Dir port> | 2025-06-28-20-00-00-consensus',
+    additional_or_addresses       Array(Tuple(
+                                      address IPv6,  -- Supports both IPv4 and IPv6
+                                      port UInt16
+                                  ))
+      COMMENT 'Additional OR addresses | or-address | 2025-06-28-08-22-37-server-descriptors',
     consensus_flags_mask           UInt32
       COMMENT 'Consensus flags mask | s <flags> | 2025-06-28-20-00-00-consensus',
     consensus_bandwidth           UInt32 CODEC(DoubleDelta, ZSTD)
@@ -140,29 +145,29 @@ CREATE TABLE relay_measurements
       COMMENT 'Consensus parameters | params | 2025-06-28-20-00-00-consensus',
 
     -- === BANDWIDTH WEIGHTS ===
-    bandwidth_weight_Wgg          UInt32
+    consensus_bandwidth_weight_Wgg          UInt32 CODEC(ZSTD)
       COMMENT 'Guard-Guard weight | Wgg | 2025-06-28-20-00-00-consensus',
-    bandwidth_weight_Wgd          UInt32
+    consensus_bandwidth_weight_Wgd          UInt32 CODEC(ZSTD)
       COMMENT 'Guard-non-Guard weight | Wgd | 2025-06-28-20-00-00-consensus',
-    bandwidth_weight_Wmg          UInt32
+    consensus_bandwidth_weight_Wmg          UInt32 CODEC(ZSTD)
       COMMENT 'Middle-Guard weight | Wmg | 2025-06-28-20-00-00-consensus',
-    bandwidth_weight_Wmd          UInt32
+    consensus_bandwidth_weight_Wmd          UInt32 CODEC(ZSTD)
       COMMENT 'Middle-non-Guard weight | Wmd | 2025-06-28-20-00-00-consensus',
-    bandwidth_weight_Wee          UInt32
+    consensus_bandwidth_weight_Wee          UInt32 CODEC(ZSTD)
       COMMENT 'Exit-Exit weight | Wee | 2025-06-28-20-00-00-consensus',
-    bandwidth_weight_Wed          UInt32
+    consensus_bandwidth_weight_Wed          UInt32 CODEC(ZSTD)
       COMMENT 'Exit-non-Exit weight | Wed | 2025-06-28-20-00-00-consensus',
-    bandwidth_weight_Wme          UInt32
+    consensus_bandwidth_weight_Wme          UInt32 CODEC(ZSTD)
       COMMENT 'Middle-Exit weight | Wme | 2025-06-28-20-00-00-consensus',
-    bandwidth_weight_Wmt          UInt32
+    consensus_bandwidth_weight_Wmt          UInt32 CODEC(ZSTD)
       COMMENT 'Middle weight | Wmt | 2025-06-28-20-00-00-consensus',
-    bandwidth_weight_Wtg          UInt32
+    consensus_bandwidth_weight_Wtg          UInt32 CODEC(ZSTD)
       COMMENT 'Guard throttling weight | Wtg | 2025-06-28-20-00-00-consensus',
-    bandwidth_weight_Wte          UInt32
+    consensus_bandwidth_weight_Wte          UInt32 CODEC(ZSTD)
       COMMENT 'Exit throttling weight | Wte | 2025-06-28-20-00-00-consensus',
-    bandwidth_weight_Wtm          UInt32
+    consensus_bandwidth_weight_Wtm          UInt32 CODEC(ZSTD)
       COMMENT 'Middle throttling weight | Wtm | 2025-06-28-20-00-00-consensus',
-    bandwidth_weight_Wdb          UInt32
+    consensus_bandwidth_weight_Wdb          UInt32 CODEC(ZSTD)
       COMMENT 'Directory bandwidth weight | Wdb | 2025-06-28-20-00-00-consensus',
 
     -- === VOTES ===
@@ -247,6 +252,10 @@ CREATE TABLE relay_measurements
     descriptor_uptime_seconds     UInt32
       COMMENT 'Uptime seconds | uptime | 2025-06-28-08-22-37-server-descriptors',
 
+    -- === RELAY STATUS ===
+    descriptor_overload_general   UInt8 DEFAULT 0
+      COMMENT 'General overload flag | overload-general | 2025-06-28-08-22-37-server-descriptors',
+
     -- === GEO & ASN ===
     geo_country_code              FixedString(2)
       COMMENT 'Country code | GeoLite2 country_iso_code | GeoLite2 DB',
@@ -260,29 +269,16 @@ CREATE TABLE relay_measurements
     -- === PLATFORM & VERSION ===
     descriptor_platform_raw       String CODEC(ZSTD)
       COMMENT 'Platform string | platform | 2025-06-28-08-22-37-server-descriptors',
-    descriptor_tor_version        LowCardinality(String)
-      COMMENT 'Tor version | v | 2025-06-28-20-00-00-consensus & 2025-06-28-08-22-37-server-descriptors',
     descriptor_os_name            LowCardinality(String)
       COMMENT 'Operating system | parsed from platform | 2025-06-28-08-22-37-server-descriptors',
+    descriptor_tor_version        LowCardinality(String)
+      COMMENT 'Tor version | v | 2025-06-28-20-00-00-consensus',
 
     -- === CONTACT & FAMILY ===
     descriptor_contact_raw        String CODEC(ZSTD)
       COMMENT 'Contact info | contact | 2025-06-28-08-22-37-server-descriptors',
     descriptor_declared_family_list Array(FixedString(20))
       COMMENT 'Declared family | family | 2025-06-28-08-22-37-server-descriptors',
-
-    -- === ADDITIONAL CONNECTIVITY ===
-    additional_or_addresses       Array(Tuple(
-                                      address IPv6,  -- Supports both IPv4 and IPv6
-                                      port UInt16
-                                  ))
-      COMMENT 'Additional OR addresses | or-address | 2025-06-28-08-22-37-server-descriptors',
-
-    -- === RELAY STATUS ===
-    descriptor_overload_general   UInt8 DEFAULT 0
-      COMMENT 'General overload flag | overload-general | 2025-06-28-08-22-37-server-descriptors',
-
-    -- === AROI DOMAIN ===
     ingest_AROI_domain            LowCardinality(String)
       COMMENT 'AROI domain parsed | AROI_domain | parsed from contact',
 
@@ -317,7 +313,8 @@ CREATE TABLE relay_measurements
     INDEX idx_country (geo_country_code) TYPE minmax GRANULARITY 4,
     INDEX idx_flags (consensus_flags_mask) TYPE bloom_filter GRANULARITY 4,
     INDEX idx_bandwidth (consensus_bandwidth) TYPE minmax GRANULARITY 4,
-    INDEX idx_nickname (consensus_nickname) TYPE bloom_filter GRANULARITY 4
+    INDEX idx_nickname (consensus_nickname) TYPE bloom_filter GRANULARITY 4,
+    INDEX idx_os_name (descriptor_os_name) TYPE bloom_filter GRANULARITY 4,
 )
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(ingest_measurement_time)
