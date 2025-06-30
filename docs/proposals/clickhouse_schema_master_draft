@@ -15,7 +15,7 @@ CREATE TABLE file_meta
     file_name         String
         COMMENT 'Filename | filename | any',
     file_type         Enum8('consensus'=1,'vote'=2,'server_desc'=3,
-                            'bandwidth'=4,'extra_info'=5)
+                            'bandwidth'=4,'extra_info'=5,'microdesc'=6)
         COMMENT 'File category | file_type | any',
     file_timestamp    DateTime
         COMMENT 'Timestamp in filename | file-timestamp | any',
@@ -26,23 +26,48 @@ CREATE TABLE file_meta
     raw_size_bytes    UInt32
         COMMENT 'Uncompressed size | file-size | any',
 
-    /* header fields —— stored sparsely (only for relevant file types) */
-    header_valid_after DateTime
-        COMMENT 'Valid-after | valid-after | consensus/vote',
-    header_fresh_until Nullable(DateTime)
-        COMMENT 'Fresh-until | fresh-until | consensus/vote',
-    header_valid_until Nullable(DateTime)
-        COMMENT 'Valid-until | valid-until | consensus/vote',
-    header_consensus_method Nullable(UInt8)
-        COMMENT 'Consensus method | consensus-method | consensus/vote',
-    header_consensus_methods Array(UInt8)
-        COMMENT 'Supported methods | consensus-methods | consensus/vote',
-    header_client_versions Nullable(String)
+    /* ===== CONSENSUS HEADERS ===== */
+    consensus_header_valid_after   Nullable(DateTime)
+        COMMENT 'Valid-after | valid-after | consensus',
+    consensus_header_fresh_until   Nullable(DateTime)
+        COMMENT 'Fresh-until | fresh-until | consensus',
+    consensus_header_valid_until   Nullable(DateTime)
+        COMMENT 'Valid-until | valid-until | consensus',
+    consensus_header_consensus_method Nullable(UInt8)
+        COMMENT 'Consensus method | consensus-method | consensus',
+    consensus_header_consensus_methods Array(UInt8)
+        COMMENT 'Supported methods | consensus-methods | consensus',
+    consensus_header_client_versions Nullable(String)
         COMMENT 'Client versions line | client-versions | consensus',
-    header_server_versions Nullable(String)
+    consensus_header_server_versions Nullable(String)
         COMMENT 'Server versions line | server-versions | consensus',
-    header_params        Nullable(String)
+    consensus_header_params        Nullable(String)
         COMMENT 'Params line | params | consensus',
+
+    /* ===== VOTE HEADERS ===== */
+    vote_header_valid_after   Nullable(DateTime)
+        COMMENT 'Valid-after | valid-after | vote',
+    vote_header_fresh_until   Nullable(DateTime)
+        COMMENT 'Fresh-until | fresh-until | vote',
+    vote_header_valid_until   Nullable(DateTime)
+        COMMENT 'Valid-until | valid-until | vote',
+    vote_header_consensus_method Nullable(UInt8)
+        COMMENT 'Consensus method | consensus-method | vote',
+    vote_header_consensus_methods Array(UInt8)
+        COMMENT 'Supported methods | consensus-methods | vote',
+
+    /* ===== ESSENTIAL BANDWIDTH HEADERS ===== */
+    bandwidth_header_version           Nullable(String)
+        COMMENT 'File format version | version | bandwidth',
+    bandwidth_header_scanner_country   Nullable(FixedString(2))
+        COMMENT 'Scanner country | scanner_country | bandwidth',
+    bandwidth_header_software          Nullable(String)
+        COMMENT 'Scanner software | software | bandwidth',
+    bandwidth_header_software_version  Nullable(String)
+        COMMENT 'Scanner version | software_version | bandwidth',
+    bandwidth_header_file_created      Nullable(DateTime)
+        COMMENT 'File created | file_created | bandwidth',
+
     ingestion_time      DateTime DEFAULT now()
         COMMENT 'Metadata ingest time | ingest_time | system',
 
@@ -325,8 +350,7 @@ CREATE TABLE relay_measurements
     INDEX idx_flags (consensus_flags_mask) TYPE bloom_filter GRANULARITY 4,
     INDEX idx_bandwidth (consensus_bandwidth) TYPE minmax GRANULARITY 4,
     INDEX idx_nickname (consensus_nickname) TYPE bloom_filter GRANULARITY 4,
-    INDEX idx_os_name (descriptor_os_name) TYPE bloom_filter GRANULARITY 4,
-    INDEX idx_geo_db_version (geo_database_version) TYPE minmax GRANULARITY 4
+    INDEX idx_os_name (descriptor_os_name) TYPE bloom_filter GRANULARITY 4
 )
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(ingest_measurement_time)
