@@ -152,6 +152,8 @@ CREATE TABLE relay_measurements
       COMMENT 'Consensus method | consensus-method | 2025-06-28-20-00-00-consensus',
     consensus_nickname            LowCardinality(String)
       COMMENT 'Relay nickname | r <nickname> | 2025-06-28-20-00-00-consensus',
+    consensus_published_time      DateTime CODEC(DoubleDelta, ZSTD)
+      COMMENT 'Per-relay published time | r line timestamp | 2025-06-28-20-00-00-consensus',
     consensus_ipv4_address       Nullable(IPv4)
       COMMENT 'IPv4 address | r <IP> | 2025-06-28-20-00-00-consensus',
     consensus_ipv6_address        Nullable(IPv6)
