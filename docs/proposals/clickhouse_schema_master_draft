@@ -1,4 +1,48 @@
-/* ---------- 1. DIMENSION LOOK‑UPS ---------- */
+/* ----------  1. FILE‑LEVEL METADATA  ---------- */
+CREATE TABLE file_meta
+(
+    file_name         String
+        COMMENT 'Filename | filename | any',
+    file_type         Enum8('consensus'=1,'vote'=2,'server_desc'=3,
+                            'bandwidth'=4,'extra_info'=5)
+        COMMENT 'File category | file_type | any',
+    file_timestamp    DateTime
+        COMMENT 'Timestamp in filename | file-timestamp | any',
+    source_id         Nullable(String)
+        COMMENT 'Authority digest or 000.. for consensus | source-id | any',
+    sha256_digest     FixedString(32)
+        COMMENT 'SHA‑256 of raw file | sha256 | any',
+    raw_size_bytes    UInt32
+        COMMENT 'Uncompressed size | file-size | any',
+
+    /* header fields —— stored sparsely (only for relevant file types) */
+    header_valid_after DateTime
+        COMMENT 'Valid-after | valid-after | consensus/vote',
+    header_fresh_until Nullable(DateTime)
+        COMMENT 'Fresh-until | fresh-until | consensus/vote',
+    header_valid_until Nullable(DateTime)
+        COMMENT 'Valid-until | valid-until | consensus/vote',
+    header_consensus_method Nullable(UInt8)
+        COMMENT 'Consensus method | consensus-method | consensus/vote',
+    header_consensus_methods Array(UInt8)
+        COMMENT 'Supported methods | consensus-methods | consensus/vote',
+    header_client_versions Nullable(String)
+        COMMENT 'Client versions line | client-versions | consensus',
+    header_server_versions Nullable(String)
+        COMMENT 'Server versions line | server-versions | consensus',
+    header_params        Nullable(String)
+        COMMENT 'Params line | params | consensus',
+    ingestion_time      DateTime DEFAULT now()
+        COMMENT 'Metadata ingest time | ingest_time | system',
+
+    PRIMARY KEY (file_type, file_timestamp, file_name)
+)
+ENGINE = MergeTree
+PARTITION BY toYYYYMM(file_timestamp)
+ORDER BY (file_type, file_timestamp);
+-- JOIN ... USING(file_name) for look‑ups in relay_measurements, i.e. relay_measurements.consensus_source, vote_source, etc.
+
+/* ---------- 2. DIMENSION LOOK‑UPS ---------- */
 
 /* Bit positions of every Tor consensus flag | flag mapping | system */
 CREATE TABLE flag_names
@@ -34,13 +78,12 @@ PRIMARY KEY bit_position
 SOURCE(CLICKHOUSE(TABLE 'flag_names'))
 LAYOUT(FLAT);
 
-/* ---------- 2. FACT – HOURLY CONSENSUS SNAPSHOT ---------- */
+/* ---------- 3. FACT – HOURLY CONSENSUS SNAPSHOT ---------- */
 -- ClickHouse schema for full relay state snapshots
 -- Data sources are noted per column with comments including: description | source field name | source file name
 
 CREATE TABLE relay_measurements
 (
-
     -- === TIME ===
     ingest_measurement_time DateTime64(3) CODEC(DoubleDelta, ZSTD)
       COMMENT 'Snapshot ingestion time | measurement_time | system',
