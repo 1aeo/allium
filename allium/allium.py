@@ -270,6 +270,7 @@ if __name__ == "__main__":
         "by-guard-bandwidth": "1.guard_bandwidth",
         "by-middle-bandwidth": "1.middle_bandwidth", 
         "by-exit-bandwidth": "1.exit_bandwidth",
+        "by-bandwidth-mean": "1.bandwidth_mean",
         "by-consensus-weight": "1.consensus_weight_fraction",
         "by-guard-consensus-weight": "1.guard_consensus_weight_fraction",
         "by-middle-consensus-weight": "1.middle_consensus_weight_fraction",
