@@ -7,9 +7,9 @@ import sys
 import os
 
 # Add the allium directory to Python path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'allium'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from lib.relays import Relays
+from allium.lib.relays import Relays
 
 
 class TestContactDataIntegrityRegression(unittest.TestCase):
@@ -26,7 +26,12 @@ class TestContactDataIntegrityRegression(unittest.TestCase):
                 'guard_count': 0,
                 'middle_count': 0,
                 'exit_count': 0,
-                'measured_relays': 0
+                'measured_relays': 0,
+                'measured_percentage': 0.0,
+                'guard_consensus_weight': 0,
+                'middle_consensus_weight': 0,
+                'exit_consensus_weight': 0,
+                'total_consensus_weight': 0
             }
         }
         

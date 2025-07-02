@@ -1,0 +1,2591 @@
+    <!DOCTYPE html>
+    <html lang="en">
+        <head>
+            <title>
+Relay Radar :: Countries By Exit Count
+            </title>
+            <meta name="description"
+                  content="Javascript-free Tor metrics generated from a 30 minute API request.">
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <link rel="stylesheet" href="../static/css/bootstrap.min.css">
+            <!--source: metrics.torproject.org-->
+            <style>
+                .circle {
+                    display: inline-block;
+                    vertical-align: middle;
+                    background: #999999;
+                    width: 7px;
+                    height: 7px;
+                    -moz-border-radius: 50%;
+                    -webkit-border-radius: 50%;
+                    border-radius: 50%;
+                }
+
+                .circle-online {
+                    background: #25d918;
+                }
+
+                .circle-offline {
+                    background: #ff1515;
+                }
+
+                .verified-hostname {
+                    color: #FE9F30;
+                }
+
+                .verified-hostname {
+                    color: #68b030;
+                }
+
+                .unverified-hostname {
+                    color: #FE9F30;
+                }
+
+                /* Dynamic text truncation for contact information */
+                .contact-text {
+                    display: inline-block;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    max-width: 20vw;  /* Use viewport width for responsive sizing */
+                }
+
+                /* Table styles */
+                .table {
+                    width: 100%;
+                    margin-bottom: 1rem;
+                }
+
+                /* Precise alignment for multi-value columns using monospace */
+                .bw-header, .cw-header, .rc-header, /* rc = relay count */
+                .bw-data, .cw-data, .rc-data {
+                    font-family: Consolas, "Courier New", monospace;
+                    white-space: nowrap;
+                    text-align: center;
+                    letter-spacing: 0.05em; /* Slight spacing for readability */
+                }
+
+                /* Container breakpoint */
+                @media (min-width: 1400px) {
+                    .container {
+                        width: 95%;
+                        max-width: none;
+                        padding-right: 15px;
+                        padding-left: 15px;
+                        margin-right: auto;
+                        margin-left: auto;
+                    }
+                }
+
+                /* AROI Leaderboards - Consolidated CSS Components */
+                
+                /* Section Spacing */
+                .aroi-section {
+                    margin-bottom: 40px;
+                    scroll-margin-top: 20px; /* Offset anchor links to show space above title */
+                }
+                
+                .aroi-subsection {
+                    margin-bottom: 30px;
+                }
+                
+                .aroi-champion-badge {
+                    margin-bottom: 20px;
+                }
+                
+                /* Top 3 Summary Tables */
+                .aroi-top3-table thead th:nth-child(1) {
+                    width: 30%;
+                }
+                
+                .aroi-top3-table thead th:nth-child(2) {
+                    width: 25%;
+                }
+                
+                .aroi-top3-table thead th:nth-child(3) {
+                    width: 45%;
+                }
+                
+                /* Complete Rankings Tables - Common patterns */
+                .aroi-rankings-table thead th:nth-child(1) {
+                    width: 5%;  /* Rank */
+                }
+                
+                .aroi-rankings-table thead th:nth-child(2) {
+                    width: 25%; /* Operator */
+                }
+                
+                /* Standard bandwidth/consensus table layout */
+                .aroi-standard-table thead th:nth-child(3) {
+                    width: 12%;  /* Relays - increased from 8% */
+                }
+                
+                .aroi-standard-table thead th:nth-child(4) {
+                    width: 11%; /* Bandwidth - decreased from 15% */
+                }
+                
+                .aroi-standard-table thead th:nth-child(5) {
+                    width: 12%; /* Consensus Weight */
+                }
+                
+                .aroi-standard-table thead th:nth-child(6) {
+                    width: 15%; /* Guard/Exit Count */
+                }
+                
+                .aroi-standard-table thead th:nth-child(7) {
+                    width: 10%; /* Countries */
+                }
+                
+                .aroi-standard-table thead th:nth-child(8) {
+                    width: 10%; /* Platforms/Efficiency/Other */
+                }
+                
+                /* Specialized table for Exit/Guard operators */
+                .aroi-specialized-table thead th:nth-child(3) {
+                    width: 10%; /* Specific Relays (Exit/Guard) */
+                }
+                
+                .aroi-specialized-table thead th:nth-child(4) {
+                    width: 8%;  /* Total Relays */
+                }
+                
+                .aroi-specialized-table thead th:nth-child(5) {
+                    width: 15%; /* Bandwidth */
+                }
+                
+                .aroi-specialized-table thead th:nth-child(6) {
+                    width: 12%; /* Consensus Weight */
+                }
+                
+                .aroi-specialized-table thead th:nth-child(7) {
+                    width: 10%; /* Countries */
+                }
+                
+                .aroi-specialized-table thead th:nth-child(8) {
+                    width: 15%; /* Cross Reference (Guard/Exit Count) */
+                }
+                
+                /* Diversity/Category table layout - Generic defaults */
+                .aroi-category-table thead th:nth-child(3) {
+                    width: 8%;  /* Relays */
+                }
+                
+                .aroi-category-table thead th:nth-child(4) {
+                    width: 15%; /* Key Metric */
+                }
+                
+                .aroi-category-table thead th:nth-child(5) {
+                    width: 12%; /* Bandwidth */
+                }
+                
+                .aroi-category-table thead th:nth-child(6) {
+                    width: 10%; /* Countries */
+                }
+                
+                .aroi-category-table thead th:nth-child(7) {
+                    width: 10%; /* Platforms */
+                }
+                
+                .aroi-category-table thead th:nth-child(8) {
+                    width: 15%; /* Specialization */
+                }
+                
+                /* Geographic Champions (Non-EU Leaders) specific layout */
+                .aroi-geographic-table thead th:nth-child(3) {
+                    width: 15%; /* Non-EU Relays */
+                }
+                
+                .aroi-geographic-table thead th:nth-child(4) {
+                    width: 10%; /* Bandwidth */
+                }
+                
+                .aroi-geographic-table thead th:nth-child(5) {
+                    width: 8%; /* Countries */
+                }
+                
+                .aroi-geographic-table thead th:nth-child(6) {
+                    width: 25%; /* Specialization - Much wider for geographic breakdown details */
+                }
+                
+                /* Frontier Builders (Rare Countries) specific layout */
+                .aroi-frontier-table thead th:nth-child(3) {
+                    width: 10%; /* Rare Relays - Reduced from 15% */
+                }
+                
+                .aroi-frontier-table thead th:nth-child(4) {
+                    width: 12%; /* Bandwidth */
+                }
+                
+                .aroi-frontier-table thead th:nth-child(5) {
+                    width: 10%; /* Countries */
+                }
+                
+                .aroi-frontier-table thead th:nth-child(6) {
+                    width: 23%; /* Specialization - Increased from 18% (+5% from Rare Relays column) */
+                }
+                
+                /* Platform Diversity (Non-Linux Heroes) specific layout */
+                .aroi-platform-table thead th:nth-child(3) {
+                    width: 10%; /* Non Linux Relays - Reduced from 15% */
+                }
+                
+                .aroi-platform-table thead th:nth-child(4) {
+                    width: 8%; /* Bandwidth - Reduced from 12% */
+                }
+                
+                .aroi-platform-table thead th:nth-child(5) {
+                    width: 22%; /* Specialization - Increased from 15% (+7% from reductions) */
+                }
+
+                /* AROI Champion Badge Styles - Harmonized Color Tier System */
+                
+                /* Authority/Network Control (Gold/Orange spectrum) */
+                .aroi-champion-platinum {
+                    background: linear-gradient(45deg, #FFD700, #FFA500);
+                    color: #000;
+                    box-shadow: 0 2px 6px rgba(255, 215, 0, 0.25);
+                }
+                
+                .aroi-champion-network {
+                    background: linear-gradient(45deg, #FFB300, #FF8C00);
+                    color: #000;
+                    box-shadow: 0 2px 6px rgba(255, 179, 0, 0.25);
+                }
+                
+                .aroi-champion-exit-authority {
+                    background: linear-gradient(45deg, #FFAA00, #FF9500);
+                    color: #000;
+                    box-shadow: 0 2px 6px rgba(255, 170, 0, 0.25);
+                }
+                
+                .aroi-champion-guard-authority {
+                    background: linear-gradient(45deg, #FF6B35, #F7931E);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(255, 107, 53, 0.25);
+                }
+                
+                .aroi-champion-guard {
+                    background: linear-gradient(45deg, #E67E22, #D35400);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(230, 126, 34, 0.25);
+                }
+                
+                .aroi-champion-exit {
+                    background: linear-gradient(45deg, #FF8C42, #FF7315);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(255, 140, 66, 0.25);
+                }
+                
+                /* Innovation & Technology (Purple/Blue spectrum) */
+                .aroi-champion-platform {
+                    background: linear-gradient(45deg, #a29bfe, #6c5ce7);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(162, 155, 254, 0.25);
+                }
+                
+                .aroi-champion-ipv4 {
+                    background: linear-gradient(45deg, #0984e3, #74b9ff);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(9, 132, 227, 0.25);
+                }
+                
+                .aroi-champion-ipv6 {
+                    background: linear-gradient(45deg, #6c5ce7, #a29bfe);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(108, 92, 231, 0.25);
+                }
+                
+
+                
+                /* Diversity & Growth (Green spectrum) */
+                .aroi-champion-diversity {
+                    background: linear-gradient(45deg, #00b894, #55a3ff);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(0, 184, 148, 0.25);
+                }
+                
+                .aroi-champion-global {
+                    background: linear-gradient(45deg, #00cec9, #55efc4);
+                    color: #000;
+                    box-shadow: 0 2px 6px rgba(0, 206, 201, 0.25);
+                }
+                
+                .aroi-champion-frontier {
+                    background: linear-gradient(45deg, #27ae60, #2ecc71);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(39, 174, 96, 0.25);
+                }
+                
+                /* Reliability & Legacy (Earth tones) */
+                .aroi-champion-reliability {
+                    background: linear-gradient(45deg, #8b7355, #a0845c);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(139, 115, 85, 0.25);
+                }
+                
+                .aroi-champion-veteran {
+                    background: linear-gradient(45deg, #cd7f32, #b8860b);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(205, 127, 50, 0.25);
+                }
+                
+                /* Legacy compatibility class */
+                .aroi-champion-legacy {
+                    background: linear-gradient(45deg, #8b4513, #a0522d);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(139, 69, 19, 0.25);
+                }
+                
+
+                
+                /* Enhanced hover effects for all badges */
+                .aroi-champion-badge .panel-body {
+                    transition: transform 0.2s ease, box-shadow 0.2s ease;
+                }
+                
+                .aroi-champion-badge .panel-body:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+                }
+
+                /* AROI Ranking Badge Styles */
+                .aroi-rank-gold {
+                    background-color: #FFD700;
+                }
+                
+                .aroi-rank-silver {
+                    background-color: #C0C0C0;
+                }
+                
+                .aroi-rank-bronze {
+                    background-color: #CD7F32;
+                }
+
+                /* AROI Link Styles */
+                .aroi-underline-link {
+                    text-decoration: underline;
+                    color: inherit;
+                }
+                
+                .aroi-contact-link {
+                    text-decoration: underline;
+                }
+
+                /* AROI Layout Styles */
+                .aroi-center-text {
+                    text-align: center;
+                }
+                
+                .aroi-flex-nav {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 10px;
+                }
+                
+                .aroi-nav-spacing {
+                    margin-bottom: 20px;
+                }
+                
+                .aroi-nav-spacing h4 {
+                    margin-top: 5px;
+                }
+                
+                .aroi-primary-nav {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 15px;
+                    margin-bottom: 15px;
+                    justify-content: center;
+                }
+                
+                .aroi-category-nav {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 8px;
+                    padding-top: 15px;
+                    border-top: 1px solid #ddd;
+                    justify-content: center;
+                }
+
+                /* Compact Navigation Styles */
+                .aroi-compact-nav {
+                    margin-bottom: 15px;
+                    padding: 10px 15px;
+                }
+                
+                .aroi-compact-nav-row {
+                    display: flex;
+                    flex-wrap: wrap;
+                    align-items: center;
+                    gap: 15px;
+                    font-size: 14px;
+                }
+                
+                .aroi-nav-label {
+                    font-weight: bold;
+                    color: #333;
+                    white-space: nowrap;
+                }
+                
+                .aroi-primary-nav-centered {
+                    display: flex;
+                    justify-content: center;
+                    gap: 8px;
+                    margin-bottom: 10px;
+                    flex-wrap: wrap;
+                }
+                
+                .aroi-category-links-row {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 12px;
+                    justify-content: center;
+                }
+                
+                .aroi-nav-link {
+                    color: #337ab7;
+                    text-decoration: none;
+                    padding: 2px 6px;
+                    border-radius: 3px;
+                    font-size: 13px;
+                    white-space: nowrap;
+                }
+                
+                .aroi-nav-link:hover {
+                    color: #23527c;
+                    background-color: #f5f5f5;
+                    text-decoration: none;
+                }
+
+                /* Responsive adjustments for compact nav */
+                @media (max-width: 768px) {
+                    .aroi-primary-nav-centered {
+                        flex-direction: column;
+                        align-items: center;
+                        gap: 8px;
+                    }
+                    
+                    .aroi-category-links-row {
+                        justify-content: center;
+                    }
+                    
+                    .aroi-nav-link {
+                        font-size: 12px;
+                    }
+                }
+                
+                .aroi-nav-separator {
+                    border-top: 1px solid #ddd;
+                    margin: 15px 0;
+                }
+                
+                .aroi-top-margin {
+                    margin-top: 10px;
+                }
+                
+                .aroi-compact-summary {
+                    margin-bottom: 8px;
+                    padding: 8px 12px;
+                }
+                
+                .aroi-compact-summary h5 {
+                    margin-top: 0;
+                    margin-bottom: 4px;
+                    font-size: 15px;
+                    line-height: 1.2;
+                }
+                
+                .aroi-compact-summary .row {
+                    margin-bottom: 2px;
+                }
+                
+                .aroi-compact-summary .col-md-3 {
+                    padding-top: 2px;
+                    padding-bottom: 2px;
+                }
+                
+                .aroi-compact-footer {
+                    margin-top: 4px;
+                    padding-top: 3px;
+                    border-top: 1px solid rgba(255,255,255,0.3);
+                }
+                
+                .aroi-compact-footer small {
+                    font-size: 11px;
+                    line-height: 1.3;
+                }
+                
+                .aroi-header-spacing {
+                    margin-top: 0;
+                }
+                
+                .aroi-fixed-nav {
+                    position: fixed;
+                    bottom: 20px;
+                    right: 20px;
+                    z-index: 1000;
+                }
+                
+                .aroi-footer-section {
+                    margin-top: 50px;
+                    border-top: 2px solid #ccc;
+                    padding-top: 30px;
+                }
+
+                /* AROI Pagination Styles using :target selector */
+                /* Hide all pagination sections by default */
+                .pagination-section {
+                    display: none;
+                }
+                
+                /* Show first section by default (when no hash in URL) */
+                #bandwidth-1-10,
+                #consensus_weight-1-10,
+                #exit_authority-1-10,
+                #guard_authority-1-10,
+                #exit_operators-1-10,
+                #guard_operators-1-10,
+                #most_diverse-1-10,
+                #platform_diversity-1-10,
+                #non_eu_leaders-1-10,
+                #frontier_builders-1-10,
+                #network_veterans-1-10,
+                #reliability_masters-1-10,
+                #legacy_titans-1-10,
+                #ipv4_leaders-1-10,
+                #ipv6_leaders-1-10 {
+                    display: block;
+                }
+                
+                /* When a specific section is targeted, show only that section */
+                #bandwidth-1-10:target,
+                #bandwidth-11-20:target,
+                #bandwidth-21-25:target,
+                #consensus_weight-1-10:target,
+                #consensus_weight-11-20:target,
+                #consensus_weight-21-25:target,
+                #exit_authority-1-10:target,
+                #exit_authority-11-20:target,
+                #exit_authority-21-25:target,
+                #guard_authority-1-10:target,
+                #guard_authority-11-20:target,
+                #guard_authority-21-25:target,
+                #exit_operators-1-10:target,
+                #exit_operators-11-20:target,
+                #exit_operators-21-25:target,
+                #guard_operators-1-10:target,
+                #guard_operators-11-20:target,
+                #guard_operators-21-25:target,
+                #most_diverse-1-10:target,
+                #most_diverse-11-20:target,
+                #most_diverse-21-25:target,
+                #platform_diversity-1-10:target,
+                #platform_diversity-11-20:target,
+                #platform_diversity-21-25:target,
+                #non_eu_leaders-1-10:target,
+                #non_eu_leaders-11-20:target,
+                #non_eu_leaders-21-25:target,
+                #frontier_builders-1-10:target,
+                #frontier_builders-11-20:target,
+                #frontier_builders-21-25:target,
+                #network_veterans-1-10:target,
+                #network_veterans-11-20:target,
+                #network_veterans-21-25:target,
+                #reliability_masters-1-10:target,
+                #reliability_masters-11-20:target,
+                #reliability_masters-21-25:target,
+                #legacy_titans-1-10:target,
+                #legacy_titans-11-20:target,
+                #legacy_titans-21-25:target,
+                #ipv4_leaders-1-10:target,
+                #ipv4_leaders-11-20:target,
+                #ipv4_leaders-21-25:target,
+                #ipv6_leaders-1-10:target,
+                #ipv6_leaders-11-20:target,
+                #ipv6_leaders-21-25:target {
+                    display: block;
+                }
+
+                
+                /* Category-specific pagination behavior - each category manages its own pagination independently */
+                /* Use scoped :has() selector so each category manages its own pagination state */
+                
+                /* When a pagination section is targeted within a category, hide other sections in that same category only */
+                #bandwidth:has(.pagination-section:target) .pagination-section:not(:target),
+                #consensus_weight:has(.pagination-section:target) .pagination-section:not(:target),
+                #exit_authority:has(.pagination-section:target) .pagination-section:not(:target),
+                #guard_authority:has(.pagination-section:target) .pagination-section:not(:target),
+                #exit_operators:has(.pagination-section:target) .pagination-section:not(:target),
+                #guard_operators:has(.pagination-section:target) .pagination-section:not(:target),
+                #most_diverse:has(.pagination-section:target) .pagination-section:not(:target),
+                #platform_diversity:has(.pagination-section:target) .pagination-section:not(:target),
+                #non_eu_leaders:has(.pagination-section:target) .pagination-section:not(:target),
+                #frontier_builders:has(.pagination-section:target) .pagination-section:not(:target),
+                #network_veterans:has(.pagination-section:target) .pagination-section:not(:target),
+                #reliability_masters:has(.pagination-section:target) .pagination-section:not(:target),
+                #legacy_titans:has(.pagination-section:target) .pagination-section:not(:target),
+                #ipv4_leaders:has(.pagination-section:target) .pagination-section:not(:target),
+                #ipv6_leaders:has(.pagination-section:target) .pagination-section:not(:target) {
+                    display: none !important;
+                }
+
+                /* Improved pagination positioning and table spacing */
+                .pagination-section {
+                    scroll-margin-top: 80px; /* Modern CSS property for scroll positioning without layout gaps */
+                }
+                
+                .pagination-section:target {
+                    /* Using scroll-margin-top instead of padding/margin for clean scroll behavior */
+                }
+
+                .pagination-section h4 {
+                    margin-top: 20px;
+                    margin-bottom: 15px;
+                }
+
+                /* Compact table styling to match other tables */
+                .aroi-rankings-table.aroi-standard-table td,
+                .aroi-rankings-table.aroi-standard-table th {
+                    padding: 6px 8px; /* Reduced from default Bootstrap padding */
+                    vertical-align: middle;
+                }
+
+                .aroi-rankings-table.aroi-standard-table {
+                    margin-bottom: 10px; /* Reduce bottom margin */
+                }
+
+                /* Move pagination nav below tables */
+                .pagination-nav-bottom {
+                    margin: 0 0 30px 0; /* Remove top margin to sit right below table */
+                    text-align: center;
+                    border: 1px solid #ddd;
+                    border-radius: 5px;
+                    padding: 4px; /* Reduced padding to match table row height */
+                    background-color: #f9f9f9;
+                }
+
+                .pagination-nav-bottom a {
+                    display: inline-block;
+                    padding: 4px 8px; /* Smaller padding to match table text size */
+                    margin: 0 2px; /* Reduced margin */
+                    border: 1px solid #337ab7;
+                    border-radius: 3px;
+                    color: #337ab7;
+                    text-decoration: none;
+                    background-color: white;
+                    font-size: 14px; /* Match table text size */
+                    line-height: 1.2; /* Match table row height */
+                }
+
+                .pagination-nav-bottom a:hover {
+                    background-color: #337ab7;
+                    color: white;
+                }
+
+                .pagination-nav-bottom a.active {
+                    background-color: #337ab7;
+                    color: white;
+                }
+
+                /* AROI Panel Background Colors for Champion Badges */
+                .panel-danger .panel-body {
+                    background-color: #f2dede;
+                    border-color: #ebccd1;
+                }
+                
+                .panel-warning .panel-body {
+                    background-color: #fcf8e3;
+                    border-color: #faebcc;
+                }
+                
+                .panel-info .panel-body {
+                    background-color: #d9edf7;
+                    border-color: #bce8f1;
+                }
+                
+                .panel-success .panel-body {
+                    background-color: #dff0d8;
+                    border-color: #d6e9c6;
+                }
+                
+                .panel-primary {
+                    border-color: #bce8f1;
+                }
+                
+                .panel-primary .panel-body {
+                    background-color: #d9edf7;
+                }
+
+                /* Mobile-friendly tooltips - CSS-only solution */
+                /* Base tooltip styling for elements with title attributes */
+                [title] {
+                    position: relative;
+                    cursor: help;
+                }
+
+                /* Create tooltip content using title attribute */
+                [title]:before {
+                    content: attr(title);
+                    position: absolute;
+                    background: rgba(0, 0, 0, 0.9);
+                    color: white;
+                    padding: 8px 12px;
+                    border-radius: 6px;
+                    font-size: 13px;
+                    line-height: 1.3;
+                    white-space: nowrap;
+                    max-width: 300px;
+                    word-wrap: break-word;
+                    white-space: normal;
+                    z-index: 1000;
+                    pointer-events: none;
+                    opacity: 0;
+                    visibility: hidden;
+                    transition: opacity 0.3s, visibility 0.3s;
+                    
+                    /* Position above the element by default */
+                    bottom: 100%;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    margin-bottom: 8px;
+                }
+
+                /* Tooltip arrow */
+                [title]:after {
+                    content: '';
+                    position: absolute;
+                    border: 6px solid transparent;
+                    border-top-color: rgba(0, 0, 0, 0.9);
+                    z-index: 1001;
+                    pointer-events: none;
+                    opacity: 0;
+                    visibility: hidden;
+                    transition: opacity 0.3s, visibility 0.3s;
+                    
+                    /* Position arrow */
+                    bottom: 100%;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    margin-bottom: 2px;
+                }
+
+                /* Show tooltip on hover (desktop) and focus/active (mobile) */
+                [title]:hover:before,
+                [title]:focus:before,
+                [title]:active:before,
+                [title]:hover:after,
+                [title]:focus:after,
+                [title]:active:after {
+                    opacity: 1;
+                    visibility: visible;
+                }
+
+                /* Make elements focusable on mobile for tooltip interaction */
+                @media (max-width: 767px) {
+                    [title] {
+                        -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+                        outline: none;
+                    }
+                    
+                    /* Add subtle visual feedback for tapped tooltips on mobile */
+                    [title]:active {
+                        background-color: rgba(0, 0, 0, 0.05);
+                        border-radius: 3px;
+                    }
+                    
+                    /* Ensure tooltip fits on mobile screens */
+                    [title]:before {
+                        max-width: 280px;
+                        left: 0;
+                        right: 0;
+                        transform: none;
+                        margin-left: auto;
+                        margin-right: auto;
+                    }
+                    
+                    [title]:after {
+                        left: 50%;
+                        transform: translateX(-50%);
+                    }
+                }
+
+                /* Special positioning for table cells and small elements */
+                td[title]:before,
+                th[title]:before {
+                    bottom: 100%;       /* position tooltip above cell */
+                    top: auto;
+                    margin-bottom: 8px; /* spacing between cell and tooltip */
+                    margin-top: 0;
+                }
+
+                td[title]:after,
+                th[title]:after {
+                    bottom: 100%;
+                    top: auto;
+                    border-top-color: rgba(0, 0, 0, 0.9); /* arrow points down */
+                    border-bottom-color: transparent;
+                    margin-bottom: 2px;
+                    margin-top: 0;
+                }
+
+                /* CSS-only navbar collapse using checkbox hack */
+                .navbar-toggle {
+                    display: none;
+                    background-color: transparent;
+                    background-image: none;
+                    border: 1px solid #ddd;
+                    border-radius: 4px;
+                    padding: 9px 10px;
+                    margin-top: 8px;
+                    margin-right: 15px;
+                    margin-bottom: 8px;
+                    cursor: pointer;
+                    float: right;
+                }
+
+                .navbar-toggle:hover,
+                .navbar-toggle:focus {
+                    background-color: #ddd;
+                }
+
+                .navbar-toggle .icon-bar {
+                    display: block;
+                    width: 22px;
+                    height: 2px;
+                    background-color: #888;
+                    border-radius: 1px;
+                    margin: 4px 0;
+                }
+
+                .navbar-brand {
+                    float: left;
+                    height: 50px;
+                    padding: 15px;
+                    font-size: 18px;
+                    line-height: 20px;
+                    font-weight: bold;
+                }
+
+                /* Desktop: show navigation horizontally */
+                @media (min-width: 768px) {
+                    .navbar-collapse {
+                        display: block !important;
+                        height: auto !important;
+                        overflow: visible !important;
+                    }
+                    
+                    .nav.navbar-nav {
+                        float: left;
+                        margin: 0;
+                    }
+                    
+                    .nav.navbar-nav > li {
+                        float: left;
+                    }
+                    
+                    .nav.navbar-nav > li > a {
+                        padding-top: 15px;
+                        padding-bottom: 15px;
+                        color: #777;
+                        text-decoration: none;
+                        padding-left: 15px;
+                        padding-right: 15px;
+                    }
+                    
+                    .nav.navbar-nav > li.active > a,
+                    .nav.navbar-nav > li > a:hover,
+                    .nav.navbar-nav > li > a:focus {
+                        color: #333;
+                        background-color: #e7e7e7;
+                    }
+                    
+                    .navbar-brand {
+                        display: none;
+                    }
+                }
+
+                /* Mobile: hide navigation by default, show hamburger */
+                @media (max-width: 767px) {
+                    .navbar-toggle {
+                        display: block;
+                    }
+                    
+                    .navbar-collapse {
+                        display: none;
+                        clear: both;
+                        width: 100%;
+                        margin-top: 50px;
+                        border-top: 1px solid #e7e7e7;
+                        padding-top: 10px;
+                    }
+                    
+                    /* When checkbox is checked, show the menu */
+                    .navbar-toggle-checkbox:checked ~ .navbar-header + .navbar-collapse {
+                        display: block;
+                    }
+                    
+                    .nav.navbar-nav > li {
+                        float: none;
+                    }
+                    
+                    .nav.navbar-nav > li > a {
+                        display: block;
+                        padding: 12px 20px;
+                        color: #777;
+                        text-decoration: none;
+                        border-bottom: 1px solid #e7e7e7;
+                    }
+                    
+                    .nav.navbar-nav > li:last-child > a {
+                        border-bottom: none;
+                    }
+                    
+                    .nav.navbar-nav > li.active > a,
+                    .nav.navbar-nav > li > a:hover,
+                    .nav.navbar-nav > li > a:focus {
+                        color: #333;
+                        background-color: #f5f5f5;
+                    }
+                }
+
+                /* Network Health Ribbon Styles */
+                .network-health-ribbon {
+                    max-width: 1400px;
+                    margin: 0 auto;
+                    padding: 7px;
+                }
+
+                .ribbon-row {
+                    display: grid;
+                    grid-template-columns: repeat(3, 1fr);
+                    gap: 7px;
+                    margin-bottom: 7px;
+                }
+
+                .ribbon-card {
+                    background: white;
+                    border-radius: 6px;
+                    padding: 10px;
+                    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+                    border: 1px solid #e1e8ed;
+                    transition: all 0.3s ease;
+                    min-height: 90px;
+                }
+
+                .ribbon-card:hover {
+                    transform: translateY(-1px);
+                    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+                }
+
+                .ribbon-card .card-header {
+                    margin-bottom: 7px;
+                    padding-bottom: 5px;
+                    border-bottom: 1px solid #f0f4f8;
+                }
+
+                .ribbon-card .card-header h4 {
+                    margin: 0;
+                    font-size: 1.65rem;
+                    color: #2c3e50;
+                    font-weight: 600;
+                }
+
+                .card-metrics {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 6px;
+                }
+
+                .metric-item.primary {
+                    text-align: center;
+                    padding-bottom: 5px;
+                    border-bottom: 1px solid #f8fafc;
+                    margin-bottom: 4px;
+                }
+
+                .metric-item.primary .metric-value {
+                    display: block;
+                    font-size: 3.3rem;
+                    font-weight: bold;
+                    color: #2c3e50;
+                    line-height: 1.0;
+                }
+
+                .metric-item.primary .metric-label {
+                    display: block;
+                    font-size: 1.5rem;
+                    color: #64748b;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                    margin-top: 2px;
+                    font-weight: 500;
+                }
+
+                .metric-grid {
+                    display: grid;
+                    grid-template-columns: repeat(4, 1fr);
+                    gap: 5px;
+                }
+
+                .metric-grid .metric-item {
+                    text-align: center;
+                    padding: 4px;
+                    background: #f8fafc;
+                    border-radius: 3px;
+                }
+
+                .metric-grid .metric-value {
+                    display: block;
+                    font-size: 1.65rem;
+                    font-weight: 600;
+                    color: #374151;
+                    line-height: 1.0;
+                }
+
+                .metric-grid .metric-label {
+                    display: block;
+                    font-size: 1.275rem;
+                    color: #6b7280;
+                    margin-top: 1px;
+                    font-weight: 500;
+                }
+
+                /* Card-specific colors and styling - All primary metrics now black */
+                .ribbon-card.relay-counts .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                .ribbon-card.bandwidth-counts .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                .ribbon-card.relay-uptime .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                .ribbon-card.operator-participation .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                .ribbon-card.geographic-participation .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                .ribbon-card.provider-participation .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                .ribbon-card.platform-counts .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                .ribbon-card.bandwidth-utilization .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                .ribbon-card.version-compliance .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                .ribbon-card.exit-policies .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                /* Tooltip styles for network health metrics */
+                .metric-item[title] {
+                    position: relative;
+                    cursor: help;
+                }
+
+                .metric-item[title]:hover::after {
+                    content: attr(title);
+                    position: absolute;
+                    bottom: 100%;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background: #1f2937;
+                    color: white;
+                    padding: 8px 12px;
+                    border-radius: 6px;
+                    font-size: 0.85rem;
+                    white-space: normal;
+                    max-width: 300px;
+                    width: max-content;
+                    z-index: 1000;
+                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                    line-height: 1.4;
+                    text-align: left;
+                    font-weight: normal;
+                    margin-bottom: 8px;
+                }
+
+                .metric-item[title]:hover::before {
+                    content: '';
+                    position: absolute;
+                    bottom: 100%;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    border: 6px solid transparent;
+                    border-top-color: #1f2937;
+                    z-index: 1000;
+                    margin-bottom: 2px;
+                }
+
+                .ribbon-footer {
+                    text-align: center;
+                    margin-top: 15px;
+                    padding-top: 12px;
+                    border-top: 1px solid #e5e7eb;
+                }
+
+                .ribbon-footer .last-updated {
+                    font-size: 0.9rem;
+                    color: #9ca3af;
+                    margin: 0;
+                }
+
+                /* Responsive adjustments for ribbon */
+                @media (max-width: 1200px) {
+                    .ribbon-row {
+                        grid-template-columns: repeat(2, 1fr);
+                    }
+                    
+                    .metric-grid {
+                        grid-template-columns: repeat(3, 1fr);
+                    }
+                }
+
+                @media (max-width: 768px) {
+                    .ribbon-row {
+                        grid-template-columns: 1fr;
+                        gap: 6px;
+                    }
+                    
+                    .network-health-ribbon {
+                        padding: 6px;
+                    }
+
+                    .ribbon-card {
+                        padding: 8px;
+                        min-height: 80px;
+                    }
+
+                    .ribbon-card .card-header h4 {
+                        font-size: 1.35rem;
+                    }
+
+                    .metric-item.primary .metric-value {
+                        font-size: 2.7rem;
+                    }
+
+                    .metric-item.primary .metric-label {
+                        font-size: 1.2rem;
+                    }
+
+                    .metric-grid {
+                        grid-template-columns: repeat(2, 1fr);
+                        gap: 4px;
+                    }
+
+                    .metric-grid .metric-value {
+                        font-size: 1.35rem;
+                    }
+
+                    .metric-grid .metric-label {
+                        font-size: 1.05rem;
+                    }
+                }
+
+                @media (max-width: 480px) {
+                    .ribbon-card .card-header h4 {
+                        font-size: 1.2rem;
+                    }
+
+                    .metric-item.primary .metric-value {
+                        font-size: 3.2rem;
+                    }
+
+                    .metric-item.primary .metric-label {
+                        font-size: 1.4rem;
+                    }
+
+                    .metric-grid .metric-value {
+                        font-size: 1.6rem;
+                    }
+
+                    .metric-grid .metric-label {
+                        font-size: 1.2rem;
+                    }
+                }
+            </style>
+        </head>
+    <body>
+        <div class="container">
+<h2>
+        Browse by Country
+    </h2>
+    
+            <nav aria-label="breadcrumb" style="margin-bottom: 10px;">
+    <ol class="breadcrumb" style="background: none; padding: 0; margin: 0; font-size: 0.9em; list-style: none;">
+        <li style="display: inline;"><a href="../index.html" style="color: #337ab7; text-decoration: none;">Home</a></li>
+            <li style="display: inline; color: #777;"> > Browse by Country</li>
+    </ol>
+</nav>
+    <nav class="navbar navbar-default" style="margin-bottom: 20px;">
+        <div class="container-fluid">
+            <!-- CSS-only hamburger toggle using checkbox hack -->
+            <input type="checkbox" id="navbar-toggle" class="navbar-toggle-checkbox" style="display: none;">
+            
+            <div class="navbar-header">
+                <label for="navbar-toggle" class="navbar-toggle" role="button" aria-label="Toggle navigation">
+                    <span class="sr-only">Toggle navigation</span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </label>
+                <span class="navbar-brand visible-xs">Browse Categories</span>
+            </div>
+            
+            <div class="navbar-collapse" id="main-navbar">
+                <ul class="nav navbar-nav">
+                    <li class="">
+                        <a href="../network-health.html">Network Health</a>
+                    </li>
+                    <li class="">
+                        <a href="../index.html">Operator Champions</a>
+                    </li>
+                    <li class="">
+                        <a href="../misc/contacts-by-bandwidth.html">By Operator / Contact</a>
+                    </li>
+                    <li class="">
+                        <a href="../misc/families-by-bandwidth.html">By Family</a>
+                    </li>
+                    <li class="">
+                        <a href="../misc/networks-by-bandwidth.html">By Network</a>
+                    </li>
+                    <li class="active">
+                        <a href="../misc/countries-by-bandwidth.html">By Country</a>
+                    </li>
+                    <li class="">
+                        <a href="../misc/platforms-by-bandwidth.html">By Platform</a>
+                    </li>
+                    <li class="">
+                        <a href="../misc/authorities.html">Directory Authorities</a>
+                    </li>
+                    <li class="">
+                        <a href="../top500.html">Top 500 Relays</a>
+                    </li>
+                    <li class="">
+                        <a href="../misc/all.html">All Relays</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+    
+    <p>
+        Geographic distribution of Tor infrastructure - shows regional network capacity and political risk factors.
+    </p>
+
+    <ul style="margin-bottom: 15px;">
+        <li><strong>Countries</strong>: 77 geographic locations hosting relays currently active</li>
+        <li><strong>Network Relays</strong>: Total: 9558
+            <ul style="margin: 2px 0; padding-left: 20px;">
+                <li><strong><span title="Main role with Exit priority, Exit > Guard > Middle">Primary Role</span></strong>: 
+                    Guard: 3982 | 
+                    Middle: 2726 | 
+                    Exit: 2850
+                </li>
+                <li><strong><span title="Exclusive categories for all role combinations, adding Guard+Exit">Role Categories</span></strong>: 
+                    Guard: 3982 | 
+                    Middle: 2726 | 
+                    Exit: 1083 | 
+                    Guard+Exit: 1767
+                </li>
+                <li><strong><span title="Multi-role relays counted by every role they perform">All Roles</span></strong>: 
+                    Guard: 5749 | 
+                    Middle: 2726 | 
+                    Exit: 2850
+                </li>
+                <li><strong><span title="Boolean field saying whether the consensus weight of this relay is based on a threshold of 3 or more measurements by Tor bandwidth authorities. Omitted if the network status consensus containing this relay does not contain measurement information.">Bandwidth Measured</span></strong>: 
+                    9406 relays, 98.4% of all relays
+                </li>
+            </ul>
+        </li>
+        <li><strong>Geographic Diversity</strong>: 59.7% in top 3 countries | 14 countries have >1% of network | 12.5% in Five Eyes countries</li>
+<li><strong>Jurisdiction Analysis</strong>: 12.5% Five Eyes influence | 77.4% Fourteen Eyes</li>
+<li><strong>Regional Clustering</strong>: MODERATE regional concentration (<span title="Moderate geographic concentration">HHI: 0.157</span>) | <span title="Top 3 countries: DE: 32.0%, NL: 18.2%, US: 9.5%">Top regions: DE: 32.0%, NL: 18.2%, US: 9.5%</span></li>
+        <li><strong>Sorted by</strong>: exit count</li>
+        <li><strong>Key</strong>: BW = Observed Bandwidth, CW = Consensus Weight, AS = Autonomous System (network provider)</li>
+    </ul>
+    
+    <p class="text-muted" style="margin-bottom: 15px;">
+    <small>Last updated: Tue, 01 Jul 2025 05:08:59 GMT. Refreshed every 30 minutes from the Tor directory authorities via <a href="https://onionoo.torproject.org/">Tor Project's onionoo API</a>.</small>
+    </p>
+    
+    <table class="table table-condensed">
+        <tr>
+            <th>Country</th>
+<th class="text-center bw-header" title="Observed Bandwidth: An estimate of the capacity this relay can handle. The relay remembers the max bandwidth sustained output over any ten second period in the past 5 days, and another sustained input. The 'observed' value is the lesser of these two numbers."><a href="countries-by-overall-bandwidth.html">Overall</a> / <a href="countries-by-guard-bandwidth.html">Guard</a> / <a href="countries-by-middle-bandwidth.html">Middle</a> / <a href="countries-by-exit-bandwidth.html">Exit</a> BW</th>
+<th class="text-center cw-header" title="Consensus Weight">
+                    <a href="countries-by-consensus-weight.html">Overall</a> / <a href="countries-by-guard-consensus-weight.html">Guard</a> / <a href="countries-by-middle-consensus-weight.html">Middle</a> / <a href="countries-by-exit-consensus-weight.html">Exit</a> CW
+                </th>
+<th class="text-center rc-header">
+                    <a href="countries-by-guard-count.html">Guard</a> / <a href="countries-by-middle-count.html">Middle</a> / Exit
+                </th>
+<th title="Number of unique AROI / contact operators in this country">
+                    <a href="countries-by-unique-contact-count.html">Unique AROI / Contact</a>
+                </th>
+<th title="Number of unique effective families in this country">
+                    <a href="countries-by-unique-family-count.html">Unique Families</a>
+                </th>
+<th title="Number of different autonomous systems (networks) in this country">
+                    <a href="countries-by-unique-as-count.html">Unique AS</a>
+                </th>
+</tr>
+        <tbody>
+<tr>
+<td>
+                        <a href="../country/nl/">
+                            <img src="../static/images/cc/nl.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">166.82 / 56.22 / 13.86 / 96.74 Gbit/s</td>
+<td class="text-center cw-data">18.17% / 11.33% / 14.49% / 28.74%</td>
+<td class="text-center rc-data">286 / 167 / 484</td>
+                    <td>245</td>
+                    <td>74</td>
+                    <td>101</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/de/">
+                            <img src="../static/images/cc/de.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">318.78 / 198.66 / 30.68 / 89.44 Gbit/s</td>
+<td class="text-center cw-data">32.02% / 36.32% / 30.61% / 26.33%</td>
+<td class="text-center rc-data">967 / 566 / 429</td>
+                    <td>832</td>
+                    <td>175</td>
+                    <td>146</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/us/">
+                            <img src="../static/images/cc/us.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">178.37 / 121.62 / 21.97 / 34.79 Gbit/s</td>
+<td class="text-center cw-data">9.47% / 11.99% / 11.84% / 5.30%</td>
+<td class="text-center rc-data">1073 / 760 / 426</td>
+                    <td>736</td>
+                    <td>164</td>
+                    <td>232</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/pl/">
+                            <img src="../static/images/cc/pl.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">52.73 / 14.00 / 1.59 / 37.14 Gbit/s</td>
+<td class="text-center cw-data">3.93% / 2.35% / 1.32% / 6.82%</td>
+<td class="text-center rc-data">82 / 34 / 352</td>
+                    <td>76</td>
+                    <td>37</td>
+                    <td>39</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/se/">
+                            <img src="../static/images/cc/se.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">67.64 / 20.50 / 2.33 / 44.81 Gbit/s</td>
+<td class="text-center cw-data">6.30% / 3.59% / 2.21% / 11.17%</td>
+<td class="text-center rc-data">138 / 52 / 272</td>
+                    <td>87</td>
+                    <td>28</td>
+                    <td>41</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/bg/">
+                            <img src="../static/images/cc/bg.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">8.11 / 3.38 / 1.07 / 3.67 Gbit/s</td>
+<td class="text-center cw-data">0.43% / 0.45% / 0.75% / 0.31%</td>
+<td class="text-center rc-data">34 / 20 / 166</td>
+                    <td>35</td>
+                    <td>18</td>
+                    <td>23</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/at/">
+                            <img src="../static/images/cc/at.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">25.27 / 1.64 / 3.64 / 19.99 Gbit/s</td>
+<td class="text-center cw-data">2.28% / 0.26% / 0.24% / 5.66%</td>
+<td class="text-center rc-data">16 / 68 / 106</td>
+                    <td>30</td>
+                    <td>8</td>
+                    <td>23</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/lu/">
+                            <img src="../static/images/cc/lu.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">17.88 / 2.50 / 0.36 / 15.02 Gbit/s</td>
+<td class="text-center cw-data">1.57% / 0.41% / 0.44% / 3.51%</td>
+<td class="text-center rc-data">21 / 8 / 105</td>
+                    <td>53</td>
+                    <td>20</td>
+                    <td>7</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/ro/">
+                            <img src="../static/images/cc/ro.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">10.85 / 2.99 / 1.15 / 6.72 Gbit/s</td>
+<td class="text-center cw-data">0.71% / 0.40% / 0.66% / 1.16%</td>
+<td class="text-center rc-data">35 / 32 / 74</td>
+                    <td>48</td>
+                    <td>19</td>
+                    <td>26</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/fr/">
+                            <img src="../static/images/cc/fr.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">50.81 / 35.50 / 4.82 / 10.49 Gbit/s</td>
+<td class="text-center cw-data">4.96% / 6.52% / 4.41% / 2.90%</td>
+<td class="text-center rc-data">221 / 70 / 71</td>
+                    <td>137</td>
+                    <td>31</td>
+                    <td>34</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/ru/">
+                            <img src="../static/images/cc/ru.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">18.86 / 6.08 / 2.15 / 10.63 Gbit/s</td>
+<td class="text-center cw-data">1.59% / 0.88% / 1.76% / 2.55%</td>
+<td class="text-center rc-data">53 / 36 / 61</td>
+                    <td>53</td>
+                    <td>29</td>
+                    <td>28</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/sg/">
+                            <img src="../static/images/cc/sg.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">2.82 / 0.55 / 0.68 / 1.58 Gbit/s</td>
+<td class="text-center cw-data">0.07% / 0.03% / 0.13% / 0.10%</td>
+<td class="text-center rc-data">13 / 38 / 35</td>
+                    <td>39</td>
+                    <td>16</td>
+                    <td>23</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/ch/">
+                            <img src="../static/images/cc/ch.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">19.48 / 12.87 / 2.26 / 4.35 Gbit/s</td>
+<td class="text-center cw-data">1.75% / 2.23% / 2.12% / 0.98%</td>
+<td class="text-center rc-data">71 / 46 / 26</td>
+                    <td>68</td>
+                    <td>23</td>
+                    <td>30</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/hr/">
+                            <img src="../static/images/cc/hr.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">3.00 / 0.40 / 0.43 / 2.17 Gbit/s</td>
+<td class="text-center cw-data">0.23% / 0.05% / 0.35% / 0.44%</td>
+<td class="text-center rc-data">5 / 7 / 25</td>
+                    <td>10</td>
+                    <td>7</td>
+                    <td>7</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/ua/">
+                            <img src="../static/images/cc/ua.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">9.43 / 5.37 / 2.00 / 2.05 Gbit/s</td>
+<td class="text-center cw-data">0.66% / 0.70% / 1.48% / 0.40%</td>
+<td class="text-center rc-data">49 / 22 / 19</td>
+                    <td>38</td>
+                    <td>20</td>
+                    <td>25</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/is/">
+                            <img src="../static/images/cc/is.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">2.01 / 0.60 / 0.23 / 1.18 Gbit/s</td>
+<td class="text-center cw-data">0.13% / 0.07% / 0.13% / 0.21%</td>
+<td class="text-center rc-data">8 / 7 / 19</td>
+                    <td>20</td>
+                    <td>5</td>
+                    <td>4</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/za/">
+                            <img src="../static/images/cc/za.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">1.00 / 0.05 / 0.31 / 0.64 Gbit/s</td>
+<td class="text-center cw-data">0.03% / 0.01% / 0.06% / 0.05%</td>
+<td class="text-center rc-data">1 / 25 / 17</td>
+                    <td>16</td>
+                    <td>10</td>
+                    <td>9</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/dk/">
+                            <img src="../static/images/cc/dk.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">8.74 / 3.82 / 1.04 / 3.89 Gbit/s</td>
+<td class="text-center cw-data">0.81% / 0.65% / 0.91% / 1.01%</td>
+<td class="text-center rc-data">22 / 10 / 15</td>
+                    <td>19</td>
+                    <td>9</td>
+                    <td>16</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/ca/">
+                            <img src="../static/images/cc/ca.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">10.92 / 8.64 / 1.06 / 1.22 Gbit/s</td>
+<td class="text-center cw-data">0.48% / 0.69% / 0.33% / 0.21%</td>
+<td class="text-center rc-data">128 / 68 / 14</td>
+                    <td>104</td>
+                    <td>32</td>
+                    <td>39</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/gb/">
+                            <img src="../static/images/cc/gb.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">25.96 / 19.06 / 5.79 / 1.11 Gbit/s</td>
+<td class="text-center cw-data">2.49% / 3.48% / 5.65% / 0.27%</td>
+<td class="text-center rc-data">129 / 103 / 13</td>
+                    <td>154</td>
+                    <td>42</td>
+                    <td>55</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/cz/">
+                            <img src="../static/images/cc/cz.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">17.97 / 15.12 / 1.90 / 0.94 Gbit/s</td>
+<td class="text-center cw-data">1.74% / 2.83% / 1.82% / 0.19%</td>
+<td class="text-center rc-data">67 / 24 / 13</td>
+                    <td>49</td>
+                    <td>20</td>
+                    <td>33</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/it/">
+                            <img src="../static/images/cc/it.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">9.81 / 6.82 / 1.27 / 1.72 Gbit/s</td>
+<td class="text-center cw-data">0.85% / 1.12% / 1.05% / 0.41%</td>
+<td class="text-center rc-data">55 / 23 / 13</td>
+                    <td>63</td>
+                    <td>14</td>
+                    <td>21</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/md/">
+                            <img src="../static/images/cc/md.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">4.90 / 2.84 / 1.32 / 0.73 Gbit/s</td>
+<td class="text-center cw-data">0.33% / 0.35% / 0.92% / 0.14%</td>
+<td class="text-center rc-data">41 / 22 / 11</td>
+                    <td>39</td>
+                    <td>17</td>
+                    <td>7</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/hu/">
+                            <img src="../static/images/cc/hu.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">5.21 / 3.11 / 0.96 / 1.15 Gbit/s</td>
+<td class="text-center cw-data">0.44% / 0.49% / 0.79% / 0.28%</td>
+<td class="text-center rc-data">25 / 14 / 8</td>
+                    <td>36</td>
+                    <td>14</td>
+                    <td>11</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/jp/">
+                            <img src="../static/images/cc/jp.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">2.28 / 1.09 / 0.96 / 0.23 Gbit/s</td>
+<td class="text-center cw-data">0.05% / 0.05% / 0.14% / 0.01%</td>
+<td class="text-center rc-data">22 / 52 / 8</td>
+                    <td>43</td>
+                    <td>12</td>
+                    <td>34</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/fi/">
+                            <img src="../static/images/cc/fi.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">39.67 / 33.17 / 5.77 / 0.73 Gbit/s</td>
+<td class="text-center cw-data">3.67% / 5.69% / 6.28% / 0.16%</td>
+<td class="text-center rc-data">151 / 62 / 7</td>
+                    <td>114</td>
+                    <td>28</td>
+                    <td>23</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/id/">
+                            <img src="../static/images/cc/id.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">176.63 / 0.00 / 46.98 / 129.65 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.01% / 0.01%</td>
+<td class="text-center rc-data">0 / 6 / 5</td>
+                    <td>5</td>
+                    <td>1</td>
+                    <td>4</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/no/">
+                            <img src="../static/images/cc/no.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">6.31 / 5.87 / 0.20 / 0.24 Gbit/s</td>
+<td class="text-center cw-data">0.57% / 1.03% / 0.18% / 0.04%</td>
+<td class="text-center rc-data">37 / 8 / 4</td>
+                    <td>24</td>
+                    <td>9</td>
+                    <td>16</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/au/">
+                            <img src="../static/images/cc/au.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">1.66 / 0.81 / 0.71 / 0.15 Gbit/s</td>
+<td class="text-center cw-data">0.07% / 0.11% / 0.10% / 0.01%</td>
+<td class="text-center rc-data">4 / 88 / 4</td>
+                    <td>58</td>
+                    <td>12</td>
+                    <td>27</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/br/">
+                            <img src="../static/images/cc/br.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">687.07 / 140.17 / 278.17 / 268.74 Mbit/s</td>
+<td class="text-center cw-data">0.02% / 0.01% / 0.05% / 0.02%</td>
+<td class="text-center rc-data">2 / 28 / 4</td>
+                    <td>16</td>
+                    <td>4</td>
+                    <td>15</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/kr/">
+                            <img src="../static/images/cc/kr.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">268.94 / 0.00 / 190.39 / 78.55 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.03% / 0.00%</td>
+<td class="text-center rc-data">0 / 19 / 4</td>
+                    <td>15</td>
+                    <td>2</td>
+                    <td>8</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/lt/">
+                            <img src="../static/images/cc/lt.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">3.72 / 3.00 / 0.32 / 0.40 Gbit/s</td>
+<td class="text-center cw-data">0.34% / 0.54% / 0.29% / 0.07%</td>
+<td class="text-center rc-data">17 / 3 / 3</td>
+                    <td>12</td>
+                    <td>2</td>
+                    <td>10</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/ae/">
+                            <img src="../static/images/cc/ae.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">437.47 / 0.00 / 38.19 / 399.28 Mbit/s</td>
+<td class="text-center cw-data">0.04% / 0.00% / 0.01% / 0.12%</td>
+<td class="text-center rc-data">0 / 3 / 3</td>
+                    <td>3</td>
+                    <td>1</td>
+                    <td>5</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/my/">
+                            <img src="../static/images/cc/my.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">452.71 / 135.08 / 172.47 / 145.16 Mbit/s</td>
+<td class="text-center cw-data">0.02% / 0.02% / 0.03% / 0.02%</td>
+<td class="text-center rc-data">2 / 18 / 3</td>
+                    <td>9</td>
+                    <td>3</td>
+                    <td>8</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/kz/">
+                            <img src="../static/images/cc/kz.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">68.94 / 0.00 / 45.39 / 23.55 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.01% / 0.00%</td>
+<td class="text-center rc-data">0 / 2 / 3</td>
+                    <td>5</td>
+                    <td>0</td>
+                    <td>3</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/be/">
+                            <img src="../static/images/cc/be.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">4.82 / 4.32 / 0.26 / 0.23 Gbit/s</td>
+<td class="text-center cw-data">0.55% / 0.96% / 0.22% / 0.06%</td>
+<td class="text-center rc-data">17 / 11 / 2</td>
+                    <td>17</td>
+                    <td>2</td>
+                    <td>10</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/bz/">
+                            <img src="../static/images/cc/bz.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">586.67 / 0.00 / 76.37 / 510.31 Mbit/s</td>
+<td class="text-center cw-data">0.07% / 0.00% / 0.07% / 0.18%</td>
+<td class="text-center rc-data">0 / 1 / 2</td>
+                    <td>3</td>
+                    <td>1</td>
+                    <td>1</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/tw/">
+                            <img src="../static/images/cc/tw.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">270.64 / 0.00 / 172.55 / 98.10 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.03% / 0.00%</td>
+<td class="text-center rc-data">0 / 12 / 2</td>
+                    <td>10</td>
+                    <td>0</td>
+                    <td>2</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/cy/">
+                            <img src="../static/images/cc/cy.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">154.54 / 69.74 / 0.00 / 84.81 Mbit/s</td>
+<td class="text-center cw-data">0.01% / 0.01% / 0.00% / 0.01%</td>
+<td class="text-center rc-data">2 / 0 / 2</td>
+                    <td>4</td>
+                    <td>1</td>
+                    <td>1</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/cl/">
+                            <img src="../static/images/cc/cl.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">143.71 / 0.00 / 97.41 / 46.30 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.02% / 0.00%</td>
+<td class="text-center rc-data">0 / 5 / 2</td>
+                    <td>5</td>
+                    <td>3</td>
+                    <td>5</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/cr/">
+                            <img src="../static/images/cc/cr.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">111.67 / 0.00 / 27.44 / 84.23 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.01% / 0.01%</td>
+<td class="text-center rc-data">0 / 3 / 2</td>
+                    <td>2</td>
+                    <td>1</td>
+                    <td>2</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/es/">
+                            <img src="../static/images/cc/es.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">8.55 / 6.34 / 2.17 / 0.04 Gbit/s</td>
+<td class="text-center cw-data">0.66% / 0.95% / 1.60% / 0.00%</td>
+<td class="text-center rc-data">46 / 38 / 1</td>
+                    <td>54</td>
+                    <td>23</td>
+                    <td>23</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/pt/">
+                            <img src="../static/images/cc/pt.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">2.09 / 1.98 / 0.03 / 0.08 Gbit/s</td>
+<td class="text-center cw-data">0.21% / 0.40% / 0.00% / 0.00%</td>
+<td class="text-center rc-data">12 / 4 / 1</td>
+                    <td>8</td>
+                    <td>3</td>
+                    <td>6</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/gr/">
+                            <img src="../static/images/cc/gr.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">1.98 / 1.56 / 0.29 / 0.13 Gbit/s</td>
+<td class="text-center cw-data">0.13% / 0.19% / 0.20% / 0.02%</td>
+<td class="text-center rc-data">18 / 12 / 1</td>
+                    <td>21</td>
+                    <td>5</td>
+                    <td>11</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/ee/">
+                            <img src="../static/images/cc/ee.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">2.62 / 1.87 / 0.62 / 0.13 Gbit/s</td>
+<td class="text-center cw-data">0.20% / 0.26% / 0.58% / 0.02%</td>
+<td class="text-center rc-data">16 / 6 / 1</td>
+                    <td>10</td>
+                    <td>7</td>
+                    <td>11</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/in/">
+                            <img src="../static/images/cc/in.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">665.79 / 589.47 / 10.58 / 65.75 Mbit/s</td>
+<td class="text-center cw-data">0.04% / 0.07% / 0.00% / 0.01%</td>
+<td class="text-center rc-data">9 / 2 / 1</td>
+                    <td>10</td>
+                    <td>4</td>
+                    <td>3</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/il/">
+                            <img src="../static/images/cc/il.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">430.30 / 210.15 / 120.78 / 99.37 Mbit/s</td>
+<td class="text-center cw-data">0.02% / 0.02% / 0.05% / 0.01%</td>
+<td class="text-center rc-data">4 / 6 / 1</td>
+                    <td>11</td>
+                    <td>2</td>
+                    <td>7</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/hk/">
+                            <img src="../static/images/cc/hk.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">300.15 / 0.00 / 206.47 / 93.68 Mbit/s</td>
+<td class="text-center cw-data">0.01% / 0.00% / 0.03% / 0.01%</td>
+<td class="text-center rc-data">0 / 11 / 1</td>
+                    <td>8</td>
+                    <td>2</td>
+                    <td>9</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/tr/">
+                            <img src="../static/images/cc/tr.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">626.59 / 272.00 / 261.59 / 92.99 Mbit/s</td>
+<td class="text-center cw-data">0.04% / 0.03% / 0.22% / 0.02%</td>
+<td class="text-center rc-data">6 / 5 / 1</td>
+                    <td>12</td>
+                    <td>7</td>
+                    <td>10</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/sc/">
+                            <img src="../static/images/cc/sc.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">74.85 / 0.00 / 0.00 / 74.85 Mbit/s</td>
+<td class="text-center cw-data">0.01% / 0.00% / 0.00% / 0.02%</td>
+<td class="text-center rc-data">0 / 0 / 1</td>
+                    <td>1</td>
+                    <td>0</td>
+                    <td>1</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/mx/">
+                            <img src="../static/images/cc/mx.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">264.44 / 83.21 / 125.17 / 56.06 Mbit/s</td>
+<td class="text-center cw-data">0.01% / 0.00% / 0.03% / 0.01%</td>
+<td class="text-center rc-data">3 / 6 / 1</td>
+                    <td>9</td>
+                    <td>2</td>
+                    <td>4</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/pe/">
+                            <img src="../static/images/cc/pe.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">64.60 / 0.00 / 10.81 / 53.79 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.00% / 0.00%</td>
+<td class="text-center rc-data">0 / 1 / 1</td>
+                    <td>2</td>
+                    <td>0</td>
+                    <td>2</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/vn/">
+                            <img src="../static/images/cc/vn.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">126.08 / 0.00 / 96.91 / 29.17 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.01% / 0.00%</td>
+<td class="text-center rc-data">0 / 9 / 1</td>
+                    <td>7</td>
+                    <td>4</td>
+                    <td>7</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/nz/">
+                            <img src="../static/images/cc/nz.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">80.39 / 0.00 / 57.98 / 22.41 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.01% / 0.00%</td>
+<td class="text-center rc-data">0 / 8 / 1</td>
+                    <td>7</td>
+                    <td>0</td>
+                    <td>5</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/tt/">
+                            <img src="../static/images/cc/tt.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">16.50 / 0.00 / 0.00 / 16.50 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.00% / 0.00%</td>
+<td class="text-center rc-data">0 / 0 / 1</td>
+                    <td>1</td>
+                    <td>1</td>
+                    <td>1</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/ph/">
+                            <img src="../static/images/cc/ph.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">43.53 / 0.00 / 37.08 / 6.46 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.01% / 0.00%</td>
+<td class="text-center rc-data">0 / 5 / 1</td>
+                    <td>3</td>
+                    <td>1</td>
+                    <td>2</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/cw/">
+                            <img src="../static/images/cc/cw.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">2.84 / 0.00 / 0.00 / 2.84 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.00% / 0.00%</td>
+<td class="text-center rc-data">0 / 0 / 1</td>
+                    <td>1</td>
+                    <td>1</td>
+                    <td>1</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/am/">
+                            <img src="../static/images/cc/am.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">784.88 / 729.96 / 54.92 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.05% / 0.09% / 0.02% / 0.00%</td>
+<td class="text-center rc-data">7 / 2 / 0</td>
+                    <td>5</td>
+                    <td>2</td>
+                    <td>4</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/al/">
+                            <img src="../static/images/cc/al.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">9.97 / 7.27 / 2.70 / 0.00 Gbit/s</td>
+<td class="text-center cw-data">1.17% / 1.62% / 3.19% / 0.00%</td>
+<td class="text-center rc-data">34 / 10 / 0</td>
+                    <td>6</td>
+                    <td>6</td>
+                    <td>3</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/ie/">
+                            <img src="../static/images/cc/ie.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">2.07 / 1.95 / 0.12 / 0.00 Gbit/s</td>
+<td class="text-center cw-data">0.24% / 0.43% / 0.09% / 0.00%</td>
+<td class="text-center rc-data">6 / 3 / 0</td>
+                    <td>5</td>
+                    <td>1</td>
+                    <td>5</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/ge/">
+                            <img src="../static/images/cc/ge.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">611.50 / 0.00 / 611.50 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.06% / 0.00% / 0.57% / 0.00%</td>
+<td class="text-center rc-data">0 / 4 / 0</td>
+                    <td>2</td>
+                    <td>1</td>
+                    <td>2</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/ba/">
+                            <img src="../static/images/cc/ba.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">436.22 / 436.22 / 0.00 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.03% / 0.06% / 0.00% / 0.00%</td>
+<td class="text-center rc-data">3 / 0 / 0</td>
+                    <td>2</td>
+                    <td>1</td>
+                    <td>1</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/lv/">
+                            <img src="../static/images/cc/lv.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">2.33 / 1.28 / 1.05 / 0.00 Gbit/s</td>
+<td class="text-center cw-data">0.16% / 0.17% / 0.70% / 0.00%</td>
+<td class="text-center rc-data">17 / 17 / 0</td>
+                    <td>18</td>
+                    <td>9</td>
+                    <td>9</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/rs/">
+                            <img src="../static/images/cc/rs.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">331.96 / 0.00 / 331.96 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.02% / 0.00% / 0.24% / 0.00%</td>
+<td class="text-center rc-data">0 / 6 / 0</td>
+                    <td>3</td>
+                    <td>2</td>
+                    <td>3</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/eu/">
+                            <img src="../static/images/cc/eu.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">382.71 / 202.82 / 179.90 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.04% / 0.04% / 0.15% / 0.00%</td>
+<td class="text-center rc-data">2 / 3 / 0</td>
+                    <td>4</td>
+                    <td>2</td>
+                    <td>4</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/si/">
+                            <img src="../static/images/cc/si.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">196.29 / 0.00 / 196.29 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.02% / 0.00% / 0.16% / 0.00%</td>
+<td class="text-center rc-data">0 / 3 / 0</td>
+                    <td>3</td>
+                    <td>0</td>
+                    <td>3</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/mk/">
+                            <img src="../static/images/cc/mk.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">185.22 / 0.00 / 185.22 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.01% / 0.00% / 0.13% / 0.00%</td>
+<td class="text-center rc-data">0 / 2 / 0</td>
+                    <td>2</td>
+                    <td>1</td>
+                    <td>2</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/sk/">
+                            <img src="../static/images/cc/sk.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">307.43 / 295.64 / 11.79 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.03% / 0.05% / 0.00% / 0.00%</td>
+<td class="text-center rc-data">3 / 1 / 0</td>
+                    <td>3</td>
+                    <td>1</td>
+                    <td>4</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/bd/">
+                            <img src="../static/images/cc/bd.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">82.66 / 72.76 / 9.91 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.01% / 0.01% / 0.00% / 0.00%</td>
+<td class="text-center rc-data">1 / 1 / 0</td>
+                    <td>2</td>
+                    <td>1</td>
+                    <td>2</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/kg/">
+                            <img src="../static/images/cc/kg.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">32.12 / 32.12 / 0.00 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.00% / 0.00%</td>
+<td class="text-center rc-data">1 / 0 / 0</td>
+                    <td>1</td>
+                    <td>0</td>
+                    <td>1</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/th/">
+                            <img src="../static/images/cc/th.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">169.48 / 0.00 / 169.48 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.03% / 0.00%</td>
+<td class="text-center rc-data">0 / 11 / 0</td>
+                    <td>4</td>
+                    <td>1</td>
+                    <td>3</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/uz/">
+                            <img src="../static/images/cc/uz.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">26.39 / 0.00 / 26.39 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.01% / 0.00%</td>
+<td class="text-center rc-data">0 / 1 / 0</td>
+                    <td>1</td>
+                    <td>1</td>
+                    <td>1</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/ma/">
+                            <img src="../static/images/cc/ma.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">20.31 / 0.00 / 20.31 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.00% / 0.00%</td>
+<td class="text-center rc-data">0 / 2 / 0</td>
+                    <td>2</td>
+                    <td>0</td>
+                    <td>2</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/co/">
+                            <img src="../static/images/cc/co.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">14.85 / 0.00 / 14.85 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.00% / 0.00%</td>
+<td class="text-center rc-data">0 / 1 / 0</td>
+                    <td>1</td>
+                    <td>0</td>
+                    <td>1</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/ao/">
+                            <img src="../static/images/cc/ao.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">12.15 / 0.00 / 12.15 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.00% / 0.00%</td>
+<td class="text-center rc-data">0 / 1 / 0</td>
+                    <td>1</td>
+                    <td>1</td>
+                    <td>1</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/pr/">
+                            <img src="../static/images/cc/pr.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">9.45 / 0.00 / 9.45 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.00% / 0.00%</td>
+<td class="text-center rc-data">0 / 1 / 0</td>
+                    <td>1</td>
+                    <td>0</td>
+                    <td>1</td>
+                </tr>
+<tr>
+<td>
+                        <a href="../country/mt/">
+                            <img src="../static/images/cc/mt.png"
+                                 title=""
+                                 alt="">
+                            
+                        </a>
+                    </td>
+<td class="text-center bw-data">8.05 / 0.00 / 8.05 / 0.00 Mbit/s</td>
+<td class="text-center cw-data">0.00% / 0.00% / 0.00% / 0.00%</td>
+<td class="text-center rc-data">0 / 1 / 0</td>
+                    <td>1</td>
+                    <td>0</td>
+                    <td>1</td>
+                </tr>
+</tbody>
+    </table>
+        </div>
+    </body>
+        <footer class="page-footer font-small">
+            <div class="footer-copyright text-center text-muted">
+                <p>
+                    Generated by a <a href="https://github.com/1aeo/allium">1aeo modified fork of allium</a>, based on original <a href="https://git.jordan.im/allium/">allium</a>, on Tue, 01 Jul 2025 05:08:59 GMT. Source data from <a href="https://onionoo.torproject.org/">Tor Project onionoo</a>.
+                </p>
+            </div>
+        </footer>
+    </html>

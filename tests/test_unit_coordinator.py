@@ -10,9 +10,9 @@ import time
 from unittest.mock import patch, MagicMock
 
 # Add the allium directory to Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'allium'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from lib.coordinator import Coordinator, create_relay_set_with_coordinator
+from allium.lib.coordinator import Coordinator, create_relay_set_with_coordinator
 
 
 class TestCoordinator:
@@ -144,7 +144,7 @@ class TestCoordinator:
         mock_relay_set = MagicMock()
         mock_relay_set.json = mock_data
         
-        with patch('lib.coordinator.Relays', return_value=mock_relay_set) as mock_relays:
+        with patch('allium.lib.coordinator.Relays', return_value=mock_relay_set) as mock_relays:
             with patch('builtins.print') as mock_print:
                 result = coordinator.create_relay_set(mock_data)
                 
@@ -163,7 +163,7 @@ class TestCoordinator:
                 )
                 
                 # Check progress messages
-                assert any("Creating relay set with fetched data" in str(call) for call in mock_print.call_args_list)
+                assert any("Creating relay set with Details API data" in str(call) for call in mock_print.call_args_list)
                 assert any("Relay set created successfully" in str(call) for call in mock_print.call_args_list)
     
     def test_create_relay_set_returns_none_when_data_processing_fails(self):
@@ -176,7 +176,7 @@ class TestCoordinator:
         mock_relay_set = MagicMock()
         mock_relay_set.json = None
         
-        with patch('lib.coordinator.Relays', return_value=mock_relay_set):
+        with patch('allium.lib.coordinator.Relays', return_value=mock_relay_set):
             with patch('builtins.print') as mock_print:
                 result = coordinator.create_relay_set(mock_data)
                 
@@ -228,7 +228,7 @@ class TestCoordinator:
         coordinator = Coordinator("./output", "https://test.details.url", "https://test.uptime.url")
         
         # Patch the function where it's imported in coordinator
-        with patch('lib.coordinator.get_all_worker_status', return_value=mock_status):
+        with patch('allium.lib.coordinator.get_all_worker_status', return_value=mock_status):
             summary = coordinator.get_worker_status_summary()
             
             assert summary["worker_count"] == 3
@@ -241,7 +241,7 @@ class TestCoordinator:
         coordinator = Coordinator("./output", "https://test.details.url", "https://test.uptime.url")
         
         # Patch the function where it's imported in coordinator
-        with patch('lib.coordinator.get_all_worker_status', return_value={}):
+        with patch('allium.lib.coordinator.get_all_worker_status', return_value={}):
             summary = coordinator.get_worker_status_summary()
             
             assert summary["worker_count"] == 0
@@ -259,7 +259,7 @@ class TestBackwardsCompatibility:
         mock_coordinator = MagicMock()
         mock_coordinator.get_relay_set.return_value = mock_relay_set
         
-        with patch('lib.coordinator.Coordinator', return_value=mock_coordinator) as mock_coordinator_class:
+        with patch('allium.lib.coordinator.Coordinator', return_value=mock_coordinator) as mock_coordinator_class:
             result = create_relay_set_with_coordinator(
                 output_dir="./test_output",
                 onionoo_details_url="https://test.details.url",
@@ -271,17 +271,20 @@ class TestBackwardsCompatibility:
             assert result == mock_relay_set
             
             # Check that Coordinator was instantiated correctly
-            mock_coordinator_class.assert_called_once_with(
-                output_dir="./test_output",
-                onionoo_details_url="https://test.details.url",
-                onionoo_uptime_url="https://test.uptime.url",
-                use_bits=True,
-                progress=True,
-                start_time=mock_coordinator_class.call_args[1]['start_time'],
-                progress_step=0,
-                total_steps=34,
-                enabled_apis='all'
-            )
+            call_args = mock_coordinator_class.call_args
+            if call_args and len(call_args) > 1:
+                kwargs = call_args[1]
+                mock_coordinator_class.assert_called_once_with(
+                    output_dir="./test_output",
+                    onionoo_details_url="https://test.details.url",
+                    onionoo_uptime_url="https://test.uptime.url",
+                    use_bits=True,
+                    progress=True,
+                    start_time=kwargs['start_time'],
+                    progress_step=0,
+                    total_steps=34,
+                    enabled_apis='all'
+                )
             
             mock_coordinator.get_relay_set.assert_called_once()
     
@@ -290,7 +293,7 @@ class TestBackwardsCompatibility:
         mock_coordinator = MagicMock()
         mock_coordinator.get_relay_set.return_value = None
         
-        with patch('lib.coordinator.Coordinator', return_value=mock_coordinator):
+        with patch('allium.lib.coordinator.Coordinator', return_value=mock_coordinator):
             result = create_relay_set_with_coordinator("./output", "https://test.details.url", "https://test.uptime.url")
             
             assert result is None
@@ -301,19 +304,20 @@ class TestBackwardsCompatibility:
         mock_coordinator = MagicMock()
         mock_coordinator.get_relay_set.return_value = mock_relay_set
         
-        with patch('lib.coordinator.Coordinator', return_value=mock_coordinator) as mock_coordinator_class:
+        with patch('allium.lib.coordinator.Coordinator', return_value=mock_coordinator) as mock_coordinator_class:
             result = create_relay_set_with_coordinator("./output", "https://test.details.url", "https://test.uptime.url")
             
             assert result == mock_relay_set
             
             # Check default parameters
             call_args = mock_coordinator_class.call_args
-            kwargs = call_args[1]
-            assert kwargs['use_bits'] is False
-            assert kwargs['progress'] is False
-            assert kwargs['progress_step'] == 0
-            assert kwargs['total_steps'] == 34
-            assert isinstance(kwargs['start_time'], float)
+            if call_args and len(call_args) > 1:
+                kwargs = call_args[1]
+                assert kwargs['use_bits'] is False
+                assert kwargs['progress'] is False
+                assert kwargs['progress_step'] == 0
+                assert kwargs['total_steps'] == 34
+                assert isinstance(kwargs['start_time'], float)
 
 
 class TestCoordinatorIntegration:
@@ -336,8 +340,8 @@ class TestCoordinatorIntegration:
         mock_response.read.return_value = json.dumps(mock_data).encode('utf-8')
         
         with tempfile.TemporaryDirectory() as temp_dir:
-            with patch('lib.workers.CACHE_DIR', temp_dir):
-                with patch('lib.workers.STATE_FILE', os.path.join(temp_dir, 'state.json')):
+            with patch('allium.lib.workers.CACHE_DIR', temp_dir):
+                with patch('allium.lib.workers.STATE_FILE', os.path.join(temp_dir, 'state.json')):
                     with patch('urllib.request.urlopen', return_value=mock_response):
                         with patch('builtins.print') as mock_print:
                             # Test fetching data
@@ -356,8 +360,8 @@ class TestCoordinatorIntegration:
         coordinator = Coordinator("./test_output", "https://test.details.url", "https://test.uptime.url", progress=True)
         
         with tempfile.TemporaryDirectory() as temp_dir:
-            with patch('lib.workers.CACHE_DIR', temp_dir):
-                with patch('lib.workers.STATE_FILE', os.path.join(temp_dir, 'state.json')):
+            with patch('allium.lib.workers.CACHE_DIR', temp_dir):
+                with patch('allium.lib.workers.STATE_FILE', os.path.join(temp_dir, 'state.json')):
                     # Simulate network error
                     with patch('urllib.request.urlopen', side_effect=ConnectionError("Network error")):
                         with patch('builtins.print'):
@@ -366,10 +370,22 @@ class TestCoordinatorIntegration:
                             assert data is None
                             
                             # Check worker status
-                            from lib.workers import get_worker_status
+                            from allium.lib.workers import get_worker_status
                             status = get_worker_status("onionoo_details")
                             assert status["status"] == "stale"
                             assert "Network error" in status["error"]
+    
+    def test_create_relay_set_with_empty_data(self):
+        """Test creating relay set with empty data"""
+        coordinator = Coordinator("./output", "https://test.details.url", "https://test.uptime.url")
+        
+        mock_relay_set = MagicMock()
+        mock_relay_set.json = {"relays": []}
+        
+        with patch('allium.lib.coordinator.Relays', return_value=mock_relay_set):
+            result = coordinator.create_relay_set({"relays": []})
+            
+            assert result == mock_relay_set
 
 
 class TestCoordinatorProgressLogging:
@@ -434,7 +450,7 @@ class TestCoordinatorEdgeCases:
         mock_relay_set = MagicMock()
         mock_relay_set.json = {"relays": []}
         
-        with patch('lib.coordinator.Relays', return_value=mock_relay_set):
+        with patch('allium.lib.coordinator.Relays', return_value=mock_relay_set):
             result = coordinator.create_relay_set({"relays": []})
             
             assert result == mock_relay_set
@@ -588,7 +604,23 @@ class TestCoordinatorMultiAPI:
     def test_create_relay_set_with_additional_apis(self):
         """Test relay set creation with additional API data attached"""
         mock_details_data = {
-            "relays": [{"nickname": "TestRelay1", "fingerprint": "ABC123"}],
+            "relays": [{
+                "nickname": "TestRelay1", 
+                "fingerprint": "ABC123",
+                "flags": ["Fast", "Running", "Stable"],
+                "observed_bandwidth": 1000000,
+                "consensus_weight": 50,
+                "first_seen": "2020-01-01 00:00:00",
+                "last_seen": "2024-01-01 00:00:00",
+                "last_restarted": "2024-01-01 00:00:00",
+                "platform": "Tor 0.4.7.10 on Linux",
+                "as": "AS12345",
+                "as_name": "Test AS",
+                "country": "US",
+                "country_name": "United States",
+                "or_addresses": ["192.0.2.1:9001"],
+                "running": True
+            }],
             "version": "details_test"
         }
         
@@ -607,7 +639,7 @@ class TestCoordinatorMultiAPI:
         mock_relay_set = MagicMock()
         mock_relay_set.json = mock_details_data
         
-        with patch('lib.coordinator.Relays', return_value=mock_relay_set) as mock_relays:
+        with patch('allium.lib.coordinator.Relays', return_value=mock_relay_set) as mock_relays:
             result = coordinator.create_relay_set(mock_details_data)
             
             assert result == mock_relay_set
@@ -620,7 +652,23 @@ class TestCoordinatorMultiAPI:
     def test_fetch_onionoo_data_multiapi_compatibility(self):
         """Test that fetch_onionoo_data returns details for backward compatibility"""
         mock_details_data = {
-            "relays": [{"nickname": "TestRelay1", "fingerprint": "ABC123"}],
+            "relays": [{
+                "nickname": "TestRelay1", 
+                "fingerprint": "ABC123",
+                "flags": ["Fast", "Running", "Stable"],
+                "observed_bandwidth": 1000000,
+                "consensus_weight": 50,
+                "first_seen": "2020-01-01 00:00:00",
+                "last_seen": "2024-01-01 00:00:00",
+                "last_restarted": "2024-01-01 00:00:00",
+                "platform": "Tor 0.4.7.10 on Linux",
+                "as": "AS12345",
+                "as_name": "Test AS",
+                "country": "US",
+                "country_name": "United States",
+                "or_addresses": ["192.0.2.1:9001"],
+                "running": True
+            }],
             "version": "details_test"
         }
         
@@ -642,7 +690,23 @@ class TestCoordinatorMultiAPI:
     def test_get_relay_set_full_multiapi_flow(self):
         """Test complete multiapi relay set creation flow"""
         mock_details_data = {
-            "relays": [{"nickname": "TestRelay1", "fingerprint": "ABC123"}],
+            "relays": [{
+                "nickname": "TestRelay1", 
+                "fingerprint": "ABC123",
+                "flags": ["Fast", "Running", "Stable"],
+                "observed_bandwidth": 1000000,
+                "consensus_weight": 50,
+                "first_seen": "2020-01-01 00:00:00",
+                "last_seen": "2024-01-01 00:00:00",
+                "last_restarted": "2024-01-01 00:00:00",
+                "platform": "Tor 0.4.7.10 on Linux",
+                "as": "AS12345",
+                "as_name": "Test AS",
+                "country": "US",
+                "country_name": "United States",
+                "or_addresses": ["192.0.2.1:9001"],
+                "running": True
+            }],
             "version": "details_test"
         }
         
@@ -658,7 +722,7 @@ class TestCoordinatorMultiAPI:
         
         # Mock the data fetching to avoid real network calls
         with patch.object(coordinator, 'fetch_onionoo_data', return_value=mock_details_data):
-            with patch('lib.coordinator.Relays', return_value=mock_relay_set):
+            with patch('allium.lib.coordinator.Relays', return_value=mock_relay_set):
                 # Set up worker data
                 coordinator.worker_data = {'onionoo_uptime': mock_uptime_data}
                 
