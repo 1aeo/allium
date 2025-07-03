@@ -44,7 +44,7 @@
         <li><strong>Operator Concentration</strong>: {{ relays.json.smart_context.concentration_patterns.template_optimized.contacts_largest_percentage }}% controlled by largest operator | {{ relays.json.smart_context.concentration_patterns.template_optimized.contacts_top_10_percentage }}% controlled by top 10 operators | {{ relays.json.smart_context.concentration_patterns.template_optimized.contacts_no_contact_percentage }}% have no contact info</li>
 <li><strong>Capacity Distribution</strong>: <span title="{{ relays.json.smart_context.capacity_distribution.template_optimized.gini_tooltip }}">Gini coefficient {{ relays.json.smart_context.capacity_distribution.template_optimized.gini_coefficient }}</span> ({{ relays.json.smart_context.capacity_distribution.template_optimized.diversity_status }} inequality) | <span title="{{ relays.json.smart_context.capacity_distribution.template_optimized.guard_capacity_tooltip }}">{{ relays.json.smart_context.capacity_distribution.template_optimized.guard_capacity_status }} guard capacity ({{ relays.json.smart_context.capacity_distribution.template_optimized.guard_capacity_percentage }}%)</span> | <span title="{{ relays.json.smart_context.capacity_distribution.template_optimized.exit_capacity_tooltip }}">{{ relays.json.smart_context.capacity_distribution.template_optimized.exit_capacity_status }} exit capacity ({{ relays.json.smart_context.capacity_distribution.template_optimized.exit_capacity_percentage }}%)</span></li>
         <li><strong>Sorted by</strong>: {{ sorted_by_label|replace('_', ' ')|replace('bandwidth', 'observed bandwidth') }}</li>
-        <li><strong>Key</strong>: BW = Observed Bandwidth, CW = Consensus Weight, AS = Autonomous System (network provider)</li>
+        <li><strong>Key</strong>: BW = Observed Bandwidth, BW Mean = Average Observed Bandwidth, CW = Consensus Weight, AS = Autonomous System (network provider)</li>
     </ul>
     
     <p class="text-muted" style="margin-bottom: 15px;">
@@ -95,6 +95,13 @@
                     <a href="contacts-by-guard-count.html">Guard</a> / <a href="contacts-by-middle-count.html">Middle</a> / <a href="contacts-by-exit-count.html">Exit</a>
                 </th>
             {% endif -%}
+            {% if sorted_by_label == 'bandwidth_mean' -%}
+                <th title="Average observed bandwidth across all relays for this contact">BW Mean</th>
+            {% else -%}
+                <th title="Average observed bandwidth across all relays for this contact">
+                    <a href="contacts-by-bandwidth-mean.html">BW Mean</a>
+                </th>
+            {% endif -%}
             <th><span title="Total number of relays for this contact">Relay</span> / <span title="Total number of relays for this contact measured by >=3 bandwidth authorities.">Measured</span></th>
             {% if sorted_by_label == 'unique_as_count' -%}
                 <th title="Number of different autonomous systems (networks) this contact operates relays in">Unique AS</th>
@@ -136,6 +143,7 @@
                         <td class="text-center cw-data">{{ "%.2f%%"|format(v['consensus_weight_fraction'] * 100) }} / {{ "%.2f%%"|format(v['guard_consensus_weight_fraction'] * 100) }} / {{ "%.2f%%"|format(v['middle_consensus_weight_fraction'] * 100) }} / {{ "%.2f%%"|format(v['exit_consensus_weight_fraction'] * 100) }}</td>
                     {% endif -%}
                     <td class="text-center rc-data">{{ v['guard_count'] }} / {{ v['middle_count'] }} / {{ v['exit_count'] }}</td>
+                    <td class="text-center">{{ v['bandwidth_mean_display'] }}</td>
                     <td>{{ v['relays']|length }} / {{ v['measured_count'] }}</td>
                     <td>{{ v['unique_as_count'] }}</td>
                     <td>

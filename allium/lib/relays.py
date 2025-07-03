@@ -1152,8 +1152,8 @@ class Relays:
         # Convert unique AS sets to counts for families, contacts, countries, platforms, and networks
         self._finalize_unique_as_counts()
         
-        # Calculate primary countries for contacts after all relay processing is complete
-        self._calculate_primary_countries()
+        # Calculate derived contact data: primary countries and bandwidth means
+        self._calculate_contact_derived_data()
 
     def _calculate_consensus_weight_fractions(self, total_guard_cw, total_middle_cw, total_exit_cw):
         """
@@ -1370,15 +1370,16 @@ class Relays:
                         else:
                             data["unique_family_count"] = 0
 
-    def _calculate_primary_countries(self):
+    def _calculate_contact_derived_data(self):
         """
-        Calculate primary country data and complete country list for each contact based on relay counts.
-        Called after all relay processing is complete in _categorize().
+        Calculate derived contact data: primary countries and bandwidth means in single pass.
+        Optimized implementation combining both calculations for better performance.
         """
         if "contact" not in self.json["sorted"]:
             return
             
         for contact_hash, contact_data in self.json["sorted"]["contact"].items():
+            # PRIMARY COUNTRIES CALCULATION (from _calculate_primary_countries)
             country_counts = contact_data.get("country_counts", {})
             
             if country_counts:
@@ -1411,6 +1412,25 @@ class Relays:
                 
             # Clean up temporary country_counts to save memory
             del contact_data["country_counts"]
+            
+            # BANDWIDTH MEANS CALCULATION (optimized from _calculate_bandwidth_means)
+            relays = contact_data.get("relays", [])
+            total_bandwidth = contact_data.get("bandwidth", 0)
+            
+            if len(relays) > 0:
+                # Calculate mean bandwidth
+                mean_bandwidth = total_bandwidth / len(relays)
+                contact_data["bandwidth_mean"] = mean_bandwidth
+                
+                # OPTIMIZED: Combined display format following dominant codebase pattern
+                unit = self._determine_unit(mean_bandwidth)
+                formatted_mean = self._format_bandwidth_with_unit(mean_bandwidth, unit)
+                contact_data["bandwidth_mean_display"] = f"{formatted_mean} {unit}"
+            else:
+                # Handle edge case of no relays
+                contact_data["bandwidth_mean"] = 0
+                fallback_unit = "KB/s" if not self.use_bits else "Kbit/s"
+                contact_data["bandwidth_mean_display"] = f"0.00 {fallback_unit}"
 
     def _generate_aroi_leaderboards(self):
         """
