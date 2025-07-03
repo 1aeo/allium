@@ -16,7 +16,7 @@ import shutil
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, parent_dir)
 
-from lib.relays import Relays
+from allium.lib.relays import Relays
 
 
 class TestDirectoryAuthorities(unittest.TestCase):

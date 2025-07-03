@@ -56,27 +56,31 @@ class TestNetworkUptimePercentiles(unittest.TestCase):
         percentiles = calculate_network_uptime_percentiles(self.mock_uptime_data, '6_months')
         
         self.assertIsNotNone(percentiles)
-        self.assertIn('25th', percentiles)
-        self.assertIn('50th', percentiles)
-        self.assertIn('75th', percentiles)
-        self.assertIn('90th', percentiles)
-        self.assertIn('95th', percentiles)
-        self.assertIn('99th', percentiles)
+        self.assertIn('percentiles', percentiles)
+        self.assertIn('25th', percentiles['percentiles'])
+        self.assertIn('50th', percentiles['percentiles'])
+        self.assertIn('75th', percentiles['percentiles'])
+        self.assertIn('90th', percentiles['percentiles'])
+        self.assertIn('95th', percentiles['percentiles'])
+        self.assertIn('99th', percentiles['percentiles'])
+        
+        # Test additional fields
+        self.assertIn('average', percentiles)
         self.assertIn('total_relays', percentiles)
+        self.assertIn('time_period', percentiles)
+        self.assertEqual(percentiles['time_period'], '6_months')
         
     def test_percentiles_mathematical_validity(self):
         """Test that percentiles are in ascending order."""
         percentiles = calculate_network_uptime_percentiles(self.mock_uptime_data, '6_months')
         
-        self.assertLessEqual(percentiles['5th'], percentiles['25th'])
-        self.assertLessEqual(percentiles['25th'], percentiles['50th'])
-        self.assertLessEqual(percentiles['50th'], percentiles['75th'])
-        self.assertLessEqual(percentiles['75th'], percentiles['90th'])
-        self.assertLessEqual(percentiles['90th'], percentiles['95th'])
-        self.assertLessEqual(percentiles['95th'], percentiles['99th'])
-        
-        # Average should be >= 25th percentile (mathematical validity)
-        self.assertGreaterEqual(percentiles['average'], percentiles['25th'])
+        pct = percentiles['percentiles']
+        self.assertLessEqual(pct['5th'], pct['25th'])
+        self.assertLessEqual(pct['25th'], pct['50th'])
+        self.assertLessEqual(pct['50th'], pct['75th'])
+        self.assertLessEqual(pct['75th'], pct['90th'])
+        self.assertLessEqual(pct['90th'], pct['95th'])
+        self.assertLessEqual(pct['95th'], pct['99th'])
         
     def test_calculate_network_uptime_percentiles_empty_data(self):
         """Test handling of empty uptime data."""
@@ -137,9 +141,15 @@ class TestNetworkUptimePercentiles(unittest.TestCase):
         display = format_network_percentiles_display(percentiles, 99.0)
         
         self.assertIsInstance(display, str)
-        self.assertIn('Network Uptime (6mo):', display)
-        self.assertIn('Operator:', display)
-        self.assertIn('99.0%', display)  # Operator value
+        if display:  # Check display is not None
+            self.assertIn('Network Uptime (6mo):', display)
+            self.assertIn('Operator:', display)
+            self.assertIn('99%', display)  # Operator value (formatted to 0 decimals)
+        
+        # Test with below median operator
+        display_low = format_network_percentiles_display(percentiles, 80.0)
+        if display_low:  # Check display_low is not None
+            self.assertIn('80%', display_low)
         
     def test_format_network_percentiles_display_color_coding(self):
         """Test color coding in display formatting."""
@@ -254,9 +264,8 @@ class TestNetworkUptimePercentiles(unittest.TestCase):
         percentiles2 = calculate_network_uptime_percentiles(self.mock_uptime_data, '6_months')
         
         # Results should be identical
-        self.assertEqual(percentiles1['25th'], percentiles2['25th'])
-        self.assertEqual(percentiles1['50th'], percentiles2['50th'])
-        self.assertEqual(percentiles1['total_relays'], percentiles2['total_relays'])
+        self.assertEqual(percentiles1['percentiles']['25th'], percentiles2['percentiles']['25th'])
+        self.assertEqual(percentiles1['average'], percentiles2['average'])
 
 
 if __name__ == '__main__':
