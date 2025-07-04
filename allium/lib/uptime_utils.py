@@ -8,6 +8,7 @@ to avoid duplication between aroileaders.py and relays.py.
 import statistics
 import math
 from .error_handlers import handle_calculation_errors
+from .statistical_utils import StatisticalUtils
 
 
 def normalize_uptime_value(raw_value):
@@ -224,50 +225,8 @@ def calculate_network_uptime_percentiles(uptime_data, time_period='6_months'):
     # Sort for percentile calculations
     network_uptime_values.sort()
     
-    # Use Python's robust quantiles function if available (Python 3.8+)
-    # Otherwise fall back to manual calculation
-    try:
-        import sys
-        if sys.version_info >= (3, 8):
-            # Use statistics.quantiles for more accurate results
-            quantile_values = statistics.quantiles(network_uptime_values, n=100, method='inclusive')
-            percentiles = {
-                '5th': quantile_values[4],   # 5th percentile
-                '25th': quantile_values[24],  # 25th percentile
-                '50th': quantile_values[49],  # 50th percentile (median)
-                '75th': quantile_values[74],  # 75th percentile
-                '90th': quantile_values[89],  # 90th percentile
-                '95th': quantile_values[94],  # 95th percentile
-                '99th': quantile_values[98]   # 99th percentile
-            }
-        else:
-            raise ImportError("Using fallback calculation")
-    except (ImportError, IndexError):
-        # Fallback to manual calculation for older Python versions
-        def calculate_percentile(data, percentile):
-            """Calculate percentile manually using numpy-style interpolation"""
-            if not data:
-                return 0.0
-            n = len(data)
-            if n == 1:
-                return data[0]
-            # Use method similar to numpy.percentile with linear interpolation
-            k = (n - 1) * (percentile / 100.0)
-            f = int(k)
-            c = k - f
-            if f >= n - 1:
-                return data[-1]
-            return data[f] + c * (data[f + 1] - data[f])
-        
-        percentiles = {
-            '5th': calculate_percentile(network_uptime_values, 5),
-            '25th': calculate_percentile(network_uptime_values, 25),
-            '50th': calculate_percentile(network_uptime_values, 50),  # Median
-            '75th': calculate_percentile(network_uptime_values, 75),
-            '90th': calculate_percentile(network_uptime_values, 90),
-            '95th': calculate_percentile(network_uptime_values, 95),
-            '99th': calculate_percentile(network_uptime_values, 99)
-        }
+    # Use unified statistical utilities for percentile calculations
+    percentiles = StatisticalUtils.calculate_percentiles(network_uptime_values, [5, 25, 50, 75, 90, 95, 99])
     
     # Use median as the "average" - robust to outliers and mathematically guaranteed valid
     # This represents the typical relay performance better than mean in highly skewed distributions
@@ -470,6 +429,8 @@ def calculate_statistical_outliers(uptime_values, relay_breakdown, std_dev_thres
     """
     Calculate statistical outliers from uptime values.
     
+    Uses unified StatisticalUtils for consistent outlier detection.
+    
     Args:
         uptime_values (list): List of uptime percentages
         relay_breakdown (dict): Mapping of fingerprint to relay data
@@ -478,49 +439,14 @@ def calculate_statistical_outliers(uptime_values, relay_breakdown, std_dev_thres
     Returns:
         dict: Contains low_outliers and high_outliers lists
     """
-    if len(uptime_values) < 3:  # Need at least 3 data points for meaningful std dev
-        return {'low_outliers': [], 'high_outliers': []}
-    
-    try:
-        mean_uptime = statistics.mean(uptime_values)
-        std_dev = statistics.stdev(uptime_values)
-        
-        low_threshold = mean_uptime - (std_dev_threshold * std_dev)
-        high_threshold = mean_uptime + (std_dev_threshold * std_dev)
-        
-        low_outliers = []
-        high_outliers = []
-        
-        for fingerprint, relay_data in relay_breakdown.items():
-            uptime = relay_data['uptime']
-            
-            if uptime < low_threshold:
-                low_outliers.append({
-                    'nickname': relay_data['nickname'],
-                    'fingerprint': fingerprint,
-                    'uptime': uptime,
-                    'deviation': abs(uptime - mean_uptime) / std_dev
-                })
-            elif uptime > high_threshold:
-                high_outliers.append({
-                    'nickname': relay_data['nickname'],
-                    'fingerprint': fingerprint,
-                    'uptime': uptime,
-                    'deviation': abs(uptime - mean_uptime) / std_dev
-                })
-        
-        return {'low_outliers': low_outliers, 'high_outliers': high_outliers}
-        
-    except statistics.StatisticsError:
-        # Handle case where all values are identical (std dev = 0)
-        return {'low_outliers': [], 'high_outliers': []}
+    return StatisticalUtils.calculate_outliers(uptime_values, relay_breakdown, std_dev_threshold)
 
 
 def _calculate_period_statistics(values):
     """
     OPTIMIZATION: Centralized statistical calculation function to eliminate code duplication.
     
-    Replaces 4 identical statistical calculation blocks with a single reusable function.
+    Uses unified StatisticalUtils for consistent statistical calculations.
     
     Args:
         values (list): List of uptime values for statistical analysis
@@ -530,35 +456,24 @@ def _calculate_period_statistics(values):
     """
     if len(values) < 3:
         return None
-        
-    try:
-        total_sum = sum(values)
-        count = len(values)
-        sum_of_squares = sum(x ** 2 for x in values)
-        
-        # Calculate statistical thresholds for outlier detection
-        mean = total_sum / count
-        variance = (sum_of_squares / count) - (mean ** 2)
-        std_dev = math.sqrt(max(0, variance))  # Ensure non-negative variance
-        
-        # Set lower bound of 0 for two_sigma_low since negative uptimes are impossible
-        two_sigma_low = max(0.0, mean - 2 * std_dev)
-        two_sigma_high = mean + 2 * std_dev
-        
-        # Calculate median for network health dashboard requirements
-        import statistics
-        median = statistics.median(values)
-        
-        return {
-            'mean': mean,
-            'median': median,
-            'std_dev': std_dev,
-            'two_sigma_low': two_sigma_low,
-            'two_sigma_high': two_sigma_high,
-            'count': count
-        }
-    except Exception:
+    
+    # Use unified statistical utilities
+    stats = StatisticalUtils.calculate_basic_statistics(values)
+    if not stats:
         return None
+    
+    # Add two-sigma bounds for outlier detection (maintain backwards compatibility)
+    mean = stats['mean']
+    std_dev = stats['std_dev']
+    
+    return {
+        'mean': mean,
+        'median': stats['median'],
+        'std_dev': std_dev,
+        'two_sigma_low': max(0.0, mean - 2 * std_dev),  # Lower bound of 0 since negative uptimes impossible
+        'two_sigma_high': mean + 2 * std_dev,
+        'count': stats['count']
+    }
 
 
 def process_all_uptime_data_consolidated(all_relays, uptime_data, include_flag_analysis=True):
