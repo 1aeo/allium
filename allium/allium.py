@@ -15,9 +15,11 @@ import resource
 import sys
 import time
 from shutil import copytree
+from typing import Any, Dict, Optional
 from lib.relays import Relays
 from lib.coordinator import create_relay_set_with_coordinator
 from lib.progress import log_progress
+from lib.utils import get_page_context, get_misc_page_context
 
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
 
@@ -47,25 +49,7 @@ def ensure_output_directory(output_dir):
         print(f"💡 Make sure the parent directory exists and you have write permissions")
         sys.exit(1)
 
-def get_page_context(page_type, breadcrumb_type=None, breadcrumb_data=None):
-    """Get page context with path_prefix and breadcrumb info for different page types"""
-    contexts = {
-        'index': {'path_prefix': './'},
-        'misc': {'path_prefix': '../'},
-        'detail': {'path_prefix': '../../'}
-    }
-    ctx = contexts.get(page_type, contexts['misc']).copy()
-    
-    # Add breadcrumb information if provided
-    if breadcrumb_type:
-        ctx['breadcrumb_type'] = breadcrumb_type
-        ctx['breadcrumb_data'] = breadcrumb_data or {}
-    
-    return ctx
 
-def get_misc_page_context(page_name):
-    """Helper function for creating misc page contexts with consistent structure"""
-    return get_page_context('misc', 'misc_listing', {'page_name': page_name})
 
 def check_dependencies(show_progress=False):
     """Check if required dependencies are available."""
@@ -83,7 +67,6 @@ def check_dependencies(show_progress=False):
         sys.exit(1)
     
     # Check Python version
-    import sys
     if sys.version_info < (3, 8):
         print(f"❌ Error: Python 3.8+ required, found {sys.version}")
         print("💡 Please upgrade Python or use a virtual environment with Python 3.8+")

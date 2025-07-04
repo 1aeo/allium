@@ -211,12 +211,12 @@ class Coordinator:
                 self._log_progress_with_step_increment("Failed to create relay set")
             return None
         
-        # Phase 2: Attach additional API data to relay set (direct assignment)
+        # Phase 2: Attach additional API data to relay set (dynamic assignment)
         uptime_data = self.get_uptime_data()
         
-        relay_set.uptime_data = uptime_data
-        relay_set.consensus_health_data = self.get_consensus_health_data()
-        relay_set.collector_data = self.get_collector_data()
+        setattr(relay_set, 'uptime_data', uptime_data)
+        setattr(relay_set, 'consensus_health_data', self.get_consensus_health_data())
+        setattr(relay_set, 'collector_data', self.get_collector_data())
         
         # CRITICAL FIX: Regenerate AROI leaderboards now that uptime data is available
         # The leaderboards were calculated during __init__ before uptime_data was attached

@@ -600,7 +600,8 @@ class Relays:
         Also calculates network-wide uptime percentiles once for all contact pages
         to avoid performance bottlenecks from recalculating for each contact.
         """
-        if not hasattr(self, 'uptime_data') or not self.uptime_data:
+        uptime_data = getattr(self, 'uptime_data', None)
+        if not uptime_data:
             return
             
         try:
@@ -610,7 +611,7 @@ class Relays:
             # This replaces multiple separate loops with consolidated processing
             consolidated_results = process_all_uptime_data_consolidated(
                 all_relays=self.json["relays"],
-                uptime_data=self.uptime_data,
+                uptime_data=uptime_data,
                 include_flag_analysis=True
             )
             
@@ -650,10 +651,11 @@ class Relays:
             
         # PERFORMANCE OPTIMIZATION: Calculate network-wide uptime percentiles ONCE for all contacts
         # This avoids recalculating the same percentiles for every contact page (major performance optimization)
-        if hasattr(self, 'uptime_data') and self.uptime_data:
+        uptime_data = getattr(self, 'uptime_data', None)
+        if uptime_data:
             from .uptime_utils import calculate_network_uptime_percentiles
             self._log_progress("Calculating network uptime percentiles (6-month period)...")
-            self.network_uptime_percentiles = calculate_network_uptime_percentiles(self.uptime_data, '6_months')
+            self.network_uptime_percentiles = calculate_network_uptime_percentiles(uptime_data, '6_months')
             if self.network_uptime_percentiles:
                 total_relays = self.network_uptime_percentiles.get('total_relays', 0)
                 self._log_progress(f"Network percentiles calculated: {total_relays:,} relays analyzed")
@@ -1686,7 +1688,7 @@ class Relays:
     def get_detail_page_context(self, category, value):
         """Generate page context with correct breadcrumb data for detail pages"""
         # Import here to avoid circular imports
-        from allium import get_page_context
+        from .utils import get_page_context
         
         mapping = {
             'as': ('as_detail', {'as_number': value}),
@@ -1935,7 +1937,7 @@ class Relays:
             if not relay["fingerprint"].isalnum():
                 continue
             # Import here to avoid circular imports
-            from allium import get_page_context
+            from .utils import get_page_context
             
             page_ctx = get_page_context('detail', 'relay_detail', {
                 'nickname': relay.get('nickname', relay.get('fingerprint', 'Unknown')),
@@ -2078,7 +2080,8 @@ class Relays:
         Returns:
             dict: Reliability statistics including overall uptime, time periods, outliers, and network percentiles
         """
-        if not hasattr(self, 'uptime_data') or not self.uptime_data or not operator_relays:
+        uptime_data = getattr(self, 'uptime_data', None)
+        if not uptime_data or not operator_relays:
             return None
             
         from .uptime_utils import (
@@ -2120,7 +2123,7 @@ class Relays:
         
         for period in time_periods:
             # Extract uptime data for this period using shared utility
-            period_result = extract_relay_uptime_for_period(operator_relays, self.uptime_data, period)
+            period_result = extract_relay_uptime_for_period(operator_relays, uptime_data, period)
             
             if period_result['uptime_values']:
                 mean_uptime = statistics.mean(period_result['uptime_values'])
@@ -2536,8 +2539,9 @@ class Relays:
         
         # 7. Uptime data timestamp (reuse existing uptime data)
         uptime_timestamp = None
-        if hasattr(self, 'uptime_data') and self.uptime_data and self.uptime_data.get('relays_published'):
-            uptime_timestamp = self.uptime_data['relays_published'] + ' UTC'
+        uptime_data = getattr(self, 'uptime_data', None)
+        if uptime_data and uptime_data.get('relays_published'):
+            uptime_timestamp = uptime_data['relays_published'] + ' UTC'
         display_data['uptime_timestamp'] = uptime_timestamp
         
         # 8. Real-time downtime alerts (idea #8 from uptime integration proposals)
