@@ -154,5 +154,218 @@ class TestNetworkHealthDashboard(unittest.TestCase):
         self.assertIn('guard_cw_bw_overall', health_data)
         self.assertIn('middle_cw_bw_overall', health_data)
 
+    def test_unique_families_count_fix(self):
+        """Test that families_count correctly counts unique families, not family member entries"""
+        # Create test data with 2 families:
+        # Family 1: 3 relays (fingerprints A, B, C) 
+        # Family 2: 2 relays (fingerprints D, E)
+        # This should result in families_count = 2, not 5
+        family_test_data = {
+            'relays': [
+                {
+                    'fingerprint': 'AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555',
+                    'contact': 'operator1@example.com',
+                    'effective_family': ['AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555', 'BBBB2222CCCC3333DDDD4444EEEE5555AAAA1111', 'CCCC3333DDDD4444EEEE5555AAAA1111BBBB2222'],
+                    'or_addresses': ['192.168.1.1:9001'],
+                    'observed_bandwidth': 1000000,
+                    'consensus_weight': 100,
+                    'flags': ['Fast', 'Running'],
+                    'running': True,
+                    'country': 'US',
+                    'first_seen': '2023-01-01 00:00:00',
+                    'platform': 'Tor 0.4.8.10 on Linux',
+                    'contact_md5': 'hash1'
+                },
+                {
+                    'fingerprint': 'BBBB2222CCCC3333DDDD4444EEEE5555AAAA1111', 
+                    'contact': 'operator1@example.com',
+                    'effective_family': ['AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555', 'BBBB2222CCCC3333DDDD4444EEEE5555AAAA1111', 'CCCC3333DDDD4444EEEE5555AAAA1111BBBB2222'],
+                    'or_addresses': ['192.168.1.2:9001'],
+                    'observed_bandwidth': 1000000,
+                    'consensus_weight': 100,
+                    'flags': ['Fast', 'Running'],
+                    'running': True,
+                    'country': 'US',
+                    'first_seen': '2023-01-01 00:00:00',
+                    'platform': 'Tor 0.4.8.10 on Linux',
+                    'contact_md5': 'hash1'
+                },
+                {
+                    'fingerprint': 'CCCC3333DDDD4444EEEE5555AAAA1111BBBB2222',
+                    'contact': 'operator1@example.com',
+                    'effective_family': ['AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555', 'BBBB2222CCCC3333DDDD4444EEEE5555AAAA1111', 'CCCC3333DDDD4444EEEE5555AAAA1111BBBB2222'],
+                    'or_addresses': ['192.168.1.3:9001'],
+                    'observed_bandwidth': 1000000,
+                    'consensus_weight': 100,
+                    'flags': ['Fast', 'Running'],
+                    'running': True,
+                    'country': 'US',
+                    'first_seen': '2023-01-01 00:00:00',
+                    'platform': 'Tor 0.4.8.10 on Linux',
+                    'contact_md5': 'hash1'
+                },
+                {
+                    'fingerprint': 'DDDD4444EEEE5555AAAA1111BBBB2222CCCC3333',
+                    'contact': 'operator2@example.com',
+                    'effective_family': ['DDDD4444EEEE5555AAAA1111BBBB2222CCCC3333', 'EEEE5555AAAA1111BBBB2222CCCC3333DDDD4444'],
+                    'or_addresses': ['192.168.1.4:9001'],
+                    'observed_bandwidth': 1000000,
+                    'consensus_weight': 100,
+                    'flags': ['Fast', 'Running'],
+                    'running': True,
+                    'country': 'DE',
+                    'first_seen': '2023-01-01 00:00:00',
+                    'platform': 'Tor 0.4.8.10 on Linux',
+                    'contact_md5': 'hash2'
+                },
+                {
+                    'fingerprint': 'EEEE5555AAAA1111BBBB2222CCCC3333DDDD4444',
+                    'contact': 'operator2@example.com',
+                    'effective_family': ['DDDD4444EEEE5555AAAA1111BBBB2222CCCC3333', 'EEEE5555AAAA1111BBBB2222CCCC3333DDDD4444'],
+                    'or_addresses': ['192.168.1.5:9001'],
+                    'observed_bandwidth': 1000000,
+                    'consensus_weight': 100,
+                    'flags': ['Fast', 'Running'],
+                    'running': True,
+                    'country': 'DE',
+                    'first_seen': '2023-01-01 00:00:00',
+                    'platform': 'Tor 0.4.8.10 on Linux',
+                    'contact_md5': 'hash2'
+                }
+            ]
+        }
+        
+        relays_obj = Relays(
+            output_dir="/tmp/test", 
+            onionoo_url="http://test.url", 
+            relay_data=family_test_data,
+            use_bits=False,
+            progress=False
+        )
+        
+        # Process data to create family sorted data structure
+        relays_obj._categorize()
+        relays_obj._calculate_network_health_metrics()
+        
+        # Verify the fix: should count 2 unique families, not 5 family member entries
+        health_data = relays_obj.json['network_health']
+        self.assertEqual(health_data['families_count'], 2, 
+                         "families_count should count unique families (2), not family member entries (5)")
+        
+        # Verify that the old incorrect calculation would have returned 5
+        # by checking the length of the sorted family data structure
+        raw_family_count = len(relays_obj.json["sorted"].get('family', {}))
+        self.assertEqual(raw_family_count, 5, 
+                         "The raw family data structure should have 5 entries (one per family member)")
+        
+        # Verify families_count is different from raw count (proves the fix works)
+        self.assertNotEqual(health_data['families_count'], raw_family_count,
+                           "families_count should be different from raw family member count")
+
+    def test_intelligence_engine_families_count_fix(self):
+        """Test that intelligence engine also correctly counts unique families, not family member entries"""
+        # Use the same test data as the previous test
+        family_test_data = {
+            'relays': [
+                {
+                    'fingerprint': 'AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555',
+                    'contact': 'operator1@example.com',
+                    'effective_family': ['AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555', 'BBBB2222CCCC3333DDDD4444EEEE5555AAAA1111', 'CCCC3333DDDD4444EEEE5555AAAA1111BBBB2222'],
+                    'or_addresses': ['192.168.1.1:9001'],
+                    'observed_bandwidth': 1000000,
+                    'consensus_weight': 100,
+                    'flags': ['Fast', 'Running'],
+                    'running': True,
+                    'country': 'US',
+                    'first_seen': '2023-01-01 00:00:00',
+                    'platform': 'Tor 0.4.8.10 on Linux',
+                    'contact_md5': 'hash1'
+                },
+                {
+                    'fingerprint': 'BBBB2222CCCC3333DDDD4444EEEE5555AAAA1111', 
+                    'contact': 'operator1@example.com',
+                    'effective_family': ['AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555', 'BBBB2222CCCC3333DDDD4444EEEE5555AAAA1111', 'CCCC3333DDDD4444EEEE5555AAAA1111BBBB2222'],
+                    'or_addresses': ['192.168.1.2:9001'],
+                    'observed_bandwidth': 1000000,
+                    'consensus_weight': 100,
+                    'flags': ['Fast', 'Running'],
+                    'running': True,
+                    'country': 'US',
+                    'first_seen': '2023-01-01 00:00:00',
+                    'platform': 'Tor 0.4.8.10 on Linux',
+                    'contact_md5': 'hash1'
+                },
+                {
+                    'fingerprint': 'CCCC3333DDDD4444EEEE5555AAAA1111BBBB2222',
+                    'contact': 'operator1@example.com',
+                    'effective_family': ['AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555', 'BBBB2222CCCC3333DDDD4444EEEE5555AAAA1111', 'CCCC3333DDDD4444EEEE5555AAAA1111BBBB2222'],
+                    'or_addresses': ['192.168.1.3:9001'],
+                    'observed_bandwidth': 1000000,
+                    'consensus_weight': 100,
+                    'flags': ['Fast', 'Running'],
+                    'running': True,
+                    'country': 'US',
+                    'first_seen': '2023-01-01 00:00:00',
+                    'platform': 'Tor 0.4.8.10 on Linux',
+                    'contact_md5': 'hash1'
+                },
+                {
+                    'fingerprint': 'DDDD4444EEEE5555AAAA1111BBBB2222CCCC3333',
+                    'contact': 'operator2@example.com',
+                    'effective_family': ['DDDD4444EEEE5555AAAA1111BBBB2222CCCC3333', 'EEEE5555AAAA1111BBBB2222CCCC3333DDDD4444'],
+                    'or_addresses': ['192.168.1.4:9001'],
+                    'observed_bandwidth': 1000000,
+                    'consensus_weight': 100,
+                    'flags': ['Fast', 'Running'],
+                    'running': True,
+                    'country': 'DE',
+                    'first_seen': '2023-01-01 00:00:00',
+                    'platform': 'Tor 0.4.8.10 on Linux',
+                    'contact_md5': 'hash2'
+                },
+                {
+                    'fingerprint': 'EEEE5555AAAA1111BBBB2222CCCC3333DDDD4444',
+                    'contact': 'operator2@example.com',
+                    'effective_family': ['DDDD4444EEEE5555AAAA1111BBBB2222CCCC3333', 'EEEE5555AAAA1111BBBB2222CCCC3333DDDD4444'],
+                    'or_addresses': ['192.168.1.5:9001'],
+                    'observed_bandwidth': 1000000,
+                    'consensus_weight': 100,
+                    'flags': ['Fast', 'Running'],
+                    'running': True,
+                    'country': 'DE',
+                    'first_seen': '2023-01-01 00:00:00',
+                    'platform': 'Tor 0.4.8.10 on Linux',
+                    'contact_md5': 'hash2'
+                }
+            ]
+        }
+        
+        relays_obj = Relays(
+            output_dir="/tmp/test", 
+            onionoo_url="http://test.url", 
+            relay_data=family_test_data,
+            use_bits=False,
+            progress=False
+        )
+        
+        # Process data to create sorted data structure and generate smart context
+        relays_obj._categorize()
+        relays_obj._generate_smart_context()
+        
+        # Verify intelligence engine uses correct unique family count
+        smart_context = relays_obj.json.get('smart_context', {})
+        basic_relationships = smart_context.get('basic_relationships', {})
+        template_optimized = basic_relationships.get('template_optimized', {})
+        
+        intelligence_families_count = template_optimized.get('total_families', -1)
+        self.assertEqual(intelligence_families_count, 2, 
+                         "Intelligence engine total_families should count unique families (2), not family member entries (5)")
+        
+        # Verify this matches the network health dashboard calculation
+        relays_obj._calculate_network_health_metrics()
+        health_data = relays_obj.json['network_health']
+        self.assertEqual(intelligence_families_count, health_data['families_count'],
+                        "Intelligence engine total_families should match network health families_count")
+ 
 if __name__ == '__main__':
     unittest.main() 

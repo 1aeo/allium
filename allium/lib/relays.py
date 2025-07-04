@@ -1244,25 +1244,30 @@ class Relays:
         else:
             misconfigured_percentage = configured_percentage = "0.0"
         
-        # Process existing family structure for largest family size and large family count
+        # Process existing family structure for all family metrics in single optimized loop
+        # This replaces 3 separate deduplication loops with one efficient calculation
         largest_family_size = 0
         large_family_count = 0
+        unique_families_count = 0
         
         if 'family' in self.json['sorted']:
             processed_fingerprints = set()
             
-            # Process each family only once using deduplication
+            # Process each family only once using deduplication (serves multiple metrics)
             for k, v in self.json['sorted']['family'].items():
                 # Get first relay fingerprint to check if this family was already processed
                 first_relay_idx = v['relays'][0]
                 first_relay_fingerprint = self.json['relays'][first_relay_idx]['fingerprint']
                 
                 if first_relay_fingerprint not in processed_fingerprints:
-                    # Track actual relay count and largest family
+                    # Count this as one unique family (for families_count and total_families)
+                    unique_families_count += 1
+                    
+                    # Track actual relay count and largest family (existing logic)
                     family_size = len(v['relays'])
                     largest_family_size = max(largest_family_size, family_size)
                     
-                    # Count families with 10+ relays
+                    # Count families with 10+ relays (existing logic)
                     if family_size >= 10:
                         large_family_count += 1
                     
@@ -1291,7 +1296,10 @@ class Relays:
             
             # Existing centralization metrics
             'largest_family_size': largest_family_size,
-            'large_family_count': large_family_count
+            'large_family_count': large_family_count,
+            
+            # OPTIMIZED: Unique families count (calculated once, reused everywhere)
+            'unique_families_count': unique_families_count
         }
 
     def _finalize_unique_as_counts(self):
@@ -2978,12 +2986,15 @@ class Relays:
             'measured_percentage': network_totals['measured_percentage'],
             'countries_count': len(sorted_data.get('country', {})),
             'unique_as_count': len(sorted_data.get('as', {})),
-            'families_count': len(sorted_data.get('family', {})),
             # Add percentages for relay counts
             'guard_percentage': (network_totals['guard_count'] / total_relays_count * 100) if total_relays_count > 0 else 0.0,
             'middle_percentage': (network_totals['middle_count'] / total_relays_count * 100) if total_relays_count > 0 else 0.0,
             'exit_percentage': (network_totals['exit_count'] / total_relays_count * 100) if total_relays_count > 0 else 0.0
         }
+        
+        # OPTIMIZED: Reuse cached unique families count from _calculate_and_cache_family_statistics()
+        # This eliminates duplicate deduplication loops for better performance
+        health_metrics['families_count'] = self.json.get('family_statistics', {}).get('unique_families_count', 0)
         
         # AROI operators - reuse existing calculation
         if hasattr(self, 'json') and 'aroi_leaderboards' in self.json:
