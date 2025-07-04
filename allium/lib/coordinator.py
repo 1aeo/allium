@@ -14,6 +14,7 @@ from .workers import (
 )
 from .relays import Relays
 from .progress import log_progress
+from .progress_logger import ProgressLogger
 from .error_handlers import handle_worker_errors, handle_calculation_errors
 
 
@@ -35,6 +36,9 @@ class Coordinator:
         self.total_steps = total_steps
         self.enabled_apis = enabled_apis
         self.filter_downtime_days = filter_downtime_days
+        
+        # Create unified progress logger
+        self.progress_logger = ProgressLogger(self.start_time, self.progress_step, self.total_steps, self.progress)
         
         # Worker management
         self.workers = {}
@@ -111,8 +115,9 @@ class Coordinator:
 
     def _log_progress_with_step_increment(self, message):
         """Log progress message and increment progress step"""
-        self.progress_step += 1
-        log_progress(message, self.start_time, self.progress_step, self.total_steps, self.progress)
+        self.progress_logger.log_with_increment(message)
+        # Keep progress_step in sync for backwards compatibility
+        self.progress_step = self.progress_logger.get_current_step()
 
     def fetch_all_apis_threaded(self):
         """

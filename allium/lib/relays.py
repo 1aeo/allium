@@ -16,6 +16,7 @@ from shutil import rmtree
 from jinja2 import Environment, FileSystemLoader
 from .aroileaders import _calculate_aroi_leaderboards, _safe_parse_ip_address
 from .progress import log_progress, get_memory_usage
+from .progress_logger import ProgressLogger
 from .string_utils import format_percentage_from_fraction
 from .bandwidth_formatter import (
     BandwidthFormatter, 
@@ -243,6 +244,9 @@ class Relays:
         # Initialize bandwidth formatter with correct units setting
         self.bandwidth_formatter = BandwidthFormatter(use_bits=use_bits)
         
+        # Initialize unified progress logger
+        self.progress_logger = ProgressLogger(self.start_time, self.progress_step, self.total_steps, self.progress)
+        
         # Use provided relay data (fetched by coordinator)
         self.json = relay_data
         if self.json is None:
@@ -264,8 +268,8 @@ class Relays:
 
     def _log_progress(self, message, increment_step=False):
         """Log progress message using shared progress utility"""
-        # Note: increment_step parameter is kept for backwards compatibility but not used
-        log_progress(message, self.start_time, self.progress_step, self.total_steps, self.progress)
+        # Use unified progress logger without incrementing (maintains backwards compatibility)
+        self.progress_logger.log_without_increment(message)
 
 
     def _trim_platform(self):
