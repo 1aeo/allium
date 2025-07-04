@@ -485,8 +485,8 @@ class Relays:
             # Optimization 5: Pre-compute bandwidth formatting (major relay-list.html optimization)
             # This avoids calling _determine_unit and _format_bandwidth_with_unit in templates
             obs_bw = relay.get("observed_bandwidth", 0)
-            obs_unit = self._determine_unit(obs_bw)
-            obs_formatted = self._format_bandwidth_with_unit(obs_bw, obs_unit)
+            obs_unit = self.bandwidth_formatter.determine_unit(obs_bw)
+            obs_formatted = self.bandwidth_formatter.format_bandwidth_with_unit(obs_bw, obs_unit)
             relay["obs_bandwidth_formatted"] = obs_formatted
             relay["obs_bandwidth_unit"] = obs_unit
             relay["obs_bandwidth_with_unit"] = f"{obs_formatted} {obs_unit}"
@@ -1414,8 +1414,8 @@ class Relays:
                 contact_data["bandwidth_mean"] = mean_bandwidth
                 
                 # OPTIMIZED: Combined display format following dominant codebase pattern
-                unit = self._determine_unit(mean_bandwidth)
-                formatted_mean = self._format_bandwidth_with_unit(mean_bandwidth, unit)
+                unit = self.bandwidth_formatter.determine_unit(mean_bandwidth)
+                formatted_mean = self.bandwidth_formatter.format_bandwidth_with_unit(mean_bandwidth, unit)
                 contact_data["bandwidth_mean_display"] = f"{formatted_mean} {unit}"
             else:
                 # Handle edge case of no relays
@@ -1580,17 +1580,7 @@ class Relays:
             'uptime_metadata': (getattr(self, 'uptime_data', {}) or {}).get('relays_published', 'Unknown')
         }
 
-    def _determine_unit(self, bandwidth_bytes):
-        """Determine unit using unified bandwidth formatter"""
-        return self.bandwidth_formatter.determine_unit(bandwidth_bytes)
 
-    def _get_divisor_for_unit(self, unit):
-        """Get divisor using unified bandwidth formatter"""
-        return self.bandwidth_formatter.get_divisor_for_unit(unit)
-
-    def _format_bandwidth_with_unit(self, bandwidth_bytes, unit, decimal_places=2):
-        """Format bandwidth using unified bandwidth formatter"""
-        return self.bandwidth_formatter.format_bandwidth_with_unit(bandwidth_bytes, unit, decimal_places)
 
     def _format_time_ago(self, timestamp_str):
         """Format timestamp as multi-unit time ago (e.g., '2y 3m 2w ago')"""
@@ -1681,12 +1671,12 @@ class Relays:
             os.makedirs(dir_path)
             self.json["relay_subset"] = members
             
-            bandwidth_unit = self._determine_unit(i["bandwidth"])
+            bandwidth_unit = self.bandwidth_formatter.determine_unit(i["bandwidth"])
             # Format all bandwidth values using the same unit
-            bandwidth = self._format_bandwidth_with_unit(i["bandwidth"], bandwidth_unit)
-            guard_bandwidth = self._format_bandwidth_with_unit(i["guard_bandwidth"], bandwidth_unit)
-            middle_bandwidth = self._format_bandwidth_with_unit(i["middle_bandwidth"], bandwidth_unit)
-            exit_bandwidth = self._format_bandwidth_with_unit(i["exit_bandwidth"], bandwidth_unit)
+            bandwidth = self.bandwidth_formatter.format_bandwidth_with_unit(i["bandwidth"], bandwidth_unit)
+            guard_bandwidth = self.bandwidth_formatter.format_bandwidth_with_unit(i["guard_bandwidth"], bandwidth_unit)
+            middle_bandwidth = self.bandwidth_formatter.format_bandwidth_with_unit(i["middle_bandwidth"], bandwidth_unit)
+            exit_bandwidth = self.bandwidth_formatter.format_bandwidth_with_unit(i["exit_bandwidth"], bandwidth_unit)
             
             # Calculate network position using intelligence engine
             try:
@@ -2140,17 +2130,17 @@ class Relays:
         # 1. Bandwidth components filtering (reuse existing formatting functions)
         bw_components = []
         if i["guard_count"] > 0 and i["guard_bandwidth"] > 0:
-            guard_bw = self._format_bandwidth_with_unit(i["guard_bandwidth"], bandwidth_unit)
+            guard_bw = self.bandwidth_formatter.format_bandwidth_with_unit(i["guard_bandwidth"], bandwidth_unit)
             if guard_bw != '0.00':
                 bw_components.append(f"{guard_bw} {bandwidth_unit} guard")
         
         if i["middle_count"] > 0 and i["middle_bandwidth"] > 0:
-            middle_bw = self._format_bandwidth_with_unit(i["middle_bandwidth"], bandwidth_unit)
+            middle_bw = self.bandwidth_formatter.format_bandwidth_with_unit(i["middle_bandwidth"], bandwidth_unit)
             if middle_bw != '0.00':
                 bw_components.append(f"{middle_bw} {bandwidth_unit} middle")
         
         if i["exit_count"] > 0 and i["exit_bandwidth"] > 0:
-            exit_bw = self._format_bandwidth_with_unit(i["exit_bandwidth"], bandwidth_unit)
+            exit_bw = self.bandwidth_formatter.format_bandwidth_with_unit(i["exit_bandwidth"], bandwidth_unit)
             if exit_bw != '0.00':
                 bw_components.append(f"{exit_bw} {bandwidth_unit} exit")
         
@@ -3753,14 +3743,14 @@ class Relays:
         )
         
         if self.use_bits:
-            obs_adv_unit = self._determine_unit(avg_obs_adv_diff_bytes * 8)
-            avg_formatted = self._format_bandwidth_with_unit(avg_obs_adv_diff_bytes * 8, obs_adv_unit, decimal_places=0) + f" {obs_adv_unit}"
-            median_formatted = self._format_bandwidth_with_unit(median_obs_adv_diff_bytes * 8, obs_adv_unit, decimal_places=0) + f" {obs_adv_unit}"
+            obs_adv_unit = self.bandwidth_formatter.determine_unit(avg_obs_adv_diff_bytes * 8)
+            avg_formatted = self.bandwidth_formatter.format_bandwidth_with_unit(avg_obs_adv_diff_bytes * 8, obs_adv_unit, decimal_places=0) + f" {obs_adv_unit}"
+            median_formatted = self.bandwidth_formatter.format_bandwidth_with_unit(median_obs_adv_diff_bytes * 8, obs_adv_unit, decimal_places=0) + f" {obs_adv_unit}"
             health_metrics['avg_observed_advertised_diff_formatted'] = f"{avg_formatted} | {median_formatted}"
         else:
-            obs_adv_unit = self._determine_unit(avg_obs_adv_diff_bytes)
-            avg_formatted = self._format_bandwidth_with_unit(avg_obs_adv_diff_bytes, obs_adv_unit, decimal_places=0) + f" {obs_adv_unit}"
-            median_formatted = self._format_bandwidth_with_unit(median_obs_adv_diff_bytes, obs_adv_unit, decimal_places=0) + f" {obs_adv_unit}"
+            obs_adv_unit = self.bandwidth_formatter.determine_unit(avg_obs_adv_diff_bytes)
+            avg_formatted = self.bandwidth_formatter.format_bandwidth_with_unit(avg_obs_adv_diff_bytes, obs_adv_unit, decimal_places=0) + f" {obs_adv_unit}"
+            median_formatted = self.bandwidth_formatter.format_bandwidth_with_unit(median_obs_adv_diff_bytes, obs_adv_unit, decimal_places=0) + f" {obs_adv_unit}"
             health_metrics['avg_observed_advertised_diff_formatted'] = f"{avg_formatted} | {median_formatted}"
         
         health_metrics['consensus_weight_bandwidth_ratio'] = (
@@ -3802,7 +3792,7 @@ class Relays:
         # Check if any mean/median would show as 0 with the main unit, if so use smaller unit for all
         if self.use_bits:
             # For bits, check if any value would round to 0 with Gbit/s
-            base_unit = self._determine_unit(total_bandwidth * 8)
+            base_unit = self.bandwidth_formatter.determine_unit(total_bandwidth * 8)
             test_values = [
                 health_metrics['exit_bw_mean'] * 8,
                 health_metrics['exit_bw_median'] * 8,
@@ -3816,7 +3806,7 @@ class Relays:
             use_smaller_unit = False
             for value in test_values:
                 if value > 0:  # Only check non-zero values
-                    formatted_val = self._format_bandwidth_with_unit(value, base_unit, decimal_places=0)
+                    formatted_val = self.bandwidth_formatter.format_bandwidth_with_unit(value, base_unit, decimal_places=0)
                     if float(formatted_val) == 0:
                         use_smaller_unit = True
                         break
@@ -3843,7 +3833,7 @@ class Relays:
             hsdir_median_formatted = self._format_bandwidth_with_unit(health_metrics['hsdir_bw_median'] * 8, unit, decimal_places=0) + f" {unit}"
         else:
             # For bytes, check if any value would round to 0 with GB/s
-            base_unit = self._determine_unit(total_bandwidth)
+            base_unit = self.bandwidth_formatter.determine_unit(total_bandwidth)
             test_values = [
                 health_metrics['exit_bw_mean'],
                 health_metrics['exit_bw_median'],
@@ -3905,7 +3895,7 @@ class Relays:
         
         # Bandwidth formatting with proper units
         if self.use_bits:
-            unit = self._determine_unit(total_bandwidth * 8)
+            unit = self.bandwidth_formatter.determine_unit(total_bandwidth * 8)
             health_metrics['total_bandwidth_formatted'] = self._format_bandwidth_with_unit(total_bandwidth * 8, unit, decimal_places=0) + f" {unit}"
             health_metrics['guard_bandwidth_formatted'] = self._format_bandwidth_with_unit(guard_bandwidth * 8, unit, decimal_places=0) + f" {unit}"
             health_metrics['exit_bandwidth_formatted'] = self._format_bandwidth_with_unit(exit_bandwidth * 8, unit, decimal_places=0) + f" {unit}"
@@ -3914,7 +3904,7 @@ class Relays:
             health_metrics['ipv4_only_bandwidth_formatted'] = self._format_bandwidth_with_unit(ipv4_only_bandwidth * 8, unit, decimal_places=0) + f" {unit}"
             health_metrics['both_ipv4_ipv6_bandwidth_formatted'] = self._format_bandwidth_with_unit(both_ipv4_ipv6_bandwidth * 8, unit, decimal_places=0) + f" {unit}"
         else:
-            unit = self._determine_unit(total_bandwidth)
+            unit = self.bandwidth_formatter.determine_unit(total_bandwidth)
             health_metrics['total_bandwidth_formatted'] = self._format_bandwidth_with_unit(total_bandwidth, unit, decimal_places=0) + f" {unit}"
             health_metrics['guard_bandwidth_formatted'] = self._format_bandwidth_with_unit(guard_bandwidth, unit, decimal_places=0) + f" {unit}"
             health_metrics['exit_bandwidth_formatted'] = self._format_bandwidth_with_unit(exit_bandwidth, unit, decimal_places=0) + f" {unit}"
