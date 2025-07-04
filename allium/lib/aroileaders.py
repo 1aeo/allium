@@ -21,6 +21,9 @@ from .country_utils import (
     EU_POLITICAL_REGION  # Add this import
 )
 
+# Import HTML escaping utility
+from .string_utils import safe_html_escape
+
 
 
 def _calculate_reliability_score(operator_relays, uptime_data, time_period):
@@ -894,7 +897,7 @@ def _calculate_aroi_leaderboards(relays_instance):
                 'aroi_domain': metrics['aroi_domain'],
                 'contact_hash': metrics['contact_hash'],
                 'contact_info': metrics['contact_info'],
-                'contact_info_escaped': html.escape(metrics['contact_info']),
+                'contact_info_escaped': safe_html_escape(metrics['contact_info']),
                 'total_relays': metrics['total_relays'],
                 'total_bandwidth': formatted_bandwidth,
                 'bandwidth_unit': bandwidth_unit,

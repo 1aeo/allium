@@ -16,52 +16,22 @@ from shutil import rmtree
 from jinja2 import Environment, FileSystemLoader
 from .aroileaders import _calculate_aroi_leaderboards, _safe_parse_ip_address
 from .progress import log_progress, get_memory_usage
+from .string_utils import format_percentage_from_fraction
+from .bandwidth_formatter import (
+    BandwidthFormatter, 
+    determine_unit, 
+    get_divisor_for_unit, 
+    format_bandwidth_with_unit,
+    determine_unit_filter, 
+    format_bandwidth_filter
+)
 import logging
 import statistics
 from datetime import datetime, timedelta
 
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
 
-# Utility functions for Jinja2 filters (standalone versions of Relays methods)
-def determine_unit(bandwidth_bytes, use_bits=False):
-    """Determine unit - simple threshold checking"""
-    if use_bits:
-        bits = bandwidth_bytes * 8
-        if bits >= 1000000000:  # If greater than or equal to 1 Gbit/s
-            return "Gbit/s"
-        elif bits >= 1000000:  # If greater than or equal to 1 Mbit/s
-            return "Mbit/s"
-        else:
-            return "Kbit/s"
-    else:
-        if bandwidth_bytes >= 1000000000:  # If greater than or equal to 1 GB/s
-            return "GB/s"
-        elif bandwidth_bytes >= 1000000:  # If greater than or equal to 1 MB/s
-            return "MB/s"
-        else:
-            return "KB/s"
-
-def get_divisor_for_unit(unit):
-    """Simple dictionary lookup for divisors"""
-    divisors = {
-        # Bits (convert bytes to bits, then to unit)
-        "Gbit/s": 125000000,   # 1000000000 / 8
-        "Mbit/s": 125000,      # 1000000 / 8  
-        "Kbit/s": 125,         # 1000 / 8
-        # Bytes  
-        "GB/s": 1000000000,
-        "MB/s": 1000000,
-        "KB/s": 1000
-    }
-    if unit in divisors:
-        return divisors[unit]
-    raise ValueError(f"Unknown unit: {unit}")
-
-def format_bandwidth_with_unit(bandwidth_bytes, unit, decimal_places=2):
-    """Format bandwidth using specified unit with configurable decimal places"""
-    divisor = get_divisor_for_unit(unit)
-    value = bandwidth_bytes / divisor
-    return f"{value:.{decimal_places}f}"
+# Bandwidth formatting utilities now imported from bandwidth_formatter.py
 
 def is_private_ip_address(ip_str):
     """
@@ -212,19 +182,7 @@ ENV = Environment(
     autoescape=True  # Enable autoescape to prevent XSS vulnerabilities
 )
 
-# Create filters that can access context for use_bits parameter
-def determine_unit_filter(bandwidth_bytes, use_bits=False):
-    """Filter version of determine_unit that handles context access"""
-    return determine_unit(bandwidth_bytes, use_bits)
-
-def format_bandwidth_filter(bandwidth_bytes, unit=None, use_bits=False, decimal_places=2):
-    """
-    Format bandwidth for display with unit and optional unit specification.
-    """
-    if unit is None:
-        unit = determine_unit_filter(bandwidth_bytes, use_bits)
-    
-    return format_bandwidth_with_unit(bandwidth_bytes, unit, decimal_places)
+# Jinja2 filter functions now imported from bandwidth_formatter.py
 
 # Add custom filters to the Jinja2 environment
 ENV.filters['determine_unit'] = determine_unit_filter
@@ -281,6 +239,9 @@ class Relays:
         self.total_steps = total_steps
         self.filter_downtime_days = filter_downtime_days
         self.ts_file = os.path.join(os.path.dirname(ABS_PATH), "timestamp")
+        
+        # Initialize bandwidth formatter with correct units setting
+        self.bandwidth_formatter = BandwidthFormatter(use_bits=use_bits)
         
         # Use provided relay data (fetched by coordinator)
         self.json = relay_data
@@ -1620,65 +1581,16 @@ class Relays:
         }
 
     def _determine_unit(self, bandwidth_bytes):
-        """Determine unit - simple threshold checking"""
-        if self.use_bits:
-            bits = bandwidth_bytes * 8
-            if bits >= 1000000000: # If greater than or equal to 1 Gbit/s
-                return "Gbit/s"
-            elif bits >= 1000000: # If greater than or equal to 1 Mbit/s
-                return "Mbit/s"
-            else:
-                return "Kbit/s"
-        else:
-            if bandwidth_bytes >= 1000000000: # If greater than or equal to 1 GB/s
-                return "GB/s"
-            elif bandwidth_bytes >= 1000000: # If greater than or equal to 1 MB/s
-                return "MB/s"
-            else:
-                return "KB/s"
+        """Determine unit using unified bandwidth formatter"""
+        return self.bandwidth_formatter.determine_unit(bandwidth_bytes)
 
     def _get_divisor_for_unit(self, unit):
-        """Simple dictionary lookup for divisors"""
-        divisors = {
-            # Bits (convert bytes to bits, then to unit)
-            "Gbit/s": 125000000,   # 1000000000 / 8
-            "Mbit/s": 125000,      # 1000000 / 8  
-            "Kbit/s": 125,         # 1000 / 8
-            # Bytes  
-            "GB/s": 1000000000,
-            "MB/s": 1000000,
-            "KB/s": 1000
-        }
-        if unit in divisors:
-            return divisors[unit]
-        raise ValueError(f"Unknown unit: {unit}")
+        """Get divisor using unified bandwidth formatter"""
+        return self.bandwidth_formatter.get_divisor_for_unit(unit)
 
     def _format_bandwidth_with_unit(self, bandwidth_bytes, unit, decimal_places=2):
-        """
-        OPTIMIZATION: Inline division and formatting to eliminate function call overhead.
-        
-        This function is called thousands of times during site generation (contact pages,
-        templates, network health dashboard). Eliminating the _get_divisor_for_unit() 
-        function call and inlining the dictionary lookup provides measurable speedup.
-        """
-        # OPTIMIZATION: Inline dictionary lookup instead of function call
-        divisors = {
-            # Bits (convert bytes to bits, then to unit)
-            "Gbit/s": 125000000,   # 1000000000 / 8
-            "Mbit/s": 125000,      # 1000000 / 8  
-            "Kbit/s": 125,         # 1000 / 8
-            # Bytes  
-            "GB/s": 1000000000,
-            "MB/s": 1000000,
-            "KB/s": 1000
-        }
-        
-        # OPTIMIZATION: Single lookup + division + format in one efficient operation
-        if unit in divisors:
-            value = bandwidth_bytes / divisors[unit]
-            return f"{value:.{decimal_places}f}"
-        else:
-            raise ValueError(f"Unknown unit: {unit}")
+        """Format bandwidth using unified bandwidth formatter"""
+        return self.bandwidth_formatter.format_bandwidth_with_unit(bandwidth_bytes, unit, decimal_places)
 
     def _format_time_ago(self, timestamp_str):
         """Format timestamp as multi-unit time ago (e.g., '2y 3m 2w ago')"""
@@ -3092,7 +3004,7 @@ class Relays:
         for count_key, pct_key, combined_key in combined_format_mappings:
             if count_key in health_metrics and pct_key in health_metrics:
                 count_formatted = f"{health_metrics[count_key]:,}"
-                pct_formatted = f"{health_metrics[pct_key]:.1f}%"
+                pct_formatted = format_percentage_from_fraction(health_metrics[pct_key] / 100, 1, "0.0%")
                 health_metrics[combined_key] = f"{count_formatted} ({pct_formatted})"
 
     def _calculate_network_health_metrics(self):
