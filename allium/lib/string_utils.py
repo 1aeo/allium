@@ -3,30 +3,19 @@ File: string_utils.py
 
 Phase 2 DRY Helper Functions - String Literals and Constants Consolidation
 Provides centralized string formatting utilities to eliminate duplication across the codebase.
+
+DEPRECATED: Use html_escape_utils.py for HTML escaping operations.
+This module is maintained for backward compatibility.
 """
 
-import html
-
-# String Constants - Centralized for consistency
-UNKNOWN_ESCAPED = "Unknown"
-UNKNOWN_LOWERCASE = "unknown"
-NONE_ESCAPED = "none"
-NA_FALLBACK = "N/A"
-
-def safe_html_escape(value, fallback=""):
-    """
-    Safely escape HTML content with consistent fallback handling.
-    
-    Args:
-        value: The value to escape (can be None, str, or other types)
-        fallback: Fallback value if input is None/empty (default: "")
-    
-    Returns:
-        str: HTML-escaped string or fallback
-    """
-    if value is None or value == "":
-        return fallback
-    return html.escape(str(value))
+# Import from centralized HTML escaping utilities
+from .html_escape_utils import (
+    safe_html_escape,
+    UNKNOWN_ESCAPED,
+    UNKNOWN_LOWERCASE, 
+    NONE_ESCAPED,
+    NA_FALLBACK
+)
 
 def format_percentage(value, decimals=1, fallback=NA_FALLBACK):
     """

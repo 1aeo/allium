@@ -429,6 +429,8 @@ class Relays:
     def _preprocess_template_data(self):
         """
         Pre-process data for template rendering optimization.
+        Uses centralized HTML escaping utilities to eliminate duplication.
+        
         Pre-compute expensive Jinja2 operations to improve template performance:
         - HTML-escape contact strings (19.95% of template time)
         - HTML-escape flag strings (29.63% of template time) 
@@ -439,52 +441,37 @@ class Relays:
         - Pre-computed time formatting
         - Pre-computed address parsing
         """
-        import html
+        from .html_escape_utils import create_bulk_escaper, NA_FALLBACK, UNKNOWN_LOWERCASE
+        
+        # Use centralized HTML escaping utility
+        bulk_escaper = create_bulk_escaper()
         
         for relay in self.json["relays"]:
-            # Optimization 1: Pre-escape contact strings (19.95% savings)
-            if relay.get("contact"):
-                relay["contact_escaped"] = html.escape(relay["contact"])
-            else:
-                relay["contact_escaped"] = ""
-                
-            # Optimization 2: Pre-escape and lowercase flag strings (40.8% combined savings)
-            if relay.get("flags"):
-                relay["flags_escaped"] = [html.escape(flag) for flag in relay["flags"]]
-                relay["flags_lower_escaped"] = [html.escape(flag.lower()) for flag in relay["flags"]]
-            else:
-                relay["flags_escaped"] = []
-                relay["flags_lower_escaped"] = []
-                
-            # Optimization 3: Pre-split first_seen dates (used multiple times)
-            if relay.get("first_seen"):
-                relay["first_seen_date"] = relay["first_seen"].split(' ', 1)[0]
-                relay["first_seen_date_escaped"] = html.escape(relay["first_seen_date"])
-            else:
-                relay["first_seen_date"] = ""
-                relay["first_seen_date_escaped"] = ""
-                
+            # Use centralized bulk escaping for all HTML escape patterns
+            bulk_escaper.escape_all_relay_fields(relay)
+            
+            # Continue with non-HTML-escaping optimizations
             # Optimization 4: Pre-compute percentage values for relay-info templates
             # This avoids expensive format operations in individual relay pages
             if relay.get("consensus_weight_fraction") is not None:
                 relay["consensus_weight_percentage"] = f"{relay['consensus_weight_fraction'] * 100:.2f}%"
             else:
-                relay["consensus_weight_percentage"] = "N/A"
+                relay["consensus_weight_percentage"] = NA_FALLBACK
                 
             if relay.get("guard_probability") is not None:
                 relay["guard_probability_percentage"] = f"{relay['guard_probability'] * 100:.2f}%"
             else:
-                relay["guard_probability_percentage"] = "N/A"
+                relay["guard_probability_percentage"] = NA_FALLBACK
                 
             if relay.get("middle_probability") is not None:
                 relay["middle_probability_percentage"] = f"{relay['middle_probability'] * 100:.2f}%"
             else:
-                relay["middle_probability_percentage"] = "N/A"
+                relay["middle_probability_percentage"] = NA_FALLBACK
                 
             if relay.get("exit_probability") is not None:
                 relay["exit_probability_percentage"] = f"{relay['exit_probability'] * 100:.2f}%"
             else:
-                relay["exit_probability_percentage"] = "N/A"
+                relay["exit_probability_percentage"] = NA_FALLBACK
                 
             # Optimization 5: Pre-compute bandwidth formatting (major relay-list.html optimization)
             # This avoids calling _determine_unit and _format_bandwidth_with_unit in templates
@@ -500,55 +487,27 @@ class Relays:
                 relay["last_restarted_ago"] = self._format_time_ago(relay["last_restarted"])
                 relay["last_restarted_date"] = relay["last_restarted"].split(' ', 1)[0]
             else:
-                relay["last_restarted_ago"] = "unknown"
-                relay["last_restarted_date"] = "unknown"
+                relay["last_restarted_ago"] = UNKNOWN_LOWERCASE
+                relay["last_restarted_date"] = UNKNOWN_LOWERCASE
                 
             # Optimization 7: Pre-parse IP addresses using safe parsing for validation
             if relay.get("or_addresses") and len(relay["or_addresses"]) > 0:
                 # Use safe IP parsing to extract IP address properly
                 parsed_ip, _ = _safe_parse_ip_address(relay["or_addresses"][0])
-                relay["ip_address"] = parsed_ip if parsed_ip else "unknown"
+                relay["ip_address"] = parsed_ip if parsed_ip else UNKNOWN_LOWERCASE
             else:
-                relay["ip_address"] = "unknown"
-                
-            # Optimization 8: Pre-escape and truncate commonly used fields
-            if relay.get("nickname"):
-                relay["nickname_escaped"] = html.escape(relay["nickname"])
-                relay["nickname_truncated"] = html.escape(relay["nickname"][:14])
-            else:
-                relay["nickname_escaped"] = "Unknown"
-                relay["nickname_truncated"] = "Unknown"
-                
-            if relay.get("as_name"):
-                relay["as_name_escaped"] = html.escape(relay["as_name"])
-                relay["as_name_truncated"] = html.escape(relay["as_name"][:20])
-            else:
-                relay["as_name_escaped"] = "Unknown"
-                relay["as_name_truncated"] = "Unknown"
-                
-            if relay.get("platform"):
-                relay["platform_escaped"] = html.escape(relay["platform"])
-                relay["platform_truncated"] = html.escape(relay["platform"][:10])
-            else:
-                relay["platform_escaped"] = "Unknown"
-                relay["platform_truncated"] = "Unknown"
-                
-            # Optimization 9: Pre-escape AROI domain and other commonly used fields
-            if relay.get("aroi_domain") and relay["aroi_domain"] != "none":
-                relay["aroi_domain_escaped"] = html.escape(relay["aroi_domain"])
-            else:
-                relay["aroi_domain_escaped"] = "none"
+                relay["ip_address"] = UNKNOWN_LOWERCASE
                 
             # Optimization 10: Pre-compute time formatting for relay-info pages
             if relay.get("first_seen"):
                 relay["first_seen_ago"] = self._format_time_ago(relay["first_seen"])
             else:
-                relay["first_seen_ago"] = "unknown"
+                relay["first_seen_ago"] = UNKNOWN_LOWERCASE
                 
             if relay.get("last_seen"):
                 relay["last_seen_ago"] = self._format_time_ago(relay["last_seen"])
             else:
-                relay["last_seen_ago"] = "unknown"
+                relay["last_seen_ago"] = UNKNOWN_LOWERCASE
                 
             # Optimization 11: Pre-compute uptime/downtime display based on last_restarted and running status
             relay["uptime_display"] = self._calculate_uptime_display(relay)
