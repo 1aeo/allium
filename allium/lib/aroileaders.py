@@ -21,6 +21,9 @@ from .country_utils import (
     EU_POLITICAL_REGION  # Add this import
 )
 
+# Import HTML escaping utility
+from .string_utils import safe_html_escape
+
 
 
 def _calculate_reliability_score(operator_relays, uptime_data, time_period):
@@ -662,20 +665,20 @@ def _calculate_aroi_leaderboards(relays_instance):
         formatted_data = []
         for rank, (operator_key, metrics) in enumerate(data, 1):
             # Use existing bandwidth formatting methods (top10 specific formatting)
-            bandwidth_unit = relays_instance._determine_unit(metrics['total_bandwidth'])
-            formatted_bandwidth = relays_instance._format_bandwidth_with_unit(
+            bandwidth_unit = relays_instance.bandwidth_formatter.determine_unit(metrics['total_bandwidth'])
+            formatted_bandwidth = relays_instance.bandwidth_formatter.format_bandwidth_with_unit(
                 metrics['total_bandwidth'], bandwidth_unit, decimal_places=1
             )
             
             # Format exit-specific bandwidth for exit categories (exit_authority, exit_operators)
-            exit_bandwidth_unit = relays_instance._determine_unit(metrics['exit_bandwidth'])
-            formatted_exit_bandwidth = relays_instance._format_bandwidth_with_unit(
+            exit_bandwidth_unit = relays_instance.bandwidth_formatter.determine_unit(metrics['exit_bandwidth'])
+            formatted_exit_bandwidth = relays_instance.bandwidth_formatter.format_bandwidth_with_unit(
                 metrics['exit_bandwidth'], exit_bandwidth_unit, decimal_places=1
             )
             
             # Format guard-specific bandwidth for guard categories (guard_authority, guard_operators)
-            guard_bandwidth_unit = relays_instance._determine_unit(metrics['guard_bandwidth'])
-            formatted_guard_bandwidth = relays_instance._format_bandwidth_with_unit(
+            guard_bandwidth_unit = relays_instance.bandwidth_formatter.determine_unit(metrics['guard_bandwidth'])
+            formatted_guard_bandwidth = relays_instance.bandwidth_formatter.format_bandwidth_with_unit(
                 metrics['guard_bandwidth'], guard_bandwidth_unit, decimal_places=1
             )
             
@@ -851,8 +854,8 @@ def _calculate_aroi_leaderboards(relays_instance):
                     ipv4_achievement_title = "🥉 IPv4 Champion"
                 
                 # Format IPv4 bandwidth with unit (reuse existing formatters)
-                ipv4_bandwidth_unit = relays_instance._determine_unit(metrics['ipv4_total_bandwidth'])
-                formatted_ipv4_bandwidth = relays_instance._format_bandwidth_with_unit(
+                ipv4_bandwidth_unit = relays_instance.bandwidth_formatter.determine_unit(metrics['ipv4_total_bandwidth'])
+                formatted_ipv4_bandwidth = relays_instance.bandwidth_formatter.format_bandwidth_with_unit(
                     metrics['ipv4_total_bandwidth'], ipv4_bandwidth_unit, decimal_places=1
                 )
                 
@@ -869,8 +872,8 @@ def _calculate_aroi_leaderboards(relays_instance):
                     ipv6_achievement_title = "🥉 IPv6 Champion"
                 
                 # Format IPv6 bandwidth with unit (reuse existing formatters)
-                ipv6_bandwidth_unit = relays_instance._determine_unit(metrics['ipv6_total_bandwidth'])
-                formatted_ipv6_bandwidth = relays_instance._format_bandwidth_with_unit(
+                ipv6_bandwidth_unit = relays_instance.bandwidth_formatter.determine_unit(metrics['ipv6_total_bandwidth'])
+                formatted_ipv6_bandwidth = relays_instance.bandwidth_formatter.format_bandwidth_with_unit(
                     metrics['ipv6_total_bandwidth'], ipv6_bandwidth_unit, decimal_places=1
                 )
                 
@@ -894,7 +897,7 @@ def _calculate_aroi_leaderboards(relays_instance):
                 'aroi_domain': metrics['aroi_domain'],
                 'contact_hash': metrics['contact_hash'],
                 'contact_info': metrics['contact_info'],
-                'contact_info_escaped': html.escape(metrics['contact_info']),
+                'contact_info_escaped': safe_html_escape(metrics['contact_info']),
                 'total_relays': metrics['total_relays'],
                 'total_bandwidth': formatted_bandwidth,
                 'bandwidth_unit': bandwidth_unit,
@@ -987,8 +990,8 @@ def _calculate_aroi_leaderboards(relays_instance):
     # This should be displayed as the percentage of network authority they represent
     
     # Format summary bandwidth with unit (reuse existing formatters with top10 formatting)
-    summary_bandwidth_unit = relays_instance._determine_unit(total_bandwidth_all)
-    summary_bandwidth_value = relays_instance._format_bandwidth_with_unit(
+    summary_bandwidth_unit = relays_instance.bandwidth_formatter.determine_unit(total_bandwidth_all)
+    summary_bandwidth_value = relays_instance.bandwidth_formatter.format_bandwidth_with_unit(
         total_bandwidth_all, summary_bandwidth_unit, decimal_places=1
     )
     

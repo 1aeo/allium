@@ -14,6 +14,8 @@ from .workers import (
 )
 from .relays import Relays
 from .progress import log_progress
+from .progress_logger import ProgressLogger
+from .error_handlers import handle_worker_errors, handle_calculation_errors
 
 
 class Coordinator:
@@ -34,6 +36,9 @@ class Coordinator:
         self.total_steps = total_steps
         self.enabled_apis = enabled_apis
         self.filter_downtime_days = filter_downtime_days
+        
+        # Create unified progress logger
+        self.progress_logger = ProgressLogger(self.start_time, self.progress_step, self.total_steps, self.progress)
         
         # Worker management
         self.workers = {}
@@ -76,10 +81,12 @@ class Coordinator:
             else:
                 self._log_progress_with_step_increment(f"{api_display_name} - warning: returned no data")
         except Exception as e:
+            # Use centralized error handling approach
             api_display_name = self._get_api_display_name(api_name)
             self._log_progress_with_step_increment(f"{api_display_name} - error: {str(e)}")
             self.worker_data[api_name] = None
-            # In CI environments, provide more context for debugging
+            
+            # CI debugging with centralized approach
             import os
             if os.environ.get('CI') or os.environ.get('GITHUB_ACTIONS'):
                 print(f"🔧 CI Debug: {api_name} worker failed with: {e}")
@@ -108,8 +115,9 @@ class Coordinator:
 
     def _log_progress_with_step_increment(self, message):
         """Log progress message and increment progress step"""
-        self.progress_step += 1
-        log_progress(message, self.start_time, self.progress_step, self.total_steps, self.progress)
+        self.progress_logger.log_with_increment(message)
+        # Keep progress_step in sync for backwards compatibility
+        self.progress_step = self.progress_logger.get_current_step()
 
     def fetch_all_apis_threaded(self):
         """

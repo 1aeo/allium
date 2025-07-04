@@ -2,12 +2,9 @@
 
 import unittest
 from unittest.mock import Mock, patch, MagicMock
-import sys
-import os
 
-# Add the allium directory to Python path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-
+# Import consolidated test utilities
+from test_utils import TestDataFactory, TestSetupHelpers, TestPatchingHelpers
 from allium.lib.relays import Relays
 
 
@@ -16,44 +13,14 @@ class TestContactDisplayData(unittest.TestCase):
     
     def setUp(self):
         """Set up test fixtures."""
-        # Mock relay data for Relays constructor
-        mock_relay_data = {
-            'relays': [],
-            'sorted': {},
-            'network_totals': {
-                'total_relays': 0,
-                'guard_count': 0,
-                'middle_count': 0,
-                'exit_count': 0,
-                'measured_relays': 0,
-                'measured_percentage': 0.0,
-                'guard_consensus_weight': 0,
-                'middle_consensus_weight': 0,
-                'exit_consensus_weight': 0,
-                'total_network_bandwidth': 0,
-                'total_guard_bandwidth': 0,
-                'total_exit_bandwidth': 0
-            }
-        }
-        
-        # Initialize Relays with required constructor arguments
-        with patch.object(Relays, '_fix_missing_observed_bandwidth'), \
-             patch.object(Relays, '_sort_by_observed_bandwidth'), \
-             patch.object(Relays, '_trim_platform'), \
-             patch.object(Relays, '_add_hashed_contact'), \
-             patch.object(Relays, '_process_aroi_contacts'), \
-             patch.object(Relays, '_preprocess_template_data'), \
-             patch.object(Relays, '_categorize'), \
-             patch.object(Relays, '_generate_aroi_leaderboards'), \
-             patch.object(Relays, '_generate_smart_context'):
-            
-            self.relays = Relays(
-                output_dir='/tmp/test',
-                onionoo_url='https://test.example.com',
-                relay_data=mock_relay_data,
-                use_bits=False,
-                progress=False
-            )
+        # Use consolidated test utilities
+        self.relays = TestSetupHelpers.create_test_relays_instance(
+            output_dir='/tmp/test',
+            onionoo_url='https://test.example.com',
+            relay_data=TestDataFactory.create_minimal_relay_data(),
+            use_bits=False,
+            progress=False
+        )
         
         # Set up test intelligence data
         self.relays.json = {
@@ -149,7 +116,7 @@ class TestContactDisplayData(unittest.TestCase):
         result = self.relays._format_intelligence_rating(None)
         self.assertEqual(result, None)
 
-    @patch.object(Relays, '_format_bandwidth_with_unit')
+    @patch('allium.lib.bandwidth_formatter.BandwidthFormatter.format_bandwidth_with_unit')
     def test_compute_contact_display_data_bandwidth_breakdown(self, mock_format_bw):
         """Test bandwidth breakdown formatting with mixed relay types."""
         mock_format_bw.side_effect = lambda bw, unit: f"{bw/1000000:.1f}"  # Convert to MB
@@ -165,7 +132,7 @@ class TestContactDisplayData(unittest.TestCase):
         self.assertIn('middle', breakdown) 
         self.assertIn('exit', breakdown)
 
-    @patch.object(Relays, '_format_bandwidth_with_unit')
+    @patch('allium.lib.bandwidth_formatter.BandwidthFormatter.format_bandwidth_with_unit')
     def test_compute_contact_display_data_bandwidth_breakdown_zero_values(self, mock_format_bw):
         """Test bandwidth breakdown filtering of zero values."""
         mock_format_bw.side_effect = lambda bw, unit: "0.00" if bw == 0 else f"{bw/1000000:.1f}"
@@ -351,7 +318,7 @@ class TestContactDisplayData(unittest.TestCase):
         self.assertEqual(result['uptime_formatted'], {})
         self.assertEqual(result['outliers'], {})
 
-    @patch.object(Relays, '_format_bandwidth_with_unit')
+    @patch('allium.lib.bandwidth_formatter.BandwidthFormatter.format_bandwidth_with_unit')
     def test_compute_contact_display_data_edge_case_single_relay(self, mock_format_bw):
         """Test display data computation for single relay contact."""
         mock_format_bw.return_value = '10.0'

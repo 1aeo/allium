@@ -5,6 +5,7 @@ All calculations moved from Jinja2 templates to Python for maximum performance.
 
 import statistics
 import math
+from .statistical_utils import StatisticalUtils
 
 class IntelligenceEngine:
     """Complete Tier 1 Intelligence Engine - implements all design doc requirements"""
@@ -89,22 +90,14 @@ class IntelligenceEngine:
         return all_ratios, guard_ratios, exit_ratios
     
     def _calculate_median(self, sorted_list):
-        """Centralized median calculation - eliminates duplication"""
+        """Centralized median calculation using unified StatisticalUtils"""
         if not sorted_list:
             return 0
-        n = len(sorted_list)
-        if n % 2 == 0:
-            return (sorted_list[n//2 - 1] + sorted_list[n//2]) / 2
-        else:
-            return sorted_list[n//2]
+        return statistics.median(sorted_list)
     
     def _calculate_percentile_rank(self, value, sorted_ratio_list):
-        """Centralized percentile calculation - eliminates duplication"""
-        if not sorted_ratio_list or value == 0:
-            return 0
-        below_count = sum(1 for r in sorted_ratio_list if r < value)
-        percentile = (below_count / len(sorted_ratio_list)) * 100
-        return max(1, min(99, round(percentile)))
+        """Centralized percentile calculation using unified StatisticalUtils"""
+        return StatisticalUtils.calculate_percentile_rank(value, sorted_ratio_list)
         
     def analyze_all_layers(self):
         """Execute all Tier 1 layers using existing data - no recalculation"""
