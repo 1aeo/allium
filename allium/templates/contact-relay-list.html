@@ -36,6 +36,7 @@
     <th>AS Name</th>
     <th>Platform</th>
     <th class="visible-md visible-lg">First Seen</th>
+    <th class="visible-md visible-lg">Last Restarted</th>
     {% set has_ipv6 = false -%}
     {% if is_index -%}
 	{% set relay_list_check = relays.json['relay_subset'][:500] -%}
@@ -212,6 +213,13 @@
 			{% endif -%}
 		    </td>
 		{% endif -%}
+		<td class="visible-md visible-lg" title="{% if relay['last_restarted'] -%}{{ relay['last_restarted'].split(' ', 1)[0]|escape }}{% else -%}unknown{% endif -%}">
+		    {% if relay['last_restarted'] -%}
+		        {{ relay['last_restarted']|format_time_ago }}
+		    {% else -%}
+		        unknown
+		    {% endif -%}
+		</td>
 		{% if has_ipv6 -%}
 		<td class="visible-md visible-lg">
 		    {% set ipv6_found = false -%}
