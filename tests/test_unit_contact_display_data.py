@@ -149,7 +149,7 @@ class TestContactDisplayData(unittest.TestCase):
         result = self.relays._format_intelligence_rating(None)
         self.assertEqual(result, None)
 
-    @patch.object(Relays, '_format_bandwidth_with_unit')
+    @patch('allium.lib.bandwidth_formatter.BandwidthFormatter.format_bandwidth_with_unit')
     def test_compute_contact_display_data_bandwidth_breakdown(self, mock_format_bw):
         """Test bandwidth breakdown formatting with mixed relay types."""
         mock_format_bw.side_effect = lambda bw, unit: f"{bw/1000000:.1f}"  # Convert to MB
@@ -165,7 +165,7 @@ class TestContactDisplayData(unittest.TestCase):
         self.assertIn('middle', breakdown) 
         self.assertIn('exit', breakdown)
 
-    @patch.object(Relays, '_format_bandwidth_with_unit')
+    @patch('allium.lib.bandwidth_formatter.BandwidthFormatter.format_bandwidth_with_unit')
     def test_compute_contact_display_data_bandwidth_breakdown_zero_values(self, mock_format_bw):
         """Test bandwidth breakdown filtering of zero values."""
         mock_format_bw.side_effect = lambda bw, unit: "0.00" if bw == 0 else f"{bw/1000000:.1f}"
@@ -351,7 +351,7 @@ class TestContactDisplayData(unittest.TestCase):
         self.assertEqual(result['uptime_formatted'], {})
         self.assertEqual(result['outliers'], {})
 
-    @patch.object(Relays, '_format_bandwidth_with_unit')
+    @patch('allium.lib.bandwidth_formatter.BandwidthFormatter.format_bandwidth_with_unit')
     def test_compute_contact_display_data_edge_case_single_relay(self, mock_format_bw):
         """Test display data computation for single relay contact."""
         mock_format_bw.return_value = '10.0'

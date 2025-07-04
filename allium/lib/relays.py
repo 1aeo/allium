@@ -2781,9 +2781,9 @@ class Relays:
             
         downtime_alerts['offline_bandwidth_impact'] = {
             'total_offline_bandwidth': total_offline_bandwidth,
-            'total_offline_bandwidth_formatted': self._format_bandwidth_with_unit(total_offline_bandwidth, bandwidth_unit),
+            'total_offline_bandwidth_formatted': self.bandwidth_formatter.format_bandwidth_with_unit(total_offline_bandwidth, bandwidth_unit),
             'offline_bandwidth_percentage': offline_bandwidth_percentage,
-            'total_operator_bandwidth_formatted': self._format_bandwidth_with_unit(operator_total_bandwidth, bandwidth_unit)
+            'total_operator_bandwidth_formatted': self.bandwidth_formatter.format_bandwidth_with_unit(operator_total_bandwidth, bandwidth_unit)
         }
         
         # Calculate consensus weight impact metrics  
@@ -3814,23 +3814,23 @@ class Relays:
             # Use Mbit/s if any would show as 0 Gbit/s
             unit = 'Mbit/s' if (use_smaller_unit and base_unit == 'Gbit/s') else base_unit
             
-            exit_mean_formatted = self._format_bandwidth_with_unit(health_metrics['exit_bw_mean'] * 8, unit, decimal_places=0) + f" {unit}"
-            exit_median_formatted = self._format_bandwidth_with_unit(health_metrics['exit_bw_median'] * 8, unit, decimal_places=0) + f" {unit}"
-            guard_mean_formatted = self._format_bandwidth_with_unit(health_metrics['guard_bw_mean'] * 8, unit, decimal_places=0) + f" {unit}"
-            guard_median_formatted = self._format_bandwidth_with_unit(health_metrics['guard_bw_median'] * 8, unit, decimal_places=0) + f" {unit}"
-            middle_mean_formatted = self._format_bandwidth_with_unit(health_metrics['middle_bw_mean'] * 8, unit, decimal_places=0) + f" {unit}"
-            middle_median_formatted = self._format_bandwidth_with_unit(health_metrics['middle_bw_median'] * 8, unit, decimal_places=0) + f" {unit}"
+            exit_mean_formatted = self.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['exit_bw_mean'] * 8, unit, decimal_places=0) + f" {unit}"
+            exit_median_formatted = self.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['exit_bw_median'] * 8, unit, decimal_places=0) + f" {unit}"
+            guard_mean_formatted = self.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['guard_bw_mean'] * 8, unit, decimal_places=0) + f" {unit}"
+            guard_median_formatted = self.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['guard_bw_median'] * 8, unit, decimal_places=0) + f" {unit}"
+            middle_mean_formatted = self.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['middle_bw_mean'] * 8, unit, decimal_places=0) + f" {unit}"
+            middle_median_formatted = self.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['middle_bw_median'] * 8, unit, decimal_places=0) + f" {unit}"
             # NEW: Additional flag-specific bandwidth formatting
-            fast_mean_formatted = self._format_bandwidth_with_unit(health_metrics['fast_bw_mean'] * 8, unit, decimal_places=0) + f" {unit}"
-            fast_median_formatted = self._format_bandwidth_with_unit(health_metrics['fast_bw_median'] * 8, unit, decimal_places=0) + f" {unit}"
-            stable_mean_formatted = self._format_bandwidth_with_unit(health_metrics['stable_bw_mean'] * 8, unit, decimal_places=0) + f" {unit}"
-            stable_median_formatted = self._format_bandwidth_with_unit(health_metrics['stable_bw_median'] * 8, unit, decimal_places=0) + f" {unit}"
-            authority_mean_formatted = self._format_bandwidth_with_unit(health_metrics['authority_bw_mean'] * 8, unit, decimal_places=0) + f" {unit}"
-            authority_median_formatted = self._format_bandwidth_with_unit(health_metrics['authority_bw_median'] * 8, unit, decimal_places=0) + f" {unit}"
-            v2dir_mean_formatted = self._format_bandwidth_with_unit(health_metrics['v2dir_bw_mean'] * 8, unit, decimal_places=0) + f" {unit}"
-            v2dir_median_formatted = self._format_bandwidth_with_unit(health_metrics['v2dir_bw_median'] * 8, unit, decimal_places=0) + f" {unit}"
-            hsdir_mean_formatted = self._format_bandwidth_with_unit(health_metrics['hsdir_bw_mean'] * 8, unit, decimal_places=0) + f" {unit}"
-            hsdir_median_formatted = self._format_bandwidth_with_unit(health_metrics['hsdir_bw_median'] * 8, unit, decimal_places=0) + f" {unit}"
+            fast_mean_formatted = self.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['fast_bw_mean'] * 8, unit, decimal_places=0) + f" {unit}"
+            fast_median_formatted = self.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['fast_bw_median'] * 8, unit, decimal_places=0) + f" {unit}"
+            stable_mean_formatted = self.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['stable_bw_mean'] * 8, unit, decimal_places=0) + f" {unit}"
+            stable_median_formatted = self.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['stable_bw_median'] * 8, unit, decimal_places=0) + f" {unit}"
+            authority_mean_formatted = self.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['authority_bw_mean'] * 8, unit, decimal_places=0) + f" {unit}"
+            authority_median_formatted = self.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['authority_bw_median'] * 8, unit, decimal_places=0) + f" {unit}"
+            v2dir_mean_formatted = self.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['v2dir_bw_mean'] * 8, unit, decimal_places=0) + f" {unit}"
+            v2dir_median_formatted = self.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['v2dir_bw_median'] * 8, unit, decimal_places=0) + f" {unit}"
+            hsdir_mean_formatted = self.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['hsdir_bw_mean'] * 8, unit, decimal_places=0) + f" {unit}"
+            hsdir_median_formatted = self.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['hsdir_bw_median'] * 8, unit, decimal_places=0) + f" {unit}"
         else:
             # For bytes, check if any value would round to 0 with GB/s
             base_unit = self.bandwidth_formatter.determine_unit(total_bandwidth)
@@ -3847,7 +3847,7 @@ class Relays:
             use_smaller_unit = False
             for value in test_values:
                 if value > 0:  # Only check non-zero values
-                    formatted_val = self._format_bandwidth_with_unit(value, base_unit, decimal_places=0)
+                    formatted_val = self.bandwidth_formatter.format_bandwidth_with_unit(value, base_unit, decimal_places=0)
                     if float(formatted_val) == 0:
                         use_smaller_unit = True
                         break
@@ -3855,23 +3855,23 @@ class Relays:
             # Use MB/s if any would show as 0 GB/s
             unit = 'MB/s' if (use_smaller_unit and base_unit == 'GB/s') else base_unit
             
-            exit_mean_formatted = self._format_bandwidth_with_unit(health_metrics['exit_bw_mean'], unit, decimal_places=0) + f" {unit}"
-            exit_median_formatted = self._format_bandwidth_with_unit(health_metrics['exit_bw_median'], unit, decimal_places=0) + f" {unit}"
-            guard_mean_formatted = self._format_bandwidth_with_unit(health_metrics['guard_bw_mean'], unit, decimal_places=0) + f" {unit}"
-            guard_median_formatted = self._format_bandwidth_with_unit(health_metrics['guard_bw_median'], unit, decimal_places=0) + f" {unit}"
-            middle_mean_formatted = self._format_bandwidth_with_unit(health_metrics['middle_bw_mean'], unit, decimal_places=0) + f" {unit}"
-            middle_median_formatted = self._format_bandwidth_with_unit(health_metrics['middle_bw_median'], unit, decimal_places=0) + f" {unit}"
+            exit_mean_formatted = self.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['exit_bw_mean'], unit, decimal_places=0) + f" {unit}"
+            exit_median_formatted = self.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['exit_bw_median'], unit, decimal_places=0) + f" {unit}"
+            guard_mean_formatted = self.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['guard_bw_mean'], unit, decimal_places=0) + f" {unit}"
+            guard_median_formatted = self.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['guard_bw_median'], unit, decimal_places=0) + f" {unit}"
+            middle_mean_formatted = self.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['middle_bw_mean'], unit, decimal_places=0) + f" {unit}"
+            middle_median_formatted = self.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['middle_bw_median'], unit, decimal_places=0) + f" {unit}"
             # NEW: Additional flag-specific bandwidth formatting (bytes)
-            fast_mean_formatted = self._format_bandwidth_with_unit(health_metrics['fast_bw_mean'], unit, decimal_places=0) + f" {unit}"
-            fast_median_formatted = self._format_bandwidth_with_unit(health_metrics['fast_bw_median'], unit, decimal_places=0) + f" {unit}"
-            stable_mean_formatted = self._format_bandwidth_with_unit(health_metrics['stable_bw_mean'], unit, decimal_places=0) + f" {unit}"
-            stable_median_formatted = self._format_bandwidth_with_unit(health_metrics['stable_bw_median'], unit, decimal_places=0) + f" {unit}"
-            authority_mean_formatted = self._format_bandwidth_with_unit(health_metrics['authority_bw_mean'], unit, decimal_places=0) + f" {unit}"
-            authority_median_formatted = self._format_bandwidth_with_unit(health_metrics['authority_bw_median'], unit, decimal_places=0) + f" {unit}"
-            v2dir_mean_formatted = self._format_bandwidth_with_unit(health_metrics['v2dir_bw_mean'], unit, decimal_places=0) + f" {unit}"
-            v2dir_median_formatted = self._format_bandwidth_with_unit(health_metrics['v2dir_bw_median'], unit, decimal_places=0) + f" {unit}"
-            hsdir_mean_formatted = self._format_bandwidth_with_unit(health_metrics['hsdir_bw_mean'], unit, decimal_places=0) + f" {unit}"
-            hsdir_median_formatted = self._format_bandwidth_with_unit(health_metrics['hsdir_bw_median'], unit, decimal_places=0) + f" {unit}"
+            fast_mean_formatted = self.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['fast_bw_mean'], unit, decimal_places=0) + f" {unit}"
+            fast_median_formatted = self.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['fast_bw_median'], unit, decimal_places=0) + f" {unit}"
+            stable_mean_formatted = self.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['stable_bw_mean'], unit, decimal_places=0) + f" {unit}"
+            stable_median_formatted = self.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['stable_bw_median'], unit, decimal_places=0) + f" {unit}"
+            authority_mean_formatted = self.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['authority_bw_mean'], unit, decimal_places=0) + f" {unit}"
+            authority_median_formatted = self.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['authority_bw_median'], unit, decimal_places=0) + f" {unit}"
+            v2dir_mean_formatted = self.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['v2dir_bw_mean'], unit, decimal_places=0) + f" {unit}"
+            v2dir_median_formatted = self.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['v2dir_bw_median'], unit, decimal_places=0) + f" {unit}"
+            hsdir_mean_formatted = self.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['hsdir_bw_mean'], unit, decimal_places=0) + f" {unit}"
+            hsdir_median_formatted = self.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['hsdir_bw_median'], unit, decimal_places=0) + f" {unit}"
         
         health_metrics.update({
             'exit_bw_mean_formatted': exit_mean_formatted,
@@ -3896,22 +3896,22 @@ class Relays:
         # Bandwidth formatting with proper units
         if self.use_bits:
             unit = self.bandwidth_formatter.determine_unit(total_bandwidth * 8)
-            health_metrics['total_bandwidth_formatted'] = self._format_bandwidth_with_unit(total_bandwidth * 8, unit, decimal_places=0) + f" {unit}"
-            health_metrics['guard_bandwidth_formatted'] = self._format_bandwidth_with_unit(guard_bandwidth * 8, unit, decimal_places=0) + f" {unit}"
-            health_metrics['exit_bandwidth_formatted'] = self._format_bandwidth_with_unit(exit_bandwidth * 8, unit, decimal_places=0) + f" {unit}"
-            health_metrics['middle_bandwidth_formatted'] = self._format_bandwidth_with_unit(middle_bandwidth * 8, unit, decimal_places=0) + f" {unit}"
+            health_metrics['total_bandwidth_formatted'] = self.bandwidth_formatter.format_bandwidth_with_unit(total_bandwidth * 8, unit, decimal_places=0) + f" {unit}"
+            health_metrics['guard_bandwidth_formatted'] = self.bandwidth_formatter.format_bandwidth_with_unit(guard_bandwidth * 8, unit, decimal_places=0) + f" {unit}"
+            health_metrics['exit_bandwidth_formatted'] = self.bandwidth_formatter.format_bandwidth_with_unit(exit_bandwidth * 8, unit, decimal_places=0) + f" {unit}"
+            health_metrics['middle_bandwidth_formatted'] = self.bandwidth_formatter.format_bandwidth_with_unit(middle_bandwidth * 8, unit, decimal_places=0) + f" {unit}"
             # NEW: IPv6 bandwidth formatting (bits)
-            health_metrics['ipv4_only_bandwidth_formatted'] = self._format_bandwidth_with_unit(ipv4_only_bandwidth * 8, unit, decimal_places=0) + f" {unit}"
-            health_metrics['both_ipv4_ipv6_bandwidth_formatted'] = self._format_bandwidth_with_unit(both_ipv4_ipv6_bandwidth * 8, unit, decimal_places=0) + f" {unit}"
+            health_metrics['ipv4_only_bandwidth_formatted'] = self.bandwidth_formatter.format_bandwidth_with_unit(ipv4_only_bandwidth * 8, unit, decimal_places=0) + f" {unit}"
+            health_metrics['both_ipv4_ipv6_bandwidth_formatted'] = self.bandwidth_formatter.format_bandwidth_with_unit(both_ipv4_ipv6_bandwidth * 8, unit, decimal_places=0) + f" {unit}"
         else:
             unit = self.bandwidth_formatter.determine_unit(total_bandwidth)
-            health_metrics['total_bandwidth_formatted'] = self._format_bandwidth_with_unit(total_bandwidth, unit, decimal_places=0) + f" {unit}"
-            health_metrics['guard_bandwidth_formatted'] = self._format_bandwidth_with_unit(guard_bandwidth, unit, decimal_places=0) + f" {unit}"
-            health_metrics['exit_bandwidth_formatted'] = self._format_bandwidth_with_unit(exit_bandwidth, unit, decimal_places=0) + f" {unit}"
-            health_metrics['middle_bandwidth_formatted'] = self._format_bandwidth_with_unit(middle_bandwidth, unit, decimal_places=0) + f" {unit}"
+            health_metrics['total_bandwidth_formatted'] = self.bandwidth_formatter.format_bandwidth_with_unit(total_bandwidth, unit, decimal_places=0) + f" {unit}"
+            health_metrics['guard_bandwidth_formatted'] = self.bandwidth_formatter.format_bandwidth_with_unit(guard_bandwidth, unit, decimal_places=0) + f" {unit}"
+            health_metrics['exit_bandwidth_formatted'] = self.bandwidth_formatter.format_bandwidth_with_unit(exit_bandwidth, unit, decimal_places=0) + f" {unit}"
+            health_metrics['middle_bandwidth_formatted'] = self.bandwidth_formatter.format_bandwidth_with_unit(middle_bandwidth, unit, decimal_places=0) + f" {unit}"
             # NEW: IPv6 bandwidth formatting (bytes)
-            health_metrics['ipv4_only_bandwidth_formatted'] = self._format_bandwidth_with_unit(ipv4_only_bandwidth, unit, decimal_places=0) + f" {unit}"
-            health_metrics['both_ipv4_ipv6_bandwidth_formatted'] = self._format_bandwidth_with_unit(both_ipv4_ipv6_bandwidth, unit, decimal_places=0) + f" {unit}"
+            health_metrics['ipv4_only_bandwidth_formatted'] = self.bandwidth_formatter.format_bandwidth_with_unit(ipv4_only_bandwidth, unit, decimal_places=0) + f" {unit}"
+            health_metrics['both_ipv4_ipv6_bandwidth_formatted'] = self.bandwidth_formatter.format_bandwidth_with_unit(both_ipv4_ipv6_bandwidth, unit, decimal_places=0) + f" {unit}"
         
         # Uptime metrics - reuse existing consolidated uptime calculations for efficiency
         if hasattr(self, '_consolidated_uptime_results') and self._consolidated_uptime_results:

@@ -144,7 +144,7 @@ class TestContactDataIntegrityRegression(unittest.TestCase):
         self.assertEqual(middle_count, self.expected_aggregates['middle_count'])
         self.assertEqual(exit_count, self.expected_aggregates['exit_count'])
 
-    @patch.object(Relays, '_format_bandwidth_with_unit')
+    @patch('allium.lib.bandwidth_formatter.BandwidthFormatter.format_bandwidth_with_unit')
     def test_bandwidth_breakdown_format_consistency(self, mock_format_bw):
         """Test that bandwidth breakdown formatting remains consistent."""
         mock_format_bw.side_effect = lambda bw, unit: f"{bw/1000000:.1f}"  # Convert to MB
@@ -289,7 +289,7 @@ class TestContactDataIntegrityRegression(unittest.TestCase):
         actual_order = [r['rank'] for r in sorted_rankings]
         self.assertEqual(actual_order, expected_order)
 
-    @patch.object(Relays, '_format_bandwidth_with_unit')
+    @patch('allium.lib.bandwidth_formatter.BandwidthFormatter.format_bandwidth_with_unit')
     def test_zero_value_filtering_consistency(self, mock_format_bw):
         """Test that zero value filtering works consistently across all display components."""
         mock_format_bw.side_effect = lambda bw, unit: "0.00" if bw == 0 else f"{bw/1000000:.1f}"
