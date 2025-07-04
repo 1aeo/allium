@@ -7,6 +7,7 @@ to avoid duplication between aroileaders.py and relays.py.
 
 import statistics
 import math
+from .error_handlers import handle_calculation_errors
 
 
 def normalize_uptime_value(raw_value):
@@ -150,6 +151,7 @@ def extract_relay_uptime_for_period(operator_relays, uptime_data, time_period):
     }
 
 
+@handle_calculation_errors("calculate network uptime percentiles", default_return=None)
 def calculate_network_uptime_percentiles(uptime_data, time_period='6_months'):
     """
     Calculate network-wide uptime percentiles for all active relays.
@@ -222,79 +224,74 @@ def calculate_network_uptime_percentiles(uptime_data, time_period='6_months'):
     # Sort for percentile calculations
     network_uptime_values.sort()
     
+    # Use Python's robust quantiles function if available (Python 3.8+)
+    # Otherwise fall back to manual calculation
     try:
-        # Use Python's robust quantiles function if available (Python 3.8+)
-        # Otherwise fall back to manual calculation
-        try:
-            import sys
-            if sys.version_info >= (3, 8):
-                # Use statistics.quantiles for more accurate results
-                quantile_values = statistics.quantiles(network_uptime_values, n=100, method='inclusive')
-                percentiles = {
-                    '5th': quantile_values[4],   # 5th percentile
-                    '25th': quantile_values[24],  # 25th percentile
-                    '50th': quantile_values[49],  # 50th percentile (median)
-                    '75th': quantile_values[74],  # 75th percentile
-                    '90th': quantile_values[89],  # 90th percentile
-                    '95th': quantile_values[94],  # 95th percentile
-                    '99th': quantile_values[98]   # 99th percentile
-                }
-            else:
-                raise ImportError("Using fallback calculation")
-        except (ImportError, IndexError):
-            # Fallback to manual calculation for older Python versions
-            def calculate_percentile(data, percentile):
-                """Calculate percentile manually using numpy-style interpolation"""
-                if not data:
-                    return 0.0
-                n = len(data)
-                if n == 1:
-                    return data[0]
-                # Use method similar to numpy.percentile with linear interpolation
-                k = (n - 1) * (percentile / 100.0)
-                f = int(k)
-                c = k - f
-                if f >= n - 1:
-                    return data[-1]
-                return data[f] + c * (data[f + 1] - data[f])
-            
+        import sys
+        if sys.version_info >= (3, 8):
+            # Use statistics.quantiles for more accurate results
+            quantile_values = statistics.quantiles(network_uptime_values, n=100, method='inclusive')
             percentiles = {
-                '5th': calculate_percentile(network_uptime_values, 5),
-                '25th': calculate_percentile(network_uptime_values, 25),
-                '50th': calculate_percentile(network_uptime_values, 50),  # Median
-                '75th': calculate_percentile(network_uptime_values, 75),
-                '90th': calculate_percentile(network_uptime_values, 90),
-                '95th': calculate_percentile(network_uptime_values, 95),
-                '99th': calculate_percentile(network_uptime_values, 99)
+                '5th': quantile_values[4],   # 5th percentile
+                '25th': quantile_values[24],  # 25th percentile
+                '50th': quantile_values[49],  # 50th percentile (median)
+                '75th': quantile_values[74],  # 75th percentile
+                '90th': quantile_values[89],  # 90th percentile
+                '95th': quantile_values[94],  # 95th percentile
+                '99th': quantile_values[98]   # 99th percentile
             }
+        else:
+            raise ImportError("Using fallback calculation")
+    except (ImportError, IndexError):
+        # Fallback to manual calculation for older Python versions
+        def calculate_percentile(data, percentile):
+            """Calculate percentile manually using numpy-style interpolation"""
+            if not data:
+                return 0.0
+            n = len(data)
+            if n == 1:
+                return data[0]
+            # Use method similar to numpy.percentile with linear interpolation
+            k = (n - 1) * (percentile / 100.0)
+            f = int(k)
+            c = k - f
+            if f >= n - 1:
+                return data[-1]
+            return data[f] + c * (data[f + 1] - data[f])
         
-        # Use median as the "average" - robust to outliers and mathematically guaranteed valid
-        # This represents the typical relay performance better than mean in highly skewed distributions
-        # and avoids mathematical impossibilities while showing honest network representation
-        network_average = percentiles['50th']  # median
-        
-        # Also calculate arithmetic mean for comparison/debugging
-        arithmetic_mean = statistics.mean(network_uptime_values)
-        
-        result = {
-            'percentiles': percentiles,
-            'average': network_average,  # This is actually the median for robustness
-            'median': percentiles['50th'],
-            'arithmetic_mean': arithmetic_mean,  # Included for debugging
-            'total_relays': len(network_uptime_values),
-            'time_period': time_period,
-            'filtering_stats': {
-                'total_processed': total_relays_processed,
-                'included': len(network_uptime_values),
-                'excluded': excluded_relays
-            }
+        percentiles = {
+            '5th': calculate_percentile(network_uptime_values, 5),
+            '25th': calculate_percentile(network_uptime_values, 25),
+            '50th': calculate_percentile(network_uptime_values, 50),  # Median
+            '75th': calculate_percentile(network_uptime_values, 75),
+            '90th': calculate_percentile(network_uptime_values, 90),
+            '95th': calculate_percentile(network_uptime_values, 95),
+            '99th': calculate_percentile(network_uptime_values, 99)
         }
-        
-        return result
-        
-    except Exception as e:
-        # Fallback in case of any calculation errors
-        return None
+    
+    # Use median as the "average" - robust to outliers and mathematically guaranteed valid
+    # This represents the typical relay performance better than mean in highly skewed distributions
+    # and avoids mathematical impossibilities while showing honest network representation
+    network_average = percentiles['50th']  # median
+    
+    # Also calculate arithmetic mean for comparison/debugging
+    arithmetic_mean = statistics.mean(network_uptime_values)
+    
+    result = {
+        'percentiles': percentiles,
+        'average': network_average,  # This is actually the median for robustness
+        'median': percentiles['50th'],
+        'arithmetic_mean': arithmetic_mean,  # Included for debugging
+        'total_relays': len(network_uptime_values),
+        'time_period': time_period,
+        'filtering_stats': {
+            'total_processed': total_relays_processed,
+            'included': len(network_uptime_values),
+            'excluded': excluded_relays
+        }
+    }
+    
+    return result
 
 
 def find_operator_percentile_position(operator_uptime, network_percentiles):

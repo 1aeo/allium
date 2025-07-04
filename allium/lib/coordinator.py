@@ -14,6 +14,7 @@ from .workers import (
 )
 from .relays import Relays
 from .progress import log_progress
+from .error_handlers import handle_worker_errors, handle_calculation_errors
 
 
 class Coordinator:
@@ -76,10 +77,12 @@ class Coordinator:
             else:
                 self._log_progress_with_step_increment(f"{api_display_name} - warning: returned no data")
         except Exception as e:
+            # Use centralized error handling approach
             api_display_name = self._get_api_display_name(api_name)
             self._log_progress_with_step_increment(f"{api_display_name} - error: {str(e)}")
             self.worker_data[api_name] = None
-            # In CI environments, provide more context for debugging
+            
+            # CI debugging with centralized approach
             import os
             if os.environ.get('CI') or os.environ.get('GITHUB_ACTIONS'):
                 print(f"🔧 CI Debug: {api_name} worker failed with: {e}")

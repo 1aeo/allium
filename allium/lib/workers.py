@@ -12,6 +12,7 @@ import time
 import urllib.request
 import threading
 from pathlib import Path
+from .error_handlers import handle_file_io_errors, handle_http_errors, handle_json_errors
 
 # Global constants
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
@@ -30,6 +31,7 @@ _state_lock = threading.Lock()
 _worker_status = {}
 
 
+@handle_file_io_errors("save cache", context="")
 def _save_cache(api_name, data):
     """
     Save API data to cache file
@@ -39,13 +41,12 @@ def _save_cache(api_name, data):
         data: Data to cache (will be JSON serialized)
     """
     cache_file = os.path.join(CACHE_DIR, f"{api_name}.json")
-    try:
-        with open(cache_file, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
-    except Exception as e:
-        print(f"Warning: Failed to save cache for {api_name}: {e}")
+    with open(cache_file, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
 
 
+@handle_file_io_errors("load cache", context="")
+@handle_json_errors("parse cached JSON", default_return=None)
 def _load_cache(api_name):
     """
     Load API data from cache file
@@ -57,12 +58,9 @@ def _load_cache(api_name):
         Cached data or None if not available
     """
     cache_file = os.path.join(CACHE_DIR, f"{api_name}.json")
-    try:
-        if os.path.exists(cache_file):
-            with open(cache_file, "r", encoding="utf-8") as f:
-                return json.load(f)
-    except Exception as e:
-        print(f"Warning: Failed to load cache for {api_name}: {e}")
+    if os.path.exists(cache_file):
+        with open(cache_file, "r", encoding="utf-8") as f:
+            return json.load(f)
     return None
 
 
@@ -99,29 +97,27 @@ def _mark_stale(api_name, error_msg):
         _save_state()
 
 
+@handle_file_io_errors("save state")
 def _save_state():
     """Save worker state to file (called with lock held)"""
-    try:
-        state_data = {
-            "workers": _worker_status,
-            "last_updated": time.time()
-        }
-        with open(STATE_FILE, "w", encoding="utf-8") as f:
-            json.dump(state_data, f, indent=2)
-    except Exception as e:
-        print(f"Warning: Failed to save state: {e}")
+    state_data = {
+        "workers": _worker_status,
+        "last_updated": time.time()
+    }
+    with open(STATE_FILE, "w", encoding="utf-8") as f:
+        json.dump(state_data, f, indent=2)
 
 
+@handle_file_io_errors("load state")
+@handle_json_errors("parse state JSON", default_return={})
 def _load_state():
     """Load worker state from file"""
     global _worker_status
-    try:
-        if os.path.exists(STATE_FILE):
-            with open(STATE_FILE, "r", encoding="utf-8") as f:
-                state_data = json.load(f)
-                _worker_status = state_data.get("workers", {})
-    except Exception as e:
-        print(f"Warning: Failed to load state: {e}")
+    if os.path.exists(STATE_FILE):
+        with open(STATE_FILE, "r", encoding="utf-8") as f:
+            state_data = json.load(f)
+            _worker_status = state_data.get("workers", {})
+    else:
         _worker_status = {}
 
 
@@ -150,6 +146,7 @@ def get_all_worker_status():
         return _worker_status.copy()
 
 
+@handle_file_io_errors("save timestamp", context="")
 def _write_timestamp(api_name, timestamp_str):
     """
     Store encoded timestamp for conditional requests
@@ -159,13 +156,11 @@ def _write_timestamp(api_name, timestamp_str):
         timestamp_str: Formatted timestamp string
     """
     timestamp_file = os.path.join(CACHE_DIR, f"{api_name}_timestamp.txt")
-    try:
-        with open(timestamp_file, "w", encoding="utf-8") as f:
-            f.write(timestamp_str)
-    except Exception as e:
-        print(f"Warning: Failed to save timestamp for {api_name}: {e}")
+    with open(timestamp_file, "w", encoding="utf-8") as f:
+        f.write(timestamp_str)
 
 
+@handle_file_io_errors("read timestamp", context="")
 def _read_timestamp(api_name):
     """
     Read stored timestamp for conditional requests
@@ -177,15 +172,14 @@ def _read_timestamp(api_name):
         str: Timestamp string or None if not available
     """
     timestamp_file = os.path.join(CACHE_DIR, f"{api_name}_timestamp.txt")
-    try:
-        if os.path.exists(timestamp_file):
-            with open(timestamp_file, "r", encoding="utf-8") as f:
-                return f.read().strip()
-    except Exception as e:
-        print(f"Warning: Failed to read timestamp for {api_name}: {e}")
+    if os.path.exists(timestamp_file):
+        with open(timestamp_file, "r", encoding="utf-8") as f:
+            return f.read().strip()
     return None
 
 
+@handle_http_errors("onionoo details", _load_cache, _save_cache, _mark_ready, _mark_stale, 
+                   allow_exit_on_304=True, critical=True)
 def fetch_onionoo_details(onionoo_url="https://onionoo.torproject.org/details", progress_logger=None):
     """
     Fetch onionoo details data (extracted from original Relays._fetch_onionoo_details)
@@ -205,78 +199,44 @@ def fetch_onionoo_details(onionoo_url="https://onionoo.torproject.org/details", 
         else:
             print(message)
     
-    try:
-        # Check for conditional request timestamp
-        prev_timestamp = _read_timestamp(api_name)
-        
-        if prev_timestamp:
-            headers = {"If-Modified-Since": prev_timestamp}
-            conn = urllib.request.Request(onionoo_url, headers=headers)
-        else:
-            conn = urllib.request.Request(onionoo_url)
+    # Check for conditional request timestamp
+    prev_timestamp = _read_timestamp(api_name)
+    
+    if prev_timestamp:
+        headers = {"If-Modified-Since": prev_timestamp}
+        conn = urllib.request.Request(onionoo_url, headers=headers)
+    else:
+        conn = urllib.request.Request(onionoo_url)
 
-        try:
-            # Add timeout to prevent hanging in CI environments
-            api_response = urllib.request.urlopen(conn, timeout=30).read()
-        except urllib.error.HTTPError as err:
-            if err.code == 304:
-                # No update since last run - use cached data
-                log_progress("no onionoo update since last run, using cached data...")
-                cached_data = _load_cache(api_name)
-                if cached_data:
-                    _mark_ready(api_name)
-                    return cached_data
-                else:
-                    # No cache available, this is a problem
-                    log_progress("no onionoo update since last run, dying peacefully...")
-                    sys.exit(1)
-            else:
-                log_progress(f"HTTP error fetching onionoo data: {err.code}")
-                raise err
-        except urllib.error.URLError as err:
-            log_progress(f"network error fetching onionoo data: {err}")
-            log_progress("check your internet connection and try again")
-            log_progress("in CI environments, this might be a temporary network issue")
-            raise err
+    # Add timeout to prevent hanging in CI environments
+    api_response = urllib.request.urlopen(conn, timeout=30).read()
 
-        # Parse JSON response
-        log_progress("parsing JSON response...")
-        data = json.loads(api_response.decode("utf-8"))
-        
-        # Cache the data
-        log_progress("caching data...")
-        _save_cache(api_name, data)
-        
-        # Write timestamp for future conditional requests
-        timestamp_str = time.strftime(
-            "%a, %d %b %Y %H:%M:%S GMT", time.gmtime(time.time())
-        )
-        _write_timestamp(api_name, timestamp_str)
-        
-        # Mark as ready
-        _mark_ready(api_name)
-        
-        # Use consistent progress format for success message
-        relay_count = len(data.get('relays', []))
-        log_progress(f"successfully fetched {relay_count} relays from onionoo details API")
-        
-        return data
-        
-    except Exception as e:
-        error_msg = f"Failed to fetch onionoo details: {str(e)}"
-        log_progress(f"error: {error_msg}")
-        _mark_stale(api_name, error_msg)
-        
-        # Try to return cached data as fallback
-        cached_data = _load_cache(api_name)
-        if cached_data:
-            log_progress("using cached onionoo data as fallback")
-            return cached_data
-        else:
-            log_progress("no cached data available, cannot continue")
-            return None
+    # Parse JSON response
+    log_progress("parsing JSON response...")
+    data = json.loads(api_response.decode("utf-8"))
+    
+    # Cache the data
+    log_progress("caching data...")
+    _save_cache(api_name, data)
+    
+    # Write timestamp for future conditional requests
+    timestamp_str = time.strftime(
+        "%a, %d %b %Y %H:%M:%S GMT", time.gmtime(time.time())
+    )
+    _write_timestamp(api_name, timestamp_str)
+    
+    # Mark as ready
+    _mark_ready(api_name)
+    
+    # Use consistent progress format for success message
+    relay_count = len(data.get('relays', []))
+    log_progress(f"successfully fetched {relay_count} relays from onionoo details API")
+    
+    return data
 
 
+@handle_http_errors("onionoo uptime", _load_cache, _save_cache, _mark_ready, _mark_stale, 
+                   allow_exit_on_304=False, critical=False)
 def fetch_onionoo_uptime(onionoo_url="https://onionoo.torproject.org/uptime", progress_logger=None):
     """
     Fetch onionoo uptime data from the Tor Project's Onionoo API
@@ -294,78 +254,40 @@ def fetch_onionoo_uptime(onionoo_url="https://onionoo.torproject.org/uptime", pr
         if progress_logger:
             progress_logger(message)
     
-    try:
-        # Check for conditional request timestamp
-        prev_timestamp = _read_timestamp(api_name)
-        
-        if prev_timestamp:
-            headers = {"If-Modified-Since": prev_timestamp}
-            conn = urllib.request.Request(onionoo_url, headers=headers)
-        else:
-            conn = urllib.request.Request(onionoo_url)
+    # Check for conditional request timestamp
+    prev_timestamp = _read_timestamp(api_name)
+    
+    if prev_timestamp:
+        headers = {"If-Modified-Since": prev_timestamp}
+        conn = urllib.request.Request(onionoo_url, headers=headers)
+    else:
+        conn = urllib.request.Request(onionoo_url)
 
-        try:
-            # Add timeout to prevent hanging in CI environments
-            api_response = urllib.request.urlopen(conn, timeout=30).read()
-        except urllib.error.HTTPError as err:
-            if err.code == 304:
-                # No update since last run - use cached data
-                log_progress("no onionoo uptime update since last run, using cached data...")
-                cached_data = _load_cache(api_name)
-                if cached_data:
-                    _mark_ready(api_name)
-                    return cached_data
-                else:
-                    # No cache available, this is a problem
-                    log_progress("no onionoo uptime update since last run and no cache, skipping uptime data...")
-                    # Mark as stale but don't exit - uptime is not critical
-                    _mark_stale(api_name, "No cached uptime data available")
-                    return None
-            else:
-                log_progress(f"HTTP error fetching onionoo uptime data: {err.code}")
-                raise err
-        except urllib.error.URLError as err:
-            log_progress(f"network error fetching onionoo uptime data: {err}")
-            log_progress("check your internet connection and try again")
-            log_progress("in CI environments, this might be a temporary network issue")
-            raise err
+    # Add timeout to prevent hanging in CI environments
+    api_response = urllib.request.urlopen(conn, timeout=30).read()
 
-        log_progress("parsing JSON response...")
+    log_progress("parsing JSON response...")
 
-        # Parse JSON response
-        data = json.loads(api_response.decode("utf-8"))
-        
-        # Cache the data
-        log_progress("caching data...")
-        _save_cache(api_name, data)
-        
-        # Write timestamp for future conditional requests
-        timestamp_str = time.strftime(
-            "%a, %d %b %Y %H:%M:%S GMT", time.gmtime(time.time())
-        )
-        _write_timestamp(api_name, timestamp_str)
-        
-        # Mark as ready
-        _mark_ready(api_name)
-        
-        # Use consistent progress format for success message
-        relay_count = len(data.get('relays', []))
-        log_progress(f"successfully fetched {relay_count} relays from onionoo uptime API")
-        return data
-        
-    except Exception as e:
-        error_msg = f"Failed to fetch onionoo uptime: {str(e)}"
-        log_progress(f"error: {error_msg}")
-        _mark_stale(api_name, error_msg)
-        
-        # Try to return cached data as fallback
-        cached_data = _load_cache(api_name)
-        if cached_data:
-            log_progress("using cached onionoo data as fallback")
-            return cached_data
-        else:
-            log_progress("no cached data available, continuing without uptime data")
-            return None
+    # Parse JSON response
+    data = json.loads(api_response.decode("utf-8"))
+    
+    # Cache the data
+    log_progress("caching data...")
+    _save_cache(api_name, data)
+    
+    # Write timestamp for future conditional requests
+    timestamp_str = time.strftime(
+        "%a, %d %b %Y %H:%M:%S GMT", time.gmtime(time.time())
+    )
+    _write_timestamp(api_name, timestamp_str)
+    
+    # Mark as ready
+    _mark_ready(api_name)
+    
+    # Use consistent progress format for success message
+    relay_count = len(data.get('relays', []))
+    log_progress(f"successfully fetched {relay_count} relays from onionoo uptime API")
+    return data
 
 
 def fetch_collector_data(progress_logger=None):
