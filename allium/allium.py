@@ -20,7 +20,7 @@ from lib.relays import Relays
 from lib.coordinator import create_relay_set_with_coordinator
 from lib.progress import log_progress
 from lib.progress_logger import create_progress_logger
-from lib.utils import get_page_context, get_misc_page_context
+from lib.page_context import get_page_context, get_misc_page_context, StandardTemplateContexts
 
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
 
@@ -233,9 +233,8 @@ if __name__ == "__main__":
 
     # Network Health Dashboard page
     progress_logger.log("Generating network health dashboard...")
-    health_ctx = get_page_context('index', 'home', {'page_name': 'Network Health Dashboard'})
-    # Add timestamp for the dashboard
-    health_ctx['timestamp_str'] = RELAY_SET.timestamp
+    standard_contexts = StandardTemplateContexts(RELAY_SET)
+    health_ctx = standard_contexts.get_index_page_context('Network Health Dashboard', RELAY_SET.timestamp)
     RELAY_SET.write_misc(template="network-health-dashboard.html", path="network-health.html", page_ctx=health_ctx)
     progress_logger.log("Generated network health dashboard")
 
@@ -274,7 +273,8 @@ if __name__ == "__main__":
     
     for k, v in misc_pages.items():
         for page_type, page_title in misc_page_types:
-            page_ctx = get_misc_page_context(page_title)
+            standard_contexts = StandardTemplateContexts(RELAY_SET)
+            page_ctx = standard_contexts.get_misc_page_context(f"misc-{page_type}.html", page_title, sorted_by=v)
             RELAY_SET.write_misc(
                 template=f"misc-{page_type}.html",
                 path=f"misc/{page_type}-{k}.html",

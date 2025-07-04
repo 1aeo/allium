@@ -1593,20 +1593,9 @@ class Relays:
 
     def get_detail_page_context(self, category, value):
         """Generate page context with correct breadcrumb data for detail pages"""
-        # Import here to avoid circular imports
-        from .utils import get_page_context
-        
-        mapping = {
-            'as': ('as_detail', {'as_number': value}),
-            'contact': ('contact_detail', {'contact_hash': value}),
-            'country': ('country_detail', {'country_name': value}),
-            'family': ('family_detail', {'family_hash': value}),
-            'platform': ('platform_detail', {'platform_name': value}),
-            'first_seen': ('first_seen_detail', {'date': value}),
-            'flag': ('flag_detail', {'flag_name': value}),
-        }
-        breadcrumb_type, breadcrumb_data = mapping.get(category, (f"{category}_detail", {}))
-        return get_page_context('detail', breadcrumb_type, breadcrumb_data)
+        # Use centralized page context generation
+        from .page_context import get_detail_page_context
+        return get_detail_page_context(category, value)
 
     def write_pages_by_key(self, k):
         """
@@ -1842,17 +1831,15 @@ class Relays:
         for relay in relay_list:
             if not relay["fingerprint"].isalnum():
                 continue
-            # Import here to avoid circular imports
-            from .utils import get_page_context
-            
-            page_ctx = get_page_context('detail', 'relay_detail', {
-                'nickname': relay.get('nickname', relay.get('fingerprint', 'Unknown')),
-                'fingerprint': relay.get('fingerprint', 'Unknown'),
-                'as_number': relay.get('as', '')
-            })
+            # Use centralized page context generation
+            from .page_context import StandardTemplateContexts
             
             # Get the contact display data from existing contact structure
             contact_display_data = self._get_contact_display_data_for_relay(relay)
+            
+            standard_contexts = StandardTemplateContexts(self)
+            full_context = standard_contexts.get_relay_page_context(relay, contact_display_data)
+            page_ctx = full_context
             
             rendered = template.render(
                 relay=relay, page_ctx=page_ctx, relays=self, contact_display_data=contact_display_data
