@@ -1,5 +1,5 @@
 """
-Unit tests for allium/lib/workers.py - Worker system for API data fetching
+Unit tests for allium/lib/allium.lib.workers.py - Worker system for API data fetching
 """
 import json
 import os
@@ -12,13 +12,10 @@ import urllib.request
 from pathlib import Path
 from unittest.mock import patch, mock_open, MagicMock
 
-# Add the allium directory to Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'allium'))
+# Add the project root to Python path
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-# Add the lib directory to Python path for workers import
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'allium', 'lib'))
-
-from workers import (
+from allium.lib.workers import (
     _save_cache as save_cache, _load_cache as load_cache, 
     _mark_ready as mark_worker_ready, _mark_stale as mark_worker_stale, 
     get_worker_status, get_all_worker_status, 
@@ -38,7 +35,7 @@ class TestWorkerCacheManagement:
         with tempfile.TemporaryDirectory() as temp_dir:
             cache_file = os.path.join(temp_dir, "test_cache.json")
             
-            with patch('workers.CACHE_DIR', temp_dir):
+            with patch('allium.lib.workers.CACHE_DIR', temp_dir):
                 # Save data
                 save_cache("test_worker", test_data)
                 
@@ -50,7 +47,7 @@ class TestWorkerCacheManagement:
     def test_cache_load_returns_none_when_file_does_not_exist(self):
         """Test loading cache when file doesn't exist"""
         with tempfile.TemporaryDirectory() as temp_dir:
-            with patch('workers.CACHE_DIR', temp_dir):
+            with patch('allium.lib.workers.CACHE_DIR', temp_dir):
                 result = load_cache("nonexistent_worker")
                 assert result is None
     
@@ -74,7 +71,7 @@ class TestWorkerCacheManagement:
             with open(cache_file, 'w') as f:
                 f.write("invalid json content")
             
-            with patch('workers.CACHE_DIR', temp_dir):
+            with patch('allium.lib.workers.CACHE_DIR', temp_dir):
                 with patch('builtins.print') as mock_print:
                     result = load_cache("onionoo_details")
                     
@@ -90,7 +87,7 @@ class TestWorkerStatusManagement:
     def test_worker_status_mark_ready_updates_state_correctly(self):
         """Test marking worker as ready and checking status"""
         with tempfile.TemporaryDirectory() as temp_dir:
-            with patch('workers.STATE_FILE', os.path.join(temp_dir, "state.json")):
+            with patch('allium.lib.workers.STATE_FILE', os.path.join(temp_dir, "state.json")):
                 mark_worker_ready("test_worker")
                 
                 status = get_worker_status("test_worker")
@@ -104,7 +101,7 @@ class TestWorkerStatusManagement:
         error_msg = "Network timeout"
         
         with tempfile.TemporaryDirectory() as temp_dir:
-            with patch('workers.STATE_FILE', os.path.join(temp_dir, "state.json")):
+            with patch('allium.lib.workers.STATE_FILE', os.path.join(temp_dir, "state.json")):
                 mark_worker_stale("test_worker", error_msg)
                 
                 status = get_worker_status("test_worker")
@@ -116,7 +113,7 @@ class TestWorkerStatusManagement:
     def test_worker_status_get_all_returns_complete_status_dictionary(self):
         """Test getting all worker statuses"""
         with tempfile.TemporaryDirectory() as temp_dir:
-            with patch('workers.STATE_FILE', os.path.join(temp_dir, "state.json")):
+            with patch('allium.lib.workers.STATE_FILE', os.path.join(temp_dir, "state.json")):
                 mark_worker_ready("worker1")
                 mark_worker_stale("worker2", "Error")
                 
@@ -130,7 +127,7 @@ class TestWorkerStatusManagement:
     def test_worker_status_get_returns_none_for_nonexistent_worker(self):
         """Test getting status for non-existent worker"""
         with tempfile.TemporaryDirectory() as temp_dir:
-            with patch('workers.STATE_FILE', os.path.join(temp_dir, "state.json")):
+            with patch('allium.lib.workers.STATE_FILE', os.path.join(temp_dir, "state.json")):
                 status = get_worker_status("nonexistent_worker")
                 assert status is None
     
@@ -139,7 +136,7 @@ class TestWorkerStatusManagement:
         with tempfile.TemporaryDirectory() as temp_dir:
             state_file = os.path.join(temp_dir, "state.json")
             
-            with patch('workers.STATE_FILE', state_file):
+            with patch('allium.lib.workers.STATE_FILE', state_file):
                 # Mark worker as ready
                 mark_worker_ready("persistent_worker")
                 
@@ -164,7 +161,7 @@ class TestWorkerTimestampManagement:
         test_timestamp = "Mon, 01 Jan 2024 12:00:00 GMT"
         
         with tempfile.TemporaryDirectory() as temp_dir:
-            with patch('workers.CACHE_DIR', temp_dir):
+            with patch('allium.lib.workers.CACHE_DIR', temp_dir):
                 write_timestamp("test_worker", test_timestamp)
                 
                 read_timestamp_value = read_timestamp("test_worker")
@@ -174,7 +171,7 @@ class TestWorkerTimestampManagement:
     def test_timestamp_read_returns_none_when_file_does_not_exist(self):
         """Test reading timestamp when file doesn't exist"""
         with tempfile.TemporaryDirectory() as temp_dir:
-            with patch('workers.CACHE_DIR', temp_dir):
+            with patch('allium.lib.workers.CACHE_DIR', temp_dir):
                 result = read_timestamp("nonexistent_worker")
                 assert result is None
 
@@ -191,16 +188,18 @@ class TestOnionooDetailsWorker:
         }
         
         with patch('urllib.request.urlopen') as mock_urlopen:
-            mock_response = MagicMock()
-            mock_response.read.return_value = json.dumps(mock_data).encode('utf-8')
-            mock_urlopen.return_value.__enter__.return_value = mock_response
-            
-            result = fetch_onionoo_details("http://test.url", progress=False)
-            
-            assert result is not None
-            assert isinstance(result, dict)
-            assert 'relays' in result
-            assert result['relays'][0]['nickname'] == 'TestRelay'
+            with patch('allium.lib.workers._load_cache') as mock_load_cache:
+                mock_load_cache.return_value = None  # No cached data
+                mock_response = MagicMock()
+                mock_response.read.return_value = json.dumps(mock_data).encode('utf-8')
+                mock_urlopen.return_value = mock_response
+                
+                result = fetch_onionoo_details("http://test.url", progress_logger=None)
+                
+                assert result is not None
+                assert isinstance(result, dict)
+                assert 'relays' in result
+                assert result['relays'][0]['nickname'] == 'TestRelay'
 
 
 class TestOnionooUptimeWorker:
@@ -215,14 +214,16 @@ class TestOnionooUptimeWorker:
         }
         
         with patch('urllib.request.urlopen') as mock_urlopen:
-            mock_response = MagicMock()
-            mock_response.read.return_value = json.dumps(mock_data).encode('utf-8')
-            mock_urlopen.return_value.__enter__.return_value = mock_response
-            
-            result = fetch_onionoo_uptime("http://test.url", progress=False)
-            
-            assert result is not None
-            assert isinstance(result, dict)
+            with patch('allium.lib.workers._load_cache') as mock_load_cache:
+                mock_load_cache.return_value = None  # No cached data
+                mock_response = MagicMock()
+                mock_response.read.return_value = json.dumps(mock_data).encode('utf-8')
+                mock_urlopen.return_value = mock_response
+                
+                result = fetch_onionoo_uptime("http://test.url", progress_logger=None)
+                
+                assert result is not None
+                assert isinstance(result, dict)
 
 
 def test_fetch_onionoo_uptime_success():
@@ -234,14 +235,16 @@ def test_fetch_onionoo_uptime_success():
     }
     
     with patch('urllib.request.urlopen') as mock_urlopen:
-        mock_response = MagicMock()
-        mock_response.read.return_value = json.dumps(mock_data).encode('utf-8')
-        mock_urlopen.return_value.__enter__.return_value = mock_response
-        
-        result = fetch_onionoo_uptime("http://test.url", progress=False)
-        
-        assert result is not None
-        assert isinstance(result, dict)
+        with patch('allium.lib.workers._load_cache') as mock_load_cache:
+            mock_load_cache.return_value = None  # No cached data
+            mock_response = MagicMock()
+            mock_response.read.return_value = json.dumps(mock_data).encode('utf-8')
+            mock_urlopen.return_value = mock_response
+            
+            result = fetch_onionoo_uptime("http://test.url", progress_logger=None)
+            
+            assert result is not None
+            assert isinstance(result, dict)
 
 
 def test_fetch_onionoo_uptime_network_error_with_cache_fallback():
@@ -250,7 +253,7 @@ def test_fetch_onionoo_uptime_network_error_with_cache_fallback():
     with patch('urllib.request.urlopen') as mock_urlopen:
         mock_urlopen.side_effect = urllib.error.URLError("Network error")
         
-        result = fetch_onionoo_uptime("http://test.url", progress=False)
+        result = fetch_onionoo_uptime("http://test.url", progress_logger=None)
         
         # Should handle gracefully (may return None or cached data)
         assert result is None or isinstance(result, dict)
@@ -262,7 +265,7 @@ def test_fetch_onionoo_uptime_network_error_no_cache():
     with patch('urllib.request.urlopen') as mock_urlopen:
         mock_urlopen.side_effect = urllib.error.URLError("Network error")
         
-        result = fetch_onionoo_uptime("http://test.url", progress=False)
+        result = fetch_onionoo_uptime("http://test.url", progress_logger=None)
         
         # Should handle gracefully
         assert result is None or isinstance(result, dict)
@@ -277,14 +280,16 @@ def test_fetch_onionoo_uptime_progress_steps():
     }
     
     with patch('urllib.request.urlopen') as mock_urlopen:
-        mock_response = MagicMock()
-        mock_response.read.return_value = json.dumps(mock_data).encode('utf-8')
-        mock_urlopen.return_value.__enter__.return_value = mock_response
-        
-        result = fetch_onionoo_uptime("http://test.url", progress=True)
-        
-        assert result is not None
-        assert isinstance(result, dict)
+        with patch('allium.lib.workers._load_cache') as mock_load_cache:
+            mock_load_cache.return_value = None  # No cached data
+            mock_response = MagicMock()
+            mock_response.read.return_value = json.dumps(mock_data).encode('utf-8')
+            mock_urlopen.return_value = mock_response
+            
+            result = fetch_onionoo_uptime("http://test.url", progress_logger=None)
+            
+            assert result is not None
+            assert isinstance(result, dict)
 
 
 class TestPlaceholderWorkers:
@@ -329,8 +334,8 @@ class TestDirectoryCreation:
                 os.rmdir(cache_dir)
             
             # Patch the directory constants
-            with patch('workers.CACHE_DIR', cache_dir):
-                with patch('workers.DATA_DIR', data_dir):
+            with patch('allium.lib.workers.CACHE_DIR', cache_dir):
+                with patch('allium.lib.workers.DATA_DIR', data_dir):
                     # Create the cache directory since save_cache expects it to exist
                     os.makedirs(cache_dir, exist_ok=True)
                     # Manually trigger directory creation by calling the function that creates them

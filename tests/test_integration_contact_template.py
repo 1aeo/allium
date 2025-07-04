@@ -450,7 +450,7 @@ class TestContactTemplateIntegration(unittest.TestCase):
         context_mixed_flags['contact_display_data']['flag_analysis'] = {
             'has_flag_data': True,
             'flag_reliabilities': {
-                'Exit': {
+            'Exit': {
                     'icon': '🚪',
                     'display_name': 'Exit Node',
                     'periods': {
