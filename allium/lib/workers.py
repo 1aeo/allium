@@ -31,25 +31,28 @@ _state_lock = threading.Lock()
 _worker_status = {}
 
 
-@handle_file_io_errors("save cache", context="")
+# Use centralized file I/O utilities
+from .file_io_utils import create_cache_manager, create_timestamp_manager, create_state_manager
+
+# Initialize file managers
+_cache_manager = create_cache_manager(CACHE_DIR)
+_timestamp_manager = create_timestamp_manager(CACHE_DIR)
+_state_manager = create_state_manager(STATE_FILE)
+
 def _save_cache(api_name, data):
     """
-    Save API data to cache file
+    Save API data to cache file using centralized cache manager.
     
     Args:
         api_name: Name of the API (e.g., 'onionoo_details')
         data: Data to cache (will be JSON serialized)
     """
-    cache_file = os.path.join(CACHE_DIR, f"{api_name}.json")
-    with open(cache_file, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
+    return _cache_manager.save_cache(api_name, data)
 
 
-@handle_file_io_errors("load cache", context="")
-@handle_json_errors("parse cached JSON", default_return=None)
 def _load_cache(api_name):
     """
-    Load API data from cache file
+    Load API data from cache file using centralized cache manager.
     
     Args:
         api_name: Name of the API (e.g., 'onionoo_details')
@@ -57,11 +60,7 @@ def _load_cache(api_name):
     Returns:
         Cached data or None if not available
     """
-    cache_file = os.path.join(CACHE_DIR, f"{api_name}.json")
-    if os.path.exists(cache_file):
-        with open(cache_file, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return None
+    return _cache_manager.load_cache(api_name)
 
 
 def _mark_ready(api_name):
@@ -149,21 +148,18 @@ def get_all_worker_status():
 @handle_file_io_errors("save timestamp", context="")
 def _write_timestamp(api_name, timestamp_str):
     """
-    Store encoded timestamp for conditional requests
+    Store encoded timestamp for conditional requests using centralized timestamp manager.
     
     Args:
         api_name: Name of the API
         timestamp_str: Formatted timestamp string
     """
-    timestamp_file = os.path.join(CACHE_DIR, f"{api_name}_timestamp.txt")
-    with open(timestamp_file, "w", encoding="utf-8") as f:
-        f.write(timestamp_str)
+    return _timestamp_manager.write_timestamp(api_name, timestamp_str)
 
 
-@handle_file_io_errors("read timestamp", context="")
 def _read_timestamp(api_name):
     """
-    Read stored timestamp for conditional requests
+    Read stored timestamp for conditional requests using centralized timestamp manager.
     
     Args:
         api_name: Name of the API
@@ -171,11 +167,7 @@ def _read_timestamp(api_name):
     Returns:
         str: Timestamp string or None if not available
     """
-    timestamp_file = os.path.join(CACHE_DIR, f"{api_name}_timestamp.txt")
-    if os.path.exists(timestamp_file):
-        with open(timestamp_file, "r", encoding="utf-8") as f:
-            return f.read().strip()
-    return None
+    return _timestamp_manager.read_timestamp(api_name)
 
 
 @handle_http_errors("onionoo details", _load_cache, _save_cache, _mark_ready, _mark_stale, 
