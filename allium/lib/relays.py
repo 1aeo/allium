@@ -1000,8 +1000,15 @@ class Relays:
 
         if k == "as":
             self.json["sorted"][k][v]["country"] = relay.get("country")
-            self.json["sorted"][k][v]["country_name"] = relay.get("country")
+            self.json["sorted"][k][v]["country_name"] = relay.get("country_name") or relay.get("country", "").upper()
             self.json["sorted"][k][v]["as_name"] = relay.get("as_name")
+        
+        if k == "country":
+            # Set country name for countries - truncate to 32 characters as requested
+            full_country_name = relay.get("country_name") or relay.get("country", "").upper()
+            truncated_country_name = full_country_name[:32] if len(full_country_name) > 32 else full_country_name
+            self.json["sorted"][k][v]["country_name"] = truncated_country_name
+            self.json["sorted"][k][v]["country_name_full"] = full_country_name
 
         if k == "family" or k == "contact" or k == "country" or k == "platform" or k == "as":
             # Families, contacts, countries, platforms, and networks benefit from additional tracking data:
