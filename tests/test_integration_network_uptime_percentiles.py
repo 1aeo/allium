@@ -58,7 +58,9 @@ class TestNetworkUptimePercentilesIntegration(unittest.TestCase):
                 {
                     "fingerprint": f"AAAA{i:016X}",
                     "uptime": {
-                        "6_months": [85.0 + i * 0.1 for _ in range(35)]  # 35+ values required
+                        "6_months": {
+                            "values": [85.0 + i * 0.1 for _ in range(35)]  # 35+ values required
+                        }
                     }
                 }
                 for i in range(103)
@@ -136,7 +138,6 @@ class TestNetworkUptimePercentilesIntegration(unittest.TestCase):
             progress=False
         )
         # Don't set uptime_data
-        
         # Should not crash
         try:
             relays._reprocess_uptime_data()

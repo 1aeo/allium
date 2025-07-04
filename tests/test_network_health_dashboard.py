@@ -76,7 +76,7 @@ class TestNetworkHealthDashboard(unittest.TestCase):
         self.assertIn('relays_total', health_data)
         self.assertIn('exit_count', health_data)
         self.assertIn('guard_count', health_data)
-        
+
     def test_ipv6_operator_tracking_fix(self):
         """Test that IPv6 operator tracking uses correct field name"""
         relays_obj = Relays(
@@ -120,7 +120,7 @@ class TestNetworkHealthDashboard(unittest.TestCase):
         # Test with unrestricted exit
         unrestricted_relay = self.sample_relay_data['relays'][0].copy()
         unrestricted_relay['exit_policy'] = ['accept *:*']
-    
+
         relays_obj = Relays(
             output_dir="/tmp/test", 
             onionoo_url="http://test.url", 
@@ -135,7 +135,7 @@ class TestNetworkHealthDashboard(unittest.TestCase):
         self.assertIn('unrestricted_exits', health_data)
         self.assertIn('restricted_exits', health_data)
         self.assertIn('web_traffic_exits', health_data)
-        
+
     def test_cw_bw_ratio_calculations(self):
         """Test CW/BW ratio calculations"""
         relays_obj = Relays(

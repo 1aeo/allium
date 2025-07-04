@@ -1,10 +1,21 @@
+/* ---------- 0. EXAMPLE SOURCE FILES ---------- */
+-- Consensus file: 2025-06-28-20-00-00-consensus https://collector.torproject.org/recent/relay-descriptors/consensuses/2025-06-28-20-00-00-consensus
+-- Vote file: vote-<authority>-2025-06-28-20-00-00
+    -- moria: https://collector.torproject.org/recent/relay-descriptors/votes/2025-06-28-20-00-00-vote-F533C81CEF0BC0267857C99B2F471ADF249FA232-F7A2D7D9F52137D155EE84C1AF0B6BC34A6B509B
+    -- gabelmoo: https://collector.torproject.org/recent/relay-descriptors/votes/2025-06-28-20-00-00-vote-F533C81CEF0BC0267857C99B2F471ADF249FA232-F7A2D7D9F52137D155EE84C1AF0B6BC34A6B509B
+-- Server descriptor file: 2025-06-28-08-22-37-server-descriptors https://collector.torproject.org/recent/relay-descriptors/server-descriptors/2025-06-28-08-22-37-server-descriptors
+-- Bandwidth file: 2025-06-28-19-51-50-bandwidth-<digest>
+    -- Example 1: https://collector.torproject.org/recent/relay-descriptors/bandwidths/2025-06-28-19-41-01-bandwidth-89C7C210312ECB21F74C0D6DCB83FC5119D67F5DE95A268D8B0AF934D843E42D
+    -- maatuska: https://collector.torproject.org/recent/relay-descriptors/bandwidths/2025-06-28-19-51-50-bandwidth-765440120D06D9039E265D11DE45F98ACF665F89F68F1B0B4EF11CE7777EB609
+-- Extra-info file: 2025-06-28-08-22-37-extra-infos https://collector.torproject.org/recent/relay-descriptors/extra-infos/2025-06-28-08-22-37-extra-infos
+
 /* ----------  1. FILE‑LEVEL METADATA  ---------- */
 CREATE TABLE file_meta
 (
     file_name         String
         COMMENT 'Filename | filename | any',
     file_type         Enum8('consensus'=1,'vote'=2,'server_desc'=3,
-                            'bandwidth'=4,'extra_info'=5)
+                            'bandwidth'=4,'extra_info'=5,'microdesc'=6)
         COMMENT 'File category | file_type | any',
     file_timestamp    DateTime
         COMMENT 'Timestamp in filename | file-timestamp | any',
@@ -15,32 +26,58 @@ CREATE TABLE file_meta
     raw_size_bytes    UInt32
         COMMENT 'Uncompressed size | file-size | any',
 
-    /* header fields —— stored sparsely (only for relevant file types) */
-    header_valid_after DateTime
-        COMMENT 'Valid-after | valid-after | consensus/vote',
-    header_fresh_until Nullable(DateTime)
-        COMMENT 'Fresh-until | fresh-until | consensus/vote',
-    header_valid_until Nullable(DateTime)
-        COMMENT 'Valid-until | valid-until | consensus/vote',
-    header_consensus_method Nullable(UInt8)
-        COMMENT 'Consensus method | consensus-method | consensus/vote',
-    header_consensus_methods Array(UInt8)
-        COMMENT 'Supported methods | consensus-methods | consensus/vote',
-    header_client_versions Nullable(String)
+    /* ===== CONSENSUS HEADERS ===== */
+    consensus_header_valid_after   Nullable(DateTime)
+        COMMENT 'Valid-after | valid-after | consensus',
+    consensus_header_fresh_until   Nullable(DateTime)
+        COMMENT 'Fresh-until | fresh-until | consensus',
+    consensus_header_valid_until   Nullable(DateTime)
+        COMMENT 'Valid-until | valid-until | consensus',
+    consensus_header_consensus_method Nullable(UInt8)
+        COMMENT 'Consensus method | consensus-method | consensus',
+    consensus_header_consensus_methods Array(UInt8)
+        COMMENT 'Supported methods | consensus-methods | consensus',
+    consensus_header_client_versions Nullable(String)
         COMMENT 'Client versions line | client-versions | consensus',
-    header_server_versions Nullable(String)
+    consensus_header_server_versions Nullable(String)
         COMMENT 'Server versions line | server-versions | consensus',
-    header_params        Nullable(String)
+    consensus_header_params        Nullable(String)
         COMMENT 'Params line | params | consensus',
+
+    /* ===== VOTE HEADERS ===== */
+    vote_header_valid_after   Nullable(DateTime)
+        COMMENT 'Valid-after | valid-after | vote',
+    vote_header_fresh_until   Nullable(DateTime)
+        COMMENT 'Fresh-until | fresh-until | vote',
+    vote_header_valid_until   Nullable(DateTime)
+        COMMENT 'Valid-until | valid-until | vote',
+    vote_header_consensus_method Nullable(UInt8)
+        COMMENT 'Consensus method | consensus-method | vote',
+    vote_header_consensus_methods Array(UInt8)
+        COMMENT 'Supported methods | consensus-methods | vote',
+
+    /* ===== ESSENTIAL BANDWIDTH HEADERS ===== */
+    bandwidth_header_version           Nullable(String)
+        COMMENT 'File format version | version | bandwidth',
+    bandwidth_header_scanner_country   Nullable(FixedString(2))
+        COMMENT 'Scanner country | scanner_country | bandwidth',
+    bandwidth_header_software          Nullable(String)
+        COMMENT 'Scanner software | software | bandwidth',
+    bandwidth_header_software_version  Nullable(String)
+        COMMENT 'Scanner version | software_version | bandwidth',
+    bandwidth_header_file_created      Nullable(DateTime)
+        COMMENT 'File created | file_created | bandwidth',
+
     ingestion_time      DateTime DEFAULT now()
         COMMENT 'Metadata ingest time | ingest_time | system',
 
     PRIMARY KEY (file_type, file_timestamp, file_name)
 )
-ENGINE = MergeTree
+ENGINE = MergeTree()
 PARTITION BY toYYYYMM(file_timestamp)
 ORDER BY (file_type, file_timestamp);
 -- JOIN ... USING(file_name) for look‑ups in relay_measurements, i.e. relay_measurements.consensus_source, vote_source, etc.
+-- JOIN relay_measurements ON relay_measurements.vote_source = file_meta.file_name to reach any of the header fields without duplicating them in every relay row.
 
 /* ---------- 2. DIMENSION LOOK‑UPS ---------- */
 
@@ -115,6 +152,10 @@ CREATE TABLE relay_measurements
       COMMENT 'Consensus method | consensus-method | 2025-06-28-20-00-00-consensus',
     consensus_nickname            LowCardinality(String)
       COMMENT 'Relay nickname | r <nickname> | 2025-06-28-20-00-00-consensus',
+    consensus_published_time      DateTime CODEC(DoubleDelta, ZSTD)
+      COMMENT 'Per-relay published time | r line timestamp | 2025-06-28-20-00-00-consensus',
+    descriptor_uptime_seconds     UInt32
+      COMMENT 'Uptime seconds | uptime | 2025-06-28-08-22-37-server-descriptors',
     consensus_ipv4_address       Nullable(IPv4)
       COMMENT 'IPv4 address | r <IP> | 2025-06-28-20-00-00-consensus',
     consensus_ipv6_address        Nullable(IPv6)
@@ -123,27 +164,66 @@ CREATE TABLE relay_measurements
       COMMENT 'OR port | r <OR port> | 2025-06-28-20-00-00-consensus',
     consensus_dir_port            UInt16
       COMMENT 'Dir port | r <Dir port> | 2025-06-28-20-00-00-consensus',
+    additional_or_addresses       Array(Tuple(
+                                      address IPv6,  -- Supports both IPv4 and IPv6
+                                      port UInt16
+                                  ))
+      COMMENT 'Additional OR addresses | or-address | 2025-06-28-08-22-37-server-descriptors',
     consensus_flags_mask           UInt32
       COMMENT 'Consensus flags mask | s <flags> | 2025-06-28-20-00-00-consensus',
     consensus_bandwidth           UInt32 CODEC(DoubleDelta, ZSTD)
       COMMENT 'Consensus bandwidth | Bandwidth | 2025-06-28-20-00-00-consensus',
     consensus_protocols           Map(String, String)
       COMMENT 'Protocol ranges | pr | 2025-06-28-20-00-00-consensus',
-    consensus_exit_policy_raw     String CODEC(ZSTD)
-      COMMENT 'Full exit policy | p | 2025-06-28-20-00-00-consensus',
-    consensus_exit_policy_summary String CODEC(ZSTD)
-      COMMENT 'Policy summary | p | 2025-06-28-20-00-00-consensus',
+    consensus_exit_policy         String CODEC(ZSTD)
+      COMMENT 'Exit policy | p | 2025-06-28-20-00-00-consensus',
+
+    -- === CONSENSUS METADATA ===
+    consensus_parameters          Map(String, String) CODEC(ZSTD)
+      COMMENT 'Consensus parameters | params | 2025-06-28-20-00-00-consensus',
+
+    -- === BANDWIDTH WEIGHTS ===
+    consensus_bandwidth_weight_Wgg          UInt32 CODEC(ZSTD)
+      COMMENT 'Guard-Guard weight | Wgg | 2025-06-28-20-00-00-consensus',
+    consensus_bandwidth_weight_Wgd          UInt32 CODEC(ZSTD)
+      COMMENT 'Guard-non-Guard weight | Wgd | 2025-06-28-20-00-00-consensus',
+    consensus_bandwidth_weight_Wmg          UInt32 CODEC(ZSTD)
+      COMMENT 'Middle-Guard weight | Wmg | 2025-06-28-20-00-00-consensus',
+    consensus_bandwidth_weight_Wmd          UInt32 CODEC(ZSTD)
+      COMMENT 'Middle-non-Guard weight | Wmd | 2025-06-28-20-00-00-consensus',
+    consensus_bandwidth_weight_Wee          UInt32 CODEC(ZSTD)
+      COMMENT 'Exit-Exit weight | Wee | 2025-06-28-20-00-00-consensus',
+    consensus_bandwidth_weight_Wed          UInt32 CODEC(ZSTD)
+      COMMENT 'Exit-non-Exit weight | Wed | 2025-06-28-20-00-00-consensus',
+    consensus_bandwidth_weight_Wme          UInt32 CODEC(ZSTD)
+      COMMENT 'Middle-Exit weight | Wme | 2025-06-28-20-00-00-consensus',
+    consensus_bandwidth_weight_Wmt          UInt32 CODEC(ZSTD)
+      COMMENT 'Middle weight | Wmt | 2025-06-28-20-00-00-consensus',
+    consensus_bandwidth_weight_Wtg          UInt32 CODEC(ZSTD)
+      COMMENT 'Guard throttling weight | Wtg | 2025-06-28-20-00-00-consensus',
+    consensus_bandwidth_weight_Wte          UInt32 CODEC(ZSTD)
+      COMMENT 'Exit throttling weight | Wte | 2025-06-28-20-00-00-consensus',
+    consensus_bandwidth_weight_Wtm          UInt32 CODEC(ZSTD)
+      COMMENT 'Middle throttling weight | Wtm | 2025-06-28-20-00-00-consensus',
+    consensus_bandwidth_weight_Wdb          UInt32 CODEC(ZSTD)
+      COMMENT 'Directory bandwidth weight | Wdb | 2025-06-28-20-00-00-consensus',
 
     -- === VOTES ===
     vote_by_auth Nested(
         vote_authority          LowCardinality(String)
             COMMENT 'Authority name | auth | vote',
+        vote_authority_fingerprint FixedString(40)
+            COMMENT 'Authority RSA fingerprint | fingerprint | vote',
         vote_flags_mask         UInt32
             COMMENT 'Vote flags mask | s <flags> | vote',
         vote_bw_reported        UInt32
             COMMENT 'Reported bandwidth | w Bandwidth | vote',
         vote_bw_measured        UInt32
             COMMENT 'Measured bandwidth | Measured | vote',
+        vote_unmeasured         UInt8
+            COMMENT 'Authority unmeasured flag | Unmeasured= | vote',
+        vote_exit_policy_summary String CODEC(ZSTD)
+            COMMENT 'Exit policy summary | p | vote',
         vote_stats_wfu          Float32
             COMMENT 'Weighted fraction uptime | stats wfu | vote',
         vote_stats_tk           UInt32
@@ -173,6 +253,10 @@ CREATE TABLE relay_measurements
       COMMENT 'Latest read history | read-history | 2025-06-28-08-22-37-extra-infos',
     extra_info_bandwidth_write    UInt64 CODEC(DoubleDelta, ZSTD)
       COMMENT 'Latest write history | write-history | 2025-06-28-08-22-37-extra-infos',
+    extra_info_ipv6_bandwidth_read  UInt64 CODEC(DoubleDelta, ZSTD)
+      COMMENT 'Latest IPv6 read | ipv6-read-history | 2025-06-28-08-22-37-extra-infos',
+    extra_info_ipv6_bandwidth_write UInt64 CODEC(DoubleDelta, ZSTD)
+      COMMENT 'Latest IPv6 write | ipv6-write-history | 2025-06-28-08-22-37-extra-infos',
 
     -- === BANDWIDTH FILE METRICS ===
     bandwidth_measured         UInt32 CODEC(DoubleDelta, ZSTD)
@@ -210,29 +294,33 @@ CREATE TABLE relay_measurements
     bandwidth_xoff_sent          UInt32
       COMMENT 'XOFF packets sent | xoff_sent | 2025-06-28-19-51-50-bandwidth-<digest>',
 
-    -- === UPTIME ===
-    descriptor_uptime_seconds     UInt32
-      COMMENT 'Uptime seconds | uptime | 2025-06-28-08-22-37-server-descriptors',
+    -- === RELAY STATUS ===
+    descriptor_overload_general   UInt8 DEFAULT 0
+      COMMENT 'General overload flag | overload-general | 2025-06-28-08-22-37-server-descriptors',
 
     -- === GEO & ASN ===
     geo_country_code              FixedString(2)
       COMMENT 'Country code | GeoLite2 country_iso_code | GeoLite2 DB',
     geo_as_number                 UInt32
       COMMENT 'ASN number | GeoLite2 autonomous_system_number | GeoLite2 DB',
+    geo_database_version          LowCardinality(String)
+      COMMENT 'GeoIP database version | system | GeoLite2 DB metadata',
+    geo_database_date             Date
+      COMMENT 'GeoIP database date | system | GeoLite2 DB metadata',
 
     -- === PLATFORM & VERSION ===
     descriptor_platform_raw       String CODEC(ZSTD)
       COMMENT 'Platform string | platform | 2025-06-28-08-22-37-server-descriptors',
+    descriptor_os_name            LowCardinality(String)
+      COMMENT 'Operating system | parsed from platform | 2025-06-28-08-22-37-server-descriptors',
     descriptor_tor_version        LowCardinality(String)
-      COMMENT 'Tor version | v | 2025-06-28-20-00-00-consensus & 2025-06-28-08-22-37-server-descriptors',
+      COMMENT 'Tor version | v | 2025-06-28-20-00-00-consensus',
 
     -- === CONTACT & FAMILY ===
     descriptor_contact_raw        String CODEC(ZSTD)
       COMMENT 'Contact info | contact | 2025-06-28-08-22-37-server-descriptors',
     descriptor_declared_family_list Array(FixedString(20))
       COMMENT 'Declared family | family | 2025-06-28-08-22-37-server-descriptors',
-
-    -- === AROI DOMAIN ===
     ingest_AROI_domain            LowCardinality(String)
       COMMENT 'AROI domain parsed | AROI_domain | parsed from contact',
 
@@ -267,7 +355,8 @@ CREATE TABLE relay_measurements
     INDEX idx_country (geo_country_code) TYPE minmax GRANULARITY 4,
     INDEX idx_flags (consensus_flags_mask) TYPE bloom_filter GRANULARITY 4,
     INDEX idx_bandwidth (consensus_bandwidth) TYPE minmax GRANULARITY 4,
-    INDEX idx_nickname (consensus_nickname) TYPE bloom_filter GRANULARITY 4
+    INDEX idx_nickname (consensus_nickname) TYPE bloom_filter GRANULARITY 4,
+    INDEX idx_os_name (descriptor_os_name) TYPE bloom_filter GRANULARITY 4
 )
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(ingest_measurement_time)
@@ -276,3 +365,71 @@ PRIMARY KEY (descriptor_fingerprint, ingest_measurement_time)
 -- TTL removed to retain all historical data
     -- TTL ingest_measurement_time + INTERVAL 5 YEAR
 SETTINGS index_granularity = 8192;
+
+
+/*  ----------  4. SIDE-TABLES -------------------------- */
+/* ----------- 4.1 DIRECTORY‑REQUEST STATS – FULL  ----------  */
+CREATE TABLE relay_dirreq_stats
+(
+    ingest_measurement_time DateTime
+        COMMENT 'Snapshot ingestion time | measurement_time | system',
+
+    descriptor_fingerprint FixedString(20)
+        COMMENT 'Relay fingerprint | fingerprint | server-descriptor',
+
+    -- ==================  24‑h HISTORY  ==================
+    dirreq_write_history Array(UInt64) CODEC(ZSTD)
+        COMMENT 'Write hist bytes | dirreq-write-history | extra-info',
+    dirreq_read_history  Array(UInt64) CODEC(ZSTD)
+        COMMENT 'Read hist bytes  | dirreq-read-history  | extra-info',
+
+    -- ===========  COUNTS BY COUNTRY (maps) ==============
+    dirreq_v2_ips  Map(String, UInt32)
+        COMMENT 'v2 IPs by CC   | dirreq-v2-ips  | extra-info',
+    dirreq_v3_ips  Map(String, UInt32)
+        COMMENT 'v3 IPs by CC   | dirreq-v3-ips  | extra-info',
+    dirreq_v2_reqs Map(String, UInt32)
+        COMMENT 'v2 requests CC | dirreq-v2-reqs | extra-info',
+    dirreq_v3_reqs Map(String, UInt32)
+        COMMENT 'v3 requests CC | dirreq-v3-reqs | extra-info',
+
+    -- ============  RESPONSE HISTOGRAMS  =================
+    dirreq_v2_resp Map(String, UInt32)
+        COMMENT 'v2 response map | dirreq-v2-resp | extra-info',
+    dirreq_v3_resp Map(String, UInt32)
+        COMMENT 'v3 response map | dirreq-v3-resp | extra-info',
+
+    -- ============  DOWNLOAD OUTCOMES  ===================
+    dirreq_v2_direct_dl    Map(String, UInt32)
+        COMMENT 'v2 direct DL   | dirreq-v2-direct-dl    | extra-info',
+    dirreq_v2_tunneled_dl  Map(String, UInt32)
+        COMMENT 'v2 tunneled DL | dirreq-v2-tunneled-dl  | extra-info',
+    dirreq_v3_direct_dl    Map(String, UInt32)
+        COMMENT 'v3 direct DL   | dirreq-v3-direct-dl    | extra-info',
+    dirreq_v3_tunneled_dl  Map(String, UInt32)
+        COMMENT 'v3 tunneled DL | dirreq-v3-tunneled-dl  | extra-info',
+
+    -- === INDEXES ===
+    INDEX idx_time (ingest_measurement_time) TYPE minmax GRANULARITY 4
+)
+ENGINE = MergeTree()
+PARTITION BY toYYYYMM(ingest_measurement_time)
+ORDER BY (descriptor_fingerprint, ingest_measurement_time)
+PRIMARY KEY (descriptor_fingerprint, ingest_measurement_time);
+
+/*
+-- HOW TO JOIN WITH relay_measurements:
+
+SELECT
+    m.consensus_valid_after,
+    sum(d.dirreq_v3_resp['ok'])        AS v3_ok,
+    sum(d.dirreq_v3_resp['not-modified']) AS v3_notmod,
+    quantile(0.5)(arrayElement(d.dirreq_write_history, 5)) AS median_v4_bytes
+FROM relay_measurements AS m
+INNER JOIN relay_dirreq_stats d
+  ON  m.descriptor_fingerprint   = d.descriptor_fingerprint
+  AND m.ingest_measurement_time  = d.ingest_measurement_time
+WHERE m.consensus_valid_after >= today() - INTERVAL 30 DAY
+GROUP BY m.consensus_valid_after
+ORDER BY m.consensus_valid_after;
+*/
