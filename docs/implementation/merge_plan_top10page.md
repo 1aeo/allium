@@ -30,7 +30,7 @@ The `top10page` branch introduces a comprehensive pagination system for AROI lea
 - **Enhanced macros**: `allium/templates/aroi_macros.html` (+497 lines)
 - **Leaderboard improvements**: `allium/templates/aroi-leaderboards.html` (394 changes)
 - **Skeleton updates**: `allium/templates/skeleton.html` (+141 lines)
-- **Test page**: `allium/test_pagination.html` (new file, 133 lines)
+- **Test page**: `tests/manual/test_pagination.html` (new file, 133 lines)
 
 ### 3. Backend Optimizations
 - **Intelligence engine**: Enhanced logic in `allium/lib/intelligence_engine.py`

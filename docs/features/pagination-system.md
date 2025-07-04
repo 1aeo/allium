@@ -158,7 +158,7 @@ Use the included test file for manual validation:
 
 ```bash
 # Open test file in browser
-open allium/test_pagination.html
+open tests/manual/test_pagination.html
 
 # Test independent pagination behavior:
 # 1. Initially both categories show page 1-10
@@ -212,7 +212,7 @@ open allium/test_pagination.html
 
 ### **Test Files**
 - **`tests/test_aroi_pagination_system.py`** - Comprehensive pagination tests
-- **`allium/test_pagination.html`** - Manual testing interface
+- **`tests/manual/test_pagination.html`** - Manual testing interface
 
 ### **Documentation**
 - **`docs/features/aroi-leaderboard/README.md`** - AROI system overview with pagination

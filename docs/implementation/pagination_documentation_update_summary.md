@@ -149,7 +149,7 @@ python -m pytest tests/ -v
 ### **Manual Testing:**
 ```bash
 # Test pagination behavior in browser
-open allium/test_pagination.html
+open tests/manual/test_pagination.html
 
 # Generate site and test live pagination
 cd allium && python3 allium.py --progress
@@ -177,7 +177,7 @@ cd www && python3 -m http.server 8000
 - `allium/templates/aroi-leaderboards.html` - Main pagination template
 - `allium/templates/aroi_macros.html` - Pagination macros
 - `allium/templates/skeleton.html` - CSS framework
-- `allium/test_pagination.html` - Manual testing interface
+- `tests/manual/test_pagination.html` - Manual testing interface
 
 ### **Documentation:**
 - `README.md` - Main project documentation  
