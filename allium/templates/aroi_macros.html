@@ -899,3 +899,92 @@
         </table>
     </div>
 {% endmacro %} 
+
+{# Universal Pagination Section Macro - Eliminates 12x duplicate pagination blocks in aroi-leaderboards.html #}
+{# This macro creates the standard 3-section pagination pattern (1-10, 11-20, 21-25) used throughout the template #}
+{% macro pagination_section(category_key, emoji, category_data, table_macro_name, page_ctx, use_bits=false) %}
+    {% if category_data %}
+    
+    <!-- Page 1: Ranks 1-10 -->
+    <div id="{{ category_key }}-1-10" class="pagination-section">
+        <h4>{{ emoji }} Ranks 1-10</h4>
+        {% if table_macro_name == 'bandwidth_table_complete' %}
+            {{ bandwidth_table_complete(category_data[:10], use_bits, page_ctx) }}
+        {% elif table_macro_name == 'consensus_weight_table_complete' %}
+            {{ consensus_weight_table_complete(category_data[:10], use_bits, page_ctx) }}
+        {% elif table_macro_name == 'exit_authority_table_complete' %}
+            {{ exit_authority_table_complete(category_data[:10], use_bits, page_ctx) }}
+        {% elif table_macro_name == 'guard_authority_table_complete' %}
+            {{ guard_authority_table_complete(category_data[:10], use_bits, page_ctx) }}
+        {% elif table_macro_name == 'exit_operators_table_complete' %}
+            {{ exit_operators_table_complete(category_data[:10], use_bits, page_ctx) }}
+        {% elif table_macro_name == 'guard_operators_table_complete' %}
+            {{ guard_operators_table_complete(category_data[:10], use_bits, page_ctx) }}
+        {% elif table_macro_name == 'generic_ranking_table_paginated' %}
+            {{ generic_ranking_table_paginated(category_key, category_data[:10], page_ctx, use_bits) }}
+        {% elif table_macro_name == 'ipv4_ipv6_table_paginated' %}
+            {{ ipv4_ipv6_table_paginated(category_key, category_data[:10], page_ctx, use_bits) }}
+        {% endif %}
+    </div>
+    
+    <!-- Page 2: Ranks 11-20 (only show if data exists) -->
+    {% if category_data|length > 10 %}
+    <div id="{{ category_key }}-11-20" class="pagination-section">
+        <h4>{{ emoji }} Ranks 11-20</h4>
+        {% if table_macro_name == 'bandwidth_table_complete' %}
+            {{ bandwidth_table_complete(category_data[10:20], use_bits, page_ctx) }}
+        {% elif table_macro_name == 'consensus_weight_table_complete' %}
+            {{ consensus_weight_table_complete(category_data[10:20], use_bits, page_ctx) }}
+        {% elif table_macro_name == 'exit_authority_table_complete' %}
+            {{ exit_authority_table_complete(category_data[10:20], use_bits, page_ctx) }}
+        {% elif table_macro_name == 'guard_authority_table_complete' %}
+            {{ guard_authority_table_complete(category_data[10:20], use_bits, page_ctx) }}
+        {% elif table_macro_name == 'exit_operators_table_complete' %}
+            {{ exit_operators_table_complete(category_data[10:20], use_bits, page_ctx) }}
+        {% elif table_macro_name == 'guard_operators_table_complete' %}
+            {{ guard_operators_table_complete(category_data[10:20], use_bits, page_ctx) }}
+        {% elif table_macro_name == 'generic_ranking_table_paginated' %}
+            {{ generic_ranking_table_paginated(category_key, category_data[10:20], page_ctx, use_bits) }}
+        {% elif table_macro_name == 'ipv4_ipv6_table_paginated' %}
+            {{ ipv4_ipv6_table_paginated(category_key, category_data[10:20], page_ctx, use_bits) }}
+        {% endif %}
+    </div>
+    {% endif %}
+    
+    <!-- Page 3: Ranks 21-25 (only show if data exists) -->
+    {% if category_data|length > 20 %}
+    <div id="{{ category_key }}-21-25" class="pagination-section">
+        <h4>{{ emoji }} Ranks 21-25</h4>
+        {% if table_macro_name == 'bandwidth_table_complete' %}
+            {{ bandwidth_table_complete(category_data[20:25], use_bits, page_ctx) }}
+        {% elif table_macro_name == 'consensus_weight_table_complete' %}
+            {{ consensus_weight_table_complete(category_data[20:25], use_bits, page_ctx) }}
+        {% elif table_macro_name == 'exit_authority_table_complete' %}
+            {{ exit_authority_table_complete(category_data[20:25], use_bits, page_ctx) }}
+        {% elif table_macro_name == 'guard_authority_table_complete' %}
+            {{ guard_authority_table_complete(category_data[20:25], use_bits, page_ctx) }}
+        {% elif table_macro_name == 'exit_operators_table_complete' %}
+            {{ exit_operators_table_complete(category_data[20:25], use_bits, page_ctx) }}
+        {% elif table_macro_name == 'guard_operators_table_complete' %}
+            {{ guard_operators_table_complete(category_data[20:25], use_bits, page_ctx) }}
+        {% elif table_macro_name == 'generic_ranking_table_paginated' %}
+            {{ generic_ranking_table_paginated(category_key, category_data[20:25], page_ctx, use_bits) }}
+        {% elif table_macro_name == 'ipv4_ipv6_table_paginated' %}
+            {{ ipv4_ipv6_table_paginated(category_key, category_data[20:25], page_ctx, use_bits) }}
+        {% endif %}
+    </div>
+    {% endif %}
+    
+    <!-- Pagination Navigation (moved below tables) - only show links for pages with data -->
+    <div class="pagination-nav-bottom">
+        <a href="#{{ category_key }}-1-10">1-10</a>
+        {% if category_data|length > 10 %}<a href="#{{ category_key }}-11-20">11-20</a>{% endif %}
+        {% if category_data|length > 20 %}<a href="#{{ category_key }}-21-25">21-25</a>{% endif %}
+    </div>
+    
+    {% else %}
+    <div class="alert alert-warning">
+        <p>No data available for this category.</p>
+    </div>
+    {% endif %}
+{% endmacro %} 
