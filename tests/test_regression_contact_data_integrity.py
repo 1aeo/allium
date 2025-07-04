@@ -3,12 +3,9 @@
 import pytest
 import unittest
 from unittest.mock import Mock, patch, MagicMock
-import sys
-import os
 
-# Add the allium directory to Python path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-
+# Import consolidated test utilities
+from test_utils import TestDataFactory, TestSetupHelpers, TestPatchingHelpers
 from allium.lib.relays import Relays
 
 
@@ -17,42 +14,14 @@ class TestContactDataIntegrityRegression(unittest.TestCase):
     
     def setUp(self):
         """Set up test fixtures with realistic relay data."""
-        # Mock relay data for Relays constructor
-        mock_relay_data = {
-            'relays': [],
-            'sorted': {},
-            'network_totals': {
-                'total_relays': 0,
-                'guard_count': 0,
-                'middle_count': 0,
-                'exit_count': 0,
-                'measured_relays': 0,
-                'measured_percentage': 0.0,
-                'guard_consensus_weight': 0,
-                'middle_consensus_weight': 0,
-                'exit_consensus_weight': 0,
-                'total_consensus_weight': 0
-            }
-        }
-        
-        # Initialize Relays with required constructor arguments and mock methods
-        with patch.object(Relays, '_fix_missing_observed_bandwidth'), \
-             patch.object(Relays, '_sort_by_observed_bandwidth'), \
-             patch.object(Relays, '_trim_platform'), \
-             patch.object(Relays, '_add_hashed_contact'), \
-             patch.object(Relays, '_process_aroi_contacts'), \
-             patch.object(Relays, '_preprocess_template_data'), \
-             patch.object(Relays, '_categorize'), \
-             patch.object(Relays, '_generate_aroi_leaderboards'), \
-             patch.object(Relays, '_generate_smart_context'):
-            
-            self.relays = Relays(
-                output_dir='/tmp/test',
-                onionoo_url='https://test.example.com',
-                relay_data=mock_relay_data,
-                use_bits=False,
-                progress=False
-            )
+        # Use consolidated test utilities
+        self.relays = TestSetupHelpers.create_test_relays_instance(
+            output_dir='/tmp/test',
+            onionoo_url='https://test.example.com',
+            relay_data=TestDataFactory.create_minimal_relay_data(),
+            use_bits=False,
+            progress=False
+        )
         
         # Sample relay data that matches real-world structure
         self.sample_members = [

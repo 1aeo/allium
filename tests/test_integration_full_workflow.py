@@ -11,11 +11,13 @@ import urllib.error
 from unittest.mock import patch, MagicMock
 
 # Add the allium directory to Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'allium'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from lib.coordinator import Coordinator, create_relay_set_with_coordinator
-from lib.workers import fetch_onionoo_details, get_worker_status
-from lib.relays import Relays
+# Import consolidated test utilities
+from test_utils import TestDataFactory, TestPatchingHelpers
+from allium.lib.coordinator import Coordinator, create_relay_set_with_coordinator
+from allium.lib.workers import fetch_onionoo_details, get_worker_status
+from allium.lib.relays import Relays
 
 
 class TestFullIntegrationFlow:
@@ -66,9 +68,8 @@ class TestFullIntegrationFlow:
             "version": "1.0"
         }
         
-        # Mock HTTP response
-        mock_response = MagicMock()
-        mock_response.read.return_value = json.dumps(mock_onionoo_data).encode('utf-8')
+        # Use consolidated test utilities for mock HTTP response
+        mock_response = TestPatchingHelpers.create_mock_http_response(mock_onionoo_data)
         
         with tempfile.TemporaryDirectory() as temp_dir:
             output_dir = os.path.join(temp_dir, "output")
