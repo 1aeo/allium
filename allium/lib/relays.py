@@ -271,7 +271,7 @@ def determine_ipv6_support(or_addresses):
 class Relays:
     """Relay class consisting of processing routines and onionoo data"""
 
-    def __init__(self, output_dir, onionoo_url, relay_data, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=34):
+    def __init__(self, output_dir, onionoo_url, relay_data, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=34, filter_downtime_days=7):
         self.output_dir = output_dir
         self.onionoo_url = onionoo_url
         self.use_bits = use_bits
@@ -279,6 +279,7 @@ class Relays:
         self.start_time = start_time or time.time()
         self.progress_step = progress_step
         self.total_steps = total_steps
+        self.filter_downtime_days = filter_downtime_days
         self.ts_file = os.path.join(os.path.dirname(ABS_PATH), "timestamp")
         
         # Use provided relay data (fetched by coordinator)
@@ -289,7 +290,7 @@ class Relays:
         # Generate timestamp for compatibility - use centralized function
         self.timestamp = format_timestamp_gmt()
 
-        self._fix_missing_observed_bandwidth()
+        self._filter_and_fix_relays()
         self._sort_by_observed_bandwidth()
         self._trim_platform()
         self._add_hashed_contact()
@@ -334,20 +335,47 @@ class Relays:
                     # Fallback: use the original platform string
                     relay["platform"] = relay["platform_raw"]
 
-    def _fix_missing_observed_bandwidth(self):
-        """
-        Set the observed_bandwidth parameter value for any relay missing the
-        parameter to 0; the observed_bandwidth parameter is (apparently)
-        optional, I hadn't run into an instance of it missing until 2019-10-03
-
-        "[...] Missing if router descriptor containing this information cannot be
-        found."
-        --https://metrics.torproject.org/onionoo.html#details_relay_observed_bandwidth
-
-        """
-        for idx, relay in enumerate(self.json["relays"]):
+    def _filter_and_fix_relays(self):
+        """Filter relays by downtime and fix missing bandwidth - single efficient pass"""
+        if not self.json or 'relays' not in self.json:
+            return
+        
+        original_count = len(self.json["relays"])
+        
+        # Early exit if filtering disabled - just fix bandwidth
+        if self.filter_downtime_days <= 0:
+            for relay in self.json["relays"]:
+                if not relay.get("observed_bandwidth"):
+                    relay["observed_bandwidth"] = 0
+            return
+        
+        # Combined filtering + bandwidth fix - single pass
+        cutoff_time = datetime.utcnow() - timedelta(days=self.filter_downtime_days)
+        
+        def should_keep_relay(relay):
+            # Fix bandwidth while we're processing
             if not relay.get("observed_bandwidth"):
-                self.json["relays"][idx]["observed_bandwidth"] = 0
+                relay["observed_bandwidth"] = 0
+            
+            # Keep if running
+            if relay.get('running', False):
+                return True
+            
+            # For offline relays, check last_seen
+            last_seen = relay.get('last_seen')
+            if not last_seen:
+                return False  # No last_seen data
+            
+            last_seen_dt = parse_onionoo_timestamp(last_seen)
+            return last_seen_dt and last_seen_dt.replace(tzinfo=None) >= cutoff_time
+        
+        # Filter in-place
+        self.json["relays"] = [r for r in self.json["relays"] if should_keep_relay(r)]
+        
+        # Log if relays were filtered
+        excluded_count = original_count - len(self.json["relays"])
+        if excluded_count > 0 and self.progress:
+            self._log_progress(f"Filtered out {excluded_count} relays with downtime > {self.filter_downtime_days} days")
 
     def _simple_aroi_parsing(self, contact):
         """

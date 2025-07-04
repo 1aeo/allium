@@ -23,7 +23,7 @@ class Coordinator:
     Phase 2: Multiple API support with incremental rendering.
     """
     
-    def __init__(self, output_dir, onionoo_details_url, onionoo_uptime_url, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=34, enabled_apis='all'):
+    def __init__(self, output_dir, onionoo_details_url, onionoo_uptime_url, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=34, enabled_apis='all', filter_downtime_days=7):
         self.output_dir = output_dir
         self.onionoo_details_url = onionoo_details_url
         self.onionoo_uptime_url = onionoo_uptime_url
@@ -33,6 +33,7 @@ class Coordinator:
         self.progress_step = progress_step
         self.total_steps = total_steps
         self.enabled_apis = enabled_apis
+        self.filter_downtime_days = filter_downtime_days
         
         # Worker management
         self.workers = {}
@@ -201,7 +202,8 @@ class Coordinator:
             progress=self.progress,
             start_time=self.start_time,
             progress_step=self.progress_step,
-            total_steps=self.total_steps
+            total_steps=self.total_steps,
+            filter_downtime_days=self.filter_downtime_days
         )
         
         if relay_set.json is None:
@@ -258,7 +260,7 @@ class Coordinator:
 
 
 # For backwards compatibility, provide a simple function that mimics the original Relays constructor
-def create_relay_set_with_coordinator(output_dir, onionoo_details_url, onionoo_uptime_url, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=34, enabled_apis='all'):
+def create_relay_set_with_coordinator(output_dir, onionoo_details_url, onionoo_uptime_url, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=34, enabled_apis='all', filter_downtime_days=7):
     """
     Create a relay set using the coordinator system.
     Phase 2: Support for multiple APIs with threading.
@@ -276,7 +278,8 @@ def create_relay_set_with_coordinator(output_dir, onionoo_details_url, onionoo_u
         start_time=start_time,
         progress_step=progress_step,
         total_steps=total_steps,
-        enabled_apis=enabled_apis
+        enabled_apis=enabled_apis,
+        filter_downtime_days=filter_downtime_days
     )
     
     return coordinator.get_relay_set() 

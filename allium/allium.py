@@ -170,6 +170,14 @@ if __name__ == "__main__":
         ),
         required=False,
     )
+    parser.add_argument(
+        "--filter-downtime",
+        dest="filter_downtime_days",
+        type=int,
+        default=7,
+        help="filter out relays offline for more than N days (default: 7, use 0 to disable)",
+        required=False,
+    )
     args = parser.parse_args()
 
     start_time = time.time()
@@ -201,7 +209,7 @@ if __name__ == "__main__":
     progress_step = log_step_progress("Initializing relay data from onionoo (using coordinator)...", start_time, progress_step, total_steps, args.progress)
     
     try:
-        RELAY_SET = create_relay_set_with_coordinator(args.output_dir, args.onionoo_details_url, args.onionoo_uptime_url, args.bandwidth_units == 'bits', args.progress, start_time, progress_step, total_steps, args.enabled_apis)
+        RELAY_SET = create_relay_set_with_coordinator(args.output_dir, args.onionoo_details_url, args.onionoo_uptime_url, args.bandwidth_units == 'bits', args.progress, start_time, progress_step, total_steps, args.enabled_apis, args.filter_downtime_days)
         if RELAY_SET is None or RELAY_SET.json == None:
             # Progress-style error context message (conditional on progress flag)
             progress_step = log_step_progress("No onionoo data available, exiting gracefully", start_time, progress_step, total_steps, args.progress)
