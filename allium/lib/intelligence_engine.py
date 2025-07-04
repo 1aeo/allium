@@ -159,12 +159,16 @@ class IntelligenceEngine:
     
     def _layer1_basic_relationships(self):
         """Layer 1: Basic counts using existing sorted data"""
+        # OPTIMIZED: Reuse cached unique families count from family_statistics
+        # This eliminates duplicate deduplication loops for better performance
+        unique_families_count = self.family_stats.get('unique_families_count', 0)
+        
         return {
             'template_optimized': {
                 'total_countries': len(self.sorted_data.get('country', {})),
                 'total_networks': len(self.sorted_data.get('as', {})),
                 'total_operators': len(self.sorted_data.get('contact', {})),
-                'total_families': len(self.sorted_data.get('family', {})),
+                'total_families': unique_families_count,
                 'total_platforms': len(self.sorted_data.get('platform', {}))
             }
         }

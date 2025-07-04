@@ -314,7 +314,7 @@ Network Health Dashboard
                 </div>
                 <!-- Family Row -->
                 <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
-                    <div class="metric-item" title="Total number of relay families - groups of relays operated by the same entity.">
+                    <div class="metric-item" title="Total number of unique relay families - distinct groups of relays operated by the same entity.">
                         <span class="metric-value"><a href="{{ page_ctx.path_prefix }}misc/families-by-bandwidth.html" style="color: inherit; text-decoration: none;">{{ "{:,}".format(relays.json.network_health.families_count) }}</a></span>
                         <span class="metric-label">Total Families</span>
                     </div>
