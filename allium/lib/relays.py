@@ -1722,6 +1722,15 @@ class Relays:
                 # Get primary country data for this contact
                 primary_country_data = i.get("primary_country_data")
             
+            # Add family-specific data for family templates (used by detail_summary macro)
+            family_aroi_domain = None
+            family_contact = None
+            family_contact_md5 = None
+            if k == "family":
+                family_aroi_domain = i.get("aroi_domain", "")
+                family_contact = i.get("contact", "")
+                family_contact_md5 = i.get("contact_md5", "")
+            
             # Time the template rendering
             render_start = time.time()
             rendered = template.render(
@@ -1748,6 +1757,10 @@ class Relays:
                 operator_reliability=operator_reliability,  # Operator reliability statistics for contact pages
                 contact_display_data=contact_display_data,  # Pre-computed contact-specific display data
                 primary_country_data=primary_country_data,  # Primary country data for contact pages
+                # Family-specific data for detail_summary macro in family templates
+                family_aroi_domain=family_aroi_domain,  # AROI domain for family pages
+                family_contact=family_contact,  # Contact string for family pages
+                family_contact_md5=family_contact_md5,  # Contact MD5 hash for family pages
                 # Template optimizations - pre-computed values to avoid expensive Jinja2 operations for all page types
                 consensus_weight_percentage=f"{i['consensus_weight_fraction'] * 100:.2f}%",
                 guard_consensus_weight_percentage=f"{i['guard_consensus_weight_fraction'] * 100:.2f}%",

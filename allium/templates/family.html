@@ -1,7 +1,7 @@
-{% extends "relay-list.html" %}
+{% extends "contact-relay-list.html" %}
 {% from "macros.html" import navigation, detail_summary %}
 {% set family_hash = key %}
-{% set family_aroi = relays.json['relay_subset'][0]['aroi_domain'] if relays.json['relay_subset'] and relays.json['relay_subset'][0].get('aroi_domain') else '' %}
+{% set family_aroi = family_aroi_domain if family_aroi_domain else '' %}
 {% block title %}Tor Relays :: Family {{ family_hash }}{% endblock %}
 {% block header %}
     {% if family_aroi and family_aroi != 'none' and family_aroi != '' -%}
@@ -14,4 +14,4 @@
 {{ navigation('families', page_ctx) }}
 {% endblock -%}
 {% block description %}Relays with effective family member <code>{{ value|escape }}</code> summary:
-{{ detail_summary(bandwidth, bandwidth_unit, guard_bandwidth, middle_bandwidth, exit_bandwidth, consensus_weight_fraction, guard_consensus_weight_fraction, middle_consensus_weight_fraction, exit_consensus_weight_fraction, guard_count, middle_count, exit_count, relays.json['relay_subset']|length, network_position) }}{% endblock %}
+{{ detail_summary(bandwidth, bandwidth_unit, guard_bandwidth, middle_bandwidth, exit_bandwidth, consensus_weight_fraction, guard_consensus_weight_fraction, middle_consensus_weight_fraction, exit_consensus_weight_fraction, guard_count, middle_count, exit_count, relays.json['relay_subset']|length, network_position, family_aroi_domain, family_contact, family_contact_md5, page_ctx) }}{% endblock %}
