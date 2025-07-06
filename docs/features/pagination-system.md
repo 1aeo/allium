@@ -4,7 +4,7 @@
 
 ## 📋 Overview
 
-The AROI Leaderboard pagination system transforms the traditional single-page leaderboard view into an optimized, multi-page experience that improves readability, performance, and user navigation across all 12 leaderboard categories.
+The AROI Leaderboard pagination system transforms the traditional single-page leaderboard view into an optimized, multi-page experience that improves readability, performance, and user navigation across all 15 leaderboard categories.
 
 ### **🎯 Key Benefits**
 - **Enhanced Performance**: Reduced initial page load with paginated data
@@ -85,7 +85,7 @@ The system integrates seamlessly with existing Jinja2 macros:
 
 ## 🌟 Supported Categories
 
-All 12 AROI leaderboard categories include full pagination support:
+All 15 AROI leaderboard categories include full pagination support:
 
 | Category | URL Pattern | Description |
 |----------|-------------|-------------|

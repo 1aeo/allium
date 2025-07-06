@@ -45,6 +45,21 @@ For new developers or contributors:
 3. **Features**: Explore specific features in the [Features](#-features--functionality) section
 4. **Performance**: Check [Optimization Reports](performance/README.md) for performance insights
 
+## 🔄 Documentation Restructuring
+
+📋 **[RESTRUCTURING PLAN](RESTRUCTURING_PLAN.md)** - Comprehensive analysis and plan to reorganize documentation for better user experience
+
+### Current Issues
+- Mixed content types (implemented features vs proposals)
+- Confusing organization for new users
+- No clear status indicators
+
+### Recommended Solution
+- **features/** - Implemented & ready features only
+- **proposals/** - Planned but not implemented
+- **implementation/** - Development process & completed reports
+- **research/** - Analysis & research documents
+
 ## 🔄 Last Updated
 
 This documentation structure was reorganized from the top10aroileaders branch for better navigation and discoverability.

@@ -81,7 +81,7 @@ The contact page uses an efficient two-column layout that maximizes information 
 - **Achievement descriptions**: Brief explanation of each accomplishment
 
 #### Ranking Categories
-Operators may appear in up to 12 specialized leaderboards:
+Operators may appear in up to 15 specialized leaderboards:
 - Bandwidth Champions, Consensus Weight Leaders
 - Exit Authority Champions, Guard Champions
 - Network Diversity Leaders, Platform Diversity Heroes
