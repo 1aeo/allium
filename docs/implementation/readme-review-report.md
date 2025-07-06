@@ -21,7 +21,7 @@ The current `README` file is quite minimal (41 lines) and appears to be signific
 - **Template escaping standardized** throughout the application
 
 ### 2. AROI Leaderboard System 🏆
-- **12 distinct leaderboard categories** for operator rankings
+- **15 distinct leaderboard categories** for operator rankings
 - **Sophisticated operator analytics** including geographic and platform diversity
 - **Dynamic scoring algorithms** for rare countries and network contributions
 - **Professional dashboard interface** for viewing operator achievements
@@ -60,7 +60,7 @@ A powerful, security-hardened static site generator that creates comprehensive T
 - **Bandwidth and consensus weight analytics** with multiple viewing modes
 
 ### AROI Leaderboard System 🏆
-- **12 specialized leaderboards** for authenticated relay operators
+- **15 specialized leaderboards** for authenticated relay operators
 - **Operator achievement tracking** across multiple dimensions
 - **Geographic diversity scoring** with frontier country recognition
 - **Platform diversity metrics** highlighting technical leadership
@@ -133,7 +133,7 @@ cd www && python -m http.server 8000
 ### Main Pages
 - **Index page** with top 500 relays by consensus weight
 - **Complete relay listing** with all active relays
-- **AROI leaderboards** with 12 specialized categories
+- **AROI leaderboards** with 15 specialized categories
 - **Geographic analysis** with rare country intelligence
 
 ### Categorized Views
@@ -272,7 +272,7 @@ Rarity Score = (Relay Count Factor × 4) +
 5. **Add proper installation guide** with requirements
 6. **Include examples** of different usage scenarios
 7. **Highlight performance features** like progress tracking
-8. **Document the 12 AROI leaderboard categories**
+8. **Document the 15 AROI leaderboard categories**
 9. **Explain the rare country classification system**
 10. **Add contributing guidelines** for the expanded project
 
