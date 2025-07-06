@@ -178,7 +178,7 @@ User Understanding: Simplified
 - Simplified reliability scoring with no weighting
 - 25+ relay eligibility requirement
 - Focus on statistical significance and clarity
-- Maintains 12-category AROI leaderboard system
+- Maintains 15-category AROI leaderboard system
 
 ## Future Considerations
 

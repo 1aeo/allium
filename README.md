@@ -34,12 +34,14 @@ cd www && python3 -m http.server 8000
 - **Optimized contact pages** with efficient two-column layout (50% space reduction)
 - **Enhanced operator profiles** with streamlined reliability metrics and network uptime percentiles
 - **Network uptime percentile analysis** showing operator positioning within network performance distribution
+- **Enhanced family pages** with AROI and Contact bullets for better navigation
+- **Country display improvements** with full country names and tooltips
 - **Improved information density** while preserving all analytical data
 - **Responsive design** with mobile-friendly layouts
 - **JavaScript-free pagination** for AROI leaderboards with independent category navigation
 
 ### AROI Leaderboard System 🏆
-- **12 specialized leaderboards** for authenticated relay operators
+- **15 specialized leaderboards** for authenticated relay operators (includes Guard/Exit Authority, IPv4/IPv6 unique address categories)
 - **Paginated rankings** with 1-10, 11-20, 21-25 views per category for improved navigation
 - **Independent pagination** - each category manages its own page state
 - **CSS-only navigation** using `:target` selectors for maximum security and performance
@@ -49,6 +51,7 @@ cd www && python3 -m http.server 8000
 - **Operator achievement tracking** across multiple dimensions
 - **Geographic diversity scoring** with frontier country recognition
 - **Platform diversity metrics** highlighting technical leadership
+- **Network address diversity** with IPv4/IPv6 unique address leaderboards
 
 ### Security & Performance 🔒
 - **XSS-hardened templates** with comprehensive input sanitization
@@ -109,6 +112,12 @@ allium integrates with multiple Tor Project APIs:
 - **Memory Usage**: ~2GB during processing (large historical dataset)
 - **Usage**: Enhanced relay reliability metrics and performance analysis
 
+### Onionoo Bandwidth API
+- **URL**: `https://onionoo.torproject.org/bandwidth`
+- **Purpose**: Historical bandwidth statistics for trend analysis and optimization
+- **Cache**: Configurable cache time (default: 12 hours)
+- **Usage**: Historical bandwidth data for performance tracking and analysis
+
 **Sample Data**:
 ```json
 {
@@ -138,6 +147,8 @@ allium integrates with multiple Tor Project APIs:
 |--------|---------|-------------|
 | `--out` | `./www` | Output directory for generated files |
 | `--onionoo-url` | `https://onionoo.torproject.org/details` | Onionoo API endpoint |
+| `--onionoo-bandwidth-url` | `https://onionoo.torproject.org/bandwidth` | Historical bandwidth API endpoint |
+| `--bandwidth-cache-hours` | `12` | Cache time for historical bandwidth data (hours) |
 | `--display-bandwidth-units` | `bits` | Units for bandwidth display (`bits` or `bytes`) |
 | `--progress` | `false` | Show detailed progress with memory usage |
 
@@ -174,20 +185,23 @@ allium integrates with multiple Tor Project APIs:
 
 ## 🌍 AROI Leaderboards
 
-Twelve specialized categories tracking authenticated operator achievements:
+Fifteen specialized categories tracking authenticated operator achievements:
 
 1. **Bandwidth Champions** - Total bandwidth contributed
 2. **Consensus Weight Leaders** - Network authority holders
 3. **Exit Authority Champions** - Exit traffic facilitators
-4. **Exit Gate Keepers** - Number of exit relays operated
-5. **Guard Champions** - Number of guard relays operated
-6. **Most Diverse Operators** - Geographic, platform, and network diversity
-7. **Platform Diversity Heroes** - Non-Linux champions promoting OS diversity
-8. **Non-EU Leaders** - Geographic champions expanding Tor outside EU
-9. **Frontier Builders** - Operators in rare/underrepresented countries
-10. **Network Veterans** - Longest-serving operators
-11. **Reliability Masters** - 6-month average uptime champions (25+ relays)
-12. **Legacy Titans** - 5-year average uptime champions (25+ relays)
+4. **Guard Authority Champions** - Guard traffic facilitators
+5. **Exit Gate Keepers** - Number of exit relays operated
+6. **Guard Champions** - Number of guard relays operated
+7. **Most Diverse Operators** - Geographic, platform, and network diversity
+8. **Platform Diversity Heroes** - Non-Linux champions promoting OS diversity
+9. **Non-EU Leaders** - Geographic champions expanding Tor outside EU
+10. **Frontier Builders** - Operators in rare/underrepresented countries
+11. **Network Veterans** - Longest-serving operators
+12. **Reliability Masters** - 6-month average uptime champions (25+ relays)
+13. **Legacy Titans** - 5-year average uptime champions (25+ relays)
+14. **IPv4 Address Diversity** - Unique IPv4 address distribution leaders
+15. **IPv6 Address Diversity** - Unique IPv6 address distribution leaders
 
 ## 🔒 Security & Performance
 
