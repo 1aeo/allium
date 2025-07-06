@@ -282,6 +282,80 @@ def fetch_onionoo_uptime(onionoo_url="https://onionoo.torproject.org/uptime", pr
     return data
 
 
+@handle_http_errors("onionoo historical bandwidth", _load_cache, _save_cache, _mark_ready, _mark_stale, 
+                   allow_exit_on_304=False, critical=False)
+def fetch_onionoo_bandwidth(onionoo_url="https://onionoo.torproject.org/bandwidth", cache_hours=12, progress_logger=None):
+    """
+    Fetch onionoo historical bandwidth data from the Tor Project's Onionoo API.
+    Implements configurable cache refresh logic - only fetches if cache is older than specified hours.
+    
+    Args:
+        onionoo_url: URL to fetch historical bandwidth data from
+        cache_hours: Hours to cache historical bandwidth data before refreshing (default: 12)
+        progress_logger: Optional function to call for progress updates
+        
+    Returns:
+        dict: JSON response from onionoo historical bandwidth API or cached data
+    """
+    api_name = "onionoo_bandwidth"
+    
+    def log_progress(message):
+        if progress_logger:
+            progress_logger(message)
+    
+    # Convert hours to seconds for cache age comparison
+    cache_seconds = cache_hours * 3600
+    
+    # Check cache age first - only refresh if older than specified hours
+    cache_age = _cache_manager.get_cache_age(api_name)
+    if cache_age is not None and cache_age < cache_seconds:
+        log_progress(f"using cached historical bandwidth data (less than {cache_hours} hours old)")
+        cached_data = _load_cache(api_name)
+        if cached_data:
+            _mark_ready(api_name)
+            relay_count = len(cached_data.get('relays', []))
+            log_progress(f"loaded {relay_count} relays from historical bandwidth cache")
+            return cached_data
+    
+    # Cache is stale or doesn't exist, fetch new data
+    log_progress(f"fetching fresh historical bandwidth data (cache older than {cache_hours} hours)")
+    
+    # Check for conditional request timestamp
+    prev_timestamp = _read_timestamp(api_name)
+    
+    if prev_timestamp:
+        headers = {"If-Modified-Since": prev_timestamp}
+        conn = urllib.request.Request(onionoo_url, headers=headers)
+    else:
+        conn = urllib.request.Request(onionoo_url)
+
+    # Add timeout to prevent hanging in CI environments
+    api_response = urllib.request.urlopen(conn, timeout=30).read()
+
+    log_progress("parsing JSON response...")
+
+    # Parse JSON response
+    data = json.loads(api_response.decode("utf-8"))
+    
+    # Cache the data
+    log_progress("caching historical bandwidth data...")
+    _save_cache(api_name, data)
+    
+    # Write timestamp for future conditional requests
+    timestamp_str = time.strftime(
+        "%a, %d %b %Y %H:%M:%S GMT", time.gmtime(time.time())
+    )
+    _write_timestamp(api_name, timestamp_str)
+    
+    # Mark as ready
+    _mark_ready(api_name)
+    
+    # Use consistent progress format for success message
+    relay_count = len(data.get('relays', []))
+    log_progress(f"successfully fetched {relay_count} relays from onionoo historical bandwidth API")
+    return data
+
+
 def fetch_collector_data(progress_logger=None):
     """
     Fetch CollecTor data (placeholder for future implementation)

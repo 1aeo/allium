@@ -9,7 +9,7 @@ Phase 2 implementation: multiple API support, threading, and incremental renderi
 import threading
 import time
 from .workers import (
-    fetch_onionoo_details, fetch_onionoo_uptime, 
+    fetch_onionoo_details, fetch_onionoo_uptime, fetch_onionoo_bandwidth,
     get_worker_status, get_all_worker_status
 )
 from .relays import Relays
@@ -25,10 +25,12 @@ class Coordinator:
     Phase 2: Multiple API support with incremental rendering.
     """
     
-    def __init__(self, output_dir, onionoo_details_url, onionoo_uptime_url, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=34, enabled_apis='all', filter_downtime_days=7):
+    def __init__(self, output_dir, onionoo_details_url, onionoo_uptime_url, onionoo_bandwidth_url, bandwidth_cache_hours, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=34, enabled_apis='all', filter_downtime_days=7):
         self.output_dir = output_dir
         self.onionoo_details_url = onionoo_details_url
         self.onionoo_uptime_url = onionoo_uptime_url
+        self.onionoo_bandwidth_url = onionoo_bandwidth_url
+        self.bandwidth_cache_hours = bandwidth_cache_hours
         self.use_bits = use_bits
         self.progress = progress
         self.start_time = start_time or time.time()
@@ -55,6 +57,7 @@ class Coordinator:
         # Include uptime API only if 'all' is selected (details + uptime)
         if self.enabled_apis == 'all':
             self.api_workers.append(("onionoo_uptime", fetch_onionoo_uptime, [self.onionoo_uptime_url, self._log_progress]))
+            self.api_workers.append(("onionoo_bandwidth", fetch_onionoo_bandwidth, [self.onionoo_bandwidth_url, self.bandwidth_cache_hours, self._log_progress]))
         
     def _log_progress(self, message):
         """Log progress message using shared progress utility"""
@@ -68,7 +71,8 @@ class Coordinator:
             
             # Update args to use the API-specific logger
             args_with_api_logger = list(args)
-            args_with_api_logger[1] = api_specific_logger  # Replace progress_logger
+            # Replace the last argument (progress_logger) with the API-specific logger
+            args_with_api_logger[-1] = api_specific_logger
             
             # Log API-specific start message
             api_display_name = self._get_api_display_name(api_name)
@@ -99,6 +103,8 @@ class Coordinator:
             return "Details API"
         elif api_name == "onionoo_uptime":
             return "Uptime API"
+        elif api_name == "onionoo_bandwidth":
+            return "Historical Bandwidth API"
         else:
             return api_name.replace("_", " ").title()
 
@@ -183,6 +189,12 @@ class Coordinator:
         """
         return self.worker_data.get('onionoo_uptime')
 
+    def get_bandwidth_data(self):
+        """
+        Get historical bandwidth data if available
+        """
+        return self.worker_data.get('onionoo_bandwidth')
+
     def get_consensus_health_data(self):
         """
         Get consensus health data if available (Future API)
@@ -221,8 +233,10 @@ class Coordinator:
         
         # Phase 2: Attach additional API data to relay set (dynamic assignment)
         uptime_data = self.get_uptime_data()
+        bandwidth_data = self.get_bandwidth_data()
         
         setattr(relay_set, 'uptime_data', uptime_data)
+        setattr(relay_set, 'bandwidth_data', bandwidth_data)
         setattr(relay_set, 'consensus_health_data', self.get_consensus_health_data())
         setattr(relay_set, 'collector_data', self.get_collector_data())
         
@@ -268,7 +282,7 @@ class Coordinator:
 
 
 # For backwards compatibility, provide a simple function that mimics the original Relays constructor
-def create_relay_set_with_coordinator(output_dir, onionoo_details_url, onionoo_uptime_url, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=34, enabled_apis='all', filter_downtime_days=7):
+def create_relay_set_with_coordinator(output_dir, onionoo_details_url, onionoo_uptime_url, onionoo_bandwidth_url, bandwidth_cache_hours, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=34, enabled_apis='all', filter_downtime_days=7):
     """
     Create a relay set using the coordinator system.
     Phase 2: Support for multiple APIs with threading.
@@ -281,6 +295,8 @@ def create_relay_set_with_coordinator(output_dir, onionoo_details_url, onionoo_u
         output_dir=output_dir,
         onionoo_details_url=onionoo_details_url,
         onionoo_uptime_url=onionoo_uptime_url,
+        onionoo_bandwidth_url=onionoo_bandwidth_url,
+        bandwidth_cache_hours=bandwidth_cache_hours,
         use_bits=use_bits,
         progress=progress,
         start_time=start_time,

@@ -123,6 +123,25 @@ if __name__ == "__main__":
         required=False,
     )
     parser.add_argument(
+        "--onionoo-bandwidth-url",
+        dest="onionoo_bandwidth_url",
+        type=str,
+        default="https://onionoo.torproject.org/bandwidth",
+        help=(
+            "onionoo historical bandwidth API HTTP URL (default "
+            '"https://onionoo.torproject.org/bandwidth")'
+        ),
+        required=False,
+    )
+    parser.add_argument(
+        "--bandwidth-cache-hours",
+        dest="bandwidth_cache_hours",
+        type=int,
+        default=12,
+        help="hours to cache historical bandwidth data before refreshing (default: 12)",
+        required=False,
+    )
+    parser.add_argument(
         "--apis",
         dest="enabled_apis",
         type=str,
@@ -177,7 +196,7 @@ if __name__ == "__main__":
     progress_logger.log("Initializing relay data from onionoo (using coordinator)...")
     
     try:
-        RELAY_SET = create_relay_set_with_coordinator(args.output_dir, args.onionoo_details_url, args.onionoo_uptime_url, args.bandwidth_units == 'bits', args.progress, start_time, progress_logger.get_current_step(), total_steps, args.enabled_apis, args.filter_downtime_days)
+        RELAY_SET = create_relay_set_with_coordinator(args.output_dir, args.onionoo_details_url, args.onionoo_uptime_url, args.onionoo_bandwidth_url, args.bandwidth_cache_hours, args.bandwidth_units == 'bits', args.progress, start_time, progress_logger.get_current_step(), total_steps, args.enabled_apis, args.filter_downtime_days)
         if RELAY_SET is None or RELAY_SET.json == None:
             # Progress-style error context message (conditional on progress flag)
             progress_logger.log("No onionoo data available, exiting gracefully")
