@@ -22,7 +22,7 @@ The proposed metrics utilize existing Onionoo API fields that are currently unde
 
 ---
 
-## Top 10 Proposed Bandwidth Metrics
+## Top 10 Proposed Historical Bandwidth Metrics
 
 ### 1. Bandwidth Stability Index (BSI)
 
