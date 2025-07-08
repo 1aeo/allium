@@ -5,7 +5,7 @@
 **Advanced Tor Relay Analytics & Metrics Platform** - A powerful, security-hardened static site generator that creates comprehensive Tor relay metrics, statistics, and operator leaderboards from Onionoo API data.
 
 ## 🚀 Quick Start
-
+**One-command setup** (recommended):
 ```bash
 curl -sSL https://raw.githubusercontent.com/1aeo/allium/master/setup.sh | bash
 ```
