@@ -23,7 +23,7 @@ jobs:
       uses: actions/cache@v4
       with:
         path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-linting-${{ hashFiles('**/config/requirements.txt') }}
+        key: ${{ runner.os }}-pip-linting-${{ hashFiles('**/config/requirements-dev.txt') }}
         restore-keys: |
           ${{ runner.os }}-pip-linting-
           
@@ -59,15 +59,14 @@ jobs:
       uses: actions/cache@v4
       with:
         path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-tests-${{ hashFiles('**/config/requirements.txt') }}
+        key: ${{ runner.os }}-pip-tests-${{ hashFiles('**/config/requirements-dev.txt') }}
         restore-keys: |
           ${{ runner.os }}-pip-tests-
           
     - name: Install test dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r config/requirements.txt
-        pip install pytest pytest-cov
+        pip install -r config/requirements-dev.txt
         
     - name: Run unit tests
       run: |
@@ -147,8 +146,7 @@ jobs:
     - name: Install security tools
       run: |
         python -m pip install --upgrade pip
-        pip install -r config/requirements.txt
-        pip install bandit safety
+        pip install -r config/requirements-dev.txt
         
     - name: Run security scans
       run: |
@@ -181,7 +179,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r config/requirements.txt
+        pip install -r config/requirements-dev.txt
         
     - name: Test AROI leaderboard generation
       run: |
@@ -432,8 +430,7 @@ jobs:
         
     - name: Install dependencies
       run: |
-        pip install -r config/requirements.txt
-        pip install memory-profiler
+        pip install -r config/requirements-dev.txt
         
     - name: Performance test
       run: |

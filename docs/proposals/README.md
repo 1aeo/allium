@@ -248,7 +248,7 @@ GET https://onionoo.torproject.org/uptime?lookup={fp1},{fp2},{fp3}
 cd allium/
 python3 -m venv venv
 source venv/bin/activate
-pip install -r requirements.txt
+pip install -r config/requirements.txt
 ```
 
 ### Development Setup

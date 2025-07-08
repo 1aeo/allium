@@ -64,7 +64,7 @@ def check_dependencies(show_progress=False):
                 print("✅ Jinja2 found")
     except ImportError:
         print("❌ Error: Jinja2 not found")
-        print("💡 Install it with: pip3 install -r requirements.txt")
+        print("💡 Install it with: pip3 install -r config/requirements.txt")
         sys.exit(1)
     
     # Check Python version

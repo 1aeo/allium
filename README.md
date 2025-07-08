@@ -6,7 +6,6 @@
 
 ## 🚀 Quick Start
 
-**One-command setup** (recommended):
 ```bash
 curl -sSL https://raw.githubusercontent.com/1aeo/allium/master/setup.sh | bash
 ```
@@ -21,6 +20,19 @@ cd www && python3 -m http.server 8000
 ```
 
 **⚡ Update data**: `cd allium && python3 allium.py --progress`
+
+## 📋 Table of Contents
+
+- [🚀 Key Features](#-key-features)
+- [🌐 API Data Sources](#-api-data-sources)  
+- [📋 Usage & Configuration](#-usage--configuration)
+- [📊 Generated Content](#-generated-content)
+- [🌍 AROI Leaderboards](#-aroi-leaderboards)
+- [🔒 Security & Performance](#-security--performance)
+- [🛠️ Requirements](#️-requirements)
+- [🤝 Contributing](#-contributing)
+- [📷 Screenshots](#-screenshots)
+- [📄 License](#-license)
 
 ## 🚀 Key Features
 
@@ -215,12 +227,43 @@ Fifteen specialized categories tracking authenticated operator achievements:
 
 ## 🛠️ Requirements
 
+### Production (Minimal)
 - **Python 3.8+**
 - **Jinja2 ≥2.11.2**
 
+### Development (Additional)
+- **pytest ≥6.0.0** - Unit testing framework
+- **pytest-cov ≥2.10.0** - Coverage reporting
+- **flake8 ≥3.8.0** - Code style checker
+- **bandit ≥1.7.0** - Security vulnerability scanner
+- **safety ≥1.10.0** - Dependency vulnerability checker
+- **djlint ≥1.0.0** - HTML/template linter
+- **memory-profiler ≥0.60.0** - Memory usage profiling
+
 ## 🤝 Contributing
 
-Contributions welcome in:
+Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed setup instructions.
+
+### 🧪 Developer Setup
+
+**Quick developer setup** (includes testing and linting tools):
+```bash
+curl -sSL https://raw.githubusercontent.com/1aeo/allium/master/setup.sh | bash -s -- --dev
+```
+
+**Manual developer setup**:
+```bash
+git clone https://github.com/1aeo/allium.git && cd allium
+python3 -m venv venv && source venv/bin/activate
+pip install -r config/requirements-dev.txt
+cd allium && python3 allium.py --progress
+```
+
+**Run tests**: `pytest` • **Lint code**: `flake8 .` • **Security scan**: `bandit -r .`
+
+### 🎯 Contributing Areas
+
+Areas where contributions are particularly welcome:
 - Security enhancements and vulnerability reporting
 - Analytics improvements and new leaderboard categories
 - Geographic intelligence and country classification updates
