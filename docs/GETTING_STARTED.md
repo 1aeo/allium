@@ -13,19 +13,28 @@ Allium generates **beautiful, static websites** that show Tor relay statistics a
 
 ## Quick Start (Recommended)
 
-### Option 1: One-Command Install
+### Option 1: One-Command Install (Production)
 ```bash
 curl -sSL https://raw.githubusercontent.com/1aeo/allium/master/setup.sh | bash
 ```
 
-### Option 2: Manual Install
+### Option 2: One-Command Install (Developer)
+For contributors who want testing tools:
+```bash
+curl -sSL https://raw.githubusercontent.com/1aeo/allium/master/setup.sh | bash -s -- --dev
+```
+
+### Option 3: Manual Install
 ```bash
 # 1. Clone the repository
 git clone https://github.com/1aeo/allium.git
 cd allium
 
 # 2. Install dependencies
-pip3 install -r requirements.txt
+# For production (minimal):
+pip3 install -r config/requirements.txt
+# OR for development (includes testing tools):
+pip3 install -r config/requirements-dev.txt
 
 # 3. Generate your first site
 cd allium
@@ -111,7 +120,7 @@ python3 allium.py --display-bandwidth-units bytes  # Use bytes instead of bits
 ```bash
 pip3 install jinja2
 # or
-pip3 install -r requirements.txt
+pip3 install -r config/requirements.txt
 ```
 
 ### **"Permission denied"**

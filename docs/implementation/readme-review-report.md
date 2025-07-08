@@ -118,7 +118,7 @@ git clone [repository-url]
 cd allium
 
 # Install dependencies
-pip install -r requirements.txt
+pip install -r config/requirements.txt
 
 # Generate metrics site
 cd allium

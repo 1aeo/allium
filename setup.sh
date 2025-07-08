@@ -1,13 +1,32 @@
 #!/bin/bash
 
 # Allium Quick Setup Script
-# Usage: curl -sSL https://raw.githubusercontent.com/1aeo/allium/master/setup.sh | bash
+# 
+# Production setup (default):
+#   curl -sSL https://raw.githubusercontent.com/1aeo/allium/master/setup.sh | bash
+#   
+# Developer setup (includes testing dependencies):
+#   curl -sSL https://raw.githubusercontent.com/1aeo/allium/master/setup.sh | bash -s -- --dev
 
 set -e
 
-echo "🌐 Allium - Tor Relay Analytics Setup"
-echo "======================================"
-echo "🔥 Enhanced with AROI Reliability Scoring System"
+# Check if developer mode is requested
+DEV_MODE=false
+if [[ "$1" == "--dev" ]]; then
+    DEV_MODE=true
+fi
+
+if [[ "$DEV_MODE" == "true" ]]; then
+    echo "🌐 Allium - Tor Relay Analytics Setup (Developer Mode)"
+    echo "===================================================="
+    echo "🔥 Enhanced with AROI Reliability Scoring System"
+    echo "🧪 Including testing and development dependencies"
+else
+    echo "🌐 Allium - Tor Relay Analytics Setup (Production Mode)"
+    echo "====================================================="
+    echo "🔥 Enhanced with AROI Reliability Scoring System"
+    echo "📦 Minimal dependencies for production deployment"
+fi
 echo ""
 
 # Check Python version
@@ -47,7 +66,14 @@ source venv/bin/activate
 
 echo "📦 Installing dependencies..."
 pip install --upgrade pip
-pip install -r config/requirements.txt
+
+if [[ "$DEV_MODE" == "true" ]]; then
+    echo "🧪 Installing development dependencies (includes testing tools)..."
+    pip install -r config/requirements-dev.txt
+else
+    echo "📦 Installing production dependencies (minimal set)..."
+    pip install -r config/requirements.txt
+fi
 
 echo "🚀 Running first generation with progress tracking..."
 
@@ -127,5 +153,16 @@ else
     echo "   Then run: python3 allium/allium.py --progress"
 fi
 echo ""
+if [[ "$DEV_MODE" == "true" ]]; then
+    echo "🧪 Developer Mode - Additional Tools Available:"
+    echo "   • pytest: Run unit tests with 'pytest'"
+    echo "   • pytest-cov: Generate coverage reports with 'pytest --cov'"
+    echo "   • flake8: Check code style with 'flake8'"
+    echo "   • bandit: Security analysis with 'bandit -r .'"
+    echo "   • safety: Check dependencies with 'safety check'"
+    echo "   • djlint: HTML/template linting with 'djlint allium/templates/'"
+    echo "   • memory-profiler: Profile memory usage"
+    echo ""
+fi
 echo "📚 Documentation: docs/README.md"
 echo "🔧 Configuration options: python3 allium/allium.py --help" 
