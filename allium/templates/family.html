@@ -1,8 +1,8 @@
 {% extends "contact-relay-list.html" %}
 {% from "macros.html" import navigation, detail_summary %}
-{% set family_hash = key %}
+{% set family_hash = value %}
 {% set family_aroi = family_aroi_domain if family_aroi_domain else '' %}
-{% block title %}Tor Relays :: Family {{ family_hash }}{% endblock %}
+{% block title %}Tor Relays :: Family {% if family_aroi and family_aroi != 'none' and family_aroi != '' %}{{ family_aroi }}{% elif family_contact and family_contact.strip() %}{{ family_contact|truncate(30) }}{% else %}{{ family_hash[:8] }}{% endif %}{% endblock %}
 {% block header %}
     {% if family_aroi and family_aroi != 'none' and family_aroi != '' -%}
         View Family {{ family_aroi }} Details
