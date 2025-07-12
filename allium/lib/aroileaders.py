@@ -105,7 +105,7 @@ def _calculate_bandwidth_score(operator_relays, bandwidth_data, time_period):
     Args:
         operator_relays (list): List of relay objects for this operator
         bandwidth_data (dict): Bandwidth data from Onionoo API (attached to relays_instance)
-        time_period (str): Time period to use ('6_months' or '1_year')
+        time_period (str): Time period to use ('6_months' or '5_years')
         
     Returns:
         dict: Bandwidth metrics including score, average bandwidth, relay count, etc.
@@ -552,8 +552,8 @@ def _calculate_aroi_leaderboards(relays_instance):
         # 6-month bandwidth score (primary metric)
         bandwidth_6m = _calculate_bandwidth_score(operator_relays, bandwidth_data, '6_months')
         
-        # 1-year bandwidth score (extended metric)
-        bandwidth_1y = _calculate_bandwidth_score(operator_relays, bandwidth_data, '1_year')
+        # 5-year bandwidth score (extended metric)
+        bandwidth_5y = _calculate_bandwidth_score(operator_relays, bandwidth_data, '5_years')
         
         # Store operator data (mix of existing + new calculations)
         aroi_operators[operator_key] = {
@@ -616,12 +616,12 @@ def _calculate_aroi_leaderboards(relays_instance):
             'bandwidth_6m_valid_relays': bandwidth_6m['valid_relays'],
             'bandwidth_6m_breakdown': bandwidth_6m['breakdown'],
             
-            # 1-year bandwidth data
-            'bandwidth_1y_score': bandwidth_1y['score'],
-            'bandwidth_1y_average': bandwidth_1y['average_bandwidth'],
-            'bandwidth_1y_weight': bandwidth_1y['weight'],
-            'bandwidth_1y_valid_relays': bandwidth_1y['valid_relays'],
-            'bandwidth_1y_breakdown': bandwidth_1y['breakdown'],
+            # 5-year bandwidth data
+            'bandwidth_5y_score': bandwidth_5y['score'],
+            'bandwidth_5y_average': bandwidth_5y['average_bandwidth'],
+            'bandwidth_5y_weight': bandwidth_5y['weight'],
+            'bandwidth_5y_valid_relays': bandwidth_5y['valid_relays'],
+            'bandwidth_5y_breakdown': bandwidth_5y['breakdown'],
             
             # === IPv4/IPv6 UNIQUE ADDRESS METRICS (NEW) ===
             'unique_ipv4_count': unique_ipv4_count,
@@ -761,11 +761,11 @@ def _calculate_aroi_leaderboards(relays_instance):
         reverse=True
     )[:50]
     
-    # 17. 🌟 Bandwidth Legends - 1-Year Average Bandwidth (NEW) - Only operators with > 25 relays AND > 0 bandwidth
-    bandwidth_legends_filtered = {k: v for k, v in aroi_operators.items() if v['total_relays'] > 25 and v['bandwidth_1y_score'] > 0.0}
+    # 17. 🌟 Bandwidth Legends - 5-Year Average Bandwidth (NEW) - Only operators with > 25 relays AND > 0 bandwidth
+    bandwidth_legends_filtered = {k: v for k, v in aroi_operators.items() if v['total_relays'] > 25 and v['bandwidth_5y_score'] > 0.0}
     leaderboards['bandwidth_legends'] = sorted(
         bandwidth_legends_filtered.items(),
-        key=lambda x: x[1]['bandwidth_1y_score'],
+        key=lambda x: x[1]['bandwidth_5y_score'],
         reverse=True
     )[:50]
     
@@ -963,10 +963,10 @@ def _calculate_aroi_leaderboards(relays_instance):
                     bandwidth_weight = metrics['bandwidth_6m_weight']
                     period_label = "6-month"
                 else:  # bandwidth_legends
-                    bandwidth_score_raw = metrics['bandwidth_1y_score']
-                    bandwidth_average = metrics['bandwidth_1y_average']
-                    bandwidth_weight = metrics['bandwidth_1y_weight']
-                    period_label = "1-year"
+                    bandwidth_score_raw = metrics['bandwidth_5y_score']
+                    bandwidth_average = metrics['bandwidth_5y_average']
+                    bandwidth_weight = metrics['bandwidth_5y_weight']
+                    period_label = "5-year"
                 
                 # Format bandwidth with unit (reuse existing formatters)
                 bandwidth_unit = relays_instance.bandwidth_formatter.determine_unit(bandwidth_average)
@@ -1160,7 +1160,7 @@ def _calculate_aroi_leaderboards(relays_instance):
             'reliability_masters': '⏰ Reliability Masters (6-Month Uptime)',
             'legacy_titans': '👑 Legacy Titans (5-Year Uptime)',
             'bandwidth_masters': '🚀 Bandwidth Throughput Masters (6-Month Historic)',
-            'bandwidth_legends': '🌟 Bandwidth Legends (1-Year Historic)',
+            'bandwidth_legends': '🌟 Bandwidth Legends (5-Year Historic)',
             'most_diverse': 'Most Diverse Operators',
             'platform_diversity': 'Platform Diversity (Non-Linux Heroes)',
             'non_eu_leaders': 'Geographic Champions (Non-EU Leaders)',

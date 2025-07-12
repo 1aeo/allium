@@ -79,7 +79,7 @@ def extract_relay_bandwidth_for_period(operator_relays, bandwidth_data, time_per
     Args:
         operator_relays (list): List of relay objects for the operator
         bandwidth_data (dict): Bandwidth data from Onionoo API
-        time_period (str): Time period key (e.g., '6_months', '1_year')
+        time_period (str): Time period key (e.g., '6_months', '5_years')
         
     Returns:
         dict: Contains bandwidth_values (list), relay_breakdown (dict), and valid_relays (int)

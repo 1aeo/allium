@@ -38,7 +38,7 @@
         <a href="#reliability_masters" class="aroi-nav-link" title="Reliability Masters: 6-month average uptime scores for operators with 25+ relays, measuring operational excellence">⏰ Reliability Masters</a>
         <a href="#legacy_titans" class="aroi-nav-link" title="Legacy Titans: 5-year average uptime scores for operators with 25+ relays, recognizing long-term operational stability">👑 Legacy Titans</a>
         <a href="#bandwidth_masters" class="aroi-nav-link" title="Bandwidth Throughput Masters: 6-month average bandwidth performance for operators with 25+ relays, measuring recent throughput excellence">🚀 Bandwidth Masters</a>
-        <a href="#bandwidth_legends" class="aroi-nav-link" title="Bandwidth Legends: 1-year average bandwidth performance for operators with 25+ relays, measuring sustained throughput capacity">🌟 Bandwidth Legends</a>
+        <a href="#bandwidth_legends" class="aroi-nav-link" title="Bandwidth Legends: 5-year average bandwidth performance for operators with 25+ relays, measuring sustained throughput capacity">🌟 Bandwidth Legends</a>
         <a href="#ipv4_leaders" class="aroi-nav-link" title="IPv4 Address Leaders: Operators with the highest quantity of unique IPv4 addresses across their relay infrastructure">🌐 IPv4 Leaders</a>
         <a href="#ipv6_leaders" class="aroi-nav-link" title="IPv6 Address Leaders: Operators with the highest quantity of unique IPv6 addresses across their relay infrastructure">🔮 IPv6 Leaders</a>
     </div>
@@ -229,7 +229,7 @@
             {%- elif category_key == 'reliability_masters' -%}6-month average uptime reliability scores from Onionoo API data for operators with 25+ relays. Formula: reliability_score = average_6_month_uptime. Measures operational excellence and network reliability over recent 6-month period using simple average uptime percentages
             {%- elif category_key == 'legacy_titans' -%}5-year average uptime reliability scores from Onionoo API data for operators with 25+ relays. Formula: reliability_score = average_5_year_uptime. Measures long-term operational stability and reliability over 5-year historical period using simple average uptime percentages
             {%- elif category_key == 'bandwidth_masters' -%}6-month average bandwidth throughput from Onionoo API data for operators with 25+ relays. Formula: bandwidth_score = average_6_month_bandwidth. Measures recent throughput performance and network contribution over 6-month period using simple average bandwidth values
-            {%- elif category_key == 'bandwidth_legends' -%}1-year average bandwidth throughput from Onionoo API data for operators with 25+ relays. Formula: bandwidth_score = average_1_year_bandwidth. Measures sustained throughput capacity and long-term network contribution over 1-year historical period using simple average bandwidth values
+            {%- elif category_key == 'bandwidth_legends' -%}5-year average bandwidth throughput from Onionoo API data for operators with 25+ relays. Formula: bandwidth_score = average_5_year_bandwidth. Measures sustained throughput capacity and long-term network contribution over 5-year historical period using simple average bandwidth values
             {%- elif category_key == 'ipv4_leaders' -%}quantity of unique IPv4 addresses per operator across their relay infrastructure. Measures IPv4 address diversity and network distribution capabilities
             {%- elif category_key == 'ipv6_leaders' -%}quantity of unique IPv6 addresses per operator across their relay infrastructure. Measures IPv6 adoption and modern network infrastructure capabilities
             {%- endif -%}">{% if emoji and category_key not in ['reliability_masters', 'legacy_titans', 'bandwidth_masters', 'bandwidth_legends'] %}{{ emoji }} {% endif %}{{ category_name }}</h3>
@@ -278,7 +278,7 @@
                     <li><strong>⏰ Reliability Masters:</strong> 6-month average uptime scores (25+ relays, operational excellence)</li>
                     <li><strong>👑 Legacy Titans:</strong> 5-year average uptime scores (25+ relays, long-term stability)</li>
                     <li><strong>🚀 Bandwidth Throughput Masters:</strong> 6-month average bandwidth performance (25+ relays, recent throughput excellence)</li>
-                    <li><strong>🌟 Bandwidth Legends:</strong> 1-year average bandwidth performance (25+ relays, sustained throughput capacity)</li>
+                    <li><strong>🌟 Bandwidth Legends:</strong> 5-year average bandwidth performance (25+ relays, sustained throughput capacity)</li>
                 </ul>
             </div>
         </div>
@@ -322,18 +322,18 @@
         <p><em>Example:</em> An operator with 30 relays: relay1 (10 MB/s avg), relay2 (15 MB/s avg), relay3 (8 MB/s avg), ... relay30 (12 MB/s avg) would score: (10 + 15 + 8 + ... + 12) / 30 = <strong>11.2 MB/s average bandwidth score</strong>.</p>
         <p><strong>Focus:</strong> Emphasizes consistent throughput performance across all relays for established operators, ideal for identifying operators with excellent recent bandwidth contribution.</p>
         
-        <h4>🌟 Bandwidth Legends Scoring (1-Year):</h4>
-        <p><strong>1-Year Bandwidth Score Calculation:</strong> The Bandwidth Legends category measures sustained throughput capacity using simple average bandwidth data from the Onionoo API over the past 1 year. Only operators with more than 25 relays are eligible to ensure statistical significance.</p>
+        <h4>🌟 Bandwidth Legends Scoring (5-Year):</h4>
+        <p><strong>5-Year Bandwidth Score Calculation:</strong> The Bandwidth Legends category measures sustained throughput capacity using simple average bandwidth data from the Onionoo API over the past 5 years. Only operators with more than 25 relays are eligible to ensure statistical significance.</p>
         <ul>
             <li><strong>Eligibility:</strong> Only operators with more than 25 relays are included (ensures meaningful sample size)</li>
-            <li><strong>Primary Factor - Average 1-Year Bandwidth:</strong> Simple mean bandwidth throughput across all operator's relays from Onionoo 1-year bandwidth data</li>
+            <li><strong>Primary Factor - Average 5-Year Bandwidth:</strong> Simple mean bandwidth throughput across all operator's relays from Onionoo 5-year bandwidth data</li>
             <li><strong>No Weighting Applied:</strong> All relays count equally regardless of uptime or infrastructure changes</li>
-            <li><strong>Historical Perspective:</strong> Accounts for natural infrastructure evolution and capacity upgrades over 1-year period</li>
-            <li><strong>Sustained Contribution:</strong> Operators with 1+ years of consistent high bandwidth demonstrate exceptional network support</li>
+            <li><strong>Historical Perspective:</strong> Accounts for natural infrastructure evolution and capacity upgrades over 5-year period</li>
+            <li><strong>Sustained Contribution:</strong> Operators with 5+ years of consistent high bandwidth demonstrate exceptional long-term network support</li>
         </ul>
-        <p><strong>1-Year Bandwidth Formula:</strong> bandwidth_score = Σ(relay_1year_bandwidth) / relay_count</p>
-        <p><em>Example:</em> An operator with 40 relays over 1-year history: 25 active relays averaging 12.5 MB/s throughput, 15 upgraded relays (9.8 MB/s historical average) would score: ((25 × 12.5) + (15 × 9.8)) / 40 = <strong>11.5 MB/s sustained bandwidth score</strong>, demonstrating long-term network contribution.</p>
-        <p><strong>Focus:</strong> Recognizes operators who have demonstrated exceptional sustained bandwidth contribution and long-term commitment to the Tor network through consistent high-throughput performance, infrastructure investment, and network capacity expansion.</p>
+        <p><strong>5-Year Bandwidth Formula:</strong> bandwidth_score = Σ(relay_5year_bandwidth) / relay_count</p>
+        <p><em>Example:</em> An operator with 40 relays over 5-year history: 25 active relays averaging 12.5 MB/s throughput, 15 upgraded relays (9.8 MB/s historical average) would score: ((25 × 12.5) + (15 × 9.8)) / 40 = <strong>11.5 MB/s sustained bandwidth score</strong>, demonstrating long-term network contribution.</p>
+        <p><strong>Focus:</strong> Recognizes operators who have demonstrated exceptional sustained bandwidth contribution and long-term commitment to the Tor network through consistent high-throughput performance, infrastructure investment, and network capacity expansion over multiple years.</p>
         
         <h4>🌈 Diversity Champion Scoring:</h4>
         <p><strong>Diversity Score Calculation:</strong> The diversity score uses a weighted formula to measure geographic, platform, and network diversity:</p>
