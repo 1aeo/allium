@@ -37,6 +37,8 @@
         <a href="#network_veterans" class="aroi-nav-link" title="Network Veterans: Longest-serving operators calculated by earliest relay start date multiplied by current relay scale, recognizing sustained commitment to the Tor network">🏆 Network Veterans</a>
         <a href="#reliability_masters" class="aroi-nav-link" title="Reliability Masters: 6-month average uptime scores for operators with 25+ relays, measuring operational excellence">⏰ Reliability Masters</a>
         <a href="#legacy_titans" class="aroi-nav-link" title="Legacy Titans: 5-year average uptime scores for operators with 25+ relays, recognizing long-term operational stability">👑 Legacy Titans</a>
+        <a href="#bandwidth_masters" class="aroi-nav-link" title="Bandwidth Throughput Masters: 6-month average bandwidth performance for operators with 25+ relays, measuring recent throughput excellence">🚀 Bandwidth Masters</a>
+        <a href="#bandwidth_legends" class="aroi-nav-link" title="Bandwidth Legends: 1-year average bandwidth performance for operators with 25+ relays, measuring sustained throughput capacity">🌟 Bandwidth Legends</a>
         <a href="#ipv4_leaders" class="aroi-nav-link" title="IPv4 Address Leaders: Operators with the highest quantity of unique IPv4 addresses across their relay infrastructure">🌐 IPv4 Leaders</a>
         <a href="#ipv6_leaders" class="aroi-nav-link" title="IPv6 Address Leaders: Operators with the highest quantity of unique IPv6 addresses across their relay infrastructure">🔮 IPv6 Leaders</a>
     </div>
@@ -98,6 +100,10 @@
         
         {{ champion_badge("legacy_titans", relays.json.aroi_leaderboards.leaderboards.legacy_titans, "Legacy Titan", "👑", "panel-warning", "aroi-champion-legacy", page_ctx.path_prefix, relays.use_bits) }}
         
+        {{ champion_badge("bandwidth_masters", relays.json.aroi_leaderboards.leaderboards.bandwidth_masters, "Bandwidth Throughput Master", "🚀", "panel-success", "aroi-champion-bandwidth", page_ctx.path_prefix, relays.use_bits) }}
+        
+        {{ champion_badge("bandwidth_legends", relays.json.aroi_leaderboards.leaderboards.bandwidth_legends, "Bandwidth Legend", "🌟", "panel-warning", "aroi-champion-bandwidth-legend", page_ctx.path_prefix, relays.use_bits) }}
+        
         {{ champion_badge("ipv4_leaders", relays.json.aroi_leaderboards.leaderboards.ipv4_leaders, "IPv4 Master", "🌐", "panel-primary", "aroi-champion-ipv4", page_ctx.path_prefix, relays.use_bits) }}
         
         {{ champion_badge("ipv6_leaders", relays.json.aroi_leaderboards.leaderboards.ipv6_leaders, "IPv6 Pioneer", "🔮", "panel-info", "aroi-champion-ipv6", page_ctx.path_prefix, relays.use_bits) }}
@@ -149,6 +155,12 @@
 
     <!-- Legacy Titans -->
     {{ top3_table("Legacy Titans", "👑", relays.json.aroi_leaderboards.leaderboards.legacy_titans, ["Legacy Supreme", "Legacy Commander", "Legacy Hero"], "legacy_titans", page_ctx, relays.use_bits) }}
+
+    <!-- Bandwidth Throughput Masters -->
+    {{ top3_table("Bandwidth Throughput Masters", "🚀", relays.json.aroi_leaderboards.leaderboards.bandwidth_masters, ["Bandwidth King", "Bandwidth Commander", "Bandwidth Hero"], "bandwidth_masters", page_ctx, relays.use_bits) }}
+
+    <!-- Bandwidth Legends -->
+    {{ top3_table("Bandwidth Legends", "🌟", relays.json.aroi_leaderboards.leaderboards.bandwidth_legends, ["Bandwidth Legend", "Bandwidth Master", "Bandwidth Champion"], "bandwidth_legends", page_ctx, relays.use_bits) }}
 
     <!-- IPv4 Address Leaders -->
     {{ top3_table("IPv4 Address Leaders", "🌐", relays.json.aroi_leaderboards.leaderboards.ipv4_leaders, ["IPv4 Legend", "IPv4 Master", "IPv4 Champion"], "ipv4_leaders", page_ctx, relays.use_bits) }}
@@ -202,10 +214,10 @@
     </section>
 
     <!-- Paginated Generic Categories -->
-    {% for category_key in ['most_diverse', 'platform_diversity', 'non_eu_leaders', 'frontier_builders', 'network_veterans', 'reliability_masters', 'legacy_titans'] %}
+    {% for category_key in ['most_diverse', 'platform_diversity', 'non_eu_leaders', 'frontier_builders', 'network_veterans', 'reliability_masters', 'legacy_titans', 'bandwidth_masters', 'bandwidth_legends'] %}
         {% set category_name = relays.json.aroi_leaderboards.summary.categories[category_key] %}
         {% set category_data = relays.json.aroi_leaderboards.leaderboards[category_key] %}
-        {% set emoji = '🌈' if category_key == 'most_diverse' else '💻' if category_key == 'platform_diversity' else '🌍' if category_key == 'non_eu_leaders' else '🏴‍☠️' if category_key == 'frontier_builders' else '🏆' if category_key == 'network_veterans' else '⏰' if category_key == 'reliability_masters' else '👑' if category_key == 'legacy_titans' else '🌐' if category_key == 'ipv4_leaders' else '🔮' if category_key == 'ipv6_leaders' else '' %}
+        {% set emoji = '🌈' if category_key == 'most_diverse' else '💻' if category_key == 'platform_diversity' else '🌍' if category_key == 'non_eu_leaders' else '🏴‍☠️' if category_key == 'frontier_builders' else '🏆' if category_key == 'network_veterans' else '⏰' if category_key == 'reliability_masters' else '👑' if category_key == 'legacy_titans' else '🚀' if category_key == 'bandwidth_masters' else '🌟' if category_key == 'bandwidth_legends' else '🌐' if category_key == 'ipv4_leaders' else '🔮' if category_key == 'ipv6_leaders' else '' %}
         
         <section id="{{ category_key }}" class="aroi-section">
             <h3 title="Operators ranked by 
@@ -216,9 +228,11 @@
             {%- elif category_key == 'network_veterans' -%}veteran scores calculated as (earliest relay start date × total relay count). Formula: veteran_score = days_since_first_relay × total_relays. Recognizes operators who have been contributing to the Tor network for the longest time with sustained relay operations
             {%- elif category_key == 'reliability_masters' -%}6-month average uptime reliability scores from Onionoo API data for operators with 25+ relays. Formula: reliability_score = average_6_month_uptime. Measures operational excellence and network reliability over recent 6-month period using simple average uptime percentages
             {%- elif category_key == 'legacy_titans' -%}5-year average uptime reliability scores from Onionoo API data for operators with 25+ relays. Formula: reliability_score = average_5_year_uptime. Measures long-term operational stability and reliability over 5-year historical period using simple average uptime percentages
+            {%- elif category_key == 'bandwidth_masters' -%}6-month average bandwidth throughput from Onionoo API data for operators with 25+ relays. Formula: bandwidth_score = average_6_month_bandwidth. Measures recent throughput performance and network contribution over 6-month period using simple average bandwidth values
+            {%- elif category_key == 'bandwidth_legends' -%}1-year average bandwidth throughput from Onionoo API data for operators with 25+ relays. Formula: bandwidth_score = average_1_year_bandwidth. Measures sustained throughput capacity and long-term network contribution over 1-year historical period using simple average bandwidth values
             {%- elif category_key == 'ipv4_leaders' -%}quantity of unique IPv4 addresses per operator across their relay infrastructure. Measures IPv4 address diversity and network distribution capabilities
             {%- elif category_key == 'ipv6_leaders' -%}quantity of unique IPv6 addresses per operator across their relay infrastructure. Measures IPv6 adoption and modern network infrastructure capabilities
-            {%- endif -%}">{% if emoji and category_key not in ['reliability_masters', 'legacy_titans'] %}{{ emoji }} {% endif %}{{ category_name }}</h3>
+            {%- endif -%}">{% if emoji and category_key not in ['reliability_masters', 'legacy_titans', 'bandwidth_masters', 'bandwidth_legends'] %}{{ emoji }} {% endif %}{{ category_name }}</h3>
             {{ pagination_section(category_key, emoji if emoji and category_key not in ['reliability_masters', 'legacy_titans'] else '', category_data, 'generic_ranking_table_paginated', page_ctx, relays.use_bits) }}
         </section>
     {% endfor %}
@@ -263,6 +277,8 @@
                     <li><strong>🏆 Network Veterans:</strong> Longest-serving operators with earliest relay start dates</li>
                     <li><strong>⏰ Reliability Masters:</strong> 6-month average uptime scores (25+ relays, operational excellence)</li>
                     <li><strong>👑 Legacy Titans:</strong> 5-year average uptime scores (25+ relays, long-term stability)</li>
+                    <li><strong>🚀 Bandwidth Throughput Masters:</strong> 6-month average bandwidth performance (25+ relays, recent throughput excellence)</li>
+                    <li><strong>🌟 Bandwidth Legends:</strong> 1-year average bandwidth performance (25+ relays, sustained throughput capacity)</li>
                 </ul>
             </div>
         </div>
@@ -292,6 +308,32 @@
         <p><strong>5-Year Reliability Formula:</strong> reliability_score = Σ(relay_5year_uptime) / relay_count</p>
         <p><em>Example:</em> An operator with 40 relays over 5-year history: 25 active relays averaging 94.2% uptime, 15 retired relays (91.8% historical uptime) would score: ((25 × 94.2) + (15 × 91.8)) / 40 = <strong>93.2% legacy reliability score</strong>, demonstrating sustained long-term commitment.</p>
         <p><strong>Focus:</strong> Recognizes operators who have demonstrated exceptional long-term reliability and sustained commitment to the Tor network through multiple years of consistent uptime performance, infrastructure upgrades, and network service.</p>
+        
+        <h4>🚀 Bandwidth Throughput Masters Scoring (6-Month):</h4>
+        <p><strong>6-Month Bandwidth Score Calculation:</strong> The Bandwidth Throughput Masters category measures recent throughput performance using simple average bandwidth data from the Onionoo API over the past 6 months. Only operators with more than 25 relays are eligible to ensure statistical significance.</p>
+        <ul>
+            <li><strong>Eligibility:</strong> Only operators with more than 25 relays are included (ensures meaningful sample size)</li>
+            <li><strong>Primary Factor - Average 6-Month Bandwidth:</strong> Simple mean bandwidth throughput across all operator's relays from Onionoo 6-month bandwidth data</li>
+            <li><strong>No Weighting Applied:</strong> All relays count equally regardless of uptime or other factors</li>
+            <li><strong>Data Source:</strong> Tor Project's Onionoo API 6-month bandwidth endpoint with historical throughput values</li>
+            <li><strong>Update Frequency:</strong> Updated every 30 minutes as new consensus data becomes available</li>
+        </ul>
+        <p><strong>6-Month Bandwidth Formula:</strong> bandwidth_score = Σ(relay_6month_bandwidth) / relay_count</p>
+        <p><em>Example:</em> An operator with 30 relays: relay1 (10 MB/s avg), relay2 (15 MB/s avg), relay3 (8 MB/s avg), ... relay30 (12 MB/s avg) would score: (10 + 15 + 8 + ... + 12) / 30 = <strong>11.2 MB/s average bandwidth score</strong>.</p>
+        <p><strong>Focus:</strong> Emphasizes consistent throughput performance across all relays for established operators, ideal for identifying operators with excellent recent bandwidth contribution.</p>
+        
+        <h4>🌟 Bandwidth Legends Scoring (1-Year):</h4>
+        <p><strong>1-Year Bandwidth Score Calculation:</strong> The Bandwidth Legends category measures sustained throughput capacity using simple average bandwidth data from the Onionoo API over the past 1 year. Only operators with more than 25 relays are eligible to ensure statistical significance.</p>
+        <ul>
+            <li><strong>Eligibility:</strong> Only operators with more than 25 relays are included (ensures meaningful sample size)</li>
+            <li><strong>Primary Factor - Average 1-Year Bandwidth:</strong> Simple mean bandwidth throughput across all operator's relays from Onionoo 1-year bandwidth data</li>
+            <li><strong>No Weighting Applied:</strong> All relays count equally regardless of uptime or infrastructure changes</li>
+            <li><strong>Historical Perspective:</strong> Accounts for natural infrastructure evolution and capacity upgrades over 1-year period</li>
+            <li><strong>Sustained Contribution:</strong> Operators with 1+ years of consistent high bandwidth demonstrate exceptional network support</li>
+        </ul>
+        <p><strong>1-Year Bandwidth Formula:</strong> bandwidth_score = Σ(relay_1year_bandwidth) / relay_count</p>
+        <p><em>Example:</em> An operator with 40 relays over 1-year history: 25 active relays averaging 12.5 MB/s throughput, 15 upgraded relays (9.8 MB/s historical average) would score: ((25 × 12.5) + (15 × 9.8)) / 40 = <strong>11.5 MB/s sustained bandwidth score</strong>, demonstrating long-term network contribution.</p>
+        <p><strong>Focus:</strong> Recognizes operators who have demonstrated exceptional sustained bandwidth contribution and long-term commitment to the Tor network through consistent high-throughput performance, infrastructure investment, and network capacity expansion.</p>
         
         <h4>🌈 Diversity Champion Scoring:</h4>
         <p><strong>Diversity Score Calculation:</strong> The diversity score uses a weighted formula to measure geographic, platform, and network diversity:</p>

@@ -95,6 +95,75 @@ def _calculate_reliability_score(operator_relays, uptime_data, time_period):
     }
 
 
+def _calculate_bandwidth_score(operator_relays, bandwidth_data, time_period):
+    """
+    Calculate bandwidth score using simple average bandwidth (no weighting).
+    
+    Formula: Score = Average bandwidth across all relays
+    Uses shared bandwidth utilities to avoid code duplication with relays.py.
+    
+    Args:
+        operator_relays (list): List of relay objects for this operator
+        bandwidth_data (dict): Bandwidth data from Onionoo API (attached to relays_instance)
+        time_period (str): Time period to use ('6_months' or '1_year')
+        
+    Returns:
+        dict: Bandwidth metrics including score, average bandwidth, relay count, etc.
+    """
+    if not operator_relays or not bandwidth_data:
+        return {
+            'score': 0.0,
+            'average_bandwidth': 0.0,
+            'relay_count': 0,
+            'weight': 1.0,  # Always 1.0 since no weighting is applied
+            'valid_relays': 0,
+            'breakdown': {}
+        }
+    
+    from .bandwidth_utils import extract_relay_bandwidth_for_period
+    
+    # Extract bandwidth data for this period using shared utility
+    period_result = extract_relay_bandwidth_for_period(operator_relays, bandwidth_data, time_period)
+    
+    # Calculate metrics
+    relay_count = len(operator_relays)
+    valid_relays = len(period_result['bandwidth_values'])
+    
+    if not period_result['bandwidth_values']:
+        return {
+            'score': 0.0,
+            'average_bandwidth': 0.0,
+            'relay_count': relay_count,
+            'weight': 1.0,  # Always 1.0 since no weighting is applied
+            'valid_relays': 0,
+            'breakdown': {}
+        }
+    
+    # Calculate simple average bandwidth across all relays (no weighting)
+    average_bandwidth = sum(period_result['bandwidth_values']) / len(period_result['bandwidth_values'])
+    
+    # Score is simply the average bandwidth (no weight multiplier)
+    score = average_bandwidth
+    
+    # Convert relay_breakdown format for compatibility
+    breakdown = {}
+    for fingerprint, relay_data in period_result['relay_breakdown'].items():
+        breakdown[relay_data['nickname']] = {
+            'fingerprint': fingerprint,
+            'bandwidth': relay_data['bandwidth'],
+            'data_points': relay_data.get('data_points', 0)
+        }
+    
+    return {
+        'score': score,
+        'average_bandwidth': average_bandwidth,
+        'relay_count': relay_count,
+        'weight': 1.0,  # Always 1.0 since no weighting is applied
+        'valid_relays': valid_relays,
+        'breakdown': breakdown
+    }
+
+
 def _safe_parse_ip_address(address_string):
     """
     Safely parse IP address from or_addresses string with validation.
@@ -476,6 +545,16 @@ def _calculate_aroi_leaderboards(relays_instance):
         # 5-year reliability score (legacy metric)
         reliability_5y = _calculate_reliability_score(operator_relays, uptime_data, '5_years')
         
+        # === BANDWIDTH CALCULATIONS (NEW) ===
+        # Calculate bandwidth scores for both 6-month and 1-year periods
+        bandwidth_data = getattr(relays_instance, 'bandwidth_data', None)
+        
+        # 6-month bandwidth score (primary metric)
+        bandwidth_6m = _calculate_bandwidth_score(operator_relays, bandwidth_data, '6_months')
+        
+        # 1-year bandwidth score (extended metric)
+        bandwidth_1y = _calculate_bandwidth_score(operator_relays, bandwidth_data, '1_year')
+        
         # Store operator data (mix of existing + new calculations)
         aroi_operators[operator_key] = {
             # === EXISTING CALCULATIONS (REUSED) ===
@@ -528,6 +607,21 @@ def _calculate_aroi_leaderboards(relays_instance):
             'reliability_5y_weight': reliability_5y['weight'],
             'reliability_5y_valid_relays': reliability_5y['valid_relays'],
             'reliability_5y_breakdown': reliability_5y['breakdown'],
+            
+            # === BANDWIDTH PERFORMANCE METRICS (NEW) ===
+            # 6-month bandwidth data
+            'bandwidth_6m_score': bandwidth_6m['score'],
+            'bandwidth_6m_average': bandwidth_6m['average_bandwidth'],
+            'bandwidth_6m_weight': bandwidth_6m['weight'],
+            'bandwidth_6m_valid_relays': bandwidth_6m['valid_relays'],
+            'bandwidth_6m_breakdown': bandwidth_6m['breakdown'],
+            
+            # 1-year bandwidth data
+            'bandwidth_1y_score': bandwidth_1y['score'],
+            'bandwidth_1y_average': bandwidth_1y['average_bandwidth'],
+            'bandwidth_1y_weight': bandwidth_1y['weight'],
+            'bandwidth_1y_valid_relays': bandwidth_1y['valid_relays'],
+            'bandwidth_1y_breakdown': bandwidth_1y['breakdown'],
             
             # === IPv4/IPv6 UNIQUE ADDRESS METRICS (NEW) ===
             'unique_ipv4_count': unique_ipv4_count,
@@ -656,6 +750,22 @@ def _calculate_aroi_leaderboards(relays_instance):
     leaderboards['ipv6_leaders'] = sorted(
         aroi_operators.items(),
         key=lambda x: x[1]['unique_ipv6_count'],
+        reverse=True
+    )[:50]
+    
+    # 16. 🚀 Bandwidth Throughput Masters - 6-Month Average Bandwidth (NEW) - Only operators with > 25 relays AND > 0 bandwidth
+    bandwidth_masters_filtered = {k: v for k, v in aroi_operators.items() if v['total_relays'] > 25 and v['bandwidth_6m_score'] > 0.0}
+    leaderboards['bandwidth_masters'] = sorted(
+        bandwidth_masters_filtered.items(),
+        key=lambda x: x[1]['bandwidth_6m_score'],
+        reverse=True
+    )[:50]
+    
+    # 17. 🌟 Bandwidth Legends - 1-Year Average Bandwidth (NEW) - Only operators with > 25 relays AND > 0 bandwidth
+    bandwidth_legends_filtered = {k: v for k, v in aroi_operators.items() if v['total_relays'] > 25 and v['bandwidth_1y_score'] > 0.0}
+    leaderboards['bandwidth_legends'] = sorted(
+        bandwidth_legends_filtered.items(),
+        key=lambda x: x[1]['bandwidth_1y_score'],
         reverse=True
     )[:50]
     
@@ -838,6 +948,38 @@ def _calculate_aroi_leaderboards(relays_instance):
                 # Create short version for table display (simplified, no weight)
                 reliability_details_short = f"{reliability_average:.1f}% avg"
             
+            # Format bandwidth details for bandwidth categories (NEW, similar to reliability pattern)
+            bandwidth_details_short = ""
+            bandwidth_tooltip = ""
+            bandwidth_score_raw = 0.0
+            bandwidth_average = 0.0
+            bandwidth_weight = 1.0
+            
+            if category in ['bandwidth_masters', 'bandwidth_legends']:
+                # Determine which bandwidth data to use
+                if category == 'bandwidth_masters':
+                    bandwidth_score_raw = metrics['bandwidth_6m_score']
+                    bandwidth_average = metrics['bandwidth_6m_average']
+                    bandwidth_weight = metrics['bandwidth_6m_weight']
+                    period_label = "6-month"
+                else:  # bandwidth_legends
+                    bandwidth_score_raw = metrics['bandwidth_1y_score']
+                    bandwidth_average = metrics['bandwidth_1y_average']
+                    bandwidth_weight = metrics['bandwidth_1y_weight']
+                    period_label = "1-year"
+                
+                # Format bandwidth with unit (reuse existing formatters)
+                bandwidth_unit = relays_instance.bandwidth_formatter.determine_unit(bandwidth_average)
+                formatted_bandwidth_avg = relays_instance.bandwidth_formatter.format_bandwidth_with_unit(
+                    bandwidth_average, bandwidth_unit, decimal_places=1
+                )
+                
+                # Create tooltip without weighting information (simplified)
+                bandwidth_tooltip = f"{period_label} bandwidth: {formatted_bandwidth_avg} {bandwidth_unit} average bandwidth ({metrics['total_relays']} relays)"
+                
+                # Create short version for table display (simplified, no weight)
+                bandwidth_details_short = f"{formatted_bandwidth_avg} {bandwidth_unit} avg"
+            
             # Format IPv4/IPv6 specific details for IP address categories (NEW)
             ipv4_achievement_title = ""
             ipv6_achievement_title = ""
@@ -953,6 +1095,13 @@ def _calculate_aroi_leaderboards(relays_instance):
                 'reliability_details_short': reliability_details_short,
                 'reliability_tooltip': reliability_tooltip,
                 
+                # === BANDWIDTH FIELDS (NEW) ===
+                'bandwidth_score': f"{bandwidth_score_raw:.1f}",
+                'bandwidth_average': f"{bandwidth_average:.1f}",
+                'bandwidth_weight': f"{bandwidth_weight:.1f}x",
+                'bandwidth_details_short': bandwidth_details_short,
+                'bandwidth_tooltip': bandwidth_tooltip,
+                
                 # === IPv4/IPv6 ADDRESS FIELDS (NEW) ===
                 'unique_ipv4_count': metrics['unique_ipv4_count'],
                 'unique_ipv6_count': metrics['unique_ipv6_count'],
@@ -1010,6 +1159,8 @@ def _calculate_aroi_leaderboards(relays_instance):
             'guard_operators': 'Guard Operators', 
             'reliability_masters': '⏰ Reliability Masters (6-Month Uptime)',
             'legacy_titans': '👑 Legacy Titans (5-Year Uptime)',
+            'bandwidth_masters': '🚀 Bandwidth Throughput Masters (6-Month Historic)',
+            'bandwidth_legends': '🌟 Bandwidth Legends (1-Year Historic)',
             'most_diverse': 'Most Diverse Operators',
             'platform_diversity': 'Platform Diversity (Non-Linux Heroes)',
             'non_eu_leaders': 'Geographic Champions (Non-EU Leaders)',
