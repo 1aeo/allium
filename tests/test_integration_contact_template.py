@@ -110,7 +110,7 @@ class TestContactTemplateIntegration(unittest.TestCase):
             },
             'contact_rankings': [
                 {
-                    'title': 'Bandwidth Champion',
+                    'title': 'Bandwidth Capacity Champion',
                     'badge': '🥇',
                     'description': 'Top bandwidth contributor',
                     'link': 'aroi-leaderboards.html#bandwidth-1-10',
@@ -195,7 +195,7 @@ class TestContactTemplateIntegration(unittest.TestCase):
         # Should contain AROI rankings section
         self.assertIn('🏆 AROI Champion Rankings', rendered)
         self.assertIn('2 winning', rendered)  # Shows count of rankings
-        self.assertIn('— Bandwidth Champion', rendered)
+        self.assertIn('— Bandwidth Capacity Champion', rendered)
         self.assertIn('— Diversity Master', rendered)
         
         # Should contain reliability section (not separate network reliability)
@@ -215,7 +215,7 @@ class TestContactTemplateIntegration(unittest.TestCase):
         self.assertIn('aroi-leaderboards.html#most_diverse-1-10', rendered)
         
         # Template displays category names without emojis in small text
-        self.assertIn('— Bandwidth Champion', rendered)
+        self.assertIn('— Bandwidth Capacity Champion', rendered)
         self.assertIn('— Diversity Master', rendered)
 
     def test_contact_template_without_aroi_rankings(self):

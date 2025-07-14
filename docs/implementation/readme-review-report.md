@@ -164,7 +164,7 @@ allium implements comprehensive security measures:
 
 Twelve specialized leaderboards track authenticated operator achievements:
 
-1. **Bandwidth Champions** - Total bandwidth contributed
+1. **Bandwidth Capacity Champions** - Total bandwidth contributed
 2. **Consensus Weight Leaders** - Network authority holders
 3. **Exit Authority Champions** - Exit traffic facilitators
 4. **Guard Network Builders** - Entry point providers

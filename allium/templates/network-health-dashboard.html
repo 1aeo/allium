@@ -49,7 +49,7 @@ Network Health Dashboard
                     </div>
                 </div>
                 <div class="metric-grid">
-                    <div class="metric-item" title="Fast relays have sufficient bandwidth to be useful for high-speed circuits. Determined by being in the top 7/8ths for bandwidth or at least 100KB/s.">
+                    <div class="metric-item" title="Fast relays have sufficient bandwidth capacity to be useful for high-speed circuits. Determined by being in the top 7/8ths for bandwidth capacity or at least 100KB/s.">
                         <span class="metric-value">{{ relays.json.network_health.fast_count_with_percentage }}</span>
                         <span class="metric-label">Fast</span>
                     </div>
@@ -57,7 +57,7 @@ Network Health Dashboard
                         <span class="metric-value">{{ relays.json.network_health.stable_count_with_percentage }}</span>
                         <span class="metric-label">Stable</span>
                     </div>
-                    <div class="metric-item" title="Measured relays have bandwidth measured by directory authorities for accuracy. Provides more reliable bandwidth estimates than self-reported values.">
+                    <div class="metric-item" title="Measured relays have bandwidth capacity measured by directory authorities for accuracy. Provides more reliable bandwidth capacity estimates than self-reported values.">
                         <span class="metric-value">{{ relays.json.network_health.measured_relays_with_percentage }}</span>
                         <span class="metric-label">Measured</span>
                     </div>
@@ -137,85 +137,85 @@ Network Health Dashboard
         </div>
         
         <!-- CARD 2: BANDWIDTH AVAILABILITY -->
-        <div class="ribbon-card bandwidth-counts">
-            <div class="card-header">
-                <h4>⚡ Bandwidth Availability</h4>
-            </div>
+                    <div class="ribbon-card bandwidth-counts">
+                <div class="card-header">
+                    <h4>⚡ Bandwidth Capacity Availability</h4>
+                </div>
             <div class="card-metrics">
                 <div class="metric-item primary" title="Total observed bandwidth capacity across all relays. Sum of observed_bandwidth from all active relays.">
                     <span class="metric-value">{{ relays.json.network_health.total_bandwidth_formatted }}</span>
-                    <span class="metric-label">Total Bandwidth</span>
+                    <span class="metric-label">Total Capacity</span>
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
-                    <div class="metric-item" title="Total observed bandwidth of all Exit relays. Critical for network's ability to serve user traffic.">
+                    <div class="metric-item" title="Total observed bandwidth capacity of all Exit relays. Critical for network's ability to serve user traffic.">
                         <span class="metric-value">{{ relays.json.network_health.exit_bandwidth_formatted }}</span>
-                        <span class="metric-label">Exit BW Total</span>
+                        <span class="metric-label">Exit Capacity</span>
                     </div>
-                    <div class="metric-item" title="Total observed bandwidth of all Guard relays. Important for network entry capacity.">
+                    <div class="metric-item" title="Total observed bandwidth capacity of all Guard relays. Important for network entry capacity.">
                         <span class="metric-value">{{ relays.json.network_health.guard_bandwidth_formatted }}</span>
-                        <span class="metric-label">Guard BW Total</span>
+                        <span class="metric-label">Guard Capacity</span>
                     </div>
-                    <div class="metric-item" title="Total observed bandwidth of all Middle relays. Provides internal network relay capacity.">
+                    <div class="metric-item" title="Total observed bandwidth capacity of all Middle relays. Provides internal network relay capacity.">
                         <span class="metric-value">{{ relays.json.network_health.middle_bandwidth_formatted }}</span>
-                        <span class="metric-label">Middle BW Total</span>
+                        <span class="metric-label">Middle Capacity</span>
                     </div>
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
-                    <div class="metric-item" title="Mean and median bandwidth per Exit relay. Shows average capacity and typical relay size distribution.">
+                    <div class="metric-item" title="Mean and median bandwidth capacity per Exit relay. Shows average capacity and typical relay size distribution.">
                         <span class="metric-value">{{ relays.json.network_health.exit_bw_mean_formatted }} | {{ relays.json.network_health.exit_bw_median_formatted }}</span>
                         <span class="metric-label">Exit Mean | Median</span>
                     </div>
-                    <div class="metric-item" title="Mean and median bandwidth per Guard relay. Shows average capacity and typical relay size distribution.">
+                    <div class="metric-item" title="Mean and median bandwidth capacity per Guard relay. Shows average capacity and typical relay size distribution.">
                         <span class="metric-value">{{ relays.json.network_health.guard_bw_mean_formatted }} | {{ relays.json.network_health.guard_bw_median_formatted }}</span>
                         <span class="metric-label">Guard Mean | Median</span>
                     </div>
-                    <div class="metric-item" title="Mean and median bandwidth per Middle relay. Shows average capacity and typical relay size distribution.">
+                    <div class="metric-item" title="Mean and median bandwidth capacity per Middle relay. Shows average capacity and typical relay size distribution.">
                         <span class="metric-value">{{ relays.json.network_health.middle_bw_mean_formatted }} | {{ relays.json.network_health.middle_bw_median_formatted }}</span>
                         <span class="metric-label">Middle Mean | Median</span>
                     </div>
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
-                    <div class="metric-item" title="Mean and median bandwidth per Fast relay. Shows performance characteristics of fast relays.">
+                    <div class="metric-item" title="Mean and median bandwidth capacity per Fast relay. Shows performance characteristics of fast relays.">
                         <span class="metric-value">{{ relays.json.network_health.fast_bw_mean_formatted }} | {{ relays.json.network_health.fast_bw_median_formatted }}</span>
                         <span class="metric-label">Fast Mean | Median</span>
                     </div>
-                    <div class="metric-item" title="Mean and median bandwidth per Stable relay. Shows performance characteristics of stable relays.">
+                    <div class="metric-item" title="Mean and median bandwidth capacity per Stable relay. Shows performance characteristics of stable relays.">
                         <span class="metric-value">{{ relays.json.network_health.stable_bw_mean_formatted }} | {{ relays.json.network_health.stable_bw_median_formatted }}</span>
                         <span class="metric-label">Stable Mean | Median</span>
                     </div>
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
-                    <div class="metric-item" title="Mean and median bandwidth per Directory Authority. Shows infrastructure capacity of critical nodes.">
+                    <div class="metric-item" title="Mean and median bandwidth capacity per Directory Authority. Shows infrastructure capacity of critical nodes.">
                         <span class="metric-value">{{ relays.json.network_health.authority_bw_mean_formatted }} | {{ relays.json.network_health.authority_bw_median_formatted }}</span>
                         <span class="metric-label">Authority Mean | Median</span>
                     </div>
-                    <div class="metric-item" title="Mean and median bandwidth per V2Dir relay. Shows directory service capacity.">
+                    <div class="metric-item" title="Mean and median bandwidth capacity per V2Dir relay. Shows directory service capacity.">
                         <span class="metric-value">{{ relays.json.network_health.v2dir_bw_mean_formatted }} | {{ relays.json.network_health.v2dir_bw_median_formatted }}</span>
                         <span class="metric-label">V2Dir Mean | Median</span>
                     </div>
-                    <div class="metric-item" title="Mean and median bandwidth per HSDir relay. Shows hidden service directory capacity.">
+                    <div class="metric-item" title="Mean and median bandwidth capacity per HSDir relay. Shows hidden service directory capacity.">
                         <span class="metric-value">{{ relays.json.network_health.hsdir_bw_mean_formatted }} | {{ relays.json.network_health.hsdir_bw_median_formatted }}</span>
                         <span class="metric-label">HSDir Mean | Median</span>
                     </div>
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
-                    <div class="metric-item" title="Total observed bandwidth of relays supporting both IPv4 and IPv6 protocols. Dual-stack bandwidth provides maximum connectivity capacity.">
+                    <div class="metric-item" title="Total observed bandwidth capacity of relays supporting both IPv4 and IPv6 protocols. Dual-stack bandwidth provides maximum connectivity capacity.">
                         <span class="metric-value">{{ relays.json.network_health.both_ipv4_ipv6_bandwidth_formatted }} ({{ "%.1f%%"|format(relays.json.network_health.both_ipv4_ipv6_bandwidth_percentage) }})</span>
-                        <span class="metric-label">Bandwidth with IPv4 & IPv6</span>
+                        <span class="metric-label">Capacity with IPv4 & IPv6</span>
                     </div>
-                    <div class="metric-item" title="Total observed bandwidth of relays supporting only IPv4 protocol. These relays cannot provide IPv6 connectivity.">
+                    <div class="metric-item" title="Total observed bandwidth capacity of relays supporting only IPv4 protocol. These relays cannot provide IPv6 connectivity.">
                         <span class="metric-value">{{ relays.json.network_health.ipv4_only_bandwidth_formatted }} ({{ "%.1f%%"|format(relays.json.network_health.ipv4_only_bandwidth_percentage) }})</span>
-                        <span class="metric-label">Bandwidth IPv4 Only</span>
+                        <span class="metric-label">Capacity IPv4 Only</span>
                     </div>
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
-                    <div class="metric-item" title="Mean and median difference between observed and advertised bandwidth. Indicates relay capacity accuracy.">
+                    <div class="metric-item" title="Mean and median difference between observed and advertised bandwidth capacity. Indicates relay capacity accuracy.">
                         <span class="metric-value">{{ relays.json.network_health.avg_observed_advertised_diff_formatted }}</span>
                         <span class="metric-label">Obs to Adv Diff (Mean | Median)</span>
                     </div>
-                    <div class="metric-item" title="Number and percentage of relays with bandwidth measured by directory authorities for accuracy.">
+                    <div class="metric-item" title="Number and percentage of relays with bandwidth capacity measured by directory authorities for accuracy.">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.measured_relays) }} ({{ "%.1f%%"|format(relays.json.network_health.measured_percentage) }})</span>
-                        <span class="metric-label">Measured Relays</span>
+                        <span class="metric-label">Capacity Measured</span>
                     </div>
                 </div>
             </div>
@@ -488,7 +488,7 @@ Network Health Dashboard
                 <h4>📈 Bandwidth Utilization</h4>
             </div>
             <div class="card-metrics">
-                <div class="metric-item primary" title="Network-wide CW/BW ratio mean and median across all relays. CW/BW ratio = Consensus Weight ÷ Bandwidth × 1,000,000. Higher ratios indicate better network utilization per bandwidth contributed. Same calculation as Performance Insights in contact operator pages.">
+                <div class="metric-item primary" title="Network-wide CW/BW ratio mean and median across all relays. CW/BW ratio = Consensus Weight ÷ Bandwidth Capacity × 1,000,000. Higher ratios indicate better network utilization per bandwidth capacity contributed. Same calculation as Performance Insights in contact operator pages.">
                     <span class="metric-value">{{ relays.json.network_health.cw_bw_ratio_overall_mean }} | {{ relays.json.network_health.cw_bw_ratio_overall_median }}</span>
                     <span class="metric-label">CW/BW Ratio Network Mean | Median</span>
                 </div>
@@ -503,25 +503,25 @@ Network Health Dashboard
                     </div>
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
-                    <div class="metric-item" title="EU relay CW/BW ratio network mean and median. Performance of relays in European Union countries. CW/BW ratio = Consensus Weight ÷ Bandwidth × 1,000,000.">
+                    <div class="metric-item" title="EU relay CW/BW ratio network mean and median. Performance of relays in European Union countries. CW/BW ratio = Consensus Weight ÷ Bandwidth Capacity × 1,000,000.">
                         <span class="metric-value">{{ relays.json.network_health.eu_cw_bw_mean }} | {{ relays.json.network_health.eu_cw_bw_median }}</span>
                         <span class="metric-label">EU CW/BW Ratio Mean | Median</span>
                     </div>
-                    <div class="metric-item" title="Non-EU relay CW/BW ratio network mean and median. Performance of relays in non-European Union countries. CW/BW ratio = Consensus Weight ÷ Bandwidth × 1,000,000.">
+                    <div class="metric-item" title="Non-EU relay CW/BW ratio network mean and median. Performance of relays in non-European Union countries. CW/BW ratio = Consensus Weight ÷ Bandwidth Capacity × 1,000,000.">
                         <span class="metric-value">{{ relays.json.network_health.non_eu_cw_bw_mean }} | {{ relays.json.network_health.non_eu_cw_bw_median }}</span>
                         <span class="metric-label">Non-EU CW/BW Ratio Mean | Median</span>
                     </div>
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
-                    <div class="metric-item" title="Top 3 AS relay CW/BW ratio network mean and median. Performance of relays in the 3 largest Autonomous Systems by consensus weight. CW/BW ratio = Consensus Weight ÷ Bandwidth × 1,000,000.">
+                    <div class="metric-item" title="Top 3 AS relay CW/BW ratio network mean and median. Performance of relays in the 3 largest Autonomous Systems by consensus weight. CW/BW ratio = Consensus Weight ÷ Bandwidth Capacity × 1,000,000.">
                         <span class="metric-value">{{ relays.json.network_health.top_3_as_cw_bw_mean }} | {{ relays.json.network_health.top_3_as_cw_bw_median }}</span>
                         <span class="metric-label">Top 3 AS CW/BW Ratio Mean | Median</span>
                     </div>
-                    <div class="metric-item" title="Top 5 AS relay CW/BW ratio network mean and median. Performance of relays in the 5 largest Autonomous Systems by consensus weight. CW/BW ratio = Consensus Weight ÷ Bandwidth × 1,000,000.">
+                    <div class="metric-item" title="Top 5 AS relay CW/BW ratio network mean and median. Performance of relays in the 5 largest Autonomous Systems by consensus weight. CW/BW ratio = Consensus Weight ÷ Bandwidth Capacity × 1,000,000.">
                         <span class="metric-value">{{ relays.json.network_health.top_5_as_cw_bw_mean }} | {{ relays.json.network_health.top_5_as_cw_bw_median }}</span>
                         <span class="metric-label">Top 5 AS CW/BW Ratio Mean | Median</span>
                     </div>
-                    <div class="metric-item" title="Top 10 AS relay CW/BW ratio network mean and median. Performance of relays in the 10 largest Autonomous Systems by consensus weight. CW/BW ratio = Consensus Weight ÷ Bandwidth × 1,000,000.">
+                    <div class="metric-item" title="Top 10 AS relay CW/BW ratio network mean and median. Performance of relays in the 10 largest Autonomous Systems by consensus weight. CW/BW ratio = Consensus Weight ÷ Bandwidth Capacity × 1,000,000.">
                         <span class="metric-value">{{ relays.json.network_health.top_10_as_cw_bw_mean }} | {{ relays.json.network_health.top_10_as_cw_bw_median }}</span>
                         <span class="metric-label">Top 10 AS CW/BW Ratio Mean | Median</span>
                     </div>

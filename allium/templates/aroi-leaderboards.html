@@ -24,7 +24,7 @@
     
     <!-- Category Links (compact inline) -->
     <div class="aroi-category-links-row">
-        <a href="#bandwidth" class="aroi-nav-link" title="Operators ranked by total observed bandwidth capacity across all relays">🚀 Bandwidth</a>
+                    <a href="#bandwidth" class="aroi-nav-link" title="Operators ranked by total observed bandwidth capacity across all relays">🚀 Bandwidth Capacity</a>
         <a href="#consensus_weight" class="aroi-nav-link" title="Consensus Weight: The voting power each relay has in determining network routing decisions. Higher consensus weight means more influence over which relays are selected for Tor circuits">⚖️ Consensus</a>
         <a href="#exit_authority" class="aroi-nav-link" title="Exit Authority: Control over exit consensus weight, determining which relays handle the final hop where Tor traffic exits to the regular internet">🚪 Exit Authority</a>
         <a href="#guard_authority" class="aroi-nav-link" title="Guard Authority: Control over guard consensus weight, determining which relays handle the first hop where Tor traffic enters the network">🛡️ Guard Authority</a>
@@ -50,7 +50,7 @@
             <strong><span title="Total unique operators with contact information">Total Operators:</span></strong><br>{{ relays.json.aroi_leaderboards.summary.total_operators }}
         </div>
         <div class="col-md-3">
-            <strong><span title="Aggregate observed bandwidth capacity contributed to the Tor network by all operators with contact information">Combined Bandwidth:</span></strong><br>{{ relays.json.aroi_leaderboards.summary.total_bandwidth_formatted }}
+            <strong><span title="Aggregate observed bandwidth capacity contributed to the Tor network by all operators with contact information">Combined Bandwidth Capacity:</span></strong><br>{{ relays.json.aroi_leaderboards.summary.total_bandwidth_formatted }}
         </div>
         <div class="col-md-3">
             <strong><span title="Network Consensus Weight: The percentage of total Tor network voting power held by operators with contact information. This represents their collective influence over routing decisions in the Tor network">Network Consensus Weight:</span></strong><br>{{ relays.json.aroi_leaderboards.summary.total_consensus_weight_pct }}
@@ -72,7 +72,7 @@
     <p class="lead">Elite Champion Badges - Top performers across key categories</p>
     
     <div class="row">
-        {{ champion_badge("bandwidth", relays.json.aroi_leaderboards.leaderboards.bandwidth, "Platinum Bandwidth", "🥇", "panel-warning", "aroi-champion-platinum", page_ctx.path_prefix, relays.use_bits) }}
+        {{ champion_badge("bandwidth", relays.json.aroi_leaderboards.leaderboards.bandwidth, "Platinum Bandwidth Capacity", "🥇", "panel-warning", "aroi-champion-platinum", page_ctx.path_prefix, relays.use_bits) }}
         
         {{ champion_badge("consensus_weight", relays.json.aroi_leaderboards.leaderboards.consensus_weight, "Network Heavyweight", "⚖️", "panel-warning", "aroi-champion-network", page_ctx.path_prefix, relays.use_bits) }}
         
@@ -111,8 +111,8 @@
     <h2 title="Podium winners with detailed achievement breakdown">🥇 Top 3 Summary</h2>
     <p class="lead">Elite Tier Champions - Podium winners across key categories</p>
     
-    <!-- Bandwidth Titans -->
-    {{ top3_table("Bandwidth Titans", "💪", relays.json.aroi_leaderboards.leaderboards.bandwidth, ["Bandwidth King", "Bandwidth Warrior", "Bandwidth Hero"], "bandwidth", page_ctx, relays.use_bits) }}
+            <!-- Bandwidth Capacity Titans -->
+        {{ top3_table("Bandwidth Capacity Titans", "💪", relays.json.aroi_leaderboards.leaderboards.bandwidth, ["Bandwidth Capacity King", "Bandwidth Capacity Warrior", "Bandwidth Capacity Hero"], "bandwidth", page_ctx, relays.use_bits) }}
 
     <!-- Network Heavyweight Elite -->
     {{ top3_table("Network Heavyweight Elite", "⚖️", relays.json.aroi_leaderboards.leaderboards.consensus_weight, ["Authority Supreme", "Authority Commander", "Authority Captain"], "consensus_weight", page_ctx, relays.use_bits) }}
@@ -167,7 +167,7 @@
 
     <!-- Category 1: Bandwidth Contributed -->
     <section id="bandwidth" class="aroi-section">
-        <h3 title="Operators ranked by total observed bandwidth capacity across all relays">🚀 Bandwidth Contributed</h3>
+        <h3 title="Operators ranked by total observed bandwidth capacity across all relays">🚀 Bandwidth Capacity Contributed</h3>
         {{ pagination_section('bandwidth', '🚀', relays.json.aroi_leaderboards.leaderboards.bandwidth, 'bandwidth_table_complete', page_ctx, relays.use_bits) }}
     </section>
 
@@ -246,7 +246,7 @@
         <div class="row">
             <div class="col-md-6">
                 <ul>
-                    <li><strong>🚀 Bandwidth Contributed:</strong> Total observed bandwidth across all relays</li>
+                    <li><strong>🚀 Bandwidth Capacity Contributed:</strong> Total observed bandwidth capacity across all relays</li>
                     <li><strong>⚖️ Network Heavyweight Rankings:</strong> Total consensus weight percentage in the network</li>
                     <li><strong>🚪 Exit Authorities:</strong> Exit consensus weight percentage (authority over exit traffic)</li>
                     <li><strong>🛡️ Guard Authorities:</strong> Guard consensus weight percentage (authority over entry traffic)</li>

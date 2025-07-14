@@ -82,7 +82,7 @@ The contact page uses an efficient two-column layout that maximizes information 
 
 #### Ranking Categories
 Operators may appear in up to 15 specialized leaderboards:
-- Bandwidth Champions, Consensus Weight Leaders
+- Bandwidth Capacity Champions, Consensus Weight Leaders
 - Exit Authority Champions, Guard Champions
 - Network Diversity Leaders, Platform Diversity Heroes
 - Geographic Champions, Frontier Builders

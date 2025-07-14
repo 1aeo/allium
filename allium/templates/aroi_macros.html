@@ -201,7 +201,7 @@
                         {%- elif category_key == 'reliability_masters' -%}6-month reliability score: simple average uptime percentage from Onionoo API (25+ relays). Measures recent operational excellence and network reliability
                         {%- elif category_key == 'legacy_titans' -%}5-year reliability score: simple average uptime percentage from Onionoo API (25+ relays). Measures long-term operational stability and historical reliability
                                             {%- endif -%}">{% if category_key == 'platform_diversity' %}Non Linux Relays{% elif category_key == 'non_eu_leaders' %}Non-EU Relays{% elif category_key == 'frontier_builders' %}Rare Relays{% elif category_key == 'reliability_masters' %}Reliability Score{% elif category_key == 'legacy_titans' %}Legacy Score{% else %}Key Metric{% endif %}</th>
-                        <th title="Total observed bandwidth capacity in {% if use_bits %}bits per second{% else %}bytes per second{% endif %}">Bandwidth</th>
+                        <th title="Total observed bandwidth capacity in {% if use_bits %}bits per second{% else %}bytes per second{% endif %}">Bandwidth Capacity</th>
                         {% if category_key != 'platform_diversity' %}
                         <th title="{% if category_key == 'network_veterans' %}Geographic distribution: number of countries with relay operations. Geographic diversity demonstrates network resilience and reduces single-point-of-failure risks{% elif category_key == 'reliability_masters' %}Geographic distribution: number of countries with relay operations. Geographic diversity for reliability indicates distributed operational infrastructure{% elif category_key == 'legacy_titans' %}Geographic distribution: number of countries with relay operations. Geographic diversity for long-term operators shows sustained international presence{% else %}Number of countries with relay operations{% endif %}">Countries</th>
                         {% endif %}
@@ -473,7 +473,7 @@
     <th title="Position in bandwidth leaderboard based on total observed bandwidth capacity">Rank</th>
     <th title="Authenticated Relay Operator Identifier following ContactInfo specification">Operator (AROI)</th>
     <th title="Total number of relays operated with measured vs unmeasured breakdown">Relays</th>
-    <th title="Total observed bandwidth capacity contributed to Tor network in {% if use_bits %}bits per second (Mbit/s, Gbit/s, etc.){% else %}bytes per second (MB/s, GB/s, etc.){% endif %}">Bandwidth</th>
+    <th title="Total observed bandwidth capacity contributed to Tor network in {% if use_bits %}bits per second (Mbit/s, Gbit/s, etc.){% else %}bytes per second (MB/s, GB/s, etc.){% endif %}">Bandwidth Capacity</th>
     <th title="Percentage of total Tor network consensus weight controlling routing decisions">Consensus Weight</th>
     <th title="Number of guard, middle, and exit relays providing specialized services">Guard/Middle/Exit Count</th>
     <th title="Geographic distribution of relay operations across countries">Countries</th>
@@ -546,7 +546,7 @@
                     <th title="Authenticated Relay Operator Identifier following ContactInfo specification">Operator (AROI)</th>
                     <th title="Total relay count contributing to consensus weight calculation">Relays</th>
                     <th title="Percentage of total Tor network consensus weight controlled">Network Heavyweight</th>
-                    <th title="Total observed bandwidth capacity in {% if use_bits %}bits per second{% else %}bytes per second{% endif %}">Bandwidth</th>
+                    <th title="Total observed bandwidth capacity in {% if use_bits %}bits per second{% else %}bytes per second{% endif %}">Bandwidth Capacity</th>
                     <th title="Number of guard, middle, and exit relays providing specialized services">Guard/Middle/Exit Count</th>
                     <th title="Number of countries with relay presence">Countries</th>
                 </tr>
@@ -587,7 +587,7 @@
                     <th title="Number of relays providing exit services to internet">Exit Relays</th>
                     <th title="Percentage of exit consensus weight controlling internet access">Exit Authority</th>
                     <th title="Overall network consensus weight across all relay types">Total Authority</th>
-                    <th title="Exit relay bandwidth capacity in {% if use_bits %}bits per second{% else %}bytes per second{% endif %}">Exit Bandwidth</th>
+                    <th title="Exit relay bandwidth capacity in {% if use_bits %}bits per second{% else %}bytes per second{% endif %}">Exit Bandwidth Capacity</th>
                     <th title="Number of countries with relay operations">Countries</th>
                 </tr>
             </thead>
@@ -625,7 +625,7 @@
                     <th title="Number of relays providing guard services to network entry">Guard Relays</th>
                     <th title="Percentage of guard consensus weight controlling network entry">Guard Authority</th>
                     <th title="Overall network consensus weight across all relay types">Total Authority</th>
-                    <th title="Guard relay bandwidth capacity in {% if use_bits %}bits per second{% else %}bytes per second{% endif %}">Guard Bandwidth</th>
+                    <th title="Guard relay bandwidth capacity in {% if use_bits %}bits per second{% else %}bytes per second{% endif %}">Guard Bandwidth Capacity</th>
                     <th title="Number of countries with relay operations">Countries</th>
                 </tr>
             </thead>
@@ -662,7 +662,7 @@
                     <th title="Authenticated Relay Operator Identifier following ContactInfo specification">Operator (AROI)</th>
                     <th title="Number of relays providing exit services to internet">Exit Relays</th>
                     <th title="Combined count of all relay types operated">Total Relays</th>
-                    <th title="Exit relay bandwidth capacity in {% if use_bits %}bits per second{% else %}bytes per second{% endif %}">Exit Bandwidth</th>
+                    <th title="Exit relay bandwidth capacity in {% if use_bits %}bits per second{% else %}bytes per second{% endif %}">Exit Bandwidth Capacity</th>
                     <th title="Percentage of total network consensus weight">Consensus Weight</th>
                     <th title="Number of countries with relay operations">Countries</th>
                     <th title="Number of relays providing guard services">Guard Count</th>
@@ -696,7 +696,7 @@
                     <th title="Authenticated Relay Operator Identifier following ContactInfo specification">Operator (AROI)</th>
                     <th title="Number of relays serving as entry points into the Tor network">Guard Relays</th>
                     <th title="Combined count of all relay types operated">Total Relays</th>
-                    <th title="Guard relay bandwidth capacity in {% if use_bits %}bits per second{% else %}bytes per second{% endif %}">Guard Bandwidth</th>
+                    <th title="Guard relay bandwidth capacity in {% if use_bits %}bits per second{% else %}bytes per second{% endif %}">Guard Bandwidth Capacity</th>
                     <th title="Percentage of total network consensus weight">Consensus Weight</th>
                     <th title="Number of countries with relay operations">Countries</th>
                     <th title="Number of relays providing exit services">Exit Count</th>
@@ -740,7 +740,7 @@
                     {%- elif category_key == 'reliability_masters' -%}6-month reliability score: simple average uptime percentage from Onionoo API (25+ relays). Measures recent operational excellence and network reliability
                     {%- elif category_key == 'legacy_titans' -%}5-year reliability score: simple average uptime percentage from Onionoo API (25+ relays). Measures long-term operational stability and historical reliability
                     {%- endif -%}">{% if category_key == 'platform_diversity' %}Non Linux Relays{% elif category_key == 'non_eu_leaders' %}Non-EU Relays{% elif category_key == 'frontier_builders' %}Rare Relays{% elif category_key == 'reliability_masters' %}Reliability Score{% elif category_key == 'legacy_titans' %}Legacy Score{% else %}Key Metric{% endif %}</th>
-                    <th title="Total observed bandwidth capacity in {% if use_bits %}bits per second{% else %}bytes per second{% endif %}">Bandwidth</th>
+                    <th title="Total observed bandwidth capacity in {% if use_bits %}bits per second{% else %}bytes per second{% endif %}">Bandwidth Capacity</th>
                     {% if category_key != 'platform_diversity' %}
                     <th title="{% if category_key == 'network_veterans' %}Geographic distribution: number of countries with relay operations. Geographic diversity demonstrates network resilience and reduces single-point-of-failure risks{% elif category_key == 'reliability_masters' %}Geographic distribution: number of countries with relay operations. Geographic diversity for reliability indicates distributed operational infrastructure{% elif category_key == 'legacy_titans' %}Geographic distribution: number of countries with relay operations. Geographic diversity for long-term operators shows sustained international presence{% else %}Number of countries with relay operations{% endif %}">Countries</th>
                     {% endif %}
@@ -858,7 +858,7 @@
                     <th title="Authenticated Relay Operator Identifier following ContactInfo specification">Operator (AROI)</th>
                     <th title="Number of unique {{ ip_version }} addresses used across relay infrastructure">Unique {{ ip_version }}</th>
                     <th title="Number of relays using {{ ip_version }} addresses">Relays</th>
-                    <th title="Total bandwidth capacity on relays using {{ ip_version }} addresses">Bandwidth</th>
+                    <th title="Total bandwidth capacity on relays using {{ ip_version }} addresses">Bandwidth Capacity</th>
                     <th title="Consensus weight percentage on relays using {{ ip_version }} addresses">Consensus Weight</th>
                     <th title="Number of guard relays using {{ ip_version }} addresses">Guard</th>
                     <th title="Number of exit relays using {{ ip_version }} addresses">Exit</th>

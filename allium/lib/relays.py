@@ -1925,7 +1925,7 @@ class Relays:
             return {'name': name, 'emoji': emoji, 'title': name}
         
         category_info = {
-            'bandwidth': _info('Bandwidth Champion', '🚀'),
+            'bandwidth': _info('Bandwidth Capacity Champion', '🚀'),
             'consensus_weight': _info('Network Heavyweight', '⚖️'),
             'exit_authority': _info('Exit Heavyweight Master', '🚪'),
             'guard_authority': _info('Guard Heavyweight Master', '🛡️'),
