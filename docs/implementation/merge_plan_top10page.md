@@ -113,7 +113,7 @@ The `top10page` branch introduces a comprehensive pagination system for AROI lea
    ```
    
 2. **Pagination Validation**
-   - Test all 12 categories (Bandwidth Champions, Consensus Weight Leaders, etc.)
+   - Test all 12 categories (Bandwidth Capacity Champions, Consensus Weight Leaders, etc.)
    - Verify 1-10, 11-20, 21-25 pagination for each category
    - Confirm category independence (pagination in one doesn't affect others)
    - Test emoji display for Reliability Masters and Legacy Titans

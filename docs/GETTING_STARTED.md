@@ -153,7 +153,7 @@ python3 allium.py --progress
 
 These leaderboards rank relay operators who provide contact information:
 
-1. **Bandwidth Champions** - Most bandwidth contributed
+1. **Bandwidth Capacity Champions** - Most bandwidth contributed
 2. **Consensus Weight Leaders** - Most network authority
 3. **Geographic Diversity** - Operating in rare countries
 4. **Platform Diversity** - Using non-Linux systems

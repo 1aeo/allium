@@ -199,7 +199,7 @@ allium integrates with multiple Tor Project APIs:
 
 Fifteen specialized categories tracking authenticated operator achievements:
 
-1. **Bandwidth Champions** - Total bandwidth contributed
+1. **Bandwidth Capacity Champions** - Total bandwidth contributed
 2. **Consensus Weight Leaders** - Network authority holders
 3. **Exit Authority Champions** - Exit traffic facilitators
 4. **Guard Authority Champions** - Guard traffic facilitators
@@ -277,7 +277,7 @@ Areas where contributions are particularly welcome:
 
 Main AROI leaderboard showing top operators across categories with expandable views highlighting achievements in bandwidth, consensus weight, and network diversity.
 
-### AROI Leaderboard - Top 25 Bandwidth Champions
+### AROI Leaderboard - Top 25 Bandwidth Capacity Champions
 ![AROI Leaderboard Top 25 Bandwidth](docs/screenshots/aroi-leaderboard-top25-bandwidth.png)
 
 Detailed ranking of the top 25 bandwidth contributors showing authenticated relay operators with precise measurements and network impact metrics.

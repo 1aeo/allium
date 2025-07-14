@@ -29,7 +29,7 @@
     <th>Contact</th>
     <th>BW</th>
     {% if key and not is_index -%}
-    <th title="Bandwidth measured by >=3 bandwidth authorities">BW Measured</th>
+                <th title="Bandwidth capacity measured by >=3 bandwidth authorities">BW Cap Measured</th>
     {% endif -%}
     <th class="visible-md visible-lg">IP Address</th>
     <th>AS Number</th>
@@ -103,7 +103,7 @@
 		{% endif -%}
 		<td>{{ obs_bandwidth }} {{ obs_unit }}</td>
 		{% if key and not is_index -%}
-		    <td title=">=3 bandwidth authorities have measured">
+		    <td title=">=3 bandwidth authorities have measured bandwidth capacity">
 		        {% if relay['measured'] is not none -%}
 		            {% if relay['measured'] -%}Yes{% else -%}No{% endif -%}
 		        {% else -%}
