@@ -338,6 +338,19 @@
                     box-shadow: 0 2px 6px rgba(139, 69, 19, 0.25);
                 }
                 
+                /* Bandwidth categories */
+                .aroi-champion-bandwidth {
+                    background: linear-gradient(45deg, #00b894, #55a3ff);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(0, 184, 148, 0.25);
+                }
+                
+                .aroi-champion-bandwidth-legend {
+                    background: linear-gradient(45deg, #FFB300, #FF8C00);
+                    color: #000;
+                    box-shadow: 0 2px 6px rgba(255, 179, 0, 0.25);
+                }
+                
 
                 
                 /* Enhanced hover effects for all badges */
@@ -554,6 +567,8 @@
                 #network_veterans-1-10,
                 #reliability_masters-1-10,
                 #legacy_titans-1-10,
+                #bandwidth_masters-1-10,
+                #bandwidth_legends-1-10,
                 #ipv4_leaders-1-10,
                 #ipv6_leaders-1-10 {
                     display: block;
@@ -599,6 +614,12 @@
                 #legacy_titans-1-10:target,
                 #legacy_titans-11-20:target,
                 #legacy_titans-21-25:target,
+                #bandwidth_masters-1-10:target,
+                #bandwidth_masters-11-20:target,
+                #bandwidth_masters-21-25:target,
+                #bandwidth_legends-1-10:target,
+                #bandwidth_legends-11-20:target,
+                #bandwidth_legends-21-25:target,
                 #ipv4_leaders-1-10:target,
                 #ipv4_leaders-11-20:target,
                 #ipv4_leaders-21-25:target,
@@ -626,6 +647,8 @@
                 #network_veterans:has(.pagination-section:target) .pagination-section:not(:target),
                 #reliability_masters:has(.pagination-section:target) .pagination-section:not(:target),
                 #legacy_titans:has(.pagination-section:target) .pagination-section:not(:target),
+                #bandwidth_masters:has(.pagination-section:target) .pagination-section:not(:target),
+                #bandwidth_legends:has(.pagination-section:target) .pagination-section:not(:target),
                 #ipv4_leaders:has(.pagination-section:target) .pagination-section:not(:target),
                 #ipv6_leaders:has(.pagination-section:target) .pagination-section:not(:target) {
                     display: none !important;
