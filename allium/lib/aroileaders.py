@@ -783,7 +783,7 @@ def _calculate_aroi_leaderboards(relays_instance):
         reverse=True
     )[:50]
     
-    # 16. 🚀 Bandwidth Throughput Masters - 6-Month Average Bandwidth (NEW) - Only operators with > 25 relays AND > 0 bandwidth
+    # 16. 🚀 Bandwidth Served Masters - 6-Month Average Bandwidth (NEW) - Only operators with > 25 relays AND > 0 bandwidth
     bandwidth_masters_filtered = {k: v for k, v in aroi_operators.items() if v['total_relays'] > 25 and v['bandwidth_6m_score'] > 0.0}
     leaderboards['bandwidth_masters'] = sorted(
         bandwidth_masters_filtered.items(),
@@ -791,7 +791,7 @@ def _calculate_aroi_leaderboards(relays_instance):
         reverse=True
     )[:50]
     
-    # 17. 🌟 Bandwidth Legends - 5-Year Average Bandwidth (NEW) - Only operators with > 25 relays AND > 0 bandwidth
+    # 17. 🌟 Bandwidth Served Legends - 5-Year Average Bandwidth (NEW) - Only operators with > 25 relays AND > 0 bandwidth
     bandwidth_legends_filtered = {k: v for k, v in aroi_operators.items() if v['total_relays'] > 25 and v['bandwidth_5y_score'] > 0.0}
     leaderboards['bandwidth_legends'] = sorted(
         bandwidth_legends_filtered.items(),
@@ -1191,8 +1191,8 @@ def _calculate_aroi_leaderboards(relays_instance):
             'guard_operators': 'Guard Operators', 
             'reliability_masters': '⏰ Reliability Masters (6-Month Uptime)',
             'legacy_titans': '👑 Legacy Titans (5-Year Uptime)',
-            'bandwidth_masters': '🚀 Bandwidth Throughput Masters (6-Month Historic)',
-            'bandwidth_legends': '🌟 Bandwidth Legends (5-Year Historic)',
+            'bandwidth_masters': '🚀 Bandwidth Served Masters (6-Month Historic)',
+            'bandwidth_legends': '🌟 Bandwidth Served Legends (5-Year Historic)',
             'most_diverse': 'Most Diverse Operators',
             'platform_diversity': 'Platform Diversity (Non-Linux Heroes)',
             'non_eu_leaders': 'Geographic Champions (Non-EU Leaders)',

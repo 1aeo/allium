@@ -4,7 +4,7 @@ This document summarizes the comprehensive verification of bandwidth calculation
 
 ## Overview
 
-The bandwidth leaderboard categories ("Bandwidth Throughput Masters" and "Bandwidth Legends") calculate operator performance based on historical bandwidth data from the Onionoo API. This verification confirms that our calculation methodology is mathematically correct and follows Onionoo API standards.
+The bandwidth leaderboard categories ("Bandwidth Served Masters" and "Bandwidth Served Legends") calculate operator performance based on historical bandwidth data from the Onionoo API. This verification confirms the categories function correctly and display accurate rankings.
 
 ## Calculation Methodology
 
@@ -24,8 +24,8 @@ Our bandwidth calculation follows the **Onionoo details API methodology**:
 
 ### Time Periods
 
-- **Bandwidth Throughput Masters**: 6-month average (recent performance)
-- **Bandwidth Legends**: 5-year average (sustained capacity)
+- **Bandwidth Served Masters**: 6-month average (recent performance)
+- **Bandwidth Served Legends**: 5-year average (sustained capacity)
 
 ## Verification Results
 
