@@ -8,6 +8,7 @@ This directory contains proposals for advanced features and enhancements to the 
 
 The following major features from previous proposals have been successfully implemented:
 
+#### **Core Uptime & Reliability System**
 - **Reliability Champions Leaderboard** - "Reliability Masters" leaderboard with 6-month uptime scoring (25+ relays)
 - **Legacy Titans Leaderboard** - "Legacy Titans" leaderboard with 5-year uptime scoring (25+ relays)  
 - **Network Health Dashboard** - Comprehensive network-wide uptime statistics by flag type
@@ -16,13 +17,32 @@ The following major features from previous proposals have been successfully impl
 - **Operator Reliability Portfolio** - Comprehensive uptime analysis on contact detail pages
 - **Network Uptime Percentiles** - Statistical benchmarking against network averages
 - **Onionoo Uptime API Integration** - Full integration with uptime data fetching and processing
-- **AROI Leaderboards System** - Complete operator ranking system with 17 categories including reliability
 - **Statistical Outlier Detection** - Identification of underperforming relays in operator portfolios
+
+#### **Complete AROI Leaderboards System**
+- **AROI Leaderboards System** - Complete operator ranking system with 17 categories including reliability
 - **Bandwidth Leaderboards** - "Bandwidth Masters" (6-month) and "Bandwidth Legends" (5-year) categories
+- **Geographic Diversity Tracking** - Non-EU Leaders, Frontier Builders, Most Diverse categories
+- **Platform Diversity Analysis** - Non-Linux platform tracking and leaderboards
+- **Network Authority Rankings** - Exit Authority and Guard Authority leaderboards
+- **Operator Role Analysis** - Exit Operators and Guard Operators rankings
+- **Network Veterans Recognition** - Long-term operator contribution tracking
+- **IPv4/IPv6 Leadership** - Unique address leadership tracking
+- **Performance Benchmarking** - Comprehensive operator comparison systems
+
+#### **Bandwidth Analysis & Modernization**
+- **Bandwidth Labels Modernization** - Comprehensive bandwidth terminology update distinguishing capacity vs. consumption (✅ **IMPLEMENTED** - Merged in commits 76c4988 and a6ab779)
+- **Bandwidth Capacity vs. Consumption** - Analysis of all 127+ bandwidth references in codebase with user-facing label updates for clarity in templates
+- **Template Modernization** - All templates now use "Bandwidth Capacity" terminology consistently
+
+#### **Data Analysis & Research Completed**
+- **AROI Leaderboard Data Analysis** - Comprehensive analysis exceeded expectations (✅ **EXCEEDED** - Analyzed 10 categories, implemented 17 categories)
+- **Statistical Utilities** - Comprehensive uptime calculations and percentiles in `uptime_utils.py`
+- **Performance Optimization** - Efficient data processing and caching systems
 
 ### 🚀 **Active Enhancement Proposals**
 
-The remaining proposals focus on advanced analytics, visualization, and intelligence features:
+The remaining proposals focus on advanced analytics, visualization, and intelligence features that are not yet implemented:
 
 ## Proposal Documents
 
@@ -43,13 +63,6 @@ The remaining proposals focus on advanced analytics, visualization, and intellig
 - Geographic and infrastructure diversity scoring
 - Resource optimization metrics
 - **Status**: Detailed specification complete, builds on existing statistical utilities
-
-#### [Bandwidth Labels Modernization](./bandwidth_labels_modernization.md)
-**Comprehensive bandwidth terminology update** distinguishing capacity vs. consumption:
-- Analysis of all 127+ bandwidth references in codebase
-- User-facing label updates for clarity in templates
-- Template modernization for better understanding
-- **Status**: ✅ **IMPLEMENTED** - Merged in commits 76c4988 and a6ab779
 
 ### 🎯 **Advanced Intelligence Features**
 
@@ -75,15 +88,6 @@ The remaining proposals focus on advanced analytics, visualization, and intellig
 - Real-time analytics capabilities
 - **Status**: Field analysis complete, performance optimization targets identified
 
-### 📈 **Data Analysis & Research**
-
-#### [AROI Leaderboard Data Analysis](./aroi_leaderboard_data_analysis.md)
-**Comprehensive analysis of leaderboard data requirements**:
-- Data availability assessment for all ranking categories
-- Implementation feasibility analysis
-- Performance optimization recommendations
-- **Status**: ✅ **EXCEEDED EXPECTATIONS** - Analyzed 10 categories, implemented 17 categories
-
 #### [Directory Authorities Monitoring](./directory-authorities/)
 **Enhanced directory authority analytics**:
 - Comprehensive authority performance tracking
@@ -98,31 +102,30 @@ The remaining proposals focus on advanced analytics, visualization, and intellig
 # High-impact, moderate effort implementations
 1. Historical Bandwidth Metrics (10 new metrics)
 2. Operator Performance Comparisons 
-# 3. Bandwidth Labels Modernization - ✅ COMPLETED
 ```
 
 ### Phase 2: Advanced Visualizations (6-8 weeks) 📊
 ```bash
 # Enhanced user experience features
-4. Interactive Uptime Charts
-5. Geographic Intelligence Dashboard
-6. Smart Context Links System
+3. Interactive Uptime Charts
+4. Geographic Intelligence Dashboard
+5. Smart Context Links System
 ```
 
 ### Phase 3: Predictive Intelligence (8-10 weeks) 🧠
 ```bash
 # AI/ML powered features
-7. Uptime Prediction Modeling
-8. Network Fault Detection
-9. Performance Anomaly Detection
+6. Uptime Prediction Modeling
+7. Network Fault Detection
+8. Performance Anomaly Detection
 ```
 
 ### Phase 4: Infrastructure Enhancement (4-6 weeks) ⚡
 ```bash
 # Performance and scalability improvements
-10. ClickHouse Integration
-11. Real-time Analytics Pipeline
-12. Advanced Statistical Engine
+9. ClickHouse Integration
+10. Real-time Analytics Pipeline
+11. Advanced Statistical Engine
 ```
 
 ## Technical Architecture
@@ -410,4 +413,4 @@ python3 allium.py --progress --limit=100
 
 **Last Updated**: January 2025  
 **Status**: Active Enhancement Pipeline  
-**Implementation Timeline**: 16-24 weeks for complete roadmap 
+**Implementation Timeline**: 12-16 weeks for remaining roadmap 
