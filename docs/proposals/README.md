@@ -36,10 +36,10 @@ The following major features from previous proposals have been successfully impl
 - **Template Modernization** - All templates now use "Bandwidth Capacity" terminology consistently
 
 #### **Intelligence & Navigation Systems**
-- **Smart Context Links System** - Intelligent navigation and discovery system (✅ **IMPLEMENTED** - `intelligence_engine.py` with 6 layers, contextual analysis)
-- **Directory Authorities Monitoring** - Enhanced directory authority analytics and performance tracking (✅ **IMPLEMENTED** - Page generation in `allium.py`)
-- **Context-Aware Page Recommendations** - Smart cross-references between related entities
-- **Enhanced User Experience** - Intelligent routing and contextual insights
+- **Intelligence Engine Foundation** - 6-layer intelligence system (✅ **IMPLEMENTED** - `intelligence_engine.py` with basic relationships, concentration patterns, performance correlation, infrastructure dependency, geographic clustering, capacity distribution)
+- **Basic Smart Context Integration** - Intelligence data display in templates (✅ **IMPLEMENTED** - Network status, performance analysis, diversity metrics across 7 templates)
+- **Directory Authorities Core Page** - Basic authority monitoring with uptime analysis (✅ **IMPLEMENTED** - `misc-authorities.html` with uptime statistics, z-score analysis)
+- **Authority Health Metrics** - Consensus participation and network status tracking (✅ **IMPLEMENTED** - Version compliance, uptime analysis with color-coded indicators)
 
 #### **Data Analysis & Research Completed**
 - **AROI Leaderboard Data Analysis** - Comprehensive analysis exceeded expectations (✅ **EXCEEDED** - Analyzed 10 categories, implemented 17 categories)
@@ -80,6 +80,25 @@ The remaining proposals focus on advanced analytics, visualization, and intellig
 - Network fault detection and root cause analysis
 - **Status**: Consolidated 16-week implementation plan, builds on existing uptime system
 
+#### [Enhanced Smart Context Links System](./smart_context_links/implementation_plan.md)
+**Advanced contextual navigation and discovery** (builds on implemented intelligence engine):
+- Smart Context Sections & UI Framework - `smart_context_section` macro with visual risk indicators
+- Contextual Filtering & Smart Links - Context-aware link enhancement with filtering parameters
+- Smart Suggestions System - Cross-category suggestions and related analysis recommendations
+- Page-Specific Intelligence Sections - Dedicated intelligence analysis per page type
+- Risk Assessment Visualization - Visual risk indicators and interactive assessment components
+- Layer 3 Contextual Significance Analysis - "Top 5% of relays" type significance calculations
+- **Status**: Intelligence foundation complete, advanced UI and contextual features planned
+
+#### [Advanced Directory Authorities Monitoring](./directory-authorities/)
+**Enhanced authority analytics** (builds on implemented core page):
+- CollecTor API Integration - Real-time vote timestamps and bandwidth measurements
+- Consensus-Health API Integration - Live consensus metrics and relay coverage statistics
+- Advanced Performance Monitoring - Consensus failure rates and bandwidth authority analysis
+- Network Governance Analysis - Vote tracking and authority coordination metrics
+- Enhanced Visual Dashboard - Interactive authority health monitoring
+- **Status**: Core page implemented, advanced APIs and monitoring features planned
+
 #### [ClickHouse Integration](./clickhouse/missing_fields_analysis.md)
 **High-performance analytics backend**:
 - Analysis of missing Onionoo fields for advanced analytics
@@ -101,22 +120,23 @@ The remaining proposals focus on advanced analytics, visualization, and intellig
 # Enhanced user experience features
 3. Interactive Uptime Charts
 4. Geographic Intelligence Dashboard
+5. Enhanced Smart Context Links System
 ```
 
-### Phase 3: Predictive Intelligence (8-10 weeks) 🧠
+### Phase 3: Advanced Intelligence (8-10 weeks) 🧠
 ```bash
-# AI/ML powered features
-5. Uptime Prediction Modeling
-6. Network Fault Detection
-7. Performance Anomaly Detection
+# AI/ML powered features and enhanced monitoring
+6. Uptime Prediction Modeling
+7. Network Fault Detection
+8. Advanced Directory Authorities Monitoring
 ```
 
 ### Phase 4: Infrastructure Enhancement (4-6 weeks) ⚡
 ```bash
 # Performance and scalability improvements
-8. ClickHouse Integration
-9. Real-time Analytics Pipeline
-10. Advanced Statistical Engine
+9. ClickHouse Integration
+10. Real-time Analytics Pipeline
+11. Advanced Statistical Engine
 ```
 
 ## Technical Architecture
@@ -404,4 +424,4 @@ python3 allium.py --progress --limit=100
 
 **Last Updated**: January 2025  
 **Status**: Active Enhancement Pipeline  
-**Implementation Timeline**: 10-14 weeks for remaining roadmap 
+**Implementation Timeline**: 12-16 weeks for remaining roadmap 
