@@ -35,6 +35,12 @@ The following major features from previous proposals have been successfully impl
 - **Bandwidth Capacity vs. Consumption** - Analysis of all 127+ bandwidth references in codebase with user-facing label updates for clarity in templates
 - **Template Modernization** - All templates now use "Bandwidth Capacity" terminology consistently
 
+#### **Intelligence & Navigation Systems**
+- **Smart Context Links System** - Intelligent navigation and discovery system (✅ **IMPLEMENTED** - `intelligence_engine.py` with 6 layers, contextual analysis)
+- **Directory Authorities Monitoring** - Enhanced directory authority analytics and performance tracking (✅ **IMPLEMENTED** - Page generation in `allium.py`)
+- **Context-Aware Page Recommendations** - Smart cross-references between related entities
+- **Enhanced User Experience** - Intelligent routing and contextual insights
+
 #### **Data Analysis & Research Completed**
 - **AROI Leaderboard Data Analysis** - Comprehensive analysis exceeded expectations (✅ **EXCEEDED** - Analyzed 10 categories, implemented 17 categories)
 - **Statistical Utilities** - Comprehensive uptime calculations and percentiles in `uptime_utils.py`
@@ -74,26 +80,12 @@ The remaining proposals focus on advanced analytics, visualization, and intellig
 - Network fault detection and root cause analysis
 - **Status**: Consolidated 16-week implementation plan, builds on existing uptime system
 
-#### [Smart Context Links System](./smart_context_links/implementation_plan.md)
-**Intelligent navigation and discovery system**:
-- Context-aware page recommendations
-- Smart cross-references between related entities
-- Enhanced user experience with intelligent routing
-- **Status**: [Intelligence engine design](./smart_context_links/intelligence_engine_design.md) available
-
 #### [ClickHouse Integration](./clickhouse/missing_fields_analysis.md)
 **High-performance analytics backend**:
 - Analysis of missing Onionoo fields for advanced analytics
 - Performance optimization for large-scale data processing
 - Real-time analytics capabilities
 - **Status**: Field analysis complete, performance optimization targets identified
-
-#### [Directory Authorities Monitoring](./directory-authorities/)
-**Enhanced directory authority analytics**:
-- Comprehensive authority performance tracking
-- Network governance and voting analysis
-- Authority uptime and reliability monitoring
-- **Status**: [Implementation plan](./directory-authorities/README.md) and [mockup](./directory-authorities/authorities-page-mockup.html) available
 
 ## Quick Implementation Priorities
 
@@ -109,23 +101,22 @@ The remaining proposals focus on advanced analytics, visualization, and intellig
 # Enhanced user experience features
 3. Interactive Uptime Charts
 4. Geographic Intelligence Dashboard
-5. Smart Context Links System
 ```
 
 ### Phase 3: Predictive Intelligence (8-10 weeks) 🧠
 ```bash
 # AI/ML powered features
-6. Uptime Prediction Modeling
-7. Network Fault Detection
-8. Performance Anomaly Detection
+5. Uptime Prediction Modeling
+6. Network Fault Detection
+7. Performance Anomaly Detection
 ```
 
 ### Phase 4: Infrastructure Enhancement (4-6 weeks) ⚡
 ```bash
 # Performance and scalability improvements
-9. ClickHouse Integration
-10. Real-time Analytics Pipeline
-11. Advanced Statistical Engine
+8. ClickHouse Integration
+9. Real-time Analytics Pipeline
+10. Advanced Statistical Engine
 ```
 
 ## Technical Architecture
@@ -413,4 +404,4 @@ python3 allium.py --progress --limit=100
 
 **Last Updated**: January 2025  
 **Status**: Active Enhancement Pipeline  
-**Implementation Timeline**: 12-16 weeks for remaining roadmap 
+**Implementation Timeline**: 10-14 weeks for remaining roadmap 
