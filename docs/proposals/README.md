@@ -1,296 +1,413 @@
-# Allium Uptime Integration Proposals
+# Allium Enhancement Proposals
 
-This directory contains comprehensive proposals for integrating Onionoo API uptime data into the allium Tor relay analytics platform.
+This directory contains proposals for advanced features and enhancements to the allium Tor relay analytics platform.
 
-## Overview
+## Implementation Status Overview
 
-The uptime integration roadmap provides 10 detailed ideas to enhance allium with comprehensive reliability analytics, giving relay operators better visibility into their network performance and helping users understand overall Tor network health.
+### ✅ **Already Implemented Core Features**
+
+The following major features from previous proposals have been successfully implemented:
+
+- **Reliability Champions Leaderboard** - "Reliability Masters" leaderboard with 6-month uptime scoring (25+ relays)
+- **Legacy Titans Leaderboard** - "Legacy Titans" leaderboard with 5-year uptime scoring (25+ relays)  
+- **Network Health Dashboard** - Comprehensive network-wide uptime statistics by flag type
+- **Individual Relay Uptime Display** - Flag-specific uptime percentages on relay detail pages (1M/6M/1Y/5Y)
+- **Flag-Specific Uptime Analysis** - Statistics for Exit, Guard, Middle, Authority relays
+- **Operator Reliability Portfolio** - Comprehensive uptime analysis on contact detail pages
+- **Network Uptime Percentiles** - Statistical benchmarking against network averages
+- **Onionoo Uptime API Integration** - Full integration with uptime data fetching and processing
+- **AROI Leaderboards System** - Complete operator ranking system with 14 categories including reliability
+- **Statistical Outlier Detection** - Identification of underperforming relays in operator portfolios
+- **Bandwidth Leaderboards** - "Bandwidth Masters" (6-month) and "Bandwidth Legends" (5-year) categories
+
+### 🚀 **Active Enhancement Proposals**
+
+The remaining proposals focus on advanced analytics, visualization, and intelligence features:
 
 ## Proposal Documents
 
-### 📋 [Main Proposal: Uptime Integration Roadmap](./uptime_integration_roadmap.md)
-**Ideas 1-5**: Core uptime integration features including:
-- Reliability Champions Leaderboard (new competitive category)
-- Individual Relay Uptime History Charts (detailed visualization)
-- Network Health Dashboard (aggregate statistics)
-- Flag-Specific Uptime Analysis (Guard/Exit/Authority reliability)
-- Operator Reliability Portfolio (comprehensive operator dashboard)
+### 📊 **Advanced Analytics**
 
-### 📋 [Supplementary Ideas: Advanced Features](./uptime_integration_remaining_ideas.md)
-**Ideas 6-10**: Advanced analytics and intelligence features:
-- Historical Network Stability Trends (long-term analysis)
-- Uptime-Based Relay Recommendations (smart selection)
-- Real-time Downtime Alerts (network monitoring)
-- Comparative Uptime Analysis (benchmarking)
-- Uptime Prediction Modeling (predictive analytics)
+#### [Historical Bandwidth Metrics Enhancement](./onionoo_historical_bandwidth_metrics_proposal.md)
+**10 new bandwidth-focused metrics** leveraging underutilized Onionoo API endpoints:
+- Bandwidth Stability Index (BSI) for capacity planning
+- Peak Performance Tracking with temporal analysis  
+- Bandwidth Efficiency Ratios and utilization metrics
+- Network-wide bandwidth correlation analysis
+- **Status**: Ready for implementation (API endpoints identified)
 
-## Quick Implementation Guide
+#### [Operator Performance Comparison Metrics](./operator_comparison_metrics_proposal_top10.md) 
+**10 comparative metrics** for operator benchmarking:
+- Network uptime performance benchmarks against similar-scale operators
+- Bandwidth efficiency comparisons with peer analysis
+- Geographic and infrastructure diversity scoring
+- Resource optimization metrics
+- **Status**: Detailed specification complete, builds on existing statistical utilities
 
-### Phase 1: Foundation (Weeks 1-2) 🚀
+#### [Bandwidth Labels Modernization](./bandwidth_labels_modernization.md)
+**Comprehensive bandwidth terminology update** distinguishing capacity vs. consumption:
+- Analysis of all 127+ bandwidth references in codebase
+- User-facing label updates for clarity in templates
+- Template modernization for better understanding
+- **Status**: Analysis complete, ready for implementation
+
+### 🎯 **Advanced Intelligence Features**
+
+#### [Interactive Uptime Analytics](./uptime/enhanced_analytics_uptime_plan.md)
+**Advanced uptime intelligence system** building on existing infrastructure:
+- Interactive uptime trend charts and visualizations
+- Geographic uptime intelligence with anomaly detection
+- Predictive uptime modeling for maintenance planning
+- Network fault detection and root cause analysis
+- **Status**: Consolidated 16-week implementation plan, builds on existing uptime system
+
+#### [Smart Context Links System](./smart_context_links/implementation_plan.md)
+**Intelligent navigation and discovery system**:
+- Context-aware page recommendations
+- Smart cross-references between related entities
+- Enhanced user experience with intelligent routing
+- **Status**: [Intelligence engine design](./smart_context_links/intelligence_engine_design.md) available
+
+#### [ClickHouse Integration](./clickhouse/missing_fields_analysis.md)
+**High-performance analytics backend**:
+- Analysis of missing Onionoo fields for advanced analytics
+- Performance optimization for large-scale data processing
+- Real-time analytics capabilities
+- **Status**: Field analysis complete, performance optimization targets identified
+
+### 📈 **Data Analysis & Research**
+
+#### [AROI Leaderboard Data Analysis](./aroi_leaderboard_data_analysis.md)
+**Comprehensive analysis of leaderboard data requirements**:
+- Data availability assessment for all ranking categories
+- Implementation feasibility analysis
+- Performance optimization recommendations
+- **Status**: Analysis complete, informed current 14-category leaderboard system
+
+#### [Directory Authorities Monitoring](./directory-authorities/)
+**Enhanced directory authority analytics**:
+- Comprehensive authority performance tracking
+- Network governance and voting analysis
+- Authority uptime and reliability monitoring
+- **Status**: [Implementation plan](./directory-authorities/README.md) and [mockup](./directory-authorities/authorities-page-mockup.html) available
+
+## Quick Implementation Priorities
+
+### Phase 1: Enhanced Analytics (4-6 weeks) 🚀
 ```bash
-# Priority implementations for immediate impact
-1. Reliability Champions Leaderboard
-2. Network Health Dashboard
+# High-impact, moderate effort implementations
+1. Historical Bandwidth Metrics (10 new metrics)
+2. Operator Performance Comparisons 
+3. Bandwidth Labels Modernization
 ```
 
-### Phase 2: Operator Tools (Weeks 3-4) 🛠️
+### Phase 2: Advanced Visualizations (6-8 weeks) 📊
 ```bash
-# Enhanced operator visibility features
-3. Individual Relay Uptime Charts
-4. Operator Reliability Portfolio
+# Enhanced user experience features
+4. Interactive Uptime Charts
+5. Geographic Intelligence Dashboard
+6. Smart Context Links System
 ```
 
-### Phase 3: Advanced Analytics (Weeks 5-6) 📊
+### Phase 3: Predictive Intelligence (8-10 weeks) 🧠
 ```bash
-# Deep network analysis features
-5. Flag-Specific Uptime Analysis
-6. Historical Network Stability Trends
+# AI/ML powered features
+7. Uptime Prediction Modeling
+8. Network Fault Detection
+9. Performance Anomaly Detection
 ```
 
-### Phase 4: Intelligence Features (Weeks 7-8) 🧠
+### Phase 4: Infrastructure Enhancement (4-6 weeks) ⚡
 ```bash
-# Smart recommendations and monitoring
-7. Uptime-Based Relay Recommendations
-8. Real-time Downtime Alerts
-```
-
-### Phase 5: Future Features 🔮
-```bash
-# Advanced modeling and prediction
-9. Comparative Uptime Analysis
-10. Uptime Prediction Modeling
+# Performance and scalability improvements
+10. ClickHouse Integration
+11. Real-time Analytics Pipeline
+12. Advanced Statistical Engine
 ```
 
 ## Technical Architecture
 
-### Core Components
+### Current Foundation
+The platform already includes robust infrastructure for:
+- **Onionoo API Integration** - Complete uptime and details API usage
+- **Statistical Analysis** - Comprehensive uptime calculations and percentiles in `uptime_utils.py`
+- **Operator Analytics** - Contact-based grouping and reliability scoring
+- **Template System** - Mature HTML generation with macro support
+- **Performance Optimization** - Efficient data processing and caching
+- **AROI Leaderboard System** - 14 categories with sophisticated ranking algorithms
+- **Network Health Metrics** - Real-time network-wide statistics dashboard
 
-#### 1. Onionoo Integration Layer
-```python
-# New uptime data fetching infrastructure
-class UptimeDataFetcher:
-    def fetch_uptime_data(self, fingerprints: List[str]) -> Dict
-    def process_uptime_history(self, uptime_data: Dict) -> Dict
-    def calculate_reliability_scores(self, relays: List[Dict]) -> Dict
-```
-
-#### 2. Database Extensions
-```sql
--- New tables for uptime caching and analysis
-CREATE TABLE uptime_cache (
-    fingerprint VARCHAR(40) PRIMARY KEY,
-    uptime_data JSON,
-    last_updated TIMESTAMP,
-    INDEX idx_last_updated (last_updated)
-);
-
-CREATE TABLE reliability_scores (
-    contact_hash VARCHAR(64),
-    reliability_score DECIMAL(5,3),
-    trend_direction ENUM('improving', 'stable', 'declining'),
-    last_calculated TIMESTAMP,
-    PRIMARY KEY (contact_hash, last_calculated)
-);
-```
-
-#### 3. Template Enhancements
-```html
-<!-- New uptime-specific macros and components -->
-{% from "uptime_macros.html" import uptime_chart, reliability_badge, trend_indicator %}
-
-<!-- Enhanced relay detail pages -->
-{{ uptime_chart(relay.uptime_data, periods=['1_month', '6_months', '1_year']) }}
-
-<!-- New leaderboard categories -->
-{{ reliability_leaderboard(aroi_operators.reliability_champions) }}
-```
-
-### API Endpoints
-
-#### Onionoo Uptime API Usage
-```bash
-# Individual relay uptime
-GET https://onionoo.torproject.org/uptime?lookup={fingerprint}
-
-# Bulk relay uptime (for operators)
-GET https://onionoo.torproject.org/uptime?lookup={fp1},{fp2},{fp3}
-
-# Response structure:
-{
-  "relays": [{
-    "fingerprint": "...",
-    "uptime": {
-      "1_month": {
-        "first": "2024-01-01 00:00:00",
-        "last": "2024-01-31 23:00:00", 
-        "interval": 3600,
-        "factor": 1.0,
-        "values": [999, 999, 0, 999, ...]  // 0-999 normalized values
-      }
-    },
-    "flags": {
-      "Running": { "1_month": {...} },
-      "Guard": { "1_month": {...} },
-      "Exit": { "1_month": {...} }
-    }
-  }]
-}
-```
+### Enhancement Areas
+Remaining proposals focus on:
+- **Advanced Visualizations** - Interactive charts and dashboards
+- **Predictive Analytics** - ML-powered insights and recommendations  
+- **Performance Optimization** - ClickHouse backend and real-time processing
+- **User Experience** - Smart navigation and contextual features
 
 ## Visual Mockups
 
-### 1. Reliability Champions Badge
+### 1. Interactive Uptime Trend Charts
 ```
-┌─────────────────────────────────────┐
-│ ⏰ Reliability Master               │
-│ torworld.example.org                │
-│ 99.7% Uptime Score                  │
-│ 847 relays • 45.2 Gbit/s           │
-│ 6-month weighted reliability        │
-└─────────────────────────────────────┘
-```
-
-### 2. Network Health Dashboard
-```
-┌─────────────────────────────────────┐
-│ 🏥 Tor Network Health              │
-├─────────────────────────────────────┤
-│ [97.3%]  [94.1%]  [8,247] [223]    │
-│ Current  30-Day   Online  Offline   │
-│                                     │
-│ Distribution:                       │
-│ ████████ Excellent (>95%): 67.2%    │
-│ ████ Good (90-95%): 23.1%           │
-│ ██ Fair (80-90%): 7.8%              │
-│ ▌ Poor (<80%): 1.9%                 │
-└─────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│ 📈 Interactive Uptime History - relay01.example.org       │
+├─────────────────────────────────────────────────────────────┤
+│ [1M] [6M] [1Y] [5Y]     Zoom: [Hour] [Day] [Week]        │
+│                                                             │
+│ 100% ┌─────────────────────────────────────────────────────┐ │
+│  95% │ ████████████████████████████████████████████████████│ │
+│  90% │                                                     │ │
+│  85% │     ▼ Maintenance Window                            │ │
+│  80% │ ▄▄▄▄▄                                               │ │
+│      └─────────────────────────────────────────────────────┘ │
+│       Jan    Feb    Mar    Apr    May    Jun    Jul    Aug │
+│                                                             │
+│ 🎯 98.7% avg • 📊 Network Percentile: 95th • 🔮 Predicted │
+│ ⚠️  Next Maintenance: Aug 15-17 (82% confidence)          │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### 3. Individual Relay Uptime Chart
+### 2. Geographic Intelligence Dashboard
 ```
-┌─────────────────────────────────────┐
-│ ⏰ Uptime History                   │
-│ [1 Month] [6 Months] [1 Year]      │
-│                                     │
-│ 100% ┌─────────────────────────────┐ │
-│  95% │ ████████████████████████████│ │
-│  90% │                             │ │
-│      └─────────────────────────────┘ │
-│       Jan  Feb  Mar  Apr  May  Jun  │
-│                                     │
-│ Avg: 98.7% • Current: Online       │
-└─────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│ 🗺️  Geographic Uptime Intelligence                         │
+├─────────────────────────────────────────────────────────────┤
+│                World Map View                               │
+│     🟢 DE: 98.2%    🟡 FR: 94.1%    🔴 BR: 87.3%         │
+│                                                             │
+│ 🚨 Anomaly Alerts:                                         │
+│ • Eastern Europe experiencing 15% uptime drop              │
+│ • AS16509 (Amazon) showing degraded performance            │
+│ • IPv6 relays underperforming by 8% globally              │
+│                                                             │
+│ 📊 Regional Performance:                                    │
+│ ████████ North America: 97.8% (2,341 relays)              │
+│ ██████   Europe: 96.4% (4,782 relays)                     │
+│ ████     Asia-Pacific: 94.1% (891 relays)                 │
+│ ██       Other: 89.7% (234 relays)                        │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### 4. Operator Reliability Dashboard
+### 3. Bandwidth Efficiency Analysis
 ```
-┌─────────────────────────────────────┐
-│ 📊 Reliability Dashboard            │
-│ torworld.example.org                │
-├─────────────────────────────────────┤
-│           98.7%                     │
-│    Overall Reliability Score        │
-│                                     │
-│ [43] [12] [3] [1]                   │
-│ Exc  Good Fair Poor                 │
-│                                     │
-│ Individual Relays:                  │
-│ relay01 98.7% Excellent ✓          │
-│ relay02 97.1% Good     ✓           │
-│ relay03 89.2% Fair     ⚠️           │
-└─────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│ ⚡ Bandwidth Efficiency Metrics - torworld.example.org     │
+├─────────────────────────────────────────────────────────────┤
+│ 📈 Bandwidth Stability Index (BSI): 87.2/100               │
+│    ████████▓▓ Excellent (Top 15% of operators)             │
+│                                                             │
+│ 🎯 Efficiency vs Network Average:                          │
+│ • Observed/Advertised Ratio: 94.3% (+12.8% vs avg)       │
+│ • Peak Utilization: 87.1% (Target: 85-95%)                │
+│ • Capacity Variance: ±3.2% (Excellent stability)          │
+│                                                             │
+│ 📊 Peer Comparison (Similar Scale Operators):              │
+│ Rank #3 of 47 operators with 100-200 relays               │
+│ ████████████████████████████████████████████████████████    │
+│ You  Peer Avg   Network Avg   Top 10%                     │
+│ 94.3%  87.1%      82.4%       96.2%                       │
+│                                                             │
+│ 💡 Optimization Recommendations:                           │
+│ ✓ Excellent performance - maintain current configuration   │
+│ ⚠️ Consider scaling relay-05 (utilization at 97%)          │
+└─────────────────────────────────────────────────────────────┘
 ```
+
+### 4. Smart Context Links Interface
+```
+┌─────────────────────────────────────────────────────────────┐
+│ 🧠 Smart Navigation - relay01.example.org                  │
+├─────────────────────────────────────────────────────────────┤
+│ Related Insights:                                           │
+│ 🔗 Other relays from torworld.example.org (23 relays)      │
+│ 🔗 Similar performance relays in Germany (15 matches)      │
+│ 🔗 AS16509 network analysis (47 relays)                   │
+│                                                             │
+│ 📋 Contextual Actions:                                     │
+│ • 📊 Compare with network averages                         │
+│ • 🎯 Find optimization opportunities                       │
+│ • 📈 View historical performance trends                    │
+│ • ⚠️ Set up monitoring alerts                              │
+│                                                             │
+│ 🎓 Learn More:                                             │
+│ • Why this relay's uptime matters for the network         │
+│ • How bandwidth measurements work                          │
+│ • Understanding consensus weight calculations              │
+│                                                             │
+│ 🔮 AI Insights:                                            │
+│ "This relay shows consistent performance patterns similar  │
+│ to other high-reliability operators. Consider it for       │
+│ Guard position based on 99.1% uptime score."              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 5. Predictive Analytics Dashboard
+```
+┌─────────────────────────────────────────────────────────────┐
+│ 🔮 Network Prediction Center                               │
+├─────────────────────────────────────────────────────────────┤
+│ 📈 24-Hour Network Health Forecast:                        │
+│ Current: 96.8% → Predicted: 94.2% (±1.1%)                 │
+│                                                             │
+│ ⚠️ Predicted Events:                                        │
+│ • 14:30 UTC: 23 relays likely to restart (confidence: 78%) │
+│ • 18:00 UTC: AS7922 maintenance window (confidence: 92%)   │
+│ • 22:15 UTC: Eastern Europe performance dip (conf: 65%)   │
+│                                                             │
+│ 🎯 Operator Maintenance Predictions:                       │
+│ torworld.example.org:                                      │
+│ • relay-03: Likely restart in 6-12 hours (84% confidence) │
+│ • relay-07: Performance degradation trend detected        │
+│                                                             │
+│ 📊 ML Model Performance:                                   │
+│ • 24h Accuracy: 87.3% • 7d Accuracy: 72.1%               │
+│ • False Positive Rate: 12.7% • Coverage: 94.8%           │
+│                                                             │
+│ 💡 Recommended Actions:                                    │
+│ • Monitor AS7922 relays during maintenance window          │
+│ • Alert torworld.example.org about relay-03 status       │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 6. Real-time Monitoring Interface
+```
+┌─────────────────────────────────────────────────────────────┐
+│ 🚨 Real-time Network Monitor                               │
+├─────────────────────────────────────────────────────────────┤
+│ 🟢 Network Status: HEALTHY  Last Update: 2025-01-15 14:32 │
+│                                                             │
+│ 📊 Live Metrics:                                           │
+│ • Running Relays: 8,247 (↑12 from last hour)              │
+│ • Network Capacity: 847.3 Gbit/s (↑2.1%)                 │
+│ • Average Uptime: 96.8% (24h rolling)                     │
+│                                                             │
+│ 🔥 Recent Events:                                          │
+│ 14:28 - 🔴 relay-abc123 went offline (torworld.example)   │
+│ 14:25 - 🟡 Performance dip detected in AS16509            │
+│ 14:21 - 🟢 23 new relays joined the network               │
+│ 14:18 - 🔵 Bandwidth spike +15% in European region        │
+│                                                             │
+│ ⚡ Auto-Response Actions:                                  │
+│ • Notified torworld.example.org of relay offline           │
+│ • Increased monitoring frequency for AS16509               │
+│ • Triggered capacity analysis for bandwidth spike          │
+│                                                             │
+│ 📈 Trend Indicators:                                       │
+│ Network Health: ████████████████████▓▓ 94.2%              │
+│ Geographic Diversity: ██████████████████▓▓ 87.8%          │
+│ Operator Reliability: ███████████████████▓ 91.5%          │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 7. Enhanced Operator Comparison Dashboard
+```
+┌─────────────────────────────────────────────────────────────┐
+│ 🏆 Operator Performance Benchmark - torworld.example.org   │
+├─────────────────────────────────────────────────────────────┤
+│ 📊 Your Performance vs Similar Scale Operators (100-200):  │
+│                                                             │
+│ Uptime Reliability:     Rank #3 of 47 operators            │
+│ ██████████████████████████████████████████████████▓▓▓▓      │
+│ You: 98.7%  Peer Avg: 94.2%  Network: 92.1%  Top 10%: 99.1%│
+│                                                             │
+│ Bandwidth Efficiency:   Rank #7 of 47 operators            │
+│ ████████████████████████████████████████████▓▓▓▓▓▓▓▓▓▓▓▓    │
+│ You: 87.3%  Peer Avg: 82.1%  Network: 78.9%  Top 10%: 92.4%│
+│                                                             │
+│ Geographic Diversity:   Rank #12 of 47 operators           │
+│ ████████████████████████████████▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓    │
+│ You: 3 countries  Peer Avg: 2.8  Network: 2.1  Top 10%: 7 │
+│                                                             │
+│ 🎯 Optimization Opportunities:                             │
+│ • 🌍 Expand to Asia-Pacific (potential +15% diversity)     │
+│ • ⚡ Optimize relay-05 configuration (+3% efficiency)      │
+│ • 🔧 Consider IPv6 deployment (network trend +23%)        │
+│                                                             │
+│ 🏅 Achievement Progress:                                   │
+│ Next Goal: Geographic Diversity Badge (4+ countries)       │
+│ Progress: ████████████▓▓▓▓ 75% complete                    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Data Sources
+
+### Currently Utilized
+- **Onionoo Details API** - Relay capacity and status information
+- **Onionoo Uptime API** - Historical reliability data (fully integrated)
+- **Consensus Data** - Network voting and weight information
+
+### Available for Enhancement
+- **Onionoo Bandwidth API** - Historical consumption data (partially utilized)
+- **Onionoo Weights API** - Historical weight changes
+- **Directory Authority APIs** - Real-time consensus health data
 
 ## Performance Considerations
 
-### Caching Strategy
-- **Level 1**: In-memory cache for frequently accessed relays (5 minutes TTL)
-- **Level 2**: Database cache for uptime data (30 minutes TTL)
-- **Level 3**: Pre-computed reliability scores (daily refresh)
+### Current Optimizations
+- **Caching Strategy** - Multi-level caching for uptime and bandwidth data
+- **Batch Processing** - Efficient Onionoo API request patterns
+- **Statistical Computation** - Optimized algorithms for network-wide calculations in `statistical_utils.py`
 
-### API Rate Limiting
-- Batch Onionoo requests for efficiency
-- Maximum 50 fingerprints per request
-- Respect Onionoo rate limits and caching headers
-- Background processing for large operators
-
-### Data Processing
-- Asynchronous uptime data collection
-- Progressive loading for large datasets
-- Sampling strategies for network-wide statistics
-- Background calculation of complex metrics
+### Enhancement Targets
+- **Sub-2 Second Page Loads** - For all enhanced analytics pages
+- **Real-time Updates** - Sub-minute latency for critical network changes
+- **Scalable Architecture** - Support for 10,000+ relay network analysis
 
 ## Impact Assessment
 
 ### For Relay Operators 👥
-- **Better Visibility**: Comprehensive uptime analytics and trends
-- **Actionable Insights**: Specific recommendations for infrastructure improvement
-- **Performance Benchmarking**: Compare against network averages and peers
-- **Early Warning System**: Predictive alerts for potential issues
-
-### For Users 🌍
-- **Informed Selection**: Choose relays based on reliability data
-- **Network Understanding**: Learn about overall Tor network health
-- **Transparency**: Clear visibility into network operations
-- **Education**: Understand the importance of relay reliability
+- **Enhanced Analytics** - Deeper insights into performance and optimization opportunities
+- **Competitive Intelligence** - Benchmarking against similar-scale operators
+- **Predictive Maintenance** - Proactive identification of potential issues
+- **Performance Optimization** - Data-driven recommendations for infrastructure improvement
 
 ### For Network Health 💪
-- **Incentivized Reliability**: Competitive recognition for stable operators
-- **Community Recognition**: Public acknowledgment of reliable contributors
-- **Data-Driven Monitoring**: Enhanced network health tracking
-- **Troubleshooting Support**: Better tools for diagnosing network issues
+- **Advanced Monitoring** - Real-time detection of network-wide issues
+- **Predictive Analysis** - Early warning systems for network stability
+- **Research Insights** - Enhanced data for academic and security research
+- **Operational Intelligence** - Better tools for network administrators
 
-## Getting Started
+### For Users 🌍
+- **Informed Decisions** - Better relay selection based on comprehensive analytics
+- **Network Understanding** - Deeper insights into Tor network operations
+- **Performance Awareness** - Real-time visibility into network health
+- **Educational Value** - Learn about network operations and security
 
-### Prerequisites
+## Contributing
+
+### Implementation Guidelines
+1. **Build on Existing Infrastructure** - Leverage current uptime and analytics systems
+2. **Performance First** - Maintain sub-2 second page load targets
+3. **Data Accuracy** - Validate all new metrics against Onionoo API data
+4. **User Experience** - Provide clear explanations and intuitive interfaces
+5. **Testing** - Comprehensive test coverage for all new features
+
+### Development Setup
 ```bash
-# Ensure allium development environment is set up
+# Standard allium development environment
 cd allium/
 python3 -m venv venv
 source venv/bin/activate
 pip install -r config/requirements.txt
+
+# Test with development data
+python3 allium.py --progress --limit=100
 ```
 
-### Development Setup
-```bash
-# Create feature branch for uptime integration
-git checkout -b feature/uptime-integration
-
-# Start with Phase 1 implementation
-cd allium/lib/
-# Implement _fetch_uptime_data() in relays.py
-# Add reliability_champions to aroileaders.py
-```
-
-### Testing
-```bash
-# Test with small dataset first
-python3 allium.py --progress --onionoo-url "https://onionoo.torproject.org/details?limit=50"
-
-# Verify uptime data integration
-curl "https://onionoo.torproject.org/uptime?lookup=fingerprint1,fingerprint2"
-```
-
-## Contributing
-
-See the main [CONTRIB.md](../../CONTRIB.md) for general contribution guidelines.
-
-### Uptime Integration Specific Guidelines
-1. **API Usage**: Respect Onionoo API rate limits and use caching
-2. **Performance**: Always consider the impact on generation time
-3. **User Experience**: Provide clear explanations of uptime metrics
-4. **Error Handling**: Gracefully handle Onionoo API failures
-5. **Testing**: Test with both synthetic and real uptime data
+### Proposal Process
+- **Research Phase** - Analyze Onionoo API data availability and feasibility
+- **Design Phase** - Create detailed implementation specifications
+- **Implementation Phase** - Develop features with comprehensive testing
+- **Integration Phase** - Merge with existing systems and validate performance
 
 ## Questions and Support
 
-- **General Allium**: See main project documentation
-- **Uptime Integration**: Create issues with `uptime-integration` label
-- **Performance**: Tag issues with `performance` for optimization discussions
-- **Design Feedback**: Use `ui-ux` label for visual mockup feedback
+- **General Development**: See main [CONTRIBUTING.md](../../CONTRIBUTING.md)
+- **Enhancement Proposals**: Create issues with `enhancement` label
+- **Performance Optimization**: Tag issues with `performance` label  
+- **Data Analysis**: Use `analytics` label for data-related discussions
 
 ---
 
 **Last Updated**: January 2025  
-**Status**: Proposal Phase - Ready for Implementation  
-**Estimated Effort**: 8-12 weeks for full implementation across all phases 
+**Status**: Active Enhancement Pipeline  
+**Implementation Timeline**: 16-24 weeks for complete roadmap 
