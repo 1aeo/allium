@@ -26,39 +26,36 @@ The uptime integration roadmap provides 10 detailed ideas to enhance allium with
 
 ## Quick Implementation Guide
 
-### Phase 1: Foundation (Weeks 1-2) 🚀
+### ✅ Implemented Features (No longer in proposals)
+- **Reliability Champions Leaderboard** → AROI "Reliability Masters" & "Legacy Titans"
+- **Network Health Dashboard** → Fully operational 10-card dashboard
+- **Individual Relay Uptime Display** → Implemented in relay info pages
+- **Operator Reliability Portfolio** → Comprehensive contact page analysis
+- **Flag-Specific Uptime Analysis** → Implemented with priority system
+- **Network Uptime Percentiles** → Operator positioning analysis
+
+### Phase 1: Advanced Visualizations (Weeks 1-4) 📊
 ```bash
-# Priority implementations for immediate impact
-1. Reliability Champions Leaderboard
-2. Network Health Dashboard
+# Interactive analytics and visualization features
+1. Interactive Uptime Trend Charts
+2. Geographic Uptime Intelligence Dashboard
+3. Advanced Bandwidth Visualization Suite
 ```
 
-### Phase 2: Operator Tools (Weeks 3-4) 🛠️
+### Phase 2: Intelligence & Prediction (Weeks 5-8) 🧠
 ```bash
-# Enhanced operator visibility features
-3. Individual Relay Uptime Charts
-4. Operator Reliability Portfolio
+# AI/ML-powered features and smart recommendations
+4. Predictive Uptime Modeling
+5. Real-time Downtime Alerts & Monitoring
+6. Uptime-Based Relay Recommendations
 ```
 
-### Phase 3: Advanced Analytics (Weeks 5-6) 📊
+### Phase 3: Infrastructure Expansion (Weeks 9-12) 🔮
 ```bash
-# Deep network analysis features
-5. Flag-Specific Uptime Analysis
-6. Historical Network Stability Trends
-```
-
-### Phase 4: Intelligence Features (Weeks 7-8) 🧠
-```bash
-# Smart recommendations and monitoring
-7. Uptime-Based Relay Recommendations
-8. Real-time Downtime Alerts
-```
-
-### Phase 5: Future Features 🔮
-```bash
-# Advanced modeling and prediction
-9. Comparative Uptime Analysis
-10. Uptime Prediction Modeling
+# Network expansion and specialized monitoring
+7. Bridge Network Health Dashboard
+8. ClickHouse Integration & Advanced Analytics
+9. Historical Trend Analysis & Forecasting
 ```
 
 ## Technical Architecture

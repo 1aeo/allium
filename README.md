@@ -43,27 +43,28 @@ cd www && python3 -m http.server 8000
 - **Bandwidth and consensus weight analytics** with multiple viewing modes
 
 ### Enhanced User Interface 🎨
-- **Optimized contact pages** with efficient two-column layout (50% space reduction)
-- **Enhanced operator profiles** with streamlined reliability metrics and network uptime percentiles
+- **Optimized contact pages** with comprehensive operator reliability analysis
 - **Network uptime percentile analysis** showing operator positioning within network performance distribution
-- **Enhanced family pages** with AROI and Contact bullets for better navigation
+- **Flag-specific uptime tracking** with intelligent priority system (Exit > Guard > Fast > Running)
+- **Statistical outlier detection** identifying performance anomalies and optimization opportunities
+- **Enhanced family pages** with AROI and Contact navigation
 - **Country display improvements** with full country names and tooltips
-- **Improved information density** while preserving all analytical data
 - **Responsive design** with mobile-friendly layouts
 - **JavaScript-free pagination** for AROI leaderboards with independent category navigation
 
 ### AROI Leaderboard System 🏆
-- **15 specialized leaderboards** for authenticated relay operators (includes Guard/Exit Authority, IPv4/IPv6 unique address categories)
-- **Paginated rankings** with 1-10, 11-20, 21-25 views per category for improved navigation
-- **Independent pagination** - each category manages its own page state
-- **CSS-only navigation** using `:target` selectors for maximum security and performance
+- **17 specialized leaderboards** for authenticated relay operators across all performance dimensions
+- **Champion badge system** with elite performer recognition across categories
+- **Paginated rankings** with 1-10, 11-20, 21-25 views per category for optimal navigation
+- **Independent pagination** - each category manages its own page state with CSS-only navigation
 - **Reliability scoring system** with 6-month and 5-year average uptime analysis
-- **Simplified reliability scoring** using average uptime (no bandwidth weighting)
+- **Bandwidth served analysis** with historical performance tracking
 - **25+ relay eligibility filter** ensuring statistical significance for reliability categories
-- **Operator achievement tracking** across multiple dimensions
-- **Geographic diversity scoring** with frontier country recognition
-- **Platform diversity metrics** highlighting technical leadership
-- **Network address diversity** with IPv4/IPv6 unique address leaderboards
+- **Multi-dimensional scoring** across capacity, diversity, reliability, and innovation
+- **Geographic diversity scoring** with frontier country recognition and non-EU leadership
+- **Platform diversity metrics** highlighting technical leadership beyond Linux
+- **Network address diversity** with IPv4/IPv6 unique address distribution tracking
+- **Veteran recognition** with scale-weighted tenure analysis
 
 ### Security & Performance 🔒
 - **XSS-hardened templates** with comprehensive input sanitization
@@ -85,11 +86,14 @@ cd www && python3 -m http.server 8000
 - **Network consensus monitoring** displaying authority status, geographic distribution, and performance metrics
 
 ### Intelligence Features 🧠
-- **Dynamic classification system** replacing hardcoded country lists
-- **Multi-factor analysis** (relay count, network %, geopolitical factors)
-- **Tier-based country rankings** (Legendary, Epic, Rare, Emerging, Common)
-- **Geopolitical awareness** in country scoring algorithms
-- **Performance efficiency analysis** with CW/BW ratio calculations, network comparisons, and percentile rankings
+- **6-layer intelligence engine** with sub-millisecond analysis performance
+- **Context analysis** with automatic relationship mapping and pattern detection
+- **Performance correlation analysis** with CW/BW ratio intelligence and network benchmarking
+- **Geographic intelligence** with concentration risk analysis and jurisdiction mapping
+- **Infrastructure intelligence** with AS concentration and provider diversity assessment
+- **Statistical intelligence** with network percentiles and outlier detection
+- **22 template integration points** across contact pages, health dashboard, and relay info
+- **Dynamic classification system** with tier-based country rankings
 - **Underutilized relay detection** identifying optimization opportunities for operators
 
 ## 🌐 API Data Sources
@@ -197,23 +201,34 @@ allium integrates with multiple Tor Project APIs:
 
 ## 🌍 AROI Leaderboards
 
-Fifteen specialized categories tracking authenticated operator achievements:
+Seventeen specialized categories tracking authenticated operator achievements across five core dimensions:
 
-1. **Bandwidth Capacity Champions** - Total bandwidth contributed
-2. **Consensus Weight Leaders** - Network authority holders
-3. **Exit Authority Champions** - Exit traffic facilitators
-4. **Guard Authority Champions** - Guard traffic facilitators
-5. **Exit Gate Keepers** - Number of exit relays operated
-6. **Guard Champions** - Number of guard relays operated
-7. **Most Diverse Operators** - Geographic, platform, and network diversity
-8. **Platform Diversity Heroes** - Non-Linux champions promoting OS diversity
-9. **Non-EU Leaders** - Geographic champions expanding Tor outside EU
-10. **Frontier Builders** - Operators in rare/underrepresented countries
-11. **Network Veterans** - Longest-serving operators
-12. **Reliability Masters** - 6-month average uptime champions (25+ relays)
-13. **Legacy Titans** - 5-year average uptime champions (25+ relays)
-14. **IPv4 Address Diversity** - Unique IPv4 address distribution leaders
-15. **IPv6 Address Diversity** - Unique IPv6 address distribution leaders
+**🚀 Capacity & Performance**
+1. **Bandwidth Contributed** - Total observed bandwidth capacity
+2. **Consensus Weight Authority** - Network routing control influence
+
+**🛡️ Network Role Specialization**  
+3. **Exit Authority Champions** - Exit consensus weight control
+4. **Guard Authority Masters** - Guard consensus weight control
+5. **Exit Operators** - Exit relay infrastructure providers
+6. **Guard Operators** - Guard relay infrastructure providers
+
+**🌍 Diversity & Geographic Leadership**
+7. **Most Diverse Operators** - Multi-factor diversity scoring
+8. **Platform Diversity Heroes** - Non-Linux operational excellence
+9. **Non-EU Leaders** - Geographic expansion beyond EU
+10. **Frontier Builders** - Operations in underrepresented countries
+
+**⏰ Reliability & Performance Excellence**
+11. **Reliability Masters** - 6-month average uptime (25+ relays)
+12. **Legacy Titans** - 5-year average uptime (25+ relays)
+13. **Bandwidth Served Masters** - 6-month bandwidth performance (25+ relays)
+14. **Bandwidth Served Legends** - 5-year bandwidth performance (25+ relays)
+
+**🏆 Innovation & Leadership**
+15. **Network Veterans** - Scale-weighted operational tenure
+16. **IPv4 Address Leaders** - Unique IPv4 address diversity
+17. **IPv6 Address Leaders** - Unique IPv6 address diversity
 
 ## 🔒 Security & Performance
 
