@@ -52,13 +52,15 @@ The remaining proposals focus on advanced analytics, visualization, and intellig
 
 ## Proposal Documents
 
-### 📋 [Main Proposal: Uptime Integration Roadmap](./uptime_integration_roadmap.md)
-**Ideas 1-5**: Core uptime integration features including:
-- Reliability Champions Leaderboard (new competitive category)
-- Individual Relay Uptime History Charts (detailed visualization)
-- Network Health Dashboard (aggregate statistics)
-- Flag-Specific Uptime Analysis (Guard/Exit/Authority reliability)
-- Operator Reliability Portfolio (comprehensive operator dashboard)
+### ✅ **Fully Implemented Core Features**
+All foundational uptime integration features have been successfully implemented:
+- **Reliability Champions Leaderboard** ✅ → "Reliability Masters" (6-month) & "Legacy Titans" (5-year) in AROI system
+- **Network Health Dashboard** ✅ → Comprehensive 10-card dashboard with real-time network metrics
+- **Flag-Specific Uptime Analysis** ✅ → Priority-based flag uptime display (Exit > Guard > Fast > Running)
+- **Operator Reliability Portfolio** ✅ → Complete operator analysis with percentiles, outliers, and statistical analysis
+
+### 🔄 **Partially Implemented**
+- **Individual Relay Uptime Display** ✅ → Basic uptime percentages implemented, but lacks **detailed visualization charts**
 
 ### 📋 [Supplementary Ideas: Advanced Features](./uptime_integration_remaining_ideas.md)
 **Ideas 6-10**: Advanced analytics and intelligence features:
@@ -70,13 +72,8 @@ The remaining proposals focus on advanced analytics, visualization, and intellig
 
 ## Quick Implementation Guide
 
-### ✅ Implemented Features (No longer in proposals)
-- **Reliability Champions Leaderboard** → AROI "Reliability Masters" & "Legacy Titans"
-- **Network Health Dashboard** → Fully operational 10-card dashboard
-- **Individual Relay Uptime Display** → Implemented in relay info pages
-- **Operator Reliability Portfolio** → Comprehensive contact page analysis
-- **Flag-Specific Uptime Analysis** → Implemented with priority system
-- **Network Uptime Percentiles** → Operator positioning analysis
+### 🎯 **Remaining Enhancement Opportunities**
+Focus areas for advanced features beyond the implemented foundation:
 
 ### Phase 1: Advanced Visualizations (Weeks 1-4) 📊
 ```bash
