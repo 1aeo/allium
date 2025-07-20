@@ -42,11 +42,16 @@ cd www && python3 -m http.server 8000
 - **Platform and AS diversity tracking** across the network
 - **Bandwidth and consensus weight analytics** with multiple viewing modes
 
-### Enhanced User Interface 🎨
-- **Optimized contact pages** with comprehensive operator reliability analysis
-- **Network uptime percentile analysis** showing operator positioning within network performance distribution
+### Complete Uptime Intelligence System ⏰
+- **Reliability Champions Leaderboard** with "Reliability Masters" (6-month) & "Legacy Titans" (5-year) categories
+- **Comprehensive operator reliability portfolios** with multi-period analysis and network percentile positioning
 - **Flag-specific uptime tracking** with intelligent priority system (Exit > Guard > Fast > Running)
-- **Statistical outlier detection** identifying performance anomalies and optimization opportunities
+- **Statistical outlier detection** identifying performance anomalies and optimization opportunities (≥2σ deviations)
+- **Network Health Dashboard** with real-time uptime metrics and concentration risk analysis
+- **Individual relay uptime display** with flag analysis and network context
+
+### Enhanced User Interface 🎨
+- **Optimized contact pages** with streamlined reliability metrics and comprehensive analysis
 - **Enhanced family pages** with AROI and Contact navigation
 - **Country display improvements** with full country names and tooltips
 - **Responsive design** with mobile-friendly layouts

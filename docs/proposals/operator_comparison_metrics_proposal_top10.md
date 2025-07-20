@@ -20,28 +20,16 @@ From tor-relays mailing list analysis, the most common operator concerns include
 
 ## Proposed Metrics (Priority Order)
 
-### 1. **Network Uptime Performance Benchmark** (Priority: Critical)
+### 1. **Network Uptime Performance Benchmark** ✅ **IMPLEMENTED**
 
-**Format:** `Network Uptime 6mo: 2.3% lower than mean of 94.2%, and 4.5% below 95th percentile of 99.1%`
+**Status:** ✅ Fully implemented in contact pages as operator reliability analysis
 
-**Mockup:**
-```
-📊 Uptime Benchmarking - torworld.example.org              
-├─────────────────────────────────────────────────────────┤
-│ Your Score: 98.7%  Network Ranking: 92nd Percentile     │
-│                                                         │
-│ 🏆 Performance vs Network:                              │
-│ • 95th percentile: 99.1% (↓ 0.4% below target)         │
-│ • 90th percentile: 98.3% (✅ You exceed this)           │
-│ • Network average: 94.2% (↑ 4.5% above average)        │
-│ • 25th percentile: 91.7% (↑ 7.0% above low performers) │
-└─────────────────────────────────────────────────────────┘
-```
+**Implementation Location:** Contact detail pages with network percentile positioning
+- Example output: "Top 15% of network operators (85th percentile)"
+- Statistical outlier detection with ≥2σ deviations
+- Multi-period analysis (1M/6M/1Y/5Y) with network comparisons
 
-**Proposal:** Compare operator's 6-month uptime average against network percentiles. Critical because uptime directly impacts network stability and user experience. Helps operators understand if infrastructure investments are paying off.
-
-**Data Sources:** Onionoo uptime API, existing `operator_reliability` calculations
-**Implementation:** Extend `_calculate_operator_reliability()` method
+**Code:** `allium/lib/relays.py` (_compute_contact_display_data) with comprehensive reliability portfolio
 
 ---
 
