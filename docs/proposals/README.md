@@ -100,7 +100,10 @@ The remaining proposals focus on advanced analytics, visualization, and intellig
 7. Bridge Network Health Dashboard
 8. ClickHouse Integration & Advanced Analytics
 9. Historical Trend Analysis & Forecasting
-=======
+```
+
+## Active Enhancement Proposals
+
 ### 📊 **Advanced Analytics**
 
 #### [Historical Bandwidth Metrics Enhancement](./onionoo_historical_bandwidth_metrics_proposal.md)
@@ -117,7 +120,7 @@ The remaining proposals focus on advanced analytics, visualization, and intellig
 - Bandwidth efficiency comparisons with peer analysis
 - Geographic and infrastructure diversity scoring
 - Resource optimization metrics
-- **Status**: Detailed specification complete, builds on existing statistical utilities
+- **Status**: Specification updated to focus on advanced metrics beyond implemented baseline
 
 ### 🎯 **Advanced Intelligence Features**
 
@@ -127,41 +130,38 @@ The remaining proposals focus on advanced analytics, visualization, and intellig
 - Geographic uptime intelligence with anomaly detection
 - Predictive uptime modeling for maintenance planning
 - Network fault detection and root cause analysis
-- **Status**: Consolidated 16-week implementation plan, builds on existing uptime system
+- **Status**: Foundation implemented, advanced features planned
 
 #### [Enhanced Smart Context Links System](./smart_context_links/implementation_plan.md)
 **Advanced contextual navigation and discovery** (builds on implemented intelligence engine):
-- Smart Context Sections & UI Framework - `smart_context_section` macro with visual risk indicators
-- Contextual Filtering & Smart Links - Context-aware link enhancement with filtering parameters
-- Smart Suggestions System - Cross-category suggestions and related analysis recommendations
-- Page-Specific Intelligence Sections - Dedicated intelligence analysis per page type
-- Risk Assessment Visualization - Visual risk indicators and interactive assessment components
-- Layer 3 Contextual Significance Analysis - "Top 5% of relays" type significance calculations
-- **Status**: Intelligence foundation complete, advanced UI and contextual features planned
+- Smart Context Sections & UI Framework with visual risk indicators
+- Contextual Filtering & Smart Links with enhanced navigation
+- Smart Suggestions System with cross-category recommendations
+- Page-Specific Intelligence Sections for targeted analysis
+- Risk Assessment Visualization with interactive components
+- **Status**: Intelligence foundation complete, UI framework planned
 
-#### [Advanced Directory Authorities Monitoring](./directory-authorities/)
-**Enhanced authority analytics** (builds on implemented core page):
-- CollecTor API Integration - Real-time vote timestamps and bandwidth measurements
-- Consensus-Health API Integration - Live consensus metrics and relay coverage statistics
-- Advanced Performance Monitoring - Consensus failure rates and bandwidth authority analysis
-- Network Governance Analysis - Vote tracking and authority coordination metrics
-- Enhanced Visual Dashboard - Interactive authority health monitoring
-- **Status**: Core page implemented, advanced APIs and monitoring features planned
+#### [Bridge Network Health Dashboard](./bridges/bridge-network-health-dashboard-proposal.md)
+**Specialized bridge monitoring system**:
+- Bridge-specific health metrics and analysis
+- Transport diversity tracking
+- Censorship circumvention effectiveness analysis
+- **Status**: Proposal complete, implementation planned
 
 #### [ClickHouse Integration](./clickhouse/missing_fields_analysis.md)
 **High-performance analytics backend**:
 - Analysis of missing Onionoo fields for advanced analytics
 - Performance optimization for large-scale data processing
 - Real-time analytics capabilities
-- **Status**: Field analysis complete, performance optimization targets identified
+- **Status**: Field analysis complete, performance targets identified
 
-## Quick Implementation Priorities
+## Implementation Priorities
 
 ### Phase 1: Enhanced Analytics (4-6 weeks) 🚀
 ```bash
-# High-impact, moderate effort implementations
+# High-impact analytics enhancements
 1. Historical Bandwidth Metrics (10 new metrics)
-2. Operator Performance Comparisons 
+2. Advanced Operator Performance Comparisons 
 ```
 
 ### Phase 2: Advanced Visualizations (6-8 weeks) 📊
@@ -175,7 +175,7 @@ The remaining proposals focus on advanced analytics, visualization, and intellig
 ### Phase 3: Advanced Intelligence (8-10 weeks) 🧠
 ```bash
 # AI/ML powered features and enhanced monitoring
-6. Uptime Prediction Modeling
+6. Predictive Uptime Modeling
 7. Network Fault Detection
 8. Advanced Directory Authorities Monitoring
 ```
