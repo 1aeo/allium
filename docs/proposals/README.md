@@ -2,32 +2,9 @@
 
 This directory contains proposals for advanced features and enhancements to the allium Tor relay analytics platform.
 
-## ✅ **Features Moved to docs/features**
-
-The following major features from previous proposals have been successfully implemented and moved to `docs/features`:
-
-### **🏆 Core Systems (Fully Implemented)**
-- **[Complete AROI Leaderboards System](../features/aroi-leaderboard/complete-implementation.md)** - All 17 competitive categories operational
-- **[Complete Uptime & Reliability System](../features/complete-reliability-system.md)** - Comprehensive reliability analysis with statistical outlier detection
-- **[Bandwidth Labels Modernization](../features/bandwidth-labels-modernization.md)** - All 127+ bandwidth references updated with capacity vs consumption terminology
-- **[Intelligence Engine Foundation](../features/intelligence-engine-foundation.md)** - 6-layer intelligence system with smart context integration
-- **[Network Health Dashboard](../features/comprehensive-network-monitoring.md)** - 10-card dashboard with real-time network metrics
-- **[Directory Authorities Core](../features/directory-authorities-core.md)** - Authority monitoring with uptime analysis and version compliance
-
-### **📋 Individual Features (Implemented)**
-- **Reliability Champions Leaderboard** - "Reliability Masters" (6-month) & "Legacy Titans" (5-year) categories
-- **Individual Relay Uptime Display** - Flag-specific uptime percentages (1M/6M/1Y/5Y)
-- **Operator Reliability Portfolio** - Comprehensive uptime analysis with network percentiles
-- **Statistical Outlier Detection** - ≥2σ deviation identification for underperforming relays
-- **Basic Smart Context Integration** - Intelligence data display across 7+ templates
-- **Pagination System** - AROI leaderboard navigation with anchor-based deep linking
-- **Multi-API Integration** - Details, Uptime, and Bandwidth API processing
-
----
-
 ## 🚀 **Active Enhancement Proposals**
 
-The remaining proposals focus on advanced analytics, visualization, and intelligence features that are not yet implemented:
+The following proposals focus on advanced analytics, visualization, and intelligence features that are not yet implemented:
 
 ## Proposal Documents
 
@@ -227,6 +204,29 @@ Remaining proposals focus on:
 - **API-First Design**: Prepare for mobile apps and community integration
 - **Performance Optimization**: Maintain existing efficiency standards
 - **Statistical Rigor**: Continue professional-grade statistical analysis
+
+---
+
+## ✅ **Features Moved to docs/features**
+
+The following major features from previous proposals have been successfully implemented and moved to `docs/features`:
+
+### **🏆 Core Systems (Fully Implemented)**
+- **[Complete AROI Leaderboards System](../features/aroi-leaderboard/complete-implementation.md)** - All 17 competitive categories operational
+- **[Complete Uptime & Reliability System](../features/complete-reliability-system.md)** - Comprehensive reliability analysis with statistical outlier detection
+- **[Bandwidth Labels Modernization](../features/bandwidth-labels-modernization.md)** - All 127+ bandwidth references updated with capacity vs consumption terminology
+- **[Intelligence Engine Foundation](../features/intelligence-engine-foundation.md)** - 6-layer intelligence system with smart context integration
+- **[Network Health Dashboard](../features/comprehensive-network-monitoring.md)** - 10-card dashboard with real-time network metrics
+- **[Directory Authorities Core](../features/directory-authorities-core.md)** - Authority monitoring with uptime analysis and version compliance
+
+### **📋 Individual Features (Implemented)**
+- **Reliability Champions Leaderboard** - "Reliability Masters" (6-month) & "Legacy Titans" (5-year) categories
+- **Individual Relay Uptime Display** - Flag-specific uptime percentages (1M/6M/1Y/5Y)
+- **Operator Reliability Portfolio** - Comprehensive uptime analysis with network percentiles
+- **Statistical Outlier Detection** - ≥2σ deviation identification for underperforming relays
+- **Basic Smart Context Integration** - Intelligence data display across 7+ templates
+- **Pagination System** - AROI leaderboard navigation with anchor-based deep linking
+- **Multi-API Integration** - Details, Uptime, and Bandwidth API processing
 
 ---
 
