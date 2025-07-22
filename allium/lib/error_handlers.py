@@ -56,8 +56,10 @@ def handle_http_errors(api_name: str, cache_loader: Callable, cache_saver: Calla
                     else:
                         if allow_exit_on_304:
                             log_progress(f"no {api_name} update since last run, dying peacefully...")
-                            import sys
-                            sys.exit(1)
+                            # Don't call sys.exit(1) from worker threads - it only kills the thread
+                            # Instead, mark as stale and return None to let coordinator handle gracefully
+                            mark_stale(api_name, f"No cached {api_name} data available (304 with no cache)")
+                            return None
                         else:
                             log_progress(f"no {api_name} update since last run and no cache, skipping {api_name} data...")
                             mark_stale(api_name, f"No cached {api_name} data available")
