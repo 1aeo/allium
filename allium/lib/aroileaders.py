@@ -673,7 +673,7 @@ def _calculate_aroi_leaderboards(relays_instance):
             'relays': operator_relays
         }
     
-    # Generate 14 core leaderboard categories (added Guard Authority + 2 new reliability categories)
+    # Generate 17 core leaderboard categories (complete AROI leaderboard system)
     leaderboards = {}
     
     # 1. Bandwidth Contributed (use existing calculation)
