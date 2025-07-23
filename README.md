@@ -187,7 +187,7 @@ allium integrates with multiple Tor Project APIs:
 ### Main Analytics
 - **Index page** - Top 500 relays by consensus weight
 - **Complete relay listing** - All active relays with filtering
-- **AROI leaderboards** - 12 specialized operator categories
+- **AROI leaderboards** - 17 specialized operator categories
 - **Geographic analysis** - Rare country intelligence
 
 ### Categorized Views
@@ -214,26 +214,28 @@ Seventeen specialized categories tracking authenticated operator achievements ac
 
 **🛡️ Network Role Specialization**  
 3. **Exit Authority Champions** - Exit consensus weight control
-4. **Guard Authority Masters** - Guard consensus weight control
+4. **Guard Authority Champions** - Guard consensus weight control
 5. **Exit Operators** - Exit relay infrastructure providers
 6. **Guard Operators** - Guard relay infrastructure providers
 
-**🌍 Diversity & Geographic Leadership**
-7. **Most Diverse Operators** - Multi-factor diversity scoring
-8. **Platform Diversity Heroes** - Non-Linux operational excellence
-9. **Non-EU Leaders** - Geographic expansion beyond EU
-10. **Frontier Builders** - Operations in underrepresented countries
-
 **⏰ Reliability & Performance Excellence**
-11. **Reliability Masters** - 6-month average uptime (25+ relays)
-12. **Legacy Titans** - 5-year average uptime (25+ relays)
-13. **Bandwidth Served Masters** - 6-month bandwidth performance (25+ relays)
-14. **Bandwidth Served Legends** - 5-year bandwidth performance (25+ relays)
+7. **Reliability Masters** - 6-month average uptime (25+ relays)
+8. **Legacy Titans** - 5-year average uptime (25+ relays)
+
+**🌍 Diversity & Geographic Leadership**
+9. **Most Diverse Operators** - Multi-factor diversity scoring
+10. **Platform Diversity Heroes** - Non-Linux operational excellence
+11. **Non-EU Leaders** - Geographic expansion beyond EU
+12. **Frontier Builders** - Operations in underrepresented countries
 
 **🏆 Innovation & Leadership**
-15. **Network Veterans** - Scale-weighted operational tenure
-16. **IPv4 Address Leaders** - Unique IPv4 address diversity
-17. **IPv6 Address Leaders** - Unique IPv6 address diversity
+13. **Network Veterans** - Scale-weighted operational tenure
+14. **IPv4 Address Leaders** - Unique IPv4 address diversity
+15. **IPv6 Address Leaders** - Unique IPv6 address diversity
+
+**📊 Bandwidth Performance Excellence**
+16. **Bandwidth Served Masters** - 6-month bandwidth performance (25+ relays)
+17. **Bandwidth Served Legends** - 5-year bandwidth performance (25+ relays)
 
 ## 🔒 Security & Performance
 
