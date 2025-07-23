@@ -249,6 +249,16 @@ class Coordinator:
             # Recalculate network health metrics now that uptime data is available
             relay_set._calculate_network_health_metrics()
         
+        # BANDWIDTH PROCESSING: Process bandwidth data for contact page reliability metrics
+        # Mirror the uptime processing structure but keep separate as requested
+        if bandwidth_data and hasattr(relay_set, 'json') and relay_set.json.get('relays'):
+            try:
+                # Reprocess bandwidth data for individual relays and contact pages
+                relay_set._reprocess_bandwidth_data()
+            except Exception as e:
+                print(f"Warning: Bandwidth processing failed ({e}), continuing without bandwidth metrics")
+                # Continue without bandwidth metrics rather than crashing
+        
         # Update the relay_set's progress_step to match our current progress
         relay_set.progress_step = self.progress_step
         

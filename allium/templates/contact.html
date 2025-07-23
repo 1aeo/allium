@@ -139,7 +139,6 @@
                 {% endif %}
             </ul>
         </div>
-        {% endif %}
         
         {# Relay Reliability on Left Side (when AROI rankings present) #}
         {% if contact_rankings and operator_reliability and operator_reliability.valid_relays > 0 %}
@@ -200,6 +199,116 @@
                 {% endif %}
                 {% endif %}
             </ul>
+            
+            <div style="font-size: 12px; color: #666; margin-top: 10px;">
+                Reliability data available for {{ operator_reliability.valid_relays }}/{{ operator_reliability.total_relays }} relays{% if contact_display_data and contact_display_data.uptime_timestamp %}, from {{ contact_display_data.uptime_timestamp }}{% endif %}
+            </div>
+        </div>
+        {% endif %}
+        
+        {# Bandwidth Reliability Metrics - Always on left side #}
+        {% if operator_reliability and operator_reliability.overall_bandwidth %}
+        <div style="padding: 15px; background-color: #f8f9fa; border-left: 4px solid #28a745; margin-top: 20px;">
+            <h4 style="margin-top: 0; color: #495057;">🚀 Bandwidth Reliability</h4>
+
+            {# Operator Performance (Operator vs Self) #}
+            <div style="margin-bottom: 15px;">
+                <strong style="color: #495057;">Operator Performance:</strong>
+                <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px; margin-bottom: 0;">
+                    {# Average relay bandwidth performance across time periods #}
+                    <li><strong><span title="Average bandwidth per individual relay over time. Calculation: Sum(relay_bandwidth_values) ÷ relay_count for each time period. Shows individual relay throughput performance." style="cursor: help;">Average Relay Throughput</span>:</strong>
+                    {% for period, data in operator_reliability.overall_bandwidth.items() %}
+                        {{ data.display_name }} {{ data.average_formatted }} avg ({{ data.relay_count }} relays){% if not loop.last %}, {% endif %}
+                    {% endfor %}
+                    
+                    {# Bandwidth statistical outliers #}
+                    {% if operator_reliability.bandwidth_outliers and (operator_reliability.bandwidth_outliers.low_outliers or operator_reliability.bandwidth_outliers.high_outliers) %}
+
+                    {% else %}
+                    <ul style="list-style-type: circle; padding-left: 20px; margin-top: 3px; margin-bottom: 0;">
+                        <li><span style="color: #28a745;">No bandwidth outliers detected</span></li>
+                    </ul>
+                    {% endif %}
+                    {% endif %}
+                </li>
+                
+                {# PROPOSAL METRICS: Advanced Bandwidth Reliability (Secondary Tree) #}
+                {% if operator_reliability.overall_bandwidth['6_months'] %}
+                {% set bw_6m = operator_reliability.overall_bandwidth['6_months'] %}
+                
+                {# Performance Analysis converted to bullet format like other sections #}
+                {% if bw_6m.bandwidth_stability or bw_6m.peak_performance or bw_6m.growth_trend or bw_6m.capacity_utilization %}
+                <li style="list-style-type: disc;">
+                    <strong>Performance Analysis (6mo):</strong>
+                    <ul style="list-style-type: circle; margin-top: 3px; margin-bottom: 0;">
+                        
+                        {# Bandwidth Stability #}
+                        {% if bw_6m.bandwidth_stability %}
+                        <li><strong><span title="Coefficient of Variation: Standard deviation divided by mean bandwidth. Lower values indicate more consistent performance. Great: Top 25%, Good: 50-75%, Variable: 25-50%, Extreme: Bottom 10%. σ = {{ bw_6m.bandwidth_stability.std_dev_formatted }} {{ bw_6m.bandwidth_stability.std_dev_unit }}, μ = {{ bw_6m.bandwidth_stability.mean_formatted }} {{ bw_6m.bandwidth_stability.mean_unit }}" style="cursor: help;">Stability</span>:</strong>
+                            {% set color_map = {'great': '#28a745', 'good': '#007bff', 'variable': '#ffc107', 'extreme': '#dc3545'} %}
+                            <span style="color: {{ color_map.get(bw_6m.bandwidth_stability.color, '#000') }}; font-weight: bold;">{{ bw_6m.bandwidth_stability.category }}</span>
+                            (Coefficient of Variation: {{ bw_6m.bandwidth_stability.coefficient_of_variation|round(1) }}% = {{ bw_6m.bandwidth_stability.std_dev_formatted }} {{ bw_6m.bandwidth_stability.std_dev_unit }} σ / {{ bw_6m.bandwidth_stability.mean_formatted }} {{ bw_6m.bandwidth_stability.mean_unit }} μ)
+                        </li>
+                        {% endif %}
+                        
+                        {# Growth Trend #}
+                        {% if bw_6m.growth_trend %}
+                        <li><strong><span title="Bandwidth trend comparing the last month vs first month within the 6-month period. Calculates daily operator totals (sum across all relays) and compares average of recent month vs older month. Growth >5%, Decline <-5%, Stable ±5%" style="cursor: help;">Trend</span>:</strong> {{ bw_6m.growth_trend.display }}</li>
+                        {% endif %}
+                        
+                        {# Capacity Utilization #}
+                        {% if bw_6m.capacity_utilization %}
+                        <li><strong><span title="Current average bandwidth as percentage of historical maximum capacity. Shows how well current performance utilizes proven capability" style="cursor: help;">Capacity Utilization</span>:</strong> {{ bw_6m.capacity_utilization.display }}</li>
+                        {% endif %}
+                        
+                        {# 6mo Bandwidth Outliers (actionable timeframe) #}
+                        {% if operator_reliability.bandwidth_outliers and (operator_reliability.bandwidth_outliers.low_outliers or operator_reliability.bandwidth_outliers.high_outliers) %}
+                            {% set bw_outliers = operator_reliability.bandwidth_outliers %}
+                            {% set total_bw_outliers = (bw_outliers.low_outliers|length) + (bw_outliers.high_outliers|length) %}
+                            {% set bw_6mo_stats = operator_reliability.overall_bandwidth.get('6_months', {}) %}
+                            <li><strong><span title="Statistical outliers detected using ±2σ (standard deviation) from operator mean across this operator's relays in current 6mo period. Operator mean (μ): {{ bw_6mo_stats.average_formatted if bw_6mo_stats.average_formatted else 'N/A' }}, Operator std dev (σ): {% if bw_6mo_stats.std_dev and bw_6mo_stats.std_dev > 0 %}{{ "%.1f"|format(bw_6mo_stats.std_dev / 1000000) }} Mbit/s{% else %}N/A{% endif %}. Low outliers: ≤2σ below mean, High outliers: ≥2σ above mean. Only current outliers shown for actionable insights." style="cursor: help;">Bandwidth Outliers:</span></strong>
+                                <span style="color: #000; font-weight: normal;">{{ total_bw_outliers }} relay{{ 's' if total_bw_outliers != 1 else '' }} with unusual bandwidth patterns</span>{% if bw_outliers.low_outliers or bw_outliers.high_outliers %}, {% endif %}{% if bw_outliers.low_outliers %}<span style="color: #dc3545; font-weight: bold;">Low:</span> {% for outlier in bw_outliers.low_outliers %}<a href="{{ page_ctx.path_prefix }}relay/{{ outlier.fingerprint }}/" title="{{ outlier.nickname }} ({{ outlier.value_formatted }})" style="color: #dc3545; text-decoration: none;">{{ outlier.nickname }}</a>{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}{% if bw_outliers.high_outliers %}{% if bw_outliers.low_outliers %}, {% endif %}<span style="color: #28a745; font-weight: bold;">High:</span> {% for outlier in bw_outliers.high_outliers %}<a href="{{ page_ctx.path_prefix }}relay/{{ outlier.fingerprint }}/" title="{{ outlier.nickname }} ({{ outlier.value_formatted }})" style="color: #28a745; text-decoration: none;">{{ outlier.nickname }}</a>{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}
+                            </li>
+                        {% endif %}
+                        
+                    </ul>
+                </li>
+                {% endif %}
+                {% endif %}
+                
+
+                </ul>
+            </div>
+            
+            {# Network Comparison (Operator vs Other Operators) #}
+            <div style="margin-bottom: 15px;">
+                <strong style="color: #495057;">Network Comparison:</strong>
+                <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px; margin-bottom: 0;">
+                    {% if operator_reliability.overall_bandwidth['6_months'] and operator_reliability.overall_bandwidth['6_months'].network_position %}
+                    {% set bw_position = operator_reliability.overall_bandwidth['6_months'] %}
+                    <li><span title="Based on 6-month average bandwidth compared to {{ operator_reliability.network_bandwidth_percentiles.total_operators if operator_reliability.network_bandwidth_percentiles else 'network' }} operators" style="cursor: help;"><strong>Network Position:</strong> {{ bw_position.network_position }} ({{ bw_position.percentile_range }})</span></li>
+                    {% endif %}
+                    
+                    {# Network Contribution (operator-level aggregate metric) #}
+                    {% if operator_reliability.operator_daily_bandwidth %}
+                    <li><strong><span title="Sum of all operator relays' bandwidth per day, then averaged across time period. Calculation: Daily_Total = Sum(all_relay_bandwidth_on_day_X), then Average(Daily_Totals). Shows combined operator network contribution. '(X days)' indicates number of days with valid bandwidth data used in the average calculation." style="cursor: help;">Network Contribution:</strong>
+                        {% for period, data in operator_reliability.operator_daily_bandwidth.items() %}
+                            {{ data.display_name }} {{ data.average_daily_total_formatted }} avg (<span title="Number of days with valid bandwidth data used in the average calculation" style="cursor: help;">{{ data.valid_days }} days</span>){% if not loop.last %}, {% endif %}
+                        {% endfor %}
+                    </li>
+                    {% endif %}
+                </ul>
+            </div>
+            
+            {# Bandwidth Reliability Color Legend #}
+            <div style="font-size: 12px; color: #666; margin-top: 10px;">
+                <strong>Bandwidth Stability:</strong> 
+                <span style="color: #28a745;">Great (Top 25% most stable)</span>, 
+                <span style="color: #007bff;">Good (25-50% most stable)</span>, 
+                <span style="color: #ffc107;">Variable (25-50% most stable)</span>, 
+                <span style="color: #dc3545;">Extreme (Bottom 10% most variable)</span>
+                
+            </div>
             
             <div style="font-size: 12px; color: #666; margin-top: 10px;">
                 Reliability data available for {{ operator_reliability.valid_relays }}/{{ operator_reliability.total_relays }} relays{% if contact_display_data and contact_display_data.uptime_timestamp %}, from {{ contact_display_data.uptime_timestamp }}{% endif %}
@@ -338,10 +447,60 @@
             {% endif %}
             
             <div style="font-size: 12px; color: #666; margin-top: 10px;">
-                <span style="color: #28a745;">Green: >99%</span>, 
-                <span style="color: #cc9900;">Yellow: <μ of network</span>, 
-                <span style="color: #dc3545;">Red: ≥2σ from network μ</span>
+                <span style="color: #28a745;">Excellent (>99%)</span>, 
+                <span style="color: #cc9900;">Below average (<μ of network)</span>, 
+                <span style="color: #dc3545;">Poor (≥2σ from network μ)</span>
                 {% if contact_display_data and contact_display_data.uptime_timestamp %}, from {{ contact_display_data.uptime_timestamp }}{% endif %}
+            </div>
+        </div>
+        {% endif %}
+        
+        {# Flag Bandwidth Reliability - Mirrors Flag Reliability but for bandwidth #}
+        {% if contact_display_data and contact_display_data.flag_bandwidth_analysis and contact_display_data.flag_bandwidth_analysis.has_flag_data %}
+        {% set flag_bw_data = contact_display_data.flag_bandwidth_analysis %}
+        <div class="flag-bandwidth-reliability-section" style="padding: 15px; background-color: #f8f9fa; border-left: 4px solid #28a745; margin-top: 20px;">
+            <h4 style="margin-top: 0; color: #495057;">🚀 Flag Bandwidth Performance</h4>
+            
+            <div style="font-size: 14px; margin-bottom: 10px;">
+                <strong>Flag-specific bandwidth averages{% if flag_bw_data.period_display and flag_bw_data.period_display != 'No Data' %} ({{ flag_bw_data.period_display }}){% endif %}:</strong>
+            </div>
+            
+            {% if flag_bw_data.available_periods and flag_bw_data.available_periods|length > 0 %}
+            {% for flag_name, flag_info in flag_bw_data.flag_reliabilities.items() %}
+            <div style="margin-bottom: 8px;">
+                <span>{{ flag_info.icon }} {{ flag_info.display_name }}:</span>
+                {% set period_values = [] %}
+                {% for period in flag_bw_data.available_periods %}
+                    {% if period in flag_info.periods %}
+                        {% set period_data = flag_info.periods[period] %}
+                        {% set color_style = '' %}
+                        {% if period_data.color_class == 'high-performance' %}
+                            {% set color_style = 'color: #28a745; font-weight: bold;' %}
+                        {% elif period_data.color_class == 'statistical-outlier-low' %}
+                            {% set color_style = 'color: #dc3545; font-weight: bold;' %}
+                        {% elif period_data.color_class == 'statistical-outlier-high' %}
+                            {% set color_style = 'color: #dc3545; font-weight: bold;' %}
+                        {% elif period_data.color_class == 'below-mean' %}
+                            {% set color_style = 'color: #cc9900; font-weight: bold;' %}
+                        {% endif %}
+                        {% set formatted_value %}<span title="{{ period_data.tooltip }}" style="cursor: help; {{ color_style }}">{{ period_data.value_display }}</span>{% endset %}
+                        {% set _ = period_values.append(formatted_value) %}
+                    {% endif %}
+                {% endfor %}
+                {{ period_values|join(' / ') }}
+            </div>
+            {% endfor %}
+            {% else %}
+            <div style="color: #6c757d; font-style: italic;">
+                No flag bandwidth data available for this operator.
+            </div>
+            {% endif %}
+            
+            <div style="font-size: 12px; color: #666; margin-top: 10px;">
+                <span style="color: #28a745;">High performance (>1.5x μ)</span>, 
+                <span style="color: #cc9900;">Below average (<μ of network)</span>, 
+                <span style="color: #dc3545;">Poor (≥2σ from network μ)</span>
+                {% if contact_display_data and contact_display_data.bandwidth_timestamp %}, from {{ contact_display_data.bandwidth_timestamp }}{% endif %}
             </div>
         </div>
         {% endif %}
