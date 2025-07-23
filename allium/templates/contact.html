@@ -139,7 +139,6 @@
                 {% endif %}
             </ul>
         </div>
-        {% endif %}
         
         {# Relay Reliability on Left Side (when AROI rankings present) #}
         {% if contact_rankings and operator_reliability and operator_reliability.valid_relays > 0 %}
@@ -200,11 +199,16 @@
                 {% endif %}
                 {% endif %}
             </ul>
+            
+            <div style="font-size: 12px; color: #666; margin-top: 10px;">
+                Reliability data available for {{ operator_reliability.valid_relays }}/{{ operator_reliability.total_relays }} relays{% if contact_display_data and contact_display_data.uptime_timestamp %}, from {{ contact_display_data.uptime_timestamp }}{% endif %}
+            </div>
         </div>
+        {% endif %}
         
-        {# Bandwidth Reliability Metrics (NEW) - Split into operator vs self and operator vs network categories #}
+        {# Bandwidth Reliability Metrics - Always on left side #}
+        {% if operator_reliability and operator_reliability.overall_bandwidth %}
         <div style="padding: 15px; background-color: #f8f9fa; border-left: 4px solid #28a745; margin-top: 20px;">
-            {% if operator_reliability and operator_reliability.overall_bandwidth %}
             <h4 style="margin-top: 0; color: #495057;">🚀 Bandwidth Reliability</h4>
 
             {# Operator Performance (Operator vs Self) #}
@@ -309,8 +313,8 @@
             <div style="font-size: 12px; color: #666; margin-top: 10px;">
                 Reliability data available for {{ operator_reliability.valid_relays }}/{{ operator_reliability.total_relays }} relays{% if contact_display_data and contact_display_data.uptime_timestamp %}, from {{ contact_display_data.uptime_timestamp }}{% endif %}
             </div>
-            {% endif %}
         </div>
+        {% endif %}
     </div>
     
     {# Right Column (40%): AROI Rankings & Flag Reliability, or Relay Reliability when no AROI #}
