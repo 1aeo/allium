@@ -95,7 +95,7 @@
     </nav>
 {%- endmacro %}
 
-{% macro detail_summary(bandwidth, bandwidth_unit, guard_bandwidth, middle_bandwidth, exit_bandwidth, consensus_weight_fraction, guard_consensus_weight_fraction, middle_consensus_weight_fraction, exit_consensus_weight_fraction, guard_count, middle_count, exit_count, total_relays, network_position, aroi_domain=none, contact=none, contact_md5=none, page_ctx=none, unique_aroi_list=none, unique_contact_list=none, unique_aroi_count=none, unique_contact_count=none, aroi_to_contact_map=none) -%}
+{% macro detail_summary(bandwidth, bandwidth_unit, guard_bandwidth, middle_bandwidth, exit_bandwidth, consensus_weight_fraction, guard_consensus_weight_fraction, middle_consensus_weight_fraction, exit_consensus_weight_fraction, guard_count, middle_count, exit_count, total_relays, network_position, aroi_domain=none, contact=none, contact_md5=none, page_ctx=none, unique_aroi_list=none, unique_contact_list=none, unique_aroi_count=none, unique_contact_count=none, unique_aroi_contact_html=none, aroi_to_contact_map=none) -%}
 <ul style="list-style-type: disc; padding-left: 20px; margin-bottom: 15px;">
     <li><strong><span title="Observed bandwidth capacity represents the estimated maximum throughput this group can handle, combining total, guard, middle, and exit bandwidth contributions">Bandwidth Capacity</span>:</strong> ~{{ bandwidth }} {{ bandwidth_unit }}
         {%- if guard_count > 0 or middle_count > 0 or exit_count > 0 %} 
@@ -112,27 +112,9 @@
         )
         {%- endif %}</li>
     <li><strong><span title="Network position indicates the strategic role distribution of relays. Labels: Guard-focused (>60% guard), Exit-focused (>40% exit), Multi-role (both guard and exit >20%), Balanced (mixed roles), Guard-only (100% guard), Exit-only (100% exit), Middle-only (100% middle)">Network Position</span>:</strong> {{ network_position.formatted_string }}</li>
-    {%- if unique_aroi_list is not none and unique_contact_list is not none %}
+    {%- if unique_aroi_count is not none and unique_contact_count is not none %}
     <li><strong><span title="Unique AROI operators and contact information for this network">Unique AROI Operators and Contact Information</span>:</strong> {{ unique_aroi_count + unique_contact_count }}
-        {%- if unique_aroi_list or unique_contact_list -%}
-            {%- set items = [] -%}
-            {%- for aroi in unique_aroi_list -%}
-                {%- if aroi and aroi != 'none' -%}
-                    {%- set contact_hash = aroi_to_contact_map.get(aroi, '') if aroi_to_contact_map else '' -%}
-                    {%- if contact_hash -%}
-                        {%- set _ = items.append('<a href="' + (page_ctx.path_prefix if page_ctx else '../../') + 'contact/' + contact_hash + '/">' + aroi|escape + '</a>') -%}
-                    {%- else -%}
-                        {%- set _ = items.append(aroi|escape) -%}
-                    {%- endif -%}
-                {%- endif -%}
-            {%- endfor -%}
-            {%- for contact_hash in unique_contact_list -%}
-                {%- if contact_hash and contact_hash != '' -%}
-                    {%- set _ = items.append('<a href="' + (page_ctx.path_prefix if page_ctx else '../../') + 'contact/' + contact_hash + '/">' + contact_hash[:8] + '</a>') -%}
-                {%- endif -%}
-            {%- endfor -%}
-            {%- if items %}, {{ items|join(', ')|safe }}{% endif -%}
-        {%- endif -%}
+        {%- if unique_aroi_contact_html %}, {{ unique_aroi_contact_html|safe }}{% endif -%}
     </li>
     {%- endif %}
     {%- if aroi_domain and aroi_domain != 'none' and aroi_domain != '' %}

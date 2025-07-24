@@ -1594,7 +1594,27 @@ class Relays:
                             data["unique_aroi_count"] = 0
                             data["unique_aroi_list"] = []
                             
-                        # Store AROI to contact mapping for link generation
+                        # Build HTML links for unique AROI and contact display
+                        aroi_contact_html_items = []
+                        
+                        # Add AROI domain links first
+                        for aroi in data.get("unique_aroi_list", []):
+                            if aroi and aroi != "none":
+                                contact_hash = data.get("aroi_to_contact_map", {}).get(aroi, "")
+                                if contact_hash:
+                                    aroi_contact_html_items.append(f'<a href="../../contact/{contact_hash}/">{aroi}</a>')
+                                else:
+                                    aroi_contact_html_items.append(aroi)
+                        
+                        # Add contact hash links (truncated to 8 characters)
+                        for contact_hash in data.get("unique_contact_list", []):
+                            if contact_hash and contact_hash != "":
+                                aroi_contact_html_items.append(f'<a href="../../contact/{contact_hash}/">{contact_hash[:8]}</a>')
+                        
+                        # Store the pre-built HTML string
+                        data["unique_aroi_contact_html"] = ", ".join(aroi_contact_html_items) if aroi_contact_html_items else ""
+                        
+                        # Store AROI to contact mapping for link generation (keep for backward compatibility)
                         if "aroi_to_contact_map" not in data:
                             data["aroi_to_contact_map"] = {}
 
@@ -2037,6 +2057,7 @@ class Relays:
                 unique_contact_list=i.get("unique_contact_list", []),
                 unique_aroi_count=i.get("unique_aroi_count", 0),
                 unique_contact_count=i.get("unique_contact_count", 0),
+                unique_aroi_contact_html=i.get("unique_aroi_contact_html", ""),
                 aroi_to_contact_map=i.get("aroi_to_contact_map", {})
             )
             render_time += time.time() - render_start
