@@ -1259,6 +1259,8 @@ class Relays:
                     self.json["sorted"][k][v]["unique_aroi_set"] = set()
                 if not self.json["sorted"][k][v].get("aroi_to_contact_map"):
                     self.json["sorted"][k][v]["aroi_to_contact_map"] = {}
+                if not self.json["sorted"][k][v].get("aroi_contact_counts"):
+                    self.json["sorted"][k][v]["aroi_contact_counts"] = {}
                 
                 # Add this relay's contact hash to the country/platform/network's unique contacts
                 c_str = relay.get("contact", "").encode("utf-8")
@@ -1269,8 +1271,12 @@ class Relays:
                 aroi_domain = relay.get("aroi_domain", "")
                 if aroi_domain and aroi_domain != "none" and aroi_domain.strip():
                     self.json["sorted"][k][v]["unique_aroi_set"].add(aroi_domain)
-                    # Map AROI domain to contact hash for link generation
-                    self.json["sorted"][k][v]["aroi_to_contact_map"][aroi_domain] = c_hash
+                    # Count contact hashes for each AROI domain to find the most common one
+                    if aroi_domain not in self.json["sorted"][k][v]["aroi_contact_counts"]:
+                        self.json["sorted"][k][v]["aroi_contact_counts"][aroi_domain] = {}
+                    if c_hash not in self.json["sorted"][k][v]["aroi_contact_counts"][aroi_domain]:
+                        self.json["sorted"][k][v]["aroi_contact_counts"][aroi_domain][c_hash] = 0
+                    self.json["sorted"][k][v]["aroi_contact_counts"][aroi_domain][c_hash] += 1
                 
                 # Add this relay's family to the country/platform/network's unique families
                 if relay.get("effective_family") and len(relay["effective_family"]) > 1:
@@ -1594,8 +1600,22 @@ class Relays:
                             data["unique_aroi_count"] = 0
                             data["unique_aroi_list"] = []
                             
+                        # Build AROI to contact mapping by selecting the most frequent contact hash for each AROI domain
+                        if "aroi_contact_counts" in data:
+                            data["aroi_to_contact_map"] = {}
+                            for aroi_domain, contact_counts in data["aroi_contact_counts"].items():
+                                # Select the contact hash with the highest count for this AROI domain
+                                most_common_contact = max(contact_counts.items(), key=lambda x: x[1])[0]
+                                data["aroi_to_contact_map"][aroi_domain] = most_common_contact
+                            del data["aroi_contact_counts"]
+                        else:
+                            data["aroi_to_contact_map"] = {}
+                            
                         # Build HTML links for unique AROI and contact display
                         aroi_contact_html_items = []
+                        
+                        # Collect AROI contact hashes to avoid duplication
+                        aroi_contact_hashes = set()
                         
                         # Add AROI domain links first
                         for aroi in data.get("unique_aroi_list", []):
@@ -1603,12 +1623,13 @@ class Relays:
                                 contact_hash = data.get("aroi_to_contact_map", {}).get(aroi, "")
                                 if contact_hash:
                                     aroi_contact_html_items.append(f'<a href="../../contact/{contact_hash}/">{aroi}</a>')
+                                    aroi_contact_hashes.add(contact_hash)
                                 else:
                                     aroi_contact_html_items.append(aroi)
                         
-                        # Add contact hash links (truncated to 8 characters)
+                        # Add contact hash links (truncated to 8 characters) - only those not already represented by AROI
                         for contact_hash in data.get("unique_contact_list", []):
-                            if contact_hash and contact_hash != "":
+                            if contact_hash and contact_hash != "" and contact_hash not in aroi_contact_hashes:
                                 aroi_contact_html_items.append(f'<a href="../../contact/{contact_hash}/">{contact_hash[:8]}</a>')
                         
                         # Store the pre-built HTML string
