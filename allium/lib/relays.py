@@ -1257,9 +1257,9 @@ class Relays:
                     self.json["sorted"][k][v]["unique_family_set"] = set()
                 
                 # Add this relay's contact hash to the country/platform/network's unique contacts
-                c_str = relay.get("contact", "").encode("utf-8")
-                c_hash = hashlib.md5(c_str).hexdigest()
-                self.json["sorted"][k][v]["unique_contact_set"].add(c_hash)
+                c_hash = relay.get("contact_md5", "")
+                if c_hash:  # Only add if contact_md5 exists
+                    self.json["sorted"][k][v]["unique_contact_set"].add(c_hash)
                 
                 # Add this relay's family to the country/platform/network's unique families
                 if relay.get("effective_family") and len(relay["effective_family"]) > 1:

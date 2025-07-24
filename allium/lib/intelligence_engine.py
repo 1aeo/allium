@@ -529,11 +529,30 @@ class IntelligenceEngine:
                 
                 # Determine network diversity rating
                 if unique_as_count == 1:
-                    # Special case: Check if this contact is the only operator in their AS
+                                        # Special case: Check if this contact is the only operator in their AS
                     first_relay_as = contact_relays[0].get('as') if contact_relays else None
-                    if (first_relay_as and 'as' in self.sorted_data and 
-                        first_relay_as in self.sorted_data['as'] and
-                        self.sorted_data['as'][first_relay_as].get('unique_contact_count', 0) == 1):
+                    
+
+                    
+                    # Robust AS format handling: try multiple format variations
+                    as_data = None
+                    if first_relay_as and 'as' in self.sorted_data:
+                        # Try original format first
+                        as_data = self.sorted_data['as'].get(first_relay_as)
+                        
+                        # If not found, try alternative formats
+                        if not as_data:
+                            # If relay AS has "AS" prefix, try without it
+                            if first_relay_as.startswith('AS'):
+                                normalized_as = first_relay_as[2:]  # Remove "AS" prefix
+                                as_data = self.sorted_data['as'].get(normalized_as)
+                            # If relay AS doesn't have "AS" prefix, try with it
+                            else:
+                                prefixed_as = f"AS{first_relay_as}"
+                                as_data = self.sorted_data['as'].get(prefixed_as)
+                    
+                    # Check if this contact is the only operator in their AS
+                    if as_data and as_data.get('unique_contact_count', 0) == 1:
                         network_rating = "Great"
                         portfolio_diversity = f"{network_rating}, 1 AS with 1 operator"
                     else:
