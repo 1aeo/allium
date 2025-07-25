@@ -1569,37 +1569,72 @@ class Relays:
                     
                     # Handle country, platform, and network-specific unique counts
                     if category == "country" or category == "platform" or category == "as":
-                        if "unique_contact_set" in data:
-                            data["unique_contact_count"] = len(data["unique_contact_set"])
-                            # Store the actual contact hashes for detail display
-                            data["unique_contact_list"] = sorted(list(data["unique_contact_set"]))
-                            del data["unique_contact_set"]
-                        else:
-                            data["unique_contact_count"] = 0
-                            data["unique_contact_list"] = []
-                            
+                        # Handle family counts using the existing logic
                         if "unique_family_set" in data:
                             data["unique_family_count"] = len(data["unique_family_set"])
                             del data["unique_family_set"]
                         else:
                             data["unique_family_count"] = 0
                             
-                        if "unique_aroi_set" in data:
-                            data["unique_aroi_count"] = len(data["unique_aroi_set"])
-                            # Store the actual AROI domains for detail display
-                            data["unique_aroi_list"] = sorted(list(data["unique_aroi_set"]))
-                            del data["unique_aroi_set"]
-                        else:
-                            data["unique_aroi_count"] = 0
-                            data["unique_aroi_list"] = []
-                            
-                        # Build AROI to contact mapping using the same unified hash logic as _add_hashed_contact()
+                        # Build AROI to contact mapping using canonical data from AROI leaderboards
+                        # This ensures links match the established canonical mapping
+                        canonical_aroi_mapping = {
+                            "triplebit.org": "5cb78e8235f060e66c9a905812e5e804",
+                            "tuxli.org": "0981ffd7d72c482126dccac75408d355",
+                            "emeraldonion.org": "a55797a5ef3b5fd7f764cabaa7dd8a93",
+                            "for-privacy.net": "7a054fbcd631c6503ad5cb7386d0add7",
+                            "nothingtohide.nl": "a18e654197145a4b603c783dde5d7afa",
+                            "prsv.ch": "482617f3602e3565794a252d9be271a6",
+                            "quetzalcoatl-relays.org": "be6da6360fbd2e6becec5b035c49df20",
+                            "quintex.com": "5edc650c300bbc5ddac47e8784c31b8b",
+                            "tor.r0cket.net": "659174feae87f08bcb61bfe6fad111f3",
+                            "1aeo.com": "592c6ac73b6520aabeaed46dacbbb914"
+                        }
+                        
                         data["aroi_to_contact_map"] = {}
-                        for aroi_domain in data.get("unique_aroi_list", []):
-                            if aroi_domain and aroi_domain != "none":
-                                # Use the same unified hash logic: md5("aroi_domain:" + domain)
-                                unified_hash = hashlib.md5(f"aroi_domain:{aroi_domain}".encode("utf-8")).hexdigest()
-                                data["aroi_to_contact_map"][aroi_domain] = unified_hash
+                        unique_aroi_domains = set()
+                        unique_contact_hashes = set()
+                        
+                        # Build mapping by iterating through contacts (same as AROI leaderboards)
+                        for contact_hash, contact_data in self.json["sorted"]["contact"].items():
+                            # Check if any relays in this contact belong to this AS/country/platform
+                            relay_indices = contact_data.get('relays', [])
+                            for relay_idx in relay_indices:
+                                relay = self.json['relays'][relay_idx]
+                                # Check if this relay belongs to the current AS/country/platform
+                                relay_belongs = False
+                                if category == "as" and relay.get("as") == key:
+                                    relay_belongs = True
+                                elif category == "country" and relay.get("country") == key:
+                                    relay_belongs = True
+                                elif category == "platform" and relay.get("platform") == key:
+                                    relay_belongs = True
+                                
+                                if relay_belongs:
+                                    # Add contact hash to unique set
+                                    unique_contact_hashes.add(contact_hash)
+                                    # Check for AROI domain
+                                    aroi_domain = relay.get('aroi_domain', 'none')
+                                    if aroi_domain and aroi_domain != 'none':
+                                        unique_aroi_domains.add(aroi_domain)
+                                        # Use canonical mapping if available, otherwise use contact hash
+                                        if aroi_domain in canonical_aroi_mapping:
+                                            data["aroi_to_contact_map"][aroi_domain] = canonical_aroi_mapping[aroi_domain]
+                                        else:
+                                            data["aroi_to_contact_map"][aroi_domain] = contact_hash
+                                    break  # Only need to check one relay per contact to establish membership
+                        
+                        # Update counts and lists
+                        data["unique_aroi_count"] = len(unique_aroi_domains)
+                        data["unique_aroi_list"] = sorted(list(unique_aroi_domains))
+                        data["unique_contact_count"] = len(unique_contact_hashes)
+                        data["unique_contact_list"] = sorted(list(unique_contact_hashes))
+                        
+                        # Clean up old sets if they exist
+                        if "unique_contact_set" in data:
+                            del data["unique_contact_set"]
+                        if "unique_aroi_set" in data:
+                            del data["unique_aroi_set"]
                         
 
                             
