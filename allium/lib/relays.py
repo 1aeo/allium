@@ -1259,24 +1259,17 @@ class Relays:
                     self.json["sorted"][k][v]["unique_aroi_set"] = set()
                 if not self.json["sorted"][k][v].get("aroi_to_contact_map"):
                     self.json["sorted"][k][v]["aroi_to_contact_map"] = {}
-                if not self.json["sorted"][k][v].get("aroi_contact_counts"):
-                    self.json["sorted"][k][v]["aroi_contact_counts"] = {}
                 
                 # Add this relay's contact hash to the country/platform/network's unique contacts
-                c_str = relay.get("contact", "").encode("utf-8")
-                c_hash = hashlib.md5(c_str).hexdigest()
-                self.json["sorted"][k][v]["unique_contact_set"].add(c_hash)
+                # Use the pre-computed contact_md5 which includes unified AROI domain grouping
+                c_hash = relay.get("contact_md5", "")
+                if c_hash:
+                    self.json["sorted"][k][v]["unique_contact_set"].add(c_hash)
                 
                 # Add this relay's AROI domain to the country/platform/network's unique AROI domains
                 aroi_domain = relay.get("aroi_domain", "")
                 if aroi_domain and aroi_domain != "none" and aroi_domain.strip():
                     self.json["sorted"][k][v]["unique_aroi_set"].add(aroi_domain)
-                    # Count contact hashes for each AROI domain to find the most common one
-                    if aroi_domain not in self.json["sorted"][k][v]["aroi_contact_counts"]:
-                        self.json["sorted"][k][v]["aroi_contact_counts"][aroi_domain] = {}
-                    if c_hash not in self.json["sorted"][k][v]["aroi_contact_counts"][aroi_domain]:
-                        self.json["sorted"][k][v]["aroi_contact_counts"][aroi_domain][c_hash] = 0
-                    self.json["sorted"][k][v]["aroi_contact_counts"][aroi_domain][c_hash] += 1
                 
                 # Add this relay's family to the country/platform/network's unique families
                 if relay.get("effective_family") and len(relay["effective_family"]) > 1:
@@ -1565,7 +1558,7 @@ class Relays:
         """
         for category in ["family", "contact", "country", "platform", "as"]:
             if category in self.json["sorted"]:
-                for data in self.json["sorted"][category].values():
+                for key, data in self.json["sorted"][category].items():
                     if "unique_as_set" in data:
                         data["unique_as_count"] = len(data["unique_as_set"])
                         # Remove the set to save memory and avoid JSON serialization issues
@@ -1600,16 +1593,15 @@ class Relays:
                             data["unique_aroi_count"] = 0
                             data["unique_aroi_list"] = []
                             
-                        # Build AROI to contact mapping by selecting the most frequent contact hash for each AROI domain
-                        if "aroi_contact_counts" in data:
-                            data["aroi_to_contact_map"] = {}
-                            for aroi_domain, contact_counts in data["aroi_contact_counts"].items():
-                                # Select the contact hash with the highest count for this AROI domain
-                                most_common_contact = max(contact_counts.items(), key=lambda x: x[1])[0]
-                                data["aroi_to_contact_map"][aroi_domain] = most_common_contact
-                            del data["aroi_contact_counts"]
-                        else:
-                            data["aroi_to_contact_map"] = {}
+                        # Build AROI to contact mapping using the same unified hash logic as _add_hashed_contact()
+                        data["aroi_to_contact_map"] = {}
+                        for aroi_domain in data.get("unique_aroi_list", []):
+                            if aroi_domain and aroi_domain != "none":
+                                # Use the same unified hash logic: md5("aroi_domain:" + domain)
+                                unified_hash = hashlib.md5(f"aroi_domain:{aroi_domain}".encode("utf-8")).hexdigest()
+                                data["aroi_to_contact_map"][aroi_domain] = unified_hash
+                        
+
                             
                         # Build HTML links for unique AROI and contact display
                         aroi_contact_html_items = []
