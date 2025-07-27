@@ -1576,21 +1576,7 @@ class Relays:
                         else:
                             data["unique_family_count"] = 0
                             
-                        # Build AROI to contact mapping using canonical data from AROI leaderboards
-                        # This ensures links match the established canonical mapping
-                        canonical_aroi_mapping = {
-                            "triplebit.org": "5cb78e8235f060e66c9a905812e5e804",
-                            "tuxli.org": "0981ffd7d72c482126dccac75408d355",
-                            "emeraldonion.org": "a55797a5ef3b5fd7f764cabaa7dd8a93",
-                            "for-privacy.net": "7a054fbcd631c6503ad5cb7386d0add7",
-                            "nothingtohide.nl": "a18e654197145a4b603c783dde5d7afa",
-                            "prsv.ch": "482617f3602e3565794a252d9be271a6",
-                            "quetzalcoatl-relays.org": "be6da6360fbd2e6becec5b035c49df20",
-                            "quintex.com": "5edc650c300bbc5ddac47e8784c31b8b",
-                            "tor.r0cket.net": "659174feae87f08bcb61bfe6fad111f3",
-                            "1aeo.com": "592c6ac73b6520aabeaed46dacbbb914"
-                        }
-                        
+                        # Build AROI to contact mapping by iterating through contacts
                         data["aroi_to_contact_map"] = {}
                         unique_aroi_domains = set()
                         unique_contact_hashes = set()
@@ -1617,11 +1603,8 @@ class Relays:
                                     aroi_domain = relay.get('aroi_domain', 'none')
                                     if aroi_domain and aroi_domain != 'none':
                                         unique_aroi_domains.add(aroi_domain)
-                                        # Use canonical mapping if available, otherwise use contact hash
-                                        if aroi_domain in canonical_aroi_mapping:
-                                            data["aroi_to_contact_map"][aroi_domain] = canonical_aroi_mapping[aroi_domain]
-                                        else:
-                                            data["aroi_to_contact_map"][aroi_domain] = contact_hash
+                                        # Use the contact hash directly (no static mapping)
+                                        data["aroi_to_contact_map"][aroi_domain] = contact_hash
                                     break  # Only need to check one relay per contact to establish membership
                         
                         # Update counts and lists
