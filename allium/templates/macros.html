@@ -113,7 +113,7 @@
         {%- endif %}</li>
     <li><strong><span title="Network position indicates the strategic role distribution of relays. Labels: Guard-focused (>60% guard), Exit-focused (>40% exit), Multi-role (both guard and exit >20%), Balanced (mixed roles), Guard-only (100% guard), Exit-only (100% exit), Middle-only (100% middle)">Network Position</span>:</strong> {{ network_position.formatted_string }}</li>
     {%- if unique_aroi_count is not none and unique_contact_count is not none %}
-    <li><strong><span title="Unique AROI operators and contact information for this network">Unique AROI Operators and Contact Information</span>:</strong> {{ unique_aroi_count + unique_contact_count }}
+    <li><strong><span title="Unique AROI operators and contact information for this network">Unique AROI Operators and Contact Information</span>:</strong> {{ unique_contact_count }}
         {%- if unique_aroi_contact_html %}, {{ unique_aroi_contact_html|safe }}{% endif -%}
     </li>
     {%- endif %}

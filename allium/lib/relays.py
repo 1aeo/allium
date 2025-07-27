@@ -1607,20 +1607,6 @@ class Relays:
                                         data["aroi_to_contact_map"][aroi_domain] = contact_hash
                                     break  # Only need to check one relay per contact to establish membership
                         
-                        # Update counts and lists
-                        data["unique_aroi_count"] = len(unique_aroi_domains)
-                        data["unique_aroi_list"] = sorted(list(unique_aroi_domains))
-                        data["unique_contact_count"] = len(unique_contact_hashes)
-                        data["unique_contact_list"] = sorted(list(unique_contact_hashes))
-                        
-                        # Clean up old sets if they exist
-                        if "unique_contact_set" in data:
-                            del data["unique_contact_set"]
-                        if "unique_aroi_set" in data:
-                            del data["unique_aroi_set"]
-                        
-
-                            
                         # Build HTML links for unique AROI and contact display
                         aroi_contact_html_items = []
                         
@@ -1628,7 +1614,7 @@ class Relays:
                         aroi_contact_hashes = set()
                         
                         # Add AROI domain links first
-                        for aroi in data.get("unique_aroi_list", []):
+                        for aroi in sorted(list(unique_aroi_domains)):
                             if aroi and aroi != "none":
                                 contact_hash = data.get("aroi_to_contact_map", {}).get(aroi, "")
                                 if contact_hash:
@@ -1638,16 +1624,28 @@ class Relays:
                                     aroi_contact_html_items.append(aroi)
                         
                         # Add contact hash links (truncated to 8 characters) - only those not already represented by AROI
-                        for contact_hash in data.get("unique_contact_list", []):
+                        for contact_hash in sorted(list(unique_contact_hashes)):
                             if contact_hash and contact_hash != "" and contact_hash not in aroi_contact_hashes:
                                 aroi_contact_html_items.append(f'<a href="../../contact/{contact_hash}/">{contact_hash[:8]}</a>')
                         
                         # Store the pre-built HTML string
                         data["unique_aroi_contact_html"] = ", ".join(aroi_contact_html_items) if aroi_contact_html_items else ""
                         
-                        # Store AROI to contact mapping for link generation (keep for backward compatibility)
-                        if "aroi_to_contact_map" not in data:
-                            data["aroi_to_contact_map"] = {}
+                        # Calculate correct counts: total unique contacts (this is the real count we want to display)
+                        data["unique_aroi_count"] = len(unique_aroi_domains)
+                        data["unique_aroi_list"] = sorted(list(unique_aroi_domains))
+                        data["unique_contact_count"] = len(unique_contact_hashes)
+                        data["unique_contact_list"] = sorted(list(unique_contact_hashes))
+                        
+                        # The total unique count that should be displayed is just the total number of unique contacts
+                        # since AROI operators are a subset of contacts, not additional to them
+                        data["unique_total_count"] = len(unique_contact_hashes)
+                        
+                        # Clean up old sets if they exist
+                        if "unique_contact_set" in data:
+                            del data["unique_contact_set"]
+                        if "unique_aroi_set" in data:
+                            del data["unique_aroi_set"]
 
     def _calculate_contact_derived_data(self):
         """
