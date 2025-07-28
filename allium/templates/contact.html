@@ -233,7 +233,7 @@
                 </li>
                 
                 {# PROPOSAL METRICS: Advanced Bandwidth Reliability (Secondary Tree) #}
-                {% if operator_reliability.overall_bandwidth['6_months'] %}
+                {% if operator_reliability and operator_reliability.overall_bandwidth and operator_reliability.overall_bandwidth['6_months'] %}
                 {% set bw_6m = operator_reliability.overall_bandwidth['6_months'] %}
                 
                 {# Performance Analysis converted to bullet format like other sections #}
@@ -284,7 +284,7 @@
             <div style="margin-bottom: 15px;">
                 <strong style="color: #495057;">Network Comparison:</strong>
                 <ul style="list-style-type: disc; padding-left: 20px; margin-top: 5px; margin-bottom: 0;">
-                    {% if operator_reliability.overall_bandwidth['6_months'] and operator_reliability.overall_bandwidth['6_months'].network_position %}
+                    {% if operator_reliability and operator_reliability.overall_bandwidth and operator_reliability.overall_bandwidth['6_months'] and operator_reliability.overall_bandwidth['6_months'].network_position %}
                     {% set bw_position = operator_reliability.overall_bandwidth['6_months'] %}
                     <li><span title="Based on 6-month average bandwidth compared to {{ operator_reliability.network_bandwidth_percentiles.total_operators if operator_reliability.network_bandwidth_percentiles else 'network' }} operators" style="cursor: help;"><strong>Network Position:</strong> {{ bw_position.network_position }} ({{ bw_position.percentile_range }})</span></li>
                     {% endif %}

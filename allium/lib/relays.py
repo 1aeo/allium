@@ -1250,16 +1250,28 @@ class Relays:
             # - First seen date tracking (oldest relay in group)
             # - For countries, platforms, and networks: also track unique contacts and families
             if k == "country" or k == "platform" or k == "as":
-                # Track unique contacts and families for countries, platforms, and networks
+                # Track unique contacts, families, and AROI domains for countries, platforms, and networks
                 if not self.json["sorted"][k][v].get("unique_contact_set"):
                     self.json["sorted"][k][v]["unique_contact_set"] = set()
                 if not self.json["sorted"][k][v].get("unique_family_set"):
                     self.json["sorted"][k][v]["unique_family_set"] = set()
+                if not self.json["sorted"][k][v].get("unique_aroi_set"):
+                    self.json["sorted"][k][v]["unique_aroi_set"] = set()
+                if not self.json["sorted"][k][v].get("aroi_to_contact_map"):
+                    self.json["sorted"][k][v]["aroi_to_contact_map"] = {}
                 
                 # Add this relay's contact hash to the country/platform/network's unique contacts
+                # Use the pre-computed contact_md5 which includes unified AROI domain grouping
                 c_hash = relay.get("contact_md5", "")
-                if c_hash:  # Only add if contact_md5 exists
+                if c_hash:
                     self.json["sorted"][k][v]["unique_contact_set"].add(c_hash)
+                
+                # Add this relay's AROI domain to the country/platform/network's unique AROI domains
+                aroi_domain = relay.get("aroi_domain", "")
+                if aroi_domain and aroi_domain != "none" and aroi_domain.strip():
+                    self.json["sorted"][k][v]["unique_aroi_set"].add(aroi_domain)
+                    # APPROACH 1 ENHANCEMENT: Build AROI-to-contact mapping during categorization
+                    self.json["sorted"][k][v]["aroi_to_contact_map"][aroi_domain] = c_hash
                 
                 # Add this relay's family to the country/platform/network's unique families
                 if relay.get("effective_family") and len(relay["effective_family"]) > 1:
@@ -1548,7 +1560,7 @@ class Relays:
         """
         for category in ["family", "contact", "country", "platform", "as"]:
             if category in self.json["sorted"]:
-                for data in self.json["sorted"][category].values():
+                for key, data in self.json["sorted"][category].items():
                     if "unique_as_set" in data:
                         data["unique_as_count"] = len(data["unique_as_set"])
                         # Remove the set to save memory and avoid JSON serialization issues
@@ -1559,17 +1571,48 @@ class Relays:
                     
                     # Handle country, platform, and network-specific unique counts
                     if category == "country" or category == "platform" or category == "as":
-                        if "unique_contact_set" in data:
-                            data["unique_contact_count"] = len(data["unique_contact_set"])
-                            del data["unique_contact_set"]
-                        else:
-                            data["unique_contact_count"] = 0
-                            
+                        # Handle family counts using the existing logic
                         if "unique_family_set" in data:
                             data["unique_family_count"] = len(data["unique_family_set"])
                             del data["unique_family_set"]
                         else:
                             data["unique_family_count"] = 0
+                            
+                        # APPROACH 1 SIMPLIFIED: Use already-built sets and mappings from _sort()
+                        unique_aroi_domains = data.get("unique_aroi_set", set())
+                        unique_contact_hashes = data.get("unique_contact_set", set())
+                        # aroi_to_contact_map already built during _sort(), no need to rebuild
+                        
+                        # APPROACH 1: Simplified HTML generation from existing data
+                        aroi_contact_html_items = []
+                        used_contacts = set()
+                        aroi_map = data.get("aroi_to_contact_map", {})
+                        
+                        # Add AROI domain links first
+                        for aroi in sorted(unique_aroi_domains):
+                            if aroi and aroi != "none":
+                                contact_hash = aroi_map.get(aroi, "")
+                                if contact_hash:
+                                    aroi_contact_html_items.append(f'<a href="../../contact/{contact_hash}/">{aroi}</a>')
+                                    used_contacts.add(contact_hash)
+                                else:
+                                    aroi_contact_html_items.append(aroi)
+                        
+                        # Add non-AROI contact links (truncated to 8 characters)
+                        for contact_hash in sorted(unique_contact_hashes):
+                            if contact_hash and contact_hash not in used_contacts:
+                                aroi_contact_html_items.append(f'<a href="../../contact/{contact_hash}/">{contact_hash[:8]}</a>')
+                        
+                        # Store results
+                        data["unique_aroi_contact_html"] = ", ".join(aroi_contact_html_items)
+                        data["unique_aroi_count"] = len(unique_aroi_domains)
+                        data["unique_aroi_list"] = sorted(unique_aroi_domains)
+                        data["unique_contact_count"] = len(unique_contact_hashes)
+                        data["unique_contact_list"] = sorted(unique_contact_hashes)
+                        
+                        # Cleanup sets to save memory
+                        data.pop("unique_contact_set", None)
+                        data.pop("unique_aroi_set", None)
 
     def _calculate_contact_derived_data(self):
         """
@@ -2004,7 +2047,14 @@ class Relays:
                 has_guard=i["guard_count"] > 0,
                 has_middle=i["middle_count"] > 0,
                 has_exit=i["exit_count"] > 0,
-                has_typed_relays=i["guard_count"] > 0 or i["middle_count"] > 0 or i["exit_count"] > 0
+                has_typed_relays=i["guard_count"] > 0 or i["middle_count"] > 0 or i["exit_count"] > 0,
+                # Unique AROI and contact data for AS detail pages
+                unique_aroi_list=i.get("unique_aroi_list", []),
+                unique_contact_list=i.get("unique_contact_list", []),
+                unique_aroi_count=i.get("unique_aroi_count", 0),
+                unique_contact_count=i.get("unique_contact_count", 0),
+                unique_aroi_contact_html=i.get("unique_aroi_contact_html", ""),
+                aroi_to_contact_map=i.get("aroi_to_contact_map", {})
             )
             render_time += time.time() - render_start
 
