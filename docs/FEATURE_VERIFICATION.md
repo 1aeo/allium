@@ -10,28 +10,36 @@
 
 ### 1. AROI Leaderboards System
 **Location**: `/tmp/allium-before/misc/aroi-leaderboards.html`
-**Status**: ✅ CONFIRMED - All categories present
+**Status**: ✅ CONFIRMED - ALL 17 CATEGORIES PRESENT
 
-**Verified Categories (13/17 found in output)**:
+**Verified Categories (17/17 confirmed in output)**:
+
+**Capacity & Performance (2)**:
 - ✅ Bandwidth Contributed
-- ✅ Consensus Weight
+- ✅ Consensus Weight Authority
+
+**Network Role Specialization (4)**:
 - ✅ Exit Authority Champions
 - ✅ Guard Authority Champions
+- ✅ Exit Operators
+- ✅ Guard Operators
+
+**Reliability & Performance Excellence (4)**:
 - ✅ Reliability Masters (6-month)
 - ✅ Legacy Titans (5-year)
+- ✅ Bandwidth Served Masters (6-month)
+- ✅ Bandwidth Served Legends (5-year)
+
+**Diversity & Geographic Leadership (4)**:
 - ✅ Most Diverse Operators
 - ✅ Platform Diversity Heroes
 - ✅ Non-EU Leaders
 - ✅ Frontier Builders
+
+**Innovation & Leadership (3)**:
 - ✅ Network Veterans
 - ✅ IPv4 Address Leaders
 - ✅ IPv6 Address Leaders
-
-**Missing from docs/features/aroi-leaderboard/complete-implementation.md** (need to verify in file):
-- Exit Operators
-- Guard Operators
-- Bandwidth Served Masters
-- Bandwidth Served Legends
 
 ### 2. Network Health Dashboard
 **Location**: `/tmp/allium-before/network-health.html`
