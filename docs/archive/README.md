@@ -9,15 +9,28 @@ Completed implementation reports and technical write-ups for features that have 
 
 **Purpose**: Historical record of how features were implemented, decisions made, and challenges overcome.
 
+**Contains**: 14+ implementation reports including contact page enhancements, directory authorities, IPv6 tracking, uptime processing, pagination, security fixes, and intelligence engine integration.
+
 ### [performance-details/](performance-details/)
 Detailed performance optimization reports and benchmarking results from past optimization work.
 
 **Purpose**: Historical context for performance improvements, useful for understanding optimization decisions.
 
+**Contains**: 3 optimization reports including AROI leaderboard ultra-optimization (99.3% improvement), duplicate merging optimization, and Jinja2 template optimization results (90% faster rendering).
+
 ### [security-details/](security-details/)
 Historical security audit reports and vulnerability assessments that have been addressed.
 
 **Purpose**: Record of security improvements, useful for compliance and understanding security evolution.
+
+**Contains**: 3 security audit reports including AROI security audit, HTML injection vulnerability reports and fixes summary.
+
+### [tracking-docs/](tracking-docs/)
+Documentation reorganization project tracking documents and verification reports.
+
+**Purpose**: Complete record of the 2025-11-23 documentation reorganization project including before/after comparisons and feature verification.
+
+**Contains**: Before/after comparison (25KB), complete reorganization summary (44KB), and feature verification report (17KB) confirming all 17 AROI categories and system functionality.
 
 ## 🎯 Purpose of Archiving
 
@@ -41,17 +54,31 @@ Documentation is archived when:
 | Performance Status | `development/performance.md` | `archive/performance-details/` |
 | Security Status | `development/security.md` | `archive/security-details/` |
 | Implemented Features | `features/implemented/` | `archive/implementation-reports/` |
+| Project Tracking | N/A (completed) | `archive/tracking-docs/` |
 
 ## 📅 Archive Index
 
-### Implementation Reports
-*To be populated as documents are moved*
+### Implementation Reports (14+ documents)
+- Before/After comparison, Contact page enhancements, Directory authorities implementation
+- IPv6 operator tracking fix, Pagination documentation, Security fixes
+- Uptime processing consolidation, Weighted scoring, Intelligence engine (Tier 1)
+- Country harmonization, Phase 1 validation, README review
+- Relay detail page layout changes, Documentation reorganization report
 
-### Performance Details
-*To be populated as documents are moved*
+### Performance Details (3 documents)
+- AROI Leaderboard Ultra-Optimization: 99.3% improvement (129ms → 0.87ms)
+- Duplicate Merging Optimization: Eliminated redundant calculations
+- Jinja2 Template Optimization: 90% faster rendering
 
-### Security Details
-*To be populated as documents are moved*
+### Security Details (3 documents)
+- AROI Security Audit Report: Complete vulnerability assessment
+- HTML Injection Audit Report: XSS vulnerability identification
+- HTML Injection Fixes Summary: Remediation and verification
+
+### Tracking Documents (3 documents)
+- Before/After Comparison: 25KB detailed analysis of documentation reorganization
+- Complete Reorganization Summary: 44KB comprehensive project report
+- Feature Verification: 17KB report confirming all 17 AROI categories working
 
 ---
 
