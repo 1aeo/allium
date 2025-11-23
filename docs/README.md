@@ -1,50 +1,162 @@
 # Allium Documentation
 
-Welcome to the Allium project documentation. Allium generates static Tor relay metrics and statistics with a focus on performance, simplicity, and comprehensive relay analysis.
+Welcome to the complete documentation for Allium, an advanced Tor relay analytics platform.
 
-## 🚀 **New User? Start Here!**
+## 📚 Documentation Sections
 
-- **[🚀 Getting Started Guide](GETTING_STARTED.md)** - **Perfect for first-time users!**
-- **[📚 Project Overview](../README.md)** - Main project README
+### 👥 For Users
+Start here if you want to **generate and deploy** Allium sites:
 
-## 📁 Documentation Structure
+- **[User Guide](user-guide/README.md)** - Installation, configuration, and usage
+  - [Quick Start](user-guide/quick-start.md) - Get running in 5 minutes
+  - [Configuration](user-guide/configuration.md) - Customize behavior
+  - [Updating](user-guide/updating.md) - Keep data fresh
+  - [Features](user-guide/features.md) - Understanding generated content
 
-### 🏗️ Architecture & Design
-- **[Architecture Overview](architecture/README.md)** - System architecture and design principles
-- **[Intelligence Engine Design](architecture/intelligence-engine-design.md)** - Comprehensive intelligence engine architecture
+### 👨‍💻 For Developers
+Start here if you want to **contribute code** or customize Allium:
 
-### 🚀 Features & Functionality
-- **[AROI Leaderboard System](features/aroi-leaderboard/README.md)** - Autonomous Relay Operator Identification leaderboard
-- **[Smart Context Links](features/smart-context-links/README.md)** - Intelligent navigation and context system
-- **[Directory Authorities Monitoring](features/directory-authorities/README.md)** - Tor directory authority health tracking and consensus monitoring
-- **[Performance Insights](../README.md#intelligence-features-)** - CW/BW ratio analysis and network efficiency metrics
-- **[Country & Geographic Processing](features/geographic-processing.md)** - Country harmonization and geographic analysis
+- **[Development Guide](development/README.md)** - Contributing and development setup
+  - [Testing Guide](development/testing.md) - Test standards and practices
+  - [Performance](development/performance.md) - Current status and optimization
+  - [Security](development/security.md) - Security practices and guidelines
+  - [Example Data](development/example-data/) - Mock data for testing
 
-### 📊 Performance & Optimization
-- **[Optimization Reports](performance/README.md)** - Performance improvements and optimization summaries
-- **[Template Optimization](performance/jinja2-template-optimization.md)** - Jinja2 template performance improvements
+### 🏗️ Architecture
+Understand how Allium works internally:
 
-### 🔧 Implementation & Technical
-- **[Implementation Reports](implementation/README.md)** - Feature implementation reports and technical details
-- **[Development Scripts](scripts/README.md)** - Development and validation scripts
+- **[Architecture Overview](architecture/README.md)** - System design and data flow
+  - [Data Pipeline](architecture/data-pipeline.md) - How data flows through the system
+  - [Template Optimization](architecture/template-optimization.md) - Rendering performance
 
-### 🔒 Security & Auditing
-- **[Security Documentation](security/README.md)** - Security audit reports and vulnerability assessments
-- **[HTML Injection Fixes](security/html-injection-fixes-summary.md)** - Security vulnerability fixes applied
+### 🔌 API Documentation
+Understanding data sources:
 
-### 📋 Project Information
-- **[Project Overview](../README.md)** - Main project README
-- **[License](../UNLICENSE)** - Project license information
+- **[API Guide](api/README.md)** - Onionoo API integration
+  - Details API - Core relay information
+  - Uptime API - Historical uptime data
+  - Bandwidth API - Historical bandwidth data
 
-## 🎯 Quick Start
+### 🗺️ Features & Roadmap
+Current and planned functionality:
 
-For new developers or contributors:
+- **[Features](features/README.md)** - Feature documentation
+  - [Implemented Features](features/implemented/) - Working features
+  - [Planned Features](features/planned/) - Future enhancements
 
-1. **Start with**: [Project Overview](../README.md) to understand the allium project
-2. **Architecture**: Review [Architecture Overview](architecture/README.md) for system design
-3. **Features**: Explore specific features in the [Features](#-features--functionality) section
-4. **Performance**: Check [Optimization Reports](performance/README.md) for performance insights
+### 📦 Archive
+Historical documentation preserved for reference:
 
-## 🔄 Last Updated
+- **[Archive](archive/README.md)** - Completed work and historical reports
+  - [Implementation Reports](archive/implementation-reports/) - Past implementations
+  - [Performance Details](archive/performance-details/) - Optimization history
+  - [Security Details](archive/security-details/) - Security audit history
 
-This documentation structure was reorganized from the top10aroileaders branch for better navigation and discoverability.
+---
+
+## 🎯 Quick Start Paths
+
+### Path 1: I want to **use** Allium
+1. Read [User Guide: Quick Start](user-guide/quick-start.md)
+2. Install and generate your first site
+3. Explore [Features](user-guide/features.md) to understand output
+
+### Path 2: I want to **develop** Allium
+1. Read [Development Guide](development/README.md)
+2. Set up development environment
+3. Review [Testing Standards](development/testing.md)
+4. Check [Architecture Overview](architecture/README.md)
+
+### Path 3: I want to **understand** Allium
+1. Read main [README](../README.md) for overview
+2. Explore [Features Guide](user-guide/features.md)
+3. Dive into [Architecture](architecture/README.md)
+4. Review [API Documentation](api/README.md)
+
+---
+
+## 📖 Documentation Organization
+
+This documentation is organized by **audience** and **purpose**:
+
+| Section | Audience | Purpose |
+|---------|----------|---------|
+| **User Guide** | End users | Installation, configuration, usage |
+| **Development** | Contributors | Code guidelines, testing, optimization |
+| **Architecture** | Technical readers | System design, data flow |
+| **API** | Integrators | Data source specifications |
+| **Features** | All | Current and planned functionality |
+| **Archive** | Reference | Historical context |
+
+---
+
+## 🔍 Finding Information
+
+### Common Questions
+
+**"How do I install Allium?"**  
+→ [User Guide: Quick Start](user-guide/quick-start.md)
+
+**"How do I configure automated updates?"**  
+→ [User Guide: Configuration](user-guide/configuration.md#-automated-updates-cron)
+
+**"What are AROI leaderboards?"**  
+→ [User Guide: Features](user-guide/features.md#-aroi-leaderboards-miscaroi-leaderboardshtml)
+
+**"How do I run tests?"**  
+→ [Development: Testing](development/testing.md)
+
+**"What's the current performance status?"**  
+→ [Development: Performance](development/performance.md)
+
+**"How secure is Allium?"**  
+→ [Development: Security](development/security.md)
+
+**"How does the data pipeline work?"**  
+→ [Architecture: Data Pipeline](architecture/data-pipeline.md)
+
+**"What optimizations have been done?"**  
+→ [Archive: Performance Details](archive/performance-details/)
+
+---
+
+## 📝 Contributing to Documentation
+
+Documentation contributions are welcome! When adding or updating docs:
+
+1. **User-facing docs** → `user-guide/`
+2. **Developer docs** → `development/`
+3. **Architecture docs** → `architecture/`
+4. **API specs** → `api/`
+5. **Feature docs** → `features/implemented/` or `features/planned/`
+6. **Historical reports** → `archive/[appropriate-subdir]/`
+
+### Documentation Standards
+- Use clear, concise language
+- Include code examples where appropriate
+- Link to related documentation
+- Keep formatting consistent
+- Update relevant READMEs
+
+---
+
+## 🔗 External Resources
+
+- **[Main Project README](../README.md)** - Project overview
+- **[GitHub Repository](https://github.com/1aeo/allium)** - Source code
+- **[Onionoo API](https://onionoo.torproject.org/)** - Data source
+- **[Tor Metrics](https://metrics.torproject.org/)** - Official Tor metrics
+
+---
+
+## 📅 Documentation Updates
+
+This documentation structure was established on **2025-11-23** to improve organization and accessibility.
+
+**Previous documentation** has been archived in `archive/` with proper indexing for reference.
+
+**Ongoing updates** focus on keeping user and developer guides current while preserving historical context.
+
+---
+
+**Questions?** Open an issue on GitHub or check the relevant guide section above.
