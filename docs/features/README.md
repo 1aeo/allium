@@ -36,22 +36,25 @@ The following major features are **confirmed working** (see [FEATURE_VERIFICATIO
 
 ## 🚀 Planned Features
 
-See [docs/ROADMAP.md](../ROADMAP.md) for high-level vision and [planned/](planned/) directory for detailed proposals.
+See **[docs/ROADMAP.md](../ROADMAP.md)** for high-level vision and **[planned/](planned/)** directory for detailed proposals.
 
-### Near-Term (Q1 2025)
-- Interactive graphs and charts
-- Advanced visualizations
-- Enhanced operator comparisons
+### Q1 2025: Interactive Visualizations
+- Interactive graphs and charts (Milestone 1)
+- Geographic heat maps
+- Platform diversity visualization
+- AROI achievement wheels
 
-### Medium-Term (Q2-Q3 2025)
-- Real-time authority monitoring
-- Predictive analytics
-- Advanced network health features
+### Q2-Q3 2025: Advanced Monitoring
+- Real-time authority monitoring (Milestone 2)
+- Predictive relay failure detection (Milestone 3)
+- Network capacity forecasting
+- Enhanced smart context links
 
-### Long-Term (Q4 2025+)
-- AI/ML-powered insights
-- Community API
-- Mobile applications
+### Q4 2025 - Q1 2026: AI & Community
+- AI/ML-powered insights (Milestone 4)
+- Community API & developer tools (Milestone 5)
+- Mobile applications (iOS/Android)
+- Collaborative network planning
 
 ## 📋 Feature Status Legend
 
