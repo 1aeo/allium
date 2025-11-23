@@ -30,6 +30,7 @@ cd www && python3 -m http.server 8000
 - [🌍 AROI Leaderboards](#-aroi-leaderboards)
 - [🔒 Security & Performance](#-security--performance)
 - [🛠️ Requirements](#️-requirements)
+- [📚 Documentation](#-documentation)
 - [🤝 Contributing](#-contributing)
 - [📷 Screenshots](#-screenshots)
 - [📄 License](#-license)
@@ -261,6 +262,29 @@ Seventeen specialized categories tracking authenticated operator achievements ac
 - **safety ≥1.10.0** - Dependency vulnerability checker
 - **djlint ≥1.0.0** - HTML/template linter
 - **memory-profiler ≥0.60.0** - Memory usage profiling
+
+## 📚 Documentation
+
+Comprehensive documentation is available in the [`docs/`](docs/) directory:
+
+### 👥 For Users
+- **[Quick Start Guide](docs/user-guide/quick-start.md)** - Get running in 5 minutes
+- **[Configuration Guide](docs/user-guide/configuration.md)** - All options and automation setup
+- **[Updating Guide](docs/user-guide/updating.md)** - Keep data and code current
+- **[Features Guide](docs/user-guide/features.md)** - Understanding all 17 AROI categories and features
+
+### 👨‍💻 For Developers
+- **[Development Guide](docs/development/README.md)** - Contributing and development setup
+- **[Testing Standards](docs/development/testing.md)** - Test naming and organization
+- **[Performance Guide](docs/development/performance.md)** - Current status and optimization
+- **[Security Guide](docs/development/security.md)** - Security best practices
+
+### 📖 Additional Resources
+- **[Complete Documentation Index](docs/README.md)** - Full documentation navigation
+- **[Roadmap 2025-2026](docs/ROADMAP.md)** - Future plans and milestones
+- **[Architecture Overview](docs/architecture/README.md)** - System design
+- **[Implemented Features](docs/features/implemented/)** - What works now
+- **[Planned Features](docs/features/planned/)** - What's coming next
 
 ## 🤝 Contributing
 

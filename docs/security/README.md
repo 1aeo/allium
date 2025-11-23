@@ -1,15 +1,22 @@
 # Security Documentation
 
-This section contains security audit reports, vulnerability assessments, and security fix documentation for the Allium project.
+⚠️ **This directory has been reorganized**
 
-## 📋 Contents
+## 📍 New Locations
 
-### **Security Audit Reports**
-- [`aroi-security-audit-report.md`](aroi-security-audit-report.md) - Comprehensive security audit of AROI leaderboard implementation
-- [`html-injection-audit-report.md`](html-injection-audit-report.md) - HTML injection vulnerability assessment and analysis
+### **Current Security Status**
+→ See **[docs/development/security.md](../development/security.md)** for:
+- Current security posture
+- Active security priorities
+- Security testing guidelines
+- Developer security best practices
 
-### **Security Fix Documentation**
-- [`html-injection-fixes-summary.md`](html-injection-fixes-summary.md) - Summary of HTML injection vulnerability fixes applied
+### **Historical Security Reports**
+→ See **[docs/archive/security-details/](../archive/security-details/)** for:
+- Security audit reports
+- Vulnerability assessments
+- Remediation documentation
+- Historical security improvements
 
 ## 🎯 Purpose
 

@@ -1,10 +1,22 @@
 # Allium Enhancement Proposals
 
-This directory contains proposals for advanced features and enhancements to the allium Tor relay analytics platform.
+⚠️ **This directory has been reorganized**
 
-## 🚀 **Active Enhancement Proposals**
+## 📍 New Location
 
-The following proposals focus on advanced analytics, visualization, and intelligence features that are not yet implemented:
+All proposals have been moved to **[docs/features/planned/](../features/planned/)**
+
+## 🔗 Quick Links
+
+- **[Planned Features](../features/planned/)** - All proposals and roadmap items
+- **[Implemented Features](../features/implemented/)** - What's already built
+- **[Features Overview](../features/README.md)** - Complete features documentation
+
+---
+
+## 📋 What Was Here
+
+This directory previously contained proposals for advanced features and enhancements. These have been reorganized:
 
 ## Proposal Documents
 

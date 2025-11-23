@@ -1,14 +1,22 @@
 # Performance & Optimization
 
-This section contains performance analysis, optimization reports, and efficiency improvements implemented across the Allium project.
+⚠️ **This directory has been reorganized**
 
-## 📋 Documents
+## 📍 New Locations
 
-### **Core Performance Reports**
-- [`aroi-leaderboard-ultra-optimization.md`](aroi-leaderboard-ultra-optimization.md) - 99.3% performance gain in AROI country processing
-- [`duplicate-merging-optimization.md`](duplicate-merging-optimization.md) - Duplicate code elimination and merging optimizations
-- [`intelligence-engine-optimization.md`](intelligence-engine-optimization.md) - Intelligence Engine Tier 1 optimization (79.5% code reduction)
-- [`jinja2-template-optimization.md`](jinja2-template-optimization.md) - Template system performance improvements (90% faster rendering)
+### **Current Performance Status**
+→ See **[docs/development/performance.md](../development/performance.md)** for:
+- Current performance metrics
+- Active optimization priorities
+- Performance testing guidelines
+- Developer performance best practices
+
+### **Historical Performance Reports**
+→ See **[docs/archive/performance-details/](../archive/performance-details/)** for:
+- Detailed optimization reports
+- Historical benchmarking results
+- Past performance improvements
+- Optimization case studies
 
 ### **Performance Achievements**
 - **⚡ AROI Processing**: 99.3% improvement (129ms → 0.87ms for 100 evaluations)
