@@ -4730,6 +4730,92 @@ class Relays:
                 'cw_bw_ratio_exit_median': '0'
         })
         
+        # === AROI VALIDATION METRICS ===
+        # Fetch and calculate AROI validation metrics for operator participation
+        try:
+            from .aroi_validation import fetch_aroi_validation_data, calculate_aroi_validation_metrics
+            
+            # Fetch validation data (cached for 1 hour)
+            cache_dir = os.path.join(os.path.dirname(self.output_dir), 'cache')
+            validation_data = fetch_aroi_validation_data(cache_dir=cache_dir)
+            
+            # Calculate validation metrics
+            validation_metrics = calculate_aroi_validation_metrics(
+                self.json.get('relays', []), 
+                validation_data
+            )
+            
+            # Add validation metrics to health_metrics
+            health_metrics.update(validation_metrics)
+            
+            # Calculate total relays with AROI (validated + invalid)
+            total_relays_with_aroi = (
+                validation_metrics.get('aroi_validated_count', 0) + 
+                validation_metrics.get('aroi_unvalidated_count', 0)
+            )
+            
+            # Calculate percentages relative to AROI relays
+            if total_relays_with_aroi > 0:
+                aroi_validated_pct_of_aroi = (
+                    validation_metrics['aroi_validated_count'] / total_relays_with_aroi * 100
+                )
+                aroi_invalid_pct_of_aroi = (
+                    validation_metrics['aroi_unvalidated_count'] / total_relays_with_aroi * 100
+                )
+            else:
+                aroi_validated_pct_of_aroi = 0.0
+                aroi_invalid_pct_of_aroi = 0.0
+            
+            # Add derived metrics
+            health_metrics['total_relays_with_aroi'] = total_relays_with_aroi
+            health_metrics['total_relays_with_aroi_percentage'] = (
+                (total_relays_with_aroi / total_relays_count * 100) 
+                if total_relays_count > 0 else 0.0
+            )
+            health_metrics['aroi_validated_percentage_of_aroi'] = aroi_validated_pct_of_aroi
+            health_metrics['aroi_invalid_percentage_of_aroi'] = aroi_invalid_pct_of_aroi
+            
+            # Calculate average relays per operator
+            aroi_operators_count = health_metrics.get('aroi_operators_count', 0)
+            if aroi_operators_count > 0:
+                health_metrics['avg_relays_per_aroi_operator'] = round(
+                    total_relays_with_aroi / aroi_operators_count, 2
+                )
+            else:
+                health_metrics['avg_relays_per_aroi_operator'] = 0.0
+            
+            if validation_metrics.get('validation_data_available') and self.progress:
+                print(f"✅ AROI Validation: Loaded data from {validation_metrics.get('validation_timestamp')}")
+                print(f"   Total AROI Relays: {total_relays_with_aroi:,} ({health_metrics['total_relays_with_aroi_percentage']:.1f}%)")
+                print(f"   Validated: {validation_metrics['aroi_validated_count']:,} relays ({aroi_validated_pct_of_aroi:.1f}% of AROI)")
+                print(f"   Success Rate: {validation_metrics['aroi_validation_success_rate']:.1f}%")
+            elif self.progress:
+                print(f"⚠️  AROI Validation: Data unavailable, using local AROI detection")
+                    
+        except Exception as e:
+            # Graceful fallback if validation data unavailable
+            if self.progress:
+                print(f"⚠️  AROI Validation: Error loading data: {e}")
+            health_metrics.update({
+                'aroi_validated_count': 0,
+                'aroi_unvalidated_count': 0,
+                'aroi_no_proof_count': 0,
+                'relays_no_aroi': 0,
+                'aroi_validated_percentage': 0.0,
+                'aroi_unvalidated_percentage': 0.0,
+                'aroi_no_proof_percentage': 0.0,
+                'relays_no_aroi_percentage': 0.0,
+                'aroi_validation_success_rate': 0.0,
+                'dns_rsa_success_rate': 0.0,
+                'uri_rsa_success_rate': 0.0,
+                'validation_data_available': False,
+                'total_relays_with_aroi': 0,
+                'total_relays_with_aroi_percentage': 0.0,
+                'aroi_validated_percentage_of_aroi': 0.0,
+                'aroi_invalid_percentage_of_aroi': 0.0,
+                'avg_relays_per_aroi_operator': 0.0
+            })
+        
         # OPTIMIZATION: Pre-format all template strings to eliminate Jinja2 formatting overhead
         # Template formatting in Jinja2 is 3-5x slower than Python formatting
         self._preformat_network_health_template_strings(health_metrics)
