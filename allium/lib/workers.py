@@ -356,6 +356,65 @@ def fetch_onionoo_bandwidth(onionoo_url="https://onionoo.torproject.org/bandwidt
     return data
 
 
+@handle_http_errors("AROI validation", _load_cache, _save_cache, _mark_ready, _mark_stale,
+                   allow_exit_on_304=False, critical=False)
+def fetch_aroi_validation(aroi_url="https://aroivalidator.1aeo.com/latest.json", progress_logger=None):
+    """
+    Fetch AROI validation data from aroivalidator.1aeo.com API.
+    
+    Args:
+        aroi_url: URL to fetch AROI validation data from
+        progress_logger: Optional function to call for progress updates
+        
+    Returns:
+        dict: JSON response with AROI validation data
+    """
+    api_name = "aroi_validation"
+    
+    def log_progress(message):
+        if progress_logger:
+            progress_logger(message)
+        else:
+            print(message)
+    
+    # Check if we have cached data less than 1 hour old
+    cache_path = os.path.join(CACHE_DIR, "aroi_validation_cache.json")
+    if os.path.exists(cache_path):
+        cache_age = time.time() - os.path.getmtime(cache_path)
+        if cache_age < 3600:  # 1 hour in seconds
+            log_progress(f"using cached AROI validation data (less than 1 hour old)")
+            cached_data = _load_cache(api_name)
+            if cached_data:
+                validation_count = len(cached_data.get('results', []))
+                log_progress(f"loaded {validation_count} relay validations from cache")
+                _mark_ready(api_name)
+                return cached_data
+    
+    # Fetch fresh data
+    log_progress(f"fetching fresh AROI validation data")
+    req = urllib.request.Request(aroi_url, headers={'User-Agent': 'Allium/1.0'})
+    api_response = urllib.request.urlopen(req, timeout=30).read()
+    
+    log_progress("parsing JSON response...")
+    data = json.loads(api_response.decode('utf-8'))
+    
+    # Validate structure
+    required_keys = ['metadata', 'statistics', 'results']
+    if not all(key in data for key in required_keys):
+        log_progress("warning: invalid AROI validation data structure")
+        return None
+    
+    # Cache the data
+    log_progress("caching AROI validation data...")
+    _save_cache(api_name, data)
+    _mark_ready(api_name)
+    
+    validation_count = len(data.get('results', []))
+    log_progress(f"successfully fetched {validation_count} relay validations from AROI validator API")
+    
+    return data
+
+
 def fetch_collector_data(progress_logger=None):
     """
     Fetch CollecTor data (placeholder for future implementation)

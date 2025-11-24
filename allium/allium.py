@@ -171,9 +171,9 @@ if __name__ == "__main__":
     # API steps (5-18): threaded fetching, both APIs (fetch->parse->cache->success->complete), relay set creation
     # Site generation steps (19-35): data loaded, index, top500, all relays, AROI, misc pages, unique values, relay info, static files, completion
     setup_steps = 4
-    api_steps = 14  # Maximum API-related steps (when all APIs enabled) 
-    site_generation_steps = 17  # Site generation and completion steps (added top500 page)
-    total_steps = setup_steps + api_steps + site_generation_steps  # 35 total steps
+    api_steps = 26  # API-related steps with parallel fetching (Details, Uptime, Bandwidth, AROI validation with detailed logging)
+    site_generation_steps = 19  # Site generation and completion steps (includes relay set processing, page generation)
+    total_steps = setup_steps + api_steps + site_generation_steps  # 49 total steps
 
     # Create unified progress logger
     progress_logger = create_progress_logger(start_time, 0, total_steps, args.progress)

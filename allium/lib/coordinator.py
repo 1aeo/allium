@@ -10,6 +10,7 @@ import threading
 import time
 from .workers import (
     fetch_onionoo_details, fetch_onionoo_uptime, fetch_onionoo_bandwidth,
+    fetch_aroi_validation,
     get_worker_status, get_all_worker_status
 )
 from .relays import Relays
@@ -58,6 +59,7 @@ class Coordinator:
         if self.enabled_apis == 'all':
             self.api_workers.append(("onionoo_uptime", fetch_onionoo_uptime, [self.onionoo_uptime_url, self._log_progress]))
             self.api_workers.append(("onionoo_bandwidth", fetch_onionoo_bandwidth, [self.onionoo_bandwidth_url, self.bandwidth_cache_hours, self._log_progress]))
+            self.api_workers.append(("aroi_validation", fetch_aroi_validation, ["https://aroivalidator.1aeo.com/latest.json", self._log_progress]))
         
     def _log_progress(self, message):
         """Log progress message using shared progress utility"""
@@ -105,6 +107,8 @@ class Coordinator:
             return "Uptime API"
         elif api_name == "onionoo_bandwidth":
             return "Historical Bandwidth API"
+        elif api_name == "aroi_validation":
+            return "AROI Validation API"
         else:
             return api_name.replace("_", " ").title()
 
@@ -195,6 +199,12 @@ class Coordinator:
         """
         return self.worker_data.get('onionoo_bandwidth')
 
+    def get_aroi_validation_data(self):
+        """
+        Get AROI validation data if available
+        """
+        return self.worker_data.get('aroi_validation')
+
     def get_consensus_health_data(self):
         """
         Get consensus health data if available (Future API)
@@ -234,9 +244,11 @@ class Coordinator:
         # Phase 2: Attach additional API data to relay set (dynamic assignment)
         uptime_data = self.get_uptime_data()
         bandwidth_data = self.get_bandwidth_data()
+        aroi_validation_data = self.get_aroi_validation_data()
         
         setattr(relay_set, 'uptime_data', uptime_data)
         setattr(relay_set, 'bandwidth_data', bandwidth_data)
+        setattr(relay_set, 'aroi_validation_data', aroi_validation_data)
         setattr(relay_set, 'consensus_health_data', self.get_consensus_health_data())
         setattr(relay_set, 'collector_data', self.get_collector_data())
         

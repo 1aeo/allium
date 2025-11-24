@@ -4731,13 +4731,13 @@ class Relays:
         })
         
         # === AROI VALIDATION METRICS ===
-        # Fetch and calculate AROI validation metrics for operator participation
+        # Calculate AROI validation metrics for operator participation
+        # Data was fetched in parallel by coordinator API worker
         try:
-            from .aroi_validation import fetch_aroi_validation_data, calculate_aroi_validation_metrics
+            from .aroi_validation import calculate_aroi_validation_metrics
             
-            # Fetch validation data (cached for 1 hour)
-            cache_dir = os.path.join(os.path.dirname(self.output_dir), 'cache')
-            validation_data = fetch_aroi_validation_data(cache_dir=cache_dir)
+            # Get pre-fetched validation data (attached by coordinator)
+            validation_data = getattr(self, 'aroi_validation_data', None)
             
             # Calculate validation metrics
             validation_metrics = calculate_aroi_validation_metrics(
@@ -4784,13 +4784,8 @@ class Relays:
             else:
                 health_metrics['avg_relays_per_aroi_operator'] = 0.0
             
-            if validation_metrics.get('validation_data_available') and self.progress:
-                print(f"✅ AROI Validation: Loaded data from {validation_metrics.get('validation_timestamp')}")
-                print(f"   Total AROI Relays: {total_relays_with_aroi:,} ({health_metrics['total_relays_with_aroi_percentage']:.1f}%)")
-                print(f"   Validated: {validation_metrics['aroi_validated_count']:,} relays ({aroi_validated_pct_of_aroi:.1f}% of AROI)")
-                print(f"   Success Rate: {validation_metrics['aroi_validation_success_rate']:.1f}%")
-            elif self.progress:
-                print(f"⚠️  AROI Validation: Data unavailable, using local AROI detection")
+            # AROI validation progress messages are now handled by coordinator API worker
+            # No need for separate progress output here since it's fetched in parallel
                     
         except Exception as e:
             # Graceful fallback if validation data unavailable
