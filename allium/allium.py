@@ -134,6 +134,17 @@ if __name__ == "__main__":
         required=False,
     )
     parser.add_argument(
+        "--aroi-url",
+        dest="aroi_url",
+        type=str,
+        default="https://aroivalidator.1aeo.com/latest.json",
+        help=(
+            "AROI validator API HTTP URL (default "
+            '"https://aroivalidator.1aeo.com/latest.json")'
+        ),
+        required=False,
+    )
+    parser.add_argument(
         "--bandwidth-cache-hours",
         dest="bandwidth_cache_hours",
         type=int,
@@ -171,9 +182,9 @@ if __name__ == "__main__":
     # API steps (5-18): threaded fetching, both APIs (fetch->parse->cache->success->complete), relay set creation
     # Site generation steps (19-35): data loaded, index, top500, all relays, AROI, misc pages, unique values, relay info, static files, completion
     setup_steps = 4
-    api_steps = 14  # Maximum API-related steps (when all APIs enabled) 
-    site_generation_steps = 17  # Site generation and completion steps (added top500 page)
-    total_steps = setup_steps + api_steps + site_generation_steps  # 35 total steps
+    api_steps = 26  # API-related steps with parallel fetching (Details, Uptime, Bandwidth, AROI validation with detailed logging)
+    site_generation_steps = 19  # Site generation and completion steps (includes relay set processing, page generation)
+    total_steps = setup_steps + api_steps + site_generation_steps  # 49 total steps
 
     # Create unified progress logger
     progress_logger = create_progress_logger(start_time, 0, total_steps, args.progress)
@@ -196,7 +207,7 @@ if __name__ == "__main__":
     progress_logger.log("Initializing relay data from onionoo (using coordinator)...")
     
     try:
-        RELAY_SET = create_relay_set_with_coordinator(args.output_dir, args.onionoo_details_url, args.onionoo_uptime_url, args.onionoo_bandwidth_url, args.bandwidth_cache_hours, args.bandwidth_units == 'bits', args.progress, start_time, progress_logger.get_current_step(), total_steps, args.enabled_apis, args.filter_downtime_days)
+        RELAY_SET = create_relay_set_with_coordinator(args.output_dir, args.onionoo_details_url, args.onionoo_uptime_url, args.onionoo_bandwidth_url, args.aroi_url, args.bandwidth_cache_hours, args.bandwidth_units == 'bits', args.progress, start_time, progress_logger.get_current_step(), total_steps, args.enabled_apis, args.filter_downtime_days)
         if RELAY_SET is None or RELAY_SET.json == None:
             # Progress-style error context message (conditional on progress flag)
             progress_logger.log("No onionoo data available, exiting gracefully")
