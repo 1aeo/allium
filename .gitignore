@@ -15,6 +15,7 @@ env/
 
 # Data files (cache, state, etc.)
 allium/data/
+cache/
 
 # Testing and CI
 .pytest_cache/
