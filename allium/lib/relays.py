@@ -348,6 +348,11 @@ class Relays:
         For display purposes only - does not affect the stored/hashed contact info.
         More details: https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/
         
+        According to the AROI spec, a valid contact string must have:
+        - ciissversion:2
+        - proof:dns-rsa or proof:uri-rsa  
+        - url:<domain>
+        
         Args:
             contact: The contact string to process
         Returns:
@@ -356,11 +361,13 @@ class Relays:
         if not contact:
             return "none"
             
-        # Check if both required patterns are present
-        url_match = re.search(r'url:(?:https?://)?([^,\s]+)', contact)
-        ciiss_match = 'ciissversion:2' in contact
+        # Check if ALL required patterns are present (ciissversion, proof, and url)
+        # Use word boundaries (\b) to avoid matching "donationurl:" or similar fields
+        url_match = re.search(r'\burl:(?:https?://)?([^,\s]+)', contact, re.IGNORECASE)
+        ciiss_match = re.search(r'\bciissversion:2\b', contact, re.IGNORECASE)
+        proof_match = re.search(r'\bproof:(dns-rsa|uri-rsa)\b', contact, re.IGNORECASE)
         
-        if url_match and ciiss_match:
+        if url_match and ciiss_match and proof_match:
             # Extract domain and clean it up
             domain = url_match.group(1)
             
