@@ -262,3 +262,142 @@ def _format_timestamp(timestamp_str):
         return dt.strftime('%Y-%m-%d %H:%M UTC')
     except (ValueError, AttributeError):
         return timestamp_str
+
+
+def get_contact_validation_status(relays: List[Dict], validation_data: Optional[Dict] = None) -> Dict:
+    """
+    Get validation status for a specific contact's relays.
+    
+    Analyzes all relays belonging to a contact and returns:
+    - Overall validation status (validated, partially_validated, unvalidated)
+    - List of validated relays with proof details
+    - List of unvalidated relays with error messages
+    - Summary statistics
+    
+    Args:
+        relays: List of relay dictionaries for this contact
+        validation_data: Optional validation data from aroivalidator.1aeo.com
+        
+    Returns:
+        Dict containing contact-level validation information
+    """
+    result = {
+        'has_aroi': False,
+        'validation_status': 'no_aroi',  # no_aroi, validated, partially_validated, unvalidated
+        'validated_relays': [],
+        'unvalidated_relays': [],
+        'validation_summary': {
+            'total_relays': len(relays),
+            'relays_with_aroi': 0,
+            'validated_count': 0,
+            'unvalidated_count': 0,
+            'validation_rate': 0.0
+        },
+        'validation_available': False,
+        'show_detailed_errors': True  # Show detailed error list (False if all errors are just "Missing AROI fields")
+    }
+    
+    if not relays:
+        return result
+    
+    # Build fingerprint -> validation result mapping FIRST
+    # This way we check validation data directly, not just parsed aroi_domain
+    validation_map = {}
+    if validation_data and 'results' in validation_data:
+        for val_result in validation_data.get('results', []):
+            fingerprint = val_result.get('fingerprint')
+            if fingerprint:
+                validation_map[fingerprint] = val_result
+        result['validation_available'] = True
+    
+    # Check if any relay has AROI based on validation data OR parsed domain
+    aroi_domains = set()
+    for relay in relays:
+        fingerprint = relay.get('fingerprint')
+        aroi_domain = relay.get('aroi_domain', 'none')
+        
+        # Check both validation data and parsed domain
+        has_validation_result = fingerprint in validation_map
+        has_parsed_domain = aroi_domain and aroi_domain != 'none'
+        
+        if has_validation_result or has_parsed_domain:
+            result['has_aroi'] = True
+            if has_parsed_domain:
+                aroi_domains.add(aroi_domain)
+    
+    if not result['has_aroi']:
+        return result
+    
+    # If no validation data available, mark as unvalidated
+    if not validation_map:
+        result['validation_status'] = 'unvalidated'
+        result['validation_summary']['relays_with_aroi'] = len([r for r in relays if r.get('aroi_domain') and r.get('aroi_domain') != 'none'])
+        result['unvalidated_relays'] = [{
+            'fingerprint': r.get('fingerprint', ''),
+            'nickname': r.get('nickname', 'Unnamed'),
+            'aroi_domain': r.get('aroi_domain', 'none'),
+            'error': 'Validation data not available'
+        } for r in relays if r.get('aroi_domain') and r.get('aroi_domain') != 'none']
+        return result
+    
+    # Process each relay
+    for relay in relays:
+        fingerprint = relay.get('fingerprint')
+        aroi_domain = relay.get('aroi_domain', 'none')
+        nickname = relay.get('nickname', 'Unnamed')
+        
+        # Skip relays with no validation result (they don't have AROI fields)
+        if fingerprint not in validation_map:
+            continue
+        
+        result['validation_summary']['relays_with_aroi'] += 1
+        
+        val_result = validation_map[fingerprint]
+        
+        if val_result.get('valid', False):
+            # Relay is validated
+            result['validation_summary']['validated_count'] += 1
+            result['validated_relays'].append({
+                'fingerprint': fingerprint,
+                'nickname': nickname,
+                'aroi_domain': aroi_domain if aroi_domain != 'none' else 'unknown',
+                'proof_type': val_result.get('proof_type', 'unknown'),
+                'proof_uri': val_result.get('proof_uri', ''),
+            })
+        else:
+            # Relay has validation error
+            result['validation_summary']['unvalidated_count'] += 1
+            result['unvalidated_relays'].append({
+                'fingerprint': fingerprint,
+                'nickname': nickname,
+                'aroi_domain': aroi_domain if aroi_domain != 'none' else 'unknown',
+                'error': val_result.get('error', 'Unknown error'),
+                'proof_type': val_result.get('proof_type', 'unknown'),
+            })
+    
+    # Calculate validation rate
+    if result['validation_summary']['relays_with_aroi'] > 0:
+        result['validation_summary']['validation_rate'] = (
+            result['validation_summary']['validated_count'] / 
+            result['validation_summary']['relays_with_aroi'] * 100
+        )
+    
+    # Determine overall status
+    if result['validation_summary']['validated_count'] == result['validation_summary']['relays_with_aroi']:
+        result['validation_status'] = 'validated'
+    elif result['validation_summary']['validated_count'] > 0:
+        result['validation_status'] = 'partially_validated'
+    else:
+        result['validation_status'] = 'unvalidated'
+    
+    # Check if all errors are just "Missing AROI fields" - if so, don't show detailed list
+    # This avoids repetitive display when operator hasn't configured AROI at all
+    if result['unvalidated_relays']:
+        all_missing_aroi = all(
+            relay.get('error', '').strip() == 'Missing AROI fields'
+            for relay in result['unvalidated_relays']
+        )
+        if all_missing_aroi:
+            result['show_detailed_errors'] = False
+    
+    return result

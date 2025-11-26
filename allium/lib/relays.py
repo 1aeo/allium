@@ -1991,6 +1991,8 @@ class Relays:
             operator_reliability = None
             contact_display_data = None
             primary_country_data = None
+            contact_validation_status = None
+            aroi_validation_timestamp = None
             if k == "contact":
                 contact_rankings = self._generate_contact_rankings(v)
                 # Calculate operator reliability statistics
@@ -2003,6 +2005,10 @@ class Relays:
                 i['contact_display_data'] = contact_display_data
                 # Get primary country data for this contact
                 primary_country_data = i.get("primary_country_data")
+                # Get AROI validation status for this contact (Phase 2)
+                contact_validation_status = self._get_contact_validation_status(members)
+                # Extract AROI validation timestamp for display
+                aroi_validation_timestamp = self._get_aroi_validation_timestamp()
             
             # Add family-specific data for family templates (used by detail_summary macro)
             family_aroi_domain = None
@@ -2039,6 +2045,8 @@ class Relays:
                 operator_reliability=operator_reliability,  # Operator reliability statistics for contact pages
                 contact_display_data=contact_display_data,  # Pre-computed contact-specific display data
                 primary_country_data=primary_country_data,  # Primary country data for contact pages
+                contact_validation_status=contact_validation_status,  # AROI validation status for Phase 2
+                aroi_validation_timestamp=aroi_validation_timestamp,  # AROI validation data timestamp
                 # Family-specific data for detail_summary macro in family templates
                 family_aroi_domain=family_aroi_domain,  # AROI domain for family pages
                 family_contact=family_contact,  # Contact string for family pages
@@ -2157,6 +2165,42 @@ class Relays:
         
         # Otherwise return empty dict and template will use fallback
         return {}
+
+    def _get_contact_validation_status(self, members):
+        """
+        Get AROI validation status for a contact's relays (Phase 2).
+        
+        Args:
+            members (list): List of relay objects for this contact
+            
+        Returns:
+            dict: Validation status information from get_contact_validation_status
+        """
+        from .aroi_validation import get_contact_validation_status
+        
+        # Get the validation data that was fetched during initialization
+        validation_data = getattr(self, 'aroi_validation_data', None)
+        
+        # Call the validation function with the contact's relays
+        return get_contact_validation_status(members, validation_data)
+    
+    def _get_aroi_validation_timestamp(self):
+        """
+        Get formatted timestamp from AROI validation data.
+        
+        Returns:
+            str: Formatted timestamp or 'Unknown' if not available
+        """
+        from .aroi_validation import _format_timestamp
+        
+        validation_data = getattr(self, 'aroi_validation_data', None)
+        if not validation_data:
+            return 'Unknown'
+        
+        metadata = validation_data.get('metadata', {})
+        timestamp_str = metadata.get('timestamp', '')
+        
+        return _format_timestamp(timestamp_str)
 
     def _generate_contact_rankings(self, contact_hash):
         """
