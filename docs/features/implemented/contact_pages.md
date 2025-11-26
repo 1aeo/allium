@@ -32,10 +32,20 @@ The contact page uses an efficient two-column layout that maximizes information 
 **Purpose**: Core identity and network contribution metrics
 
 #### Contact Information
-- **Domain**: AROI domain (when available)
+- **AROI Domain**: AROI domain (when available) with validation status badge
+  - ✓ Verified: All relays with AROI have valid cryptographic proofs
+  - ⚠ Partially Verified: Some relays validated (clickable link to validation details)
+  - ✗ Unvalidated: AROI validation failed
 - **Contact**: Email or contact identifier
 - **Hash**: MD5 hash of contact information  
 - **Country**: Flag, full country name, and link to country page
+
+#### AROI Validation Details
+When relays have validation issues (partially validated status), a detailed section appears at the bottom of the page showing:
+- Individual relay validation errors with fingerprints
+- Validation data timestamp
+- Links to AROI specification for guidance
+- Note: Only shown when there are actionable validation errors (not just "Missing AROI fields" across all relays)
 
 #### Network Summary
 - **Bandwidth**: Total observed bandwidth with breakdown by relay type

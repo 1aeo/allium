@@ -243,4 +243,8 @@
 	{% endfor -%}
     </tbody>
 </table>
+
+{# Additional content block for child templates to add content after the table #}
+{% block after_table %}{% endblock %}
+
 {% endblock -%} 
