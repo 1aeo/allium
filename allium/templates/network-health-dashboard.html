@@ -298,15 +298,68 @@ Network Health Dashboard
             </div>
             <div class="card-metrics">
                 <!-- AROI Coverage - Dual Focus (matches Bandwidth Utilization style) -->
-                <div class="metric-item primary" title="AROI participation overview: {{ "{:,}".format(relays.json.network_health.aroi_operators_count) }} unique operators running {{ "{:,}".format(relays.json.network_health.total_relays_with_aroi) }} relays with AROI information ({{ "%.1f%%"|format(relays.json.network_health.total_relays_with_aroi_percentage) }} of network). Average: {{ relays.json.network_health.avg_relays_per_aroi_operator }} relays per operator.">
-                    <span class="metric-value"><a href="{{ page_ctx.path_prefix }}misc/contacts-by-bandwidth.html" style="color: inherit; text-decoration: none;">{{ "{:,}".format(relays.json.network_health.aroi_operators_count) }}</a> | {{ "{:,}".format(relays.json.network_health.total_relays_with_aroi) }} ({{ "%.1f%%"|format(relays.json.network_health.total_relays_with_aroi_percentage) }})</span>
-                    <span class="metric-label">AROI Operators | AROI Relays (% of network)</span>
+                <div class="metric-item primary" style="font-size: 18px; font-weight: 600;" title="AROI Authentication: {{ "{:,}".format(relays.json.network_health.unique_aroi_domains_count) }} unique operators using AROI domain verification across {{ "{:,}".format(relays.json.network_health.total_relays_with_aroi) }} relays ({{ "%.1f%%"|format(relays.json.network_health.total_relays_with_aroi_percentage) }} of network). Top operators: {{ relays.json.network_health.top_operators_text }}. Average: {{ relays.json.network_health.avg_relays_per_aroi_operator }} relays per operator.">
+                    <span class="metric-value">
+                        <a href="{{ page_ctx.path_prefix }}misc/contacts-by-bandwidth.html" style="color: inherit; text-decoration: none;">
+                            {{ "{:,}".format(relays.json.network_health.unique_aroi_domains_count) }} domains
+                        </a> | 
+                        {{ "{:,}".format(relays.json.network_health.total_relays_with_aroi) }} relays 
+                        ({{ "%.1f%%"|format(relays.json.network_health.total_relays_with_aroi_percentage) }})
+                    </span>
+                    <span class="metric-label">Unique AROI Operators | AROI Relays (% of network)</span>
                 </div>
-                <!-- AROI Validation Quality -->
+                
+                <!-- Operator Validation Status -->
+                <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
+                    <div class="metric-item" title="AROI operators with at least one successfully validated relay ({{ "%.1f%%"|format(relays.json.network_health.validated_aroi_domains_percentage) }} of AROI operators). Validation confirms cryptographic proof of domain ownership via DNS-RSA or URI-RSA.
+
+Validation failure breakdown ({{ "{:,}".format(relays.json.network_health.dns_rsa_total) }} DNS-RSA, {{ "{:,}".format(relays.json.network_health.uri_rsa_total) }} URI-RSA total):
+
+DNS-RSA Failures ({{ "{:,}".format(relays.json.network_health.dns_rsa_valid) }}/{{ "{:,}".format(relays.json.network_health.dns_rsa_total) }} validated, {{ "%.1f%%"|format(relays.json.network_health.dns_rsa_success_rate) }}):
+• DNS lookup errors: {{ "{:,}".format(relays.json.network_health.validation_failure_dns_rsa_lookup) }} relays
+• Fingerprint mismatch: {{ "{:,}".format(relays.json.network_health.validation_failure_dns_rsa_fingerprint) }} relays
+
+URI-RSA Failures ({{ "{:,}".format(relays.json.network_health.uri_rsa_valid) }}/{{ "{:,}".format(relays.json.network_health.uri_rsa_total) }} validated, {{ "%.1f%%"|format(relays.json.network_health.uri_rsa_success_rate) }}):
+• Connection/SSL/HTTP errors: {{ "{:,}".format(relays.json.network_health.validation_failure_uri_rsa_connection) }} relays
+• Fingerprint mismatch: {{ "{:,}".format(relays.json.network_health.validation_failure_uri_rsa_fingerprint) }} relays
+
+Other errors: {{ "{:,}".format(relays.json.network_health.validation_failure_other) }} relays">
+                        <span class="metric-value" style="color: #28a745; font-weight: 600;">
+                            {{ "{:,}".format(relays.json.network_health.validated_aroi_domains_count) }}
+                        </span>
+                        <span class="metric-label">Validated AROI Operators</span>
+                        <div style="font-size: 11px; color: #666; margin-top: 2px;">
+                            {{ "%.1f%%"|format(relays.json.network_health.validated_aroi_domains_percentage) }} of AROI
+                        </div>
+                    </div>
+                    <div class="metric-item" title="AROI operators with no successfully validated relays ({{ "%.1f%%"|format(relays.json.network_health.invalid_aroi_domains_percentage) }} of AROI operators). These have AROI configuration but validation failed.
+
+Validation failure breakdown ({{ "{:,}".format(relays.json.network_health.dns_rsa_total) }} DNS-RSA, {{ "{:,}".format(relays.json.network_health.uri_rsa_total) }} URI-RSA total):
+
+DNS-RSA Failures ({{ "{:,}".format(relays.json.network_health.dns_rsa_valid) }}/{{ "{:,}".format(relays.json.network_health.dns_rsa_total) }} validated, {{ "%.1f%%"|format(relays.json.network_health.dns_rsa_success_rate) }}):
+• DNS lookup errors: {{ "{:,}".format(relays.json.network_health.validation_failure_dns_rsa_lookup) }} relays
+• Fingerprint mismatch: {{ "{:,}".format(relays.json.network_health.validation_failure_dns_rsa_fingerprint) }} relays
+
+URI-RSA Failures ({{ "{:,}".format(relays.json.network_health.uri_rsa_valid) }}/{{ "{:,}".format(relays.json.network_health.uri_rsa_total) }} validated, {{ "%.1f%%"|format(relays.json.network_health.uri_rsa_success_rate) }}):
+• Connection/SSL/HTTP errors: {{ "{:,}".format(relays.json.network_health.validation_failure_uri_rsa_connection) }} relays
+• Fingerprint mismatch: {{ "{:,}".format(relays.json.network_health.validation_failure_uri_rsa_fingerprint) }} relays
+
+Other errors: {{ "{:,}".format(relays.json.network_health.validation_failure_other) }} relays">
+                        <span class="metric-value" style="color: #dc3545;">
+                            {{ "{:,}".format(relays.json.network_health.invalid_aroi_domains_count) }}
+                        </span>
+                        <span class="metric-label">Failed Validation</span>
+                        <div style="font-size: 11px; color: #666; margin-top: 2px;">
+                            {{ "%.1f%%"|format(relays.json.network_health.invalid_aroi_domains_percentage) }} of AROI
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- AROI Validation Quality (Relay-level) -->
                 <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
                     <div class="metric-item" title="Relays with confirmed valid AROI proof of domain ownership via DNS-RSA or URI-RSA verification. These operators have successfully proven control of their claimed domain through cryptographic proofs. Shows {{ "%.1f%%"|format(relays.json.network_health.aroi_validated_percentage) }} of all relays and {{ "%.1f%%"|format(relays.json.network_health.aroi_validated_percentage_of_aroi) }} of relays with AROI configured.">
                         <span class="metric-value" style="color: #28a745;">{{ "{:,}".format(relays.json.network_health.aroi_validated_count) }}</span>
-                        <span class="metric-label">Validated AROI</span>
+                        <span class="metric-label">Validated AROI Relays</span>
                         <div style="font-size: 11px; color: #666; margin-top: 2px;">{{ "%.1f%%"|format(relays.json.network_health.aroi_validated_percentage) }} all, {{ "%.1f%%"|format(relays.json.network_health.aroi_validated_percentage_of_aroi) }} AROI</div>
                     </div>
                     <div class="metric-item" title="Relays that attempted AROI validation but failed. These have AROI information configured but cryptographic proof verification was unsuccessful. Shows {{ "%.1f%%"|format(relays.json.network_health.aroi_unvalidated_percentage) }} of all relays and {{ "%.1f%%"|format(relays.json.network_health.aroi_invalid_percentage_of_aroi) }} of relays with AROI configured.">
@@ -316,7 +369,7 @@ Network Health Dashboard
                     </div>
                     <div class="metric-item" title="Relays missing AROI information in their contact field. These relays cannot be validated because they lack the necessary AROI domain and proof configuration. Calculated as {{ "%.1f%%"|format(relays.json.network_health.aroi_no_proof_percentage) }} of all relays in the network.">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.aroi_no_proof_count) }}</span>
-                        <span class="metric-label">No Validation Possible</span>
+                        <span class="metric-label">No AROI</span>
                         <div style="font-size: 11px; color: #666; margin-top: 2px;">{{ "%.1f%%"|format(relays.json.network_health.aroi_no_proof_percentage) }} of all relays</div>
                     </div>
                 </div>
@@ -363,13 +416,13 @@ Network Health Dashboard
                 </div>
                 <!-- IPv6 Row -->
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
-                    <div class="metric-item" title="Number and percentage of AROI operators running at least one relay with both IPv4 and IPv6 support.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.both_ipv4_ipv6_operators) }} ({{ "%.1f%%"|format(relays.json.network_health.both_ipv4_ipv6_operators_percentage) }})</span>
-                        <span class="metric-label">Total AROI with IPv4 & IPv6</span>
+                    <div class="metric-item" title="Number and percentage of validated AROI operators running at least one relay with both IPv4 and IPv6 support. Percentage is calculated as a portion of the {{ "{:,}".format(relays.json.network_health.validated_aroi_domains_count) }} validated AROI operators.">
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.both_ipv4_ipv6_aroi_operators) }} ({{ "%.1f%%"|format(relays.json.network_health.both_ipv4_ipv6_aroi_operators_percentage) }})</span>
+                        <span class="metric-label">Validated AROI with IPv4 & IPv6</span>
                     </div>
-                    <div class="metric-item" title="Number and percentage of AROI operators running at least one relay with IPv4-only support.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.ipv4_only_operators) }} ({{ "%.1f%%"|format(relays.json.network_health.ipv4_only_operators_percentage) }})</span>
-                        <span class="metric-label">with IPv4 Only</span>
+                    <div class="metric-item" title="Number and percentage of validated AROI operators running only IPv4-only relays (no dual-stack relays). Percentage is calculated as a portion of the {{ "{:,}".format(relays.json.network_health.validated_aroi_domains_count) }} validated AROI operators.">
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.ipv4_only_aroi_operators) }} ({{ "%.1f%%"|format(relays.json.network_health.ipv4_only_aroi_operators_percentage) }})</span>
+                        <span class="metric-label">Validated AROI with IPv4 Only</span>
                     </div>
                 </div>
             </div>
