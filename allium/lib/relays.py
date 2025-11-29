@@ -1991,8 +1991,6 @@ class Relays:
             operator_reliability = None
             contact_display_data = None
             primary_country_data = None
-            contact_validation_status = None
-            aroi_validation_timestamp = None
             if k == "contact":
                 contact_rankings = self._generate_contact_rankings(v)
                 # Calculate operator reliability statistics
@@ -2005,10 +2003,6 @@ class Relays:
                 i['contact_display_data'] = contact_display_data
                 # Get primary country data for this contact
                 primary_country_data = i.get("primary_country_data")
-                # Get AROI validation status for this contact (Phase 2)
-                contact_validation_status = self._get_contact_validation_status(members)
-                # Extract AROI validation timestamp for display
-                aroi_validation_timestamp = self._get_aroi_validation_timestamp()
             
             # Add family-specific data for family templates (used by detail_summary macro)
             family_aroi_domain = None
@@ -2045,8 +2039,6 @@ class Relays:
                 operator_reliability=operator_reliability,  # Operator reliability statistics for contact pages
                 contact_display_data=contact_display_data,  # Pre-computed contact-specific display data
                 primary_country_data=primary_country_data,  # Primary country data for contact pages
-                contact_validation_status=contact_validation_status,  # AROI validation status for Phase 2
-                aroi_validation_timestamp=aroi_validation_timestamp,  # AROI validation data timestamp
                 # Family-specific data for detail_summary macro in family templates
                 family_aroi_domain=family_aroi_domain,  # AROI domain for family pages
                 family_contact=family_contact,  # Contact string for family pages
@@ -2165,42 +2157,6 @@ class Relays:
         
         # Otherwise return empty dict and template will use fallback
         return {}
-
-    def _get_contact_validation_status(self, members):
-        """
-        Get AROI validation status for a contact's relays (Phase 2).
-        
-        Args:
-            members (list): List of relay objects for this contact
-            
-        Returns:
-            dict: Validation status information from get_contact_validation_status
-        """
-        from .aroi_validation import get_contact_validation_status
-        
-        # Get the validation data that was fetched during initialization
-        validation_data = getattr(self, 'aroi_validation_data', None)
-        
-        # Call the validation function with the contact's relays
-        return get_contact_validation_status(members, validation_data)
-    
-    def _get_aroi_validation_timestamp(self):
-        """
-        Get formatted timestamp from AROI validation data.
-        
-        Returns:
-            str: Formatted timestamp or 'Unknown' if not available
-        """
-        from .aroi_validation import _format_timestamp
-        
-        validation_data = getattr(self, 'aroi_validation_data', None)
-        if not validation_data:
-            return 'Unknown'
-        
-        metadata = validation_data.get('metadata', {})
-        timestamp_str = metadata.get('timestamp', '')
-        
-        return _format_timestamp(timestamp_str)
 
     def _generate_contact_rankings(self, contact_hash):
         """
@@ -3574,7 +3530,14 @@ class Relays:
             'recommended_version_count', 'not_recommended_count', 'experimental_count', 
             'obsolete_count', 'outdated_count', 'guard_exit_count', 'unrestricted_exits',
             'restricted_exits', 'web_traffic_exits', 'eu_relays_count', 'non_eu_relays_count',
-            'rare_countries_relays', 'ipv4_only_relays', 'both_ipv4_ipv6_relays'
+            'rare_countries_relays', 'ipv4_only_relays', 'both_ipv4_ipv6_relays',
+            # NEW: AROI domain-level metrics
+            'unique_aroi_domains_count', 'validated_aroi_domains_count', 'invalid_aroi_domains_count',
+            'validation_failure_dns_rsa_lookup', 'validation_failure_dns_rsa_fingerprint',
+            'validation_failure_uri_rsa_connection', 'validation_failure_uri_rsa_fingerprint',
+            'validation_failure_other',
+            # NEW: IPv6 AROI operator metrics
+            'ipv4_only_aroi_operators', 'both_ipv4_ipv6_aroi_operators'
         ]
         
         for key in integer_format_keys:
@@ -3601,7 +3564,11 @@ class Relays:
             # REFACTORED: Generate percentage format keys using consistent pattern
             'overall_uptime',
             'ipv4_only_relays_percentage', 'both_ipv4_ipv6_relays_percentage',
-            'ipv4_only_bandwidth_percentage', 'both_ipv4_ipv6_bandwidth_percentage'
+            'ipv4_only_bandwidth_percentage', 'both_ipv4_ipv6_bandwidth_percentage',
+            # NEW: IPv6 AROI operator percentages
+            'ipv4_only_aroi_operators_percentage', 'both_ipv4_ipv6_aroi_operators_percentage',
+            # NEW: AROI domain percentages
+            'validated_aroi_domains_percentage', 'invalid_aroi_domains_percentage'
         ]
         
         # Add 1_month period formatting keys (used directly in templates) 
@@ -3830,8 +3797,8 @@ class Relays:
         both_ipv4_ipv6_as = {}  # as_number -> count
         
         # NEW: IPv6 support analysis - operator-level collections
-        ipv4_only_operators = set()  # contact_hashes that have any ipv4-only relay
-        both_ipv4_ipv6_operators = set()  # contact_hashes that have any dual-stack relay
+        # Track what types of relays each operator has to determine their overall support
+        operator_ipv6_status = {}  # domain -> {'has_ipv4_only': bool, 'has_dual_stack': bool}
         
         # Uptime data will be extracted from existing consolidated results after uptime API processing
         
@@ -4107,13 +4074,16 @@ class Relays:
                 elif ipv6_support == 'both':
                     both_ipv4_ipv6_as[as_number] = both_ipv4_ipv6_as.get(as_number, 0) + 1
             
-            # Operator-level IPv6 support tracking (uses contact hash from existing processing)
-            contact_hash = relay.get('contact_md5')
-            if contact_hash:
+            # Operator-level IPv6 support tracking (uses AROI domain for consistency with Option B)
+            aroi_domain = relay.get('aroi_domain', 'none')
+            if aroi_domain and aroi_domain != 'none':
+                if aroi_domain not in operator_ipv6_status:
+                    operator_ipv6_status[aroi_domain] = {'has_ipv4_only': False, 'has_dual_stack': False}
+                
                 if ipv6_support == 'ipv4_only':
-                    ipv4_only_operators.add(contact_hash)
+                    operator_ipv6_status[aroi_domain]['has_ipv4_only'] = True
                 elif ipv6_support == 'both':
-                    both_ipv4_ipv6_operators.add(contact_hash)
+                    operator_ipv6_status[aroi_domain]['has_dual_stack'] = True
             
             # Skip uptime calculation here - will use existing consolidated results
         
@@ -4344,13 +4314,10 @@ class Relays:
             'both_ipv4_ipv6_bandwidth_percentage': (both_ipv4_ipv6_bandwidth / total_bandwidth * 100) if total_bandwidth > 0 else 0.0
         })
         
-        # NEW: IPv6 support metrics - operator-level statistics
-        health_metrics.update({
-            'ipv4_only_operators': len(ipv4_only_operators),
-            'both_ipv4_ipv6_operators': len(both_ipv4_ipv6_operators),
-            'ipv4_only_operators_percentage': (len(ipv4_only_operators) / health_metrics['aroi_operators_count'] * 100) if health_metrics['aroi_operators_count'] > 0 else 0.0,
-            'both_ipv4_ipv6_operators_percentage': (len(both_ipv4_ipv6_operators) / health_metrics['aroi_operators_count'] * 100) if health_metrics['aroi_operators_count'] > 0 else 0.0
-        })
+        # NEW: IPv6 support metrics - operator-level statistics (counts only, percentages calculated later)
+        # Note: These counts will be recalculated after AROI validation to only include validated operators
+        # Temporarily store the full operator_ipv6_status dict for later filtering
+        health_metrics['_temp_operator_ipv6_status'] = operator_ipv6_status
         
         # NEW: IPv6 support metrics - top country analysis
         # Find top country for each IPv6 category
@@ -4790,10 +4757,11 @@ class Relays:
             # Get pre-fetched validation data (attached by coordinator)
             validation_data = getattr(self, 'aroi_validation_data', None)
             
-            # Calculate validation metrics
+            # Calculate validation metrics (relay AND operator level in single pass)
             validation_metrics = calculate_aroi_validation_metrics(
                 self.json.get('relays', []), 
-                validation_data
+                validation_data,
+                calculate_operator_metrics=True  # Enable operator-level metrics in same pass
             )
             
             # Add validation metrics to health_metrics
@@ -4826,7 +4794,36 @@ class Relays:
             health_metrics['aroi_validated_percentage_of_aroi'] = aroi_validated_pct_of_aroi
             health_metrics['aroi_invalid_percentage_of_aroi'] = aroi_invalid_pct_of_aroi
             
-            # Calculate average relays per operator
+            # Operator-level metrics calculated in aroi_validation.py (same pass as relay metrics)
+            # Extract validated domain set for IPv6 calculation
+            validated_domain_set = validation_metrics.get('_validated_domain_set', set())
+            validated_aroi_domains = validation_metrics.get('validated_aroi_domains_count', 0)
+            unique_aroi_domains_count = validation_metrics.get('unique_aroi_domains_count', 0)
+            
+            # UPDATE aroi_operators_count to use accurate AROI domain count (Option B: Global Replace)
+            health_metrics['aroi_operators_count'] = unique_aroi_domains_count
+            
+            # Get IPv6 status dict from earlier calculation
+            operator_ipv6_status = health_metrics.pop('_temp_operator_ipv6_status', {})
+            
+            # Count IPv6 support ONLY among validated operators (mutually exclusive)
+            both_ipv4_ipv6_aroi_operators = sum(1 for domain in validated_domain_set 
+                                            if domain in operator_ipv6_status and operator_ipv6_status[domain]['has_dual_stack'])
+            ipv4_only_aroi_operators = sum(1 for domain in validated_domain_set
+                                       if domain in operator_ipv6_status and not operator_ipv6_status[domain]['has_dual_stack'] and operator_ipv6_status[domain]['has_ipv4_only'])
+            
+            health_metrics['ipv4_only_aroi_operators'] = ipv4_only_aroi_operators
+            health_metrics['both_ipv4_ipv6_aroi_operators'] = both_ipv4_ipv6_aroi_operators
+            
+            # Calculate IPv6 operator percentages based on validated operators count (124)
+            if validated_aroi_domains > 0:
+                health_metrics['ipv4_only_aroi_operators_percentage'] = (ipv4_only_aroi_operators / validated_aroi_domains * 100)
+                health_metrics['both_ipv4_ipv6_aroi_operators_percentage'] = (both_ipv4_ipv6_aroi_operators / validated_aroi_domains * 100)
+            else:
+                health_metrics['ipv4_only_aroi_operators_percentage'] = 0.0
+                health_metrics['both_ipv4_ipv6_aroi_operators_percentage'] = 0.0
+            
+            # Calculate average relays per operator (now using accurate count)
             aroi_operators_count = health_metrics.get('aroi_operators_count', 0)
             if aroi_operators_count > 0:
                 health_metrics['avg_relays_per_aroi_operator'] = round(
@@ -4859,7 +4856,22 @@ class Relays:
                 'total_relays_with_aroi_percentage': 0.0,
                 'aroi_validated_percentage_of_aroi': 0.0,
                 'aroi_invalid_percentage_of_aroi': 0.0,
-                'avg_relays_per_aroi_operator': 0.0
+                'avg_relays_per_aroi_operator': 0.0,
+                'unique_aroi_domains_count': 0,
+                'validated_aroi_domains_count': 0,
+                'invalid_aroi_domains_count': 0,
+                'validated_aroi_domains_percentage': 0.0,
+                'invalid_aroi_domains_percentage': 0.0,
+                'validation_failure_dns_rsa_lookup': 0,
+                'validation_failure_dns_rsa_fingerprint': 0,
+                'validation_failure_uri_rsa_connection': 0,
+                'validation_failure_uri_rsa_fingerprint': 0,
+                'validation_failure_other': 0,
+                'top_operators_text': 'No data available',
+                'ipv4_only_aroi_operators': 0,
+                'both_ipv4_ipv6_aroi_operators': 0,
+                'ipv4_only_aroi_operators_percentage': 0.0,
+                'both_ipv4_ipv6_aroi_operators_percentage': 0.0
             })
         
         # OPTIMIZATION: Pre-format all template strings to eliminate Jinja2 formatting overhead
