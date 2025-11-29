@@ -8,6 +8,8 @@
 
 Future enhancements to build upon the implemented AROI Operator Participation feature in the Network Health Dashboard.
 
+**Recent Addition (Nov 29, 2025):** Top 3 Countries by Validated AROI Operator Count - see [geographic-aroi-operator-distribution.md](../implemented/geographic-aroi-operator-distribution.md)
+
 ## Completed in Base Implementation
 
 - ✅ Accurate AROI operator count (153 unique domains)
@@ -235,6 +237,8 @@ DNS-RSA Lookup Errors (39 relays):
 - **Base Implementation:** [aroi_operator_participation_implementation_report.md](../implemented/aroi_operator_participation_implementation_report.md)
 - **CIISS Specification:** https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/
 - **AROI Validator:** https://aroivalidator.1aeo.com/
+
+
 
 
 

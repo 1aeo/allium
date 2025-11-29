@@ -161,7 +161,8 @@ def calculate_aroi_validation_metrics(relays: List[Dict], validation_data: Optio
         'uri_rsa_total': 0,
         'uri_rsa_valid': 0,
         'validation_data_available': False,
-        'validation_timestamp': 'Unknown'
+        'validation_timestamp': 'Unknown',
+        'top_3_aroi_countries': []  # Default empty list for template
     }
     
     if not relays:
@@ -227,6 +228,7 @@ def calculate_aroi_validation_metrics(relays: List[Dict], validation_data: Optio
     domain_has_valid_relay = {}
     domain_relays = {}
     domain_failure_reasons = {}
+    domain_country = {}  # Track country for each validated domain
     
     # SINGLE PASS: Process each relay for BOTH relay-level AND operator-level metrics
     for relay in relays:
@@ -253,6 +255,12 @@ def calculate_aroi_validation_metrics(relays: List[Dict], validation_data: Optio
                     domain_has_valid_relay[aroi_domain] = False
                     domain_relays[aroi_domain] = []
                     domain_failure_reasons[aroi_domain] = {}
+                
+                # Track country for this domain (use first relay's country)
+                if aroi_domain not in domain_country:
+                    country = relay.get('country', 'unknown')
+                    if country and country != 'unknown':
+                        domain_country[aroi_domain] = country.upper()
                 
                 fp = relay.get('fingerprint')
                 domain_relays[aroi_domain].append(fp)
@@ -291,11 +299,11 @@ def calculate_aroi_validation_metrics(relays: List[Dict], validation_data: Optio
         
         # Categorize failures by proof type
         failure_totals = {
-            'dns_rsa_lookup_errors': 0,
-            'dns_rsa_fingerprint_mismatch': 0,
-            'uri_rsa_connection_errors': 0,
-            'uri_rsa_fingerprint_mismatch': 0,
-            'other_errors': 0
+            'validation_failure_dns_rsa_lookup': 0,
+            'validation_failure_dns_rsa_fingerprint': 0,
+            'validation_failure_uri_rsa_connection': 0,
+            'validation_failure_uri_rsa_fingerprint': 0,
+            'validation_failure_other': 0
         }
         
         for domain, has_valid in domain_has_valid_relay.items():
@@ -304,16 +312,16 @@ def calculate_aroi_validation_metrics(relays: List[Dict], validation_data: Optio
                     error_lower = error.lower()
                     
                     if 'fingerprint not found' in error_lower and 'https://' in error_lower:
-                        failure_totals['uri_rsa_fingerprint_mismatch'] += count
+                        failure_totals['validation_failure_uri_rsa_fingerprint'] += count
                     elif any(kw in error_lower for kw in ['dns lookup', 'nxdomain', 'servfail', 'txt record', 'dns query', 'dns response']):
                         if 'fingerprint' in error_lower and 'mismatch' in error_lower:
-                            failure_totals['dns_rsa_fingerprint_mismatch'] += count
+                            failure_totals['validation_failure_dns_rsa_fingerprint'] += count
                         else:
-                            failure_totals['dns_rsa_lookup_errors'] += count
+                            failure_totals['validation_failure_dns_rsa_lookup'] += count
                     elif any(kw in error_lower for kw in ['ssl', 'tls', 'certificate', 'https', 'http', '404', '403', 'connection', 'refused', 'timeout', 'failed to fetch', 'max retries', 'unreachable']):
-                        failure_totals['uri_rsa_connection_errors'] += count
+                        failure_totals['validation_failure_uri_rsa_connection'] += count
                     else:
-                        failure_totals['other_errors'] += count
+                        failure_totals['validation_failure_other'] += count
         
         # Calculate top operators by relay count
         domain_relay_counts = [(domain, len(fps)) for domain, fps in domain_relays.items()]
@@ -336,8 +344,22 @@ def calculate_aroi_validation_metrics(relays: List[Dict], validation_data: Optio
         metrics.update(failure_totals)
         metrics['top_operators_text'] = top_operators_text
         
-        # Return validated domain set for IPv6 calculation
-        metrics['_validated_domain_set'] = {d for d, valid in domain_has_valid_relay.items() if valid}
+        # Build validated domain set once for both IPv6 and country calculations
+        validated_domains = {d for d, valid in domain_has_valid_relay.items() if valid}
+        metrics['_validated_domain_set'] = validated_domains
+        
+        # Calculate top 3 countries by validated AROI operator count
+        country_counts = {}
+        for domain in validated_domains:
+            if domain in domain_country:
+                country_counts[domain_country[domain]] = country_counts.get(domain_country[domain], 0) + 1
+        
+        # Sort and format top 3 for template
+        metrics['top_3_aroi_countries'] = [
+            {'rank': i, 'country_code': cc, 'count': cnt, 
+             'percentage': (cnt / validated_aroi_domains * 100) if validated_aroi_domains > 0 else 0.0}
+            for i, (cc, cnt) in enumerate(sorted(country_counts.items(), key=lambda x: x[1], reverse=True)[:3], 1)
+        ]
     
     return metrics
 
