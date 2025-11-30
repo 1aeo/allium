@@ -1601,7 +1601,11 @@ class Relays:
                             if aroi and aroi != "none":
                                 contact_hash = aroi_map.get(aroi, "")
                                 if contact_hash:
-                                    aroi_contact_html_items.append(f'<a href="../../contact/{contact_hash}/">{aroi}</a>')
+                                    # Use vanity URL if base_url is configured and domain is validated
+                                    if self.base_url and hasattr(self, 'validated_aroi_domains') and aroi in self.validated_aroi_domains:
+                                        aroi_contact_html_items.append(f'<a href="{self.base_url}/{aroi.lower()}/">{aroi}</a>')
+                                    else:
+                                        aroi_contact_html_items.append(f'<a href="../../contact/{contact_hash}/">{aroi}</a>')
                                     used_contacts.add(contact_hash)
                                 else:
                                     aroi_contact_html_items.append(aroi)
