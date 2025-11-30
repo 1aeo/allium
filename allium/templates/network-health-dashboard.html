@@ -311,19 +311,7 @@ Network Health Dashboard
                 
                 <!-- Operator Validation Status -->
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
-                    <div class="metric-item" title="AROI operators with at least one successfully validated relay ({{ "%.1f%%"|format(relays.json.network_health.validated_aroi_domains_percentage) }} of AROI operators). Validation confirms cryptographic proof of domain ownership via DNS-RSA or URI-RSA.
-
-Validation failure breakdown ({{ "{:,}".format(relays.json.network_health.dns_rsa_total) }} DNS-RSA, {{ "{:,}".format(relays.json.network_health.uri_rsa_total) }} URI-RSA total):
-
-DNS-RSA Failures ({{ "{:,}".format(relays.json.network_health.dns_rsa_valid) }}/{{ "{:,}".format(relays.json.network_health.dns_rsa_total) }} validated, {{ "%.1f%%"|format(relays.json.network_health.dns_rsa_success_rate) }}):
-• DNS lookup errors: {{ "{:,}".format(relays.json.network_health.validation_failure_dns_rsa_lookup) }} relays
-• Fingerprint mismatch: {{ "{:,}".format(relays.json.network_health.validation_failure_dns_rsa_fingerprint) }} relays
-
-URI-RSA Failures ({{ "{:,}".format(relays.json.network_health.uri_rsa_valid) }}/{{ "{:,}".format(relays.json.network_health.uri_rsa_total) }} validated, {{ "%.1f%%"|format(relays.json.network_health.uri_rsa_success_rate) }}):
-• Connection/SSL/HTTP errors: {{ "{:,}".format(relays.json.network_health.validation_failure_uri_rsa_connection) }} relays
-• Fingerprint mismatch: {{ "{:,}".format(relays.json.network_health.validation_failure_uri_rsa_fingerprint) }} relays
-
-Other errors: {{ "{:,}".format(relays.json.network_health.validation_failure_other) }} relays">
+                    <div class="metric-item" title="Unique operators with at least one successfully validated relay ({{ "%.1f%%"|format(relays.json.network_health.validated_aroi_domains_percentage) }} of AROI operators). Validation confirms cryptographic proof of domain ownership via DNS-RSA or URI-RSA. This metric counts operators, not individual relays.">
                         <span class="metric-value" style="color: #28a745; font-weight: 600;">
                             {{ "{:,}".format(relays.json.network_health.validated_aroi_domains_count) }}
                         </span>
@@ -332,19 +320,10 @@ Other errors: {{ "{:,}".format(relays.json.network_health.validation_failure_oth
                             {{ "%.1f%%"|format(relays.json.network_health.validated_aroi_domains_percentage) }} of AROI
                         </div>
                     </div>
-                    <div class="metric-item" title="AROI operators with no successfully validated relays ({{ "%.1f%%"|format(relays.json.network_health.invalid_aroi_domains_percentage) }} of AROI operators). These have AROI configuration but validation failed.
+                    <div class="metric-item" title="Unique operators with no successfully validated relays ({{ "%.1f%%"|format(relays.json.network_health.invalid_aroi_domains_percentage) }} of AROI operators). These operators have AROI configuration but all their relays failed validation. This metric counts operators, not individual relays.
 
-Validation failure breakdown ({{ "{:,}".format(relays.json.network_health.dns_rsa_total) }} DNS-RSA, {{ "{:,}".format(relays.json.network_health.uri_rsa_total) }} URI-RSA total):
-
-DNS-RSA Failures ({{ "{:,}".format(relays.json.network_health.dns_rsa_valid) }}/{{ "{:,}".format(relays.json.network_health.dns_rsa_total) }} validated, {{ "%.1f%%"|format(relays.json.network_health.dns_rsa_success_rate) }}):
-• DNS lookup errors: {{ "{:,}".format(relays.json.network_health.validation_failure_dns_rsa_lookup) }} relays
-• Fingerprint mismatch: {{ "{:,}".format(relays.json.network_health.validation_failure_dns_rsa_fingerprint) }} relays
-
-URI-RSA Failures ({{ "{:,}".format(relays.json.network_health.uri_rsa_valid) }}/{{ "{:,}".format(relays.json.network_health.uri_rsa_total) }} validated, {{ "%.1f%%"|format(relays.json.network_health.uri_rsa_success_rate) }}):
-• Connection/SSL/HTTP errors: {{ "{:,}".format(relays.json.network_health.validation_failure_uri_rsa_connection) }} relays
-• Fingerprint mismatch: {{ "{:,}".format(relays.json.network_health.validation_failure_uri_rsa_fingerprint) }} relays
-
-Other errors: {{ "{:,}".format(relays.json.network_health.validation_failure_other) }} relays">
+Top failure reasons (operator count):{% for error, count in relays.json.network_health.operator_error_top5 %}
+• {{ error }}: {{ "{:,}".format(count) }} operators{% endfor %}">
                         <span class="metric-value" style="color: #dc3545;">
                             {{ "{:,}".format(relays.json.network_health.invalid_aroi_domains_count) }}
                         </span>
@@ -375,11 +354,17 @@ Other errors: {{ "{:,}".format(relays.json.network_health.validation_failure_oth
                 </div>
                 <!-- DNS-RSA and URI-RSA Validation Rates -->
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
-                    <div class="metric-item" title="DNS-RSA validation success rate: {{ "{:,}".format(relays.json.network_health.dns_rsa_valid) }} relays successfully validated out of {{ "{:,}".format(relays.json.network_health.dns_rsa_total) }} relays with DNS-RSA proof information configured. DNS-RSA uses DNS TXT records for domain verification.">
+                    <div class="metric-item" title="DNS-RSA validation: {{ "{:,}".format(relays.json.network_health.dns_rsa_valid) }} relays successfully validated out of {{ "{:,}".format(relays.json.network_health.dns_rsa_total) }} relays with DNS-RSA proof configured. This metric counts individual relays, not operators. DNS-RSA uses DNS TXT records for domain verification.
+
+Top failure reasons (relay count):{% for error, count in relays.json.network_health.relay_error_top5 %}{% if 'dns' in error.lower() or 'txt' in error.lower() or 'nxdomain' in error.lower() %}
+• {{ error }}: {{ "{:,}".format(count) }} relays{% endif %}{% endfor %}">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.dns_rsa_valid) }}/{{ "{:,}".format(relays.json.network_health.dns_rsa_total) }} ({{ "%.1f%%"|format(relays.json.network_health.dns_rsa_success_rate) }})</span>
                         <span class="metric-label">DNS-RSA Validated</span>
                     </div>
-                    <div class="metric-item" title="URI-RSA validation success rate: {{ "{:,}".format(relays.json.network_health.uri_rsa_valid) }} relays successfully validated out of {{ "{:,}".format(relays.json.network_health.uri_rsa_total) }} relays with URI-RSA proof information configured. URI-RSA uses web server files for domain verification.">
+                    <div class="metric-item" title="URI-RSA validation: {{ "{:,}".format(relays.json.network_health.uri_rsa_valid) }} relays successfully validated out of {{ "{:,}".format(relays.json.network_health.uri_rsa_total) }} relays with URI-RSA proof configured. This metric counts individual relays, not operators. URI-RSA uses web server files for domain verification.
+
+Top failure reasons (relay count):{% for error, count in relays.json.network_health.relay_error_top5 %}{% if 'http' in error.lower() or 'ssl' in error.lower() or 'tls' in error.lower() or 'certificate' in error.lower() or 'connection' in error.lower() or 'timeout' in error.lower() or '404' in error or '403' in error or 'fingerprint not found' in error.lower() %}
+• {{ error }}: {{ "{:,}".format(count) }} relays{% endif %}{% endfor %}">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.uri_rsa_valid) }}/{{ "{:,}".format(relays.json.network_health.uri_rsa_total) }} ({{ "%.1f%%"|format(relays.json.network_health.uri_rsa_success_rate) }})</span>
                         <span class="metric-label">URI-RSA Validated</span>
                     </div>
