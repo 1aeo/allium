@@ -442,7 +442,7 @@ Other errors: {{ "{:,}".format(relays.json.network_health.validation_failure_oth
                 <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
                     {% for country in relays.json.network_health.top_3_countries %}
                     <div class="metric-item" title="Country ranked #{{ country.rank }} by consensus weight concentration in the Tor network.">
-                        <span class="metric-value">{{ "%.1f%%"|format(country.consensus_weight_percentage) }} <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ country.country_code.lower() }}.png" alt="{{ country.country_code }}" style="width: 16px; height: 11px; margin-left: 3px;"> {{ country.country_code }}</span>
+                        <span class="metric-value">{{ "%.1f%%"|format(country.consensus_weight_percentage) }} <img src="/static/images/cc/{{ country.country_code.lower() }}.png" alt="{{ country.country_code }}" style="width: 16px; height: 11px; margin-left: 3px;"> {{ country.country_code }}</span>
                         <span class="metric-label">#{{ country.rank }} Country CW</span>
                     </div>
                     {% endfor %}
@@ -478,7 +478,7 @@ Other errors: {{ "{:,}".format(relays.json.network_health.validation_failure_oth
                 <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
                     {% for country in relays.json.network_health.top_3_aroi_countries %}
                     <div class="metric-item" title="Country ranked #{{ country.rank }} by number of validated AROI operators. {{ country.count }} validated AROI operators ({{ "%.1f%%"|format(country.percentage) }} of all validated operators) are based in {{ country.country_code }}.">
-                        <span class="metric-value">{{ country.count }} ({{ "%.1f%%"|format(country.percentage) }}) <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ country.country_code.lower() }}.png" alt="{{ country.country_code }}" style="width: 16px; height: 11px; margin-left: 3px;"> {{ country.country_code }}</span>
+                        <span class="metric-value">{{ country.count }} ({{ "%.1f%%"|format(country.percentage) }}) <img src="/static/images/cc/{{ country.country_code.lower() }}.png" alt="{{ country.country_code }}" style="width: 16px; height: 11px; margin-left: 3px;"> {{ country.country_code }}</span>
                         <span class="metric-label">#{{ country.rank }} AROI Operators</span>
                     </div>
                     {% endfor %}
@@ -487,11 +487,11 @@ Other errors: {{ "{:,}".format(relays.json.network_health.validation_failure_oth
                 <!-- IPv6 Country Row -->
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
                     <div class="metric-item" title="Top country with the highest number of relays supporting both IPv4 and IPv6 protocols.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.top_both_ipv4_ipv6_country_count) }} ({{ "%.1f%%"|format(relays.json.network_health.top_both_ipv4_ipv6_country_percentage) }}) <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ relays.json.network_health.top_both_ipv4_ipv6_country.lower() }}.png" alt="{{ relays.json.network_health.top_both_ipv4_ipv6_country }}" style="width: 16px; height: 11px; margin-left: 3px;"> {{ relays.json.network_health.top_both_ipv4_ipv6_country }}</span>
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.top_both_ipv4_ipv6_country_count) }} ({{ "%.1f%%"|format(relays.json.network_health.top_both_ipv4_ipv6_country_percentage) }}) <img src="/static/images/cc/{{ relays.json.network_health.top_both_ipv4_ipv6_country.lower() }}.png" alt="{{ relays.json.network_health.top_both_ipv4_ipv6_country }}" style="width: 16px; height: 11px; margin-left: 3px;"> {{ relays.json.network_health.top_both_ipv4_ipv6_country }}</span>
                         <span class="metric-label">#1 Country IPv4 & IPv6</span>
                     </div>
                     <div class="metric-item" title="Top country with the highest number of relays supporting IPv4-only protocol.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.top_ipv4_only_country_count) }} ({{ "%.1f%%"|format(relays.json.network_health.top_ipv4_only_country_percentage) }}) <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ relays.json.network_health.top_ipv4_only_country.lower() }}.png" alt="{{ relays.json.network_health.top_ipv4_only_country }}" style="width: 16px; height: 11px; margin-left: 3px;"> {{ relays.json.network_health.top_ipv4_only_country }}</span>
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.top_ipv4_only_country_count) }} ({{ "%.1f%%"|format(relays.json.network_health.top_ipv4_only_country_percentage) }}) <img src="/static/images/cc/{{ relays.json.network_health.top_ipv4_only_country.lower() }}.png" alt="{{ relays.json.network_health.top_ipv4_only_country }}" style="width: 16px; height: 11px; margin-left: 3px;"> {{ relays.json.network_health.top_ipv4_only_country }}</span>
                         <span class="metric-label">#1 Country IPv4 Only</span>
                     </div>
                 </div>

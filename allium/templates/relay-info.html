@@ -299,7 +299,7 @@ none
 {% if (relay['city_name'] or relay['region_name']) and relay['country'] -%} | {% endif -%}
 {% if relay['country'] -%}
 <a href="{{ page_ctx.path_prefix }}country/{{ relay['country']|escape }}/">
-<img src="{{ page_ctx.path_prefix }}static/images/cc/{{ relay['country']|escape }}.png"
+<img src="/static/images/cc/{{ relay['country']|escape }}.png"
 title="{{ relay['country_name']|escape }}"
 alt="{{ relay['country_name']|escape }}">
 </a> <span title="Country name of the location of this relay as found by a geolocation database based on the relay's IP address. Omitted if the relay location could not be found.">{{ relay['country_name']|escape }}</span>
@@ -338,7 +338,7 @@ Flags: {{ relay['flags']|reject('equalto', 'StaleDesc')|list|length }}
 {% for flag in relay['flags'] -%}
 {% if flag != 'StaleDesc' -%}
 <a href="{{ page_ctx.path_prefix }}flag/{{ flag.lower()|escape }}/">
-<img src="{{ page_ctx.path_prefix }}static/images/flags/{{ flag.lower()|escape }}.png"
+<img src="/static/images/flags/{{ flag.lower()|escape }}.png"
 title="{{ flag|escape }}"
 alt="{{ flag|escape }}">
 </a> {{ flag|escape }}
