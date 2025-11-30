@@ -2087,7 +2087,7 @@ class Relays:
                 html.write(rendered)
             io_time += time.time() - io_start
             
-            # Create vanity URL for validated AROI domains (reuse just-written file)
+            # Create vanity URL for validated AROI domains (copy and adjust paths)
             # Only create if base_url is configured - Place at root level (e.g., /domain/ instead of /contact/domain/)
             if self.base_url and k == "contact" and members and hasattr(self, 'validated_aroi_domains'):
                 aroi_domain = members[0].get("aroi_domain")
@@ -2098,7 +2098,15 @@ class Relays:
                     vanity_dir = os.path.join(os.path.dirname(output_path), safe_domain)
                     try:
                         os.makedirs(vanity_dir, exist_ok=True)
-                        copy2(html_path, os.path.join(vanity_dir, "index.html"))
+                        # Read the HTML and adjust paths for different directory depth
+                        # Contact pages are depth 2 (../../) but vanity URLs are depth 1 (../)
+                        with open(html_path, 'r', encoding='utf8') as f:
+                            html_content = f.read()
+                        # Adjust path prefix from depth 2 to depth 1
+                        adjusted_html = html_content.replace('href="../../', 'href="../').replace('src="../../', 'src="../')
+                        # Write adjusted HTML to vanity URL directory
+                        with open(os.path.join(vanity_dir, "index.html"), 'w', encoding='utf8') as f:
+                            f.write(adjusted_html)
                     except OSError:
                         pass  # Silent fail - don't break generation for vanity URL issues
             
