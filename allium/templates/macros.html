@@ -118,7 +118,13 @@
     </li>
     {%- endif %}
     {%- if aroi_domain and aroi_domain != 'none' and aroi_domain != '' %}
-    <li><strong><span title="Autonomous Relay Operator Identifier - unverified">AROI</span>:</strong> <a href="{{ page_ctx.path_prefix if page_ctx else '../../' }}contact/{{ contact_md5|escape }}/">{{ aroi_domain|escape }}</a></li>
+    <li><strong><span title="Autonomous Relay Operator Identifier - unverified">AROI</span>:</strong> 
+    {% if base_url and aroi_domain in validated_aroi_domains -%}
+    <a href="{{ base_url }}/{{ aroi_domain|lower|escape }}/">{{ aroi_domain|escape }}</a>
+    {% else -%}
+    <a href="{{ page_ctx.path_prefix if page_ctx else '../../' }}contact/{{ contact_md5|escape }}/">{{ aroi_domain|escape }}</a>
+    {% endif -%}
+    </li>
     {%- endif %}
     {%- if contact_md5 %}
     <li><strong>Contact:</strong> <a href="{{ page_ctx.path_prefix if page_ctx else '../../' }}contact/{{ contact_md5|escape }}/">{% if contact and contact.strip() %}{{ contact|escape }}{% else %}none{% endif %}</a></li>

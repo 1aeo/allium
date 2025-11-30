@@ -8,7 +8,13 @@
                 <h3 class="aroi-header-spacing" title="Elite champion in {{ title.lower() }} category"><a href="#{{ category_key }}" style="color: inherit; text-decoration: none;">{{ emoji }} {{ title }}</a></h3>
                 {% if leaderboard_data %}
                     {% set champion = leaderboard_data[0] %}
-                    <h4><strong><a href="{{ path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info_escaped }}" class="aroi-underline-link">{{ champion.display_name|escape }}</a></strong></h4>
+                    <h4><strong>
+                    {% if base_url and champion.aroi_domain and champion.aroi_domain in validated_aroi_domains -%}
+                    <a href="{{ base_url }}/{{ champion.aroi_domain|lower|escape }}/" title="Contact: {{ champion.contact_info_escaped }}" class="aroi-underline-link">{{ champion.display_name|escape }}</a>
+                    {% else -%}
+                    <a href="{{ path_prefix }}contact/{{ champion.contact_hash }}/" title="Contact: {{ champion.contact_info_escaped }}" class="aroi-underline-link">{{ champion.display_name|escape }}</a>
+                    {% endif -%}
+                    </strong></h4>
                     <p>
                         {% if category_key == "bandwidth" %}
                             <span title="Total observed bandwidth capacity in {% if use_bits %}{{ champion.bandwidth_unit }} (bits per second){% else %}{{ champion.bandwidth_unit }} (bytes per second){% endif %}">{{ champion.total_bandwidth }} {{ champion.bandwidth_unit }}</span>
@@ -83,7 +89,11 @@
                         <td>
                             <strong>
                                 {% if entry.rank == 1 %}🥇{% elif entry.rank == 2 %}🥈{% elif entry.rank == 3 %}🥉{% endif %}
+                                {% if base_url and entry.aroi_domain and entry.aroi_domain in validated_aroi_domains -%}
+                                <a href="{{ base_url }}/{{ entry.aroi_domain|lower|escape }}/" title="Contact: {{ entry.contact_info_escaped }}" class="aroi-underline-link">{{ entry.display_name|escape }}</a>
+                                {% else -%}
                                 <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" title="Contact: {{ entry.contact_info_escaped }}" class="aroi-underline-link">{{ entry.display_name|escape }}</a>
+                                {% endif -%}
                             </strong>
                         </td>
                         <td>
@@ -169,7 +179,11 @@
 
 {# Operator Link Macro - Handles operator name/domain links with proper styling (used ~50 times) #}
 {% macro operator_link(entry, page_ctx, include_title=true, strong=true) %}
+    {% if base_url and entry.aroi_domain and entry.aroi_domain in validated_aroi_domains -%}
+    <a href="{{ base_url }}/{{ entry.aroi_domain|lower|escape }}/" {% if include_title %}title="Contact: {{ entry.contact_info_escaped }}"{% endif %} class="aroi-underline-link">
+    {% else -%}
     <a href="{{ page_ctx.path_prefix }}contact/{{ entry.contact_hash }}/" {% if include_title %}title="Contact: {{ entry.contact_info_escaped }}"{% endif %} class="aroi-underline-link">
+    {% endif -%}
         {% if strong %}<strong>{% endif %}
         {{ entry.display_name|escape }}
         {% if strong %}</strong>{% endif %}

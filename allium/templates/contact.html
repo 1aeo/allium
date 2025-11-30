@@ -7,6 +7,12 @@
     {% set contact = 'none' %}
 {% endif %}
 {% block title %}Tor Relays :: Contact {{ contact_hash }}{% endblock %}
+{% block canonical_link %}
+{% set aroi_domain = relays.json['relay_subset'][0]['aroi_domain'] if relays.json['relay_subset'][0]['aroi_domain'] else 'none' %}
+{% if base_url and aroi_domain and aroi_domain != 'none' and is_validated_aroi %}
+<link rel="canonical" href="{{ base_url }}/{{ aroi_domain|lower|escape }}/" />
+{% endif %}
+{% endblock %}
 {% block header %}
     {% if relays.json['relay_subset'][0]['aroi_domain'] and relays.json['relay_subset'][0]['aroi_domain'] != 'none' -%}
         View Contact {{ relays.json['relay_subset'][0]['aroi_domain']|escape }} Details
@@ -46,6 +52,12 @@
                             {% endif %}
                         {% endif %}
                     </li>
+                    {# Vanity URL display for validated AROI domains - only show if base_url is configured #}
+                    {% if is_validated_aroi and base_url %}
+                    <li style="margin-left: 20px;">
+                        <strong>Vanity URL:</strong> <a href="{{ base_url }}/{{ aroi_domain|lower|escape }}/" style="color: #0066cc; text-decoration: none;">{{ base_url }}/{{ aroi_domain|lower|escape }}/</a>
+                    </li>
+                    {% endif %}
                     {% elif contact_validation_status and contact_validation_status.has_aroi %}
                     {# Show AROI validation status even when domain wasn't parsed #}
                     <li><strong>AROI Validation:</strong>

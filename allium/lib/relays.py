@@ -12,7 +12,7 @@ import re
 import sys
 import time
 import urllib.request
-from shutil import rmtree
+from shutil import rmtree, copy2
 from jinja2 import Environment, FileSystemLoader
 from .aroileaders import _calculate_aroi_leaderboards, _safe_parse_ip_address
 from .progress import log_progress, get_memory_usage
@@ -230,7 +230,7 @@ def determine_ipv6_support(or_addresses):
 class Relays:
     """Relay class consisting of processing routines and onionoo data"""
 
-    def __init__(self, output_dir, onionoo_url, relay_data, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=34, filter_downtime_days=7):
+    def __init__(self, output_dir, onionoo_url, relay_data, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=34, filter_downtime_days=7, base_url=''):
         self.output_dir = output_dir
         self.onionoo_url = onionoo_url
         self.use_bits = use_bits
@@ -239,6 +239,7 @@ class Relays:
         self.progress_step = progress_step
         self.total_steps = total_steps
         self.filter_downtime_days = filter_downtime_days
+        self.base_url = base_url
         self.ts_file = os.path.join(os.path.dirname(ABS_PATH), "timestamp")
         
         # Initialize bandwidth formatter with correct units setting
@@ -1753,6 +1754,8 @@ class Relays:
             "reverse": reverse,
             "is_index": is_index,
             "page_ctx": page_ctx,
+            "validated_aroi_domains": self.validated_aroi_domains if hasattr(self, 'validated_aroi_domains') else set(),
+            "base_url": self.base_url,
         }
         
         if template.name == "misc-families.html":
@@ -2013,6 +2016,12 @@ class Relays:
                 family_contact = i.get("contact", "")
                 family_contact_md5 = i.get("contact_md5", "")
             
+            # Check if this contact has a validated AROI domain for vanity URL display
+            is_validated_aroi = False
+            if k == "contact" and members and hasattr(self, 'validated_aroi_domains'):
+                aroi_domain = members[0].get("aroi_domain")
+                is_validated_aroi = aroi_domain and aroi_domain != "none" and aroi_domain in self.validated_aroi_domains
+            
             # Time the template rendering
             render_start = time.time()
             rendered = template.render(
@@ -2061,17 +2070,37 @@ class Relays:
                 unique_aroi_count=i.get("unique_aroi_count", 0),
                 unique_contact_count=i.get("unique_contact_count", 0),
                 unique_aroi_contact_html=i.get("unique_aroi_contact_html", ""),
-                aroi_to_contact_map=i.get("aroi_to_contact_map", {})
+                aroi_to_contact_map=i.get("aroi_to_contact_map", {}),
+                # Validation status for vanity URL display
+                is_validated_aroi=is_validated_aroi,
+                # Pass validated domains set to all templates for vanity URL links
+                validated_aroi_domains=self.validated_aroi_domains if hasattr(self, 'validated_aroi_domains') else set(),
+                # Base URL for vanity URLs
+                base_url=self.base_url
             )
             render_time += time.time() - render_start
 
             # Time the file I/O
             io_start = time.time()
-            with open(
-                os.path.join(dir_path, "index.html"), "w", encoding="utf8"
-            ) as html:
+            html_path = os.path.join(dir_path, "index.html")
+            with open(html_path, "w", encoding="utf8") as html:
                 html.write(rendered)
             io_time += time.time() - io_start
+            
+            # Create vanity URL for validated AROI domains (reuse just-written file)
+            # Only create if base_url is configured - Place at root level (e.g., /domain/ instead of /contact/domain/)
+            if self.base_url and k == "contact" and members and hasattr(self, 'validated_aroi_domains'):
+                aroi_domain = members[0].get("aroi_domain")
+                if aroi_domain and aroi_domain != "none" and aroi_domain in self.validated_aroi_domains:
+                    # Lowercase domain for case-insensitive URLs
+                    safe_domain = aroi_domain.lower().replace("..", "").replace("/", "_")
+                    # Use parent directory (root level) instead of output_path (contact subdirectory)
+                    vanity_dir = os.path.join(os.path.dirname(output_path), safe_domain)
+                    try:
+                        os.makedirs(vanity_dir, exist_ok=True)
+                        copy2(html_path, os.path.join(vanity_dir, "index.html"))
+                    except OSError:
+                        pass  # Silent fail - don't break generation for vanity URL issues
             
             page_count += 1
             
@@ -2118,7 +2147,9 @@ class Relays:
             page_ctx = full_context
             
             rendered = template.render(
-                relay=relay, page_ctx=page_ctx, relays=self, contact_display_data=contact_display_data
+                relay=relay, page_ctx=page_ctx, relays=self, contact_display_data=contact_display_data,
+                validated_aroi_domains=self.validated_aroi_domains if hasattr(self, 'validated_aroi_domains') else set(),
+                base_url=self.base_url
             )
             
             # Create directory structure: relay/FINGERPRINT/index.html (depth 2)
@@ -4799,6 +4830,9 @@ class Relays:
             validated_domain_set = validation_metrics.get('_validated_domain_set', set())
             validated_aroi_domains = validation_metrics.get('validated_aroi_domains_count', 0)
             unique_aroi_domains_count = validation_metrics.get('unique_aroi_domains_count', 0)
+            
+            # Store validated domain set for vanity URL generation later
+            self.validated_aroi_domains = validated_domain_set
             
             # UPDATE aroi_operators_count to use accurate AROI domain count (Option B: Global Replace)
             health_metrics['aroi_operators_count'] = unique_aroi_domains_count
