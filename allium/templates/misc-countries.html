@@ -129,7 +129,7 @@
                     {% set exit_bw = v['exit_bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
                     <td title="{{ v['country_name_full']|escape }}">
                         <a href="{{ page_ctx.path_prefix }}country/{{ k|escape }}/">
-                            <img src="/static/images/cc/{{ k|escape }}.png"
+                            <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ k|escape }}.png"
                                  alt="{{ v['country_name']|escape }}">
                             {{ v['country_name']|escape }}
                         </a>

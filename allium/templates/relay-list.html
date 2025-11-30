@@ -144,14 +144,14 @@
 		    {% if key != 'country' -%}
 			<td>
 			    <a href="{{ page_ctx.path_prefix }}country/{{ relay['country']|escape }}/">
-				<img src="/static/images/cc/{{ relay['country']|escape }}.png"
+				<img src="{{ page_ctx.path_prefix }}static/images/cc/{{ relay['country']|escape }}.png"
 				     title="{{ relay['country_name']|escape }}"
 				     alt="{{ relay['country_name']|escape }}">
 			    </a>
 			</td>
 		    {% else -%}
 			<td>
-			    <img src="/static/images/cc/{{ relay['country']|escape }}.png"
+			    <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ relay['country']|escape }}.png"
 				 title="{{ relay['country_name']|escape }}"
 				 alt="{{ relay['country_name']|escape }}">
 			    {{ relay['country_name']|escape }}
@@ -173,7 +173,7 @@
 			{% if flag != 'StaleDesc' -%}
 			    {% set flag_idx = loop.index0 -%}
 			    <a href="{{ page_ctx.path_prefix }}flag/{{ relay['flags_lower_escaped'][flag_idx] }}/">
-				<img src="/static/images/flags/{{ relay['flags_lower_escaped'][flag_idx] }}.png"
+				<img src="{{ page_ctx.path_prefix }}static/images/flags/{{ relay['flags_lower_escaped'][flag_idx] }}.png"
 				     title="{{ relay['flags_escaped'][flag_idx] }}"
 				     alt="{{ relay['flags_escaped'][flag_idx] }}">
 			    </a>
