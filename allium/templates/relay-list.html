@@ -76,7 +76,11 @@
 		{% if key != 'contact' -%}
 		    {% if relay['aroi_domain'] and relay['aroi_domain'] != 'none' -%}
 			<td>
+			    {% if base_url and relay['aroi_domain'] in validated_aroi_domains -%}
+			    <a href="{{ base_url }}/{{ relay['aroi_domain']|lower|escape }}/" title="{{ relay['aroi_domain']|escape }}">{{ relay['aroi_domain']|escape }}</a>
+			    {% else -%}
 			    <a href="{{ page_ctx.path_prefix }}contact/{{ relay['contact_md5'] }}/" title="{{ relay['aroi_domain']|escape }}">{{ relay['aroi_domain']|escape }}</a>
+			    {% endif -%}
 			</td>
 		    {% else -%}
 			<td>none</td>

@@ -87,6 +87,14 @@ if __name__ == "__main__":
         required=False,
     )
     parser.add_argument(
+        "--base-url",
+        dest="base_url",
+        type=str,
+        default="",
+        help='base URL for vanity URLs (default: "" for root-relative paths like /domain/)',
+        required=False,
+    )
+    parser.add_argument(
         "--display-bandwidth-units",
         dest="bandwidth_units",
         choices=['bits', 'bytes'],
@@ -207,7 +215,7 @@ if __name__ == "__main__":
     progress_logger.log("Initializing relay data from onionoo (using coordinator)...")
     
     try:
-        RELAY_SET = create_relay_set_with_coordinator(args.output_dir, args.onionoo_details_url, args.onionoo_uptime_url, args.onionoo_bandwidth_url, args.aroi_url, args.bandwidth_cache_hours, args.bandwidth_units == 'bits', args.progress, start_time, progress_logger.get_current_step(), total_steps, args.enabled_apis, args.filter_downtime_days)
+        RELAY_SET = create_relay_set_with_coordinator(args.output_dir, args.onionoo_details_url, args.onionoo_uptime_url, args.onionoo_bandwidth_url, args.aroi_url, args.bandwidth_cache_hours, args.bandwidth_units == 'bits', args.progress, start_time, progress_logger.get_current_step(), total_steps, args.enabled_apis, args.filter_downtime_days, args.base_url)
         if RELAY_SET is None or RELAY_SET.json == None:
             # Progress-style error context message (conditional on progress flag)
             progress_logger.log("No onionoo data available, exiting gracefully")
