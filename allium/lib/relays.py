@@ -1998,6 +1998,8 @@ class Relays:
             operator_reliability = None
             contact_display_data = None
             primary_country_data = None
+            contact_validation_status = None
+            aroi_validation_timestamp = None
             if k == "contact":
                 contact_rankings = self._generate_contact_rankings(v)
                 # Calculate operator reliability statistics
@@ -2010,6 +2012,12 @@ class Relays:
                 i['contact_display_data'] = contact_display_data
                 # Get primary country data for this contact
                 primary_country_data = i.get("primary_country_data")
+                # Calculate AROI validation status for this contact
+                contact_validation_status = self._calculate_contact_validation_status(v, members)
+                # Get validation timestamp if available
+                validation_data = getattr(self, 'aroi_validation_data', None)
+                if validation_data and 'metadata' in validation_data:
+                    aroi_validation_timestamp = validation_data['metadata'].get('timestamp', 'Unknown')
             
             # Add family-specific data for family templates (used by detail_summary macro)
             family_aroi_domain = None
@@ -2052,6 +2060,8 @@ class Relays:
                 operator_reliability=operator_reliability,  # Operator reliability statistics for contact pages
                 contact_display_data=contact_display_data,  # Pre-computed contact-specific display data
                 primary_country_data=primary_country_data,  # Primary country data for contact pages
+                contact_validation_status=contact_validation_status,  # AROI validation status for contact pages
+                aroi_validation_timestamp=aroi_validation_timestamp,  # AROI validation timestamp
                 # Family-specific data for detail_summary macro in family templates
                 family_aroi_domain=family_aroi_domain,  # AROI domain for family pages
                 family_contact=family_contact,  # Contact string for family pages
@@ -2277,6 +2287,133 @@ class Relays:
         # Default for unknown categories
         default_name = category.replace('_', ' ').title()
         return category_info.get(category, _info(default_name, '🏅'))
+
+    def _calculate_contact_validation_status(self, contact_hash, operator_relays):
+        """
+        Calculate AROI validation status for a specific contact/operator.
+        
+        This function determines if an operator's relays have valid AROI proofs and provides
+        detailed error information for any unvalidated relays.
+        
+        Args:
+            contact_hash (str): Contact hash for the operator
+            operator_relays (list): List of relay dictionaries for this operator
+            
+        Returns:
+            dict: Validation status information including:
+                - has_aroi (bool): Whether any relay has AROI
+                - validation_status (str): 'validated', 'partially_validated', or 'unvalidated'
+                - validation_summary (dict): Counts and percentages
+                - unvalidated_relays (list): List of relays with validation errors
+                - show_detailed_errors (bool): Whether to show error details
+                - validation_available (bool): Whether validation data is available
+        """
+        # Default result for operators without AROI
+        default_result = {
+            'has_aroi': False,
+            'validation_status': 'no_aroi',
+            'validation_summary': {
+                'relays_with_aroi': 0,
+                'validated_count': 0,
+                'validation_rate': 0.0
+            },
+            'unvalidated_relays': [],
+            'show_detailed_errors': False,
+            'validation_available': False
+        }
+        
+        if not operator_relays:
+            return default_result
+        
+        # Check if we have AROI validation data
+        validation_data = getattr(self, 'aroi_validation_data', None)
+        if not validation_data or 'results' not in validation_data:
+            # No validation data available - check if operator has AROI anyway
+            has_any_aroi = any(
+                relay.get('aroi_domain') and relay.get('aroi_domain') != 'none' 
+                for relay in operator_relays
+            )
+            if has_any_aroi:
+                result = default_result.copy()
+                result['has_aroi'] = True
+                result['validation_status'] = 'unvalidated'
+                relays_with_aroi = [r for r in operator_relays if r.get('aroi_domain') and r.get('aroi_domain') != 'none']
+                result['validation_summary']['relays_with_aroi'] = len(relays_with_aroi)
+                return result
+            return default_result
+        
+        # Build fingerprint -> validation result mapping
+        validation_map = {}
+        for result in validation_data.get('results', []):
+            fingerprint = result.get('fingerprint')
+            if fingerprint:
+                validation_map[fingerprint] = result
+        
+        # Analyze each relay in this contact
+        relays_with_aroi = []
+        validated_relays = []
+        unvalidated_relays = []
+        
+        for relay in operator_relays:
+            aroi_domain = relay.get('aroi_domain')
+            fingerprint = relay.get('fingerprint')
+            
+            # Check if relay has AROI
+            if aroi_domain and aroi_domain != 'none':
+                relays_with_aroi.append(relay)
+                
+                # Check validation status
+                if fingerprint in validation_map:
+                    validation_result = validation_map[fingerprint]
+                    if validation_result.get('valid', False):
+                        validated_relays.append(relay)
+                    else:
+                        # Relay has AROI but validation failed
+                        error_msg = validation_result.get('error', 'Unknown error')
+                        proof_type = validation_result.get('proof_type', 'unknown')
+                        unvalidated_relays.append({
+                            'fingerprint': fingerprint,
+                            'nickname': relay.get('nickname', 'Unknown'),
+                            'error': error_msg,
+                            'proof_type': proof_type
+                        })
+                else:
+                    # No validation result found for this relay
+                    unvalidated_relays.append({
+                        'fingerprint': fingerprint,
+                        'nickname': relay.get('nickname', 'Unknown'),
+                        'error': 'No validation data available',
+                        'proof_type': 'unknown'
+                    })
+        
+        # If no relays with AROI, return default
+        if not relays_with_aroi:
+            return default_result
+        
+        # Calculate validation status
+        total_with_aroi = len(relays_with_aroi)
+        validated_count = len(validated_relays)
+        validation_rate = (validated_count / total_with_aroi * 100) if total_with_aroi > 0 else 0.0
+        
+        if validated_count == total_with_aroi:
+            validation_status = 'validated'
+        elif validated_count > 0:
+            validation_status = 'partially_validated'
+        else:
+            validation_status = 'unvalidated'
+        
+        return {
+            'has_aroi': True,
+            'validation_status': validation_status,
+            'validation_summary': {
+                'relays_with_aroi': total_with_aroi,
+                'validated_count': validated_count,
+                'validation_rate': validation_rate
+            },
+            'unvalidated_relays': unvalidated_relays,
+            'show_detailed_errors': len(unvalidated_relays) > 0,
+            'validation_available': True
+        }
 
     def _calculate_operator_reliability(self, contact_hash, operator_relays):
         """
