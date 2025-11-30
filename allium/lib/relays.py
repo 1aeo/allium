@@ -1751,6 +1751,19 @@ class Relays:
         if page_ctx is None:
             page_ctx = {'path_prefix': '../'}  # default fallback
         
+        # Add AROI validation status to contact data for misc-contacts templates
+        # This runs before write_pages_by_key, so we calculate once and store for reuse
+        if template.name == "misc-contacts.html":
+            for contact_hash, contact_data in self.json["sorted"].get("contact", {}).items():
+                # Only calculate if not already stored
+                if "aroi_validation_status" not in contact_data:
+                    relay_indices = contact_data.get("relays", [])
+                    members = [self.json["relays"][idx] for idx in relay_indices]
+                    validation_status = self._get_contact_validation_status(members)
+                    contact_data["aroi_validation_status"] = validation_status["validation_status"]
+                    # Store full validation status for operator pages to reuse
+                    contact_data["aroi_validation_full"] = validation_status
+        
         # Pre-compute family statistics for misc-families templates
         template_vars = {
             "relays": self,
@@ -2013,7 +2026,11 @@ class Relays:
                 # Get primary country data for this contact
                 primary_country_data = i.get("primary_country_data")
                 # Get AROI validation status for this contact (Phase 2)
-                contact_validation_status = self._get_contact_validation_status(members)
+                # Reuse validation status from write_misc if already calculated, otherwise calculate now
+                if "aroi_validation_full" in i:
+                    contact_validation_status = i["aroi_validation_full"]
+                else:
+                    contact_validation_status = self._get_contact_validation_status(members)
                 # Extract AROI validation timestamp for display
                 aroi_validation_timestamp = self._get_aroi_validation_timestamp()
             
