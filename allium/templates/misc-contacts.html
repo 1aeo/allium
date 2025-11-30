@@ -134,6 +134,13 @@
                             {% else -%}
                             <a href="{{ page_ctx.path_prefix }}contact/{{ k|escape }}/" title="Contact: {{ v['contact']|escape }}" style="text-decoration: underline;">{{ v['aroi_domain']|escape }}</a>
                             {% endif -%}
+                            {% if v.get('aroi_validation_status') == 'validated' -%}
+                            <span title="All relays validated"> ✅</span>
+                            {% elif v.get('aroi_validation_status') == 'partially_validated' -%}
+                            <span title="Partially validated"> ⚠️</span>
+                            {% elif v.get('aroi_validation_status') == 'unvalidated' -%}
+                            <span title="No relays validated"> ❌</span>
+                            {% endif -%}
                         {% elif v['contact'] and v['contact'] != '' -%}
                             <a href="{{ page_ctx.path_prefix }}contact/{{ k|escape }}/" title="Contact: {{ v['contact']|escape }}" style="text-decoration: underline;" class="contact-text">{{ v['contact']|truncate(30)|escape }}</a>
                         {% else -%}
