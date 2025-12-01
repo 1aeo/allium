@@ -48,7 +48,7 @@
                             {% elif contact_validation_status.validation_status == 'partially_validated' %}
                                 <a href="#aroi-validation-issues" style="color: #ffc107; font-weight: bold; margin-left: 5px; text-decoration: none;" title="{{ contact_validation_status.validation_summary.validated_count }}/{{ contact_validation_status.validation_summary.relays_with_aroi }} relays validated ({{ "%.1f"|format(contact_validation_status.validation_summary.validation_rate) }}%) - See details below">⚠ Partially Verified</a>
                             {% elif contact_validation_status.validation_status == 'unvalidated' %}
-                                <span style="color: #dc3545; font-weight: bold; margin-left: 5px;" title="AROI validation failed">✗ Unvalidated</span>
+                                <a href="#aroi-validation-issues" style="color: #dc3545; font-weight: bold; margin-left: 5px; text-decoration: none;" title="AROI validation failed - See details below">✗ Unvalidated</a>
                             {% endif %}
                         {% endif %}
                     </li>
@@ -66,7 +66,7 @@
                         {% elif contact_validation_status.validation_status == 'partially_validated' %}
                             <a href="#aroi-validation-issues" style="color: #ffc107; font-weight: bold; text-decoration: none;" title="{{ contact_validation_status.validation_summary.validated_count }}/{{ contact_validation_status.validation_summary.relays_with_aroi }} relays validated ({{ "%.1f"|format(contact_validation_status.validation_summary.validation_rate) }}%) - See details below">⚠ Partially Verified ({{ contact_validation_status.validation_summary.validated_count }}/{{ contact_validation_status.validation_summary.relays_with_aroi }})</a>
                         {% elif contact_validation_status.validation_status == 'unvalidated' %}
-                            <span style="color: #dc3545; font-weight: bold;" title="AROI validation failed for {{ contact_validation_status.validation_summary.relays_with_aroi }} relays">✗ Unvalidated ({{ contact_validation_status.validation_summary.relays_with_aroi }} relays)</span>
+                            <a href="#aroi-validation-issues" style="color: #dc3545; font-weight: bold; text-decoration: none;" title="AROI validation failed for {{ contact_validation_status.validation_summary.relays_with_aroi }} relays - See details below">✗ Unvalidated ({{ contact_validation_status.validation_summary.relays_with_aroi }} relays)</a>
                         {% endif %}
                     </li>
                     {% endif %}
