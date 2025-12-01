@@ -549,109 +549,22 @@
                 }
 
                 /* AROI Pagination Styles using :target selector */
-                /* Hide all pagination sections by default */
                 .pagination-section {
-                    display: none;
+                    display: none; /* Hidden by default */
                 }
                 
-                /* Show first section by default (when no hash in URL) */
-                #bandwidth-1-10,
-                #consensus_weight-1-10,
-                #exit_authority-1-10,
-                #guard_authority-1-10,
-                #exit_operators-1-10,
-                #guard_operators-1-10,
-                #most_diverse-1-10,
-                #platform_diversity-1-10,
-                #non_eu_leaders-1-10,
-                #frontier_builders-1-10,
-                #network_veterans-1-10,
-                #reliability_masters-1-10,
-                #legacy_titans-1-10,
-                #bandwidth_masters-1-10,
-                #bandwidth_legends-1-10,
-                #ipv4_leaders-1-10,
-                #ipv6_leaders-1-10 {
+                /* Show first page (1-10) by default for all categories - uses CSS attribute selector for pattern matching */
+                [id$="-1-10"].pagination-section {
                     display: block;
                 }
                 
-                /* When a specific section is targeted, show only that section */
-                #bandwidth-1-10:target,
-                #bandwidth-11-20:target,
-                #bandwidth-21-25:target,
-                #consensus_weight-1-10:target,
-                #consensus_weight-11-20:target,
-                #consensus_weight-21-25:target,
-                #exit_authority-1-10:target,
-                #exit_authority-11-20:target,
-                #exit_authority-21-25:target,
-                #guard_authority-1-10:target,
-                #guard_authority-11-20:target,
-                #guard_authority-21-25:target,
-                #exit_operators-1-10:target,
-                #exit_operators-11-20:target,
-                #exit_operators-21-25:target,
-                #guard_operators-1-10:target,
-                #guard_operators-11-20:target,
-                #guard_operators-21-25:target,
-                #most_diverse-1-10:target,
-                #most_diverse-11-20:target,
-                #most_diverse-21-25:target,
-                #platform_diversity-1-10:target,
-                #platform_diversity-11-20:target,
-                #platform_diversity-21-25:target,
-                #non_eu_leaders-1-10:target,
-                #non_eu_leaders-11-20:target,
-                #non_eu_leaders-21-25:target,
-                #frontier_builders-1-10:target,
-                #frontier_builders-11-20:target,
-                #frontier_builders-21-25:target,
-                #network_veterans-1-10:target,
-                #network_veterans-11-20:target,
-                #network_veterans-21-25:target,
-                #reliability_masters-1-10:target,
-                #reliability_masters-11-20:target,
-                #reliability_masters-21-25:target,
-                #legacy_titans-1-10:target,
-                #legacy_titans-11-20:target,
-                #legacy_titans-21-25:target,
-                #bandwidth_masters-1-10:target,
-                #bandwidth_masters-11-20:target,
-                #bandwidth_masters-21-25:target,
-                #bandwidth_legends-1-10:target,
-                #bandwidth_legends-11-20:target,
-                #bandwidth_legends-21-25:target,
-                #ipv4_leaders-1-10:target,
-                #ipv4_leaders-11-20:target,
-                #ipv4_leaders-21-25:target,
-                #ipv6_leaders-1-10:target,
-                #ipv6_leaders-11-20:target,
-                #ipv6_leaders-21-25:target {
+                /* Show any targeted pagination section */
+                .pagination-section:target {
                     display: block;
                 }
-
                 
-                /* Category-specific pagination behavior - each category manages its own pagination independently */
-                /* Use scoped :has() selector so each category manages its own pagination state */
-                
-                /* When a pagination section is targeted within a category, hide other sections in that same category only */
-                #bandwidth:has(.pagination-section:target) .pagination-section:not(:target),
-                #consensus_weight:has(.pagination-section:target) .pagination-section:not(:target),
-                #exit_authority:has(.pagination-section:target) .pagination-section:not(:target),
-                #guard_authority:has(.pagination-section:target) .pagination-section:not(:target),
-                #exit_operators:has(.pagination-section:target) .pagination-section:not(:target),
-                #guard_operators:has(.pagination-section:target) .pagination-section:not(:target),
-                #most_diverse:has(.pagination-section:target) .pagination-section:not(:target),
-                #platform_diversity:has(.pagination-section:target) .pagination-section:not(:target),
-                #non_eu_leaders:has(.pagination-section:target) .pagination-section:not(:target),
-                #frontier_builders:has(.pagination-section:target) .pagination-section:not(:target),
-                #network_veterans:has(.pagination-section:target) .pagination-section:not(:target),
-                #reliability_masters:has(.pagination-section:target) .pagination-section:not(:target),
-                #legacy_titans:has(.pagination-section:target) .pagination-section:not(:target),
-                #bandwidth_masters:has(.pagination-section:target) .pagination-section:not(:target),
-                #bandwidth_legends:has(.pagination-section:target) .pagination-section:not(:target),
-                #ipv4_leaders:has(.pagination-section:target) .pagination-section:not(:target),
-                #ipv6_leaders:has(.pagination-section:target) .pagination-section:not(:target) {
+                /* When a section is targeted, hide other sections in same category - uses :has() for scoped hiding */
+                .aroi-section:has(.pagination-section:target) .pagination-section:not(:target) {
                     display: none !important;
                 }
 

@@ -1,5 +1,5 @@
 {% from "macros.html" import navigation %}
-{% from "aroi_macros.html" import champion_badge, top3_table, ranking_table_row, operator_link, rank_badge, generic_ranking_table, top5_paginated_ranking_table, bandwidth_table_headers, bandwidth_table_complete, consensus_weight_table_complete, exit_authority_table_complete, guard_authority_table_complete, exit_operators_table_complete, guard_operators_table_complete, generic_ranking_table_paginated, ipv4_ipv6_table_paginated, ipv4_ipv6_section_paginated, pagination_section %}
+{% from "aroi_macros.html" import champion_badge, top3_table, ranking_table_row, operator_link, rank_badge, generic_ranking_table, top5_paginated_ranking_table, bandwidth_table_headers, bandwidth_table_complete, consensus_weight_table_complete, exit_authority_table_complete, guard_authority_table_complete, exit_operators_table_complete, guard_operators_table_complete, validated_relays_table_complete, generic_ranking_table_paginated, ipv4_ipv6_table_paginated, ipv4_ipv6_section_paginated, pagination_section %}
 {% extends "skeleton.html" -%}
 {% block title -%}
     🏆 Tor Network Operator Champion Dashboard
@@ -41,6 +41,7 @@
         <a href="#bandwidth_legends" class="aroi-nav-link" title="Bandwidth Served Legends: 5-year average bandwidth performance for operators with 25+ relays, measuring sustained bandwidth served capacity">🌟 Bandwidth Served Legends</a>
         <a href="#ipv4_leaders" class="aroi-nav-link" title="IPv4 Address Leaders: Operators with the highest quantity of unique IPv4 addresses across their relay infrastructure">🌐 IPv4 Leaders</a>
         <a href="#ipv6_leaders" class="aroi-nav-link" title="IPv6 Address Leaders: Operators with the highest quantity of unique IPv6 addresses across their relay infrastructure">🔮 IPv6 Leaders</a>
+        <a href="#validated_relays" class="aroi-nav-link" title="AROI Validation Champions: Operators with the most relays that have valid AROI cryptographic proofs (DNS-RSA or URI-RSA), demonstrating verified operator identity and accountability">✅ Validation Champions</a>
     </div>
 </nav>
 
@@ -107,6 +108,8 @@
         {{ champion_badge("ipv4_leaders", relays.json.aroi_leaderboards.leaderboards.ipv4_leaders, "IPv4 Master", "🌐", "panel-primary", "aroi-champion-ipv4", page_ctx.path_prefix, relays.use_bits) }}
         
         {{ champion_badge("ipv6_leaders", relays.json.aroi_leaderboards.leaderboards.ipv6_leaders, "IPv6 Pioneer", "🔮", "panel-info", "aroi-champion-ipv6", page_ctx.path_prefix, relays.use_bits) }}
+        
+        {{ champion_badge("validated_relays", relays.json.aroi_leaderboards.leaderboards.validated_relays, "AROI Validation Champion", "✅", "panel-success", "aroi-champion-validation", page_ctx.path_prefix, relays.use_bits) }}
     </div>
 </section>
 
@@ -167,6 +170,9 @@
 
     <!-- IPv6 Address Leaders -->
     {{ top3_table("IPv6 Address Leaders", "🔮", relays.json.aroi_leaderboards.leaderboards.ipv6_leaders, ["IPv6 Legend", "IPv6 Master", "IPv6 Champion"], "ipv6_leaders", page_ctx, relays.use_bits) }}
+
+    <!-- AROI Validation Champions -->
+    {{ top3_table("AROI Validation Champions", "✅", relays.json.aroi_leaderboards.leaderboards.validated_relays, ["Validation King", "Validation Commander", "Validation Hero"], "validated_relays", page_ctx, relays.use_bits) }}
 
 </section>
 
@@ -243,6 +249,12 @@
     <!-- IPv6 Address Leaders - Optimized Unified Section -->
     {{ ipv4_ipv6_section_paginated('ipv6_leaders', relays.json.aroi_leaderboards.summary.categories.ipv6_leaders, relays.json.aroi_leaderboards.leaderboards.ipv6_leaders, '🔮', 'Operators ranked by quantity of unique IPv6 addresses per operator across their relay infrastructure. Measures IPv6 adoption and modern network infrastructure capabilities', page_ctx, relays.use_bits) }}
 
+    <!-- AROI Validation Champions - New Category #18 -->
+    <section id="validated_relays" class="aroi-section">
+        <h3 title="Operators ranked by number of relays with valid AROI cryptographic proofs (DNS-RSA or URI-RSA), demonstrating verified operator identity and accountability in the Tor network">✅ AROI Validation Champions</h3>
+        {{ pagination_section('validated_relays', '✅', relays.json.aroi_leaderboards.leaderboards.validated_relays, 'validated_relays_table_complete', page_ctx, relays.use_bits) }}
+    </section>
+
 </section>
 
 <!-- Floating Back to Top Button -->
@@ -279,6 +291,7 @@
                     <li><strong>👑 Legacy Titans:</strong> 5-year average uptime scores (25+ relays, long-term stability)</li>
                     <li><strong>🚀 Bandwidth Served Masters:</strong> 6-month average bandwidth performance (25+ relays, recent bandwidth served excellence)</li>
                     <li><strong>🌟 Bandwidth Served Legends:</strong> 5-year average bandwidth performance (25+ relays, sustained bandwidth served capacity)</li>
+                    <li><strong>✅ AROI Validation Champions:</strong> Most relays with valid AROI cryptographic proofs (DNS-RSA or URI-RSA verification)</li>
                 </ul>
             </div>
         </div>
@@ -334,6 +347,19 @@
         <p><strong>5-Year Bandwidth Formula:</strong> bandwidth_score = Σ(relay_5year_bandwidth) / relay_count</p>
         <p><em>Example:</em> An operator with 40 relays over 5-year history: 25 active relays averaging 12.5 MB/s bandwidth served, 15 upgraded relays (9.8 MB/s historical average) would score: ((25 × 12.5) + (15 × 9.8)) / 40 = <strong>11.5 MB/s sustained bandwidth score</strong>, demonstrating long-term network contribution.</p>
         <p><strong>Focus:</strong> Recognizes operators who have demonstrated exceptional sustained bandwidth contribution and long-term commitment to the Tor network through consistent high bandwidth served performance, infrastructure investment, and network capacity expansion over multiple years.</p>
+        
+        <h4>✅ AROI Validation Champions Scoring:</h4>
+        <p><strong>Validation Score Calculation:</strong> The AROI Validation Champions category measures operator commitment to verified identity and accountability by counting relays with valid AROI cryptographic proofs.</p>
+        <ul>
+            <li><strong>Eligibility:</strong> All operators with at least one relay that has valid AROI proof (DNS-RSA or URI-RSA)</li>
+            <li><strong>Primary Factor:</strong> Count of relays with valid AROI cryptographic proofs verified by aroivalidator.1aeo.com</li>
+            <li><strong>Proof Types:</strong> DNS-RSA (TXT records) or URI-RSA (HTTPS file verification)</li>
+            <li><strong>Invalid Relays:</strong> Shown for transparency but do not contribute to ranking score</li>
+            <li><strong>Data Source:</strong> Real-time validation data from <a href="https://aroivalidator.1aeo.com/" target="_blank">aroivalidator.1aeo.com</a></li>
+        </ul>
+        <p><strong>Validation Formula:</strong> validation_score = count(relays_with_valid_aroi_proof)</p>
+        <p><em>Example:</em> An operator with 50 relays: 45 relays with valid AROI proofs (DNS-RSA or URI-RSA), 5 relays with failed validation would score: <strong>45 validated relays</strong>, ranking by the count of successfully validated relays.</p>
+        <p><strong>Focus:</strong> Promotes operator accountability and transparency by recognizing those who maintain proper AROI cryptographic verification across their relay infrastructure, demonstrating commitment to verified identity and network trust.</p>
         
         <h4>🌈 Diversity Champion Scoring:</h4>
         <p><strong>Diversity Score Calculation:</strong> The diversity score uses a weighted formula to measure geographic, platform, and network diversity:</p>

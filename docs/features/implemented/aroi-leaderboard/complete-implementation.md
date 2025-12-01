@@ -1,15 +1,15 @@
 # AROI Leaderboards Complete Implementation - IMPLEMENTED
 
 **Status**: ✅ **FULLY IMPLEMENTED**  
-**Implementation Date**: 2024  
-**Categories**: 17 competitive categories operational  
-**File**: `allium/lib/aroileaders.py` (1,212 lines)  
+**Implementation Date**: 2024, Category #18 added Nov 29, 2025  
+**Categories**: 18 competitive categories operational  
+**File**: `allium/lib/aroileaders.py` (1,306 lines)  
 
 ## Overview
 
-The Complete AROI (Authenticated Relay Operator Identifier) Leaderboards System is a comprehensive operator ranking system with 17 competitive categories that recognize excellence across different aspects of Tor network operation. The system processes operators based on contact information and provides detailed analytics and achievement recognition.
+The Complete AROI (Authenticated Relay Operator Identifier) Leaderboards System is a comprehensive operator ranking system with 18 competitive categories that recognize excellence across different aspects of Tor network operation. The system processes operators based on contact information and provides detailed analytics and achievement recognition.
 
-## All 17 Implemented Categories
+## All 18 Implemented Categories
 
 ### **1. 🚀 Bandwidth Capacity Contributed**
 - **Metric**: Total observed bandwidth capacity across all relays
@@ -117,13 +117,27 @@ The Complete AROI (Authenticated Relay Operator Identifier) Leaderboards System 
 - **Recognition**: IPv6 adoption leadership
 - **Data Source**: Address field analysis
 
+### **18. ✅ AROI Validation Champions** (Added Nov 29, 2025)
+- **Metric**: Operators with most validated AROI relays
+- **Calculation**: Count of relays with valid AROI cryptographic proofs (DNS-RSA or URI-RSA)
+- **Recognition**: Validated operator identity and accountability
+- **Data Source**: Real-time validation data from aroivalidator.1aeo.com
+- **Eligibility**: Operators with at least one validated relay
+- **Additional Metrics**: 
+  - Invalid relay count (for transparency)
+  - Guard/Middle/Exit validated relay breakdown
+  - Bandwidth capacity on validated relays
+  - Consensus weight on validated relays
+  - Countries with validated operations
+- **Performance**: O(1) validation lookups via fingerprint dictionary mapping
+
 ## Implementation Architecture
 
 ### Core Processing (`aroileaders.py`)
 ```python
 def calculate_aroi_leaderboards(relays_instance, bandwidth_data=None, uptime_data=None):
     """
-    Calculate comprehensive AROI leaderboards across all 17 categories
+    Calculate comprehensive AROI leaderboards across all 18 categories
     
     Returns:
         dict: Complete leaderboard system with rankings, summaries, and metadata
