@@ -225,7 +225,7 @@ jobs:
         # Download and run setup script with retry logic
         for download_attempt in 1 2 3; do
           echo "📥 Download attempt $download_attempt of 3..."
-          if curl -sSL --connect-timeout 30 --max-time 60 https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/setup.sh -o setup.sh; then
+          if curl -sSL --connect-timeout 30 --max-time 60 https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/setup.sh -o setup.sh; then
             echo "✅ Setup script downloaded successfully"
             break
           else
@@ -237,6 +237,13 @@ jobs:
             sleep 10
           fi
         done
+        
+        # Verify we downloaded a shell script, not an error page
+        if ! head -1 setup.sh | grep -q '^#!/bin/bash'; then
+          echo "❌ Downloaded file is not a valid shell script"
+          echo "First line: $(head -1 setup.sh)"
+          exit 1
+        fi
         
         # Make sure the script is executable
         chmod +x setup.sh
