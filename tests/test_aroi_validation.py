@@ -15,7 +15,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from allium.lib.aroi_validation import (
     calculate_aroi_validation_metrics,
     get_contact_validation_status,
-    _format_timestamp
+    _format_timestamp,
+    _simplify_error_message,
+    _simplify_and_categorize_errors
 )
 
 
@@ -229,9 +231,10 @@ class TestAROIValidation(unittest.TestCase):
             self.assertIsInstance(count, int)
         
         # Check the top error is the DNS error (appears twice)
+        # Note: Error messages are now simplified, "DNS lookup failed: NXDOMAIN" -> "DNS domain not found (NXDOMAIN)"
         top_error, top_count = metrics['relay_error_top5'][0]
         self.assertEqual(top_count, 2)
-        self.assertIn('DNS lookup', top_error)
+        self.assertIn('DNS', top_error)  # Simplified error still contains DNS
     
     def test_operator_error_top5_calculation(self):
         """Test that operator_error_top5 counts operators not relays."""
@@ -326,6 +329,57 @@ class TestAROIValidation(unittest.TestCase):
         # Top5 lists should have default empty values
         self.assertEqual(metrics['relay_error_top5'], [])
         self.assertEqual(metrics['operator_error_top5'], [])
+
+    def test_error_simplification(self):
+        """Test that verbose error messages are simplified correctly."""
+        # Test SSL/TLS handshake errors
+        msg, proof = _simplify_error_message("SSL: SSLV3_ALERT_HANDSHAKE_FAILURE")
+        self.assertEqual(msg, "SSL/TLS handshake failed")
+        self.assertEqual(proof, 'uri')
+        
+        # Test 404 errors with fingerprint URL (matches fingerprint pattern)
+        msg, proof = _simplify_error_message("404 Not Found for https://example.com/.well-known/tor-relay/rsa-fingerprint.txt")
+        self.assertEqual(msg, "Fingerprint file not found (404)")
+        self.assertEqual(proof, 'uri')
+        
+        # Test 404 errors without fingerprint URL (matches generic 404 pattern)
+        msg, proof = _simplify_error_message("404 Not Found")
+        self.assertEqual(msg, "Proof file not found (404)")
+        self.assertEqual(proof, 'uri')
+        
+        # Test NXDOMAIN errors
+        msg, proof = _simplify_error_message("DNS lookup failed: NXDOMAIN")
+        self.assertEqual(msg, "DNS domain not found (NXDOMAIN)")
+        self.assertEqual(proof, 'dns')
+        
+        # Test connection timeout
+        msg, proof = _simplify_error_message("Connection timeout after 30 seconds")
+        self.assertEqual(msg, "Connection timeout")
+        self.assertEqual(proof, 'uri')
+
+    def test_error_categorization(self):
+        """Test that errors are categorized into DNS and URI correctly."""
+        errors = {
+            "DNS lookup failed: NXDOMAIN": 10,
+            "SSL certificate error": 5,
+            "404 Not Found": 3,
+            "DNS TXT record not found": 2,  # Use exact DNS pattern
+        }
+        
+        result = _simplify_and_categorize_errors(errors)
+        
+        # Check all errors are in 'all' category (may be less if errors merge)
+        self.assertGreater(len(result['all']), 0)
+        
+        # Check DNS errors only contain DNS-related errors
+        self.assertIn("DNS domain not found (NXDOMAIN)", result['dns'])
+        self.assertIn("DNS TXT record not found", result['dns'])
+        self.assertNotIn("Proof file not found (404)", result['dns'])
+        
+        # Check URI errors only contain URI-related errors
+        self.assertIn("SSL certificate error", result['uri'])
+        self.assertIn("Proof file not found (404)", result['uri'])
+        self.assertNotIn("DNS domain not found (NXDOMAIN)", result['uri'])
 
 
 if __name__ == '__main__':

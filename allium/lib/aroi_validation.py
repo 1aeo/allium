@@ -143,6 +143,110 @@ def _categorize_by_missing_fields(aroi_fields: Dict[str, bool]) -> str:
     return 'no_aroi'
 
 
+def _simplify_error_message(error: str) -> tuple:
+    """
+    Simplify a verbose error message into a 1-2 sentence description.
+    
+    Returns:
+        Tuple of (simplified_message, proof_type) where proof_type is 'dns', 'uri', or 'other'
+    """
+    error_lower = error.lower()
+    
+    # DNS-specific errors (check first as they're more specific)
+    if 'nxdomain' in error_lower or 'no such domain' in error_lower:
+        return ("DNS domain not found (NXDOMAIN)", 'dns')
+    
+    if 'servfail' in error_lower:
+        return ("DNS server failure (SERVFAIL)", 'dns')
+    
+    if 'txt record' in error_lower or ('txt' in error_lower and 'dns' in error_lower):
+        if 'not found' in error_lower or 'missing' in error_lower:
+            return ("DNS TXT record not found", 'dns')
+        return ("DNS TXT record error", 'dns')
+    
+    if 'dns' in error_lower and 'lookup' in error_lower:
+        return ("DNS lookup failed", 'dns')
+    
+    # SSL/TLS handshake failures
+    if 'ssl' in error_lower and ('handshake' in error_lower or 'alert' in error_lower):
+        return ("SSL/TLS handshake failed", 'uri')
+    
+    # Certificate errors
+    if 'certificate' in error_lower:
+        if 'verify' in error_lower or 'expired' in error_lower:
+            return ("SSL certificate verification failed", 'uri')
+        return ("SSL certificate error", 'uri')
+    
+    # 404 Not Found (check after DNS patterns)
+    if '404' in error or ('not found' in error_lower and 'dns' not in error_lower and 'txt' not in error_lower):
+        if 'fingerprint' in error_lower:
+            return ("Fingerprint file not found (404)", 'uri')
+        return ("Proof file not found (404)", 'uri')
+    
+    # 403 Forbidden
+    if '403' in error or 'forbidden' in error_lower:
+        return ("Access forbidden (403)", 'uri')
+    
+    # Connection refused/timeout
+    if 'connection refused' in error_lower or 'refused' in error_lower:
+        return ("Connection refused by server", 'uri')
+    
+    if 'timeout' in error_lower:
+        return ("Connection timeout", 'uri')
+    
+    if 'max retries exceeded' in error_lower:
+        return ("Server unreachable (max retries)", 'uri')
+    
+    # Name resolution errors
+    if 'name or service not known' in error_lower or 'nameresolutionerror' in error_lower:
+        return ("Domain name resolution failed", 'uri')
+    
+    # Fingerprint mismatch
+    if 'fingerprint' in error_lower:
+        if 'mismatch' in error_lower or 'does not match' in error_lower:
+            return ("Fingerprint mismatch", 'uri' if 'http' in error_lower else 'dns')
+        if 'not found' in error_lower:
+            return ("Fingerprint not found in proof", 'uri')
+    
+    # Generic HTTP errors
+    if 'failed to fetch' in error_lower:
+        return ("Failed to fetch proof file", 'uri')
+    
+    if 'http' in error_lower or 'https' in error_lower:
+        return ("HTTP connection error", 'uri')
+    
+    # Unknown/other errors - truncate if too long
+    if len(error) > 50:
+        return (error[:47] + "...", 'other')
+    
+    return (error, 'other')
+
+
+def _simplify_and_categorize_errors(errors: Dict[str, int]) -> Dict[str, Dict[str, int]]:
+    """
+    Simplify error messages and categorize them by proof type.
+    
+    Args:
+        errors: Dict mapping raw error message -> count
+        
+    Returns:
+        Dict with keys 'all', 'dns', 'uri' mapping simplified error -> count
+    """
+    result = {'all': {}, 'dns': {}, 'uri': {}}
+    
+    for raw_error, count in errors.items():
+        simplified, proof_type = _simplify_error_message(raw_error)
+        
+        # Add to 'all' category
+        result['all'][simplified] = result['all'].get(simplified, 0) + count
+        
+        # Add to specific proof type category
+        if proof_type in ('dns', 'uri'):
+            result[proof_type][simplified] = result[proof_type].get(simplified, 0) + count
+    
+    return result
+
+
 def _categorize_relay_by_validation(relay: Dict, validation_map: Dict) -> str:
     """
     Categorize a relay by its validation status.
@@ -245,8 +349,11 @@ def calculate_aroi_validation_metrics(relays: List[Dict], validation_data: Optio
         'validation_data_available': False,
         'validation_timestamp': 'Unknown',
         'top_3_aroi_countries': [],  # Default empty list for template
-        'relay_error_top5': [],  # Top 5 relay error reasons
-        'operator_error_top5': []  # Top 5 operator error reasons
+        'relay_error_top5': [],  # Top 5 relay error reasons (simplified)
+        'operator_error_top5': [],  # Top 5 operator error reasons (simplified)
+        'dns_error_top5': [],  # Top 5 DNS-RSA specific errors
+        'uri_error_top5': [],  # Top 5 URI-RSA specific errors
+        'no_aroi_reasons_top5': []  # Top reasons relays have no AROI
     }
     
     if not relays:
@@ -397,6 +504,20 @@ def calculate_aroi_validation_metrics(relays: List[Dict], validation_data: Optio
     metrics['aroi_no_ciissversion_percentage'] = _calc_percentage(metrics['aroi_no_ciissversion_count'], total_relays)
     metrics['relays_no_aroi_percentage'] = _calc_percentage(metrics['relays_no_aroi'], total_relays)
     
+    # Build no_aroi_reasons_top5 from the category counts
+    no_aroi_reasons = [
+        ("No contact info or missing 2+ AROI fields", metrics['relays_no_aroi']),
+        ("Missing proof field (has domain + ciissversion)", metrics['aroi_no_proof_count']),
+        ("Missing domain/URL field (has proof + ciissversion)", metrics['aroi_no_domain_count']),
+        ("Missing ciissversion (has proof + domain)", metrics['aroi_no_ciissversion_count']),
+    ]
+    # Filter out zero counts and sort by count descending
+    metrics['no_aroi_reasons_top5'] = sorted(
+        [(reason, count) for reason, count in no_aroi_reasons if count > 0],
+        key=lambda x: x[1],
+        reverse=True
+    )[:5]
+    
     # Calculate overall validation success rate
     # Success rate = valid relays / (valid + invalid with AROI attempts)
     total_aroi_attempts = metrics['dns_rsa_total'] + metrics['uri_rsa_total']
@@ -425,9 +546,17 @@ def calculate_aroi_validation_metrics(relays: List[Dict], validation_data: Optio
                     relay_errors[error] = relay_errors.get(error, 0) + relay_count
                     operator_errors[error] = operator_errors.get(error, 0) + 1
         
-        # Store top 5 for tooltips
-        metrics['relay_error_top5'] = sorted(relay_errors.items(), key=lambda x: x[1], reverse=True)[:5]
-        metrics['operator_error_top5'] = sorted(operator_errors.items(), key=lambda x: x[1], reverse=True)[:5]
+        # Simplify error messages and categorize by proof type
+        simplified_relay_errors = _simplify_and_categorize_errors(relay_errors)
+        simplified_operator_errors = _simplify_and_categorize_errors(operator_errors)
+        
+        # Store top 5 for general tooltips (simplified messages)
+        metrics['relay_error_top5'] = sorted(simplified_relay_errors['all'].items(), key=lambda x: x[1], reverse=True)[:5]
+        metrics['operator_error_top5'] = sorted(simplified_operator_errors['all'].items(), key=lambda x: x[1], reverse=True)[:5]
+        
+        # Store categorized top 5 for DNS-RSA and URI-RSA tooltips
+        metrics['dns_error_top5'] = sorted(simplified_relay_errors['dns'].items(), key=lambda x: x[1], reverse=True)[:5]
+        metrics['uri_error_top5'] = sorted(simplified_relay_errors['uri'].items(), key=lambda x: x[1], reverse=True)[:5]
         
         # Calculate top operators by relay count
         domain_relay_counts = [(domain, len(fps)) for domain, fps in domain_relays.items()]
