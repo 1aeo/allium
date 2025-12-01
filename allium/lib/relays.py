@@ -349,7 +349,7 @@ class Relays:
         For display purposes only - does not affect the stored/hashed contact info.
         More details: https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/
         
-        According to the AROI spec, a valid contact string must have:
+        According to the AROI spec, a valid contact string must have ALL 3:
         - ciissversion:2
         - proof:dns-rsa or proof:uri-rsa  
         - url:<domain>
@@ -357,7 +357,9 @@ class Relays:
         Args:
             contact: The contact string to process
         Returns:
-            AROI domain string or empty string if no AROI detected
+            Tuple of (domain, aroi_field_status) where:
+            - domain: extracted domain or "none" if incomplete
+            - aroi_field_status: dict with presence of each field
         """
         if not contact:
             return "none"
@@ -369,7 +371,7 @@ class Relays:
         proof_match = re.search(r'\bproof:(dns-rsa|uri-rsa)\b', contact, re.IGNORECASE)
         
         if url_match and ciiss_match and proof_match:
-            # Extract domain and clean it up
+            # All 3 fields present - extract domain and clean it up
             domain = url_match.group(1)
             
             # Handle protocol URLs (e.g. https://domain.com/path)
