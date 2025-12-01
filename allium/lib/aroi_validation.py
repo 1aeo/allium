@@ -145,81 +145,56 @@ def _categorize_by_missing_fields(aroi_fields: Dict[str, bool]) -> str:
 
 def _simplify_error_message(error: str) -> tuple:
     """
-    Simplify a verbose error message into a 1-2 sentence description.
+    Simplify a verbose error message into a short description with protocol prefix.
     
     Returns:
         Tuple of (simplified_message, proof_type) where proof_type is 'dns', 'uri', or 'other'
     """
-    error_lower = error.lower()
+    e = error.lower()
     
     # DNS-specific errors (check first as they're more specific)
-    if 'nxdomain' in error_lower or 'no such domain' in error_lower:
-        return ("DNS domain not found (NXDOMAIN)", 'dns')
+    if 'nxdomain' in e or 'no such domain' in e:
+        return ("DNS: Domain not found (NXDOMAIN)", 'dns')
+    if 'servfail' in e:
+        return ("DNS: Server failure (SERVFAIL)", 'dns')
+    if 'txt record' in e or ('txt' in e and 'dns' in e):
+        return ("DNS: TXT record not found", 'dns') if 'not found' in e or 'missing' in e else ("DNS: TXT record error", 'dns')
+    if 'dns' in e and 'lookup' in e:
+        return ("DNS: Lookup failed", 'dns')
     
-    if 'servfail' in error_lower:
-        return ("DNS server failure (SERVFAIL)", 'dns')
+    # SSL/TLS errors
+    if 'ssl' in e and ('handshake' in e or 'alert' in e):
+        return ("URI: SSL/TLS v3 handshake failed", 'uri')
+    if 'certificate' in e:
+        return ("URI: SSL certificate error", 'uri')
     
-    if 'txt record' in error_lower or ('txt' in error_lower and 'dns' in error_lower):
-        if 'not found' in error_lower or 'missing' in error_lower:
-            return ("DNS TXT record not found", 'dns')
-        return ("DNS TXT record error", 'dns')
+    # HTTP errors (check after DNS patterns)
+    if '404' in error or ('not found' in e and 'dns' not in e and 'txt' not in e):
+        return ("URI: Fingerprint file not found (404)", 'uri') if 'fingerprint' in e else ("URI: Proof file not found (404)", 'uri')
+    if '403' in error or 'forbidden' in e:
+        return ("URI: Access forbidden (403)", 'uri')
+    if 'connection refused' in e or 'refused' in e:
+        return ("URI: Connection refused", 'uri')
+    if 'timeout' in e:
+        return ("URI: Connection timeout", 'uri')
+    if 'max retries exceeded' in e:
+        return ("URI: Server unreachable", 'uri')
+    if 'name or service not known' in e or 'nameresolutionerror' in e:
+        return ("URI: Domain resolution failed", 'uri')
     
-    if 'dns' in error_lower and 'lookup' in error_lower:
-        return ("DNS lookup failed", 'dns')
-    
-    # SSL/TLS handshake failures
-    if 'ssl' in error_lower and ('handshake' in error_lower or 'alert' in error_lower):
-        return ("SSL/TLS handshake failed", 'uri')
-    
-    # Certificate errors
-    if 'certificate' in error_lower:
-        if 'verify' in error_lower or 'expired' in error_lower:
-            return ("SSL certificate verification failed", 'uri')
-        return ("SSL certificate error", 'uri')
-    
-    # 404 Not Found (check after DNS patterns)
-    if '404' in error or ('not found' in error_lower and 'dns' not in error_lower and 'txt' not in error_lower):
-        if 'fingerprint' in error_lower:
-            return ("Fingerprint file not found (404)", 'uri')
-        return ("Proof file not found (404)", 'uri')
-    
-    # 403 Forbidden
-    if '403' in error or 'forbidden' in error_lower:
-        return ("Access forbidden (403)", 'uri')
-    
-    # Connection refused/timeout
-    if 'connection refused' in error_lower or 'refused' in error_lower:
-        return ("Connection refused by server", 'uri')
-    
-    if 'timeout' in error_lower:
-        return ("Connection timeout", 'uri')
-    
-    if 'max retries exceeded' in error_lower:
-        return ("Server unreachable (max retries)", 'uri')
-    
-    # Name resolution errors
-    if 'name or service not known' in error_lower or 'nameresolutionerror' in error_lower:
-        return ("Domain name resolution failed", 'uri')
-    
-    # Fingerprint mismatch
-    if 'fingerprint' in error_lower:
-        if 'mismatch' in error_lower or 'does not match' in error_lower:
-            return ("Fingerprint mismatch", 'uri' if 'http' in error_lower else 'dns')
-        if 'not found' in error_lower:
-            return ("Fingerprint not found in proof", 'uri')
+    # Fingerprint errors
+    if 'fingerprint' in e:
+        if 'mismatch' in e or 'does not match' in e:
+            return ("DNS: Fingerprint mismatch", 'dns') if 'http' not in e else ("URI: Fingerprint mismatch", 'uri')
+        if 'not found' in e:
+            return ("URI: Fingerprint not in proof", 'uri')
     
     # Generic HTTP errors
-    if 'failed to fetch' in error_lower:
-        return ("Failed to fetch proof file", 'uri')
+    if 'failed to fetch' in e or 'http' in e or 'https' in e:
+        return ("URI: Connection error", 'uri')
     
-    if 'http' in error_lower or 'https' in error_lower:
-        return ("HTTP connection error", 'uri')
-    
-    # Unknown/other errors - truncate if too long
-    if len(error) > 50:
-        return (error[:47] + "...", 'other')
-    
-    return (error, 'other')
+    # Unknown - truncate if too long
+    return (error[:47] + "...", 'other') if len(error) > 50 else (error, 'other')
 
 
 def _simplify_and_categorize_errors(errors: Dict[str, int]) -> Dict[str, Dict[str, int]]:

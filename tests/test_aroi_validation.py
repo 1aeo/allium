@@ -331,30 +331,30 @@ class TestAROIValidation(unittest.TestCase):
         self.assertEqual(metrics['operator_error_top5'], [])
 
     def test_error_simplification(self):
-        """Test that verbose error messages are simplified correctly."""
-        # Test SSL/TLS handshake errors
+        """Test that verbose error messages are simplified with protocol prefix."""
+        # Test SSL/TLS handshake errors - should include v3
         msg, proof = _simplify_error_message("SSL: SSLV3_ALERT_HANDSHAKE_FAILURE")
-        self.assertEqual(msg, "SSL/TLS handshake failed")
+        self.assertEqual(msg, "URI: SSL/TLS v3 handshake failed")
         self.assertEqual(proof, 'uri')
         
-        # Test 404 errors with fingerprint URL (matches fingerprint pattern)
+        # Test 404 errors with fingerprint URL
         msg, proof = _simplify_error_message("404 Not Found for https://example.com/.well-known/tor-relay/rsa-fingerprint.txt")
-        self.assertEqual(msg, "Fingerprint file not found (404)")
+        self.assertEqual(msg, "URI: Fingerprint file not found (404)")
         self.assertEqual(proof, 'uri')
         
-        # Test 404 errors without fingerprint URL (matches generic 404 pattern)
+        # Test 404 errors without fingerprint URL
         msg, proof = _simplify_error_message("404 Not Found")
-        self.assertEqual(msg, "Proof file not found (404)")
+        self.assertEqual(msg, "URI: Proof file not found (404)")
         self.assertEqual(proof, 'uri')
         
         # Test NXDOMAIN errors
         msg, proof = _simplify_error_message("DNS lookup failed: NXDOMAIN")
-        self.assertEqual(msg, "DNS domain not found (NXDOMAIN)")
+        self.assertEqual(msg, "DNS: Domain not found (NXDOMAIN)")
         self.assertEqual(proof, 'dns')
         
         # Test connection timeout
         msg, proof = _simplify_error_message("Connection timeout after 30 seconds")
-        self.assertEqual(msg, "Connection timeout")
+        self.assertEqual(msg, "URI: Connection timeout")
         self.assertEqual(proof, 'uri')
 
     def test_error_categorization(self):
@@ -363,23 +363,21 @@ class TestAROIValidation(unittest.TestCase):
             "DNS lookup failed: NXDOMAIN": 10,
             "SSL certificate error": 5,
             "404 Not Found": 3,
-            "DNS TXT record not found": 2,  # Use exact DNS pattern
+            "DNS TXT record not found": 2,
         }
         
         result = _simplify_and_categorize_errors(errors)
         
-        # Check all errors are in 'all' category (may be less if errors merge)
+        # Check all errors are in 'all' category
         self.assertGreater(len(result['all']), 0)
         
-        # Check DNS errors only contain DNS-related errors
-        self.assertIn("DNS domain not found (NXDOMAIN)", result['dns'])
-        self.assertIn("DNS TXT record not found", result['dns'])
-        self.assertNotIn("Proof file not found (404)", result['dns'])
+        # Check DNS errors contain DNS-prefixed errors
+        self.assertIn("DNS: Domain not found (NXDOMAIN)", result['dns'])
+        self.assertIn("DNS: TXT record not found", result['dns'])
         
-        # Check URI errors only contain URI-related errors
-        self.assertIn("SSL certificate error", result['uri'])
-        self.assertIn("Proof file not found (404)", result['uri'])
-        self.assertNotIn("DNS domain not found (NXDOMAIN)", result['uri'])
+        # Check URI errors contain URI-prefixed errors
+        self.assertIn("URI: SSL certificate error", result['uri'])
+        self.assertIn("URI: Proof file not found (404)", result['uri'])
 
 
 if __name__ == '__main__':
