@@ -220,9 +220,8 @@ class TestAROIPaginationSystem(unittest.TestCase):
         template = self.jinja_env.get_template('aroi-leaderboards.html')
         rendered = template.render(**empty_context)
         
-        # Template should render without errors even with empty data
-        self.assertIsInstance(rendered, str)
-        self.assertGreater(len(rendered), 0)
+        # Should display "No bandwidth data available" message
+        self.assertIn('No bandwidth data available', rendered)
         
         # Should not display pagination navigation for empty category
         bandwidth_section = re.search(r'<section id="bandwidth".*?</section>', rendered, re.DOTALL)

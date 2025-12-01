@@ -3640,9 +3640,6 @@ class Relays:
             'rare_countries_relays', 'ipv4_only_relays', 'both_ipv4_ipv6_relays',
             # NEW: AROI domain-level metrics
             'unique_aroi_domains_count', 'validated_aroi_domains_count', 'invalid_aroi_domains_count',
-            'validation_failure_dns_rsa_lookup', 'validation_failure_dns_rsa_fingerprint',
-            'validation_failure_uri_rsa_connection', 'validation_failure_uri_rsa_fingerprint',
-            'validation_failure_other',
             # NEW: IPv6 AROI operator metrics
             'ipv4_only_aroi_operators', 'both_ipv4_ipv6_aroi_operators'
         ]
@@ -4975,11 +4972,8 @@ class Relays:
                 'invalid_aroi_domains_count': 0,
                 'validated_aroi_domains_percentage': 0.0,
                 'invalid_aroi_domains_percentage': 0.0,
-                'validation_failure_dns_rsa_lookup': 0,
-                'validation_failure_dns_rsa_fingerprint': 0,
-                'validation_failure_uri_rsa_connection': 0,
-                'validation_failure_uri_rsa_fingerprint': 0,
-                'validation_failure_other': 0,
+                'relay_error_top5': [],
+                'operator_error_top5': [],
                 'top_operators_text': 'No data available',
                 'ipv4_only_aroi_operators': 0,
                 'both_ipv4_ipv6_aroi_operators': 0,
