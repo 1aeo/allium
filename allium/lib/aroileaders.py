@@ -314,6 +314,18 @@ def _calculate_aroi_leaderboards(relays_instance):
     all_rare_countries = get_rare_countries_weighted_with_existing_data(country_data, len(all_relays))
     valid_rare_countries = {country for country in all_rare_countries if len(country) == 2 and country.isalpha()}
     
+    # === AROI VALIDATION DATA INTEGRATION ===
+    # Get pre-fetched validation data for validated relay tracking
+    validation_data = getattr(relays_instance, 'aroi_validation_data', None)
+    validation_map = {}
+    
+    if validation_data and 'results' in validation_data:
+        # Build fingerprint -> validation result mapping for O(1) lookup
+        for result in validation_data.get('results', []):
+            fingerprint = result.get('fingerprint')
+            if fingerprint:
+                validation_map[fingerprint] = result
+    
     # Build AROI operator data by processing contacts
     aroi_operators = {}
     
@@ -379,8 +391,9 @@ def _calculate_aroi_leaderboards(relays_instance):
         non_linux_count = sum(1 for relay in operator_relays 
                              if relay.get('platform') and not relay.get('platform', '').startswith('Linux'))
         
-        # === IPv4/IPv6 UNIQUE ADDRESS CALCULATIONS (NEW) ===
+        # === IPv4/IPv6 UNIQUE ADDRESS CALCULATIONS + VALIDATION TRACKING (MERGED) ===
         # Extract unique IPv4 and IPv6 addresses from all operator relays
+        # Also track validation status in the same loop for efficiency
         unique_ipv4_addresses = set()
         unique_ipv6_addresses = set()
         ipv4_relay_count = 0
@@ -396,6 +409,16 @@ def _calculate_aroi_leaderboards(relays_instance):
         ipv6_exit_count = 0
         ipv6_middle_count = 0
         
+        # Validation tracking variables (merged into same loop)
+        validated_relay_count = 0
+        invalid_relay_count = 0
+        validated_guard_count = 0
+        validated_exit_count = 0
+        validated_middle_count = 0
+        validated_bandwidth = 0
+        validated_consensus_weight = 0.0
+        validated_countries = set()
+        
         for relay in operator_relays:
             or_addresses = relay.get('or_addresses', [])
             relay_bandwidth = relay.get('observed_bandwidth', 0)
@@ -405,6 +428,7 @@ def _calculate_aroi_leaderboards(relays_instance):
             has_ipv4 = False
             has_ipv6 = False
             
+            # IPv4/IPv6 address parsing
             for address in or_addresses:
                 # Safely parse IP address with validation to prevent injection attacks
                 parsed_ip, ip_version = _safe_parse_ip_address(address)
@@ -441,9 +465,36 @@ def _calculate_aroi_leaderboards(relays_instance):
                     ipv6_guard_count += 1
                 else:
                     ipv6_middle_count += 1
+            
+            # Validation tracking (merged into same loop)
+            fp = relay.get('fingerprint')
+            if fp in validation_map:
+                result = validation_map[fp]
+                if result.get('valid', False):
+                    # This relay has valid AROI proof
+                    validated_relay_count += 1
+                    validated_bandwidth += relay_bandwidth
+                    validated_consensus_weight += relay_consensus_weight
+                    
+                    # Track country for validated relays
+                    country = relay.get('country', '')
+                    if country:
+                        validated_countries.add(country)
+                    
+                    # Count by role (Exit > Guard > Middle priority)
+                    if 'Exit' in relay_flags:
+                        validated_exit_count += 1
+                    elif 'Guard' in relay_flags:
+                        validated_guard_count += 1
+                    else:
+                        validated_middle_count += 1
+                else:
+                    # This relay has AROI but failed validation
+                    invalid_relay_count += 1
         
         unique_ipv4_count = len(unique_ipv4_addresses)
         unique_ipv6_count = len(unique_ipv6_addresses)
+        validated_country_count = len(validated_countries)
         
         # Non-EU country detection (using centralized utilities)
         operator_countries = [relay.get('country') for relay in operator_relays if relay.get('country')]
@@ -585,6 +636,8 @@ def _calculate_aroi_leaderboards(relays_instance):
         # 5-year bandwidth score (extended metric)
         bandwidth_5y = _calculate_bandwidth_score(operator_relays, bandwidth_data, '5_years')
         
+        # Note: Validation tracking is now merged with IPv4/IPv6 loop above for efficiency
+        
         # Store operator data (mix of existing + new calculations)
         aroi_operators[operator_key] = {
             # === EXISTING CALCULATIONS (REUSED) ===
@@ -668,6 +721,16 @@ def _calculate_aroi_leaderboards(relays_instance):
             'ipv6_guard_count': ipv6_guard_count,
             'ipv6_exit_count': ipv6_exit_count,
             'ipv6_middle_count': ipv6_middle_count,
+            
+            # === AROI VALIDATION METRICS (NEW) ===
+            'validated_relay_count': validated_relay_count,
+            'invalid_relay_count': invalid_relay_count,
+            'validated_guard_count': validated_guard_count,
+            'validated_exit_count': validated_exit_count,
+            'validated_middle_count': validated_middle_count,
+            'validated_bandwidth': validated_bandwidth,
+            'validated_consensus_weight': validated_consensus_weight,
+            'validated_country_count': validated_country_count,
             
             # Keep minimal relay data for potential future use
             'relays': operator_relays
@@ -796,6 +859,14 @@ def _calculate_aroi_leaderboards(relays_instance):
     leaderboards['bandwidth_legends'] = sorted(
         bandwidth_legends_filtered.items(),
         key=lambda x: x[1]['bandwidth_5y_score'],
+        reverse=True
+    )[:50]
+    
+    # 18. ✅ AROI Validation Champions - Most Validated Relays (NEW) - Only operators with > 0 validated relays
+    validated_relays_filtered = {k: v for k, v in aroi_operators.items() if v['validated_relay_count'] > 0}
+    leaderboards['validated_relays'] = sorted(
+        validated_relays_filtered.items(),
+        key=lambda x: x[1]['validated_relay_count'],
         reverse=True
     )[:50]
     
@@ -1054,6 +1125,14 @@ def _calculate_aroi_leaderboards(relays_instance):
                 
                 ip_address_details = f"{metrics['unique_ipv6_count']} unique IPv6"
                 ip_address_tooltip = f"IPv6 Infrastructure: {metrics['unique_ipv6_count']} unique addresses across {metrics['ipv6_relay_count']} relays with {formatted_ipv6_bandwidth} {ipv6_bandwidth_unit} bandwidth"
+            
+            # Format validated bandwidth only for validated_relays category (optimization)
+            formatted_validated_bandwidth = ""
+            validated_bandwidth_unit = ""
+            if category == 'validated_relays':
+                formatted_validated_bandwidth, validated_bandwidth_unit = _format_bandwidth_with_auto_unit(
+                    metrics['validated_bandwidth'], relays_instance.bandwidth_formatter
+                )
 
             
             display_name = metrics['aroi_domain'] if metrics['aroi_domain'] and metrics['aroi_domain'] != 'none' else operator_key
@@ -1154,6 +1233,18 @@ def _calculate_aroi_leaderboards(relays_instance):
                 'ipv6_achievement_title': ipv6_achievement_title,
                 'ip_address_details': ip_address_details,
                 'ip_address_tooltip': ip_address_tooltip,
+                
+                # === AROI VALIDATION FIELDS (NEW) ===
+                'validated_relay_count': metrics['validated_relay_count'],
+                'invalid_relay_count': metrics['invalid_relay_count'],
+                'validated_guard_count': metrics['validated_guard_count'],
+                'validated_exit_count': metrics['validated_exit_count'],
+                'validated_middle_count': metrics['validated_middle_count'],
+                'validated_bandwidth': formatted_validated_bandwidth,
+                'validated_bandwidth_unit': validated_bandwidth_unit,
+                'validated_consensus_weight': metrics['validated_consensus_weight'],
+                'validated_consensus_weight_pct': f"{metrics['validated_consensus_weight'] * 100:.2f}%",
+                'validated_country_count': metrics['validated_country_count'],
             }
             formatted_data.append(formatted_entry)
         
@@ -1199,7 +1290,8 @@ def _calculate_aroi_leaderboards(relays_instance):
             'frontier_builders': 'Frontier Builders (Rare Countries)',
             'network_veterans': 'Network Veterans',
             'ipv4_leaders': 'IPv4 Address Leaders',
-            'ipv6_leaders': 'IPv6 Address Leaders'
+            'ipv6_leaders': 'IPv6 Address Leaders',
+            'validated_relays': 'AROI Validation Champions'
         }
     }
     

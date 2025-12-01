@@ -101,27 +101,38 @@ Integration of real-time AROI (Authenticated Relay Operator Identifier) validati
 
 ---
 
-## Phase 4: AROI Leaderboards Enhancement (MEDIUM PRIORITY)
+## Phase 4: AROI Leaderboards Enhancement ✅ COMPLETE
 
-**Status:** Not started
+**Status:** ✅ Implemented on branch `add-aroi-validation-leaderboard-category` (Nov 29, 2025)
 
-### Planned Features:
-- Add "AROI Validation Champions" category
-- Validation badge on existing champion badges
-- Validation metrics in summary stats
-- Recognition for properly configured operators
+### Features Implemented:
+- ✅ Added "AROI Validation Champions" category (#18)
+- ✅ Validation badge on champion badges showing validated/invalid counts
+- ✅ Validation metrics in top 3 and top 25 tables
+- ✅ Recognition for properly configured operators
 
-### Implementation:
-- New leaderboard category
-- Filter for validated operators
-- Update champion_badge macro
-- Add to summary statistics
+### Implementation Details:
+- **New leaderboard category**: `validated_relays` sorted by validated relay count
+- **Specialized table macro**: `validated_relays_table_complete` with columns:
+  - Validated Relays (with invalid count in grey)
+  - Guard/Middle/Exit Validated breakdown
+  - Bandwidth Capacity Validated
+  - Consensus Weight Validated
+  - Countries Validated
+- **Updated macros**: Extended `champion_badge` and `top3_table` for validation display
+- **Navigation**: Added link to validation section
+- **Documentation**: Complete scoring explanation in leaderboards page
 
-### Benefits:
-- Gamification encourages validation
-- Positive reinforcement
-- Promotes best practices
-- Aligns with competitive theme
+### Performance Optimizations:
+- Merged validation tracking with IPv4/IPv6 loop (50% iteration reduction)
+- O(1) validation lookups via dictionary mapping
+- Conditional bandwidth formatting (only for validated_relays category)
+
+### Benefits Achieved:
+- ✅ Gamification encourages validation
+- ✅ Positive reinforcement for operators with valid AROI
+- ✅ Promotes best practices in operator identification
+- ✅ Aligns with competitive leaderboard theme
 
 ---
 
@@ -233,10 +244,10 @@ Network Health Dashboard
 
 ## Implementation Timeline
 
-- **Phase 1:** ✅ Complete (Nov 23, 2025)
+- **Phase 1:** ✅ Complete (Nov 23, 2025) - Network Health Dashboard
 - **Phase 2:** High priority (Operator badges)
 - **Phase 3:** Medium priority (Validation status page)
-- **Phase 4:** Medium priority (Leaderboards)
+- **Phase 4:** ✅ Complete (Nov 29, 2025) - AROI Leaderboards Enhancement
 - **Phase 5:** Low priority (Relay pages)
 
 ---
@@ -249,6 +260,6 @@ Network Health Dashboard
 
 ---
 
-**Last Updated:** 2025-11-23  
-**Current Phase:** Phase 1 Complete, Phase 2 Ready to Start
+**Last Updated:** 2025-11-29  
+**Current Phase:** Phases 1 & 4 Complete, Phase 2 Ready to Start
 
