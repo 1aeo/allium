@@ -422,7 +422,7 @@ def _calculate_aroi_leaderboards(relays_instance):
         for relay in operator_relays:
             or_addresses = relay.get('or_addresses', [])
             relay_bandwidth = relay.get('observed_bandwidth', 0)
-            relay_consensus_weight = relay.get('consensus_weight_fraction', 0)
+            relay_consensus_weight = relay.get('consensus_weight', 0)  # Use absolute value, not fraction
             relay_flags = relay.get('flags', [])
             
             has_ipv4 = False
@@ -495,6 +495,24 @@ def _calculate_aroi_leaderboards(relays_instance):
         unique_ipv4_count = len(unique_ipv4_addresses)
         unique_ipv6_count = len(unique_ipv6_addresses)
         validated_country_count = len(validated_countries)
+        
+        # Convert consensus weights from absolute values to fractions
+        # All consensus weight variables currently hold sums of relay.get('consensus_weight')
+        # We need to convert them to fractions by dividing by total network consensus weight
+        network_totals = relays_instance.json.get('network_totals', {})
+        total_network_cw = (
+            network_totals.get('guard_consensus_weight', 0) +
+            network_totals.get('middle_consensus_weight', 0) +
+            network_totals.get('exit_consensus_weight', 0)
+        )
+        if total_network_cw > 0:
+            validated_consensus_weight_fraction = validated_consensus_weight / total_network_cw
+            ipv4_total_consensus_weight_fraction = ipv4_total_consensus_weight / total_network_cw
+            ipv6_total_consensus_weight_fraction = ipv6_total_consensus_weight / total_network_cw
+        else:
+            validated_consensus_weight_fraction = 0.0
+            ipv4_total_consensus_weight_fraction = 0.0
+            ipv6_total_consensus_weight_fraction = 0.0
         
         # Non-EU country detection (using centralized utilities)
         operator_countries = [relay.get('country') for relay in operator_relays if relay.get('country')]
@@ -713,8 +731,8 @@ def _calculate_aroi_leaderboards(relays_instance):
             'ipv6_relay_count': ipv6_relay_count,
             'ipv4_total_bandwidth': ipv4_total_bandwidth,
             'ipv6_total_bandwidth': ipv6_total_bandwidth,
-            'ipv4_total_consensus_weight': ipv4_total_consensus_weight,
-            'ipv6_total_consensus_weight': ipv6_total_consensus_weight,
+            'ipv4_total_consensus_weight': ipv4_total_consensus_weight_fraction,  # Store as fraction
+            'ipv6_total_consensus_weight': ipv6_total_consensus_weight_fraction,  # Store as fraction
             'ipv4_guard_count': ipv4_guard_count,
             'ipv4_exit_count': ipv4_exit_count,
             'ipv4_middle_count': ipv4_middle_count,
@@ -729,7 +747,7 @@ def _calculate_aroi_leaderboards(relays_instance):
             'validated_exit_count': validated_exit_count,
             'validated_middle_count': validated_middle_count,
             'validated_bandwidth': validated_bandwidth,
-            'validated_consensus_weight': validated_consensus_weight,
+            'validated_consensus_weight': validated_consensus_weight_fraction,  # Store as fraction
             'validated_country_count': validated_country_count,
             
             # Keep minimal relay data for potential future use
