@@ -88,40 +88,118 @@ def _calc_percentage(count: int, total: int) -> float:
     return (count / total * 100) if total > 0 else 0.0
 
 
+def _check_aroi_fields(contact: str) -> Dict[str, bool]:
+    """
+    Check which AROI fields are present in contact string.
+    
+    Returns:
+        Dict with keys: 'has_ciissversion', 'has_proof', 'has_url', 'complete'
+    """
+    import re
+    
+    if not contact:
+        return {'has_ciissversion': False, 'has_proof': False, 'has_url': False, 'complete': False}
+    
+    has_ciissversion = bool(re.search(r'\bciissversion:2\b', contact, re.IGNORECASE))
+    has_proof = bool(re.search(r'\bproof:(dns-rsa|uri-rsa)\b', contact, re.IGNORECASE))
+    has_url = bool(re.search(r'\burl:(?:https?://)?([^,\s]+)', contact, re.IGNORECASE))
+    
+    return {
+        'has_ciissversion': has_ciissversion,
+        'has_proof': has_proof,
+        'has_url': has_url,
+        'complete': has_ciissversion and has_proof and has_url
+    }
+
+
+def _categorize_by_missing_fields(aroi_fields: Dict[str, bool]) -> str:
+    """
+    Helper function to categorize relay based on which AROI fields are missing.
+    Eliminates code duplication.
+    
+    Args:
+        aroi_fields: Dict from _check_aroi_fields() with has_ciissversion, has_proof, has_url
+        
+    Returns:
+        Category string based on missing fields
+    """
+    fields_present = sum([aroi_fields['has_ciissversion'], 
+                         aroi_fields['has_proof'], 
+                         aroi_fields['has_url']])
+    
+    if fields_present <= 1:
+        # Missing 2+ fields or no fields at all
+        return 'no_aroi'
+    
+    # Has exactly 2 fields (missing exactly 1) - be specific
+    if not aroi_fields['has_proof']:
+        return 'no_proof'
+    elif not aroi_fields['has_url']:
+        return 'no_domain'
+    elif not aroi_fields['has_ciissversion']:
+        return 'no_ciissversion'
+    
+    # Shouldn't reach here if logic is correct, but defensive
+    return 'no_aroi'
+
+
 def _categorize_relay_by_validation(relay: Dict, validation_map: Dict) -> str:
     """
     Categorize a relay by its validation status.
+    
+    AROI Standard: A relay must have all 3 required fields for AROI validation:
+    1. ciissversion:2
+    2. proof:dns-rsa or proof:uri-rsa
+    3. url:<domain>
     
     Args:
         relay: Relay dictionary from Onionoo API
         validation_map: Map of fingerprint -> validation result
         
     Returns:
-        Category string: 'validated', 'unvalidated', 'no_proof', or 'no_aroi'
+        Category string:
+        - 'validated': Has all 3 AROI fields and validation succeeded
+        - 'unvalidated': Has all 3 AROI fields but validation failed (SSL, DNS, etc.)
+        - 'no_proof': Has ciissversion + url but missing proof (exactly 1 field missing)
+        - 'no_domain': Has ciissversion + proof but missing url (exactly 1 field missing)
+        - 'no_ciissversion': Has proof + url but missing ciissversion (exactly 1 field missing)
+        - 'no_aroi': Missing 2+ fields or no contact at all
     """
     fingerprint = relay.get('fingerprint')
     aroi_domain = relay.get('aroi_domain', 'none')
     contact = relay.get('contact', '')
     
+    # Check if has complete AROI setup (all 3 fields)
+    has_complete_aroi = aroi_domain and aroi_domain != 'none'
+    
     if fingerprint in validation_map:
         result = validation_map[fingerprint]
         if result.get('valid', False):
             return 'validated'
+        
         error = result.get('error', '')
-        if error == 'No contact information':
+        
+        # If validation attempted but relay has complete AROI, it's a real validation failure
+        if has_complete_aroi:
+            return 'unvalidated'
+        
+        # Check which specific fields are missing
+        if error in ('No contact information', 'Missing AROI fields'):
+            aroi_fields = _check_aroi_fields(contact)
+            if not aroi_fields['complete']:
+                return _categorize_by_missing_fields(aroi_fields)
             return 'no_aroi'
-        elif error == 'Missing AROI fields':
-            return 'no_proof'
         else:
+            # Real validation error (not missing fields)
             return 'unvalidated'
     else:
-        # Fallback to local analysis
-        if aroi_domain and aroi_domain != 'none':
+        # Not in validation map - use local analysis
+        if has_complete_aroi:
             return 'unvalidated'
-        elif contact and contact.strip():
-            return 'no_proof'
-        else:
-            return 'no_aroi'
+        
+        # Check which fields are present - use helper to avoid duplication
+        aroi_fields = _check_aroi_fields(contact)
+        return _categorize_by_missing_fields(aroi_fields)
 
 
 def calculate_aroi_validation_metrics(relays: List[Dict], validation_data: Optional[Dict] = None, 
@@ -148,10 +226,14 @@ def calculate_aroi_validation_metrics(relays: List[Dict], validation_data: Optio
         'aroi_validated_count': 0,
         'aroi_unvalidated_count': 0,
         'aroi_no_proof_count': 0,
+        'aroi_no_domain_count': 0,
+        'aroi_no_ciissversion_count': 0,
         'relays_no_aroi': 0,
         'aroi_validated_percentage': 0.0,
         'aroi_unvalidated_percentage': 0.0,
         'aroi_no_proof_percentage': 0.0,
+        'aroi_no_domain_percentage': 0.0,
+        'aroi_no_ciissversion_percentage': 0.0,
         'relays_no_aroi_percentage': 0.0,
         'aroi_validation_success_rate': 0.0,
         'dns_rsa_success_rate': 0.0,
@@ -173,24 +255,53 @@ def calculate_aroi_validation_metrics(relays: List[Dict], validation_data: Optio
     # If no validation data available, return early with basic counts
     if not validation_data or 'results' not in validation_data:
         # Count relays with/without AROI based on contact info
+        unique_aroi_domains = set()  # Track for operator metrics
+        
         for relay in relays:
             aroi_domain = relay.get('aroi_domain', 'none')
             contact = relay.get('contact', '')
             
             if aroi_domain and aroi_domain != 'none':
-                # Has AROI domain but no validation data available
+                # Has AROI domain (all 3 fields) but no validation data available
                 metrics['aroi_unvalidated_count'] += 1
-            elif contact and contact.strip():
-                # Has contact but no AROI domain
-                metrics['aroi_no_proof_count'] += 1
+                if calculate_operator_metrics:
+                    unique_aroi_domains.add(aroi_domain)
             else:
-                # No contact information at all
-                metrics['relays_no_aroi'] += 1
+                # Missing some or all AROI fields - categorize specifically using helper
+                aroi_fields = _check_aroi_fields(contact)
+                category = _categorize_by_missing_fields(aroi_fields)
+                if category == 'no_proof':
+                    metrics['aroi_no_proof_count'] += 1
+                elif category == 'no_domain':
+                    metrics['aroi_no_domain_count'] += 1
+                elif category == 'no_ciissversion':
+                    metrics['aroi_no_ciissversion_count'] += 1
+                else:  # no_aroi
+                    metrics['relays_no_aroi'] += 1
         
         # Calculate percentages using helper function
         metrics['aroi_unvalidated_percentage'] = _calc_percentage(metrics['aroi_unvalidated_count'], total_relays)
         metrics['aroi_no_proof_percentage'] = _calc_percentage(metrics['aroi_no_proof_count'], total_relays)
+        metrics['aroi_no_domain_percentage'] = _calc_percentage(metrics['aroi_no_domain_count'], total_relays)
+        metrics['aroi_no_ciissversion_percentage'] = _calc_percentage(metrics['aroi_no_ciissversion_count'], total_relays)
         metrics['relays_no_aroi_percentage'] = _calc_percentage(metrics['relays_no_aroi'], total_relays)
+        
+        # Add operator-level metrics even without validation data
+        if calculate_operator_metrics:
+            metrics['unique_aroi_domains_count'] = len(unique_aroi_domains)
+            metrics['validated_aroi_domains_count'] = 0  # Can't validate without data
+            metrics['invalid_aroi_domains_count'] = len(unique_aroi_domains)  # All unknown
+            metrics['validated_aroi_domains_percentage'] = 0.0
+            metrics['invalid_aroi_domains_percentage'] = 100.0 if len(unique_aroi_domains) > 0 else 0.0
+            metrics['top_operators_text'] = "Validation data not available"
+            metrics['_validated_domain_set'] = set()  # Empty set for IPv6 calculation
+            
+            # Add failure breakdown metrics (all zeros without validation data)
+            metrics['validation_failure_dns_rsa_lookup'] = 0
+            metrics['validation_failure_dns_rsa_fingerprint'] = 0
+            metrics['validation_failure_uri_rsa_connection'] = 0
+            metrics['validation_failure_uri_rsa_fingerprint'] = 0
+            metrics['validation_failure_other'] = 0
         
         return metrics
     
@@ -241,6 +352,10 @@ def calculate_aroi_validation_metrics(relays: List[Dict], validation_data: Optio
             metrics['aroi_unvalidated_count'] += 1
         elif category == 'no_proof':
             metrics['aroi_no_proof_count'] += 1
+        elif category == 'no_domain':
+            metrics['aroi_no_domain_count'] += 1
+        elif category == 'no_ciissversion':
+            metrics['aroi_no_ciissversion_count'] += 1
         else:  # no_aroi
             metrics['relays_no_aroi'] += 1
         
@@ -248,6 +363,8 @@ def calculate_aroi_validation_metrics(relays: List[Dict], validation_data: Optio
         if calculate_operator_metrics:
             aroi_domain = relay.get('aroi_domain', 'none')
             
+            # Only track operators with all 3 required AROI fields (ciissversion:2, proof, url)
+            # aroi_domain is only set if _simple_aroi_parsing found all 3 fields
             if aroi_domain and aroi_domain != 'none':
                 unique_aroi_domains.add(aroi_domain)
                 
@@ -272,12 +389,17 @@ def calculate_aroi_validation_metrics(relays: List[Dict], validation_data: Optio
                         domain_has_valid_relay[aroi_domain] = True
                     else:
                         error = result.get('error', 'Unknown error')
-                        domain_failure_reasons[aroi_domain][error] = domain_failure_reasons[aroi_domain].get(error, 0) + 1
+                        # Only track actual validation failures, not missing AROI fields
+                        # (relays with "Missing AROI fields" shouldn't have aroi_domain set, but defensive check)
+                        if error not in ('Missing AROI fields', 'No contact information'):
+                            domain_failure_reasons[aroi_domain][error] = domain_failure_reasons[aroi_domain].get(error, 0) + 1
     
     # Calculate percentages using helper function
     metrics['aroi_validated_percentage'] = _calc_percentage(metrics['aroi_validated_count'], total_relays)
     metrics['aroi_unvalidated_percentage'] = _calc_percentage(metrics['aroi_unvalidated_count'], total_relays)
     metrics['aroi_no_proof_percentage'] = _calc_percentage(metrics['aroi_no_proof_count'], total_relays)
+    metrics['aroi_no_domain_percentage'] = _calc_percentage(metrics['aroi_no_domain_count'], total_relays)
+    metrics['aroi_no_ciissversion_percentage'] = _calc_percentage(metrics['aroi_no_ciissversion_count'], total_relays)
     metrics['relays_no_aroi_percentage'] = _calc_percentage(metrics['relays_no_aroi'], total_relays)
     
     # Calculate overall validation success rate
@@ -438,17 +560,23 @@ def get_contact_validation_status(relays: List[Dict], validation_data: Optional[
         aroi_domain = relay.get('aroi_domain', 'none')
         nickname = relay.get('nickname', 'Unnamed')
         
-        # Check if relay has AROI (validation result OR parsed domain)
-        if fingerprint not in validation_map:
-            # No validation data for this relay
-            if aroi_domain and aroi_domain != 'none':
-                # Has AROI domain but not in validation data
-                result['has_aroi'] = True
+        # AROI Standard: A relay must have ciissversion:2, proof:dns-rsa/uri-rsa, and url:domain
+        # Only consider relays with proper AROI setup (aroi_domain != 'none')
+        # The validator checks ALL relays, including ones without AROI setup
+        has_aroi_setup = aroi_domain and aroi_domain != 'none'
+        
+        if not has_aroi_setup:
+            # Relay doesn't have all 3 required AROI fields, skip validation check
             continue
         
-        # Relay has validation data
+        # Relay has proper AROI setup (all 3 required fields present)
         result['has_aroi'] = True
         result['validation_summary']['relays_with_aroi'] += 1
+        
+        # Check validation status
+        if fingerprint not in validation_map:
+            # Has AROI domain but not in validation data (shouldn't happen normally)
+            continue
         
         val_result = validation_map[fingerprint]
         
