@@ -80,18 +80,18 @@ class TestNetworkHealthDashboard(unittest.TestCase):
     def test_ipv6_operator_tracking_fix(self):
         """Test that IPv6 operator tracking uses correct field name"""
         relays_obj = Relays(
-            output_dir="/tmp/test", 
-            onionoo_url="http://test.url", 
+            output_dir="/tmp/test",
+            onionoo_url="http://test.url",
             relay_data=self.sample_relay_data,
             use_bits=False,
             progress=False
         )
         relays_obj._calculate_network_health_metrics()
         
-        # Should have IPv6 metrics
+        # Should have IPv6 metrics (AROI-specific versions)
         health_data = relays_obj.json['network_health']
-        self.assertIn('ipv4_only_operators', health_data)
-        self.assertIn('both_ipv4_ipv6_operators', health_data)
+        self.assertIn('ipv4_only_aroi_operators', health_data)
+        self.assertIn('both_ipv4_ipv6_aroi_operators', health_data)
         
     def test_consensus_weight_calculations(self):
         """Test consensus weight percentage calculations"""

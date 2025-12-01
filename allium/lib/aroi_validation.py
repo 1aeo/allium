@@ -244,7 +244,21 @@ def calculate_aroi_validation_metrics(relays: List[Dict], validation_data: Optio
         'uri_rsa_valid': 0,
         'validation_data_available': False,
         'validation_timestamp': 'Unknown',
-        'top_3_aroi_countries': []  # Default empty list for template
+        'top_3_aroi_countries': [],  # Default empty list for template
+        'avg_relays_per_aroi_operator': 0.0,  # Default value for average relays per operator
+        # Operator-level metrics (set when calculate_operator_metrics=True or validation data unavailable)
+        'unique_aroi_domains_count': 0,
+        'validated_aroi_domains_count': 0,
+        'invalid_aroi_domains_count': 0,
+        'validated_aroi_domains_percentage': 0.0,
+        'invalid_aroi_domains_percentage': 0.0,
+        'top_operators_text': 'No data available',
+        # Validation failure breakdown metrics
+        'validation_failure_dns_rsa_lookup': 0,
+        'validation_failure_dns_rsa_fingerprint': 0,
+        'validation_failure_uri_rsa_connection': 0,
+        'validation_failure_uri_rsa_fingerprint': 0,
+        'validation_failure_other': 0
     }
     
     if not relays:
