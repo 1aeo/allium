@@ -15,7 +15,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from allium.lib.aroi_validation import (
     calculate_aroi_validation_metrics,
     get_contact_validation_status,
-    _format_timestamp
+    _format_timestamp,
+    _simplify_error_message,
+    _simplify_and_categorize_errors
 )
 
 
@@ -229,9 +231,10 @@ class TestAROIValidation(unittest.TestCase):
             self.assertIsInstance(count, int)
         
         # Check the top error is the DNS error (appears twice)
+        # Note: Error messages are now simplified, "DNS lookup failed: NXDOMAIN" -> "DNS domain not found (NXDOMAIN)"
         top_error, top_count = metrics['relay_error_top5'][0]
         self.assertEqual(top_count, 2)
-        self.assertIn('DNS lookup', top_error)
+        self.assertIn('DNS', top_error)  # Simplified error still contains DNS
     
     def test_operator_error_top5_calculation(self):
         """Test that operator_error_top5 counts operators not relays."""
@@ -276,6 +279,37 @@ class TestAROIValidation(unittest.TestCase):
         # Both should be 1 (one operator each), not 2 for DNS
         self.assertEqual(dns_count, 1, "DNS error should count 1 operator not 2 relays")
         self.assertEqual(ssl_count, 1, "SSL error should count 1 operator")
+
+    def test_operator_error_top5_deduplicates_simplified_reasons(self):
+        """Operators should be counted once per simplified reason even with varied raw errors."""
+        relays = [
+            {'fingerprint': 'FP1', 'aroi_domain': 'multi.org', 'contact': 'c@multi.org'},
+            {'fingerprint': 'FP2', 'aroi_domain': 'multi.org', 'contact': 'c@multi.org'},
+        ]
+        validation_data = {
+            'metadata': {'timestamp': '2025-11-30T00:00:00Z'},
+            'statistics': {
+                'proof_types': {
+                    'dns_rsa': {'total': 0, 'valid': 0, 'success_rate': 0.0},
+                    'uri_rsa': {'total': 2, 'valid': 0, 'success_rate': 0.0}
+                }
+            },
+            'results': [
+                {'fingerprint': 'FP1', 'valid': False, 'error': 'SSL: SSLV3_ALERT_HANDSHAKE_FAILURE'},
+                # Same operator, same error type (both v3) but slightly different wording
+                {'fingerprint': 'FP2', 'valid': False, 'error': 'sslv3_alert_handshake_failure on uri proof'},
+            ]
+        }
+        
+        metrics = calculate_aroi_validation_metrics(relays, validation_data, calculate_operator_metrics=True)
+        
+        # Relay-level counts should reflect both relays
+        handshake_relay_count = next((count for error, count in metrics['relay_error_top5'] if 'SSL/TLS v3 handshake' in error), 0)
+        self.assertEqual(handshake_relay_count, 2, "Relay counts should reflect total failing relays")
+        
+        # Operator-level counts should only count the operator once
+        handshake_operator_count = next((count for error, count in metrics['operator_error_top5'] if 'SSL/TLS v3 handshake' in error), 0)
+        self.assertEqual(handshake_operator_count, 1, "Operator counts should deduplicate simplified reasons")
     
     def test_top5_lists_empty_when_no_failures(self):
         """Test that top5 lists are empty when all relays validate successfully."""
@@ -326,6 +360,55 @@ class TestAROIValidation(unittest.TestCase):
         # Top5 lists should have default empty values
         self.assertEqual(metrics['relay_error_top5'], [])
         self.assertEqual(metrics['operator_error_top5'], [])
+
+    def test_error_simplification(self):
+        """Test that verbose error messages are simplified with protocol prefix."""
+        # Test SSL/TLS handshake errors - should include v3
+        msg, proof = _simplify_error_message("SSL: SSLV3_ALERT_HANDSHAKE_FAILURE")
+        self.assertEqual(msg, "URI: SSL/TLS v3 handshake failed")
+        self.assertEqual(proof, 'uri')
+        
+        # Test 404 errors with fingerprint URL
+        msg, proof = _simplify_error_message("404 Not Found for https://example.com/.well-known/tor-relay/rsa-fingerprint.txt")
+        self.assertEqual(msg, "URI: Fingerprint file not found (404)")
+        self.assertEqual(proof, 'uri')
+        
+        # Test 404 errors without fingerprint URL
+        msg, proof = _simplify_error_message("404 Not Found")
+        self.assertEqual(msg, "URI: Proof file not found (404)")
+        self.assertEqual(proof, 'uri')
+        
+        # Test NXDOMAIN errors
+        msg, proof = _simplify_error_message("DNS lookup failed: NXDOMAIN")
+        self.assertEqual(msg, "DNS: Domain not found (NXDOMAIN)")
+        self.assertEqual(proof, 'dns')
+        
+        # Test connection timeout
+        msg, proof = _simplify_error_message("Connection timeout after 30 seconds")
+        self.assertEqual(msg, "URI: Connection timeout")
+        self.assertEqual(proof, 'uri')
+
+    def test_error_categorization(self):
+        """Test that errors are categorized into DNS and URI correctly."""
+        errors = {
+            "DNS lookup failed: NXDOMAIN": 10,
+            "SSL certificate error": 5,
+            "404 Not Found": 3,
+            "DNS TXT record not found": 2,
+        }
+        
+        result = _simplify_and_categorize_errors(errors)
+        
+        # Check all errors are in 'all' category
+        self.assertGreater(len(result['all']), 0)
+        
+        # Check DNS errors contain DNS-prefixed errors
+        self.assertIn("DNS: Domain not found (NXDOMAIN)", result['dns'])
+        self.assertIn("DNS: TXT record not found", result['dns'])
+        
+        # Check URI errors contain URI-prefixed errors
+        self.assertIn("URI: SSL certificate error", result['uri'])
+        self.assertIn("URI: Proof file not found (404)", result['uri'])
 
 
 if __name__ == '__main__':

@@ -4901,6 +4901,14 @@ class Relays:
             health_metrics['aroi_validated_percentage_of_aroi'] = aroi_validated_pct_of_aroi
             health_metrics['aroi_invalid_percentage_of_aroi'] = aroi_invalid_pct_of_aroi
             
+            # Calculate relays without AROI (total - validated - unvalidated)
+            relays_without_aroi = total_relays_count - total_relays_with_aroi
+            health_metrics['relays_without_aroi'] = relays_without_aroi
+            health_metrics['relays_without_aroi_percentage'] = (
+                (relays_without_aroi / total_relays_count * 100)
+                if total_relays_count > 0 else 0.0
+            )
+            
             # Operator-level metrics calculated in aroi_validation.py (same pass as relay metrics)
             # Extract validated domain set for IPv6 calculation
             validated_domain_set = validation_metrics.get('_validated_domain_set', set())
@@ -4954,6 +4962,8 @@ class Relays:
                 'aroi_unvalidated_count': 0,
                 'aroi_no_proof_count': 0,
                 'relays_no_aroi': 0,
+                'relays_without_aroi': total_relays_count,  # All relays have no AROI if validation fails
+                'relays_without_aroi_percentage': 100.0 if total_relays_count > 0 else 0.0,
                 'aroi_validated_percentage': 0.0,
                 'aroi_unvalidated_percentage': 0.0,
                 'aroi_no_proof_percentage': 0.0,
@@ -4974,6 +4984,9 @@ class Relays:
                 'invalid_aroi_domains_percentage': 0.0,
                 'relay_error_top5': [],
                 'operator_error_top5': [],
+                'dns_error_top5': [],
+                'uri_error_top5': [],
+                'no_aroi_reasons_top5': [],
                 'top_operators_text': 'No data available',
                 'ipv4_only_aroi_operators': 0,
                 'both_ipv4_ipv6_aroi_operators': 0,
