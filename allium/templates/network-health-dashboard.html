@@ -320,10 +320,9 @@ Network Health Dashboard
                             {{ "%.1f%%"|format(relays.json.network_health.validated_aroi_domains_percentage) }} of AROI
                         </div>
                     </div>
-                    <div class="metric-item" title="Unique operators with no successfully validated relays ({{ "%.1f%%"|format(relays.json.network_health.invalid_aroi_domains_percentage) }} of AROI operators). These operators have AROI configuration but all their relays failed validation. This metric counts operators, not individual relays.
-
-Top failure reasons (operator count):{% for error, count in relays.json.network_health.operator_error_top5 %}
-• {{ error }}: {{ "{:,}".format(count) }} operators{% endfor %}">
+                    <div class="metric-item" title="Unique operators with no successfully validated relays ({{ "%.1f%%"|format(relays.json.network_health.invalid_aroi_domains_percentage) }} of AROI operators). These operators have AROI configuration but all their relays failed validation. This metric counts operators, not individual relays.{% if relays.json.network_health.operator_error_top5 %}
+&#10;&#10;Top failure reasons (operator count):{% for error, count in relays.json.network_health.operator_error_top5 %}
+&#10;• {{ error }} — {{ "{:,}".format(count) }} operators{% endfor %}{% endif %}">
                         <span class="metric-value" style="color: #dc3545;">
                             {{ "{:,}".format(relays.json.network_health.invalid_aroi_domains_count) }}
                         </span>
@@ -341,30 +340,32 @@ Top failure reasons (operator count):{% for error, count in relays.json.network_
                         <span class="metric-label">Validated AROI Relays</span>
                         <div style="font-size: 11px; color: #666; margin-top: 2px;">{{ "%.1f%%"|format(relays.json.network_health.aroi_validated_percentage) }} all, {{ "%.1f%%"|format(relays.json.network_health.aroi_validated_percentage_of_aroi) }} AROI</div>
                     </div>
-                    <div class="metric-item" title="Relays that attempted AROI validation but failed. These have AROI information configured but cryptographic proof verification was unsuccessful. Shows {{ "%.1f%%"|format(relays.json.network_health.aroi_unvalidated_percentage) }} of all relays and {{ "%.1f%%"|format(relays.json.network_health.aroi_invalid_percentage_of_aroi) }} of relays with AROI configured.">
+                    <div class="metric-item" title="Relays with AROI configured but validation failed ({{ "%.1f%%"|format(relays.json.network_health.aroi_invalid_percentage_of_aroi) }} of AROI relays).{% if relays.json.network_health.relay_error_top5 %}
+&#10;&#10;Top validation failure reasons (relay count):{% for error, count in relays.json.network_health.relay_error_top5 %}
+&#10;• {{ error }} — {{ "{:,}".format(count) }} relays{% endfor %}{% endif %}">
                         <span class="metric-value" style="color: #dc3545;">{{ "{:,}".format(relays.json.network_health.aroi_unvalidated_count) }}</span>
                         <span class="metric-label">Invalid AROI</span>
                         <div style="font-size: 11px; color: #666; margin-top: 2px;">{{ "%.1f%%"|format(relays.json.network_health.aroi_unvalidated_percentage) }} all, {{ "%.1f%%"|format(relays.json.network_health.aroi_invalid_percentage_of_aroi) }} AROI</div>
                     </div>
-                    <div class="metric-item" title="Relays missing AROI information in their contact field. These relays cannot be validated because they lack the necessary AROI domain and proof configuration. Calculated as {{ "%.1f%%"|format(relays.json.network_health.aroi_no_proof_percentage) }} of all relays in the network.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.aroi_no_proof_count) }}</span>
+                    <div class="metric-item" title="Relays without AROI configuration ({{ "%.1f%%"|format(relays.json.network_health.relays_without_aroi_percentage) }} of network). These relays lack one or more required AROI fields.{% if relays.json.network_health.no_aroi_reasons_top5 %}
+&#10;&#10;Top missing-field reasons:{% for reason, count in relays.json.network_health.no_aroi_reasons_top5 %}
+&#10;• {{ reason }} — {{ "{:,}".format(count) }} relays{% endfor %}{% endif %}">
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.relays_without_aroi) }}</span>
                         <span class="metric-label">No AROI</span>
-                        <div style="font-size: 11px; color: #666; margin-top: 2px;">{{ "%.1f%%"|format(relays.json.network_health.aroi_no_proof_percentage) }} of all relays</div>
+                        <div style="font-size: 11px; color: #666; margin-top: 2px;">{{ "%.1f%%"|format(relays.json.network_health.relays_without_aroi_percentage) }} of all relays</div>
                     </div>
                 </div>
                 <!-- DNS-RSA and URI-RSA Validation Rates -->
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
-                    <div class="metric-item" title="DNS-RSA validation: {{ "{:,}".format(relays.json.network_health.dns_rsa_valid) }} relays successfully validated out of {{ "{:,}".format(relays.json.network_health.dns_rsa_total) }} relays with DNS-RSA proof configured. This metric counts individual relays, not operators. DNS-RSA uses DNS TXT records for domain verification.
-
-Top failure reasons (relay count):{% for error, count in relays.json.network_health.relay_error_top5 %}{% if 'dns' in error.lower() or 'txt' in error.lower() or 'nxdomain' in error.lower() %}
-• {{ error }}: {{ "{:,}".format(count) }} relays{% endif %}{% endfor %}">
+                    <div class="metric-item" title="DNS-RSA validation: {{ "{:,}".format(relays.json.network_health.dns_rsa_valid) }}/{{ "{:,}".format(relays.json.network_health.dns_rsa_total) }} relays validated. DNS-RSA uses DNS TXT records for domain verification.{% if relays.json.network_health.dns_error_top5 %}
+&#10;&#10;Top DNS failure reasons:{% for error, count in relays.json.network_health.dns_error_top5 %}
+&#10;• {{ error }} — {{ "{:,}".format(count) }} relays{% endfor %}{% endif %}">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.dns_rsa_valid) }}/{{ "{:,}".format(relays.json.network_health.dns_rsa_total) }} ({{ "%.1f%%"|format(relays.json.network_health.dns_rsa_success_rate) }})</span>
                         <span class="metric-label">DNS-RSA Validated</span>
                     </div>
-                    <div class="metric-item" title="URI-RSA validation: {{ "{:,}".format(relays.json.network_health.uri_rsa_valid) }} relays successfully validated out of {{ "{:,}".format(relays.json.network_health.uri_rsa_total) }} relays with URI-RSA proof configured. This metric counts individual relays, not operators. URI-RSA uses web server files for domain verification.
-
-Top failure reasons (relay count):{% for error, count in relays.json.network_health.relay_error_top5 %}{% if 'http' in error.lower() or 'ssl' in error.lower() or 'tls' in error.lower() or 'certificate' in error.lower() or 'connection' in error.lower() or 'timeout' in error.lower() or '404' in error or '403' in error or 'fingerprint not found' in error.lower() %}
-• {{ error }}: {{ "{:,}".format(count) }} relays{% endif %}{% endfor %}">
+                    <div class="metric-item" title="URI-RSA validation: {{ "{:,}".format(relays.json.network_health.uri_rsa_valid) }}/{{ "{:,}".format(relays.json.network_health.uri_rsa_total) }} relays validated. URI-RSA fetches proof from web server.{% if relays.json.network_health.uri_error_top5 %}
+&#10;&#10;Top URI failure reasons:{% for error, count in relays.json.network_health.uri_error_top5 %}
+&#10;• {{ error }} — {{ "{:,}".format(count) }} relays{% endfor %}{% endif %}">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.uri_rsa_valid) }}/{{ "{:,}".format(relays.json.network_health.uri_rsa_total) }} ({{ "%.1f%%"|format(relays.json.network_health.uri_rsa_success_rate) }})</span>
                         <span class="metric-label">URI-RSA Validated</span>
                     </div>

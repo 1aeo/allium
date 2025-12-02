@@ -6,13 +6,14 @@
 
 ## Executive Summary
 
-Enhanced validation tooltips in the Network Health Dashboard to clearly distinguish between operator-level and relay-level metrics, and added top 5 failure reasons with appropriate counts for each metric type. Simplified implementation from ~90 lines to 11 lines while improving user experience.
+Enhanced validation tooltips in the Network Health Dashboard to clearly distinguish between operator-level and relay-level metrics, and added top 5 failure reasons with appropriate counts for each metric type. Simplified implementation from ~90 lines to 11 lines while improving user experience. Added enhanced SSL/TLS v3 error detection to better categorize and report specific handshake failures.
 
 ### Impact
 - **Clarity:** Tooltips now explicitly state "operators" vs "relays"
-- **Actionability:** Top 5 error reasons help operators debug issues
+- **Actionability:** Top 5 error reasons help operators debug issues with simplified, readable messages
 - **Code Quality:** 88% code reduction (90+ lines → 11 lines)
 - **Maintainability:** DRY principles, reuses existing data structures
+- **Error Detection:** Enhanced SSL/TLS v3 handshake failure detection for more accurate troubleshooting
 
 ## Problem Statement
 
@@ -175,6 +176,12 @@ Display in tooltips
 - Raw error messages more useful than categories
 - Shows actual domain names having issues
 - Easier to understand specific problems
+
+### 4. Accurate Counts & Readable Tooltips
+- Operator failure reasons now deduplicate per simplified issue, so counts never exceed the number of invalid operators
+- Tooltips use explicit line breaks (`&#10;`) with URI/DNS prefixes and em dashes (—), keeping every entry to a concise 1–2 sentence summary with a clear relay/operator count
+- Enhanced SSL/TLS error detection distinguishes between SSLv3 handshake failures and generic SSL/TLS handshake failures
+- Improved fingerprint mismatch categorization to properly distinguish DNS vs URI errors
 
 ## Testing
 

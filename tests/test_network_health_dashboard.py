@@ -88,10 +88,10 @@ class TestNetworkHealthDashboard(unittest.TestCase):
         )
         relays_obj._calculate_network_health_metrics()
         
-        # Should have IPv6 metrics
+        # Should have IPv6 AROI operator metrics
         health_data = relays_obj.json['network_health']
-        self.assertIn('ipv4_only_operators', health_data)
-        self.assertIn('both_ipv4_ipv6_operators', health_data)
+        self.assertIn('ipv4_only_aroi_operators', health_data)
+        self.assertIn('both_ipv4_ipv6_aroi_operators', health_data)
         
     def test_consensus_weight_calculations(self):
         """Test consensus weight percentage calculations"""
