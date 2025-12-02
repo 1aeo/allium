@@ -456,6 +456,15 @@ class Relays:
         # Use centralized HTML escaping utility
         bulk_escaper = create_bulk_escaper()
         
+        # Calculate network total consensus weight once for efficiency
+        # Used for manual consensus_weight_fraction calculation when Onionoo doesn't provide it
+        network_totals = self.json.get('network_totals', {}) if hasattr(self, 'json') else {}
+        total_network_cw = (
+            network_totals.get('guard_consensus_weight', 0) +
+            network_totals.get('middle_consensus_weight', 0) +
+            network_totals.get('exit_consensus_weight', 0)
+        )
+        
         for relay in self.json["relays"]:
             # Use centralized bulk escaping for all HTML escape patterns
             bulk_escaper.escape_all_relay_fields(relay)
@@ -466,17 +475,10 @@ class Relays:
             # Fallback pattern: Use Onionoo's fraction when available, calculate manually when not
             if relay.get("consensus_weight_fraction") is not None:
                 relay["consensus_weight_percentage"] = f"{relay['consensus_weight_fraction'] * 100:.2f}%"
-            elif relay.get("consensus_weight") and hasattr(self, 'json') and self.json.get('network_totals'):
-                # Calculate manually for non-running relays using network totals
-                network_totals = self.json['network_totals']
-                total_cw = (network_totals.get('guard_consensus_weight', 0) + 
-                           network_totals.get('middle_consensus_weight', 0) + 
-                           network_totals.get('exit_consensus_weight', 0))
-                if total_cw > 0:
-                    manual_fraction = relay["consensus_weight"] / total_cw
-                    relay["consensus_weight_percentage"] = f"{manual_fraction * 100:.2f}%"
-                else:
-                    relay["consensus_weight_percentage"] = NA_FALLBACK
+            elif relay.get("consensus_weight") and total_network_cw > 0:
+                # Calculate manually for non-running relays (Onionoo doesn't provide fraction for these)
+                manual_fraction = relay["consensus_weight"] / total_network_cw
+                relay["consensus_weight_percentage"] = f"{manual_fraction * 100:.2f}%"
             else:
                 relay["consensus_weight_percentage"] = NA_FALLBACK
                 
