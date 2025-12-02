@@ -463,8 +463,20 @@ class Relays:
             # Continue with non-HTML-escaping optimizations
             # Optimization 4: Pre-compute percentage values for relay-info templates
             # This avoids expensive format operations in individual relay pages
+            # Fallback pattern: Use Onionoo's fraction when available, calculate manually when not
             if relay.get("consensus_weight_fraction") is not None:
                 relay["consensus_weight_percentage"] = f"{relay['consensus_weight_fraction'] * 100:.2f}%"
+            elif relay.get("consensus_weight") and hasattr(self, 'json') and self.json.get('network_totals'):
+                # Calculate manually for non-running relays using network totals
+                network_totals = self.json['network_totals']
+                total_cw = (network_totals.get('guard_consensus_weight', 0) + 
+                           network_totals.get('middle_consensus_weight', 0) + 
+                           network_totals.get('exit_consensus_weight', 0))
+                if total_cw > 0:
+                    manual_fraction = relay["consensus_weight"] / total_cw
+                    relay["consensus_weight_percentage"] = f"{manual_fraction * 100:.2f}%"
+                else:
+                    relay["consensus_weight_percentage"] = NA_FALLBACK
             else:
                 relay["consensus_weight_percentage"] = NA_FALLBACK
                 
@@ -1237,8 +1249,8 @@ class Relays:
         # Add consensus weight tracking
         if relay.get("consensus_weight"):
             self.json["sorted"][k][v]["consensus_weight"] += relay["consensus_weight"]
-        if relay.get("consensus_weight_fraction"):
-            self.json["sorted"][k][v]["consensus_weight_fraction"] += float(relay["consensus_weight_fraction"])
+        # Note: consensus_weight_fraction is recalculated in _calculate_consensus_weight_fractions()
+        # from absolute values, so no need to sum it here
 
         if k == "as":
             self.json["sorted"][k][v]["country"] = relay.get("country")

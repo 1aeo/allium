@@ -419,10 +419,18 @@ def _calculate_aroi_leaderboards(relays_instance):
         validated_consensus_weight = 0.0
         validated_countries = set()
         
+        # Get network totals for manual fraction calculation when needed
+        network_totals = relays_instance.json.get('network_totals', {})
+        total_network_cw = (
+            network_totals.get('guard_consensus_weight', 0) +
+            network_totals.get('middle_consensus_weight', 0) +
+            network_totals.get('exit_consensus_weight', 0)
+        )
+        
         for relay in operator_relays:
             or_addresses = relay.get('or_addresses', [])
             relay_bandwidth = relay.get('observed_bandwidth', 0)
-            relay_consensus_weight = relay.get('consensus_weight', 0)  # Use absolute value, not fraction
+            relay_consensus_weight = relay.get('consensus_weight', 0)
             relay_flags = relay.get('flags', [])
             
             has_ipv4 = False
@@ -474,7 +482,16 @@ def _calculate_aroi_leaderboards(relays_instance):
                     # This relay has valid AROI proof
                     validated_relay_count += 1
                     validated_bandwidth += relay_bandwidth
-                    validated_consensus_weight += relay_consensus_weight
+                    
+                    # Fallback pattern: Trust Onionoo's fraction when available, calculate manually when not
+                    relay_cw_fraction = relay.get('consensus_weight_fraction')
+                    if relay_cw_fraction is not None:
+                        # Use Onionoo's calculation (trusted)
+                        validated_consensus_weight += relay_cw_fraction
+                    elif total_network_cw > 0:
+                        # Calculate manually (for non-running relays or when Onionoo doesn't provide it)
+                        validated_consensus_weight += (relay_consensus_weight / total_network_cw)
+                    # else: no consensus weight to add (both fraction and absolute are 0)
                     
                     # Track country for validated relays
                     country = relay.get('country', '')
@@ -496,21 +513,16 @@ def _calculate_aroi_leaderboards(relays_instance):
         unique_ipv6_count = len(unique_ipv6_addresses)
         validated_country_count = len(validated_countries)
         
-        # Convert consensus weights from absolute values to fractions
-        # All consensus weight variables currently hold sums of relay.get('consensus_weight')
-        # We need to convert them to fractions by dividing by total network consensus weight
-        network_totals = relays_instance.json.get('network_totals', {})
-        total_network_cw = (
-            network_totals.get('guard_consensus_weight', 0) +
-            network_totals.get('middle_consensus_weight', 0) +
-            network_totals.get('exit_consensus_weight', 0)
-        )
+        # validated_consensus_weight now holds the sum of fractions (from Onionoo or manually calculated)
+        # No conversion needed - it's already a fraction
+        validated_consensus_weight_fraction = validated_consensus_weight
+        
+        # Convert IPv4/IPv6 consensus weights from absolute values to fractions
+        # These still use absolute values, so need conversion
         if total_network_cw > 0:
-            validated_consensus_weight_fraction = validated_consensus_weight / total_network_cw
             ipv4_total_consensus_weight_fraction = ipv4_total_consensus_weight / total_network_cw
             ipv6_total_consensus_weight_fraction = ipv6_total_consensus_weight / total_network_cw
         else:
-            validated_consensus_weight_fraction = 0.0
             ipv4_total_consensus_weight_fraction = 0.0
             ipv6_total_consensus_weight_fraction = 0.0
         
