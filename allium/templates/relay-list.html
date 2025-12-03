@@ -50,8 +50,7 @@
     {% endif -%}
     {% for relay in relay_list -%}
 	<tr>
-	    	{% set obs_unit = relay['observed_bandwidth']|determine_unit(relays.use_bits) -%}
-	{% set obs_bandwidth = relay['observed_bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
+	    {# PERF: Use pre-computed bandwidth values from _preprocess_template_data() #}
 	    {% if relay['running'] -%}
 		<td>
 		    <span class="circle circle-online" title="This relay is online"></span>
@@ -105,7 +104,7 @@
 			<span class="contact-text">{{ relay['contact_escaped'] }}</span>
 		    </td>
 		{% endif -%}
-		<td>{{ obs_bandwidth }} {{ obs_unit }}</td>
+		<td>{{ relay['obs_bandwidth_with_unit'] }}</td>
 		{% if key and not is_index -%}
 		    <td title=">=3 bandwidth authorities have measured bandwidth capacity">
 		        {% if relay['measured'] is not none -%}
@@ -115,9 +114,9 @@
 		        {% endif -%}
 		    </td>
 		{% endif -%}
+		{# PERF: Use pre-computed IP address from _preprocess_template_data() #}
 		<td class="visible-md visible-lg">
-		    <a href="https://bgp.tools/prefix/{{ relay['or_addresses'][0].split(':', 1)[0]|escape }}">{{
-		    relay['or_addresses'][0].split(':', 1)[0]|escape }}</a>
+		    <a href="https://bgp.tools/prefix/{{ relay['ip_address']|escape }}">{{ relay['ip_address']|escape }}</a>
 		</td>
 		{% if relay['as'] -%}
 		    {% if key != 'as' -%}
@@ -168,37 +167,20 @@
 		{% else -%}
 		    <td>{{ relay['platform']|truncate(length=10)|escape }}</td>
 		{% endif -%}
-		<td class="visible-md visible-lg">
-		    {% for flag in relay['flags'] -%}
-			{% if flag != 'StaleDesc' -%}
-			    {% set flag_idx = loop.index0 -%}
-			    <a href="{{ page_ctx.path_prefix }}flag/{{ relay['flags_lower_escaped'][flag_idx] }}/">
-				<img src="{{ page_ctx.path_prefix }}static/images/flags/{{ relay['flags_lower_escaped'][flag_idx] }}.png"
-				     title="{{ relay['flags_escaped'][flag_idx] }}"
-				     alt="{{ relay['flags_escaped'][flag_idx] }}">
-			    </a>
-			{% endif -%}
-		    {% endfor
-		    -%}
-		</td>
+		{# PERF: Use pre-rendered flags HTML from Python (eliminates Jinja2 loop) - THE KEY OPTIMIZATION #}
+		<td class="visible-md visible-lg">{{ relay['_flags_html']|replace('{path}', page_ctx.path_prefix)|safe }}</td>
+		{# PERF: Use pre-computed first_seen_date_escaped from _preprocess_template_data() #}
 		{% if key != 'first_seen' -%}
 		    <td class="visible-md visible-lg">
-			<a href="{{ page_ctx.path_prefix }}first_seen/{{ relay['first_seen_date_escaped'] }}/">{{
-			relay['first_seen'].split(' ', 1)[0]|escape }}</a>
+			<a href="{{ page_ctx.path_prefix }}first_seen/{{ relay['first_seen_date_escaped'] }}/">{{ relay['first_seen_date_escaped'] }}</a>
 		    </td>
 		{% else -%}
-		    <td class="visible-md visible-lg">
-			{{ relay['first_seen'].split(' ', 1)[0]|escape
-			}}
-		    </td>
+		    <td class="visible-md visible-lg">{{ relay['first_seen_date_escaped'] }}</td>
 		{% endif -%}
 		{% if key and not is_index -%}
-		    <td class="visible-md visible-lg" title="{% if relay['last_restarted'] -%}{{ relay['last_restarted'].split(' ', 1)[0]|escape }}{% else -%}unknown{% endif -%}">
-		        {% if relay['last_restarted'] -%}
-		            			{{ relay['last_restarted']|format_time_ago }}
-		        {% else -%}
-		            unknown
-		        {% endif -%}
+		    {# PERF: Use pre-computed values from _preprocess_template_data() #}
+		    <td class="visible-md visible-lg" title="{{ relay['last_restarted_date'] }}">
+		        {{ relay['last_restarted_ago'] }}
 		    </td>
 		{% endif -%}
 	    </tr>

@@ -122,11 +122,8 @@
             {% for k, v in relays.json['sorted'].get('country', {}).items()|sort(attribute=sorted_by,
                 reverse=True) -%}
                 <tr>
-                    {% set obs_unit = v['bandwidth']|determine_unit(relays.use_bits) -%}
-                    {% set obs_bandwidth = v['bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
-                    {% set guard_bw = v['guard_bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
-                    {% set middle_bw = v['middle_bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
-                    {% set exit_bw = v['exit_bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
+                    {# PERF: Use pre-computed display values instead of expensive Jinja2 filters #}
+                    {% set d = v['display'] -%}
                     <td title="{{ v['country_name_full']|escape }}">
                         <a href="{{ page_ctx.path_prefix }}country/{{ k|escape }}/">
                             <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ k|escape }}.png"
@@ -134,17 +131,12 @@
                             {{ v['country_name']|escape }}
                         </a>
                     </td>
-                    {% if v['bandwidth'] == 0 -%}
-                        <td class="text-center bw-data">0 / 0 / 0 / 0 {{ obs_unit }}</td>
-                    {% else -%}
-                        <td class="text-center bw-data">{{ obs_bandwidth }} / {{ guard_bw }} / {{ middle_bw }} / {{ exit_bw }} {{ obs_unit }}</td>
-                    {% endif -%}
-                    {% if v['consensus_weight_fraction'] == 0 and v['guard_consensus_weight_fraction'] == 0 and v['middle_consensus_weight_fraction'] == 0 and v['exit_consensus_weight_fraction'] == 0 -%}
-                        <td class="text-center cw-data">0% / 0% / 0% / 0%</td>
-                    {% else -%}
-                        <td class="text-center cw-data">{{ "%.2f%%"|format(v['consensus_weight_fraction'] * 100) }} / {{ "%.2f%%"|format(v['guard_consensus_weight_fraction'] * 100) }} / {{ "%.2f%%"|format(v['middle_consensus_weight_fraction'] * 100) }} / {{ "%.2f%%"|format(v['exit_consensus_weight_fraction'] * 100) }}</td>
-                    {% endif -%}
-                    <td class="text-center rc-data">{{ v['guard_count'] }} / {{ v['middle_count'] }} / {{ v['exit_count'] }}</td>
+                    {# PERF: Use pre-computed combined bandwidth string #}
+                    <td class="text-center bw-data">{{ d.bw_combined }}</td>
+                    {# PERF: Use pre-computed combined CW percentage string #}
+                    <td class="text-center cw-data">{{ d.cw_combined }}</td>
+                    {# PERF: Use pre-computed count combined string #}
+                    <td class="text-center rc-data">{{ d.count_combined }}</td>
                     <td>{{ v['unique_contact_count'] }}</td>
                     <td>{{ v['unique_family_count'] }}</td>
                     <td>{{ v['unique_as_count'] }}</td>

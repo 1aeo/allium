@@ -132,18 +132,8 @@
 		        N/A
 		    {% endif -%}
 		</td>
-		<td class="visible-md visible-lg">
-		    {% for flag in relay['flags'] -%}
-			{% if flag != 'StaleDesc' -%}
-			    {% set flag_idx = loop.index0 -%}
-			    <a href="{{ page_ctx.path_prefix }}flag/{{ relay['flags_lower_escaped'][flag_idx] }}/">
-				<img src="{{ page_ctx.path_prefix }}static/images/flags/{{ relay['flags_lower_escaped'][flag_idx] }}.png"
-				     title="{{ relay['flags_escaped'][flag_idx] }}"
-				     alt="{{ relay['flags_escaped'][flag_idx] }}">
-			    </a>
-			{% endif -%}
-		    {% endfor -%}
-		</td>
+		{# PERF: Use pre-rendered flags HTML from Python (eliminates Jinja2 loop) - THE KEY OPTIMIZATION #}
+		<td class="visible-md visible-lg">{{ relay['_flags_html']|replace('{path}', page_ctx.path_prefix)|safe }}</td>
 		{% if relay['country'] -%}
 		    {% if key != 'country' -%}
 			<td>
