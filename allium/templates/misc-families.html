@@ -137,11 +137,8 @@
                 reverse=True) -%}
                 {% if relays.json['relay_subset'][v['relays'][0]]['fingerprint'] not in processed -%}
                     <tr>
-                        {% set obs_unit = v['bandwidth']|determine_unit(relays.use_bits) -%}
-                        {% set obs_bandwidth = v['bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
-                        {% set guard_bw = v['guard_bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
-                        {% set middle_bw = v['middle_bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
-                        {% set exit_bw = v['exit_bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
+                        {# PERF: Use pre-computed display values instead of expensive Jinja2 filters #}
+                        {% set d = v['display'] -%}
                         <td>
                                                     {% if v['aroi_domain'] and v['aroi_domain'] != 'none' -%}
                             <a href="{{ page_ctx.path_prefix }}family/{{ k|escape }}/" title="Family {{ k|escape }}" style="text-decoration: underline;">{{ v['aroi_domain']|escape }} ({{ v['relays']|length }} relays) {{ k[:4]|escape }}</a>
@@ -149,12 +146,10 @@
                             <a href="{{ page_ctx.path_prefix }}family/{{ k|escape }}/" title="Family {{ k|escape }}" style="text-decoration: underline;">{{ v['relays']|length }} Relays {{ k[:8]|escape }}</a>
                         {% endif -%}
                         </td>
-                        <td class="text-center bw-data">{{ obs_bandwidth }} / {{ guard_bw }} / {{ middle_bw }} / {{ exit_bw }} {{ obs_unit }}</td>
-                        {% if v['consensus_weight_fraction'] == 0 and v['guard_consensus_weight_fraction'] == 0 and v['middle_consensus_weight_fraction'] == 0 and v['exit_consensus_weight_fraction'] == 0 -%}
-                            <td class="text-center cw-data">0% / 0% / 0% / 0%</td>
-                        {% else -%}
-                            <td class="text-center cw-data">{{ "%.2f%%"|format(v['consensus_weight_fraction'] * 100) }} / {{ "%.2f%%"|format(v['guard_consensus_weight_fraction'] * 100) }} / {{ "%.2f%%"|format(v['middle_consensus_weight_fraction'] * 100) }} / {{ "%.2f%%"|format(v['exit_consensus_weight_fraction'] * 100) }}</td>
-                        {% endif -%}
+                        {# PERF: Use pre-computed combined bandwidth string #}
+                        <td class="text-center bw-data">{{ d.bw_combined }}</td>
+                        {# PERF: Use pre-computed combined CW percentage string #}
+                        <td class="text-center cw-data">{{ d.cw_combined }}</td>
                         {% if v['contact'] -%}
                             <td class="visible-md visible-lg">
                                 <a href="{{ page_ctx.path_prefix }}contact/{{ v['contact_md5'] }}/"
@@ -163,11 +158,13 @@
                         {% else -%}
                             <td class="visible-md visible-lg">none</td>
                         {% endif -%}
-                        <td class="text-center rc-data">{{ v['guard_count'] }} / {{ v['middle_count'] }} / {{ v['exit_count'] }}</td>
-                        <td>{{ v['relays']|length }} / {{ v['measured_count'] }}</td>
+                        {# PERF: Use pre-computed count combined string #}
+                        <td class="text-center rc-data">{{ d.count_combined }}</td>
+                        <td>{{ d.total_relays }} / {{ v['measured_count'] }}</td>
                         <td>{{ v['unique_as_count'] }}</td>
-                                            <td>
-                        <a href="{{ page_ctx.path_prefix }}first_seen/{{ v['first_seen'].split(' ', 1)[0]|escape }}">{{ v['first_seen'].split(' ', 1)[0]|escape }}</a>
+                        {# PERF: Use pre-computed first_seen date #}
+                        <td>
+                        <a href="{{ page_ctx.path_prefix }}first_seen/{{ d.first_seen_date|escape }}">{{ d.first_seen_date|escape }}</a>
                     </td>
                         {% for r in v['relays'] -%}
                             {% set _dummy = processed.update({relays.json['relay_subset'][r]['fingerprint']:

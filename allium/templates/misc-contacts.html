@@ -122,11 +122,8 @@
             {% for k, v in relays.json['sorted'].get('contact', {}).items()|sort(attribute=sorted_by,
                 reverse=True) -%}
                 <tr>
-                    {% set obs_unit = v['bandwidth']|determine_unit(relays.use_bits) -%}
-                    {% set obs_bandwidth = v['bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
-                    {% set guard_bw = v['guard_bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
-                    {% set middle_bw = v['middle_bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
-                    {% set exit_bw = v['exit_bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
+                    {# PERF: Use pre-computed display values instead of expensive Jinja2 filters #}
+                    {% set d = v['display'] -%}
                     <td>
                         {% if v['aroi_domain'] and v['aroi_domain'] != 'none' -%}
                             {% if base_url and v['aroi_domain'] in validated_aroi_domains -%}
@@ -147,18 +144,18 @@
                             <a href="{{ page_ctx.path_prefix }}contact/{{ k|escape }}/" title="No contact info" style="text-decoration: underline;">none</a>
                         {% endif -%}
                     </td>
-                    <td class="text-center bw-data">{{ obs_bandwidth }} / {{ guard_bw }} / {{ middle_bw }} / {{ exit_bw }} {{ obs_unit }}</td>
-                    {% if v['consensus_weight_fraction'] == 0 and v['guard_consensus_weight_fraction'] == 0 and v['middle_consensus_weight_fraction'] == 0 and v['exit_consensus_weight_fraction'] == 0 -%}
-                        <td class="text-center cw-data">0% / 0% / 0% / 0%</td>
-                    {% else -%}
-                        <td class="text-center cw-data">{{ "%.2f%%"|format(v['consensus_weight_fraction'] * 100) }} / {{ "%.2f%%"|format(v['guard_consensus_weight_fraction'] * 100) }} / {{ "%.2f%%"|format(v['middle_consensus_weight_fraction'] * 100) }} / {{ "%.2f%%"|format(v['exit_consensus_weight_fraction'] * 100) }}</td>
-                    {% endif -%}
-                    <td class="text-center rc-data">{{ v['guard_count'] }} / {{ v['middle_count'] }} / {{ v['exit_count'] }}</td>
+                    {# PERF: Use pre-computed combined bandwidth string #}
+                    <td class="text-center bw-data">{{ d.bw_combined }}</td>
+                    {# PERF: Use pre-computed combined CW percentage string #}
+                    <td class="text-center cw-data">{{ d.cw_combined }}</td>
+                    {# PERF: Use pre-computed count combined string #}
+                    <td class="text-center rc-data">{{ d.count_combined }}</td>
                     <td class="text-center">{{ v['bandwidth_mean_display'] }}</td>
-                    <td>{{ v['relays']|length }} / {{ v['measured_count'] }}</td>
+                    <td>{{ d.total_relays }} / {{ v['measured_count'] }}</td>
                     <td>{{ v['unique_as_count'] }}</td>
+                    {# PERF: Use pre-computed first_seen date #}
                     <td>
-                        <a href="{{ page_ctx.path_prefix }}first_seen/{{ v['first_seen'].split(' ', 1)[0]|escape }}">{{ v['first_seen'].split(' ', 1)[0]|escape }}</a>
+                        <a href="{{ page_ctx.path_prefix }}first_seen/{{ d.first_seen_date|escape }}">{{ d.first_seen_date|escape }}</a>
                     </td>
                 </tr>
             {% endfor -%}
