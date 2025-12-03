@@ -456,6 +456,12 @@ class Relays:
         # Use centralized HTML escaping utility
         bulk_escaper = create_bulk_escaper()
         
+        # Pre-compute total network consensus weight for fallback fraction calculations
+        # This is used when individual relays don't have consensus_weight_fraction from API
+        self._total_network_cw = sum(
+            relay.get('consensus_weight', 0) for relay in self.json["relays"]
+        )
+        
         for relay in self.json["relays"]:
             # Use centralized bulk escaping for all HTML escape patterns
             bulk_escaper.escape_all_relay_fields(relay)
@@ -463,8 +469,14 @@ class Relays:
             # Continue with non-HTML-escaping optimizations
             # Optimization 4: Pre-compute percentage values for relay-info templates
             # This avoids expensive format operations in individual relay pages
+            # Use API-provided consensus_weight_fraction first, fallback to manual calculation
             if relay.get("consensus_weight_fraction") is not None:
                 relay["consensus_weight_percentage"] = f"{relay['consensus_weight_fraction'] * 100:.2f}%"
+            elif relay.get("consensus_weight") is not None and hasattr(self, '_total_network_cw') and self._total_network_cw > 0:
+                # Fallback: compute fraction from raw consensus_weight
+                computed_fraction = relay["consensus_weight"] / self._total_network_cw
+                relay["consensus_weight_fraction"] = computed_fraction  # Store for consistency
+                relay["consensus_weight_percentage"] = f"{computed_fraction * 100:.2f}%"
             else:
                 relay["consensus_weight_percentage"] = NA_FALLBACK
                 
@@ -1176,7 +1188,7 @@ class Relays:
         
         return total_guard_cw, total_middle_cw, total_exit_cw
 
-    def _sort(self, relay, idx, k, v, cw):
+    def _sort(self, relay, idx, k, v, cw, cw_fraction):
         """
         Populate self.sorted dictionary with values from :relay:
 
@@ -1186,6 +1198,7 @@ class Relays:
             k:     the name of the key to use in self.sorted
             v:     the name of the subkey to use in self.sorted[k]
             cw:    consensus weight for this relay (passed to avoid repeated extraction)
+            cw_fraction: consensus weight fraction (API value preferred, computed fallback)
         """
         if not v or not re.match(r"^[A-Za-z0-9_-]+$", v):
             return
@@ -1235,10 +1248,11 @@ class Relays:
             self.json["sorted"][k][v]["middle_consensus_weight"] += cw
 
         # Add consensus weight tracking
+        # Accumulate both raw consensus_weight and the fraction (API or computed)
         if relay.get("consensus_weight"):
             self.json["sorted"][k][v]["consensus_weight"] += relay["consensus_weight"]
-        if relay.get("consensus_weight_fraction"):
-            self.json["sorted"][k][v]["consensus_weight_fraction"] += float(relay["consensus_weight_fraction"])
+        # Accumulate fraction - uses API value when available, computed fallback otherwise
+        self.json["sorted"][k][v]["consensus_weight_fraction"] += cw_fraction
 
         if k == "as":
             self.json["sorted"][k][v]["country"] = relay.get("country")
@@ -1333,28 +1347,38 @@ class Relays:
             # Extract consensus weight once per relay to avoid repeated dict lookups
             # This value gets used multiple times: once per _sort call + once for totals
             cw = relay.get("consensus_weight", 0)
+            
+            # Get relay's consensus weight fraction - prefer API value, fallback to computed
+            # This ensures consistency with individual relay display
+            api_fraction = relay.get("consensus_weight_fraction")
+            if api_fraction is not None:
+                cw_fraction = api_fraction
+            elif hasattr(self, '_total_network_cw') and self._total_network_cw > 0:
+                cw_fraction = cw / self._total_network_cw
+            else:
+                cw_fraction = 0.0
 
             keys = ["as", "country", "platform"]
             for key in keys:
-                # Pass consensus weight to avoid re-extracting it in _sort
-                self._sort(relay, idx, key, relay.get(key), cw)
+                # Pass consensus weight and fraction to avoid re-extracting in _sort
+                self._sort(relay, idx, key, relay.get(key), cw, cw_fraction)
 
             for flag in relay["flags"]:
-                self._sort(relay, idx, "flag", flag, cw)
+                self._sort(relay, idx, "flag", flag, cw, cw_fraction)
 
             if relay.get("effective_family"):
                 for member in relay["effective_family"]:
                     if not len(relay["effective_family"]) > 1:
                         continue
-                    self._sort(relay, idx, "family", member, cw)
+                    self._sort(relay, idx, "family", member, cw, cw_fraction)
 
             self._sort(
-                relay, idx, "first_seen", relay["first_seen"].split(" ")[0], cw
+                relay, idx, "first_seen", relay["first_seen"].split(" ")[0], cw, cw_fraction
             )
 
             # Use the pre-computed contact_md5 which includes unified AROI domain grouping
             c_hash = relay.get("contact_md5", "")
-            self._sort(relay, idx, "contact", c_hash, cw)
+            self._sort(relay, idx, "contact", c_hash, cw, cw_fraction)
 
         # Calculate consensus weight fractions using the totals we accumulated above
         # This avoids a second full iteration through all relays
@@ -1381,7 +1405,7 @@ class Relays:
             
         These totals are passed from _categorize to avoid re-iterating through all relays.
         """
-        # Calculate total consensus weight for overall fractions
+        # Calculate total consensus weight for fallback fraction calculations
         total_consensus_weight = total_guard_cw + total_middle_cw + total_exit_cw
         
         # Calculate fractions for each group using the provided network-wide totals
@@ -1389,13 +1413,14 @@ class Relays:
             for v in self.json["sorted"][k]:
                 item = self.json["sorted"][k][v]
                 
-                # Calculate overall consensus weight fraction
-                if total_consensus_weight > 0:
+                # Overall consensus_weight_fraction is already accumulated from relay fractions
+                # (using API values when available, computed fallback otherwise)
+                # Only compute from raw values if accumulated fraction is 0 but raw weight exists
+                if item["consensus_weight_fraction"] == 0.0 and item["consensus_weight"] > 0 and total_consensus_weight > 0:
                     item["consensus_weight_fraction"] = item["consensus_weight"] / total_consensus_weight
-                else:
-                    item["consensus_weight_fraction"] = 0.0
                 
-                # Calculate fractions, avoiding division by zero
+                # Guard/Middle/Exit fractions must be computed from raw values
+                # (no API-provided role-specific fractions available)
                 if total_guard_cw > 0:
                     item["guard_consensus_weight_fraction"] = item["guard_consensus_weight"] / total_guard_cw
                 else:

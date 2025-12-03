@@ -326,6 +326,13 @@ def _calculate_aroi_leaderboards(relays_instance):
             if fingerprint:
                 validation_map[fingerprint] = result
     
+    # === COMPUTE TOTAL NETWORK CONSENSUS WEIGHT ===
+    # This is needed because consensus_weight_fraction is OPTIONAL in Onionoo API
+    # Many relays don't have it, so we compute fractions from raw consensus_weight
+    total_network_consensus_weight = sum(
+        relay.get('consensus_weight', 0) for relay in all_relays
+    )
+    
     # Build AROI operator data by processing contacts
     aroi_operators = {}
     
@@ -422,7 +429,15 @@ def _calculate_aroi_leaderboards(relays_instance):
         for relay in operator_relays:
             or_addresses = relay.get('or_addresses', [])
             relay_bandwidth = relay.get('observed_bandwidth', 0)
-            relay_consensus_weight = relay.get('consensus_weight_fraction', 0)
+            # Prefer API-provided consensus_weight_fraction when available (more accurate)
+            # Fallback to computing from raw consensus_weight when API fraction is missing
+            api_fraction = relay.get('consensus_weight_fraction')
+            if api_fraction is not None:
+                relay_consensus_weight = api_fraction
+            elif total_network_consensus_weight > 0:
+                relay_consensus_weight = relay.get('consensus_weight', 0) / total_network_consensus_weight
+            else:
+                relay_consensus_weight = 0.0
             relay_flags = relay.get('flags', [])
             
             has_ipv4 = False
