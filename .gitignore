@@ -17,6 +17,10 @@ env/
 allium/data/
 cache/
 
+# Jinja2 bytecode cache
+allium/.jinja2_cache/
+.jinja2_cache/
+
 # Testing and CI
 .pytest_cache/
 .coverage

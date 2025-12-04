@@ -135,7 +135,7 @@
             {% set processed = dict() -%}
             {% for k, v in relays.json['sorted'].get('family', {}).items()|sort(attribute=sorted_by,
                 reverse=True) -%}
-                {% if relays.json['relay_subset'][v['relays'][0]]['fingerprint'] not in processed -%}
+                {% if relay_subset[v['relays'][0]]['fingerprint'] not in processed -%}
                     <tr>
                         {# PERF: Use pre-computed display values instead of expensive Jinja2 filters #}
                         {% set d = v['display'] -%}
@@ -167,7 +167,7 @@
                         <a href="{{ page_ctx.path_prefix }}first_seen/{{ d.first_seen_date|escape }}">{{ d.first_seen_date|escape }}</a>
                     </td>
                         {% for r in v['relays'] -%}
-                            {% set _dummy = processed.update({relays.json['relay_subset'][r]['fingerprint']:
+                            {% set _dummy = processed.update({relay_subset[r]['fingerprint']:
                             None}) -%}
                         {% endfor -%}
                     </tr>

@@ -1,7 +1,7 @@
 {% extends "relay-list.html" %}
 {% from "macros.html" import navigation, detail_summary %}
-{% set country_orig = relays.json['relay_subset'][0]['country_name']|escape %}
-{% set country_abbr = relays.json['relay_subset'][0]['country']|escape %}
+{% set country_orig = relay_subset[0]['country_name']|escape %}
+{% set country_abbr = relay_subset[0]['country']|escape %}
 {% if country_orig in sp_countries %}
     {% set country_name = 'The ' + country_orig %}
 {% else %}
@@ -13,4 +13,4 @@
 {{ navigation('countries', page_ctx) }}
 {% endblock -%}
 {% block description %}{{ country_name }} ({{ country_abbr }}) summary:
-{{ detail_summary(bandwidth, bandwidth_unit, guard_bandwidth, middle_bandwidth, exit_bandwidth, consensus_weight_fraction, guard_consensus_weight_fraction, middle_consensus_weight_fraction, exit_consensus_weight_fraction, guard_count, middle_count, exit_count, relays.json['relay_subset']|length, network_position) }}{% endblock %}
+{{ detail_summary(bandwidth, bandwidth_unit, guard_bandwidth, middle_bandwidth, exit_bandwidth, consensus_weight_fraction, guard_consensus_weight_fraction, middle_consensus_weight_fraction, exit_consensus_weight_fraction, guard_count, middle_count, exit_count, relay_subset|length, network_position) }}{% endblock %}
