@@ -26,7 +26,7 @@ class Coordinator:
     Phase 2: Multiple API support with incremental rendering.
     """
     
-    def __init__(self, output_dir, onionoo_details_url, onionoo_uptime_url, onionoo_bandwidth_url, aroi_url, bandwidth_cache_hours, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=34, enabled_apis='all', filter_downtime_days=7, base_url=''):
+    def __init__(self, output_dir, onionoo_details_url, onionoo_uptime_url, onionoo_bandwidth_url, aroi_url, bandwidth_cache_hours, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=34, enabled_apis='all', filter_downtime_days=7, base_url='', progress_logger=None):
         self.output_dir = output_dir
         self.onionoo_details_url = onionoo_details_url
         self.onionoo_uptime_url = onionoo_uptime_url
@@ -42,8 +42,15 @@ class Coordinator:
         self.filter_downtime_days = filter_downtime_days
         self.base_url = base_url
         
-        # Create unified progress logger
-        self.progress_logger = ProgressLogger(self.start_time, self.progress_step, self.total_steps, self.progress)
+        # Use injected progress logger or create new one
+        if progress_logger is not None:
+            self.progress_logger = progress_logger
+            # Sync state from injected logger
+            self.start_time = progress_logger.start_time
+            self.progress_step = progress_logger.get_current_step()
+            self.total_steps = progress_logger.total_steps
+        else:
+            self.progress_logger = ProgressLogger(self.start_time, self.progress_step, self.total_steps, self.progress)
         
         # Worker management
         self.workers = {}
@@ -136,6 +143,7 @@ class Coordinator:
         Fetch data from all APIs using threading (Phase 2 implementation)
         """
         if self.progress:
+            self.progress_logger.start_section("API Fetching")
             self._log_progress_with_step_increment("Starting threaded API fetching...")
         
         # Start all API workers in threads
@@ -155,6 +163,7 @@ class Coordinator:
         
         if self.progress:
             self._log_progress_with_step_increment("All API workers completed")
+            self.progress_logger.end_section("API Fetching")
         
         return self.worker_data
 
@@ -224,6 +233,7 @@ class Coordinator:
         Create Relays instance with fetched data.
         """
         if self.progress:
+            self.progress_logger.start_section("Data Processing")
             self._log_progress_with_step_increment("Creating relay set with Details API data...")
         
         relay_set = Relays(
@@ -279,6 +289,7 @@ class Coordinator:
         
         if self.progress:
             self._log_progress_with_step_increment("Relay set created successfully with Details API and Uptime API data")
+            self.progress_logger.end_section("Data Processing")
         
         return relay_set
     
@@ -307,7 +318,7 @@ class Coordinator:
 
 
 # For backwards compatibility, provide a simple function that mimics the original Relays constructor
-def create_relay_set_with_coordinator(output_dir, onionoo_details_url, onionoo_uptime_url, onionoo_bandwidth_url, aroi_url, bandwidth_cache_hours, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=34, enabled_apis='all', filter_downtime_days=7, base_url=''):
+def create_relay_set_with_coordinator(output_dir, onionoo_details_url, onionoo_uptime_url, onionoo_bandwidth_url, aroi_url, bandwidth_cache_hours, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=34, enabled_apis='all', filter_downtime_days=7, base_url='', progress_logger=None):
     """
     Create a relay set using the coordinator system.
     Phase 2: Support for multiple APIs with threading.
@@ -330,7 +341,8 @@ def create_relay_set_with_coordinator(output_dir, onionoo_details_url, onionoo_u
         total_steps=total_steps,
         enabled_apis=enabled_apis,
         filter_downtime_days=filter_downtime_days,
-        base_url=base_url
+        base_url=base_url,
+        progress_logger=progress_logger,
     )
     
     return coordinator.get_relay_set() 
