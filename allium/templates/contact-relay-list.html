@@ -39,9 +39,9 @@
     <th class="visible-md visible-lg">Last Restarted</th>
     {% set has_ipv6 = false -%}
     {% if is_index -%}
-	{% set relay_list_check = relays.json['relay_subset'][:500] -%}
+	{% set relay_list_check = relay_subset[:500] -%}
     {% else -%}
-	{% set relay_list_check = relays.json['relay_subset'] -%}
+	{% set relay_list_check = relay_subset -%}
     {% endif -%}
     {% for relay in relay_list_check -%}
         {% if relay.get('or_addresses') and not has_ipv6 -%}
@@ -58,9 +58,9 @@
 </tr>
 <tbody>
     {% if is_index -%}
-	{% set relay_list = relays.json['relay_subset'][:500] -%}
+	{% set relay_list = relay_subset[:500] -%}
     {% else -%}
-	{% set relay_list = relays.json['relay_subset'] -%}
+	{% set relay_list = relay_subset -%}
     {% endif -%}
     {% for relay in relay_list -%}
 	<tr>

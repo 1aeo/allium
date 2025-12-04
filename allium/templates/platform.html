@@ -1,10 +1,10 @@
 {% extends "relay-list.html" %}
 {% from "macros.html" import navigation, detail_summary %}
-{% set platform_name = relays.json['relay_subset'][0]['platform']|escape %}
+{% set platform_name = relay_subset[0]['platform']|escape %}
 {% block title %}Tor Relays :: {{ platform_name }}{% endblock %}
 {% block header %}View Platform {{ platform_name }} Details{% endblock %}
 {% block navigation -%}
 {{ navigation('platforms', page_ctx) }}
 {% endblock -%}
 {% block description %}Platform {{ value }} summary:
-{{ detail_summary(bandwidth, bandwidth_unit, guard_bandwidth, middle_bandwidth, exit_bandwidth, consensus_weight_fraction, guard_consensus_weight_fraction, middle_consensus_weight_fraction, exit_consensus_weight_fraction, guard_count, middle_count, exit_count, relays.json['relay_subset']|length, network_position) }}{% endblock %}
+{{ detail_summary(bandwidth, bandwidth_unit, guard_bandwidth, middle_bandwidth, exit_bandwidth, consensus_weight_fraction, guard_consensus_weight_fraction, middle_consensus_weight_fraction, exit_consensus_weight_fraction, guard_count, middle_count, exit_count, relay_subset|length, network_position) }}{% endblock %}

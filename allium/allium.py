@@ -182,6 +182,14 @@ if __name__ == "__main__":
         help="filter out relays offline for more than N days (default: 7, use 0 to disable)",
         required=False,
     )
+    parser.add_argument(
+        "--workers",
+        dest="mp_workers",
+        type=int,
+        default=4,
+        help="parallel workers for page generation (default: 4, use 0 to disable)",
+        required=False,
+    )
     args = parser.parse_args()
 
     start_time = time.time()
@@ -231,6 +239,7 @@ if __name__ == "__main__":
             args.filter_downtime_days,
             args.base_url,
             progress_logger=progress_logger,
+            mp_workers=args.mp_workers,
         )
         if RELAY_SET is None or RELAY_SET.json == None:
             # Progress-style error context message (conditional on progress flag)
