@@ -215,7 +215,23 @@ if __name__ == "__main__":
     progress_logger.log("Initializing relay data from onionoo (using coordinator)...")
     
     try:
-        RELAY_SET = create_relay_set_with_coordinator(args.output_dir, args.onionoo_details_url, args.onionoo_uptime_url, args.onionoo_bandwidth_url, args.aroi_url, args.bandwidth_cache_hours, args.bandwidth_units == 'bits', args.progress, start_time, progress_logger.get_current_step(), total_steps, args.enabled_apis, args.filter_downtime_days, args.base_url)
+        RELAY_SET = create_relay_set_with_coordinator(
+            args.output_dir,
+            args.onionoo_details_url,
+            args.onionoo_uptime_url,
+            args.onionoo_bandwidth_url,
+            args.aroi_url,
+            args.bandwidth_cache_hours,
+            args.bandwidth_units == 'bits',
+            args.progress,
+            start_time,
+            progress_logger.get_current_step(),
+            total_steps,
+            args.enabled_apis,
+            args.filter_downtime_days,
+            args.base_url,
+            progress_logger=progress_logger,
+        )
         if RELAY_SET is None or RELAY_SET.json == None:
             # Progress-style error context message (conditional on progress flag)
             progress_logger.log("No onionoo data available, exiting gracefully")
@@ -237,6 +253,9 @@ if __name__ == "__main__":
     progress_logger.log(f"Details API data loaded successfully - found {len(RELAY_SET.json.get('relays', []))} relays")
 
     # Output directory already created early via ensure_output_directory() - skip redundant creation
+
+    # Start page generation section
+    progress_logger.start_section("Page Generation")
 
     # AROI leaderboards as main index page, preserve top 500 relays at separate path
     progress_logger.log("Generating index page (AROI leaderboards)...")
@@ -331,19 +350,21 @@ if __name__ == "__main__":
         page_ctx=authorities_ctx,
     )
     progress_logger.log("Generated directory authorities monitoring page")
+    
     # onionoo keys used to generate pages by unique value; e.g. AS43350
+    # Ordered with slowest pages first (family, contact have most relays per group)
     keys = [
-        "as",
-        "contact",
-        "country",
         "family",
+        "contact",
+        "as",
+        "country",
         "flag",
         "platform",
         "first_seen",
     ]
 
     progress_logger.log("Generating pages by unique values...")
-    for i, k in enumerate(keys):
+    for k in keys:
         RELAY_SET.write_pages_by_key(k)
     progress_logger.log(f"Generated pages for {len(keys)} unique value types")
 
@@ -362,5 +383,8 @@ if __name__ == "__main__":
         progress_logger.log("Copied static files to output directory")
     else:
         progress_logger.log("Static files already exist, skipping copy")
+
+    # End page generation section
+    progress_logger.end_section("Page Generation")
 
     progress_logger.log("Allium static site generation completed successfully!")

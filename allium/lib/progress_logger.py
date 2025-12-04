@@ -33,6 +33,7 @@ class ProgressLogger:
         self.progress_step = progress_step
         self.total_steps = total_steps
         self.progress_enabled = progress_enabled
+        self.section_start_times = {}
     
     def log(self, message, increment_step=True):
         """
@@ -55,6 +56,31 @@ class ProgressLogger:
             message: Progress message to display
         """
         self.log(message, increment_step=False)
+    
+    def start_section(self, section_name):
+        """
+        Record the start of a major processing section.
+        
+        Args:
+            section_name: Name of the section (e.g., "API Fetching", "Page Generation")
+        """
+        if not section_name:
+            return
+        self.section_start_times[section_name] = time.time()
+        self.log(f"═══ SECTION: {section_name} ═══ [STARTING]")
+    
+    def end_section(self, section_name):
+        """
+        Record the completion of a major processing section and log elapsed time.
+        
+        Args:
+            section_name: Name of the section to end
+        """
+        if not section_name:
+            return
+        start_time = self.section_start_times.pop(section_name, self.start_time)
+        elapsed = time.time() - start_time
+        self.log(f"═══ SECTION: {section_name} ═══ [COMPLETE in {elapsed:.1f}s]")
     
     def log_with_increment(self, message):
         """
