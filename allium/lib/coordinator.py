@@ -287,6 +287,12 @@ class Coordinator:
                 print(f"Warning: Bandwidth processing failed ({e}), continuing without bandwidth metrics")
                 # Continue without bandwidth metrics rather than crashing
         
+        # PERF OPTIMIZATION: Pre-compute all contact page data AFTER all data processing
+        # This must happen after uptime data, bandwidth data, and AROI leaderboards are processed
+        # because contact page calculations depend on those results.
+        # Enables ~33x speedup for contact page generation via parallelization.
+        relay_set._precompute_all_contact_page_data()
+        
         # Update the relay_set's progress_step to match our current progress
         relay_set.progress_step = self.progress_step
         

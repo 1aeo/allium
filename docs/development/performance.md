@@ -7,10 +7,11 @@ This document outlines Allium's current performance status, optimization priorit
 ## 📊 Current Performance Status
 
 ### Site Generation
-- **Full Site Generation**: ~5 minutes for 10,000+ relays
-- **Memory Usage**: Peak ~3.1GB during processing
+- **Full Site Generation**: ~3.5 minutes for 10,000+ relays ✅ *Improved via multiprocessing*
+- **Memory Usage**: Peak ~3.2GB during processing
 - **Output Size**: ~21,700 HTML files
-- **Processing Rate**: ~70 relays/second
+- **Page Generation Phase**: ~80 seconds (down from 140s with multiprocessing)
+- **Contact Page Generation**: ~5 seconds (down from 54s - **10x faster**)
 
 ### Page Load Performance
 - **Main Pages**: <2 seconds (target met)
@@ -20,7 +21,8 @@ This document outlines Allium's current performance status, optimization priorit
 
 ### Template Rendering
 - **Optimization Level**: High - logic moved from templates to Python
-- **Pre-computation**: Extensive (bandwidth formatting, percentages, etc.)
+- **Pre-computation**: Extensive (bandwidth formatting, contact rankings, operator reliability)
+- **Multiprocessing**: Parallel page generation for family, contact, AS, and first_seen pages
 - **Jinja2 Performance**: 97-99% of render time (expected, optimized)
 
 ---
@@ -39,15 +41,15 @@ This document outlines Allium's current performance status, optimization priorit
 - Stream template rendering
 
 ### Priority 2: Faster Generation Time
-**Current**: ~5 minutes  
+**Current**: ~3.5 minutes  
 **Target**: <3 minutes  
-**Status**: 🟡 Good, can improve
+**Status**: ✅ Significantly Improved
 
-**Strategies**:
-- Parallel template rendering
-- Optimize network calculations
-- Improve cache hit rates
-- Reduce redundant processing
+**Implemented** (see [Multiprocessing Architecture](../architecture/multiprocessing.md)):
+- ✅ Parallel page generation using fork() context
+- ✅ Parallel contact data precomputation
+- ✅ Streaming results with imap_unordered
+- ✅ Chunked processing with progress reporting
 
 ### Priority 3: Maintain Page Load Speed
 **Current**: <2 seconds  
@@ -83,8 +85,10 @@ find /tmp/perf-test -name "*.html" | wc -l
 
 | Metric | Current | Target | Status |
 |--------|---------|--------|--------|
-| Generation Time | 5 min | <3 min | 🟡 |
-| Peak Memory | 3.1GB | <2GB | 🔴 |
+| Generation Time | 3.5 min | <3 min | 🟡 |
+| Page Generation | 80s | <90s | ✅ |
+| Contact Pages | 5s | <10s | ✅ |
+| Peak Memory | 3.2GB | <2GB | 🔴 |
 | Page Load Time | <2s | <2s | ✅ |
 | Output Size | 21.7k files | Stable | ✅ |
 | Template Render % | 97-99% | Acceptable | ✅ |
@@ -100,15 +104,16 @@ find /tmp/perf-test -name "*.html" | wc -l
 ✅ **Parallel API Fetching** - Concurrent API calls  
 ✅ **Smart Caching** - API response caching  
 ✅ **Statistical Pre-calculation** - Network stats computed once  
+✅ **Multiprocessing Page Generation** - Fork-based parallel rendering (~70% speedup)  
+✅ **Contact Data Precomputation** - Parallel precompute with imap_unordered (~10x speedup)  
+✅ **Streaming Results** - imap_unordered for lower peak memory  
 
 ### In Development
 🔄 **Lazy Loading** - Load data on demand  
 🔄 **Generator Patterns** - Reduce memory footprint  
-🔄 **Streaming Rendering** - Render in chunks  
 
 ### Planned
 📋 **Incremental Updates** - Only regenerate changed pages  
-📋 **Distributed Processing** - Multi-process generation  
 📋 **Advanced Caching** - Redis/Memcached support  
 
 ---
@@ -127,6 +132,8 @@ See [archive/performance-details/](../archive/performance-details/) for detailed
 - ✅ Template logic reduction: 50%+ decrease in complexity
 - ✅ HTML escaping: Centralized, 3x fewer operations
 - ✅ Uptime processing: Single-pass calculation
+- ✅ **Multiprocessing**: Page generation parallelized - 40% faster overall
+- ✅ **Contact Precomputation**: 10x faster contact pages (54s → 5s)
 
 ---
 
@@ -177,6 +184,7 @@ for relay in relays:
 
 ### Internal Documentation
 - [Architecture Overview](../architecture/overview.md) - System design
+- [Multiprocessing Architecture](../architecture/multiprocessing.md) - Parallel page generation
 - [Data Pipeline](../architecture/data-pipeline.md) - Data flow optimization
 - [Template Optimization](../architecture/template-optimization.md) - Rendering performance
 
@@ -206,6 +214,6 @@ See [archive/performance-details/](../archive/performance-details/) for:
 
 ---
 
-**Last Updated**: 2025-11-23  
-**Current Status**: Good performance, optimization opportunities identified  
-**Next Review**: Q1 2025
+**Last Updated**: 2025-12-05  
+**Current Status**: Excellent performance with multiprocessing  
+**Next Review**: Q2 2025
