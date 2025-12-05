@@ -10,6 +10,8 @@ import os
 import sys
 import time
 import urllib.request
+import urllib.error
+import socket
 import threading
 from pathlib import Path
 from .error_handlers import handle_file_io_errors, handle_http_errors, handle_json_errors
@@ -29,6 +31,27 @@ _state_lock = threading.Lock()
 
 # Worker status tracking
 _worker_status = {}
+
+# ============================================================================
+# UPTIME API CACHE CONFIGURATION
+# ============================================================================
+# These values control the timeout and caching behavior for the uptime API.
+# Adjust these values to tune the balance between responsiveness and data freshness.
+# Uptime API often can take up to 10 minutes around 30 minutes past the hour in Nov and Dec 2025
+#
+# UPTIME_CACHE_MAX_AGE_HOURS: Age (in hours) after which cache is considered stale
+# UPTIME_TIMEOUT_FRESH_CACHE: Timeout (in seconds) when cache is fresh
+# UPTIME_TIMEOUT_STALE_CACHE: Timeout (in seconds) when cache is stale or missing
+#
+# Example adjustments:
+#   - For faster responses with older data: increase UPTIME_CACHE_MAX_AGE_HOURS
+#   - For more patient fetching: increase UPTIME_TIMEOUT_STALE_CACHE
+#   - For quicker timeouts: decrease UPTIME_TIMEOUT_FRESH_CACHE
+# ============================================================================
+UPTIME_CACHE_MAX_AGE_HOURS = 12      # Cache older than this is considered stale
+UPTIME_TIMEOUT_FRESH_CACHE = 30      # 30 seconds for fresh cache
+UPTIME_TIMEOUT_STALE_CACHE = 1200    # 20 minutes for stale/missing cache
+# ============================================================================
 
 
 # Use centralized file I/O utilities
@@ -231,7 +254,12 @@ def fetch_onionoo_details(onionoo_url="https://onionoo.torproject.org/details", 
                    allow_exit_on_304=False, critical=False)
 def fetch_onionoo_uptime(onionoo_url="https://onionoo.torproject.org/uptime", progress_logger=None):
     """
-    Fetch onionoo uptime data from the Tor Project's Onionoo API
+    Fetch onionoo uptime data from the Tor Project's Onionoo API with smart caching.
+    
+    Caching strategy (configurable via constants at top of this file):
+    - If cache is older than UPTIME_CACHE_MAX_AGE_HOURS: wait up to UPTIME_TIMEOUT_STALE_CACHE for fresh data
+    - If cache is newer: use UPTIME_TIMEOUT_FRESH_CACHE, fallback to cache on timeout
+    - This prevents excessive waiting while ensuring cache freshness over time
     
     Args:
         onionoo_url: URL to fetch uptime data from
@@ -246,6 +274,27 @@ def fetch_onionoo_uptime(onionoo_url="https://onionoo.torproject.org/uptime", pr
         if progress_logger:
             progress_logger(message)
     
+    # Check cache age to determine timeout strategy
+    cache_age = _cache_manager.get_cache_age(api_name)
+    cache_max_age_seconds = UPTIME_CACHE_MAX_AGE_HOURS * 3600
+    
+    if cache_age is None:
+        # No cache exists, use longer timeout to establish initial cache
+        timeout_seconds = UPTIME_TIMEOUT_STALE_CACHE
+        timeout_minutes = timeout_seconds / 60
+        log_progress(f"no cache exists, using {timeout_minutes:.0f} minute timeout for initial fetch...")
+    elif cache_age > cache_max_age_seconds:
+        # Cache is stale, wait longer to refresh
+        cache_hours = cache_age / 3600
+        timeout_seconds = UPTIME_TIMEOUT_STALE_CACHE
+        timeout_minutes = timeout_seconds / 60
+        log_progress(f"cache is {cache_hours:.1f} hours old (>{UPTIME_CACHE_MAX_AGE_HOURS}h), using {timeout_minutes:.0f} minute timeout to refresh...")
+    else:
+        # Cache is relatively fresh, use short timeout and fallback to cache if needed
+        cache_minutes = cache_age / 60
+        timeout_seconds = UPTIME_TIMEOUT_FRESH_CACHE
+        log_progress(f"cache is {cache_minutes:.1f} minutes old (<{UPTIME_CACHE_MAX_AGE_HOURS}h), using {timeout_seconds} second timeout...")
+    
     # Check for conditional request timestamp
     prev_timestamp = _read_timestamp(api_name)
     
@@ -255,8 +304,25 @@ def fetch_onionoo_uptime(onionoo_url="https://onionoo.torproject.org/uptime", pr
     else:
         conn = urllib.request.Request(onionoo_url)
 
-    # Add timeout to prevent hanging in CI environments
-    api_response = urllib.request.urlopen(conn, timeout=30).read()
+    # Try to fetch with timeout, fallback to cache on timeout
+    try:
+        api_response = urllib.request.urlopen(conn, timeout=timeout_seconds).read()
+    except (socket.timeout, urllib.error.URLError) as e:
+        # Timeout occurred - check if we have cached data to use
+        if isinstance(e, socket.timeout) or (isinstance(e, urllib.error.URLError) and isinstance(e.reason, socket.timeout)):
+            log_progress(f"request timed out after {timeout_seconds} seconds...")
+            cached_data = _load_cache(api_name)
+            if cached_data:
+                log_progress("using cached uptime data due to timeout")
+                _mark_ready(api_name)
+                return cached_data
+            else:
+                log_progress("no cached data available after timeout")
+                _mark_stale(api_name, f"Timeout after {timeout_seconds}s with no cache")
+                return None
+        else:
+            # Re-raise if it's a different URLError
+            raise
 
     log_progress("parsing JSON response...")
 

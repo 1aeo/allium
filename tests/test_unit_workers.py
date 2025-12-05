@@ -248,27 +248,46 @@ def test_fetch_onionoo_uptime_success():
 
 
 def test_fetch_onionoo_uptime_network_error_with_cache_fallback():
-    """Test network error with cache fallback"""
-    # Test network error handling
+    """Test timeout network error with cache fallback"""
+    # Test timeout error handling with cache available
+    import socket
+    
+    mock_cached_data = {
+        "relays": [{"fingerprint": "CACHED123", "uptime": {"1_month": 92.0}}],
+        "version": "cached_data"
+    }
+    
     with patch('urllib.request.urlopen') as mock_urlopen:
-        mock_urlopen.side_effect = urllib.error.URLError("Network error")
-        
-        result = fetch_onionoo_uptime("http://test.url", progress_logger=None)
-        
-        # Should handle gracefully (may return None or cached data)
-        assert result is None or isinstance(result, dict)
+        with patch('allium.lib.workers._load_cache') as mock_load_cache:
+            with patch('allium.lib.workers._cache_manager') as mock_cache_mgr:
+                # Simulate timeout error
+                mock_urlopen.side_effect = socket.timeout("Network timeout")
+                mock_load_cache.return_value = mock_cached_data
+                mock_cache_mgr.get_cache_age.return_value = 3600  # 1 hour cache
+                
+                result = fetch_onionoo_uptime("http://test.url", progress_logger=None)
+                
+                # Should return cached data on timeout
+                assert result == mock_cached_data
 
 
 def test_fetch_onionoo_uptime_network_error_no_cache():
-    """Test network error without cache"""
-    # Test network error handling without cache
+    """Test timeout network error without cache"""
+    # Test timeout error handling without cache
+    import socket
+    
     with patch('urllib.request.urlopen') as mock_urlopen:
-        mock_urlopen.side_effect = urllib.error.URLError("Network error")
-        
-        result = fetch_onionoo_uptime("http://test.url", progress_logger=None)
-        
-        # Should handle gracefully
-        assert result is None or isinstance(result, dict)
+        with patch('allium.lib.workers._load_cache') as mock_load_cache:
+            with patch('allium.lib.workers._cache_manager') as mock_cache_mgr:
+                # Simulate timeout error
+                mock_urlopen.side_effect = socket.timeout("Network timeout")
+                mock_load_cache.return_value = None  # No cache
+                mock_cache_mgr.get_cache_age.return_value = None
+                
+                result = fetch_onionoo_uptime("http://test.url", progress_logger=None)
+                
+                # Should return None when no cache available
+                assert result is None
 
 
 def test_fetch_onionoo_uptime_progress_steps():
@@ -290,6 +309,105 @@ def test_fetch_onionoo_uptime_progress_steps():
             
             assert result is not None
             assert isinstance(result, dict)
+
+
+class TestOnionooUptimeCaching:
+    """Test uptime API caching and timeout behavior"""
+    
+    def test_timeout_with_fresh_cache_fallback(self):
+        """Test that with fresh cache (<12h), timeout uses cache fallback"""
+        import socket
+        
+        mock_cached_data = {
+            "relays": [{"fingerprint": "ABC123", "uptime": {"1_month": 95.5}}],
+            "version": "cached_uptime"
+        }
+        
+        # Mock cache age as 1 hour (fresh)
+        with patch('allium.lib.workers._cache_manager') as mock_cache_mgr:
+            with patch('urllib.request.urlopen') as mock_urlopen:
+                with patch('allium.lib.workers._load_cache') as mock_load_cache:
+                    mock_cache_mgr.get_cache_age.return_value = 3600  # 1 hour
+                    mock_urlopen.side_effect = socket.timeout("Timeout")
+                    mock_load_cache.return_value = mock_cached_data
+                    
+                    result = fetch_onionoo_uptime("http://test.url", progress_logger=None)
+                    
+                    # Should return cached data on timeout
+                    assert result == mock_cached_data
+                    # Should have called urlopen with 30 second timeout (fresh cache)
+                    mock_urlopen.assert_called_once()
+                    call_args = mock_urlopen.call_args
+                    assert call_args[1]['timeout'] == 30
+    
+    def test_timeout_with_stale_cache_waits_longer(self):
+        """Test that with stale cache (>12h), timeout waits 20 minutes"""
+        import socket
+        
+        mock_cached_data = {
+            "relays": [{"fingerprint": "DEF456", "uptime": {"1_month": 90.0}}],
+            "version": "stale_cached_uptime"
+        }
+        
+        # Mock cache age as 15 hours (stale)
+        with patch('allium.lib.workers._cache_manager') as mock_cache_mgr:
+            with patch('urllib.request.urlopen') as mock_urlopen:
+                with patch('allium.lib.workers._load_cache') as mock_load_cache:
+                    mock_cache_mgr.get_cache_age.return_value = 15 * 3600  # 15 hours
+                    mock_urlopen.side_effect = socket.timeout("Timeout")
+                    mock_load_cache.return_value = mock_cached_data
+                    
+                    result = fetch_onionoo_uptime("http://test.url", progress_logger=None)
+                    
+                    # Should still return cached data on timeout
+                    assert result == mock_cached_data
+                    # Should have called urlopen with 1200 second (20 min) timeout
+                    mock_urlopen.assert_called_once()
+                    call_args = mock_urlopen.call_args
+                    assert call_args[1]['timeout'] == 1200
+    
+    def test_no_cache_uses_long_timeout(self):
+        """Test that with no cache, function uses 20 minute timeout"""
+        mock_data = {
+            "relays": [{"fingerprint": "GHI789", "uptime": {"1_month": 98.0}}],
+            "version": "fresh_uptime"
+        }
+        
+        # Mock no cache
+        with patch('allium.lib.workers._cache_manager') as mock_cache_mgr:
+            with patch('urllib.request.urlopen') as mock_urlopen:
+                with patch('allium.lib.workers._load_cache') as mock_load_cache:
+                    mock_cache_mgr.get_cache_age.return_value = None  # No cache
+                    mock_load_cache.return_value = None
+                    mock_response = MagicMock()
+                    mock_response.read.return_value = json.dumps(mock_data).encode('utf-8')
+                    mock_urlopen.return_value = mock_response
+                    
+                    result = fetch_onionoo_uptime("http://test.url", progress_logger=None)
+                    
+                    # Should return fresh data
+                    assert result is not None
+                    # Should have called urlopen with 1200 second (20 min) timeout
+                    mock_urlopen.assert_called_once()
+                    call_args = mock_urlopen.call_args
+                    assert call_args[1]['timeout'] == 1200
+    
+    def test_timeout_without_cache_returns_none(self):
+        """Test that timeout without cache returns None"""
+        import socket
+        
+        # Mock no cache
+        with patch('allium.lib.workers._cache_manager') as mock_cache_mgr:
+            with patch('urllib.request.urlopen') as mock_urlopen:
+                with patch('allium.lib.workers._load_cache') as mock_load_cache:
+                    mock_cache_mgr.get_cache_age.return_value = None  # No cache
+                    mock_urlopen.side_effect = socket.timeout("Timeout")
+                    mock_load_cache.return_value = None
+                    
+                    result = fetch_onionoo_uptime("http://test.url", progress_logger=None)
+                    
+                    # Should return None when no cache available
+                    assert result is None
 
 
 class TestPlaceholderWorkers:
