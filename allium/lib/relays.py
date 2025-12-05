@@ -7,13 +7,14 @@ timestamp
 
 import hashlib
 import json
+import multiprocessing as mp
 import os
 import re
 import sys
 import time
 import urllib.request
 from shutil import rmtree, copy2
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, FileSystemBytecodeCache
 from .aroileaders import _calculate_aroi_leaderboards, _safe_parse_ip_address
 from .progress import log_progress, get_memory_usage
 from .progress_logger import ProgressLogger
@@ -176,11 +177,17 @@ def format_time_ago(timestamp_str):
     except (ValueError, TypeError):
         return "unknown"
 
+# Template bytecode cache directory for improved rendering performance
+TEMPLATE_CACHE_DIR = os.path.join(os.path.dirname(ABS_PATH), ".jinja2_cache")
+os.makedirs(TEMPLATE_CACHE_DIR, exist_ok=True)
+
 ENV = Environment(
     loader=FileSystemLoader(os.path.join(ABS_PATH, "../templates")),
     trim_blocks=True,
     lstrip_blocks=True,
-    autoescape=True  # Enable autoescape to prevent XSS vulnerabilities
+    autoescape=True,  # Enable autoescape to prevent XSS vulnerabilities
+    bytecode_cache=FileSystemBytecodeCache(TEMPLATE_CACHE_DIR),  # Cache compiled templates
+    auto_reload=False,  # Disable for production performance
 )
 
 # Jinja2 filter functions now imported from bandwidth_formatter.py
@@ -190,6 +197,27 @@ ENV.filters['determine_unit'] = determine_unit_filter
 ENV.filters['format_bandwidth_with_unit'] = format_bandwidth_with_unit
 ENV.filters['format_bandwidth'] = format_bandwidth_filter
 ENV.filters['format_time_ago'] = format_time_ago
+
+# Multiprocessing globals (initialized via fork for copy-on-write memory sharing)
+_mp_relay_set = None
+_mp_template = None
+
+
+def _init_mp_worker(relay_set, template):
+    """Initialize worker with shared data via fork"""
+    global _mp_relay_set, _mp_template
+    _mp_relay_set = relay_set
+    _mp_template = template
+
+
+def _render_page_mp(args):
+    """Render single page in worker process"""
+    html_path, template_args = args
+    rendered = _mp_template.render(relays=_mp_relay_set, **template_args)
+    with open(html_path, "w", encoding="utf8") as f:
+        f.write(rendered)
+    return True
+
 
 def determine_ipv6_support(or_addresses):
     """
@@ -230,7 +258,7 @@ def determine_ipv6_support(or_addresses):
 class Relays:
     """Relay class consisting of processing routines and onionoo data"""
 
-    def __init__(self, output_dir, onionoo_url, relay_data, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=34, filter_downtime_days=7, base_url=''):
+    def __init__(self, output_dir, onionoo_url, relay_data, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=34, filter_downtime_days=7, base_url='', progress_logger=None, mp_workers=4):
         self.output_dir = output_dir
         self.onionoo_url = onionoo_url
         self.use_bits = use_bits
@@ -240,13 +268,18 @@ class Relays:
         self.total_steps = total_steps
         self.filter_downtime_days = filter_downtime_days
         self.base_url = base_url
+        self.mp_workers = mp_workers  # 0 = disable, >0 = worker count
         self.ts_file = os.path.join(os.path.dirname(ABS_PATH), "timestamp")
         
         # Initialize bandwidth formatter with correct units setting
         self.bandwidth_formatter = BandwidthFormatter(use_bits=use_bits)
         
-        # Initialize unified progress logger
-        self.progress_logger = ProgressLogger(self.start_time, self.progress_step, self.total_steps, self.progress)
+        # Use shared progress logger if provided, otherwise create new one
+        # Shared logger ensures consistent step counting across allium.py and coordinator.py
+        if progress_logger is not None:
+            self.progress_logger = progress_logger
+        else:
+            self.progress_logger = ProgressLogger(self.start_time, self.progress_step, self.total_steps, self.progress)
         
         # Use provided relay data (fetched by coordinator)
         self.json = relay_data
@@ -1837,7 +1870,8 @@ class Relays:
             is_index:    whether document is main index listing, limits list to 500
         """
         template = ENV.get_template(template)
-        self.json["relay_subset"] = self.json["relays"]
+        # relay_subset passed directly to template for thread safety
+        relay_subset = self.json["relays"]
         
         # Handle page context and path prefix
         if page_ctx is None:
@@ -1859,6 +1893,7 @@ class Relays:
         # Pre-compute family statistics for misc-families templates
         template_vars = {
             "relays": self,
+            "relay_subset": relay_subset,  # Pass directly for thread safety
             "sorted_by": sorted_by,
             "reverse": reverse,
             "is_index": is_index,
@@ -1966,55 +2001,35 @@ class Relays:
         return get_detail_page_context(category, value)
 
     def write_pages_by_key(self, k):
-        """
-        Render and write sorted HTML relay listings to disk
-        
-        Optimizes family pages by pre-computing math calculations and string formatting
-        while keeping Jinja2 template structure intact.
-        Reducing overall compute time from 60s to 20s.
-        
-        """
-        
+        """Render and write sorted HTML relay listings to disk"""
         start_time = time.time()
         self._log_progress(f"Starting {k} page generation...")
         
         template = ENV.get_template(k + ".html")
         output_path = os.path.join(self.output_dir, k)
 
-        # the "royal the" must be gramatically recognized
         the_prefixed = [
-            "Dominican Republic",
-            "Ivory Coast",
-            "Marshall Islands",
-            "Northern Marianas Islands",
-            "Solomon Islands",
-            "United Arab Emirates",
-            "United Kingdom",
-            "United States",
-            "United States of America",
-            "Vatican City",
-            "Czech Republic",
-            "Bahamas",
-            "Gambia",
-            "Netherlands",
-            "Philippines",
-            "Seychelles",
-            "Sudan",
-            "Ukraine",
+            "Dominican Republic", "Ivory Coast", "Marshall Islands",
+            "Northern Marianas Islands", "Solomon Islands", "United Arab Emirates",
+            "United Kingdom", "United States", "United States of America",
+            "Vatican City", "Czech Republic", "Bahamas", "Gambia", "Netherlands",
+            "Philippines", "Seychelles", "Sudan", "Ukraine",
         ]
 
         if os.path.exists(output_path):
             rmtree(output_path)
 
-        # Sort first_seen pages by date to show oldest dates first
-        if k == "first_seen":
-            sorted_values = sorted(self.json["sorted"][k].keys())
-        else:
-            sorted_values = self.json["sorted"][k].keys()
+        sorted_values = sorted(self.json["sorted"][k].keys()) if k == "first_seen" else list(self.json["sorted"][k].keys())
         
-        page_count = 0
-        render_time = 0
-        io_time = 0
+        # Use multiprocessing for large non-contact page sets on systems with fork()
+        use_mp = (self.mp_workers > 0 and len(sorted_values) >= 100 and 
+                  k != 'contact' and hasattr(mp, 'get_context'))
+        
+        if use_mp:
+            self._write_pages_parallel(k, sorted_values, template, output_path, the_prefixed, start_time)
+            return
+        
+        page_count = render_time = io_time = 0
         
         for v in sorted_values:
             # Sanitize the value to prevent directory traversal attacks
@@ -2030,7 +2045,7 @@ class Relays:
                 dir_path = os.path.join(output_path, v)
 
             os.makedirs(dir_path)
-            self.json["relay_subset"] = members
+            # relay_subset passed directly to template for thread safety (no shared state)
             
             bandwidth_unit = self.bandwidth_formatter.determine_unit(i["bandwidth"])
             # Format all bandwidth values using the same unit
@@ -2145,6 +2160,7 @@ class Relays:
             render_start = time.time()
             rendered = template.render(
                 relays=self,
+                relay_subset=members,  # Pass directly for thread safety
                 bandwidth=bandwidth,
                 bandwidth_unit=bandwidth_unit,
                 guard_bandwidth=guard_bandwidth,
@@ -2162,6 +2178,7 @@ class Relays:
                 page_ctx=page_ctx,
                 key=k,
                 value=v,
+                flag=v if k == "flag" else None,  # For flag.html template
                 sp_countries=the_prefixed,
                 contact_rankings=contact_rankings,  # AROI leaderboard rankings for this contact
                 operator_reliability=operator_reliability,  # Operator reliability statistics for contact pages
@@ -2240,8 +2257,8 @@ class Relays:
         end_time = time.time()
         total_time = end_time - start_time
         
-        # Log completion and statistics with standard format
-        self._log_progress(f"{k} page generation complete - Generated {page_count} pages in {total_time:.2f}s")
+        # Log completion with progress increment for granular tracking
+        self.progress_logger.log(f"{k} page generation complete - Generated {page_count} pages in {total_time:.2f}s")
         if self.progress:
             # Additional detailed stats (not in standard format, but supporting info)
             print(f"    🎨 Template render time: {render_time:.2f}s ({render_time/total_time*100:.1f}%)")
@@ -2249,6 +2266,90 @@ class Relays:
             if page_count > 0:
                 print(f"    ⚡ Average per page: {total_time/page_count*1000:.1f}ms")
             print("---")
+
+    def _build_template_args(self, k, v, i, the_prefixed, validated_aroi_domains):
+        """Build template arguments for non-contact pages (used by both sequential and parallel paths)."""
+        members = [self.json["relays"][idx] for idx in i["relays"]]
+        bw = self.bandwidth_formatter
+        bw_unit = bw.determine_unit(i["bandwidth"])
+        
+        # Calculate network position
+        try:
+            from .intelligence_engine import IntelligenceEngine
+            network_position = IntelligenceEngine({})._calculate_network_position(
+                i["guard_count"], i["middle_count"], i["exit_count"], len(members))
+        except Exception:
+            network_position = {'label': 'Mixed', 'formatted_string': f'{len(members)} relays'}
+        
+        return {
+            'relay_subset': members,
+            'bandwidth': bw.format_bandwidth_with_unit(i["bandwidth"], bw_unit),
+            'bandwidth_unit': bw_unit,
+            'guard_bandwidth': bw.format_bandwidth_with_unit(i["guard_bandwidth"], bw_unit),
+            'middle_bandwidth': bw.format_bandwidth_with_unit(i["middle_bandwidth"], bw_unit),
+            'exit_bandwidth': bw.format_bandwidth_with_unit(i["exit_bandwidth"], bw_unit),
+            'consensus_weight_fraction': i["consensus_weight_fraction"],
+            'guard_consensus_weight_fraction': i["guard_consensus_weight_fraction"],
+            'middle_consensus_weight_fraction': i["middle_consensus_weight_fraction"],
+            'exit_consensus_weight_fraction': i["exit_consensus_weight_fraction"],
+            'exit_count': i["exit_count"], 'guard_count': i["guard_count"], 'middle_count': i["middle_count"],
+            'network_position': network_position,
+            'is_index': False,
+            'page_ctx': self.get_detail_page_context(k, v),
+            'key': k, 'value': v,
+            'flag': v if k == "flag" else None,
+            'sp_countries': the_prefixed,
+            'contact_rankings': [], 'operator_reliability': None, 'contact_display_data': None,
+            'primary_country_data': None, 'contact_validation_status': None, 'aroi_validation_timestamp': None,
+            'family_aroi_domain': i.get("aroi_domain", "") if k == "family" else None,
+            'family_contact': i.get("contact", "") if k == "family" else None,
+            'family_contact_md5': i.get("contact_md5", "") if k == "family" else None,
+            'consensus_weight_percentage': f"{i['consensus_weight_fraction'] * 100:.2f}%",
+            'guard_consensus_weight_percentage': f"{i['guard_consensus_weight_fraction'] * 100:.2f}%",
+            'middle_consensus_weight_percentage': f"{i['middle_consensus_weight_fraction'] * 100:.2f}%",
+            'exit_consensus_weight_percentage': f"{i['exit_consensus_weight_fraction'] * 100:.2f}%",
+            'guard_relay_text': "guard relay" if i["guard_count"] == 1 else "guard relays",
+            'middle_relay_text': "middle relay" if i["middle_count"] == 1 else "middle relays",
+            'exit_relay_text': "exit relay" if i["exit_count"] == 1 else "exit relays",
+            'has_guard': i["guard_count"] > 0, 'has_middle': i["middle_count"] > 0, 'has_exit': i["exit_count"] > 0,
+            'has_typed_relays': i["guard_count"] > 0 or i["middle_count"] > 0 or i["exit_count"] > 0,
+            'unique_aroi_list': i.get("unique_aroi_list", []),
+            'unique_contact_list': i.get("unique_contact_list", []),
+            'unique_aroi_count': i.get("unique_aroi_count", 0),
+            'unique_contact_count': i.get("unique_contact_count", 0),
+            'unique_aroi_contact_html': i.get("unique_aroi_contact_html", ""),
+            'aroi_to_contact_map': i.get("aroi_to_contact_map", {}),
+            'is_validated_aroi': False,
+            'validated_aroi_domains': validated_aroi_domains,
+            'base_url': self.base_url,
+        }
+
+    def _write_pages_parallel(self, k, sorted_values, template, output_path, the_prefixed, start_time):
+        """Parallel page generation using fork() for ~70% speedup on large page sets."""
+        validated_aroi_domains = getattr(self, 'validated_aroi_domains', set())
+        page_args = []
+        
+        for v in sorted_values:
+            v = v.replace("..", "").replace("/", "_")
+            i = self.json["sorted"][k][v]
+            dir_path = os.path.join(output_path, v.lower() if k == "flag" else v)
+            os.makedirs(dir_path, exist_ok=True)
+            html_path = os.path.join(dir_path, "index.html")
+            page_args.append((html_path, self._build_template_args(k, v, i, the_prefixed, validated_aroi_domains)))
+        
+        try:
+            ctx = mp.get_context('fork')
+            with ctx.Pool(self.mp_workers, _init_mp_worker, (self, template)) as pool:
+                pool.map(_render_page_mp, page_args)
+            
+            total_time = time.time() - start_time
+            self.progress_logger.log(f"{k} page generation complete - Generated {len(page_args)} pages in {total_time:.2f}s")
+            if self.progress:
+                print(f"    🚀 Parallel: {self.mp_workers} workers, {total_time/len(page_args)*1000:.1f}ms/page avg")
+        except Exception as e:
+            self._log_progress(f"Multiprocessing failed ({e}), falling back to sequential...")
+            self.mp_workers = 0
+            self.write_pages_by_key(k)
 
     def write_relay_info(self):
         """

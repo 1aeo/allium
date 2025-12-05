@@ -32,6 +32,31 @@ class TestContactTemplateIntegration(unittest.TestCase):
         self.jinja_env.filters['format_bandwidth'] = format_bandwidth_filter
         self.jinja_env.filters['format_time_ago'] = format_time_ago
         
+        # Sample relay data - shared between relay_subset and relays.json.relay_subset
+        self.sample_relay = {
+            'aroi_domain': 'example.org',
+            'country': 'us',
+            'country_name': 'United States',
+            'observed_bandwidth': 1000000,
+            'nickname': 'TestRelay',
+            'fingerprint': 'ABC123DEF456',
+            'running': True,
+            'flags': ['Running', 'Valid'],
+            'flags_escaped': ['Running', 'Valid'],
+            'flags_lower_escaped': ['running', 'valid'],
+            'effective_family': [],
+            'measured': True,
+            'uptime_display': 'UP 5d 12h',
+            'uptime_api_display': '99.5%',
+            'or_addresses': ['192.168.1.1:9001'],
+            'as': 'AS7922',
+            'as_name': 'Comcast Cable',
+            'platform': 'Linux',
+            'first_seen': '2023-01-01 12:00:00',
+            'first_seen_date_escaped': '2023-01-01',
+            'contact_md5': 'abcd1234'
+        }
+        
         # Sample template context data
         self.template_context = {
             'contact': 'test@example.com',
@@ -47,30 +72,11 @@ class TestContactTemplateIntegration(unittest.TestCase):
                 'middle_percentage': 20,
                 'exit_percentage': 40
             },
+            # relay_subset is now passed directly to templates (Option 3 change)
+            'relay_subset': [self.sample_relay],
             'relays': {
                 'json': {
-                    'relay_subset': [{
-                        'aroi_domain': 'example.org',
-                        'country': 'us',
-                        'country_name': 'United States',
-                        'observed_bandwidth': 1000000,
-                        'nickname': 'TestRelay',
-                        'fingerprint': 'ABC123DEF456',
-                        'running': True,
-                        'flags': ['Running', 'Valid'],
-                        'flags_escaped': ['Running', 'Valid'],
-                        'flags_lower_escaped': ['running', 'valid'],
-                        'effective_family': [],
-                        'measured': True,
-                        'uptime_display': 'UP 5d 12h',
-                        'uptime_api_display': '99.5%',
-                        'or_addresses': ['192.168.1.1:9001'],
-                        'as': 'AS7922',
-                        'as_name': 'Comcast Cable',
-                        'platform': 'Linux',
-                        'first_seen': '2023-01-01 12:00:00',
-                        'first_seen_date_escaped': '2023-01-01'
-                    }]
+                    'relay_subset': [self.sample_relay]  # Keep for backward compat in tests
                 },
                 'use_bits': False
             },
@@ -318,7 +324,9 @@ class TestContactTemplateIntegration(unittest.TestCase):
 
     def test_contact_template_no_aroi_domain(self):
         """Test handling when no AROI domain is available."""
-        context_no_domain = self.template_context.copy()
+        import copy
+        context_no_domain = copy.deepcopy(self.template_context)
+        context_no_domain['relay_subset'][0]['aroi_domain'] = 'none'
         context_no_domain['relays']['json']['relay_subset'][0]['aroi_domain'] = 'none'
         
         template = self.jinja_env.get_template('contact.html')
