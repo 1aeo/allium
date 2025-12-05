@@ -258,7 +258,7 @@ def determine_ipv6_support(or_addresses):
 class Relays:
     """Relay class consisting of processing routines and onionoo data"""
 
-    def __init__(self, output_dir, onionoo_url, relay_data, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=34, filter_downtime_days=7, base_url='', mp_workers=4):
+    def __init__(self, output_dir, onionoo_url, relay_data, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=34, filter_downtime_days=7, base_url='', progress_logger=None, mp_workers=4):
         self.output_dir = output_dir
         self.onionoo_url = onionoo_url
         self.use_bits = use_bits
@@ -274,8 +274,12 @@ class Relays:
         # Initialize bandwidth formatter with correct units setting
         self.bandwidth_formatter = BandwidthFormatter(use_bits=use_bits)
         
-        # Initialize unified progress logger
-        self.progress_logger = ProgressLogger(self.start_time, self.progress_step, self.total_steps, self.progress)
+        # Use shared progress logger if provided, otherwise create new one
+        # Shared logger ensures consistent step counting across allium.py and coordinator.py
+        if progress_logger is not None:
+            self.progress_logger = progress_logger
+        else:
+            self.progress_logger = ProgressLogger(self.start_time, self.progress_step, self.total_steps, self.progress)
         
         # Use provided relay data (fetched by coordinator)
         self.json = relay_data
@@ -2253,8 +2257,8 @@ class Relays:
         end_time = time.time()
         total_time = end_time - start_time
         
-        # Log completion and statistics with standard format
-        self._log_progress(f"{k} page generation complete - Generated {page_count} pages in {total_time:.2f}s")
+        # Log completion with progress increment for granular tracking
+        self.progress_logger.log(f"{k} page generation complete - Generated {page_count} pages in {total_time:.2f}s")
         if self.progress:
             # Additional detailed stats (not in standard format, but supporting info)
             print(f"    🎨 Template render time: {render_time:.2f}s ({render_time/total_time*100:.1f}%)")
@@ -2339,7 +2343,7 @@ class Relays:
                 pool.map(_render_page_mp, page_args)
             
             total_time = time.time() - start_time
-            self._log_progress(f"{k} page generation complete - Generated {len(page_args)} pages in {total_time:.2f}s")
+            self.progress_logger.log(f"{k} page generation complete - Generated {len(page_args)} pages in {total_time:.2f}s")
             if self.progress:
                 print(f"    🚀 Parallel: {self.mp_workers} workers, {total_time/len(page_args)*1000:.1f}ms/page avg")
         except Exception as e:

@@ -193,14 +193,59 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     start_time = time.time()
-    # Updated to account for all actual progress steps:
-    # Setup steps (1-4): starting, output dir creation, ready, initializing
-    # API steps (5-18): threaded fetching, both APIs (fetch->parse->cache->success->complete), relay set creation
-    # Site generation steps (19-35): data loaded, index, top500, all relays, AROI, misc pages, unique values, relay info, static files, completion
+    
+    # Progress step breakdown (total: 61 steps):
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # Setup (4 steps):
+    #   1. Starting allium
+    #   2. Creating output directory
+    #   3. Output directory ready
+    #   4. Initializing relay data
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # Coordinator - API Fetching (26 steps, 5-30):
+    #   5. Section start
+    #   6. Starting threaded API fetching
+    #   7-8. Details API & Uptime API start
+    #   9-14. Bandwidth API & AROI API (fetch, parse, cache)
+    #   15-28. API workers completing
+    #   29. All workers completed
+    #   30. Section end
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # Coordinator - Data Processing (4 steps, 31-34):
+    #   31. Section start
+    #   32. Calculating network percentiles
+    #   33. Relay set created
+    #   34. Section end
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # Page Generation (27 steps, 35-61):
+    #   35. Details API data loaded
+    #   36. Section start
+    #   37-38. Index page (generating + generated)
+    #   39-40. Top 500 page (generating + generated)
+    #   41-42. All relays page (generating + generated)
+    #   43-44. AROI leaderboards page (generating + generated)
+    #   45-46. Network health dashboard (generating + generated)
+    #   47-48. Miscellaneous sorted pages (generating + generated)
+    #   49-50. Directory authorities (generating + generated)
+    #   51. Family pages complete (with detailed timing)
+    #   52. Contact pages complete (with detailed timing)
+    #   53. AS pages complete (with detailed timing)
+    #   54. Country pages complete (with detailed timing)
+    #   55. Flag pages complete (with detailed timing)
+    #   54. Platform pages complete (with detailed timing)
+    #   55. First_seen pages complete (with detailed timing)
+    #   56. Generating individual relay pages
+    #   57. Generated individual pages
+    #   58. Copying static files
+    #   59. Copied/skipped static files
+    #   60. Section end
+    #   61. Completion message
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    
     setup_steps = 4
-    api_steps = 26  # API-related steps with parallel fetching (Details, Uptime, Bandwidth, AROI validation with detailed logging)
-    site_generation_steps = 19  # Site generation and completion steps (includes relay set processing, page generation)
-    total_steps = setup_steps + api_steps + site_generation_steps  # 49 total steps
+    coordinator_steps = 30  # API Fetching (26) + Data Processing (4)
+    page_generation_steps = 27  # Page generation and completion (includes 7 individual key type steps)
+    total_steps = setup_steps + coordinator_steps + page_generation_steps  # 61 total steps
 
     # Create unified progress logger
     progress_logger = create_progress_logger(start_time, 0, total_steps, args.progress)
@@ -257,8 +302,8 @@ if __name__ == "__main__":
         print("💡 Try running the command again, or check your internet connection")
         sys.exit(1)
     
-    # Update progress_step from the RELAY_SET object (it was incremented during API processing and intelligence analysis)
-    progress_logger.set_step(RELAY_SET.progress_step)
+    # Progress logger is already synchronized via shared instance - no manual sync needed
+    # (Removing set_step() prevents backwards jump in progress counter)
     progress_logger.log(f"Details API data loaded successfully - found {len(RELAY_SET.json.get('relays', []))} relays")
 
     # Output directory already created early via ensure_output_directory() - skip redundant creation
@@ -372,10 +417,13 @@ if __name__ == "__main__":
         "first_seen",
     ]
 
-    progress_logger.log("Generating pages by unique values...")
+    # Generate pages for each unique value type
+    # Each key type increments the progress counter upon completion with detailed timing
+    # (e.g., "family page generation complete - Generated 5756 pages in 44.38s")
+    # Internal progress messages (e.g., "Processed 1000 family pages...") use
+    # log_without_increment for visibility without inflating the counter
     for k in keys:
         RELAY_SET.write_pages_by_key(k)
-    progress_logger.log(f"Generated pages for {len(keys)} unique value types")
 
     # per-relay info pages
     progress_logger.log("Generating individual relay info pages...")

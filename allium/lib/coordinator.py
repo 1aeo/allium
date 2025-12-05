@@ -248,7 +248,8 @@ class Coordinator:
             total_steps=self.total_steps,
             filter_downtime_days=self.filter_downtime_days,
             base_url=self.base_url,
-            mp_workers=self.mp_workers
+            progress_logger=self.progress_logger,  # Pass shared progress logger
+            mp_workers=self.mp_workers  # Multiprocessing workers for parallel page generation
         )
         
         if relay_set.json is None:
