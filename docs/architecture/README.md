@@ -4,6 +4,21 @@ This section contains high-level system architecture and design documentation fo
 
 ## 📋 Documents
 
+### [Multiprocessing Architecture](multiprocessing.md)
+**Parallel page generation for 40% faster site building**
+
+- **Purpose**: Technical documentation for Allium's multiprocessing implementation
+- **Content**: Two-phase approach, fork() context, imap_unordered streaming, flat storage pattern
+- **Audience**: Developers working on performance optimization or page generation
+- **Impact**: 10x faster contact pages, 40% faster overall page generation
+
+**Key Topics:**
+- Parallel contact data precomputation
+- Fork-based worker pools with copy-on-write memory sharing
+- Streaming results with imap_unordered for lower peak memory
+- Flat storage pattern for efficient data access
+- Regression testing for multiprocessing correctness
+
 ### [Intelligence Engine Design](intelligence-engine-design.md)
 **Comprehensive architecture for the smart context intelligence system**
 

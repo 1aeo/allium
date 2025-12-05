@@ -496,5 +496,242 @@ class TestContactTemplateIntegration(unittest.TestCase):
         self.assertIn('≥2σ 97.8% from average μ 99.9%', rendered)
 
 
+class TestContactMultiprocessingRegression(unittest.TestCase):
+    """Regression tests for contact page generation under multiprocessing.
+    
+    Ensures that precomputed contact metadata (rankings, validation, reliability)
+    is properly preserved when pages are rendered in parallel worker processes.
+    """
+    
+    def setUp(self):
+        """Set up test fixtures with minimal relay data for multiprocessing test."""
+        import tempfile
+        import hashlib
+        self.temp_dir = tempfile.mkdtemp()
+        
+        # Compute actual MD5 hashes for contacts (as Relays does)
+        contact1 = "test@example.org"
+        contact2 = "other@example.net"
+        self.contact1_md5 = hashlib.md5(contact1.encode('utf-8')).hexdigest()
+        self.contact2_md5 = hashlib.md5(contact2.encode('utf-8')).hexdigest()
+        
+        # Minimal relay data structure - Relays will call _categorize to build sorted structure
+        self.relay_data = {
+            "relays": [
+                {
+                    "fingerprint": "AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555",
+                    "nickname": "TestRelay1",
+                    "contact": contact1,
+                    "country": "us",
+                    "country_name": "United States",
+                    "as": "AS7922",
+                    "as_name": "Comcast",
+                    "observed_bandwidth": 5000000,
+                    "consensus_weight": 1000,
+                    "flags": ["Running", "Valid", "Guard"],
+                    "running": True,
+                    "measured": True,
+                    "first_seen": "2023-01-01 00:00:00",
+                    "or_addresses": ["192.168.1.1:9001"],
+                    "platform": "Tor 0.4.7.8 on Linux",
+                    "effective_family": [],
+                },
+                {
+                    "fingerprint": "FFFF6666777788889999AAAABBBBCCCCDDDDEEEE",
+                    "nickname": "TestRelay2",
+                    "contact": contact2,
+                    "country": "de",
+                    "country_name": "Germany",
+                    "as": "AS3320",
+                    "as_name": "Deutsche Telekom",
+                    "observed_bandwidth": 3000000,
+                    "consensus_weight": 800,
+                    "flags": ["Running", "Valid", "Exit"],
+                    "running": True,
+                    "measured": True,
+                    "first_seen": "2023-06-01 00:00:00",
+                    "or_addresses": ["10.0.0.1:9001"],
+                    "platform": "Tor 0.4.7.8 on FreeBSD",
+                    "effective_family": [],
+                },
+            ],
+        }
+    
+    def tearDown(self):
+        """Clean up temp directory."""
+        import shutil
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+    
+    def test_contact_precomputation_stores_required_metadata(self):
+        """Test that precomputation stores all required contact metadata directly on contact_data."""
+        # Create a minimal Relays instance - it will call _categorize to build contact sorted structure
+        relay_set = Relays(
+            output_dir=self.temp_dir,
+            onionoo_url="https://test.example.com",
+            relay_data=self.relay_data,
+            use_bits=False,
+            progress=False,
+            mp_workers=0,  # Disable MP for unit test isolation
+        )
+        
+        # Get actual contact hashes from the categorized data
+        contact_hashes = list(relay_set.json["sorted"]["contact"].keys())
+        self.assertGreater(len(contact_hashes), 0, "Should have at least one contact after categorization")
+        
+        # Manually trigger precomputation for contacts
+        aroi_validation_timestamp = "2024-01-01 00:00:00"
+        validated_aroi_domains = set()  # No validated domains in this test
+        
+        for contact_hash in contact_hashes:
+            relay_set._precompute_single_contact(
+                contact_hash, aroi_validation_timestamp, validated_aroi_domains
+            )
+        
+        # Verify required metadata is stored directly on contact_data (not nested)
+        contact1 = relay_set.json["sorted"]["contact"][contact_hashes[0]]
+        
+        # These keys must exist directly on contact_data (flat storage pattern)
+        required_keys = [
+            "contact_rankings",
+            "operator_reliability", 
+            "contact_display_data",
+            "contact_validation_status",
+            "aroi_validation_timestamp",
+            "is_validated_aroi",
+            "precomputed_bandwidth_unit",
+        ]
+        
+        for key in required_keys:
+            self.assertIn(key, contact1, f"Missing required precomputed key: {key}")
+        
+        # Verify contact_display_data is not None
+        self.assertIsNotNone(contact1["contact_display_data"], 
+                            "contact_display_data should not be None after precomputation")
+    
+    def test_contact_page_multiprocessing_preserves_metadata(self):
+        """Regression test: contact page rendering under multiprocessing preserves all metadata.
+        
+        This test forces mp_workers=2 and verifies that the template arguments
+        contain all required contact-specific metadata after parallel precomputation.
+        """
+        import multiprocessing as mp
+        
+        # Skip if fork context not available (Windows)
+        if not hasattr(mp, 'get_context'):
+            self.skipTest("Multiprocessing fork context not available")
+        
+        try:
+            ctx = mp.get_context('fork')
+        except ValueError:
+            self.skipTest("Fork context not supported on this platform")
+        
+        # Create Relays instance with multiprocessing enabled
+        relay_set = Relays(
+            output_dir=self.temp_dir,
+            onionoo_url="https://test.example.com",
+            relay_data=self.relay_data,
+            use_bits=False,
+            progress=False,
+            mp_workers=2,  # Force multiprocessing
+        )
+        
+        # Trigger precomputation (this would normally happen in coordinator)
+        relay_set._precompute_all_contact_page_data()
+        
+        # Get actual contact hash from categorized data
+        contact_hashes = list(relay_set.json["sorted"]["contact"].keys())
+        self.assertGreater(len(contact_hashes), 0, "Should have contacts after categorization")
+        
+        contact_hash = contact_hashes[0]
+        contact_data = relay_set.json["sorted"]["contact"][contact_hash]
+        
+        # Verify metadata is available for template rendering
+        the_prefixed = ["United States"]
+        validated_aroi_domains = set()
+        
+        template_args = relay_set._build_template_args(
+            "contact", contact_hash, contact_data, the_prefixed, validated_aroi_domains
+        )
+        
+        # Verify critical contact metadata is in template args
+        self.assertIn("contact_rankings", template_args)
+        self.assertIn("operator_reliability", template_args)
+        self.assertIn("contact_display_data", template_args)
+        self.assertIn("contact_validation_status", template_args)
+        self.assertIn("aroi_validation_timestamp", template_args)
+        self.assertIn("is_validated_aroi", template_args)
+        
+        # Verify values are not None/empty (regression for missing precomputation)
+        self.assertIsNotNone(template_args["contact_display_data"],
+                            "contact_display_data should not be None after precomputation")
+    
+    def test_build_template_args_uses_flat_storage(self):
+        """Test that _build_template_args reads from flat contact_data, not nested 'precomputed' dict."""
+        relay_set = Relays(
+            output_dir=self.temp_dir,
+            onionoo_url="https://test.example.com",
+            relay_data=self.relay_data,
+            use_bits=False,
+            progress=False,
+            mp_workers=0,
+        )
+        
+        # Get actual contact hash from categorized data
+        contact_hashes = list(relay_set.json["sorted"]["contact"].keys())
+        self.assertGreater(len(contact_hashes), 0, "Should have contacts")
+        
+        contact_hash = contact_hashes[0]
+        contact_data = relay_set.json["sorted"]["contact"][contact_hash]
+        
+        # Manually set flat storage pattern (as done by _precompute_single_contact)
+        contact_data["contact_rankings"] = [{"title": "Test Champion", "badge": "🏆"}]
+        contact_data["operator_reliability"] = {"valid_relays": 1, "total_relays": 1}
+        contact_data["contact_display_data"] = {"test": "data"}
+        contact_data["contact_validation_status"] = {"validation_status": "valid"}
+        contact_data["aroi_validation_timestamp"] = "2024-01-01"
+        contact_data["is_validated_aroi"] = True
+        
+        # Build template args
+        template_args = relay_set._build_template_args(
+            "contact", contact_hash, contact_data, [], set()
+        )
+        
+        # Verify flat storage is used (not nested precomputed dict)
+        self.assertEqual(template_args["contact_rankings"], 
+                        [{"title": "Test Champion", "badge": "🏆"}])
+        self.assertEqual(template_args["operator_reliability"],
+                        {"valid_relays": 1, "total_relays": 1})
+        self.assertTrue(template_args["is_validated_aroi"])
+    
+    def test_precomputation_stores_aroi_domain_for_vanity_urls(self):
+        """Test that aroi_domain is stored during precomputation for efficient vanity URL generation."""
+        relay_set = Relays(
+            output_dir=self.temp_dir,
+            onionoo_url="https://test.example.com",
+            relay_data=self.relay_data,
+            use_bits=False,
+            progress=False,
+            mp_workers=0,
+        )
+        
+        # Get contact hash and trigger precomputation
+        contact_hashes = list(relay_set.json["sorted"]["contact"].keys())
+        self.assertGreater(len(contact_hashes), 0, "Should have contacts")
+        
+        contact_hash = contact_hashes[0]
+        aroi_validation_timestamp = "2024-01-01 00:00:00"
+        validated_aroi_domains = set()
+        
+        relay_set._precompute_single_contact(
+            contact_hash, aroi_validation_timestamp, validated_aroi_domains
+        )
+        
+        contact_data = relay_set.json["sorted"]["contact"][contact_hash]
+        
+        # Verify aroi_domain is stored (used for vanity URL generation without re-fetching members)
+        self.assertIn("aroi_domain", contact_data, 
+                     "aroi_domain should be stored for efficient vanity URL generation")
+
+
 if __name__ == '__main__':
     unittest.main()
