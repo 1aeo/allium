@@ -9,6 +9,10 @@ import time
 import sys
 import os
 import resource
+import threading
+
+# Thread-safe lock for print output to prevent interleaved messages
+_print_lock = threading.Lock()
 
 
 def get_memory_usage():
@@ -62,8 +66,12 @@ def log_progress(message, start_time, progress_step, total_steps, progress_enabl
     try:
         elapsed_time = time.time() - start_time
         memory_info = get_memory_usage()
-        print(f"[{time.strftime('%H:%M:%S', time.gmtime(elapsed_time))}] [{progress_step}/{total_steps}] [{memory_info}] Progress: {message}")
+        output = f"[{time.strftime('%H:%M:%S', time.gmtime(elapsed_time))}] [{progress_step}/{total_steps}] [{memory_info}] Progress: {message}"
     except Exception:
         # Fallback if memory usage fails
         elapsed_time = time.time() - start_time
-        print(f"[{time.strftime('%H:%M:%S', time.gmtime(elapsed_time))}] [{progress_step}/{total_steps}] [Memory: N/A] Progress: {message}") 
+        output = f"[{time.strftime('%H:%M:%S', time.gmtime(elapsed_time))}] [{progress_step}/{total_steps}] [Memory: N/A] Progress: {message}"
+    
+    # Use lock to ensure atomic print output (prevents interleaved messages from multiple threads)
+    with _print_lock:
+        print(output, flush=True) 
