@@ -566,7 +566,7 @@
     <ul style="list-style-type: none; padding-left: 0; margin-bottom: 10px;">
         {% for relay in contact_validation_status.unvalidated_relays %}
         <li style="margin-bottom: 6px; padding: 8px; background-color: #fff; border-radius: 3px; font-size: 13px; border: 1px solid #ffeeba;">
-            <strong><a href="{{ page_ctx.path_prefix }}relay/{{ relay.fingerprint }}/" style="color: #856404; text-decoration: none;">{{ relay.nickname|escape }}</a></strong>
+            <strong><a href="{{ page_ctx.path_prefix }}relay/{{ relay.fingerprint }}/" style="color: #0d6efd; text-decoration: underline;">{{ relay.nickname|escape }}</a></strong>
             <span style="color: #666;">•</span>
             <span style="color: #dc3545;">{{ relay.error|escape }}</span>
             {% if relay.proof_type and relay.proof_type != 'unknown' %}

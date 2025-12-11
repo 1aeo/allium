@@ -1,4 +1,4 @@
-{% from "macros.html" import navigation %}
+{% from "macros.html" import navigation, aroi_validation_icon %}
 {% extends "skeleton.html" -%}
 {% block title -%}
     Tor Relays
@@ -62,30 +62,30 @@
     {% else -%}
 	{% set relay_list = relay_subset -%}
     {% endif -%}
+    {# Use pre-computed fingerprint sets from Python for O(1) lookups #}
+    {% set validated_fps = contact_validation_status.validated_fingerprints if contact_validation_status else {} -%}
+    {% set unvalidated_fps = contact_validation_status.unvalidated_fingerprints if contact_validation_status else {} -%}
     {% for relay in relay_list -%}
 	<tr>
 	    {% set obs_unit = relay['observed_bandwidth']|determine_unit(relays.use_bits) -%}
 	    {% set obs_bandwidth = relay['observed_bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
-	    {% if relay['running'] -%}
-		<td>
+	    <td>
+		{% if relay['running'] -%}
 		    <span class="circle circle-online" title="This relay is online"></span>
-		</td>
-	    {% else -%}
-		<td>
+		{% else -%}
 		    <span class="circle circle-offline" title="This relay is offline"></span>
-		</td>
-	    {% endif -%}
+		{% endif -%}
+		{{- aroi_validation_icon(relay['fingerprint'], relay['aroi_domain'], validated_fps, unvalidated_fps) }}
+	    </td>
 	    {% if relay['effective_family']|length > 1 -%}
 		<td title="{{ relay['nickname']|escape }}">
 		    <a href="{{ page_ctx.path_prefix }}relay/{{ relay['fingerprint']|escape }}/">{{ relay['nickname']|truncate(14)|escape
 			}}</a> (<a href="{{ page_ctx.path_prefix }}family/{{ relay['fingerprint']|escape }}/">{{
-			relay['effective_family']| length }}</a>)
-		    </td>
+			relay['effective_family']| length }}</a>)</td>
 		{% else -%}
 		    <td title="{{ relay['nickname']|escape }}">
 			<a href="{{ page_ctx.path_prefix }}relay/{{ relay['fingerprint']|escape }}/">{{ relay['nickname']|truncate(14)|escape
-			}}</a>
-		    </td>
+			}}</a></td>
 		{% endif -%}
 		<td>
 		    {{ obs_bandwidth }} {{ obs_unit }}

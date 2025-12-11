@@ -11,6 +11,7 @@ Functional approach for simplicity and maintainability
 
 import json
 import os
+import re
 import time
 import urllib.request
 import urllib.error
@@ -149,6 +150,29 @@ def _categorize_by_missing_fields(aroi_fields: Dict[str, bool], has_contact: boo
     
     # Shouldn't reach here if logic is correct, but defensive
     return 'no_aroi'
+
+
+def _deduplicate_fingerprint_not_found_error(error: str) -> str:
+    """
+    Deduplicate error messages that repeat "Fingerprint not found in URL" for multiple URLs.
+    
+    Example input:
+        "Fingerprint not found in https://prsv.ch/.../rsa-fingerprint.txt; Fingerprint not found in https://www.prsv.ch/.../rsa-fingerprint.txt"
+    
+    Example output:
+        "Fingerprint not found in https://prsv.ch/.../rsa-fingerprint.txt, https://www.prsv.ch/.../rsa-fingerprint.txt"
+    """
+    # Pattern to match "Fingerprint not found in URL" segments separated by semicolons
+    pattern = r'Fingerprint not found in ([^;]+)'
+    matches = re.findall(pattern, error)
+    
+    if len(matches) > 1:
+        # Multiple "Fingerprint not found" messages - combine the URLs
+        urls = [url.strip() for url in matches]
+        return "Fingerprint not found in " + ", ".join(urls)
+    
+    # No deduplication needed
+    return error
 
 
 def _simplify_error_message(error: str) -> tuple:
@@ -718,6 +742,8 @@ def get_contact_validation_status(relays: List[Dict], validation_data: Optional[
         else:
             # Relay has validation error
             error = val_result.get('error', 'Unknown error')
+            # Deduplicate repeated "Fingerprint not found" messages
+            error = _deduplicate_fingerprint_not_found_error(error)
             result['validation_summary']['unvalidated_count'] += 1
             result['unvalidated_relays'].append({
                 'fingerprint': fingerprint,
@@ -752,5 +778,9 @@ def get_contact_validation_status(relays: List[Dict], validation_data: Optional[
     # Set show_detailed_errors flag (already computed during loop)
     if result['unvalidated_relays'] and all_missing_aroi_fields:
         result['show_detailed_errors'] = False
+    
+    # Build fingerprint sets for O(1) lookups in templates
+    result['validated_fingerprints'] = {r['fingerprint'] for r in result['validated_relays']}
+    result['unvalidated_fingerprints'] = {r['fingerprint'] for r in result['unvalidated_relays']}
     
     return result
