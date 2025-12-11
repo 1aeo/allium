@@ -130,4 +130,14 @@
     <li><strong>Contact:</strong> <a href="{{ page_ctx.path_prefix if page_ctx else '../../' }}contact/{{ contact_md5|escape }}/">{% if contact and contact.strip() %}{{ contact|escape }}{% else %}none{% endif %}</a></li>
     {%- endif %}
 </ul>
+{%- endmacro %}
+
+{% macro aroi_validation_icon(fingerprint, aroi_domain, validated_fps, unvalidated_fps) -%}
+    {% if fingerprint in validated_fps -%}
+        <span style="color: #28a745; margin-left: 4px;" title="AROI Validated: This relay's fingerprint has been cryptographically verified via the operator's AROI proof">✓</span>
+    {% elif fingerprint in unvalidated_fps -%}
+        <a href="#aroi-validation-issues" style="color: #ffc107; margin-left: 4px; text-decoration: none;" title="AROI Validation Failed: This relay has AROI configured but validation failed - see details below">⚠</a>
+    {% elif aroi_domain and aroi_domain != 'none' -%}
+        <span style="color: #dc3545; margin-left: 4px;" title="No AROI Validation: This relay has AROI configured but no validation data is available">✗</span>
+    {% endif -%}
 {%- endmacro %} 
