@@ -378,187 +378,688 @@ export const CountryTooltip = forwardRef<HTMLDivElement, CountryTooltipProps>(
 
 ---
 
-### Phase 4: Data Schema Alignment (Day 8-12)
+### Phase 4: Unified Data Schema (Day 8-12)
 
-Both projects consume Onionoo API data but transform it differently. Here's how to align them:
+Both projects consume Onionoo API data but transform it differently. This section defines a **unified data schema** that both systems can share, eliminating redundancy and ensuring consistency.
 
-#### 4.1 Data Field Mapping
+---
 
-| Onionoo Field | Allium Usage | RouteFluxMap Usage |
-|---------------|--------------|-------------------|
-| `fingerprint` | Primary key, URL slug | Primary key, metrics link |
-| `nickname` | Display name | `RelayInfo.nickname` |
-| `observed_bandwidth` | Bytes/sec, formatted | Normalized to [0,1] |
-| `country` | Lowercase 2-letter | Uppercase 2-letter |
-| `latitude/longitude` | Display only | Map positioning |
-| `flags` | Array of strings | Encoded as `M/G/E/H` |
-| `as` | `AS12345` format | Numeric or with prefix |
-| `contact` | Raw + MD5 hash | Not used |
+#### 4.1 Source of Truth Analysis
 
-#### 4.2 Create Shared Data Export (Optional Enhancement)
+| Data Type | Best Source | Rationale |
+|-----------|-------------|-----------|
+| **Relay coordinates** | RouteFluxMap | Has MaxMind GeoIP integration with better accuracy |
+| **Relay metadata** | Onionoo API (shared) | Both already use this |
+| **Country classifications** | Allium | Has sophisticated rarity scoring system |
+| **AROI/operator data** | Allium | Has AROI validation and operator analytics |
+| **Client counts** | RouteFluxMap | Already fetches from Tor Metrics API |
+| **Historical data** | RouteFluxMap | Has Tor Collector integration |
 
-For tighter integration, Allium can export data in RouteFluxMap's format:
+**Recommendation: Each system exports what it does best, other system consumes it.**
+
+---
+
+#### 4.2 Unified Relay Schema
+
+Define a shared JSON schema that both systems can produce and consume:
+
+```typescript
+// shared/schemas/unified-relay.ts
+// This schema can be implemented in both TypeScript and Python
+
+interface UnifiedRelay {
+  // === CORE IDENTITY (from Onionoo) ===
+  fingerprint: string;        // 40-char hex, UPPERCASE (canonical)
+  nickname: string;
+  
+  // === NETWORK INFO ===
+  or_addresses: string[];     // Original format: ["1.2.3.4:9001", "[::1]:9001"]
+  ip: string;                 // Primary IPv4 (extracted)
+  ipv6?: string;              // Primary IPv6 if available
+  port: number;
+  
+  // === GEOGRAPHIC (prefer RouteFluxMap's GeoIP) ===
+  country: string;            // UPPERCASE 2-letter ISO code
+  latitude: number;
+  longitude: number;
+  city?: string;
+  region?: string;
+  
+  // === BANDWIDTH ===
+  observed_bandwidth: number; // bytes/sec (raw from Onionoo)
+  advertised_bandwidth?: number;
+  consensus_weight?: number;
+  consensus_weight_fraction?: number;
+  
+  // === FLAGS ===
+  flags: string[];            // Full array: ["Running", "Guard", "Exit", "HSDir"]
+  flags_compact: string;      // Compact: "MGE" (for visualization)
+  is_exit: boolean;
+  is_guard: boolean;
+  is_hsdir: boolean;
+  
+  // === TIMESTAMPS ===
+  first_seen: string;         // ISO format
+  last_seen: string;
+  last_restarted?: string;
+  
+  // === NETWORK IDENTITY ===
+  as_number: string;          // "AS12345" format (with prefix)
+  as_name?: string;
+  
+  // === OPERATOR (from Allium) ===
+  contact?: string;
+  contact_md5?: string;
+  aroi_domain?: string;
+  aroi_validated?: boolean;
+  
+  // === ALLIUM ENRICHMENTS ===
+  country_rarity_tier?: 'legendary' | 'epic' | 'rare' | 'emerging' | 'common';
+  country_rarity_score?: number;
+  uptime_6m?: number;         // 6-month uptime percentage
+  version?: string;
+  version_status?: 'recommended' | 'experimental' | 'obsolete' | 'unrecommended';
+  platform?: string;          // "linux", "freebsd", "windows", etc.
+}
+```
+
+---
+
+#### 4.3 Field Transformation Rules
+
+**From Onionoo → Unified Format:**
 
 ```python
-# allium/lib/routefluxmap_exporter.py (NEW FILE)
-"""
-Export Allium's processed relay data in RouteFluxMap JSON format.
-This enables RouteFluxMap to show Allium-specific data like AROI info.
-"""
+# allium/lib/schema_transforms.py
 
-import json
-from datetime import datetime
-from typing import Dict, List, Any
-
-def export_for_routefluxmap(relays_data: Dict, output_path: str) -> None:
-    """
-    Export relay data in RouteFluxMap's expected format.
+def onionoo_to_unified(relay: dict) -> dict:
+    """Transform Onionoo relay to unified schema."""
     
-    RouteFluxMap expects:
-    - relays-YYYY-MM-DD.json: Relay locations with metadata
-    - countries-YYYY-MM-DD.json: Client counts by country
-    """
-    nodes = []
+    # Extract IP and port from or_addresses
+    or_addr = relay.get('or_addresses', ['0.0.0.0:9001'])[0]
+    ip, port = parse_or_address(or_addr)
     
-    for relay in relays_data.get('relays', []):
-        lat = relay.get('latitude')
-        lng = relay.get('longitude')
+    # Normalize country code
+    country = (relay.get('country') or 'XX').upper()
+    
+    # Compact flags
+    flags = relay.get('flags', [])
+    flags_compact = ''.join([
+        'G' if 'Guard' in flags else '',
+        'E' if 'Exit' in flags else '',
+        'H' if 'HSDir' in flags else '',
+    ]) or 'M'
+    
+    # AS number normalization
+    as_raw = relay.get('as') or ''
+    as_number = as_raw if as_raw.startswith('AS') else f'AS{as_raw}' if as_raw else ''
+    
+    return {
+        # Core identity
+        'fingerprint': relay.get('fingerprint', '').upper(),
+        'nickname': relay.get('nickname', 'Unnamed'),
         
-        if not lat or not lng:
-            continue
-            
-        nodes.append({
-            'lat': lat,
-            'lng': lng,
-            'x': normalize_lng(lng),
-            'y': normalize_lat(lat),
-            'bandwidth': relay.get('observed_bandwidth', 0),
-            'label': relay.get('nickname', 'Unknown'),
-            'relays': [{
-                'nickname': relay.get('nickname', 'Unknown'),
-                'fingerprint': relay.get('fingerprint', ''),
-                'bandwidth': relay.get('observed_bandwidth', 0),
-                'flags': encode_flags(relay.get('flags', [])),
-                'ip': extract_ip(relay.get('or_addresses', [])),
-                'port': extract_port(relay.get('or_addresses', [])),
-                # Allium-specific enrichments
-                'aroi_domain': relay.get('aroi_domain'),
-                'country_rarity': relay.get('country_rarity_tier'),
-            }]
-        })
-    
-    output = {
-        'version': '1.0.0',
-        'source': 'allium',
-        'generatedAt': datetime.utcnow().isoformat() + 'Z',
-        'published': relays_data.get('relays_published', ''),
-        'nodes': aggregate_by_location(nodes),
-        'bandwidth': sum(n['bandwidth'] for n in nodes),
-        'relayCount': len(nodes),
+        # Network
+        'or_addresses': relay.get('or_addresses', []),
+        'ip': ip,
+        'port': int(port),
+        
+        # Geographic
+        'country': country,
+        'latitude': relay.get('latitude') or 0.0,
+        'longitude': relay.get('longitude') or 0.0,
+        'city': relay.get('city_name'),
+        'region': relay.get('region_name'),
+        
+        # Bandwidth
+        'observed_bandwidth': relay.get('observed_bandwidth', 0),
+        'advertised_bandwidth': relay.get('advertised_bandwidth'),
+        'consensus_weight': relay.get('consensus_weight'),
+        'consensus_weight_fraction': relay.get('consensus_weight_fraction'),
+        
+        # Flags
+        'flags': flags,
+        'flags_compact': flags_compact,
+        'is_exit': 'Exit' in flags,
+        'is_guard': 'Guard' in flags,
+        'is_hsdir': 'HSDir' in flags,
+        
+        # Timestamps
+        'first_seen': relay.get('first_seen', ''),
+        'last_seen': relay.get('last_seen', ''),
+        'last_restarted': relay.get('last_restarted'),
+        
+        # Network identity
+        'as_number': as_number,
+        'as_name': relay.get('as_name'),
+        
+        # Operator
+        'contact': relay.get('contact'),
+        'contact_md5': relay.get('contact_md5'),
+        'aroi_domain': relay.get('aroi_domain'),
+        
+        # Version info
+        'version': relay.get('version'),
+        'version_status': relay.get('version_status'),
+        'platform': relay.get('platform'),
     }
+
+
+def parse_or_address(addr: str) -> tuple:
+    """Parse OR address like '1.2.3.4:9001' or '[::1]:9001'."""
+    if addr.startswith('['):
+        # IPv6: [::1]:9001
+        bracket_end = addr.rfind(']')
+        ip = addr[1:bracket_end]
+        port = addr[bracket_end + 2:] if bracket_end + 2 < len(addr) else '9001'
+    else:
+        # IPv4: 1.2.3.4:9001
+        parts = addr.rsplit(':', 1)
+        ip = parts[0]
+        port = parts[1] if len(parts) > 1 else '9001'
+    return ip, port
+```
+
+**From Unified → RouteFluxMap AggregatedNode:**
+
+```python
+def unified_to_routefluxmap_node(relay: dict) -> dict:
+    """Transform unified relay to RouteFluxMap's AggregatedNode format."""
+    lat = relay['latitude']
+    lng = relay['longitude']
     
-    with open(output_path, 'w') as f:
-        json.dump(output, f, indent=2)
+    return {
+        'lat': lat,
+        'lng': lng,
+        'x': (lng + 180) / 360,  # Normalized for WebGL
+        'y': mercator_y(lat),     # Mercator projection
+        'bandwidth': relay['observed_bandwidth'],
+        'label': relay['nickname'],
+        'relays': [{
+            'nickname': relay['nickname'],
+            'fingerprint': relay['fingerprint'],
+            'bandwidth': relay['observed_bandwidth'],
+            'flags': relay['flags_compact'],
+            'ip': relay['ip'],
+            'port': str(relay['port']),
+            # Extended fields (Allium enrichments)
+            'aroi_domain': relay.get('aroi_domain'),
+            'rarity_tier': relay.get('country_rarity_tier'),
+        }]
+    }
 
 
-def normalize_lng(lng: float) -> float:
-    """Convert longitude to [0,1] range for WebGL."""
-    return (lng + 180) / 360
-
-
-def normalize_lat(lat: float) -> float:
-    """Convert latitude to [0,1] range using Mercator projection."""
+def mercator_y(lat: float) -> float:
+    """Convert latitude to Mercator Y coordinate [0,1]."""
     import math
     lat_rad = lat * (math.pi / 180)
     merc_n = math.log(math.tan(math.pi / 4 + lat_rad / 2))
     return 0.5 + merc_n / (2 * math.pi)
-
-
-def encode_flags(flags: List[str]) -> str:
-    """Encode relay flags as compact string (M=Middle, G=Guard, E=Exit, H=HSDir)."""
-    flag_map = {'Guard': 'G', 'Exit': 'E', 'HSDir': 'H'}
-    encoded = ''.join(flag_map.get(f, '') for f in flags if f in flag_map)
-    return encoded if encoded else 'M'
-
-
-def extract_ip(or_addresses: List[str]) -> str:
-    """Extract first IP address from OR addresses."""
-    if not or_addresses:
-        return ''
-    return or_addresses[0].rsplit(':', 1)[0]
-
-
-def extract_port(or_addresses: List[str]) -> str:
-    """Extract first port from OR addresses."""
-    if not or_addresses:
-        return ''
-    return or_addresses[0].rsplit(':', 1)[-1]
-
-
-def aggregate_by_location(nodes: List[Dict], precision: int = 2) -> List[Dict]:
-    """
-    Aggregate relays at same location (rounded to precision decimal places).
-    This matches RouteFluxMap's AggregatedNode structure.
-    """
-    location_map: Dict[str, Dict] = {}
-    
-    for node in nodes:
-        # Round coordinates for aggregation
-        key = f"{round(node['lat'], precision)},{round(node['lng'], precision)}"
-        
-        if key not in location_map:
-            location_map[key] = {
-                'lat': node['lat'],
-                'lng': node['lng'],
-                'x': node['x'],
-                'y': node['y'],
-                'bandwidth': 0,
-                'relays': [],
-            }
-        
-        location_map[key]['bandwidth'] += node['bandwidth']
-        location_map[key]['relays'].extend(node['relays'])
-    
-    # Generate labels
-    aggregated = []
-    for loc in location_map.values():
-        relay_count = len(loc['relays'])
-        if relay_count == 1:
-            loc['label'] = loc['relays'][0]['nickname']
-        else:
-            loc['label'] = f"{relay_count} relays"
-        aggregated.append(loc)
-    
-    return aggregated
 ```
 
-#### 4.3 Country Code Normalization
+---
 
-RouteFluxMap uses uppercase, Allium uses lowercase. Create a shared normalization:
+#### 4.4 Unified Country Schema
 
 ```typescript
-// routefluxmap/src/lib/utils/country.ts (NEW FILE)
+// shared/schemas/unified-country.ts
+
+interface UnifiedCountry {
+  // === IDENTITY ===
+  code: string;               // UPPERCASE 2-letter ISO code
+  code3?: string;             // 3-letter ISO code
+  name: string;
+  
+  // === RELAY STATS (from Allium) ===
+  relay_count: number;
+  guard_count: number;
+  exit_count: number;
+  middle_count: number;
+  bandwidth_total: number;    // bytes/sec
+  consensus_weight_fraction: number;
+  
+  // === CLIENT STATS (from RouteFluxMap/Tor Metrics) ===
+  client_count?: number;      // Estimated daily users
+  client_lower?: number;      // Confidence interval lower
+  client_upper?: number;      // Confidence interval upper
+  
+  // === ALLIUM CLASSIFICATIONS ===
+  rarity_tier: 'legendary' | 'epic' | 'rare' | 'emerging' | 'common';
+  rarity_score: number;
+  region: 'north_america' | 'europe' | 'asia_pacific' | 'eastern_europe' | 'other';
+  is_eu: boolean;
+  is_five_eyes: boolean;
+  is_fourteen_eyes: boolean;
+  
+  // === GEOGRAPHIC (for visualization) ===
+  centroid: {
+    latitude: number;
+    longitude: number;
+  };
+}
+```
+
+---
+
+#### 4.5 Shared Data Export Files
+
+Create a `/shared/` directory in Allium's output that RouteFluxMap can consume:
+
+```
+www/
+├── relay/                    # Allium relay pages
+├── country/                  # Allium country pages
+├── shared/                   # NEW: Shared data for RouteFluxMap
+│   ├── relays.json           # Unified relay list
+│   ├── countries.json        # Unified country data
+│   ├── classifications.json  # Country rarity tiers
+│   ├── aroi-operators.json   # Validated AROI operators
+│   └── metadata.json         # Generation timestamp, version
+```
+
+**Export Implementation:**
+
+```python
+# allium/lib/shared_data_exporter.py
+"""
+Export processed Allium data in shared format for RouteFluxMap consumption.
+"""
+
+import json
+import os
+from datetime import datetime
+from typing import Dict, List
+
+from .country_utils import (
+    assign_rarity_tier,
+    calculate_relay_count_factor,
+    calculate_network_percentage_factor,
+    calculate_geopolitical_factor,
+    calculate_regional_factor,
+    get_country_region,
+    is_eu_political,
+)
+
+
+class SharedDataExporter:
+    """Export Allium data in formats consumable by RouteFluxMap."""
+    
+    VERSION = '1.0.0'
+    
+    def __init__(self, relays_data: Dict, output_dir: str):
+        self.relays_data = relays_data
+        self.output_dir = os.path.join(output_dir, 'shared')
+        os.makedirs(self.output_dir, exist_ok=True)
+    
+    def export_all(self) -> None:
+        """Export all shared data files."""
+        self.export_metadata()
+        self.export_relays()
+        self.export_countries()
+        self.export_classifications()
+        self.export_aroi_operators()
+    
+    def export_metadata(self) -> None:
+        """Export generation metadata."""
+        metadata = {
+            'version': self.VERSION,
+            'generatedAt': datetime.utcnow().isoformat() + 'Z',
+            'source': 'allium',
+            'relaysPublished': self.relays_data.get('relays_published', ''),
+            'totalRelays': len(self.relays_data.get('relays', [])),
+            'format': 'unified-schema-v1',
+        }
+        self._write_json('metadata.json', metadata)
+    
+    def export_relays(self) -> None:
+        """Export unified relay list (lightweight for RouteFluxMap)."""
+        relays = []
+        
+        for relay in self.relays_data.get('relays', []):
+            # Skip relays without coordinates
+            if not relay.get('latitude') or not relay.get('longitude'):
+                continue
+            
+            unified = {
+                'fp': relay.get('fingerprint', '').upper(),
+                'nick': relay.get('nickname', ''),
+                'lat': relay.get('latitude'),
+                'lng': relay.get('longitude'),
+                'bw': relay.get('observed_bandwidth', 0),
+                'cc': (relay.get('country') or 'XX').upper(),
+                'flags': self._compact_flags(relay.get('flags', [])),
+                'as': relay.get('as', ''),
+            }
+            
+            # Add optional enrichments
+            if relay.get('aroi_domain') and relay['aroi_domain'] != 'none':
+                unified['aroi'] = relay['aroi_domain']
+            
+            relays.append(unified)
+        
+        output = {
+            'version': self.VERSION,
+            'generatedAt': datetime.utcnow().isoformat() + 'Z',
+            'count': len(relays),
+            'relays': relays,
+        }
+        self._write_json('relays.json', output)
+    
+    def export_countries(self) -> None:
+        """Export country statistics."""
+        sorted_data = self.relays_data.get('sorted', {})
+        country_data = sorted_data.get('country', {})
+        total_relays = len(self.relays_data.get('relays', []))
+        
+        countries = {}
+        for cc, data in country_data.items():
+            relay_count = len(data.get('relays', []))
+            
+            countries[cc.upper()] = {
+                'name': data.get('country_name', cc),
+                'relays': relay_count,
+                'guards': data.get('guard_count', 0),
+                'exits': data.get('exit_count', 0),
+                'bandwidth': data.get('bandwidth', 0),
+                'cwFraction': data.get('consensus_weight_fraction', 0),
+            }
+        
+        output = {
+            'version': self.VERSION,
+            'generatedAt': datetime.utcnow().isoformat() + 'Z',
+            'totalRelays': total_relays,
+            'countries': countries,
+        }
+        self._write_json('countries.json', output)
+    
+    def export_classifications(self) -> None:
+        """Export country rarity classifications."""
+        sorted_data = self.relays_data.get('sorted', {})
+        country_data = sorted_data.get('country', {})
+        total_relays = len(self.relays_data.get('relays', []))
+        
+        classifications = {}
+        for cc, data in country_data.items():
+            relay_count = len(data.get('relays', []))
+            
+            # Calculate rarity score using Allium's algorithm
+            rarity_score = (
+                (calculate_relay_count_factor(relay_count) * 4) +
+                (calculate_network_percentage_factor(relay_count, total_relays) * 3) +
+                (calculate_geopolitical_factor(cc) * 2) +
+                (calculate_regional_factor(cc) * 1)
+            )
+            
+            classifications[cc.upper()] = {
+                'tier': assign_rarity_tier(rarity_score),
+                'score': rarity_score,
+                'region': get_country_region(cc),
+                'isEU': is_eu_political(cc),
+                'relays': relay_count,
+                'networkPct': (relay_count / total_relays * 100) if total_relays > 0 else 0,
+            }
+        
+        # Include tier color definitions
+        tier_colors = {
+            'legendary': {'hex': '#FFD700', 'rgb': [255, 215, 0]},
+            'epic': {'hex': '#8A2BE2', 'rgb': [138, 43, 226]},
+            'rare': {'hex': '#1E90FF', 'rgb': [30, 144, 255]},
+            'emerging': {'hex': '#32CD32', 'rgb': [50, 205, 50]},
+            'common': {'hex': '#808080', 'rgb': [128, 128, 128]},
+        }
+        
+        output = {
+            'version': self.VERSION,
+            'generatedAt': datetime.utcnow().isoformat() + 'Z',
+            'totalRelays': total_relays,
+            'tierColors': tier_colors,
+            'countries': classifications,
+        }
+        self._write_json('classifications.json', output)
+    
+    def export_aroi_operators(self) -> None:
+        """Export validated AROI operator data."""
+        sorted_data = self.relays_data.get('sorted', {})
+        contact_data = sorted_data.get('contact', {})
+        
+        operators = []
+        for contact_hash, data in contact_data.items():
+            aroi_domain = data.get('aroi_domain')
+            if not aroi_domain or aroi_domain == 'none':
+                continue
+            
+            # Check if validated
+            is_validated = data.get('is_validated_aroi', False)
+            
+            operators.append({
+                'domain': aroi_domain,
+                'contactHash': contact_hash,
+                'validated': is_validated,
+                'relayCount': len(data.get('relays', [])),
+                'bandwidth': data.get('bandwidth', 0),
+                'countries': list(set(data.get('countries', []))),
+            })
+        
+        # Sort by relay count descending
+        operators.sort(key=lambda x: x['relayCount'], reverse=True)
+        
+        output = {
+            'version': self.VERSION,
+            'generatedAt': datetime.utcnow().isoformat() + 'Z',
+            'totalOperators': len(operators),
+            'operators': operators,
+        }
+        self._write_json('aroi-operators.json', output)
+    
+    def _compact_flags(self, flags: List[str]) -> str:
+        """Compact flags to single string."""
+        result = ''
+        if 'Guard' in flags:
+            result += 'G'
+        if 'Exit' in flags:
+            result += 'E'
+        if 'HSDir' in flags:
+            result += 'H'
+        return result or 'M'
+    
+    def _write_json(self, filename: str, data: Dict) -> None:
+        """Write JSON file with consistent formatting."""
+        path = os.path.join(self.output_dir, filename)
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, separators=(',', ':'))  # Compact JSON
+```
+
+---
+
+#### 4.6 RouteFluxMap Consumption
+
+Update RouteFluxMap to optionally consume Allium's enriched data:
+
+```typescript
+// routefluxmap/src/lib/utils/allium-data.ts
+
+interface AlliumClassifications {
+  version: string;
+  totalRelays: number;
+  tierColors: Record<string, { hex: string; rgb: number[] }>;
+  countries: Record<string, {
+    tier: 'legendary' | 'epic' | 'rare' | 'emerging' | 'common';
+    score: number;
+    region: string;
+    isEU: boolean;
+    relays: number;
+    networkPct: number;
+  }>;
+}
+
+let classificationsCache: AlliumClassifications | null = null;
 
 /**
- * Normalize country code for cross-system compatibility
+ * Fetch country classifications from Allium's shared data export.
+ * Falls back gracefully if Allium data unavailable.
  */
-export function normalizeCountryCode(code: string, format: 'upper' | 'lower' = 'upper'): string {
-  const clean = code.replace(/[^a-zA-Z]/g, '').slice(0, 2);
-  return format === 'upper' ? clean.toUpperCase() : clean.toLowerCase();
+export async function fetchAlliumClassifications(
+  alliumUrl: string
+): Promise<AlliumClassifications | null> {
+  if (classificationsCache) return classificationsCache;
+  
+  try {
+    const response = await fetch(`${alliumUrl}/shared/classifications.json`, {
+      signal: AbortSignal.timeout(5000)
+    });
+    
+    if (!response.ok) return null;
+    
+    classificationsCache = await response.json();
+    return classificationsCache;
+  } catch (err) {
+    console.warn('Failed to fetch Allium classifications:', err);
+    return null;
+  }
 }
 
 /**
- * Country codes that need special handling
+ * Get country color based on Allium's rarity classification.
  */
-export const COUNTRY_SPECIAL_CASES: Record<string, string> = {
-  'UK': 'GB',  // United Kingdom
-  'EN': 'GB',  // England (non-standard)
-};
-
-export function canonicalizeCountryCode(code: string): string {
-  const upper = code.toUpperCase();
-  return COUNTRY_SPECIAL_CASES[upper] || upper;
+export function getCountryColorByRarity(
+  countryCode: string,
+  classifications: AlliumClassifications | null
+): [number, number, number, number] {
+  const DEFAULT_COLOR: [number, number, number, number] = [128, 128, 128, 200];
+  
+  if (!classifications) return DEFAULT_COLOR;
+  
+  const country = classifications.countries[countryCode.toUpperCase()];
+  if (!country) return DEFAULT_COLOR;
+  
+  const tierColor = classifications.tierColors[country.tier];
+  if (!tierColor) return DEFAULT_COLOR;
+  
+  return [...tierColor.rgb, 255] as [number, number, number, number];
 }
+```
+
+---
+
+#### 4.7 Country Code Normalization
+
+Both systems must use consistent country codes. Create shared utility:
+
+```typescript
+// routefluxmap/src/lib/utils/country-codes.ts
+
+/**
+ * Normalize country code to UPPERCASE 2-letter format.
+ * This is the canonical format for the unified schema.
+ */
+export function normalizeCountryCode(code: string): string {
+  if (!code) return 'XX';
+  
+  const clean = code.replace(/[^a-zA-Z]/g, '').toUpperCase().slice(0, 2);
+  
+  // Handle common edge cases
+  const ALIASES: Record<string, string> = {
+    'UK': 'GB',  // United Kingdom
+    'EN': 'GB',  // England (non-standard)
+    'EL': 'GR',  // Greece (EU code vs ISO)
+  };
+  
+  return ALIASES[clean] || clean || 'XX';
+}
+
+// Also add to Python for Allium
+```
+
+```python
+# allium/lib/schema_transforms.py - add this function
+
+def normalize_country_code(code: str) -> str:
+    """Normalize country code to UPPERCASE 2-letter format."""
+    if not code:
+        return 'XX'
+    
+    clean = ''.join(c for c in code if c.isalpha()).upper()[:2]
+    
+    ALIASES = {
+        'UK': 'GB',
+        'EN': 'GB',
+        'EL': 'GR',
+    }
+    
+    return ALIASES.get(clean, clean) or 'XX'
+```
+
+---
+
+#### 4.8 Integration in Allium Build Process
+
+Add shared data export to Allium's build:
+
+```python
+# allium/allium.py - add after page generation completes
+
+from lib.shared_data_exporter import SharedDataExporter
+
+# ... existing code ...
+
+# Export shared data for RouteFluxMap integration
+if args.progress:
+    progress_logger.log("Exporting shared data for visualization integration...")
+
+exporter = SharedDataExporter(RELAY_SET.json, args.output_dir)
+exporter.export_all()
+
+if args.progress:
+    progress_logger.log("Shared data export complete")
+```
+
+---
+
+#### 4.9 Data Flow Summary
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           UNIFIED DATA FLOW                                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+                         ┌─────────────────────┐
+                         │    ONIONOO API      │
+                         │  (Primary Source)   │
+                         └──────────┬──────────┘
+                                    │
+                    ┌───────────────┼───────────────┐
+                    ▼               ▼               ▼
+          ┌─────────────────┐ ┌──────────┐ ┌──────────────────┐
+          │     ALLIUM      │ │ MaxMind  │ │   Tor Metrics    │
+          │   (Analytics)   │ │  GeoIP   │ │  (Client Data)   │
+          └────────┬────────┘ └────┬─────┘ └────────┬─────────┘
+                   │               │                │
+                   │       ┌───────┴────────┐       │
+                   │       │  ROUTEFLUXMAP  │       │
+                   │       │ (Visualization)│◄──────┘
+                   │       └───────┬────────┘
+                   │               │
+                   ▼               ▼
+          ┌─────────────────────────────────────────┐
+          │         SHARED DATA EXPORTS             │
+          │                                         │
+          │  /shared/relays.json      ← Allium      │
+          │  /shared/countries.json   ← Allium      │
+          │  /shared/classifications.json ← Allium  │
+          │  /shared/aroi-operators.json  ← Allium  │
+          │                                         │
+          │  RouteFluxMap fetches these for:        │
+          │  - Country rarity coloring              │
+          │  - AROI operator display                │
+          │  - Relay enrichments                    │
+          └─────────────────────────────────────────┘
+
+BENEFITS:
+✅ Single source of truth for each data type
+✅ No duplication of classification logic
+✅ RouteFluxMap gets Allium's analytics for free
+✅ Allium doesn't need to implement visualization
+✅ Both projects stay independent but connected
 ```
 
 ---
@@ -1332,7 +1833,8 @@ This integration transforms both projects:
 | `deploy/config.env` | Set `PUBLIC_METRICS_URL` | **Required** |
 | `src/lib/config.ts` | Add `getCountryMetricsUrl()`, `getASMetricsUrl()` | Recommended |
 | `src/components/map/CountryLayer.tsx` | Add country detail links | Recommended |
-| `src/lib/utils/rarity.ts` | New file for rarity coloring | Optional |
+| `src/lib/utils/allium-data.ts` | **NEW**: Fetch Allium shared data | Recommended |
+| `src/lib/utils/country-codes.ts` | **NEW**: Country code normalization | Recommended |
 
 ### Allium
 
@@ -1341,7 +1843,19 @@ This integration transforms both projects:
 | `templates/relay-info.html` | Add "View on Map" link | Recommended |
 | `templates/country.html` | Add "View on Map" link | Recommended |
 | `templates/index.html` | Add RouteFluxMap feature card | Recommended |
-| `lib/routefluxmap_exporter.py` | New file for data export | Optional |
+| `lib/shared_data_exporter.py` | **NEW**: Export shared JSON files | **Recommended** |
+| `lib/schema_transforms.py` | **NEW**: Unified schema transformations | Recommended |
+| `allium.py` | Call `SharedDataExporter.export_all()` | Recommended |
+
+### Shared Output Files (Generated by Allium)
+
+| File | Contents | Consumer |
+|------|----------|----------|
+| `www/shared/metadata.json` | Generation timestamp, version | RouteFluxMap |
+| `www/shared/relays.json` | Lightweight relay list with Allium enrichments | RouteFluxMap |
+| `www/shared/countries.json` | Country statistics | RouteFluxMap |
+| `www/shared/classifications.json` | Rarity tiers with colors | RouteFluxMap |
+| `www/shared/aroi-operators.json` | Validated AROI operators | RouteFluxMap |
 
 ---
 
