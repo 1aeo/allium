@@ -399,6 +399,226 @@ Both projects consume Onionoo API data but transform it differently. This sectio
 
 ---
 
+#### 4.1.1 Data Format Alignment Decision
+
+**Key Decision: Allium adopts RouteFluxMap's data formats**
+
+| Format | RouteFluxMap | Allium (Current) | Allium (Modified) |
+|--------|--------------|------------------|-------------------|
+| **Country codes** | UPPERCASE (`US`, `DE`) | lowercase (`us`, `de`) | **→ UPPERCASE** |
+| **Fingerprints** | UPPERCASE (40-char hex) | UPPERCASE | No change |
+| **AS numbers** | `AS12345` or `12345` | `AS12345` | No change |
+
+**Rationale:**
+- RouteFluxMap has **historical data** spanning months/years that would be expensive to migrate
+- Allium generates **fresh data on each build** with no historical data to maintain
+- Therefore, **Allium should adapt to RouteFluxMap's format**
+
+This is a one-time migration for Allium with no backward compatibility concerns.
+
+---
+
+#### 4.1.2 Allium Country Code Migration (UPPERCASE)
+
+**Files requiring modification:**
+
+##### 1. `allium/lib/country_utils.py` - Convert all sets to UPPERCASE
+
+```python
+# BEFORE (lowercase)
+CORE_REGIONS = {
+    'north_america': {'us', 'ca', 'mx'},
+    'europe': {'de', 'fr', 'gb', 'nl', ...},
+    ...
+}
+EU_POLITICAL_REGION = {'at', 'be', 'bg', 'hr', 'cy', ...}
+FRONTIER_COUNTRIES = {'mn', 'tn', 'uy', 'kz', ...}
+
+# AFTER (UPPERCASE)
+CORE_REGIONS = {
+    'north_america': {'US', 'CA', 'MX'},
+    'europe': {'DE', 'FR', 'GB', 'NL', ...},
+    ...
+}
+EU_POLITICAL_REGION = {'AT', 'BE', 'BG', 'HR', 'CY', ...}
+FRONTIER_COUNTRIES = {'MN', 'TN', 'UY', 'KZ', ...}
+```
+
+**Update all comparison functions to use `.upper()` instead of `.lower()`:**
+
+```python
+# BEFORE
+def get_country_region(country_code):
+    country_lower = country_code.lower()
+    for region, countries in CORE_REGIONS.items():
+        if country_lower in countries:
+            return region
+    return 'other'
+
+# AFTER
+def get_country_region(country_code):
+    country_upper = country_code.upper()
+    for region, countries in CORE_REGIONS.items():
+        if country_upper in countries:
+            return region
+    return 'other'
+```
+
+##### 2. `allium/lib/relays.py` - Normalize country codes at ingestion
+
+```python
+# In the relay processing loop, normalize country to UPPERCASE early
+def _process_relay(self, relay):
+    # Normalize country code to UPPERCASE (RouteFluxMap compatibility)
+    if relay.get('country'):
+        relay['country'] = relay['country'].upper()
+    
+    # Rest of processing...
+```
+
+##### 3. `allium/lib/aroileaders.py` - Update comparisons
+
+```python
+# BEFORE
+for country in unique_operator_countries:
+    if country and country.lower() in valid_rare_countries:
+        operator_rare_countries.add(country.upper())
+
+# AFTER (no conversion needed - already uppercase)
+for country in unique_operator_countries:
+    if country and country in valid_rare_countries:
+        operator_rare_countries.add(country)
+```
+
+##### 4. `allium/lib/intelligence_engine.py` - Update comparisons
+
+```python
+# BEFORE
+if country_code.lower() in five_eyes_codes:
+    five_eyes_weight += weight
+
+# AFTER
+if country_code.upper() in five_eyes_codes:
+    five_eyes_weight += weight
+```
+
+##### 5. Templates - No changes needed
+
+Templates already work with whatever case the data uses:
+```jinja2
+{# This works with both 'us' and 'US' #}
+<a href="{{ page_ctx.path_prefix }}country/{{ relay['country']|escape }}/">
+```
+
+**Note:** URL paths will change from `/country/us/` to `/country/US/`. This is fine since Allium regenerates all pages on each build.
+
+---
+
+#### 4.1.3 Complete Country Code Migration Script
+
+Create a one-time migration script to update all country code sets:
+
+```python
+#!/usr/bin/env python3
+"""
+migrate_country_codes.py - Convert Allium country codes to UPPERCASE
+
+Run this script once to update all country code definitions.
+"""
+
+import re
+import os
+
+FILES_TO_UPDATE = [
+    'allium/lib/country_utils.py',
+    'allium/lib/aroileaders.py', 
+    'allium/lib/intelligence_engine.py',
+    'allium/lib/relays.py',
+]
+
+def convert_set_to_uppercase(match):
+    """Convert a set literal from lowercase to uppercase."""
+    content = match.group(0)
+    # Find all 2-letter lowercase codes and uppercase them
+    return re.sub(r"'([a-z]{2})'", lambda m: f"'{m.group(1).upper()}'", content)
+
+def convert_lower_to_upper(content):
+    """Convert .lower() calls to .upper() for country code comparisons."""
+    # Pattern: variable.lower() in country context
+    content = re.sub(
+        r'(country[_\w]*)\s*\.lower\(\)',
+        r'\1.upper()',
+        content
+    )
+    return content
+
+def process_file(filepath):
+    """Process a single file."""
+    with open(filepath, 'r') as f:
+        content = f.read()
+    
+    original = content
+    
+    # Convert set literals with country codes
+    # Match patterns like {'us', 'ca', 'mx'} or {'de', 'fr', 'gb', ...}
+    content = re.sub(
+        r"\{(?:'[a-z]{2}'(?:,\s*)?)+\}",
+        convert_set_to_uppercase,
+        content
+    )
+    
+    # Convert .lower() to .upper() for country variables
+    content = convert_lower_to_upper(content)
+    
+    if content != original:
+        with open(filepath, 'w') as f:
+            f.write(content)
+        print(f"✓ Updated: {filepath}")
+        return True
+    else:
+        print(f"  No changes: {filepath}")
+        return False
+
+def main():
+    print("Converting Allium country codes to UPPERCASE...\n")
+    
+    updated = 0
+    for filepath in FILES_TO_UPDATE:
+        if os.path.exists(filepath):
+            if process_file(filepath):
+                updated += 1
+        else:
+            print(f"  Not found: {filepath}")
+    
+    print(f"\n✅ Updated {updated} files")
+    print("\nNext steps:")
+    print("1. Run tests: pytest tests/")
+    print("2. Rebuild: python3 allium/allium.py --out ./www --progress")
+    print("3. Verify URLs: ls www/country/")
+
+if __name__ == '__main__':
+    main()
+```
+
+---
+
+#### 4.1.4 Validation After Migration
+
+```bash
+# Verify country directories are now UPPERCASE
+ls www/country/
+# Expected: AD/ AE/ AF/ ... US/ ... ZW/
+
+# Verify country links work
+grep -r "country/" www/*.html | head -5
+# Expected: href="/country/US/" not href="/country/us/"
+
+# Run existing tests (should pass after migration)
+pytest tests/ -v
+```
+
+---
+
 #### 4.2 Unified Relay Schema
 
 Define a shared JSON schema that both systems can produce and consume:
@@ -943,51 +1163,85 @@ export function getCountryColorByRarity(
 
 #### 4.7 Country Code Normalization
 
-Both systems must use consistent country codes. Create shared utility:
+After the migration (Section 4.1.2), both systems use **UPPERCASE** country codes. RouteFluxMap already uses uppercase, and Allium will be modified to match.
+
+**Canonical Format:** `UPPERCASE 2-letter ISO 3166-1 alpha-2`
+
+Examples: `US`, `DE`, `GB`, `JP`
+
+##### Shared Normalization Utility (Optional)
+
+If either system receives data from external sources, use this normalizer:
+
+```python
+# allium/lib/country_utils.py - ADD this function
+
+# Country code aliases for edge cases
+COUNTRY_CODE_ALIASES = {
+    'UK': 'GB',  # United Kingdom (common but non-standard)
+    'EN': 'GB',  # England (non-standard)
+    'EL': 'GR',  # Greece (EU uses EL, ISO uses GR)
+}
+
+def normalize_country_code(code: str) -> str:
+    """
+    Normalize country code to UPPERCASE 2-letter ISO format.
+    
+    This is the canonical format used by both Allium and RouteFluxMap.
+    
+    Args:
+        code: Country code in any case, possibly with aliases
+        
+    Returns:
+        UPPERCASE 2-letter ISO code, or 'XX' if invalid
+    """
+    if not code:
+        return 'XX'
+    
+    # Clean and uppercase
+    clean = ''.join(c for c in code if c.isalpha()).upper()[:2]
+    
+    if len(clean) != 2:
+        return 'XX'
+    
+    # Apply aliases
+    return COUNTRY_CODE_ALIASES.get(clean, clean)
+```
 
 ```typescript
 // routefluxmap/src/lib/utils/country-codes.ts
+// RouteFluxMap already uses UPPERCASE, but add alias handling for consistency
 
-/**
- * Normalize country code to UPPERCASE 2-letter format.
- * This is the canonical format for the unified schema.
- */
+const COUNTRY_CODE_ALIASES: Record<string, string> = {
+  'UK': 'GB',
+  'EN': 'GB', 
+  'EL': 'GR',
+};
+
 export function normalizeCountryCode(code: string): string {
   if (!code) return 'XX';
   
   const clean = code.replace(/[^a-zA-Z]/g, '').toUpperCase().slice(0, 2);
   
-  // Handle common edge cases
-  const ALIASES: Record<string, string> = {
-    'UK': 'GB',  // United Kingdom
-    'EN': 'GB',  // England (non-standard)
-    'EL': 'GR',  // Greece (EU code vs ISO)
-  };
+  if (clean.length !== 2) return 'XX';
   
-  return ALIASES[clean] || clean || 'XX';
+  return COUNTRY_CODE_ALIASES[clean] || clean;
 }
-
-// Also add to Python for Allium
 ```
+
+##### After Migration: No Conversion Needed
+
+Once Allium is migrated to UPPERCASE (Section 4.1.2):
 
 ```python
-# allium/lib/schema_transforms.py - add this function
+# BEFORE (required conversion)
+routefluxmap_code = allium_country.upper()  # 'us' → 'US'
 
-def normalize_country_code(code: str) -> str:
-    """Normalize country code to UPPERCASE 2-letter format."""
-    if not code:
-        return 'XX'
-    
-    clean = ''.join(c for c in code if c.isalpha()).upper()[:2]
-    
-    ALIASES = {
-        'UK': 'GB',
-        'EN': 'GB',
-        'EL': 'GR',
-    }
-    
-    return ALIASES.get(clean, clean) or 'XX'
+# AFTER (no conversion needed)
+routefluxmap_code = allium_country  # Already 'US'
 ```
+
+This eliminates all `.lower()` / `.upper()` conversions at integration boundaries.
 
 ---
 
@@ -1025,6 +1279,7 @@ if args.progress:
                          ┌─────────────────────┐
                          │    ONIONOO API      │
                          │  (Primary Source)   │
+                         │  country: 'us'      │  ← lowercase from API
                          └──────────┬──────────┘
                                     │
                     ┌───────────────┼───────────────┐
@@ -1032,35 +1287,58 @@ if args.progress:
           ┌─────────────────┐ ┌──────────┐ ┌──────────────────┐
           │     ALLIUM      │ │ MaxMind  │ │   Tor Metrics    │
           │   (Analytics)   │ │  GeoIP   │ │  (Client Data)   │
+          │                 │ │          │ │                  │
+          │ CONVERTS TO:    │ │          │ │                  │
+          │ country: 'US'   │ │          │ │                  │
           └────────┬────────┘ └────┬─────┘ └────────┬─────────┘
                    │               │                │
                    │       ┌───────┴────────┐       │
                    │       │  ROUTEFLUXMAP  │       │
                    │       │ (Visualization)│◄──────┘
+                   │       │                │
+                   │       │ ALREADY USES:  │
+                   │       │ country: 'US'  │
                    │       └───────┬────────┘
                    │               │
                    ▼               ▼
           ┌─────────────────────────────────────────┐
-          │         SHARED DATA EXPORTS             │
+          │      SHARED DATA (UPPERCASE CODES)      │
           │                                         │
           │  /shared/relays.json      ← Allium      │
           │  /shared/countries.json   ← Allium      │
           │  /shared/classifications.json ← Allium  │
           │  /shared/aroi-operators.json  ← Allium  │
           │                                         │
-          │  RouteFluxMap fetches these for:        │
-          │  - Country rarity coloring              │
-          │  - AROI operator display                │
-          │  - Relay enrichments                    │
+          │  All country codes: 'US', 'DE', 'GB'    │
+          │  No conversion needed at boundaries!    │
           └─────────────────────────────────────────┘
 
-BENEFITS:
-✅ Single source of truth for each data type
-✅ No duplication of classification logic
-✅ RouteFluxMap gets Allium's analytics for free
-✅ Allium doesn't need to implement visualization
-✅ Both projects stay independent but connected
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         WHY ALLIUM ADAPTS                                    │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+  RouteFluxMap                              Allium
+  ────────────                              ──────
+  ✗ Has historical data                    ✓ No historical data
+    (months of JSON files)                   (regenerates on each build)
+    
+  ✗ Hard to migrate                        ✓ Easy to migrate
+    (would break existing URLs,              (one-time code change,
+     client caches, bookmarks)               no backward compat needed)
+     
+  ✓ Keep format as-is                      ✓ Adapt to match RouteFluxMap
+    (UPPERCASE country codes)                (convert to UPPERCASE)
+
+RESULT: Zero conversion overhead at integration boundaries
 ```
+
+**Benefits of Allium Adapting:**
+
+✅ **No data migration** - RouteFluxMap's historical archives untouched
+✅ **No URL changes** - RouteFluxMap URLs stay the same
+✅ **Single format** - Both systems use UPPERCASE, no runtime conversion
+✅ **Simpler code** - Remove all `.lower()` / `.upper()` at boundaries
+✅ **Future-proof** - New integrations also use UPPERCASE standard
 
 ---
 
@@ -1797,23 +2075,28 @@ This integration transforms both projects:
 
 ## Summary: Strategy B Action Items
 
-### Immediate (Day 1)
+### Immediate (Day 1-2)
 
-- [ ] Set `PUBLIC_METRICS_URL=https://allium.1aeo.com` in RouteFluxMap's `config.env`
-- [ ] Deploy RouteFluxMap with new configuration
-- [ ] Verify relay links work: Click relay → "View on Metrics" → Allium page loads
+- [ ] **Allium**: Run country code migration script (Section 4.1.3)
+- [ ] **Allium**: Update `country_utils.py` - convert sets to UPPERCASE
+- [ ] **Allium**: Update comparison functions `.lower()` → `.upper()`
+- [ ] **Allium**: Test build and verify `/country/US/` URLs work
+- [ ] **RouteFluxMap**: Set `PUBLIC_METRICS_URL=https://allium.1aeo.com` in `config.env`
+- [ ] **RouteFluxMap**: Deploy with new configuration
+- [ ] Verify cross-linking: Click relay → "View on Metrics" → Allium page loads
 
 ### Short-term (Week 1)
 
-- [ ] Add `getCountryMetricsUrl()` helper to RouteFluxMap
-- [ ] Update `CountryTooltip` component with country detail links
-- [ ] Add "View on Map" links to Allium templates (relay, country pages)
+- [ ] **RouteFluxMap**: Add `getCountryMetricsUrl()` helper
+- [ ] **RouteFluxMap**: Update `CountryTooltip` with country detail links
+- [ ] **Allium**: Add "View on Map" links to templates (relay, country pages)
+- [ ] Verify bidirectional navigation works
 
 ### Medium-term (Week 2-3)
 
-- [ ] Create `routefluxmap_exporter.py` in Allium for data export
-- [ ] Export country classifications (rarity tiers) for RouteFluxMap
-- [ ] Implement rarity-based country coloring in RouteFluxMap
+- [ ] **Allium**: Create `SharedDataExporter` class
+- [ ] **Allium**: Export `/shared/classifications.json` with rarity tiers
+- [ ] **RouteFluxMap**: Optionally fetch Allium classifications for coloring
 - [ ] Add validation script to check data consistency
 
 ### Optional Enhancements
@@ -1826,25 +2109,37 @@ This integration transforms both projects:
 
 ## Files to Modify
 
-### RouteFluxMap
+### RouteFluxMap (Minimal Changes - Has Historical Data)
 
 | File | Change | Priority |
 |------|--------|----------|
 | `deploy/config.env` | Set `PUBLIC_METRICS_URL` | **Required** |
 | `src/lib/config.ts` | Add `getCountryMetricsUrl()`, `getASMetricsUrl()` | Recommended |
 | `src/components/map/CountryLayer.tsx` | Add country detail links | Recommended |
-| `src/lib/utils/allium-data.ts` | **NEW**: Fetch Allium shared data | Recommended |
-| `src/lib/utils/country-codes.ts` | **NEW**: Country code normalization | Recommended |
+| `src/lib/utils/allium-data.ts` | **NEW**: Fetch Allium shared data | Optional |
 
-### Allium
+**Note:** RouteFluxMap requires minimal changes since it already uses the correct data formats (UPPERCASE country codes). Allium adapts to match.
+
+### Allium (Data Schema Alignment - No Historical Data)
+
+#### Country Code Migration (One-Time)
+
+| File | Change | Priority |
+|------|--------|----------|
+| `lib/country_utils.py` | Convert all country code sets to UPPERCASE | **Required** |
+| `lib/country_utils.py` | Change `.lower()` → `.upper()` in functions | **Required** |
+| `lib/aroileaders.py` | Change `.lower()` → `.upper()` comparisons | **Required** |
+| `lib/intelligence_engine.py` | Change `.lower()` → `.upper()` comparisons | **Required** |
+| `lib/relays.py` | Normalize country to UPPERCASE at ingestion | **Required** |
+
+#### Feature Integration
 
 | File | Change | Priority |
 |------|--------|----------|
 | `templates/relay-info.html` | Add "View on Map" link | Recommended |
 | `templates/country.html` | Add "View on Map" link | Recommended |
 | `templates/index.html` | Add RouteFluxMap feature card | Recommended |
-| `lib/shared_data_exporter.py` | **NEW**: Export shared JSON files | **Recommended** |
-| `lib/schema_transforms.py` | **NEW**: Unified schema transformations | Recommended |
+| `lib/shared_data_exporter.py` | **NEW**: Export shared JSON files | Recommended |
 | `allium.py` | Call `SharedDataExporter.export_all()` | Recommended |
 
 ### Shared Output Files (Generated by Allium)
