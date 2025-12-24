@@ -29,14 +29,14 @@
     <th>Uptime/Downtime</th>
     <th title="{% if contact_display_data and contact_display_data.outliers and contact_display_data.outliers.tooltip %}{{ contact_display_data.outliers.tooltip }}{% else %}Statistical outliers: ≥2σ from average{% endif %}">Uptime (1M/6M/1Y/5Y)</th>
     <th title="Flag-specific uptime percentages showing the reliability of this relay when operating in its primary network role. Priority: Exit > Guard > Fast > Running flags.">Flag Uptime (1M/6M/1Y/5Y)</th>
-    <th class="visible-md visible-lg">IPv4</th>
-    <th class="visible-md visible-lg">Flags</th>
+    <th>IPv4</th>
+    <th>Flags</th>
     <th>Country</th>
     <th>AS Number</th>
     <th>AS Name</th>
     <th>Platform</th>
-    <th class="visible-md visible-lg">First Seen</th>
-    <th class="visible-md visible-lg">Last Restarted</th>
+    <th>First Seen</th>
+    <th>Last Restarted</th>
     {% set has_ipv6 = false -%}
     {% if is_index -%}
 	{% set relay_list_check = relay_subset[:500] -%}
@@ -53,7 +53,7 @@
         {% endif -%}
     {% endfor -%}
     {% if has_ipv6 -%}
-    <th class="visible-md visible-lg">IPv6</th>
+    <th>IPv6</th>
     {% endif -%}
 </tr>
 <tbody>
@@ -124,7 +124,7 @@
 		        N/A
 		    {% endif -%}
 		</td>
-		<td class="visible-md visible-lg">
+		<td>
 		    {% if relay.get('or_addresses') and relay['or_addresses']|length > 0 -%}
 		        {% set ipv4_addr = relay['or_addresses'][0].split(':', 1)[0] -%}
 		        <a href="https://bgp.tools/prefix/{{ ipv4_addr|escape }}">{{ ipv4_addr|escape }}</a>
@@ -133,7 +133,7 @@
 		    {% endif -%}
 		</td>
 		{# PERF: Use pre-rendered flags HTML from Python (eliminates Jinja2 loop) - THE KEY OPTIMIZATION #}
-		<td class="visible-md visible-lg">{{ relay['_flags_html']|replace('{path}', page_ctx.path_prefix)|safe }}</td>
+		<td>{{ relay['_flags_html']|replace('{path}', page_ctx.path_prefix)|safe }}</td>
 		{% if relay['country'] -%}
 		    {% if key != 'country' -%}
 			<td>
@@ -185,7 +185,7 @@
 		    <td>{{ relay['platform']|truncate(length=10)|escape }}</td>
 		{% endif -%}
 		{% if key != 'first_seen' -%}
-		    <td class="visible-md visible-lg">
+		    <td>
 			<a href="{{ page_ctx.path_prefix }}first_seen/{{ relay['first_seen_date_escaped'] }}/" title="{{ relay['first_seen'].split(' ', 1)[0]|escape }}">
 			    {% if relay['first_seen'] -%}
 			        {{ relay['first_seen']|format_time_ago }}
@@ -195,7 +195,7 @@
 			</a>
 		    </td>
 		{% else -%}
-		    <td class="visible-md visible-lg" title="{{ relay['first_seen'].split(' ', 1)[0]|escape }}">
+		    <td title="{{ relay['first_seen'].split(' ', 1)[0]|escape }}">
 			{% if relay['first_seen'] -%}
 			    {{ relay['first_seen']|format_time_ago }}
 			{% else -%}
@@ -203,7 +203,7 @@
 			{% endif -%}
 		    </td>
 		{% endif -%}
-		<td class="visible-md visible-lg" title="{% if relay['last_restarted'] -%}{{ relay['last_restarted'].split(' ', 1)[0]|escape }}{% else -%}unknown{% endif -%}">
+		<td title="{% if relay['last_restarted'] -%}{{ relay['last_restarted'].split(' ', 1)[0]|escape }}{% else -%}unknown{% endif -%}">
 		    {% if relay['last_restarted'] -%}
 		        {{ relay['last_restarted']|format_time_ago }}
 		    {% else -%}
@@ -211,7 +211,7 @@
 		    {% endif -%}
 		</td>
 		{% if has_ipv6 -%}
-		<td class="visible-md visible-lg">
+		<td>
 		    {% set ipv6_found = false -%}
 		    {% set ipv6_addr = '' -%}
 		    {% if relay.get('or_addresses') -%}
