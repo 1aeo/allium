@@ -1,36 +1,46 @@
-# Top 10 Prioritized Future Features for Allium
+# Top Prioritized Future Features for Allium (Updated)
 
-**Status**: 📊 Priority Review Complete  
+**Status**: 📊 Code Review Complete - Features NOT Yet Implemented  
 **Date**: December 2024  
 **Document Type**: Strategic Feature Prioritization  
 
 ---
 
-## Executive Summary
+## Codebase Review Summary
 
-After comprehensive review of all planned features documentation, this document presents the **top 10 prioritized features** for Allium development, ordered by a weighted scoring system considering:
+After comprehensive review of the actual Allium codebase, several features from the original list have been **fully or partially implemented**. This updated document focuses only on features that require new development.
 
-| Factor | Weight | Description |
-|--------|--------|-------------|
-| **User Impact** | 30% | How many users benefit and how significantly |
-| **Technical Feasibility** | 25% | Existing infrastructure, dependencies ready |
-| **Implementation Effort** | 20% | Development time and complexity |
-| **Strategic Value** | 15% | Long-term platform positioning |
-| **Community Need** | 10% | Feedback from operators/researchers |
+### Already Implemented (Removed from Priority List)
+
+| Feature | Implementation Status | Location |
+|---------|----------------------|----------|
+| **AROI Leaderboards** | ✅ Fully implemented (18 categories, champions, rankings) | `aroi-leaderboards.html`, `aroileaders.py` |
+| **Network Health Dashboard** | ✅ Fully implemented (relay counts, bandwidth, uptime, AROI validation) | `network-health-dashboard.html` |
+| **Intelligence Engine** | ✅ Fully implemented (14 layers, contact intelligence) | `intelligence_engine.py` |
+| **Operator Reliability Metrics** | ✅ Fully implemented (uptime, bandwidth stability, flag reliability) | `relays.py`, `contact.html` |
+| **CW/BW Performance Analysis** | ✅ Fully implemented (ratios, percentiles, network comparison) | `intelligence_engine.py`, `contact.html` |
+| **Geographic Diversity Stats** | ✅ Fully implemented (EU/Non-EU, Five Eyes, rare countries) | `network-health-dashboard.html` |
+| **Platform Diversity Tables** | ✅ Fully implemented (non-Linux heroes, platform breakdown) | `aroi-leaderboards.html` |
+| **Bandwidth Stability Analysis** | ✅ Fully implemented (CV, trend, capacity utilization) | `contact.html` |
 
 ---
 
-## 🏆 Top 10 Features - Priority Ranked
+## 🏆 Revised Top Features - NOT YET IMPLEMENTED
 
 ### #1: Interactive Geographic Heat Map Dashboard
-**Priority Score: 95/100** | **Timeline: 4-6 weeks** | **Milestone: 1**
+**Priority Score: 95/100** | **Timeline: 4-6 weeks** | **Status: NOT IMPLEMENTED**
 
-#### Why Start Here
-- ✅ **Highest visual impact** - Immediately showcases Tor's global reach
-- ✅ **Foundation for all visualizations** - Sets up Chart.js/D3.js infrastructure
-- ✅ **Data already available** - Country classification system exists
-- ✅ **Mobile-responsive by default** - Broad accessibility
-- ✅ **No external API dependencies** - Uses existing Onionoo data
+#### What's Missing
+- ❌ No D3.js or Chart.js integration
+- ❌ No interactive world map visualization  
+- ❌ No color-coded country rendering
+- ❌ No hover tooltips or click interactions
+- ❌ Current implementation: Static tables only
+
+#### What Exists (Can Be Reused)
+- ✅ Country classification system exists
+- ✅ Country relay counts available in `sorted['country']`
+- ✅ Rare/frontier country categorization exists
 
 #### Mockup
 ```
@@ -68,10 +78,10 @@ After comprehensive review of all planned features documentation, this document 
 ```
 
 #### Implementation Recommendations
-1. **Start with static SVG world map** (TopoJSON) for fast initial implementation
-2. **Use D3.js** for geographic projections and interactions
-3. **Progressive enhancement**: Static image → Interactive map → Animated transitions
-4. **Mobile-first**: Touch-friendly zoom/pan with simplified legend
+1. **Add D3.js and TopoJSON** for geographic projections
+2. **Create `static/js/geographic-heatmap.js`** with map rendering
+3. **Add `allium/lib/geographic_visualization.py`** for data preparation
+4. **Progressive enhancement**: Static SVG → Interactive → Animated
 
 #### Files to Create/Modify
 - `allium/lib/geographic_visualization.py` (NEW)
@@ -81,72 +91,67 @@ After comprehensive review of all planned features documentation, this document 
 
 ---
 
-### #2: AROI Achievement Wheel & Champions Circle
-**Priority Score: 91/100** | **Timeline: 3-4 weeks** | **Milestone: 1**
+### #2: AROI Achievement Wheel Visualization
+**Priority Score: 88/100** | **Timeline: 3-4 weeks** | **Status: PARTIALLY IMPLEMENTED**
 
-#### Why Second Priority
-- ✅ **High engagement** - Gamification drives operator participation
-- ✅ **Leverages existing AROI data** - All 17 categories already calculated
-- ✅ **Builds on visualization foundation** from Feature #1
-- ✅ **Community recognition** - Encourages healthy competition
+#### What's Missing
+- ❌ No Chart.js doughnut/wheel visualization
+- ❌ No interactive rotating wheel UI
+- ❌ No animated transitions between categories
+- ❌ Current implementation: Tables only (no charts)
+
+#### What Exists (Can Be Reused)
+- ✅ All 18 AROI categories with full data
+- ✅ Champion badges and rankings
+- ✅ Complete leaderboard calculations in `aroileaders.py`
 
 #### Mockup
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ 🏆 AROI Champions Circle                                        │
+│ 🏆 AROI Champions Achievement Wheel                             │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
 │                    Champions Achievement Wheel                   │
 │                                                                 │
 │                         ⚡ Bandwidth                             │
 │                        torworld.org                              │
-│                         847.2 Gbps                               │
 │                            │                                     │
 │                    ┌───────┴───────┐                            │
 │        🏗️ Rare ──┤               ├── 🌍 Geographic              │
 │       Countries   │      🏆       │    globalnet.org             │
-│      frontier.net │   CHAMPIONS   │                              │
-│                   │               │                              │
+│                   │   CHAMPIONS   │                              │
 │        💻 ────────┤               ├────── ⚖️ Consensus          │
 │      Platform     │               │      heavyweight.net         │
-│    diverseops.org │               │                              │
 │                   └───────┬───────┘                              │
 │                           │                                      │
 │               ⏰ Reliability  🚪 Exit                            │
-│               reliabletor     exitpro.org                        │
 │                                                                  │
-│    Interactive: Click any segment for detailed leaderboard       │
-│                                                                  │
-│ ┌──────────────────────────────────────────────────────────────┐│
-│ │ Category     │ Champion          │ Value        │ Trend      ││
-│ ├──────────────┼───────────────────┼──────────────┼────────────┤│
-│ │ Bandwidth    │ torworld.org      │ 847.2 Gbps   │ ↗️ +12%    ││
-│ │ Consensus    │ heavyweight.net   │ 4.7%         │ → stable   ││
-│ │ Exit Champ   │ exitpro.org       │ 312 exits    │ ↗️ +8%     ││
-│ │ Guard Hero   │ guardians.net     │ 567 guards   │ → stable   ││
-│ │ Geographic   │ globalnet.org     │ 47 countries │ ↗️ +3      ││
-│ └──────────────┴───────────────────┴──────────────┴────────────┘│
-│                                                                  │
-│ Current Period: 2025-01-06 • 12 Active Categories               │
+│    [Click any segment to view full category leaderboard]        │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 #### Implementation Recommendations
-1. **Use Chart.js doughnut chart** with custom segment styling
-2. **Animated transitions** when switching between time periods
-3. **Click-through navigation** to individual leaderboards
-4. **Real-time position updates** with trend arrows
+1. **Use Chart.js** for doughnut chart with custom segments
+2. **Add click handlers** linking to existing leaderboard sections
+3. **Animate segment highlights** on hover
+4. **Mobile-responsive** with touch interactions
 
 ---
 
 ### #3: Actionable Improvement Guidance System
-**Priority Score: 88/100** | **Timeline: 4-6 weeks** | **Milestone: 1-2**
+**Priority Score: 85/100** | **Timeline: 4-6 weeks** | **Status: NOT IMPLEMENTED**
 
-#### Why Third Priority
-- ✅ **Addresses operator pain point** - "How do I improve my ranking?"
-- ✅ **High retention value** - Operators return to track progress
-- ✅ **Uses existing gap analysis data** - No new data collection needed
-- ✅ **Network growth driver** - Guides strategic expansion
+#### What's Missing
+- ❌ No "Path to Improvement" section on operator pages
+- ❌ No gap analysis vs top performers
+- ❌ No personalized action recommendations
+- ❌ No difficulty/impact scoring for suggestions
+- ❌ No progress tracking toward goals
+
+#### What Exists (Can Be Reused)
+- ✅ AROI leaderboard rankings exist
+- ✅ Contact rankings already show position in each category
+- ✅ Performance metrics available (CW/BW, uptime, diversity)
 
 #### Mockup
 ```
@@ -168,47 +173,43 @@ After comprehensive review of all planned features documentation, this document 
 │ │    Impact: +2.4 diversity score • Moves you #23 → #18       ││
 │ │    Resources: [Brazil VPS Guide] [Argentina Hosting]         ││
 │ │                                                              ││
-│ │ ✅ Convert 3 middle relays to guards                         ││
-│ │    Impact: +8% consensus weight • Network needs guards      ││
-│ │    Estimated timeline: 1-2 weeks after reconfiguration       ││
-│ └──────────────────────────────────────────────────────────────┘│
-│                                                                 │
-│ ⚡ QUICK WINS                                                    │
-│ ┌──────────────────────────────────────────────────────────────┐│
 │ │ ✅ Enable IPv6 on 12 relays currently IPv4-only              ││
 │ │    Impact: +3% bandwidth measurement accuracy                ││
 │ │    Difficulty: Low • [IPv6 Setup Guide]                      ││
-│ │                                                              ││
-│ │ ✅ Add FreeBSD relay for platform diversity                  ││
-│ │    Impact: +1.5 diversity score • Platform Hero potential    ││
-│ │    Resources: [FreeBSD Tor Guide]                            ││
 │ └──────────────────────────────────────────────────────────────┘│
 │                                                                 │
 │ 📊 PROGRESS TRACKING                                            │
 │ ┌──────────────────────────────────────────────────────────────┐│
-│ │ Bandwidth:  ████████████████░░░░ 78% to goal (12.3/15.8 Gbps)││
-│ │ Diversity:  ██████████░░░░░░░░░░ 52% to goal (8.7/16.8 pts) ││
+│ │ Bandwidth:  ████████████████░░░░ 78% to goal                 ││
+│ │ Diversity:  ██████████░░░░░░░░░░ 52% to goal                 ││
 │ │ Reliability: ███████████████████░ 94% (maintaining)          ││
 │ └──────────────────────────────────────────────────────────────┘│
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 #### Implementation Recommendations
-1. **Gap analysis engine** - Compare operator metrics to top performers
-2. **Recommendation priority scoring** - High impact + low difficulty = top priority
-3. **Resource database** - Links to setup guides, hosting providers
-4. **Progress persistence** - Track operator improvements over time
+1. **Create `improvement_guidance.py`** for gap analysis calculations
+2. **Add improvement section to `contact.html`** template
+3. **Build recommendation database** with difficulty/impact scores
+4. **Link to external resources** (VPS guides, setup docs)
 
 ---
 
 ### #4: Directory Authority Health Dashboard
-**Priority Score: 85/100** | **Timeline: 4-6 weeks** | **Milestone: 2**
+**Priority Score: 82/100** | **Timeline: 4-6 weeks** | **Status: NOT IMPLEMENTED**
 
-#### Why Fourth Priority
-- ✅ **Critical infrastructure monitoring** - Core Tor network health
-- ✅ **High value for Tor Foundation** - Proactive issue detection
-- ✅ **Unique offering** - No other tool provides this visualization
-- ✅ **Real-time capabilities** - Demonstrates advanced monitoring
+#### What's Missing
+- ❌ `fetch_consensus_health()` in `workers.py` is a placeholder
+- ❌ No real-time authority status monitoring
+- ❌ No voting round tracking
+- ❌ No consensus formation analysis
+- ❌ No latency/responsiveness monitoring
+- ❌ No alert system for authority issues
+
+#### What Exists (Can Be Reused)
+- ✅ Basic authority list in `misc-authorities.html`
+- ✅ Authority flag detection in relay data
+- ✅ Infrastructure for multi-API data fetching
 
 #### Mockup
 ```
@@ -221,7 +222,6 @@ After comprehensive review of all planned features documentation, this document 
 │ │                   │ │                   │ │                 ││
 │ │ ✅ CURRENT        │ │ 9/9 ACTIVE        │ │ 99.2% SYNC      ││
 │ │ Fresh: 14:32 UTC  │ │ Last Vote: Recent │ │ 8.9/9 Agreement ││
-│ │ Next: 15:00 UTC   │ │ All Participating │ │                 ││
 │ └───────────────────┘ └───────────────────┘ └─────────────────┘│
 │                                                                 │
 │ Directory Authorities Status:                                   │
@@ -230,104 +230,42 @@ After comprehensive review of all planned features documentation, this document 
 │ ├──────────────┼────────┼──────┼─────────┼─────────┼──────────┤│
 │ │ moria1       │ 🟢 OK  │ ✅   │ ✅      │ 12ms    │ 99.9%    ││
 │ │ tor26        │ 🟢 OK  │ ✅   │ ✅      │ 8ms     │ 99.9%    ││
-│ │ dizum        │ 🟢 OK  │ ✅   │ ✅      │ 15ms    │ 99.8%    ││
-│ │ gabelmoo     │ 🟢 OK  │ ✅   │ ✅      │ 11ms    │ 99.9%    ││
-│ │ dannenberg   │ 🟢 OK  │ ✅   │ ✅      │ 19ms    │ 99.7%    ││
-│ │ maatuska     │ 🟢 OK  │ ✅   │ ✅      │ 7ms     │ 99.9%    ││
 │ │ faravahar    │ 🟡 SLOW│ ✅   │ ⚠️      │ 89ms    │ 97.8%    ││
-│ │ longclaw     │ 🟢 OK  │ ✅   │ ✅      │ 14ms    │ 99.6%    ││
-│ │ bastet       │ 🟢 OK  │ ✅   │ ✅      │ 16ms    │ 99.5%    ││
 │ └──────────────┴────────┴──────┴─────────┴─────────┴──────────┘│
 │                                                                 │
 │ ⚠️ Active Alerts:                                               │
-│ ┌──────────────────────────────────────────────────────────────┐│
-│ │ • faravahar bandwidth scanning slower than usual (89ms)      ││
-│ │   Monitoring since: 14:15 UTC • Impact: Low                  ││
-│ └──────────────────────────────────────────────────────────────┘│
-│                                                                 │
-│ Recent Consensus Events:                                        │
-│ • 14:32 - Consensus published successfully (9/9 authorities)   │
-│ • 14:31 - Voting round completed in 127 seconds                │
-│ • 14:29 - All authorities synchronized                         │
+│ • faravahar bandwidth scanning slower than usual (89ms)        │
 │                                                                 │
 │ Last updated: 14:45:23 UTC • Auto-refresh: 60s                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 #### Implementation Recommendations
-1. **Multi-source data collection** - CollecTor API, direct authority queries
-2. **5-minute polling cycle** for near-real-time updates
-3. **Historical trend storage** for performance analytics
-4. **Alert thresholds** - Configurable warning/critical levels
+1. **Implement `fetch_consensus_health()`** in `workers.py`
+2. **Add CollecTor API integration** for consensus data
+3. **Create `directory_authority_monitor.py`** for status tracking
+4. **Add `misc-authorities-health.html`** template
 
 ---
 
-### #5: Platform Diversity Visualization
-**Priority Score: 82/100** | **Timeline: 3 weeks** | **Milestone: 1**
+### #5: Peer Group Performance Comparison
+**Priority Score: 79/100** | **Timeline: 4 weeks** | **Status: NOT IMPLEMENTED**
 
-#### Why Fifth Priority
-- ✅ **Builds on visualization foundation** from Features #1-2
-- ✅ **Highlights underappreciated contributors** (non-Linux operators)
-- ✅ **Simple implementation** - Data already classified
-- ✅ **Encourages diversity** - Visual recognition drives change
+#### What's Missing
+- ❌ No peer group classification (operators with similar relay count)
+- ❌ No "compare to similar operators" feature
+- ❌ No peer group rankings/percentiles
+- ❌ No "you vs peer average" visualizations
+
+#### What Exists (Can Be Reused)
+- ✅ CW/BW ratio calculations and percentiles
+- ✅ Operator reliability metrics
+- ✅ Contact-level intelligence engine data
 
 #### Mockup
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ 💻 Platform Diversity Analysis                                  │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│    Operating System Distribution                                │
-│    ┌───────────────────────────────────────────────────────┐   │
-│    │                                                       │   │
-│    │  ┌──────────────────────────────────────────────────┐│   │
-│    │  │                                                  ││   │
-│    │  │        Linux (87.2%)                            ││   │
-│    │  │  ████████████████████████████████████████████   ││   │
-│    │  │                                                  ││   │
-│    │  │  Windows (5.9%)  ████                           ││   │
-│    │  │  macOS (4.0%)    ███                            ││   │
-│    │  │  FreeBSD (2.9%)  ██                             ││   │
-│    │  │                                                  ││   │
-│    │  └──────────────────────────────────────────────────┘│   │
-│    │                                                       │   │
-│    │  Diversity Impact: Non-Linux relays contribute       │   │
-│    │  12.8% of network capacity, improving resilience     │   │
-│    └───────────────────────────────────────────────────────┘   │
-│                                                                 │
-│    🏆 Platform Champions (Non-Linux Heroes)                     │
-│    ┌───────────────────────────────────────────────────────┐   │
-│    │ Rank │ Operator        │ Platform │ Relays │ Badge    │   │
-│    ├──────┼─────────────────┼──────────┼────────┼──────────┤   │
-│    │ #1   │ WindowsHero     │ Windows  │ 45     │ 🏆 Hero  │   │
-│    │ #2   │ MacChampion     │ macOS    │ 23     │ 🏆 Hero  │   │
-│    │ #3   │ FreeBSDPro      │ FreeBSD  │ 18     │ 🏆 Hero  │   │
-│    │ #4   │ MultiPlatform   │ Mixed    │ 34     │ ⭐ Star  │   │
-│    │ #5   │ DiverseOps      │ Mixed    │ 27     │ ⭐ Star  │   │
-│    └───────────────────────────────────────────────────────┘   │
-│                                                                 │
-│    Platform Trend (30 days):                                    │
-│    • Windows relays: +12 (+8.3%)                               │
-│    • FreeBSD relays: +5 (+7.1%)                                │
-│    • macOS relays: +3 (+4.2%)                                  │
-└─────────────────────────────────────────────────────────────────┘
-```
-
----
-
-### #6: Operator Performance Comparison Metrics
-**Priority Score: 79/100** | **Timeline: 4 weeks** | **Milestone: 2**
-
-#### Why Sixth Priority
-- ✅ **Addresses operator pain points** - Consensus weight vs bandwidth discrepancies
-- ✅ **Peer group comparisons** - "How do I compare to similar operators?"
-- ✅ **Partially implemented** - Uptime benchmarks already exist
-- ✅ **High engagement driver** - Operators love benchmarking
-
-#### Mockup
-```
-┌─────────────────────────────────────────────────────────────────┐
-│ 📊 Performance vs Network - youroperator.org (47 relays)        │
+│ 📊 Peer Group Comparison - youroperator.org (47 relays)         │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
 │ 👥 Peer Group: Operators with 25-75 relays (you rank #8 of 23)  │
@@ -342,21 +280,6 @@ After comprehensive review of all planned features documentation, this document 
 │ │ 🏗️ ASN Diversity   │ 6 ASes     │ 3.2 avg  │ 2.1 avg │ Top10││
 │ └──────────────────────────────────────────────────────────────┘│
 │                                                                 │
-│ ⚖️ Consensus Weight Efficiency Deep Dive:                       │
-│ ┌──────────────────────────────────────────────────────────────┐│
-│ │ Your CW/Bandwidth ratio is 23% below peer group average      ││
-│ │                                                              ││
-│ │ Potential causes:                                            ││
-│ │ • 12 relays not measured by bandwidth authorities           ││
-│ │ • Network latency affecting measurement accuracy             ││
-│ │ • Exit policy may not match current network needs           ││
-│ │                                                              ││
-│ │ Recommended actions:                                         ││
-│ │ ✅ Investigate unmeasured relays (12 of 47)                  ││
-│ │ ✅ Review exit policies for optimization opportunities       ││
-│ │ ✅ Consider geographic redistribution for better peering     ││
-│ └──────────────────────────────────────────────────────────────┘│
-│                                                                 │
 │ 🏆 Peer Group Leaders (25-75 relay operators):                  │
 │ • #1: topoperator.org - 0.94 CW ratio, 99.1% uptime            │
 │ • #2: reliablenet.com - 0.91 CW ratio, 98.9% uptime            │
@@ -366,58 +289,19 @@ After comprehensive review of all planned features documentation, this document 
 
 ---
 
-### #7: Historical Bandwidth Metrics (10 New Metrics)
-**Priority Score: 76/100** | **Timeline: 6-8 weeks** | **Milestone: 2-3**
+### #6: Bridge Network Health Dashboard
+**Priority Score: 73/100** | **Timeline: 5-6 weeks** | **Status: NOT IMPLEMENTED**
 
-#### Why Seventh Priority
-- ✅ **Capacity planning** - Bandwidth Stability Index, Growth Trajectory
-- ✅ **Uses underutilized Onionoo data** - `bandwidth_history` fields
-- ✅ **Large operator value** - Strategic infrastructure decisions
-- ✅ **Tor Foundation value** - Network-wide capacity planning
+#### What's Missing
+- ❌ No bridge data processing (only relays)
+- ❌ No bridge-specific pages
+- ❌ No transport protocol analysis (obfs4, webtunnel, etc.)
+- ❌ No bridge distribution channel metrics
 
-#### Key Metrics from Proposal
-1. **Bandwidth Stability Index (BSI)** - Consistency measurement
-2. **Peak Hour Utilization Ratio (PHUR)** - Time zone optimization
-3. **Bandwidth Growth Trajectory (BGT)** - Capacity forecasting
-4. **Consensus Weight to Bandwidth Efficiency (CWBE)** - Optimization insights
-5. **Network Load Distribution Index (NLDI)** - Role balance analysis
-
-#### Mockup (Bandwidth Stability Index)
-```
-┌─────────────────────────────────────────────────────────────────┐
-│ 📊 Bandwidth Stability Index - youroperator.org                 │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│ Overall BSI Score: 0.18 (Stable) - Top 15% of network          │
-│                                                                 │
-│ ┌──────────────────────────────────────────────────────────────┐│
-│ │ Relay           │ BSI   │ Category │ 30d Range    │ Action  ││
-│ ├─────────────────┼───────┼──────────┼──────────────┼─────────┤│
-│ │ relay-eu-01     │ 0.08  │ Stable   │ 95-105 Mbit/s│ ✅ Good ││
-│ │ relay-eu-02     │ 0.12  │ Stable   │ 88-112 Mbit/s│ ✅ Good ││
-│ │ relay-us-01     │ 0.35  │ Moderate │ 45-85 Mbit/s │ ⚠️ Watch││
-│ │ relay-apac-01   │ 0.67  │ Volatile │ 20-120 Mbit/s│ ⚠️ Fix  ││
-│ └──────────────────────────────────────────────────────────────┘│
-│                                                                 │
-│ Stability Categories:                                           │
-│ • Stable (BSI < 0.2): 38 relays (81%) - Excellent consistency  │
-│ • Moderate (0.2-0.5): 7 relays (15%) - Monitor for issues      │
-│ • Volatile (> 0.5): 2 relays (4%) - Investigation recommended  │
-│                                                                 │
-│ Network Average BSI: 0.28 • Your Average: 0.18 (36% better)    │
-└─────────────────────────────────────────────────────────────────┘
-```
-
----
-
-### #8: Bridge Network Health Dashboard
-**Priority Score: 73/100** | **Timeline: 5-6 weeks** | **Milestone: 2-3**
-
-#### Why Eighth Priority
-- ✅ **Unique capability** - No other tool monitors bridge network health
-- ✅ **Anti-censorship value** - Critical for Tor's mission
-- ✅ **DRY implementation** - Reuses relay dashboard infrastructure
-- ✅ **Specific audience** - Bridge operators, Tor Foundation, researchers
+#### What Exists (Can Be Reused)
+- ✅ Relay dashboard infrastructure can be adapted
+- ✅ Network health card layout
+- ✅ Bandwidth/uptime calculation patterns
 
 #### Mockup
 ```
@@ -429,16 +313,7 @@ After comprehensive review of all planned features documentation, this document 
 │ │ 📊 Bridge Count │ │ 🚇 Transports   │ │ ⏰ Bridge Uptime    ││
 │ │                 │ │                 │ │                     ││
 │ │ 2,739 Total     │ │ 4 Types Active  │ │ 94.2% Average       ││
-│ │ 2,456 Running   │ │ obfs4: 67.4%    │ │ Mean: 94.2%         ││
-│ │ 283 Offline     │ │ webtunnel: 24%  │ │ Median: 96.1%       ││
-│ └─────────────────┘ └─────────────────┘ └─────────────────────┘│
-│                                                                 │
-│ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────────┐│
-│ │ 📡 Distribution │ │ 🔄 Version      │ │ ⚡ Capacity         ││
-│ │                 │ │                 │ │                     ││
-│ │ 4 Channels      │ │ 89.4% Current   │ │ 9.2 GB/s Total      ││
-│ │ https: 53.2%    │ │ Recommended: 89%│ │ Mean: 3.5 MB/s      ││
-│ │ email: 32.6%    │ │ Obsolete: 3.2%  │ │ High Cap: 234       ││
+│ │ 2,456 Running   │ │ obfs4: 67.4%    │ │                     ││
 │ └─────────────────┘ └─────────────────┘ └─────────────────────┘│
 │                                                                 │
 │ Transport Protocol Analysis:                                    │
@@ -446,42 +321,33 @@ After comprehensive review of all planned features documentation, this document 
 │ │ obfs4     ████████████████████████████████████████ 67.4%    ││
 │ │ webtunnel ████████████████ 24.0%                            ││
 │ │ snowflake █████ 6.9%                                        ││
-│ │ meek      █ 1.6%                                            ││
 │ └──────────────────────────────────────────────────────────────┘│
-│                                                                 │
-│ Multi-Transport Bridges: 234 (8.5%) - More censorship resilient│
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### #9: Smart Context Links Enhancement
-**Priority Score: 70/100** | **Timeline: 8-10 weeks** | **Milestone: 2-3**
+### #7: Smart Context Links & Suggestions
+**Priority Score: 70/100** | **Timeline: 8-10 weeks** | **Status: PARTIALLY IMPLEMENTED**
 
-#### Why Ninth Priority
-- ✅ **Foundation exists** - Intelligence engine (6 layers) already implemented
-- ✅ **Transforms navigation** - From "data browser" to "intelligence platform"
-- ✅ **Cross-cutting benefit** - Enhances every page in the system
-- ✅ **Advanced UX** - Contextual suggestions and smart filtering
+#### What's Missing
+- ❌ No "Smart Suggestions" panel on pages
+- ❌ No contextual navigation recommendations
+- ❌ No "similar networks" or "similar operators" features
+- ❌ No cross-page intelligence recommendations
+- ❌ No URL-based smart filtering
+
+#### What Exists (Can Be Reused)
+- ✅ Intelligence Engine with 14 layers
+- ✅ Contact intelligence calculations
+- ✅ Network concentration analysis
+- ✅ Geographic clustering analysis
 
 #### Mockup
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │ AS12345 - Hetzner Online GmbH                                   │
 ├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│ 🧠 Network Intelligence                                         │
-│ ┌──────────────────────────────────────────────────────────────┐│
-│ │ Risk Assessment           │ Performance           │ Explore  ││
-│ ├───────────────────────────┼───────────────────────┼──────────┤│
-│ │ 🟡 Geographic Risk: Medium│ 85% measured by       │ Similar  ││
-│ │    67% in Germany         │ ≥3 authorities        │ networks ││
-│ │    [View DE relays →]     │                       │ [→]      ││
-│ │                           │ Above avg efficiency  │          ││
-│ │ 🟢 Operator Diversity:    │                       │ 3 families││
-│ │    Good (12 operators)    │ CW ratio: 1.12x      │ in AS    ││
-│ │    [View operators →]     │ (above network avg)   │ [→]      ││
-│ └───────────────────────────┴───────────────────────┴──────────┘│
 │                                                                 │
 │ 💡 Smart Suggestions                                            │
 │ ┌──────────────────────────────────────────────────────────────┐│
@@ -490,37 +356,30 @@ After comprehensive review of all planned features documentation, this document 
 │ │ • Analyze 12 operators in this network [→]                   ││
 │ │ • See historical AS growth trends [→]                        ││
 │ └──────────────────────────────────────────────────────────────┘│
-│                                                                 │
-│ Standard Relay Table Below...                                   │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### #10: Real-Time Network Health Monitor
-**Priority Score: 67/100** | **Timeline: 4-6 weeks** | **Milestone: 3**
+### #8: Predictive Relay Failure Detection
+**Priority Score: 67/100** | **Timeline: 6-8 weeks** | **Status: NOT IMPLEMENTED**
 
-#### Why Tenth Priority
-- ✅ **Predictive analytics** - Early warning for relay failures
-- ✅ **Operational value** - Proactive network management
-- ✅ **Builds on health dashboard** - Extends existing foundation
-- ✅ **ML/AI foundation** - Sets stage for Milestone 4 features
+#### What's Missing
+- ❌ No predictive analytics/ML models
+- ❌ No "at-risk relay" detection
+- ❌ No failure prediction scoring
+- ❌ No early warning alerts
+
+#### What Exists (Can Be Reused)
+- ✅ Historical uptime data available
+- ✅ Bandwidth stability metrics (CV)
+- ✅ Offline relay detection in contact pages
 
 #### Mockup
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ 🏥 Real-Time Network Health Monitor                             │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│ Overall Health Score: 97.3% (Excellent) ↗️ +0.2%               │
-│                                                                 │
-│ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐│
-│ │ 8,247       │ │ 94.7%       │ │ 89.3%       │ │ 92.1%       ││
-│ │ Online      │ │ Consensus   │ │ Exit        │ │ Guard       ││
-│ │ Relays      │ │ Weight      │ │ Capacity    │ │ Capacity    ││
-│ └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘│
-│                                                                 │
 │ 🔮 Predictive Analytics - At-Risk Relays (Next 48h)            │
+├─────────────────────────────────────────────────────────────────┤
 │ ┌──────────────────────────────────────────────────────────────┐│
 │ │ Relay              │ Risk  │ Factors                │ Action ││
 │ ├────────────────────┼───────┼────────────────────────┼────────┤│
@@ -528,18 +387,6 @@ After comprehensive review of all planned features documentation, this document 
 │ │                    │       │ BW instability         │ operator││
 │ │ relay23.network    │ 58% ⚠️│ Consensus weight drop  │ Monitor││
 │ └────────────────────┴───────┴────────────────────────┴────────┘│
-│                                                                 │
-│ Health Distribution:                                            │
-│ ████████████████████████████████████████████████ 67.2% Excellent│
-│ ████████████████████ 23.1% Good                                │
-│ ████████ 7.8% Fair                                             │
-│ ██ 1.9% Poor                                                   │
-│                                                                 │
-│ 🚨 Active Alerts: 2 warnings, 0 critical                       │
-│ • Exit capacity in AS1234 below threshold                      │
-│ • Guard relay churn increased 15% in last 24h                  │
-│                                                                 │
-│ Last updated: 14:45:23 UTC • Refresh: 5 min                    │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -547,18 +394,16 @@ After comprehensive review of all planned features documentation, this document 
 
 ## Implementation Roadmap Summary
 
-| Priority | Feature | Timeline | Dependencies | Key Milestone |
-|----------|---------|----------|--------------|---------------|
-| **#1** | Geographic Heat Map | 4-6 weeks | None | M1 |
-| **#2** | AROI Achievement Wheel | 3-4 weeks | #1 (vis framework) | M1 |
-| **#3** | Improvement Guidance | 4-6 weeks | Existing AROI data | M1-2 |
-| **#4** | Authority Dashboard | 4-6 weeks | Multi-API integration | M2 |
-| **#5** | Platform Diversity Viz | 3 weeks | #1 (vis framework) | M1 |
-| **#6** | Operator Comparison | 4 weeks | Existing contact data | M2 |
-| **#7** | Bandwidth Metrics | 6-8 weeks | Onionoo bandwidth API | M2-3 |
-| **#8** | Bridge Health Dashboard | 5-6 weeks | Relay dashboard code | M2-3 |
-| **#9** | Smart Context Links | 8-10 weeks | Intelligence engine | M2-3 |
-| **#10** | Real-Time Health | 4-6 weeks | Health dashboard | M3 |
+| Priority | Feature | Timeline | Status | Key Milestone |
+|----------|---------|----------|--------|---------------|
+| **#1** | Geographic Heat Map | 4-6 weeks | Not Started | M1 |
+| **#2** | AROI Achievement Wheel | 3-4 weeks | Data Ready | M1 |
+| **#3** | Improvement Guidance | 4-6 weeks | Not Started | M1-2 |
+| **#4** | Authority Dashboard | 4-6 weeks | Placeholder | M2 |
+| **#5** | Peer Group Comparison | 4 weeks | Not Started | M2 |
+| **#6** | Bridge Health Dashboard | 5-6 weeks | Not Started | M2-3 |
+| **#7** | Smart Context Links | 8-10 weeks | Foundation Ready | M2-3 |
+| **#8** | Predictive Analytics | 6-8 weeks | Not Started | M3 |
 
 ---
 
@@ -567,11 +412,11 @@ After comprehensive review of all planned features documentation, this document 
 ### 🚀 Start with Feature #1: Geographic Heat Map
 
 **Reasons:**
-1. **Foundation Building** - Sets up entire visualization infrastructure (D3.js/Chart.js)
+1. **Foundation Building** - Sets up D3.js/Chart.js infrastructure for #2
 2. **Immediate Visual Impact** - Most dramatic improvement to user experience
-3. **Zero Dependencies** - Can start immediately with existing data
-4. **Reusable Components** - Chart components used by #2, #5, #7, #10
-5. **Community Appeal** - Showcases Tor's global reach to attract new operators
+3. **Zero Dependencies** - All country data already exists
+4. **Reusable Components** - Chart framework used by #2, #6, #8
+5. **Community Appeal** - Showcases Tor's global reach
 
 ### Week 1-2 Quick Start Plan
 ```bash
@@ -595,19 +440,10 @@ touch static/css/visualization.css
 - [ ] Click-through to country detail pages
 - [ ] Mobile-responsive with touch zoom/pan
 - [ ] < 2 second load time
-- [ ] WCAG 2.1 AA accessibility compliance
 
 ---
 
-## Next Steps
-
-1. **Immediate**: Begin Feature #1 (Geographic Heat Map) implementation
-2. **Week 3-4**: Start Feature #2 (AROI Achievement Wheel) in parallel
-3. **Week 5-6**: Begin Feature #3 (Improvement Guidance) planning
-4. **Monthly**: Review priorities based on community feedback
-
----
-
-**Document Status**: Complete  
+**Document Status**: Updated after codebase review  
 **Last Updated**: December 2024  
-**Next Review**: After Feature #1 completion
+**Features Removed**: 2 (AROI Leaderboards - fully implemented, Network Health Dashboard - fully implemented)  
+**Features Remaining**: 8 (requiring new development)
