@@ -13,6 +13,147 @@
             <link rel="stylesheet" href="{{ page_ctx.path_prefix }}static/css/bootstrap.min.css">
             <!--source: metrics.torproject.org-->
             <style>
+                /* 1AEO Brand Design Tokens */
+                :root {
+                    --aeo-green: #00ff7f;
+                    --aeo-green-dim: #00cc66;
+                    --aeo-green-dark: #004d26;
+                    --aeo-dark-bg: #121212;
+                    --aeo-dark-surface: #1e1e1e;
+                    --aeo-dark-border: rgba(0, 255, 127, 0.2);
+                    --aeo-text: #ffffff;
+                    --aeo-text-muted: #cccccc;
+                    --aeo-text-dim: #888888;
+                }
+
+                /* 1AEO Cross-Site Navigation Bar */
+                .aeo-cross-nav {
+                    background-color: var(--aeo-dark-surface);
+                    padding: 10px 0;
+                    border-bottom: 1px solid var(--aeo-dark-border);
+                    margin-bottom: 0;
+                }
+                
+                .aeo-cross-nav .aeo-nav-container {
+                    max-width: 95%;
+                    margin: 0 auto;
+                    padding: 0 15px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    flex-wrap: wrap;
+                    gap: 10px;
+                }
+                
+                .aeo-cross-nav .aeo-nav-brand {
+                    color: var(--aeo-green);
+                    text-decoration: none;
+                    font-weight: bold;
+                    font-size: 16px;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+                
+                .aeo-cross-nav .aeo-nav-brand:hover {
+                    color: var(--aeo-green);
+                    text-decoration: none;
+                }
+                
+                .aeo-cross-nav .aeo-nav-links {
+                    display: flex;
+                    gap: 20px;
+                    flex-wrap: wrap;
+                    font-size: 14px;
+                }
+                
+                .aeo-cross-nav .aeo-nav-links a {
+                    color: var(--aeo-text-muted);
+                    text-decoration: none;
+                    transition: color 0.2s ease;
+                }
+                
+                .aeo-cross-nav .aeo-nav-links a:hover {
+                    color: var(--aeo-green);
+                    text-decoration: none;
+                }
+                
+                .aeo-cross-nav .aeo-nav-links a.active {
+                    color: var(--aeo-green);
+                    font-weight: 500;
+                }
+                
+                @media (max-width: 480px) {
+                    .aeo-cross-nav .aeo-nav-container {
+                        justify-content: center;
+                        text-align: center;
+                    }
+                    .aeo-cross-nav .aeo-nav-links {
+                        justify-content: center;
+                        gap: 12px;
+                    }
+                }
+
+                /* Override Bootstrap blue links with 1AEO green */
+                a {
+                    color: var(--aeo-green-dim);
+                }
+                
+                a:hover, a:focus {
+                    color: var(--aeo-green);
+                }
+                
+                /* Navbar styling with 1AEO colors */
+                .navbar-default {
+                    background-color: #f8f8f8;
+                    border-color: #e7e7e7;
+                }
+                
+                .nav.navbar-nav > li.active > a,
+                .nav.navbar-nav > li > a:hover,
+                .nav.navbar-nav > li > a:focus {
+                    color: var(--aeo-green-dim) !important;
+                    background-color: #e7e7e7;
+                }
+                
+                /* 1AEO Footer */
+                .aeo-footer {
+                    background-color: var(--aeo-dark-surface);
+                    color: var(--aeo-text-muted);
+                    padding: 25px 20px;
+                    margin-top: 40px;
+                    text-align: center;
+                    border-top: 1px solid var(--aeo-dark-border);
+                }
+                
+                .aeo-footer a {
+                    color: var(--aeo-green);
+                    text-decoration: none;
+                }
+                
+                .aeo-footer a:hover {
+                    color: var(--aeo-green);
+                    text-decoration: underline;
+                }
+                
+                .aeo-footer-links {
+                    display: flex;
+                    justify-content: center;
+                    gap: 25px;
+                    margin-bottom: 15px;
+                    flex-wrap: wrap;
+                }
+                
+                .aeo-footer-brand {
+                    font-size: 14px;
+                    margin: 0;
+                }
+                
+                .aeo-footer-legal {
+                    font-size: 12px;
+                    color: var(--aeo-text-dim);
+                    margin-top: 10px;
+                }
                 .circle {
                     display: inline-block;
                     vertical-align: middle;
@@ -459,7 +600,7 @@
                 }
                 
                 .aroi-nav-link {
-                    color: #337ab7;
+                    color: var(--aeo-green-dim, #00cc66);
                     text-decoration: none;
                     padding: 2px 6px;
                     border-radius: 3px;
@@ -468,7 +609,7 @@
                 }
                 
                 .aroi-nav-link:hover {
-                    color: #23527c;
+                    color: var(--aeo-green, #00ff7f);
                     background-color: #f5f5f5;
                     text-decoration: none;
                 }
@@ -607,9 +748,9 @@
                     display: inline-block;
                     padding: 4px 8px; /* Smaller padding to match table text size */
                     margin: 0 2px; /* Reduced margin */
-                    border: 1px solid #337ab7;
+                    border: 1px solid var(--aeo-green-dim, #00cc66);
                     border-radius: 3px;
-                    color: #337ab7;
+                    color: var(--aeo-green-dim, #00cc66);
                     text-decoration: none;
                     background-color: white;
                     font-size: 14px; /* Match table text size */
@@ -617,12 +758,12 @@
                 }
 
                 .pagination-nav-bottom a:hover {
-                    background-color: #337ab7;
+                    background-color: var(--aeo-green-dim, #00cc66);
                     color: white;
                 }
 
                 .pagination-nav-bottom a.active {
-                    background-color: #337ab7;
+                    background-color: var(--aeo-green-dim, #00cc66);
                     color: white;
                 }
 
@@ -1160,17 +1301,39 @@
         </head>
     {% endblock %}
     <body>
+        <!-- 1AEO Cross-Site Navigation -->
+        <nav class="aeo-cross-nav">
+            <div class="aeo-nav-container">
+                <a href="https://www.1aeo.com" class="aeo-nav-brand">
+                    <span>1AEO</span>
+                </a>
+                <div class="aeo-nav-links">
+                    <a href="https://www.1aeo.com">Home</a>
+                    <a href="https://metrics.1aeo.com" class="active">Metrics</a>
+                    <a href="https://aroivalidator.1aeo.com">Validator</a>
+                    <a href="https://routefluxmap.1aeo.com">FluxMap</a>
+                </div>
+            </div>
+        </nav>
+        
         <div class="container">
             {% block body %}{% endblock %}
         </div>
     </body>
     {% block footer %}
-        <footer class="page-footer font-small">
-            <div class="footer-copyright text-center text-muted">
-                <p>
-                    Generated by a <a href="https://github.com/1aeo/allium">1aeo modified fork of allium</a>, based on original <a href="https://git.jordan.im/allium/">allium</a>, on {{ relays.timestamp }}. Source data from <a href="https://onionoo.torproject.org/">Tor Project onionoo</a>.
-                </p>
+        <footer class="aeo-footer">
+            <div class="aeo-footer-links">
+                <a href="https://metrics.1aeo.com">Metrics</a>
+                <a href="https://aroivalidator.1aeo.com">AROI Validator</a>
+                <a href="https://routefluxmap.1aeo.com">RouteFluxMap</a>
+                <a href="https://github.com/1aeo">GitHub</a>
             </div>
+            <p class="aeo-footer-brand">
+                Part of <a href="https://www.1aeo.com" style="font-weight: bold;">1st Amendment Encrypted Openness LLC</a>
+            </p>
+            <p class="aeo-footer-legal">
+                Generated by a <a href="https://github.com/1aeo/allium">1aeo modified fork of allium</a>, based on original <a href="https://git.jordan.im/allium/">allium</a>, on {{ relays.timestamp }}. Source data from <a href="https://onionoo.torproject.org/">Tor Project onionoo</a>.
+            </p>
         </footer>
     </html>
 {% endblock %}
