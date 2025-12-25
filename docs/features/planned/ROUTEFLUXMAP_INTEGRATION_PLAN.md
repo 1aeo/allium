@@ -95,49 +95,7 @@ Technology Stack:
 
 ---
 
-## Integration Strategies
-
-### Strategy A: Embedded Iframe (Quick Win) 🚀
-
-**Timeline: 1-2 days**
-
-Embed RouteFluxMap as an iframe in Allium's generated pages.
-
-```html
-<!-- allium/templates/geographic-map.html -->
-{% extends "skeleton.html" %}
-{% block content %}
-<div class="map-container">
-    <h2>🌍 Tor Network Global Distribution</h2>
-    <iframe 
-        src="https://routefluxmap.1aeo.com"
-        width="100%" 
-        height="600"
-        frameborder="0"
-        title="Interactive Tor Network Map">
-    </iframe>
-    <p class="map-note">
-        Powered by <a href="https://github.com/1aeo/routefluxmap">RouteFluxMap</a>
-    </p>
-</div>
-{% endblock %}
-```
-
-**Pros:**
-- Zero development effort
-- Instant deployment
-- RouteFluxMap maintained separately
-- No code changes to Allium
-
-**Cons:**
-- Iframe limitations (can't deep-link to Allium pages)
-- Separate deployment/hosting
-- Limited styling control
-- No data sharing between projects
-
----
-
-### Strategy B: API Bridge with Deep Links (Recommended) ⭐
+## Integration Strategy: API Bridge with Deep Links ⭐
 
 **Timeline: 2-3 weeks**
 
@@ -160,7 +118,7 @@ Connect RouteFluxMap to Allium via configuration, enabling seamless navigation b
 
 ### Phase 1: Configure Cross-Linking (Day 1-2)
 
-#### 1.1 RouteFluxMap Configuration
+#### 1.1 RouteFluxMap Configuration — ✅ PARTIALLY IMPLEMENTED
 
 RouteFluxMap already has built-in support for external metrics URLs via environment variables:
 
@@ -185,33 +143,43 @@ export function getRelayMetricsUrl(fingerprint: string): string {
 }
 ```
 
+**Current State:**
+- ✅ `config.ts` has `metricsUrl` env var support
+- ✅ `getRelayMetricsUrl()` helper function exists
+- ✅ `RelayPopup.tsx` uses `getRelayMetricsUrl()` for "View on Metrics" links
+- ⏳ **TODO:** Set `PUBLIC_METRICS_URL=https://metrics.1aeo.com` in production deployment
+
 **Action Required:** Set the environment variable in RouteFluxMap's deployment:
 
 ```bash
 # routefluxmap/deploy/config.env
-PUBLIC_METRICS_URL=https://allium.1aeo.com
+PUBLIC_METRICS_URL=https://metrics.1aeo.com
 PUBLIC_SITE_URL=https://routefluxmap.1aeo.com
 ```
 
 This single change makes all "View on Metrics" links in `RelayPopup.tsx` point to Allium.
 
-#### 1.2 URL Schema Alignment
+**Live Instances:**
+- RouteFluxMap: https://routefluxmap.1aeo.com ✅
+- Allium: https://metrics.1aeo.com ✅
+
+#### 1.2 URL Schema Alignment — ⚠️ REQUIRES MIGRATION
 
 **Current URL Patterns:**
 
-| Entity | RouteFluxMap Links To | Allium Generates |
-|--------|----------------------|------------------|
-| Relay | `/relay/{fingerprint}` | `/relay/{fingerprint}/index.html` |
-| Country | `/country/{CC}` | `/country/{cc}/index.html` |
-| AS | `/as/{ASN}` | `/as/{ASN}/index.html` |
-| Contact | `/contact/{hash}` | `/contact/{hash}/index.html` |
+| Entity | RouteFluxMap Links To | Allium Currently Generates | After Migration |
+|--------|----------------------|---------------------------|-----------------|
+| Relay | `/relay/{FINGERPRINT}` | `/relay/{FINGERPRINT}/` | ✅ Compatible |
+| Country | `/country/{CC}` (uppercase) | `/country/{cc}/` (lowercase) | → `/country/{CC}/` |
+| AS | `/as/AS{number}` | `/as/AS{number}/` | ✅ Compatible |
+| Contact | `/contact/{hash}` | `/contact/{hash}/` | ✅ Compatible |
 
-**Key Observations:**
-1. RouteFluxMap uses uppercase fingerprints (canonical Tor format)
-2. Allium uses lowercase country codes in URLs
-3. Both use directory-style URLs with trailing slashes
+**Key Issue:** Country code case mismatch
+- RouteFluxMap expects: `/country/US/`
+- Allium generates: `/country/us/`
+- **Solution:** Migrate Allium to UPPERCASE (see Section 4.1.2)
 
-#### 1.3 Allium URL Compatibility
+#### 1.3 Allium URL Compatibility — ✅ IMPLEMENTED (structure)
 
 Allium already generates directory-based URLs. The template shows:
 
@@ -222,25 +190,39 @@ Allium already generates directory-based URLs. The template shows:
 </a>
 ```
 
-**No changes needed** - Allium's directory structure (`/relay/{fp}/index.html`) works with clean URLs when served by any web server.
+**Current State:**
+- ✅ Directory structure works (`/relay/{fp}/index.html`)
+- ✅ Relay fingerprints are UPPERCASE
+- ⚠️ Country codes are lowercase (needs migration)
+
+**Verified Live:**
+```
+https://metrics.1aeo.com/country/us/  → 200 OK (lowercase works)
+https://metrics.1aeo.com/country/US/  → 404 (uppercase doesn't exist yet)
+```
 
 ---
 
-### Phase 2: Add Country Deep Links from RouteFluxMap (Day 3-5)
+### Phase 2: Add Country Deep Links from RouteFluxMap (Day 3-5) — 🔲 NOT IMPLEMENTED
 
 RouteFluxMap's `CountryLayer.tsx` shows country data on hover. Add click-through to Allium country pages.
 
-#### 2.1 Create Country Link Helper
+**Current State:**
+- ✅ `CountryLayer.tsx` exists with hover tooltips
+- ✅ `CountryTooltip` component shows country name and client count
+- 🔲 No link to Allium country pages yet
+- 🔲 `getCountryMetricsUrl()` helper doesn't exist yet
+
+#### 2.1 Create Country Link Helper — 🔲 TODO
 
 ```typescript
-// routefluxmap/src/lib/config.ts - ADD this function
+// routefluxmap/src/lib/config.ts - ADD these functions
 
 /**
  * Build URL to country detail page on metrics site
  * @param countryCode - ISO 3166-1 alpha-2 code (e.g., 'US', 'DE')
  */
 export function getCountryMetricsUrl(countryCode: string): string {
-  // Allium uses lowercase country codes
   const cleanCode = countryCode.toUpperCase().replace(/[^A-Z]/g, '');
   
   if (!/^[A-Z]{2}$/.test(cleanCode)) {
@@ -248,7 +230,8 @@ export function getCountryMetricsUrl(countryCode: string): string {
     return config.metricsUrl;
   }
   
-  return `${config.metricsUrl}/country/${cleanCode.toLowerCase()}/`;
+  // After Allium migration: use UPPERCASE
+  return `${config.metricsUrl}/country/${cleanCode}/`;
 }
 
 /**
@@ -256,7 +239,6 @@ export function getCountryMetricsUrl(countryCode: string): string {
  * @param asNumber - AS number (e.g., 'AS12345' or '12345')
  */
 export function getASMetricsUrl(asNumber: string): string {
-  // Extract numeric part, handle 'AS12345' or '12345' formats
   const match = asNumber.match(/(\d+)/);
   if (!match) {
     console.warn(`Invalid AS number: ${asNumber}`);
@@ -267,7 +249,18 @@ export function getASMetricsUrl(asNumber: string): string {
 }
 ```
 
-#### 2.2 Update Country Tooltip Component
+**Implementation Notes:**
+- Add both functions to `src/lib/config.ts` alongside existing `getRelayMetricsUrl()`
+- Country codes use UPPERCASE after Allium migration (Section 4.1.2)
+- AS numbers already compatible (both use `AS{number}` format)
+
+#### 2.2 Update Country Tooltip Component — 🔲 TODO
+
+**Current `CountryTooltip` (in `CountryLayer.tsx`):**
+- Shows country name and estimated client count
+- No link to external metrics
+
+**Enhanced version with Allium link:**
 
 ```typescript
 // routefluxmap/src/components/map/CountryLayer.tsx - Enhance CountryTooltip
@@ -278,38 +271,42 @@ interface CountryTooltipProps {
   countryCode: string;
   countryName: string;
   clientCount: number;
-  relayCount?: number;  // NEW: from Allium data
+  hasBounds: boolean;
+  lower: number;
+  upper: number;
   x: number;
   y: number;
 }
 
 export const CountryTooltip = forwardRef<HTMLDivElement, CountryTooltipProps>(
-  ({ countryCode, countryName, clientCount, relayCount, x, y }, ref) => {
+  ({ countryCode, countryName, clientCount, hasBounds, lower, upper, x, y }, ref) => {
     const metricsUrl = getCountryMetricsUrl(countryCode);
     
     return (
       <div
         ref={ref}
-        className="absolute z-20 bg-black/80 backdrop-blur-sm border border-tor-green/30 
-                   rounded-lg px-3 py-2 text-sm pointer-events-auto"
+        className="absolute z-20 bg-black/90 text-white text-sm px-3 py-2 rounded-lg 
+                   shadow-lg border border-purple-500/30 pointer-events-auto"
         style={{ left: x + TOOLTIP_OFFSET, top: y + TOOLTIP_OFFSET }}
       >
-        <div className="font-bold text-tor-green">{countryName}</div>
-        <div className="text-gray-300">
-          ~{formatCompact(clientCount)} Tor users
+        <div className="font-medium text-purple-400">{countryName}</div>
+        <div className="text-gray-400">
+          ~{formatCompact(clientCount)} Tor clients
         </div>
-        {relayCount !== undefined && (
-          <div className="text-gray-400 text-xs">
-            {relayCount} relays
+        {hasBounds && (
+          <div className="text-gray-500 text-xs">
+            Est. range: {formatRange(lower, upper)}
           </div>
         )}
+        {/* NEW: Link to Allium country page */}
         <a
           href={metricsUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-xs text-tor-green hover:underline mt-1 block"
+          className="text-xs text-tor-green hover:underline mt-1.5 pt-1.5 
+                     border-t border-white/10 block"
         >
-          View country details →
+          View relay details →
         </a>
       </div>
     );
@@ -317,64 +314,123 @@ export const CountryTooltip = forwardRef<HTMLDivElement, CountryTooltipProps>(
 );
 ```
 
+**Key Changes:**
+1. Import `getCountryMetricsUrl` from config
+2. Add `pointer-events-auto` to make tooltip clickable
+3. Add link with external icon to Allium country page
+4. Style link to match existing UI (tor-green color)
+```
+
 ---
 
-### Phase 3: Add RouteFluxMap Link from Allium (Day 6-7)
+### Phase 3: Add RouteFluxMap Link from Allium (Day 6-7) — 🔲 NOT IMPLEMENTED
 
-#### 3.1 Update Allium Index Template
+**Current State:**
+- ✅ Allium index page exists at https://metrics.1aeo.com/
+- ✅ Country pages exist (e.g., `/country/us/`)
+- ✅ Relay pages exist with lat/lng coordinates
+- 🔲 No links to RouteFluxMap yet
+
+#### 3.1 Update Allium Index Template — 🔲 TODO
+
+Add a prominent link to RouteFluxMap on the main dashboard:
 
 ```jinja2
-{# allium/templates/index.html - Add map link in navigation/feature section #}
+{# allium/templates/index.html - Add in the navigation or feature section #}
 
-<div class="feature-cards">
+{# Option A: Simple link in navigation #}
+<div class="nav-links">
   <a href="https://routefluxmap.1aeo.com" 
-     class="feature-card" 
      target="_blank"
-     rel="noopener noreferrer">
+     rel="noopener noreferrer"
+     title="Interactive 3D visualization of the Tor network">
+    🌍 Network Map
+  </a>
+</div>
+
+{# Option B: Featured card (if using card layout) #}
+<div class="feature-card">
+  <a href="https://routefluxmap.1aeo.com" target="_blank" rel="noopener noreferrer">
     <span class="feature-icon">🌍</span>
     <span class="feature-title">Interactive Network Map</span>
-    <span class="feature-desc">Real-time visualization of Tor relays worldwide</span>
-    <span class="badge badge-live">Live</span>
+    <span class="feature-desc">Real-time 3D visualization of Tor relays</span>
   </a>
 </div>
 ```
 
-#### 3.2 Add Map Link to Country Pages
+**Placement Options:**
+1. Top navigation bar (most visible)
+2. Dashboard section alongside AROI leaderboards
+3. Footer with other external links
+
+#### 3.2 Add Map Link to Country Pages — 🔲 TODO
+
+Deep link to RouteFluxMap with country pre-selected:
 
 ```jinja2
-{# allium/templates/country.html - Add link to see country on map #}
+{# allium/templates/country.html - Add after country summary #}
 
 {% block description %}
 {{ country_name }} ({{ country_abbr }}) summary:
 {{ detail_summary(...) }}
 
-<div class="external-links">
-  <a href="https://routefluxmap.1aeo.com/#CC={{ country_abbr }}" 
-     class="btn btn-outline"
-     target="_blank">
-    🗺️ View on Interactive Map
+{# Deep link with country code in hash #}
+<div style="margin-top: 10px;">
+  <a href="https://routefluxmap.1aeo.com/#CC={{ country_abbr|upper }}" 
+     target="_blank"
+     rel="noopener noreferrer"
+     style="color: #00ff88; text-decoration: none;">
+    🗺️ View {{ country_name }} on Interactive Map →
   </a>
 </div>
 {% endblock %}
 ```
 
-#### 3.3 Add Map Link to Relay Pages
+**URL Format:** `https://routefluxmap.1aeo.com/#CC=US`
+- RouteFluxMap will highlight/zoom to the specified country
+- Uses UPPERCASE country code (after migration)
+
+#### 3.3 Add Map Link to Relay Pages — 🔲 TODO
+
+Deep link to RouteFluxMap centered on relay's location:
 
 ```jinja2
-{# allium/templates/relay-info.html - Add link near coordinates #}
+{# allium/templates/relay-info.html - Add in the location section #}
 
-{% if relay['latitude'] and relay['longitude'] %}
-<dt>Location on Map</dt>
+{% if relay['latitude'] and relay['longitude'] and relay['latitude'] != 0 and relay['longitude'] != 0 %}
+<dt>View on Map</dt>
 <dd>
-  <a href="https://routefluxmap.1aeo.com/#ML={{ relay['longitude'] }},{{ relay['latitude'] }},8"
+  <a href="https://routefluxmap.1aeo.com/#ML={{ relay['longitude']|round(2) }},{{ relay['latitude']|round(2) }},10"
      target="_blank"
      rel="noopener noreferrer"
-     class="btn btn-sm btn-outline">
-    🗺️ View on Interactive Map
+     style="color: #00ff88;">
+    🗺️ Open in RouteFluxMap
   </a>
+  <span style="color: #666; font-size: 0.85em;">
+    ({{ relay['latitude']|round(4) }}, {{ relay['longitude']|round(4) }})
+  </span>
 </dd>
 {% endif %}
 ```
+
+**URL Format:** `https://routefluxmap.1aeo.com/#ML={lng},{lat},{zoom}`
+- `ML` = Map Location
+- Coordinates: longitude first, then latitude
+- Zoom level 10 = city-level view
+
+#### 3.4 Add Map Link to AS/Network Pages — 🔲 TODO (Optional)
+
+```jinja2
+{# allium/templates/as.html - Link to see all relays in this AS on map #}
+
+<a href="https://routefluxmap.1aeo.com" 
+   target="_blank"
+   title="View network distribution on interactive map">
+  🗺️ View on Map
+</a>
+```
+
+**Note:** RouteFluxMap doesn't currently support AS filtering via URL hash, but clicking through still provides useful visualization context.
 
 ---
 
@@ -1602,188 +1658,17 @@ ROUTEFLUXMAP_URL=https://routefluxmap.1aeo.com
 
 ---
 
-### Strategy C: Monorepo Merge (Full Integration) 🔄
-
-**Timeline: 4-6 weeks**
-
-Merge RouteFluxMap into Allium repository as a visualization subproject.
-
-#### Proposed Directory Structure
-
-```
-allium/
-├── allium.py                    # Main Python generator
-├── lib/                         # Python libraries
-├── templates/                   # Jinja2 templates
-├── static/                      # Static assets (icons, CSS)
-├── visualization/               # NEW: RouteFluxMap merge
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── map/            # TorMap, CountryLayer, etc.
-│   │   │   └── ui/             # Controls, sliders
-│   │   ├── lib/                # TypeScript utilities
-│   │   └── pages/              # Astro pages
-│   ├── scripts/
-│   │   └── fetch-all-data.ts   # Data pipeline
-│   ├── public/
-│   │   └── data/               # JSON data files
-│   ├── package.json
-│   └── astro.config.mjs
-├── www/                         # Output directory
-│   ├── index.html              # Allium pages
-│   ├── country/
-│   ├── relay/
-│   └── map/                    # NEW: RouteFluxMap output
-│       └── index.html
-└── docs/
-```
-
-#### Unified Build Script
-
-```bash
-#!/bin/bash
-# scripts/build-all.sh
-
-# Build Allium (Python)
-python3 allium.py --out ./www --progress
-
-# Build RouteFluxMap (Node.js)
-cd visualization
-npm run build
-cp -r dist/* ../www/map/
-
-echo "✅ Full build complete: www/"
-```
-
-#### Unified Data Pipeline
-
-```python
-# allium/lib/geo_data_exporter.py (NEW)
-"""
-Export Allium's relay data in RouteFluxMap format for visualization.
-"""
-
-import json
-from .relays import Relays
-
-def export_relay_json_for_visualization(relays: Relays, output_path: str):
-    """
-    Convert Allium's relay data to RouteFluxMap's JSON format.
-    
-    This allows RouteFluxMap to consume the same data that Allium uses,
-    ensuring consistency between visualization and analytics.
-    """
-    nodes = []
-    
-    for relay in relays.json['relays']:
-        if relay.get('latitude') and relay.get('longitude'):
-            nodes.append({
-                'lat': relay['latitude'],
-                'lng': relay['longitude'],
-                'bandwidth': relay.get('observed_bandwidth', 0),
-                'label': relay.get('nickname', 'Unknown'),
-                'relays': [{
-                    'nickname': relay.get('nickname', 'Unknown'),
-                    'fingerprint': relay.get('fingerprint', ''),
-                    'bandwidth': relay.get('observed_bandwidth', 0),
-                    'flags': _encode_flags(relay.get('flags', [])),
-                    'ip': relay.get('or_addresses', [''])[0].split(':')[0],
-                    'port': relay.get('or_addresses', [''])[0].split(':')[-1]
-                }]
-            })
-    
-    output = {
-        'published': relays.json.get('relays_published', ''),
-        'nodes': nodes,
-        'bandwidth': sum(n['bandwidth'] for n in nodes),
-        'relayCount': len(nodes)
-    }
-    
-    with open(output_path, 'w') as f:
-        json.dump(output, f)
-
-def _encode_flags(flags: list) -> str:
-    """Encode relay flags as compact string."""
-    flag_map = {'Guard': 'G', 'Exit': 'E', 'HSDir': 'H'}
-    return ''.join(flag_map.get(f, 'M') for f in flags if f in flag_map) or 'M'
-```
-
-**Pros:**
-- Single repository, unified versioning
-- Shared data ensures consistency
-- Single deployment
-- Unified CI/CD pipeline
-
-**Cons:**
-- More complex build process (Python + Node.js)
-- Larger repository
-- Need to maintain two tech stacks
-
 ---
 
-### Strategy D: MicroFrontend Architecture (Advanced) 🏗️
+## Alternative Approaches (Future Consideration)
 
-**Timeline: 6-8 weeks**
+### Monorepo Merge
+If deeper integration is needed later, RouteFluxMap could be merged into the Allium repository as a `visualization/` subdirectory with a unified build script. This would enable single deployment and shared data pipelines but adds complexity (Python + Node.js build).
 
-Deploy RouteFluxMap as a web component that Allium can embed anywhere.
+### Web Component
+RouteFluxMap could be packaged as a `<tor-map>` web component for embedding anywhere. This provides maximum flexibility but requires additional bundling work.
 
-#### RouteFluxMap as Web Component
-
-```typescript
-// routefluxmap/src/components/TorMapWebComponent.tsx
-import { createRoot } from 'react-dom/client';
-import TorMap from './map/TorMap';
-
-class TorMapElement extends HTMLElement {
-  connectedCallback() {
-    const root = createRoot(this);
-    const metricsUrl = this.getAttribute('metrics-url') || '';
-    root.render(<TorMap metricsUrl={metricsUrl} />);
-  }
-}
-
-customElements.define('tor-map', TorMapElement);
-```
-
-#### Usage in Allium Templates
-
-```html
-<!-- allium/templates/index.html -->
-<script type="module" src="https://routefluxmap.1aeo.com/tor-map.js"></script>
-
-<tor-map metrics-url="https://allium.1aeo.com"></tor-map>
-```
-
-**Pros:**
-- Maximum flexibility
-- Can embed visualization anywhere
-- Framework-agnostic integration
-- Independent versioning
-
-**Cons:**
-- Most complex to implement
-- Requires web component bundling expertise
-- Larger initial JS bundle
-
----
-
-## Recommended Integration Path
-
-### Phase 1: Quick Win (Week 1)
-1. **Implement Strategy A** (iframe embed)
-2. Add navigation link from Allium to RouteFluxMap
-3. Validate user experience
-
-### Phase 2: Deep Integration (Weeks 2-3)
-1. **Implement Strategy B** (API bridge)
-2. Configure RouteFluxMap `metricsUrl` to point to Allium
-3. Add clean URL routing in Allium
-4. Test bidirectional navigation
-
-### Phase 3: Full Merge (Optional, Weeks 4-6)
-1. **Evaluate Strategy C** based on Phase 2 learnings
-2. If beneficial: merge repositories
-3. Implement unified build and data pipeline
+**Recommendation:** Start with the API Bridge approach (Phases 1-3). Evaluate these alternatives after validating the integration works well.
 
 ---
 
@@ -2073,37 +1958,46 @@ This integration transforms both projects:
 
 ---
 
-## Summary: Strategy B Action Items
+## Summary: Action Items by Phase
 
-### Immediate (Day 1-2)
+### Phase 1: Cross-Linking Configuration (Day 1-2)
 
-- [ ] **Allium**: Run country code migration script (Section 4.1.3)
-- [ ] **Allium**: Update `country_utils.py` - convert sets to UPPERCASE
-- [ ] **Allium**: Update comparison functions `.lower()` → `.upper()`
-- [ ] **Allium**: Test build and verify `/country/US/` URLs work
-- [ ] **RouteFluxMap**: Set `PUBLIC_METRICS_URL=https://allium.1aeo.com` in `config.env`
-- [ ] **RouteFluxMap**: Deploy with new configuration
-- [ ] Verify cross-linking: Click relay → "View on Metrics" → Allium page loads
+| Task | Owner | Status | Notes |
+|------|-------|--------|-------|
+| Set `PUBLIC_METRICS_URL=https://metrics.1aeo.com` | RouteFluxMap | 🔲 TODO | In `deploy/config.env` |
+| Deploy RouteFluxMap with new config | RouteFluxMap | 🔲 TODO | `npm run deploy:pages` |
+| Test relay links work | Both | 🔲 TODO | Click relay → Allium page |
+| Run country code migration | Allium | 🔲 TODO | Section 4.1.3 script |
+| Update `country_utils.py` sets to UPPERCASE | Allium | 🔲 TODO | `{'us'}` → `{'US'}` |
+| Update `.lower()` → `.upper()` in comparisons | Allium | 🔲 TODO | 4 files to modify |
+| Rebuild and verify `/country/US/` URLs | Allium | 🔲 TODO | Should return 200 |
 
-### Short-term (Week 1)
+### Phase 2: Country Deep Links (Day 3-5)
 
-- [ ] **RouteFluxMap**: Add `getCountryMetricsUrl()` helper
-- [ ] **RouteFluxMap**: Update `CountryTooltip` with country detail links
-- [ ] **Allium**: Add "View on Map" links to templates (relay, country pages)
-- [ ] Verify bidirectional navigation works
+| Task | Owner | Status | Notes |
+|------|-------|--------|-------|
+| Add `getCountryMetricsUrl()` to `config.ts` | RouteFluxMap | 🔲 TODO | Section 2.1 |
+| Add `getASMetricsUrl()` to `config.ts` | RouteFluxMap | 🔲 TODO | Section 2.1 |
+| Update `CountryTooltip` with metrics link | RouteFluxMap | 🔲 TODO | Section 2.2 |
+| Test country links work | Both | 🔲 TODO | Hover country → click link |
 
-### Medium-term (Week 2-3)
+### Phase 3: RouteFluxMap Links from Allium (Day 6-7)
 
-- [ ] **Allium**: Create `SharedDataExporter` class
-- [ ] **Allium**: Export `/shared/classifications.json` with rarity tiers
-- [ ] **RouteFluxMap**: Optionally fetch Allium classifications for coloring
-- [ ] Add validation script to check data consistency
+| Task | Owner | Status | Notes |
+|------|-------|--------|-------|
+| Add RouteFluxMap link to index.html | Allium | 🔲 TODO | Section 3.1 |
+| Add "View on Map" to country.html | Allium | 🔲 TODO | Deep link with `#CC=` |
+| Add "View on Map" to relay-info.html | Allium | 🔲 TODO | Deep link with `#ML=` |
+| Test bidirectional navigation | Both | 🔲 TODO | Full user flow |
 
-### Optional Enhancements
+### Phase 4+: Data Schema & Optional Enhancements
 
-- [ ] Export AROI leaderboard data for RouteFluxMap visualization
-- [ ] Add relay search from Allium that opens RouteFluxMap at location
-- [ ] Create shared data pipeline for synchronized updates
+| Task | Owner | Priority | Notes |
+|------|-------|----------|-------|
+| Create `SharedDataExporter` class | Allium | Optional | Section 4.5 |
+| Export `classifications.json` | Allium | Optional | Rarity tiers |
+| Fetch Allium classifications | RouteFluxMap | Optional | For country coloring |
+| Export AROI operator data | Allium | Optional | For visualization |
 
 ---
 
