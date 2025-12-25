@@ -1,13 +1,14 @@
 # RouteFluxMap Integration Plan for Allium
 
-**Status**: 🚀 Phase 1 & 3 Code Complete, Phase 2 Pending  
+**Status**: 🚀 Phase 1 & 3 LIVE, Phase 2 Pending  
 **Last Updated**: December 24, 2024  
+**Last Verified**: December 24, 2024 (live site check)  
 **Document Type**: Technical Integration Strategy
 
 > **Quick Status:**
-> - ✅ **Phase 1**: Cross-linking config complete (code in repo, pending Allium redeploy)
-> - 🔲 **Phase 2**: RouteFluxMap → Allium country links (not started)
-> - ✅ **Phase 3**: Allium → RouteFluxMap links complete (pending redeploy)
+> - ✅ **Phase 1**: Cross-linking config — **LIVE** ✓
+> - 🔲 **Phase 2**: RouteFluxMap → Allium country links — NOT STARTED
+> - ✅ **Phase 3**: Allium → RouteFluxMap links — **LIVE** ✓
 > - 🔲 **Phase 4+**: Optional data schema enhancements  
 
 ---
@@ -122,9 +123,9 @@ Connect RouteFluxMap to Allium via configuration, enabling seamless navigation b
 
 ## Strategy B: Detailed Implementation Guide
 
-### Phase 1: Configure Cross-Linking (Day 1-2)
+### Phase 1: Configure Cross-Linking (Day 1-2) — ✅ LIVE
 
-#### 1.1 RouteFluxMap Configuration — ✅ FULLY IMPLEMENTED
+#### 1.1 RouteFluxMap Configuration — ✅ LIVE
 
 RouteFluxMap has `metricsUrl` configured and pointing to Allium:
 
@@ -146,39 +147,36 @@ export function getRelayMetricsUrl(fingerprint: string): string { ... }
 - ✅ `PUBLIC_METRICS_URL=https://metrics.1aeo.com` configured in production
 - ✅ Relay deep linking via `#relay=FINGERPRINT` URL hash (commit `208b43c2`)
 
-**Live Instances:**
+**Live Instances (verified Dec 24, 2024):**
 - RouteFluxMap: https://routefluxmap.1aeo.com ✅
 - Allium: https://metrics.1aeo.com ✅
 
-#### 1.2 URL Schema Alignment — ✅ CODE COMPLETE, ⏳ PENDING DEPLOYMENT
+#### 1.2 URL Schema Alignment — ✅ LIVE
 
-**Current URL Patterns (Live Site):**
+**Live URL Patterns (verified Dec 24, 2024):**
 
-| Entity | RouteFluxMap Links To | Live Allium | Code in Repo |
-|--------|----------------------|-------------|--------------|
-| Relay | `/relay/{FINGERPRINT}` | `/relay/{FINGERPRINT}/` ✅ | ✅ Compatible |
-| Country | `/country/{CC}` (uppercase) | `/country/{cc}/` (lowercase) | `/country/{CC}/` ✅ |
-| AS | `/as/AS{number}` | `/as/AS{number}/` ✅ | ✅ Compatible |
+| Entity | RouteFluxMap Links To | Allium Live | Status |
+|--------|----------------------|-------------|--------|
+| Relay | `/relay/{FINGERPRINT}` | `/relay/{FINGERPRINT}/` | ✅ LIVE |
+| Country | `/country/{CC}` (uppercase) | `/country/{CC}/` | ✅ LIVE |
+| AS | `/as/AS{number}` | `/as/AS{number}/` | ✅ LIVE |
 
-**Status:**
-- ✅ Allium code normalizes country codes to UPPERCASE (`relay["country"] = relay["country"].upper()`)
-- ✅ `country_utils.py` sets converted to UPPERCASE (commit `eb2a4178`)
-- ⏳ Live site still serves lowercase URLs (pending redeployment)
-
-**Verified Live (current):**
-```
-https://metrics.1aeo.com/country/us/  → 200 OK (lowercase - current)
-https://metrics.1aeo.com/country/US/  → 404 (pending deployment)
+**Verified Live:**
+```bash
+# UPPERCASE country URLs now work
+curl -s "https://metrics.1aeo.com/country/US/" -w "%{http_code}"  # → 200 ✅
+curl -s "https://metrics.1aeo.com/country/us/" -w "%{http_code}"  # → 404 (migrated)
 ```
 
-#### 1.3 Allium URL Compatibility — ✅ FULLY IMPLEMENTED
+#### 1.3 Allium URL Compatibility — ✅ LIVE
 
 **Commit `eb2a4178`:** "feat: add RouteFluxMap integration with country code normalization"
 
-Changes implemented:
+Deployed changes:
 - ✅ Country codes normalized to UPPERCASE throughout codebase
-- ✅ Templates use `{{ relay['country']|escape }}` (now outputs uppercase)
+- ✅ Templates use `{{ relay['country']|escape }}` (outputs uppercase)
 - ✅ Flag image paths use `|lower` filter for backwards compatibility
+- ✅ All country URLs now use UPPERCASE (e.g., `/country/US/`)
 
 ---
 
@@ -303,55 +301,46 @@ export const CountryTooltip = forwardRef<HTMLDivElement, CountryTooltipProps>(
 
 ---
 
-### Phase 3: Add RouteFluxMap Link from Allium (Day 6-7) — ✅ FULLY IMPLEMENTED
+### Phase 3: Add RouteFluxMap Link from Allium (Day 6-7) — ✅ LIVE
 
 **Commit `eb2a4178`:** "feat: add RouteFluxMap integration with country code normalization"
 **Commit `40134430`:** "Add 1AEO cross-site navigation and footer branding"
 
-**Implementation Status:**
-- ✅ Cross-site navigation bar with RouteFluxMap link in `skeleton.html`
-- ✅ Footer with 1AEO branding and links
-- ✅ Country pages have "View on Interactive Map" link (`#CC=XX`)
-- ✅ Relay pages have "View on Interactive Map" link (`#relay=FINGERPRINT`)
+**Live Status (verified Dec 24, 2024):**
+- ✅ Cross-site navigation bar with RouteFluxMap link — **LIVE**
+- ✅ Footer with 1AEO branding and links — **LIVE**
+- ✅ Country pages have "View on Interactive Map" link — **LIVE**
+- ✅ Relay pages have "View on Interactive Map" link — **LIVE**
 
-#### 3.1 Update Allium Index Template — ✅ IMPLEMENTED
+#### 3.1 Update Allium Index Template — ✅ LIVE
 
 ```html
-<!-- 1AEO Cross-Site Navigation (in skeleton.html) -->
-<a href="https://www.1aeo.com">Home</a>
-<a href="https://metrics.1aeo.com" class="active">Metrics</a>
-<a href="https://aroivalidator.1aeo.com">AROI Validator</a>
+<!-- Verified live at https://metrics.1aeo.com/ -->
 <a href="https://routefluxmap.1aeo.com">RouteFluxMap</a>
 ```
 
-#### 3.2 Add Map Link to Country Pages — ✅ IMPLEMENTED
+#### 3.2 Add Map Link to Country Pages — ✅ LIVE
 
-```jinja2
-{# allium/templates/country.html #}
-<li>
-  <a href="https://routefluxmap.1aeo.com/#CC={{ country_abbr }}" 
-     target="_blank" rel="noopener" 
-     title="View {{ country_name }} on RouteFluxMap interactive visualization">
-    🗺️ View on Interactive Map
-  </a>
-</li>
+```html
+<!-- Verified live at https://metrics.1aeo.com/country/US/ -->
+<a href="https://routefluxmap.1aeo.com/#CC=US" target="_blank" rel="noopener" 
+   title="View The United States of America on RouteFluxMap interactive visualization">
+  🗺️ View on Interactive Map
+</a>
 ```
 
-#### 3.3 Add Map Link to Relay Pages — ✅ IMPLEMENTED
+#### 3.3 Add Map Link to Relay Pages — ✅ LIVE
 
-```jinja2
-{# allium/templates/relay-info.html #}
-<dt>Interactive Map</dt>
-<dd>
-  <a href="https://routefluxmap.1aeo.com/#relay={{ relay['fingerprint']|escape }}" 
-     target="_blank" rel="noopener" 
-     title="View this relay on RouteFluxMap interactive visualization">
-    🗺️ View on Interactive Map
-  </a>
-</dd>
+```html
+<!-- Verified live at https://metrics.1aeo.com/relay/5835631C79E55CDFDCF9E2D14CB994325AEB3162/ -->
+<a href="https://routefluxmap.1aeo.com/#relay=5835631C79E55CDFDCF9E2D14CB994325AEB3162" 
+   target="_blank" rel="noopener" 
+   title="View this relay on RouteFluxMap interactive visualization">
+  🗺️ View on Interactive Map
+</a>
 ```
 
-**Note:** Uses `#relay=FINGERPRINT` format which RouteFluxMap now supports (commit `208b43c2`).
+**Note:** Uses `#relay=FINGERPRINT` format which RouteFluxMap supports (commit `208b43c2`).
 
 #### 3.4 Add Map Link to AS/Network Pages — 🔲 NOT IMPLEMENTED (Optional)
 
@@ -462,19 +451,17 @@ def _process_relay(self, relay):
 
 ---
 
-#### 4.1.3 Validation After Migration — ✅ READY FOR DEPLOYMENT
+#### 4.1.3 Validation After Migration — ✅ VERIFIED LIVE (Dec 24, 2024)
 
 ```bash
-# Verify country directories are now UPPERCASE
-ls www/country/
-# Expected: AD/ AE/ AF/ ... US/ ... ZW/
+# UPPERCASE country URLs work
+curl -s "https://metrics.1aeo.com/country/US/" -w "%{http_code}"  # → 200 ✅
 
-# Verify country links work
-grep -r "country/" www/*.html | head -5
-# Expected: href="/country/US/" not href="/country/us/"
+# Lowercase country URLs no longer work (fully migrated)
+curl -s "https://metrics.1aeo.com/country/us/" -w "%{http_code}"  # → 404 ✅
 
-# Run existing tests (should pass after migration)
-pytest tests/ -v
+# Country page contains RouteFluxMap link
+curl -s "https://metrics.1aeo.com/country/US/" | grep "routefluxmap.1aeo.com/#CC=US"  # ✅
 ```
 
 ---
@@ -1764,17 +1751,16 @@ This integration transforms both projects:
 
 ## Summary: Action Items by Phase
 
-### Phase 1: Cross-Linking Configuration — ✅ COMPLETE (pending deployment)
+### Phase 1: Cross-Linking Configuration — ✅ LIVE
 
-| Task | Owner | Status | Notes |
-|------|-------|--------|-------|
-| Set `PUBLIC_METRICS_URL=https://metrics.1aeo.com` | RouteFluxMap | ✅ Done | Configured in production |
-| Deploy RouteFluxMap with new config | RouteFluxMap | ✅ Done | Live at routefluxmap.1aeo.com |
-| Add relay deep linking `#relay=FP` | RouteFluxMap | ✅ Done | Commit `208b43c2` |
-| Update `country_utils.py` sets to UPPERCASE | Allium | ✅ Done | Commit `eb2a4178` |
-| Update `.lower()` → `.upper()` in comparisons | Allium | ✅ Done | Commit `eb2a4178` |
-| Normalize country codes at ingestion | Allium | ✅ Done | `relay["country"].upper()` |
-| **Redeploy Allium with UPPERCASE URLs** | Allium | ⏳ PENDING | Live site still has lowercase |
+| Task | Owner | Status | Verified |
+|------|-------|--------|----------|
+| Set `PUBLIC_METRICS_URL=https://metrics.1aeo.com` | RouteFluxMap | ✅ LIVE | Dec 24 |
+| Deploy RouteFluxMap with relay links | RouteFluxMap | ✅ LIVE | Dec 24 |
+| Add relay deep linking `#relay=FP` | RouteFluxMap | ✅ LIVE | Dec 24 |
+| Update `country_utils.py` to UPPERCASE | Allium | ✅ LIVE | Dec 24 |
+| Normalize country codes at ingestion | Allium | ✅ LIVE | Dec 24 |
+| Deploy Allium with UPPERCASE URLs | Allium | ✅ LIVE | Dec 24 |
 
 ### Phase 2: Country Deep Links from RouteFluxMap — 🔲 NOT STARTED
 
@@ -1785,14 +1771,13 @@ This integration transforms both projects:
 | Update `CountryTooltip` with metrics link | RouteFluxMap | 🔲 TODO | Section 2.2 |
 | Test country links work | Both | 🔲 TODO | Hover country → click link |
 
-### Phase 3: RouteFluxMap Links from Allium — ✅ COMPLETE (pending deployment)
+### Phase 3: RouteFluxMap Links from Allium — ✅ LIVE
 
-| Task | Owner | Status | Notes |
-|------|-------|--------|-------|
-| Add RouteFluxMap nav link | Allium | ✅ Done | In `skeleton.html` header |
-| Add "View on Map" to country.html | Allium | ✅ Done | `#CC={{ country_abbr }}` |
-| Add "View on Map" to relay-info.html | Allium | ✅ Done | `#relay={{ fingerprint }}` |
-| **Redeploy Allium to go live** | Allium | ⏳ PENDING | Code in repo, not live |
+| Task | Owner | Status | Verified |
+|------|-------|--------|----------|
+| Add RouteFluxMap nav link | Allium | ✅ LIVE | Dec 24 |
+| Add "View on Map" to country.html | Allium | ✅ LIVE | Dec 24 |
+| Add "View on Map" to relay-info.html | Allium | ✅ LIVE | Dec 24 |
 
 ### Phase 4+: Data Schema & Optional Enhancements
 
@@ -1805,33 +1790,43 @@ This integration transforms both projects:
 
 ---
 
-## Current Implementation Summary
+## Current Implementation Summary (Verified Dec 24, 2024)
 
-### What's Done ✅
+### What's Live ✅
 
-**RouteFluxMap (commit `208b43c2`):**
-- `metricsUrl` configured to `https://metrics.1aeo.com`
-- `getRelayMetricsUrl()` helper for relay links
-- `RelayPopup` "View on Metrics" links work
-- Relay deep linking via `#relay=FINGERPRINT` URL hash
+**RouteFluxMap (https://routefluxmap.1aeo.com):**
+- ✅ `metricsUrl` configured to `https://metrics.1aeo.com`
+- ✅ `getRelayMetricsUrl()` helper for relay links
+- ✅ `RelayPopup` "View on Metrics" links work
+- ✅ Relay deep linking via `#relay=FINGERPRINT` URL hash
 
-**Allium (commits `eb2a4178`, `40134430`):**
-- Country codes normalized to UPPERCASE in code
-- Cross-site navigation with RouteFluxMap link
-- Country pages: "View on Interactive Map" → `#CC=XX`
-- Relay pages: "View on Interactive Map" → `#relay=FINGERPRINT`
+**Allium (https://metrics.1aeo.com):**
+- ✅ Country URLs now UPPERCASE (`/country/US/` → 200, `/country/us/` → 404)
+- ✅ Cross-site navigation with RouteFluxMap link in header/footer
+- ✅ Country pages: "View on Interactive Map" → `routefluxmap.1aeo.com/#CC=US`
+- ✅ Relay pages: "View on Interactive Map" → `routefluxmap.1aeo.com/#relay=FINGERPRINT`
 
-### What's Pending ⏳
+### Bidirectional Navigation Working ✅
 
-1. **Allium Redeployment** - Code changes in repo, live site still has lowercase country URLs
-2. **Phase 2 (RouteFluxMap → Allium country links)** - Not started
+```
+Allium → RouteFluxMap:
+  /country/US/ → "View on Interactive Map" → routefluxmap.1aeo.com/#CC=US ✅
+  /relay/{FP}/ → "View on Interactive Map" → routefluxmap.1aeo.com/#relay={FP} ✅
+
+RouteFluxMap → Allium:
+  Click relay → "View on Metrics" → metrics.1aeo.com/relay/{FP}/ ✅
+  Hover country → (no link yet) 🔲
+```
 
 ### What's Remaining 🔲
 
-- `getCountryMetricsUrl()` helper in RouteFluxMap
-- `getASMetricsUrl()` helper in RouteFluxMap
-- CountryTooltip enhancement with Allium links
-- Optional: Shared data exports for rarity visualization
+**Phase 2 (RouteFluxMap → Allium country links):**
+- `getCountryMetricsUrl()` helper in RouteFluxMap config.ts
+- `getASMetricsUrl()` helper in RouteFluxMap config.ts
+- CountryTooltip enhancement with "View country details" link to Allium
+
+**Phase 4+ (Optional):**
+- Shared data exports for rarity visualization
 
 ---
 
