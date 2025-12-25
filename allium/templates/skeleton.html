@@ -17,6 +17,7 @@
                 :root {
                     --aeo-green: #00ff7f;
                     --aeo-green-dim: #00cc66;
+                    --aeo-green-hover: #009955;  /* Darker green for hover on light backgrounds */
                     --aeo-green-dark: #004d26;
                     --aeo-dark-bg: #121212;
                     --aeo-dark-surface: #1e1e1e;
@@ -94,26 +95,9 @@
                     }
                 }
 
-                /* Override Bootstrap blue links with 1AEO green */
-                a {
-                    color: var(--aeo-green-dim);
-                }
-                
-                a:hover, a:focus {
-                    color: var(--aeo-green);
-                }
-                
-                /* Navbar styling with 1AEO colors */
-                .navbar-default {
-                    background-color: #f8f8f8;
-                    border-color: #e7e7e7;
-                }
-                
-                .nav.navbar-nav > li.active > a,
-                .nav.navbar-nav > li > a:hover,
-                .nav.navbar-nav > li > a:focus {
-                    color: var(--aeo-green-dim) !important;
-                    background-color: #e7e7e7;
+                /* Breadcrumb links - no underline */
+                .breadcrumb a {
+                    text-decoration: none;
                 }
                 
                 /* 1AEO Footer */
@@ -600,7 +584,7 @@
                 }
                 
                 .aroi-nav-link {
-                    color: var(--aeo-green-dim, #00cc66);
+                    color: #337ab7;
                     text-decoration: none;
                     padding: 2px 6px;
                     border-radius: 3px;
@@ -609,7 +593,7 @@
                 }
                 
                 .aroi-nav-link:hover {
-                    color: var(--aeo-green, #00ff7f);
+                    color: #23527c;
                     background-color: #f5f5f5;
                     text-decoration: none;
                 }
@@ -748,9 +732,9 @@
                     display: inline-block;
                     padding: 4px 8px; /* Smaller padding to match table text size */
                     margin: 0 2px; /* Reduced margin */
-                    border: 1px solid var(--aeo-green-dim, #00cc66);
+                    border: 1px solid #337ab7;
                     border-radius: 3px;
-                    color: var(--aeo-green-dim, #00cc66);
+                    color: #337ab7;
                     text-decoration: none;
                     background-color: white;
                     font-size: 14px; /* Match table text size */
@@ -758,12 +742,12 @@
                 }
 
                 .pagination-nav-bottom a:hover {
-                    background-color: var(--aeo-green-dim, #00cc66);
+                    background-color: #337ab7;
                     color: white;
                 }
 
                 .pagination-nav-bottom a.active {
-                    background-color: var(--aeo-green-dim, #00cc66);
+                    background-color: #337ab7;
                     color: white;
                 }
 
@@ -1310,8 +1294,8 @@
                 <div class="aeo-nav-links">
                     <a href="https://www.1aeo.com">Home</a>
                     <a href="https://metrics.1aeo.com" class="active">Metrics</a>
-                    <a href="https://aroivalidator.1aeo.com">Validator</a>
-                    <a href="https://routefluxmap.1aeo.com">FluxMap</a>
+                    <a href="https://aroivalidator.1aeo.com">AROI Validator</a>
+                    <a href="https://routefluxmap.1aeo.com">RouteFluxMap</a>
                 </div>
             </div>
         </nav>

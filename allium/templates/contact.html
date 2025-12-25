@@ -55,7 +55,7 @@
                     {# Vanity URL display for validated AROI domains - only show if base_url is configured #}
                     {% if is_validated_aroi and base_url %}
                     <li style="margin-left: 20px;">
-                        <strong>Vanity URL:</strong> <a href="{{ base_url }}/{{ aroi_domain|lower|escape }}/" style="color: #0066cc; text-decoration: none;">{{ base_url }}/{{ aroi_domain|lower|escape }}/</a>
+                        <strong>Vanity URL:</strong> <a href="{{ base_url }}/{{ aroi_domain|lower|escape }}/">{{ base_url }}/{{ aroi_domain|lower|escape }}/</a>
                     </li>
                     {% endif %}
                     {% elif contact_validation_status and contact_validation_status.has_aroi %}
@@ -77,7 +77,7 @@
                     {% if primary_country_data %}
                     <li><strong>Countries:</strong> 
                         {% for country_info in primary_country_data.all_countries %}
-                            <a href="{{ page_ctx.path_prefix }}country/{{ country_info.country }}/" style="color: #337ab7; text-decoration: none;">
+                            <a href="{{ page_ctx.path_prefix }}country/{{ country_info.country }}/" style="text-decoration: none;">
                                 <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ country_info.country }}.png" 
                                      title="{{ primary_country_data.tooltip }}" 
                                      alt="{{ country_info.country_name }}" 
@@ -88,7 +88,7 @@
                     </li>
                     {% elif relay_subset[0]['country'] %}
                     <li><strong>Countries:</strong> 
-                        <a href="{{ page_ctx.path_prefix }}country/{{ relay_subset[0]['country'] }}/" style="color: #337ab7; text-decoration: none;">
+                        <a href="{{ page_ctx.path_prefix }}country/{{ relay_subset[0]['country'] }}/" style="text-decoration: none;">
                             <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ relay_subset[0]['country'] }}.png" 
                                  title="{{ relay_subset[0]['country_name'] if relay_subset[0]['country_name'] else relay_subset[0]['country']|upper }}" 
                                  alt="{{ relay_subset[0]['country_name'] if relay_subset[0]['country_name'] else relay_subset[0]['country']|upper }}" 
@@ -360,12 +360,12 @@
         <div class="aroi-rankings-section" style="margin-bottom: 20px; padding: 15px; background-color: #f0f8ff; border-left: 4px solid #28a745;">
             <h4 style="margin: 0 0 8px 0; color: #495057; font-size: 16px;">🏆 AROI Champion Rankings</h4>
             
-            <p style="margin-bottom: 8px; color: #666; font-size: 13px;">{{ contact_rankings|length }} winning <a href="{{ page_ctx.path_prefix }}misc/aroi-leaderboards.html" title="View complete AROI Champions Dashboard" style="color: #007bff; text-decoration: none; font-weight: bold;">AROI Champions Dashboard</a> categories:</p>
+            <p style="margin-bottom: 8px; color: #666; font-size: 13px;">{{ contact_rankings|length }} winning <a href="{{ page_ctx.path_prefix }}misc/aroi-leaderboards.html" title="View complete AROI Champions Dashboard" style="font-weight: bold;">AROI Champions Dashboard</a> categories:</p>
             
             <ul style="list-style-type: none; padding-left: 0; margin-bottom: 0;">
                 {% for ranking in contact_rankings %}
                 <li style="margin-bottom: 4px; padding: 4px 8px; background-color: #ffffff; border-radius: 3px; border: 1px solid #dee2e6; font-size: 14px;">
-                    <a href="{{ page_ctx.path_prefix }}misc/{{ ranking.link }}" title="View {{ ranking.category_name }} leaderboard rankings" style="color: #007bff; text-decoration: none; font-weight: bold;">
+                    <a href="{{ page_ctx.path_prefix }}misc/{{ ranking.link }}" title="View {{ ranking.category_name }} leaderboard rankings" style="font-weight: bold;">
                         {{ ranking.emoji }} {{ ranking.statement }}
                     </a>
                     <small style="color: #666; margin-left: 6px; font-size: 12px;">— {{ ranking.title }}</small>
@@ -566,7 +566,7 @@
     <ul style="list-style-type: none; padding-left: 0; margin-bottom: 10px;">
         {% for relay in contact_validation_status.unvalidated_relays %}
         <li style="margin-bottom: 6px; padding: 8px; background-color: #fff; border-radius: 3px; font-size: 13px; border: 1px solid #ffeeba;">
-            <strong><a href="{{ page_ctx.path_prefix }}relay/{{ relay.fingerprint }}/" style="color: #0d6efd; text-decoration: underline;">{{ relay.nickname|escape }}</a></strong>
+            <strong><a href="{{ page_ctx.path_prefix }}relay/{{ relay.fingerprint }}/">{{ relay.nickname|escape }}</a></strong>
             <span style="color: #666;">•</span>
             <span style="color: #dc3545;">{{ relay.error|escape }}</span>
             {% if relay.proof_type and relay.proof_type != 'unknown' %}
