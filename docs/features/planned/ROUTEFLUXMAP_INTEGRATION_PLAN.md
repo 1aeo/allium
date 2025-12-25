@@ -1,8 +1,14 @@
 # RouteFluxMap Integration Plan for Allium
 
-**Status**: 📊 Integration Analysis Complete  
-**Date**: December 2024  
-**Document Type**: Technical Integration Strategy  
+**Status**: 🚀 Phase 1 & 3 Code Complete, Phase 2 Pending  
+**Last Updated**: December 24, 2024  
+**Document Type**: Technical Integration Strategy
+
+> **Quick Status:**
+> - ✅ **Phase 1**: Cross-linking config complete (code in repo, pending Allium redeploy)
+> - 🔲 **Phase 2**: RouteFluxMap → Allium country links (not started)
+> - ✅ **Phase 3**: Allium → RouteFluxMap links complete (pending redeploy)
+> - 🔲 **Phase 4+**: Optional data schema enhancements  
 
 ---
 
@@ -118,100 +124,74 @@ Connect RouteFluxMap to Allium via configuration, enabling seamless navigation b
 
 ### Phase 1: Configure Cross-Linking (Day 1-2)
 
-#### 1.1 RouteFluxMap Configuration — ✅ PARTIALLY IMPLEMENTED
+#### 1.1 RouteFluxMap Configuration — ✅ FULLY IMPLEMENTED
 
-RouteFluxMap already has built-in support for external metrics URLs via environment variables:
+RouteFluxMap has `metricsUrl` configured and pointing to Allium:
 
 ```typescript
-// routefluxmap/src/lib/config.ts (already exists)
+// routefluxmap/src/lib/config.ts
 export const config = {
-  metricsUrl: import.meta.env.PUBLIC_METRICS_URL || '',
+  metricsUrl: import.meta.env.PUBLIC_METRICS_URL || '',  // Set to metrics.1aeo.com
   // ...
 };
 
-// Helper function already exists:
-export function getRelayMetricsUrl(fingerprint: string): string {
-  const cleanFingerprint = fingerprint
-    .replace(/[$:\s-]/g, '')
-    .toUpperCase();
-  
-  if (!/^[0-9A-F]{40}$/.test(cleanFingerprint)) {
-    return `${config.metricsUrl}/relay/0000000000000000000000000000000000000000`;
-  }
-  
-  return `${config.metricsUrl}/relay/${cleanFingerprint}`;
-}
+// getRelayMetricsUrl() helper exists and works
+export function getRelayMetricsUrl(fingerprint: string): string { ... }
 ```
 
-**Current State:**
+**Implementation Status:**
 - ✅ `config.ts` has `metricsUrl` env var support
 - ✅ `getRelayMetricsUrl()` helper function exists
 - ✅ `RelayPopup.tsx` uses `getRelayMetricsUrl()` for "View on Metrics" links
-- ⏳ **TODO:** Set `PUBLIC_METRICS_URL=https://metrics.1aeo.com` in production deployment
-
-**Action Required:** Set the environment variable in RouteFluxMap's deployment:
-
-```bash
-# routefluxmap/deploy/config.env
-PUBLIC_METRICS_URL=https://metrics.1aeo.com
-PUBLIC_SITE_URL=https://routefluxmap.1aeo.com
-```
-
-This single change makes all "View on Metrics" links in `RelayPopup.tsx` point to Allium.
+- ✅ `PUBLIC_METRICS_URL=https://metrics.1aeo.com` configured in production
+- ✅ Relay deep linking via `#relay=FINGERPRINT` URL hash (commit `208b43c2`)
 
 **Live Instances:**
 - RouteFluxMap: https://routefluxmap.1aeo.com ✅
 - Allium: https://metrics.1aeo.com ✅
 
-#### 1.2 URL Schema Alignment — ⚠️ REQUIRES MIGRATION
+#### 1.2 URL Schema Alignment — ✅ CODE COMPLETE, ⏳ PENDING DEPLOYMENT
 
-**Current URL Patterns:**
+**Current URL Patterns (Live Site):**
 
-| Entity | RouteFluxMap Links To | Allium Currently Generates | After Migration |
-|--------|----------------------|---------------------------|-----------------|
-| Relay | `/relay/{FINGERPRINT}` | `/relay/{FINGERPRINT}/` | ✅ Compatible |
-| Country | `/country/{CC}` (uppercase) | `/country/{cc}/` (lowercase) | → `/country/{CC}/` |
-| AS | `/as/AS{number}` | `/as/AS{number}/` | ✅ Compatible |
-| Contact | `/contact/{hash}` | `/contact/{hash}/` | ✅ Compatible |
+| Entity | RouteFluxMap Links To | Live Allium | Code in Repo |
+|--------|----------------------|-------------|--------------|
+| Relay | `/relay/{FINGERPRINT}` | `/relay/{FINGERPRINT}/` ✅ | ✅ Compatible |
+| Country | `/country/{CC}` (uppercase) | `/country/{cc}/` (lowercase) | `/country/{CC}/` ✅ |
+| AS | `/as/AS{number}` | `/as/AS{number}/` ✅ | ✅ Compatible |
 
-**Key Issue:** Country code case mismatch
-- RouteFluxMap expects: `/country/US/`
-- Allium generates: `/country/us/`
-- **Solution:** Migrate Allium to UPPERCASE (see Section 4.1.2)
+**Status:**
+- ✅ Allium code normalizes country codes to UPPERCASE (`relay["country"] = relay["country"].upper()`)
+- ✅ `country_utils.py` sets converted to UPPERCASE (commit `eb2a4178`)
+- ⏳ Live site still serves lowercase URLs (pending redeployment)
 
-#### 1.3 Allium URL Compatibility — ✅ IMPLEMENTED (structure)
-
-Allium already generates directory-based URLs. The template shows:
-
-```jinja2
-{# allium/templates/relay-info.html #}
-<a href="{{ page_ctx.path_prefix }}country/{{ relay['country']|escape }}/">
-    {{ relay['country_name']|escape }}
-</a>
+**Verified Live (current):**
+```
+https://metrics.1aeo.com/country/us/  → 200 OK (lowercase - current)
+https://metrics.1aeo.com/country/US/  → 404 (pending deployment)
 ```
 
-**Current State:**
-- ✅ Directory structure works (`/relay/{fp}/index.html`)
-- ✅ Relay fingerprints are UPPERCASE
-- ⚠️ Country codes are lowercase (needs migration)
+#### 1.3 Allium URL Compatibility — ✅ FULLY IMPLEMENTED
 
-**Verified Live:**
-```
-https://metrics.1aeo.com/country/us/  → 200 OK (lowercase works)
-https://metrics.1aeo.com/country/US/  → 404 (uppercase doesn't exist yet)
-```
+**Commit `eb2a4178`:** "feat: add RouteFluxMap integration with country code normalization"
+
+Changes implemented:
+- ✅ Country codes normalized to UPPERCASE throughout codebase
+- ✅ Templates use `{{ relay['country']|escape }}` (now outputs uppercase)
+- ✅ Flag image paths use `|lower` filter for backwards compatibility
 
 ---
 
-### Phase 2: Add Country Deep Links from RouteFluxMap (Day 3-5) — 🔲 NOT IMPLEMENTED
+### Phase 2: Add Country Deep Links from RouteFluxMap (Day 3-5) — 🔲 NOT YET IMPLEMENTED
 
 RouteFluxMap's `CountryLayer.tsx` shows country data on hover. Add click-through to Allium country pages.
 
 **Current State:**
 - ✅ `CountryLayer.tsx` exists with hover tooltips
 - ✅ `CountryTooltip` component shows country name and client count
-- 🔲 No link to Allium country pages yet
-- 🔲 `getCountryMetricsUrl()` helper doesn't exist yet
+- 🔲 **No link to Allium country pages yet**
+- 🔲 **`getCountryMetricsUrl()` helper doesn't exist yet**
+- 🔲 **`getASMetricsUrl()` helper doesn't exist yet**
 
 #### 2.1 Create Country Link Helper — 🔲 TODO
 
@@ -323,114 +303,59 @@ export const CountryTooltip = forwardRef<HTMLDivElement, CountryTooltipProps>(
 
 ---
 
-### Phase 3: Add RouteFluxMap Link from Allium (Day 6-7) — 🔲 NOT IMPLEMENTED
+### Phase 3: Add RouteFluxMap Link from Allium (Day 6-7) — ✅ FULLY IMPLEMENTED
 
-**Current State:**
-- ✅ Allium index page exists at https://metrics.1aeo.com/
-- ✅ Country pages exist (e.g., `/country/us/`)
-- ✅ Relay pages exist with lat/lng coordinates
-- 🔲 No links to RouteFluxMap yet
+**Commit `eb2a4178`:** "feat: add RouteFluxMap integration with country code normalization"
+**Commit `40134430`:** "Add 1AEO cross-site navigation and footer branding"
 
-#### 3.1 Update Allium Index Template — 🔲 TODO
+**Implementation Status:**
+- ✅ Cross-site navigation bar with RouteFluxMap link in `skeleton.html`
+- ✅ Footer with 1AEO branding and links
+- ✅ Country pages have "View on Interactive Map" link (`#CC=XX`)
+- ✅ Relay pages have "View on Interactive Map" link (`#relay=FINGERPRINT`)
 
-Add a prominent link to RouteFluxMap on the main dashboard:
+#### 3.1 Update Allium Index Template — ✅ IMPLEMENTED
 
-```jinja2
-{# allium/templates/index.html - Add in the navigation or feature section #}
-
-{# Option A: Simple link in navigation #}
-<div class="nav-links">
-  <a href="https://routefluxmap.1aeo.com" 
-     target="_blank"
-     rel="noopener noreferrer"
-     title="Interactive 3D visualization of the Tor network">
-    🌍 Network Map
-  </a>
-</div>
-
-{# Option B: Featured card (if using card layout) #}
-<div class="feature-card">
-  <a href="https://routefluxmap.1aeo.com" target="_blank" rel="noopener noreferrer">
-    <span class="feature-icon">🌍</span>
-    <span class="feature-title">Interactive Network Map</span>
-    <span class="feature-desc">Real-time 3D visualization of Tor relays</span>
-  </a>
-</div>
+```html
+<!-- 1AEO Cross-Site Navigation (in skeleton.html) -->
+<a href="https://www.1aeo.com">Home</a>
+<a href="https://metrics.1aeo.com" class="active">Metrics</a>
+<a href="https://aroivalidator.1aeo.com">AROI Validator</a>
+<a href="https://routefluxmap.1aeo.com">RouteFluxMap</a>
 ```
 
-**Placement Options:**
-1. Top navigation bar (most visible)
-2. Dashboard section alongside AROI leaderboards
-3. Footer with other external links
-
-#### 3.2 Add Map Link to Country Pages — 🔲 TODO
-
-Deep link to RouteFluxMap with country pre-selected:
+#### 3.2 Add Map Link to Country Pages — ✅ IMPLEMENTED
 
 ```jinja2
-{# allium/templates/country.html - Add after country summary #}
-
-{% block description %}
-{{ country_name }} ({{ country_abbr }}) summary:
-{{ detail_summary(...) }}
-
-{# Deep link with country code in hash #}
-<div style="margin-top: 10px;">
-  <a href="https://routefluxmap.1aeo.com/#CC={{ country_abbr|upper }}" 
-     target="_blank"
-     rel="noopener noreferrer"
-     style="color: #00ff88; text-decoration: none;">
-    🗺️ View {{ country_name }} on Interactive Map →
+{# allium/templates/country.html #}
+<li>
+  <a href="https://routefluxmap.1aeo.com/#CC={{ country_abbr }}" 
+     target="_blank" rel="noopener" 
+     title="View {{ country_name }} on RouteFluxMap interactive visualization">
+    🗺️ View on Interactive Map
   </a>
-</div>
-{% endblock %}
+</li>
 ```
 
-**URL Format:** `https://routefluxmap.1aeo.com/#CC=US`
-- RouteFluxMap will highlight/zoom to the specified country
-- Uses UPPERCASE country code (after migration)
-
-#### 3.3 Add Map Link to Relay Pages — 🔲 TODO
-
-Deep link to RouteFluxMap centered on relay's location:
+#### 3.3 Add Map Link to Relay Pages — ✅ IMPLEMENTED
 
 ```jinja2
-{# allium/templates/relay-info.html - Add in the location section #}
-
-{% if relay['latitude'] and relay['longitude'] and relay['latitude'] != 0 and relay['longitude'] != 0 %}
-<dt>View on Map</dt>
+{# allium/templates/relay-info.html #}
+<dt>Interactive Map</dt>
 <dd>
-  <a href="https://routefluxmap.1aeo.com/#ML={{ relay['longitude']|round(2) }},{{ relay['latitude']|round(2) }},10"
-     target="_blank"
-     rel="noopener noreferrer"
-     style="color: #00ff88;">
-    🗺️ Open in RouteFluxMap
+  <a href="https://routefluxmap.1aeo.com/#relay={{ relay['fingerprint']|escape }}" 
+     target="_blank" rel="noopener" 
+     title="View this relay on RouteFluxMap interactive visualization">
+    🗺️ View on Interactive Map
   </a>
-  <span style="color: #666; font-size: 0.85em;">
-    ({{ relay['latitude']|round(4) }}, {{ relay['longitude']|round(4) }})
-  </span>
 </dd>
-{% endif %}
 ```
 
-**URL Format:** `https://routefluxmap.1aeo.com/#ML={lng},{lat},{zoom}`
-- `ML` = Map Location
-- Coordinates: longitude first, then latitude
-- Zoom level 10 = city-level view
+**Note:** Uses `#relay=FINGERPRINT` format which RouteFluxMap now supports (commit `208b43c2`).
 
-#### 3.4 Add Map Link to AS/Network Pages — 🔲 TODO (Optional)
+#### 3.4 Add Map Link to AS/Network Pages — 🔲 NOT IMPLEMENTED (Optional)
 
-```jinja2
-{# allium/templates/as.html - Link to see all relays in this AS on map #}
-
-<a href="https://routefluxmap.1aeo.com" 
-   target="_blank"
-   title="View network distribution on interactive map">
-  🗺️ View on Map
-</a>
-```
-
-**Note:** RouteFluxMap doesn't currently support AS filtering via URL hash, but clicking through still provides useful visualization context.
+AS pages don't have RouteFluxMap links yet. This is optional since RouteFluxMap doesn't support AS filtering via URL hash.
 
 ---
 
@@ -474,191 +399,70 @@ This is a one-time migration for Allium with no backward compatibility concerns.
 
 ---
 
-#### 4.1.2 Allium Country Code Migration (UPPERCASE)
+#### 4.1.2 Allium Country Code Migration (UPPERCASE) — ✅ IMPLEMENTED
 
-**Files requiring modification:**
+**Status:** Completed in commit `eb2a4178`
 
-##### 1. `allium/lib/country_utils.py` - Convert all sets to UPPERCASE
+**Changes Made:**
+
+##### 1. `allium/lib/country_utils.py` — ✅ Done
+- All sets converted to UPPERCASE (`{'US', 'CA', 'MX'}` etc.)
+- NOTE header added documenting UPPERCASE convention
+
+##### 2. `allium/lib/relays.py` — ✅ Done
+- Country codes normalized at ingestion: `relay["country"] = relay["country"].upper()`
+
+##### 3. `allium/lib/aroileaders.py` — ✅ Done
+- Updated comparisons to use uppercase
+
+##### 4. `allium/lib/intelligence_engine.py` — ✅ Done
+- Updated comparisons to use uppercase
+
+##### 5. Templates — ✅ Done
+- Flag image paths use `|lower` filter for backwards compatibility
+- Country URLs now use uppercase codes
+
+**Verification (after redeployment):**
+
+```bash
+# Should return 200 after Allium redeployment
+curl -s "https://metrics.1aeo.com/country/US/" -o /dev/null -w "%{http_code}"
+
+# Current state (before redeployment)
+# /country/us/ → 200 OK (lowercase still works)
+# /country/US/ → 404 (uppercase not deployed yet)
+```
+
+<details>
+<summary>Migration Details (Historical Reference)</summary>
 
 ```python
+# Example change in country_utils.py:
 # BEFORE (lowercase)
 CORE_REGIONS = {
     'north_america': {'us', 'ca', 'mx'},
-    'europe': {'de', 'fr', 'gb', 'nl', ...},
     ...
 }
-EU_POLITICAL_REGION = {'at', 'be', 'bg', 'hr', 'cy', ...}
-FRONTIER_COUNTRIES = {'mn', 'tn', 'uy', 'kz', ...}
 
-# AFTER (UPPERCASE)
+# AFTER (UPPERCASE) - now implemented
 CORE_REGIONS = {
     'north_america': {'US', 'CA', 'MX'},
-    'europe': {'DE', 'FR', 'GB', 'NL', ...},
     ...
 }
-EU_POLITICAL_REGION = {'AT', 'BE', 'BG', 'HR', 'CY', ...}
-FRONTIER_COUNTRIES = {'MN', 'TN', 'UY', 'KZ', ...}
 ```
 
-**Update all comparison functions to use `.upper()` instead of `.lower()`:**
-
 ```python
-# BEFORE
-def get_country_region(country_code):
-    country_lower = country_code.lower()
-    for region, countries in CORE_REGIONS.items():
-        if country_lower in countries:
-            return region
-    return 'other'
-
-# AFTER
-def get_country_region(country_code):
-    country_upper = country_code.upper()
-    for region, countries in CORE_REGIONS.items():
-        if country_upper in countries:
-            return region
-    return 'other'
-```
-
-##### 2. `allium/lib/relays.py` - Normalize country codes at ingestion
-
-```python
-# In the relay processing loop, normalize country to UPPERCASE early
+# Example change in relays.py:
 def _process_relay(self, relay):
-    # Normalize country code to UPPERCASE (RouteFluxMap compatibility)
     if relay.get('country'):
-        relay['country'] = relay['country'].upper()
-    
-    # Rest of processing...
+        relay['country'] = relay['country'].upper()  # Added
 ```
 
-##### 3. `allium/lib/aroileaders.py` - Update comparisons
-
-```python
-# BEFORE
-for country in unique_operator_countries:
-    if country and country.lower() in valid_rare_countries:
-        operator_rare_countries.add(country.upper())
-
-# AFTER (no conversion needed - already uppercase)
-for country in unique_operator_countries:
-    if country and country in valid_rare_countries:
-        operator_rare_countries.add(country)
-```
-
-##### 4. `allium/lib/intelligence_engine.py` - Update comparisons
-
-```python
-# BEFORE
-if country_code.lower() in five_eyes_codes:
-    five_eyes_weight += weight
-
-# AFTER
-if country_code.upper() in five_eyes_codes:
-    five_eyes_weight += weight
-```
-
-##### 5. Templates - No changes needed
-
-Templates already work with whatever case the data uses:
-```jinja2
-{# This works with both 'us' and 'US' #}
-<a href="{{ page_ctx.path_prefix }}country/{{ relay['country']|escape }}/">
-```
-
-**Note:** URL paths will change from `/country/us/` to `/country/US/`. This is fine since Allium regenerates all pages on each build.
+</details>
 
 ---
 
-#### 4.1.3 Complete Country Code Migration Script
-
-Create a one-time migration script to update all country code sets:
-
-```python
-#!/usr/bin/env python3
-"""
-migrate_country_codes.py - Convert Allium country codes to UPPERCASE
-
-Run this script once to update all country code definitions.
-"""
-
-import re
-import os
-
-FILES_TO_UPDATE = [
-    'allium/lib/country_utils.py',
-    'allium/lib/aroileaders.py', 
-    'allium/lib/intelligence_engine.py',
-    'allium/lib/relays.py',
-]
-
-def convert_set_to_uppercase(match):
-    """Convert a set literal from lowercase to uppercase."""
-    content = match.group(0)
-    # Find all 2-letter lowercase codes and uppercase them
-    return re.sub(r"'([a-z]{2})'", lambda m: f"'{m.group(1).upper()}'", content)
-
-def convert_lower_to_upper(content):
-    """Convert .lower() calls to .upper() for country code comparisons."""
-    # Pattern: variable.lower() in country context
-    content = re.sub(
-        r'(country[_\w]*)\s*\.lower\(\)',
-        r'\1.upper()',
-        content
-    )
-    return content
-
-def process_file(filepath):
-    """Process a single file."""
-    with open(filepath, 'r') as f:
-        content = f.read()
-    
-    original = content
-    
-    # Convert set literals with country codes
-    # Match patterns like {'us', 'ca', 'mx'} or {'de', 'fr', 'gb', ...}
-    content = re.sub(
-        r"\{(?:'[a-z]{2}'(?:,\s*)?)+\}",
-        convert_set_to_uppercase,
-        content
-    )
-    
-    # Convert .lower() to .upper() for country variables
-    content = convert_lower_to_upper(content)
-    
-    if content != original:
-        with open(filepath, 'w') as f:
-            f.write(content)
-        print(f"✓ Updated: {filepath}")
-        return True
-    else:
-        print(f"  No changes: {filepath}")
-        return False
-
-def main():
-    print("Converting Allium country codes to UPPERCASE...\n")
-    
-    updated = 0
-    for filepath in FILES_TO_UPDATE:
-        if os.path.exists(filepath):
-            if process_file(filepath):
-                updated += 1
-        else:
-            print(f"  Not found: {filepath}")
-    
-    print(f"\n✅ Updated {updated} files")
-    print("\nNext steps:")
-    print("1. Run tests: pytest tests/")
-    print("2. Rebuild: python3 allium/allium.py --out ./www --progress")
-    print("3. Verify URLs: ls www/country/")
-
-if __name__ == '__main__':
-    main()
-```
-
----
-
-#### 4.1.4 Validation After Migration
+#### 4.1.3 Validation After Migration — ✅ READY FOR DEPLOYMENT
 
 ```bash
 # Verify country directories are now UPPERCASE
@@ -1960,19 +1764,19 @@ This integration transforms both projects:
 
 ## Summary: Action Items by Phase
 
-### Phase 1: Cross-Linking Configuration (Day 1-2)
+### Phase 1: Cross-Linking Configuration — ✅ COMPLETE (pending deployment)
 
 | Task | Owner | Status | Notes |
 |------|-------|--------|-------|
-| Set `PUBLIC_METRICS_URL=https://metrics.1aeo.com` | RouteFluxMap | 🔲 TODO | In `deploy/config.env` |
-| Deploy RouteFluxMap with new config | RouteFluxMap | 🔲 TODO | `npm run deploy:pages` |
-| Test relay links work | Both | 🔲 TODO | Click relay → Allium page |
-| Run country code migration | Allium | 🔲 TODO | Section 4.1.3 script |
-| Update `country_utils.py` sets to UPPERCASE | Allium | 🔲 TODO | `{'us'}` → `{'US'}` |
-| Update `.lower()` → `.upper()` in comparisons | Allium | 🔲 TODO | 4 files to modify |
-| Rebuild and verify `/country/US/` URLs | Allium | 🔲 TODO | Should return 200 |
+| Set `PUBLIC_METRICS_URL=https://metrics.1aeo.com` | RouteFluxMap | ✅ Done | Configured in production |
+| Deploy RouteFluxMap with new config | RouteFluxMap | ✅ Done | Live at routefluxmap.1aeo.com |
+| Add relay deep linking `#relay=FP` | RouteFluxMap | ✅ Done | Commit `208b43c2` |
+| Update `country_utils.py` sets to UPPERCASE | Allium | ✅ Done | Commit `eb2a4178` |
+| Update `.lower()` → `.upper()` in comparisons | Allium | ✅ Done | Commit `eb2a4178` |
+| Normalize country codes at ingestion | Allium | ✅ Done | `relay["country"].upper()` |
+| **Redeploy Allium with UPPERCASE URLs** | Allium | ⏳ PENDING | Live site still has lowercase |
 
-### Phase 2: Country Deep Links (Day 3-5)
+### Phase 2: Country Deep Links from RouteFluxMap — 🔲 NOT STARTED
 
 | Task | Owner | Status | Notes |
 |------|-------|--------|-------|
@@ -1981,14 +1785,14 @@ This integration transforms both projects:
 | Update `CountryTooltip` with metrics link | RouteFluxMap | 🔲 TODO | Section 2.2 |
 | Test country links work | Both | 🔲 TODO | Hover country → click link |
 
-### Phase 3: RouteFluxMap Links from Allium (Day 6-7)
+### Phase 3: RouteFluxMap Links from Allium — ✅ COMPLETE (pending deployment)
 
 | Task | Owner | Status | Notes |
 |------|-------|--------|-------|
-| Add RouteFluxMap link to index.html | Allium | 🔲 TODO | Section 3.1 |
-| Add "View on Map" to country.html | Allium | 🔲 TODO | Deep link with `#CC=` |
-| Add "View on Map" to relay-info.html | Allium | 🔲 TODO | Deep link with `#ML=` |
-| Test bidirectional navigation | Both | 🔲 TODO | Full user flow |
+| Add RouteFluxMap nav link | Allium | ✅ Done | In `skeleton.html` header |
+| Add "View on Map" to country.html | Allium | ✅ Done | `#CC={{ country_abbr }}` |
+| Add "View on Map" to relay-info.html | Allium | ✅ Done | `#relay={{ fingerprint }}` |
+| **Redeploy Allium to go live** | Allium | ⏳ PENDING | Code in repo, not live |
 
 ### Phase 4+: Data Schema & Optional Enhancements
 
@@ -1998,6 +1802,36 @@ This integration transforms both projects:
 | Export `classifications.json` | Allium | Optional | Rarity tiers |
 | Fetch Allium classifications | RouteFluxMap | Optional | For country coloring |
 | Export AROI operator data | Allium | Optional | For visualization |
+
+---
+
+## Current Implementation Summary
+
+### What's Done ✅
+
+**RouteFluxMap (commit `208b43c2`):**
+- `metricsUrl` configured to `https://metrics.1aeo.com`
+- `getRelayMetricsUrl()` helper for relay links
+- `RelayPopup` "View on Metrics" links work
+- Relay deep linking via `#relay=FINGERPRINT` URL hash
+
+**Allium (commits `eb2a4178`, `40134430`):**
+- Country codes normalized to UPPERCASE in code
+- Cross-site navigation with RouteFluxMap link
+- Country pages: "View on Interactive Map" → `#CC=XX`
+- Relay pages: "View on Interactive Map" → `#relay=FINGERPRINT`
+
+### What's Pending ⏳
+
+1. **Allium Redeployment** - Code changes in repo, live site still has lowercase country URLs
+2. **Phase 2 (RouteFluxMap → Allium country links)** - Not started
+
+### What's Remaining 🔲
+
+- `getCountryMetricsUrl()` helper in RouteFluxMap
+- `getASMetricsUrl()` helper in RouteFluxMap
+- CountryTooltip enhancement with Allium links
+- Optional: Shared data exports for rarity visualization
 
 ---
 
