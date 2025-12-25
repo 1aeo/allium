@@ -503,10 +503,11 @@ def calculate_aroi_validation_metrics(relays: List[Dict], validation_data: Optio
                     domain_failure_reasons[aroi_domain] = {}
                 
                 # Track country for this domain (use first relay's country)
+                # relay["country"] is already UPPERCASE from _preprocess_template_data()
                 if aroi_domain not in domain_country:
                     country = relay.get('country', 'unknown')
                     if country and country != 'unknown':
-                        domain_country[aroi_domain] = country.upper()
+                        domain_country[aroi_domain] = country
                 
                 fp = relay.get('fingerprint')
                 domain_relays[aroi_domain].append(fp)

@@ -568,6 +568,11 @@ class Relays:
             # Use centralized bulk escaping for all HTML escape patterns
             bulk_escaper.escape_all_relay_fields(relay)
             
+            # Normalize country code to UPPERCASE for consistent URL generation
+            # (matches RouteFluxMap's URL schema and sorted["country"] keys)
+            if relay.get("country"):
+                relay["country"] = relay["country"].upper()
+            
             # Continue with non-HTML-escaping optimizations
             # Optimization 4: Pre-compute percentage values for relay-info templates
             # This avoids expensive format operations in individual relay pages
@@ -1367,13 +1372,15 @@ class Relays:
         self.json["sorted"][k][v]["consensus_weight_fraction"] += cw_fraction
 
         if k == "as":
+            # relay["country"] is already UPPERCASE from _preprocess_template_data()
             self.json["sorted"][k][v]["country"] = relay.get("country")
-            self.json["sorted"][k][v]["country_name"] = relay.get("country_name") or relay.get("country", "").upper()
+            self.json["sorted"][k][v]["country_name"] = relay.get("country_name") or relay.get("country", "")
             self.json["sorted"][k][v]["as_name"] = relay.get("as_name")
         
         if k == "country":
             # Set country name for countries - truncate to 32 characters as requested
-            full_country_name = relay.get("country_name") or relay.get("country", "").upper()
+            # relay["country"] is already UPPERCASE from _preprocess_template_data()
+            full_country_name = relay.get("country_name") or relay.get("country", "")
             truncated_country_name = full_country_name[:32] if len(full_country_name) > 32 else full_country_name
             self.json["sorted"][k][v]["country_name"] = truncated_country_name
             self.json["sorted"][k][v]["country_name_full"] = full_country_name
@@ -1424,6 +1431,7 @@ class Relays:
             self.json["sorted"][k][v]["aroi_domain"] = relay.get("aroi_domain", "")
             
             # Track country counts for contacts (primary country calculation)
+            # relay["country"] is already UPPERCASE from _preprocess_template_data()
             if k == "contact" and (country := relay.get("country")):
                 self.json["sorted"][k][v]["country_counts"][country] = \
                     self.json["sorted"][k][v]["country_counts"].get(country, 0) + 1
@@ -1470,10 +1478,10 @@ class Relays:
             else:
                 cw_fraction = 0.0
 
-            keys = ["as", "country", "platform"]
-            for key in keys:
-                # Pass consensus weight and fraction to avoid re-extracting in _sort
-                self._sort(relay, idx, key, relay.get(key), cw, cw_fraction)
+            # Sort by AS, country (already UPPERCASE from _preprocess_template_data), and platform
+            self._sort(relay, idx, "as", relay.get("as"), cw, cw_fraction)
+            self._sort(relay, idx, "country", relay.get("country"), cw, cw_fraction)
+            self._sort(relay, idx, "platform", relay.get("platform"), cw, cw_fraction)
 
             for flag in relay["flags"]:
                 self._sort(relay, idx, "flag", flag, cw, cw_fraction)
@@ -1793,14 +1801,16 @@ class Relays:
                 total_relay_count = len(contact_data["relays"])
                 
                 # Build country list with names in single pass - reuse existing relay data
+                # relay["country"] is already UPPERCASE from _preprocess_template_data()
                 country_names = {}
                 for relay_idx in contact_data["relays"]:
                     country = self.json["relays"][relay_idx].get("country")
                     if country and country not in country_names:
-                        country_names[country] = self.json["relays"][relay_idx].get("country_name") or country.upper()
+                        country_names[country] = self.json["relays"][relay_idx].get("country_name") or country
                 
                 # Build final data structure directly
-                primary_country_name = country_names.get(primary_country_code, primary_country_code.upper())
+                # primary_country_code is from country_counts keys which are already UPPERCASE
+                primary_country_name = country_names.get(primary_country_code, primary_country_code)
                 contact_data["primary_country_data"] = {
                     'country': primary_country_code,
                     'country_name': primary_country_name,
@@ -1808,7 +1818,7 @@ class Relays:
                     'total_relays': total_relay_count,
                     'tooltip': f"All {total_relay_count} relays in {primary_country_name}" if len(sorted_countries) == 1 
                               else f"Primary country: {primary_country_relay_count} of {total_relay_count} relays in {primary_country_name}",
-                    'all_countries': [{'country': code, 'country_name': country_names.get(code, code.upper()), 'relay_count': count}
+                    'all_countries': [{'country': code, 'country_name': country_names.get(code, code), 'relay_count': count}
                                     for code, count in sorted_countries]
                 }
             else:
@@ -4561,8 +4571,8 @@ class Relays:
             else:
                 relays_without_contact += 1
             
-            # Geographic data
-            country = relay.get('country', '').upper()
+            # Geographic data - relay["country"] already UPPERCASE from _preprocess_template_data()
+            country = relay.get('country', '')
             if country and len(country) == 2:
                 if is_eu_political(country):
                     eu_relays += 1
@@ -4662,13 +4672,14 @@ class Relays:
             health_metrics['network_median_age_formatted'] = "Unknown"
         
         # NEW: Top 3 countries by consensus weight (reuse existing sorted data)
+        # Country keys are already UPPERCASE
         countries_by_cw = []
         if 'country' in sorted_data:
             for country_code, country_data in sorted_data['country'].items():
                 if len(country_code) == 2:  # Valid country code
                     cw_fraction = country_data.get('consensus_weight_fraction', 0)
                     if cw_fraction > 0:
-                        countries_by_cw.append((country_code.upper(), cw_fraction))
+                        countries_by_cw.append((country_code, cw_fraction))
         
         countries_by_cw.sort(key=lambda x: x[1], reverse=True)
         health_metrics['top_3_countries'] = []

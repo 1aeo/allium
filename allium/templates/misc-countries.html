@@ -126,7 +126,7 @@
                     {% set d = v['display'] -%}
                     <td title="{{ v['country_name_full']|escape }}">
                         <a href="{{ page_ctx.path_prefix }}country/{{ k|escape }}/">
-                            <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ k|escape }}.png"
+                            <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ k|lower|escape }}.png"
                                  alt="{{ v['country_name']|escape }}">
                             {{ v['country_name']|escape }}
                         </a>

@@ -3,32 +3,34 @@ Country and Geographic Utilities for Allium
 
 Centralized country logic and geographic categorization functions.
 Single source of truth for all country-related analysis across the application.
+
+NOTE: All country codes are stored in UPPERCASE format to match RouteFluxMap's URL schema.
 """
 
 # === CORE REGIONAL MAPPING ===
 # Source: intelligence_engine.py _calculate_regional_hhi_detailed()
 CORE_REGIONS = {
-    'north_america': {'us', 'ca', 'mx'},
-    'europe': {'de', 'fr', 'gb', 'nl', 'it', 'es', 'se', 'no', 'dk', 'fi', 'ch', 'at', 'be', 'ie', 'pt'},
-    'asia_pacific': {'jp', 'au', 'nz', 'kr', 'sg', 'hk', 'tw', 'th', 'my', 'ph'},
-    'eastern_europe': {'ru', 'ua', 'pl', 'cz', 'hu', 'ro', 'bg', 'sk', 'hr', 'si', 'ee', 'lv', 'lt'},
+    'north_america': {'US', 'CA', 'MX'},
+    'europe': {'DE', 'FR', 'GB', 'NL', 'IT', 'ES', 'SE', 'NO', 'DK', 'FI', 'CH', 'AT', 'BE', 'IE', 'PT'},
+    'asia_pacific': {'JP', 'AU', 'NZ', 'KR', 'SG', 'HK', 'TW', 'TH', 'MY', 'PH'},
+    'eastern_europe': {'RU', 'UA', 'PL', 'CZ', 'HU', 'RO', 'BG', 'SK', 'HR', 'SI', 'EE', 'LV', 'LT'},
 }
 
 # === EU DEFINITIONS ===
 # Geographic Europe (subset) - matches intelligence_engine.py 'europe' region
-EU_GEOGRAPHIC_REGION = {'de', 'fr', 'gb', 'nl', 'it', 'es', 'se', 'no', 'dk', 'fi', 'ch', 'at', 'be', 'ie', 'pt'}
+EU_GEOGRAPHIC_REGION = {'DE', 'FR', 'GB', 'NL', 'IT', 'ES', 'SE', 'NO', 'DK', 'FI', 'CH', 'AT', 'BE', 'IE', 'PT'}
 
 # EU Political Union (superset) - comprehensive EU membership
 # Source: aroileaders.py eu_countries definition
 EU_POLITICAL_REGION = {
-    'at', 'be', 'bg', 'hr', 'cy', 'cz', 'dk', 'ee', 'fi', 'fr', 
-    'de', 'gr', 'hu', 'ie', 'it', 'lv', 'lt', 'lu', 'mt', 'nl', 
-    'pl', 'pt', 'ro', 'sk', 'si', 'es', 'se'
+    'AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 
+    'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 
+    'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE'
 }
 
 # === FRONTIER/RARE COUNTRIES ===
 # Source: aroileaders.py rare_countries definition
-FRONTIER_COUNTRIES = {'mn', 'tn', 'uy', 'kz', 'md', 'lk', 'mk', 'mt'}
+FRONTIER_COUNTRIES = {'MN', 'TN', 'UY', 'KZ', 'MD', 'LK', 'MK', 'MT'}
 
 # === WEIGHTED RARE COUNTRY SCORING SYSTEM ===
 # Multi-factor scoring for dynamic rare country classification
@@ -37,43 +39,43 @@ FRONTIER_COUNTRIES = {'mn', 'tn', 'uy', 'kz', 'md', 'lk', 'mk', 'mt'}
 GEOPOLITICAL_CLASSIFICATIONS = {
     # Conflict zones (3 points) - Active conflicts, post-conflict zones
     'conflict_zones': {
-        'sy', 'ye', 'af', 'mm', 'sd', 'so', 'ly', 'iq', 'ml', 'cf', 'ss', 
-        'td', 'ni', 'ht', 'pk', 'ng'
+        'SY', 'YE', 'AF', 'MM', 'SD', 'SO', 'LY', 'IQ', 'ML', 'CF', 'SS', 
+        'TD', 'NI', 'HT', 'PK', 'NG'
     },
     
     # Authoritarian regimes (3 points) - Freedom House "Not Free"
     'authoritarian': {
-        'cn', 'ir', 'kp', 'sa', 'by', 'tm', 'uz', 'la', 'vn', 'cu', 'er',
-        'az', 'bh', 'cm', 'dj', 'gq', 'tj', 'eg'
+        'CN', 'IR', 'KP', 'SA', 'BY', 'TM', 'UZ', 'LA', 'VN', 'CU', 'ER',
+        'AZ', 'BH', 'CM', 'DJ', 'GQ', 'TJ', 'EG'
     },
     
     # Island nations (2 points) - Strategic geographic positions
     'island_nations': {
-        'mt', 'cy', 'is', 'mv', 'fj', 'mg', 'mu', 'sc', 'bb', 'jm', 'tt',
-        'bh', 'bn', 'ki', 'tv', 'to', 'ws', 'vu', 'sb', 'pw', 'fm',
-        'mh', 'nr', 'ag', 'bs', 'dm', 'gd', 'kn', 'lc', 'vc', 'cv'
+        'MT', 'CY', 'IS', 'MV', 'FJ', 'MG', 'MU', 'SC', 'BB', 'JM', 'TT',
+        'BH', 'BN', 'KI', 'TV', 'TO', 'WS', 'VU', 'SB', 'PW', 'FM',
+        'MH', 'NR', 'AG', 'BS', 'DM', 'GD', 'KN', 'LC', 'VC', 'CV'
     },
     
     # Landlocked developing (2 points) - UN LDC + landlocked countries
     'landlocked_developing': {
-        'af', 'bf', 'bi', 'cf', 'td', 'kz', 'kg', 'tj', 'tm', 'uz', 'bt',
-        'np', 'py', 'bo', 'ml', 'ne', 'rw', 'ug', 'zm', 'zw', 'mw', 'ls',
-        'sz', 'aw'
+        'AF', 'BF', 'BI', 'CF', 'TD', 'KZ', 'KG', 'TJ', 'TM', 'UZ', 'BT',
+        'NP', 'PY', 'BO', 'ML', 'NE', 'RW', 'UG', 'ZM', 'ZW', 'MW', 'LS',
+        'SZ', 'AW'
     },
     
     # General developing (1 point) - World Bank Lower/Lower-middle income
     'developing': {
         # Africa
-        'dz', 'ao', 'bj', 'bw', 'cm', 'cg', 'ci', 'eg', 'et', 'ga', 'gh',
-        'gn', 'ke', 'lr', 'ly', 'ma', 'mz', 'na', 'ng', 'sn', 'sl', 'tz', 
-        'tn', 'za', 'zm', 'zw',
+        'DZ', 'AO', 'BJ', 'BW', 'CM', 'CG', 'CI', 'EG', 'ET', 'GA', 'GH',
+        'GN', 'KE', 'LR', 'LY', 'MA', 'MZ', 'NA', 'NG', 'SN', 'SL', 'TZ', 
+        'TN', 'ZA', 'ZM', 'ZW',
         # Asia
-        'bd', 'in', 'id', 'lk', 'mn', 'pk', 'ph', 'th', 'vn',
+        'BD', 'IN', 'ID', 'LK', 'MN', 'PK', 'PH', 'TH', 'VN',
         # Latin America  
-        'ar', 'br', 'cl', 'co', 'ec', 'pe', 'uy', 've', 'mx', 'gt', 'hn',
-        'sv', 'cr', 'pa', 'do', 'jm',
+        'AR', 'BR', 'CL', 'CO', 'EC', 'PE', 'UY', 'VE', 'MX', 'GT', 'HN',
+        'SV', 'CR', 'PA', 'DO', 'JM',
         # Eastern Europe
-        'al', 'ba', 'mk', 'md', 'me'
+        'AL', 'BA', 'MK', 'MD', 'ME'
     }
 }
 
@@ -82,33 +84,33 @@ REGIONAL_CLASSIFICATIONS = {
     # Underrepresented regions (2 points) - Regions with typically low relay counts
     'underrepresented': {
         # Africa
-        'dz', 'ao', 'bj', 'bw', 'bf', 'bi', 'cm', 'cv', 'cf', 'td', 'km',
-        'cg', 'ci', 'dj', 'eg', 'gq', 'er', 'et', 'ga', 'gm', 'gh', 'gn',
-        'gw', 'ke', 'ls', 'lr', 'ly', 'mg', 'mw', 'ml', 'mr', 'mu', 'ma',
-        'mz', 'na', 'ne', 'ng', 'rw', 'st', 'sn', 'sc', 'sl', 'so', 'za',
-        'ss', 'sd', 'sz', 'tz', 'tg', 'tn', 'ug', 'zm', 'zw',
+        'DZ', 'AO', 'BJ', 'BW', 'BF', 'BI', 'CM', 'CV', 'CF', 'TD', 'KM',
+        'CG', 'CI', 'DJ', 'EG', 'GQ', 'ER', 'ET', 'GA', 'GM', 'GH', 'GN',
+        'GW', 'KE', 'LS', 'LR', 'LY', 'MG', 'MW', 'ML', 'MR', 'MU', 'MA',
+        'MZ', 'NA', 'NE', 'NG', 'RW', 'ST', 'SN', 'SC', 'SL', 'SO', 'ZA',
+        'SS', 'SD', 'SZ', 'TZ', 'TG', 'TN', 'UG', 'ZM', 'ZW',
         
         # Central Asia
-        'kz', 'kg', 'tj', 'tm', 'uz',
+        'KZ', 'KG', 'TJ', 'TM', 'UZ',
         
         # Pacific Islands
-        'fj', 'ki', 'mh', 'fm', 'nr', 'pw', 'pg', 'ws', 'sb', 'to', 'tv', 'vu'
+        'FJ', 'KI', 'MH', 'FM', 'NR', 'PW', 'PG', 'WS', 'SB', 'TO', 'TV', 'VU'
     },
     
     # Emerging regions (1 point) - Growing but still underrepresented
     'emerging': {
         # Caribbean
-        'ag', 'bs', 'bb', 'bz', 'dm', 'do', 'gd', 'gy', 'ht', 'jm', 'kn',
-        'lc', 'vc', 'sr', 'tt',
+        'AG', 'BS', 'BB', 'BZ', 'DM', 'DO', 'GD', 'GY', 'HT', 'JM', 'KN',
+        'LC', 'VC', 'SR', 'TT',
         
         # Central America
-        'cr', 'sv', 'gt', 'hn', 'ni', 'pa',
+        'CR', 'SV', 'GT', 'HN', 'NI', 'PA',
         
         # South Asia
-        'bd', 'bt', 'mv', 'np', 'lk',
+        'BD', 'BT', 'MV', 'NP', 'LK',
         
         # Southeast Asia (emerging)
-        'bn', 'kh', 'la', 'mm', 'tl'
+        'BN', 'KH', 'LA', 'MM', 'TL'
     }
 }
 
@@ -124,10 +126,10 @@ def get_country_region(country_code):
     Returns:
         str: Region name ('north_america', 'europe', 'asia_pacific', 'eastern_europe', 'other')
     """
-    country_lower = country_code.lower()
+    country_upper = country_code.upper()
     
     for region, countries in CORE_REGIONS.items():
-        if country_lower in countries:
+        if country_upper in countries:
             return region
     
     return 'other'
@@ -163,15 +165,15 @@ def get_regional_distribution(countries):
 
 def is_eu_political(country_code):
     """Check if country is in EU political union."""
-    return country_code.lower() in EU_POLITICAL_REGION
+    return country_code.upper() in EU_POLITICAL_REGION
 
 def is_eu_geographic(country_code):
     """Check if country is in geographic Europe region."""
-    return country_code.lower() in EU_GEOGRAPHIC_REGION
+    return country_code.upper() in EU_GEOGRAPHIC_REGION
 
 def is_frontier_country(country_code):
     """Check if country is classified as frontier/rare."""
-    return country_code.lower() in FRONTIER_COUNTRIES
+    return country_code.upper() in FRONTIER_COUNTRIES
 
 def count_non_eu_countries(countries, use_political=True):
     """
@@ -185,7 +187,7 @@ def count_non_eu_countries(countries, use_political=True):
         int: Number of non-EU countries
     """
     eu_set = EU_POLITICAL_REGION if use_political else EU_GEOGRAPHIC_REGION
-    return sum(1 for country in countries if country.lower() not in eu_set)
+    return sum(1 for country in countries if country.upper() not in eu_set)
 
 
 
@@ -308,17 +310,17 @@ def calculate_geopolitical_factor(country_code):
     Returns:
         int: Points based on geopolitical classification
     """
-    country_lower = country_code.lower()
+    country_upper = country_code.upper()
     
-    if country_lower in GEOPOLITICAL_CLASSIFICATIONS['conflict_zones']:
+    if country_upper in GEOPOLITICAL_CLASSIFICATIONS['conflict_zones']:
         return 3
-    elif country_lower in GEOPOLITICAL_CLASSIFICATIONS['authoritarian']:
+    elif country_upper in GEOPOLITICAL_CLASSIFICATIONS['authoritarian']:
         return 3
-    elif country_lower in GEOPOLITICAL_CLASSIFICATIONS['island_nations']:
+    elif country_upper in GEOPOLITICAL_CLASSIFICATIONS['island_nations']:
         return 2
-    elif country_lower in GEOPOLITICAL_CLASSIFICATIONS['landlocked_developing']:
+    elif country_upper in GEOPOLITICAL_CLASSIFICATIONS['landlocked_developing']:
         return 2
-    elif country_lower in GEOPOLITICAL_CLASSIFICATIONS['developing']:
+    elif country_upper in GEOPOLITICAL_CLASSIFICATIONS['developing']:
         return 1
     else:
         return 0
@@ -333,11 +335,11 @@ def calculate_regional_factor(country_code):
     Returns:
         int: Points based on regional classification
     """
-    country_lower = country_code.lower()
+    country_upper = country_code.upper()
     
-    if country_lower in REGIONAL_CLASSIFICATIONS['underrepresented']:
+    if country_upper in REGIONAL_CLASSIFICATIONS['underrepresented']:
         return 2
-    elif country_lower in REGIONAL_CLASSIFICATIONS['emerging']:
+    elif country_upper in REGIONAL_CLASSIFICATIONS['emerging']:
         return 1
     else:
         return 0
@@ -359,9 +361,6 @@ def assign_rarity_tier(rarity_score):
     elif rarity_score >= 6:  return 'rare'         # 🎖️
     elif rarity_score >= 3:  return 'emerging'     # 📍
     else:                    return 'common'       # Standard
-
-
-
 
 
 
@@ -482,5 +481,3 @@ def get_rare_countries_weighted_with_existing_data(country_data, total_relays, m
 def get_geographic_regions_for_analysis():
     """Return geographic regional mapping for intelligence analysis HHI calculations"""
     return CORE_REGIONS.copy()
-
- 

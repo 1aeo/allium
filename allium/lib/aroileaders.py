@@ -520,21 +520,23 @@ def _calculate_aroi_leaderboards(relays_instance):
         unique_operator_countries = list(set(operator_countries))
         
         # Find which of the operator's countries are rare
+        # operator_countries comes from relay.get('country') which is already UPPERCASE
         operator_rare_countries = set()
         for country in unique_operator_countries:
-            if country and country.lower() in valid_rare_countries:
-                operator_rare_countries.add(country.upper())
+            if country and country in valid_rare_countries:
+                operator_rare_countries.add(country)
         
         # Calculate rare country count by counting how many rare countries operator actually operates in
         rare_country_count = len(operator_rare_countries)
         
+        # relay["country"] is already UPPERCASE from _preprocess_template_data()
         relays_in_rare_countries = sum(1 for relay in operator_relays 
-                                     if relay.get('country', '').upper() in operator_rare_countries)
+                                     if relay.get('country', '') in operator_rare_countries)
         
         # Calculate breakdown of relays per rare country for tooltips and specialization
         rare_country_breakdown = {}
         for relay in operator_relays:
-            country = relay.get('country', '').upper()
+            country = relay.get('country', '')
             if country in operator_rare_countries:
                 rare_country_breakdown[country] = rare_country_breakdown.get(country, 0) + 1
         
@@ -545,7 +547,7 @@ def _calculate_aroi_leaderboards(relays_instance):
         # Calculate general country breakdown for reuse (all countries, not just rare ones)
         all_country_breakdown = {}
         for relay in operator_relays:
-            country = relay.get('country', '').upper()
+            country = relay.get('country', '')
             if country:
                 all_country_breakdown[country] = all_country_breakdown.get(country, 0) + 1
         
@@ -553,11 +555,11 @@ def _calculate_aroi_leaderboards(relays_instance):
         sorted_all_country_breakdown = sorted(all_country_breakdown.items(), 
                                      key=lambda x: (-x[1], x[0]))
         
-        # Calculate non-EU country breakdown for specialization column (NEW)
+        # Calculate non-EU country breakdown for specialization column
         non_eu_country_breakdown = {}
         for relay in operator_relays:
-            country = relay.get('country', '').upper()
-            if country and country.lower() not in EU_POLITICAL_REGION:
+            country = relay.get('country', '')
+            if country and country not in EU_POLITICAL_REGION:
                 non_eu_country_breakdown[country] = non_eu_country_breakdown.get(country, 0) + 1
         
         # Sort by relay count (descending) then by country name for consistent display

@@ -181,11 +181,11 @@ class IntelligenceEngine:
             significant_countries = len([c for c in countries if c.get('consensus_weight_fraction', 0) > 0.01])
             template_values['countries_significant_count'] = significant_countries
             
-            # Five Eyes concentration
-            five_eyes_codes = {'us', 'gb', 'ca', 'au', 'nz'}
+            # Five Eyes concentration - country keys already UPPERCASE
+            five_eyes_codes = {'US', 'GB', 'CA', 'AU', 'NZ'}
             five_eyes_weight = sum(country_data.get('consensus_weight_fraction', 0) 
                                  for country_code, country_data in self.sorted_data['country'].items() 
-                                 if country_code.lower() in five_eyes_codes)
+                                 if country_code in five_eyes_codes)
             template_values['countries_five_eyes_percentage'] = f"{five_eyes_weight * 100:.1f}"
         else:
             template_values.update({
@@ -323,18 +323,19 @@ class IntelligenceEngine:
         template_values = {}
         
         # Five Eyes and Fourteen Eyes analysis
-        five_eyes_codes = {'us', 'gb', 'ca', 'au', 'nz'}
-        fourteen_eyes_codes = five_eyes_codes.union({'de', 'fr', 'it', 'es', 'nl', 'be', 'dk', 'no', 'se'})
+        five_eyes_codes = {'US', 'GB', 'CA', 'AU', 'NZ'}
+        fourteen_eyes_codes = five_eyes_codes.union({'DE', 'FR', 'IT', 'ES', 'NL', 'BE', 'DK', 'NO', 'SE'})
         
         five_eyes_weight = 0
         fourteen_eyes_weight = 0
         
+        # Country keys are already UPPERCASE
         if 'country' in self.sorted_data:
             for country_code, country_data in self.sorted_data['country'].items():
                 weight = country_data.get('consensus_weight_fraction', 0)
-                if country_code.lower() in five_eyes_codes:
+                if country_code in five_eyes_codes:
                     five_eyes_weight += weight
-                if country_code.lower() in fourteen_eyes_codes:
+                if country_code in fourteen_eyes_codes:
                     fourteen_eyes_weight += weight
         
         template_values['five_eyes_percentage'] = f"{five_eyes_weight * 100:.1f}"
@@ -356,11 +357,11 @@ class IntelligenceEngine:
             template_values['concentration_hhi_interpretation'] = 'HIGH'
             template_values['hhi_tooltip'] = 'High geographic concentration - limited diversity'
         
-        # Top 3 regions
+        # Top 3 regions - country keys already UPPERCASE
         if 'country' in self.sorted_data:
             sorted_countries = sorted(self.sorted_data['country'].items(), 
                                     key=lambda x: x[1].get('consensus_weight_fraction', 0), reverse=True)
-            top_3 = [f"{country[0].upper()}: {country[1].get('consensus_weight_fraction', 0) * 100:.1f}%" 
+            top_3 = [f"{country[0]}: {country[1].get('consensus_weight_fraction', 0) * 100:.1f}%" 
                     for country in sorted_countries[:3]]
             template_values['top_3_regions'] = ', '.join(top_3)
             template_values['regional_concentration_tooltip'] = f"Top 3 countries: {', '.join(top_3)}"

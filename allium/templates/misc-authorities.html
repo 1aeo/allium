@@ -127,11 +127,11 @@
                 <td>
                     {% if authority.country -%}
                         <a href="{{ page_ctx.path_prefix }}country/{{ authority.country }}/">
-                            <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ authority.country }}.png"
+                            <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ authority.country|lower }}.png"
                                  title="{{ authority.country_name }}"
                                  alt="{{ authority.country_name }}">
                         </a>
-                        {{ authority.country|upper }}
+                        {{ authority.country }}
                     {% else -%}
                         Unknown
                     {%- endif %}

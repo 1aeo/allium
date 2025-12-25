@@ -299,7 +299,7 @@ none
 {% if (relay['city_name'] or relay['region_name']) and relay['country'] -%} | {% endif -%}
 {% if relay['country'] -%}
 <a href="{{ page_ctx.path_prefix }}country/{{ relay['country']|escape }}/">
-<img src="{{ page_ctx.path_prefix }}static/images/cc/{{ relay['country']|escape }}.png"
+<img src="{{ page_ctx.path_prefix }}static/images/cc/{{ relay['country']|lower|escape }}.png"
 title="{{ relay['country_name']|escape }}"
 alt="{{ relay['country_name']|escape }}">
 </a> <span title="Country name of the location of this relay as found by a geolocation database based on the relay's IP address. Omitted if the relay location could not be found.">{{ relay['country_name']|escape }}</span>
@@ -316,6 +316,12 @@ Latitude, Longitude
 <span title="Longitude of the location of this relay as found by a geolocation database based on the relay's IP address. Omitted if the relay location could not be found.">{{ relay['longitude']|escape }}</span>
 </dd>
 {% endif -%}
+<dt>
+Interactive Map
+</dt>
+<dd>
+<a href="https://routefluxmap.1aeo.com/#relay={{ relay['fingerprint']|escape }}" target="_blank" rel="noopener" title="View this relay on RouteFluxMap interactive visualization">🗺️ View on Interactive Map</a>
+</dd>
 <dt>
 Autonomous System (AS Number | AS Name)
 </dt>

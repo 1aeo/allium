@@ -78,7 +78,7 @@
                     <li><strong>Countries:</strong> 
                         {% for country_info in primary_country_data.all_countries %}
                             <a href="{{ page_ctx.path_prefix }}country/{{ country_info.country }}/" style="text-decoration: none;">
-                                <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ country_info.country }}.png" 
+                                <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ country_info.country|lower }}.png" 
                                      title="{{ primary_country_data.tooltip }}" 
                                      alt="{{ country_info.country_name }}" 
                                      style="width: 16px; height: 12px; margin-right: 5px; vertical-align: middle;">
@@ -89,11 +89,11 @@
                     {% elif relay_subset[0]['country'] %}
                     <li><strong>Countries:</strong> 
                         <a href="{{ page_ctx.path_prefix }}country/{{ relay_subset[0]['country'] }}/" style="text-decoration: none;">
-                            <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ relay_subset[0]['country'] }}.png" 
-                                 title="{{ relay_subset[0]['country_name'] if relay_subset[0]['country_name'] else relay_subset[0]['country']|upper }}" 
-                                 alt="{{ relay_subset[0]['country_name'] if relay_subset[0]['country_name'] else relay_subset[0]['country']|upper }}" 
+                            <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ relay_subset[0]['country']|lower }}.png" 
+                                 title="{{ relay_subset[0]['country_name'] if relay_subset[0]['country_name'] else relay_subset[0]['country'] }}" 
+                                 alt="{{ relay_subset[0]['country_name'] if relay_subset[0]['country_name'] else relay_subset[0]['country'] }}" 
                                  style="width: 16px; height: 12px; margin-right: 5px; vertical-align: middle;">
-                            {{ relay_subset[0]['country_name'] if relay_subset[0]['country_name'] else relay_subset[0]['country']|upper }}
+                            {{ relay_subset[0]['country_name'] if relay_subset[0]['country_name'] else relay_subset[0]['country'] }}
                         </a>
                     </li>
                     {% endif %}

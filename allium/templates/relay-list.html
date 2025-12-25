@@ -143,14 +143,14 @@
 		    {% if key != 'country' -%}
 			<td>
 			    <a href="{{ page_ctx.path_prefix }}country/{{ relay['country']|escape }}/">
-				<img src="{{ page_ctx.path_prefix }}static/images/cc/{{ relay['country']|escape }}.png"
+				<img src="{{ page_ctx.path_prefix }}static/images/cc/{{ relay['country']|lower|escape }}.png"
 				     title="{{ relay['country_name']|escape }}"
 				     alt="{{ relay['country_name']|escape }}">
 			    </a>
 			</td>
 		    {% else -%}
 			<td>
-			    <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ relay['country']|escape }}.png"
+			    <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ relay['country']|lower|escape }}.png"
 				 title="{{ relay['country_name']|escape }}"
 				 alt="{{ relay['country_name']|escape }}">
 			    {{ relay['country_name']|escape }}
