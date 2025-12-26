@@ -195,23 +195,72 @@ After comprehensive review of the actual Allium codebase, several features from 
 
 ---
 
-### #4: Directory Authority Health Dashboard
-**Priority Score: 82/100** | **Timeline: 4-6 weeks** | **Status: NOT IMPLEMENTED**
+### #4: Directory Authority Health Dashboard (EXPANDED)
+**Priority Score: 82/100** | **Timeline: 4-6 weeks** | **Status: PARTIALLY IMPLEMENTED**
 
-#### What's Missing
-- ❌ `fetch_consensus_health()` in `workers.py` is a placeholder
-- ❌ No real-time authority status monitoring
-- ❌ No voting round tracking
-- ❌ No consensus formation analysis
-- ❌ No latency/responsiveness monitoring
-- ❌ No alert system for authority issues
+---
 
-#### What Exists (Can Be Reused)
-- ✅ Basic authority list in `misc-authorities.html`
-- ✅ Authority flag detection in relay data
-- ✅ Infrastructure for multi-API data fetching
+#### Current Implementation Status
 
-#### Mockup
+| Component | Status | Location |
+|-----------|--------|----------|
+| Basic authority table | ✅ Implemented | `misc-authorities.html` |
+| Authority uptime stats (1M/6M/1Y/5Y) | ✅ Implemented | `relays.py` |
+| Z-score outlier detection | ✅ Implemented | `relays.py` |
+| Version compliance tracking | ✅ Implemented | `misc-authorities.html` |
+| `fetch_consensus_health()` | ⚠️ Placeholder only | `workers.py` line 519-551 |
+| Real-time voting status | ❌ Not implemented | — |
+| Latency monitoring | ❌ Not implemented | — |
+| Consensus formation analysis | ❌ Not implemented | — |
+| Alert system | ❌ Not implemented | — |
+| CollecTor API integration | ❌ Not implemented | — |
+
+---
+
+#### What's Missing (Detailed)
+
+##### 1. Real-Time Authority Health Checks
+```python
+# Current placeholder in workers.py:
+def fetch_consensus_health(progress_logger=None):
+    # Placeholder implementation - returns empty data
+    empty_data = {"health_status": {}, "version": "placeholder"}
+    return empty_data
+```
+
+**Needed:**
+- Direct HTTP checks to each authority's directory port
+- Response time measurement (latency in ms)
+- Timeout detection and error classification
+- Status categorization: `online`, `slow`, `degraded`, `timeout`, `offline`
+
+##### 2. Voting Round Monitoring
+- Track when each authority submits its vote
+- Measure voting round duration (typically 127-180 seconds)
+- Detect authorities that miss voting windows
+- Historical voting participation rate
+
+##### 3. Bandwidth Scanning Status
+- Track which authorities are actively measuring relay bandwidth
+- Identify scanning delays or failures
+- Compare measurement consistency across authorities
+
+##### 4. Consensus Formation Analysis
+- Parse consensus documents from CollecTor
+- Track `valid-after`, `fresh-until`, `valid-until` timestamps
+- Detect stale consensus conditions
+- Calculate authority agreement percentage on relay flags
+
+##### 5. Alert System
+- Configurable thresholds for warnings and critical alerts
+- Categories: connectivity, performance, consensus, voting
+- Real-time alert generation and history
+
+---
+
+#### Detailed Mockups
+
+##### Main Dashboard View
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │ 🏛️ Directory Authority Health Dashboard                         │
@@ -222,29 +271,293 @@ After comprehensive review of the actual Allium codebase, several features from 
 │ │                   │ │                   │ │                 ││
 │ │ ✅ CURRENT        │ │ 9/9 ACTIVE        │ │ 99.2% SYNC      ││
 │ │ Fresh: 14:32 UTC  │ │ Last Vote: Recent │ │ 8.9/9 Agreement ││
+│ │ Next: 15:00 UTC   │ │ All Participating │ │                 ││
 │ └───────────────────┘ └───────────────────┘ └─────────────────┘│
 │                                                                 │
-│ Directory Authorities Status:                                   │
+│ Directory Authorities Status (Real-Time):                       │
 │ ┌──────────────────────────────────────────────────────────────┐│
 │ │ Authority    │ Status │ Vote │ BW Scan │ Latency │ Uptime   ││
 │ ├──────────────┼────────┼──────┼─────────┼─────────┼──────────┤│
 │ │ moria1       │ 🟢 OK  │ ✅   │ ✅      │ 12ms    │ 99.9%    ││
 │ │ tor26        │ 🟢 OK  │ ✅   │ ✅      │ 8ms     │ 99.9%    ││
+│ │ dizum        │ 🟢 OK  │ ✅   │ ✅      │ 15ms    │ 99.8%    ││
+│ │ gabelmoo     │ 🟢 OK  │ ✅   │ ✅      │ 11ms    │ 99.9%    ││
+│ │ dannenberg   │ 🟢 OK  │ ✅   │ ✅      │ 19ms    │ 99.7%    ││
+│ │ maatuska     │ 🟢 OK  │ ✅   │ ✅      │ 7ms     │ 99.9%    ││
 │ │ faravahar    │ 🟡 SLOW│ ✅   │ ⚠️      │ 89ms    │ 97.8%    ││
+│ │ longclaw     │ 🟢 OK  │ ✅   │ ✅      │ 14ms    │ 99.6%    ││
+│ │ bastet       │ 🟢 OK  │ ✅   │ ✅      │ 16ms    │ 99.5%    ││
 │ └──────────────┴────────┴──────┴─────────┴─────────┴──────────┘│
 │                                                                 │
-│ ⚠️ Active Alerts:                                               │
-│ • faravahar bandwidth scanning slower than usual (89ms)        │
+│ ⚠️ Active Alerts (1):                                           │
+│ ┌──────────────────────────────────────────────────────────────┐│
+│ │ 🟡 WARNING: faravahar bandwidth scanning slower than usual   ││
+│ │    Response time: 89ms (threshold: 50ms)                     ││
+│ │    Since: 14:15 UTC • Impact: Low                            ││
+│ └──────────────────────────────────────────────────────────────┘│
+│                                                                 │
+│ Recent Consensus Events:                                        │
+│ • 14:32 - Consensus published successfully (9/9 authorities)   │
+│ • 14:31 - Voting round completed in 127 seconds                │
+│ • 14:29 - All authorities synchronized                         │
 │                                                                 │
 │ Last updated: 14:45:23 UTC • Auto-refresh: 60s                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-#### Implementation Recommendations
-1. **Implement `fetch_consensus_health()`** in `workers.py`
-2. **Add CollecTor API integration** for consensus data
-3. **Create `directory_authority_monitor.py`** for status tracking
-4. **Add `misc-authorities-health.html`** template
+##### Consensus Health Metrics View
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ 📊 Consensus Health Metrics                                     │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│ Current Consensus (2025-01-06 15:00:00):                       │
+│ ┌──────────────────────────────────────────────────────────────┐│
+│ │ Method: 28              Valid: 15:00-16:00 UTC               ││
+│ │ Relays: 8,247           Voting Delay: 300s                   ││
+│ │ Authorities: 9/9        Distribution Delay: 300s             ││
+│ │ Bandwidth Sum: 1.2TB/s  Consensus Size: 2.3MB               ││
+│ └──────────────────────────────────────────────────────────────┘│
+│                                                                 │
+│ Flag Distribution:                                              │
+│ ┌──────────────────────────────────────────────────────────────┐│
+│ │ Running  ████████████████████████████████ 7,234 (87.7%)     ││
+│ │ Fast     ████████████████████████████     6,891 (83.6%)     ││
+│ │ Stable   ████████████████████████         5,678 (68.9%)     ││
+│ │ Guard    ████████████████                 2,845 (34.5%)     ││
+│ │ Exit     ███████████                      1,923 (23.3%)     ││
+│ │ V2Dir    ████████████████████████████████ 7,156 (86.8%)     ││
+│ │ HSDir    ███████████████████████████████  6,987 (84.7%)     ││
+│ └──────────────────────────────────────────────────────────────┘│
+│                                                                 │
+│ Quality Indicators:                                             │
+│ ✅ Consensus freshness: Excellent (12 minutes until stale)     │
+│ ✅ Authority participation: 100% (9/9)                         │
+│ ✅ Flag consistency: 98.7% agreement across authorities        │
+│ ⚠️  Network diversity: APAC region underrepresented (8.3%)     │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+##### Authority Performance Analytics View
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ 📈 Authority Performance Analytics (30 days)                    │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│ Performance Scorecard:                                          │
+│ ┌──────────────────────────────────────────────────────────────┐│
+│ │ Authority    Uptime  Votes  BW-Scan  Consensus  Score        ││
+│ ├──────────────────────────────────────────────────────────────┤│
+│ │ moria1       99.8%   100%   98.2%    99.1%     ⭐⭐⭐⭐⭐      ││
+│ │ tor26        99.9%   100%   97.8%    99.3%     ⭐⭐⭐⭐⭐      ││
+│ │ dizum        99.4%   99.7%  96.1%    98.9%     ⭐⭐⭐⭐        ││
+│ │ gabelmoo     99.7%   100%   98.9%    99.2%     ⭐⭐⭐⭐⭐      ││
+│ │ dannenberg   99.2%   99.8%  94.3%    98.6%     ⭐⭐⭐⭐        ││
+│ │ maatuska     99.9%   100%   99.1%    99.4%     ⭐⭐⭐⭐⭐      ││
+│ │ faravahar    97.8%   98.9%  89.2%    97.1%     ⭐⭐⭐          ││
+│ │ longclaw     99.5%   100%   97.4%    99.0%     ⭐⭐⭐⭐        ││
+│ │ bastet       99.6%   99.9%  98.7%    99.3%     ⭐⭐⭐⭐⭐      ││
+│ └──────────────────────────────────────────────────────────────┘│
+│                                                                 │
+│ Network Impact Analysis:                                        │
+│ • Consensus Reliability: 99.4% (Excellent)                     │
+│ • Authority Redundancy: 9 active (Optimal - tolerates 4 failures)│
+│ • Single Point of Failure Risk: Low                            │
+│ • Geographic Distribution: 6 countries, 3 continents           │
+│                                                                 │
+│ Performance Score Calculation:                                  │
+│ • Uptime: 30% weight (core availability)                       │
+│ • Voting: 25% weight (consensus participation)                 │
+│ • BW Scanning: 20% weight (measurement accuracy)               │
+│ • Consensus Agreement: 25% weight (flag consistency)           │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+#### Data Sources Required
+
+| Source | Endpoint | Data Provided |
+|--------|----------|---------------|
+| **Onionoo API** | `/details?flag=Authority` | Authority relay details (✅ implemented) |
+| **Onionoo API** | `/uptime?flag=Authority` | Historical uptime (✅ implemented) |
+| **CollecTor** | `/recent/relay-descriptors/consensuses/` | Consensus documents |
+| **CollecTor** | `/recent/relay-descriptors/votes/` | Authority votes |
+| **Direct HTTP** | `http://{authority}:{port}/tor/status-vote/current/consensus` | Real-time latency |
+
+---
+
+#### Implementation Plan
+
+##### Phase 1: Real-Time Authority Health (Week 1-2)
+```python
+# File: allium/lib/authority_monitor.py
+
+class DirectoryAuthorityMonitor:
+    """Monitor directory authority health in real-time."""
+    
+    AUTHORITIES = {
+        'moria1': {'address': '128.31.0.34:9131', 'fingerprint': '9695DFC35FFEB861...'},
+        'tor26': {'address': '86.59.21.38:80', 'fingerprint': '847B1F850344D787...'},
+        'dizum': {'address': '45.66.33.45:80', 'fingerprint': '7EA6EAD6FD830830...'},
+        'gabelmoo': {'address': '131.188.40.189:80', 'fingerprint': 'F2044413DAC2E02E...'},
+        'dannenberg': {'address': '193.23.244.244:80', 'fingerprint': '585769C78764D58...'},
+        'maatuska': {'address': '171.25.193.9:443', 'fingerprint': 'BD6A829255CB653...'},
+        'faravahar': {'address': '154.35.175.225:80', 'fingerprint': 'CF6D0AAFB385BE7...'},
+        'longclaw': {'address': '199.58.81.140:80', 'fingerprint': '74A910646BCEEFB...'},
+        'bastet': {'address': '204.13.164.118:80', 'fingerprint': '24E2F139121D4394...'},
+    }
+    
+    async def check_all_authorities(self) -> Dict:
+        """Check health of all authorities in parallel."""
+        tasks = [self._check_single_authority(name, info) 
+                 for name, info in self.AUTHORITIES.items()]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        return self._process_results(results)
+    
+    async def _check_single_authority(self, name: str, info: Dict) -> Dict:
+        """Check a single authority's directory port."""
+        start = time.time()
+        try:
+            url = f"http://{info['address']}/tor/status-vote/current/consensus"
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=5) as response:
+                    latency_ms = (time.time() - start) * 1000
+                    return {
+                        'name': name,
+                        'status': 'online' if response.status == 200 else 'degraded',
+                        'latency_ms': round(latency_ms, 1),
+                        'http_status': response.status
+                    }
+        except asyncio.TimeoutError:
+            return {'name': name, 'status': 'timeout', 'latency_ms': None}
+        except Exception as e:
+            return {'name': name, 'status': 'offline', 'error': str(e)}
+```
+
+##### Phase 2: Consensus Health Integration (Week 2-3)
+```python
+# File: allium/lib/consensus_health_scraper.py
+
+class ConsensusHealthScraper:
+    """Scrape and analyze consensus documents from CollecTor."""
+    
+    COLLECTOR_URL = "https://collector.torproject.org/recent/relay-descriptors/consensuses/"
+    
+    async def fetch_latest_consensus(self) -> Dict:
+        """Fetch and parse the most recent consensus document."""
+        # 1. List available consensus files
+        # 2. Download most recent
+        # 3. Parse header (valid-after, fresh-until, method, etc.)
+        # 4. Calculate flag distribution
+        # 5. Return structured data
+        
+    def parse_consensus_document(self, content: str) -> Dict:
+        """Parse consensus document and extract metrics."""
+        return {
+            'valid_after': self._extract_timestamp('valid-after', content),
+            'fresh_until': self._extract_timestamp('fresh-until', content),
+            'valid_until': self._extract_timestamp('valid-until', content),
+            'consensus_method': self._extract_method(content),
+            'relay_count': self._count_relays(content),
+            'flag_distribution': self._calculate_flag_distribution(content),
+            'total_bandwidth': self._sum_bandwidth(content)
+        }
+```
+
+##### Phase 3: Alert System (Week 3-4)
+```python
+# File: allium/lib/authority_alerts.py
+
+class AuthorityAlertSystem:
+    """Generate alerts based on authority health status."""
+    
+    THRESHOLDS = {
+        'latency_warning': 50,      # ms
+        'latency_critical': 200,    # ms
+        'uptime_warning': 99.0,     # %
+        'uptime_critical': 95.0,    # %
+        'offline_critical': 2,      # number of authorities
+    }
+    
+    def generate_alerts(self, authority_status: List[Dict], consensus_data: Dict) -> List[Dict]:
+        """Generate alerts based on current status."""
+        alerts = []
+        
+        # Check offline authorities
+        offline = [a for a in authority_status if a['status'] in ['offline', 'timeout']]
+        if len(offline) >= self.THRESHOLDS['offline_critical']:
+            alerts.append({
+                'level': 'critical',
+                'category': 'connectivity',
+                'message': f"{len(offline)} authorities offline: {', '.join(a['name'] for a in offline)}",
+                'since': datetime.utcnow().isoformat()
+            })
+        
+        # Check slow authorities
+        slow = [a for a in authority_status 
+                if a.get('latency_ms', 0) > self.THRESHOLDS['latency_warning']]
+        for auth in slow:
+            alerts.append({
+                'level': 'warning',
+                'category': 'performance', 
+                'message': f"{auth['name']} response time: {auth['latency_ms']}ms",
+                'since': datetime.utcnow().isoformat()
+            })
+        
+        return alerts
+```
+
+##### Phase 4: Template & Integration (Week 4)
+- Create `misc-authorities-health.html` template with all views
+- Update `workers.py` to use real implementation
+- Add to navigation and coordinator
+
+---
+
+#### Files to Create/Modify
+
+| File | Action | Purpose |
+|------|--------|---------|
+| `allium/lib/authority_monitor.py` | **CREATE** | Real-time authority health checks |
+| `allium/lib/consensus_health_scraper.py` | **CREATE** | CollecTor consensus parsing |
+| `allium/lib/authority_alerts.py` | **CREATE** | Alert generation system |
+| `allium/lib/authority_analytics.py` | **CREATE** | Performance scoring |
+| `allium/lib/workers.py` | **MODIFY** | Implement `fetch_consensus_health()` |
+| `allium/templates/misc-authorities-health.html` | **CREATE** | New dashboard template |
+| `allium/templates/misc-authorities.html` | **MODIFY** | Add link to health dashboard |
+
+---
+
+#### Success Criteria
+
+- [ ] Real-time latency checks for all 9 authorities (< 5s refresh)
+- [ ] Consensus document parsing from CollecTor
+- [ ] Voting participation tracking with historical data
+- [ ] Flag distribution visualization
+- [ ] Performance scorecard with 30-day metrics
+- [ ] Alert system with configurable thresholds
+- [ ] Geographic distribution map of authorities
+- [ ] < 2 second page load time
+
+---
+
+#### Dependencies
+
+- `aiohttp` - Async HTTP requests for parallel authority checks
+- `asyncio` - Async/await coordination
+- `statistics` - Z-score and performance calculations (already available)
+
+---
+
+#### Value Proposition
+
+| Audience | Benefit |
+|----------|---------|
+| **Tor Foundation** | Proactive monitoring of critical infrastructure |
+| **Relay Operators** | Understanding why their relay flags might be delayed |
+| **Researchers** | Transparency into consensus formation process |
+| **Network Watchers** | Early warning for network-wide issues |
 
 ---
 
