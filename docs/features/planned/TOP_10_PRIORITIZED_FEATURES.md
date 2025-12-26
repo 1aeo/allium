@@ -375,97 +375,357 @@ def fetch_consensus_health(progress_logger=None):
 
 ---
 
-#### Data Sources Required
+#### Tor Network Timing Reference
 
-| Source | Endpoint | Data Provided |
-|--------|----------|---------------|
-| **Onionoo API** | `/details?flag=Authority` | Authority relay details (✅ implemented) |
-| **Onionoo API** | `/uptime?flag=Authority` | Historical uptime (✅ implemented) |
-| **CollecTor** | `/recent/relay-descriptors/consensuses/` | Consensus documents |
-| **CollecTor** | `/recent/relay-descriptors/votes/` | Authority votes |
-| **Direct HTTP** | `http://{authority}:{port}/tor/status-vote/current/consensus` | Real-time latency |
+Understanding the Tor consensus cycle is critical for monitoring:
+
+| Event | Frequency | Timing Details |
+|-------|-----------|----------------|
+| **Consensus Published** | Every **1 hour** | At :00 of each hour (00:00, 01:00, 02:00...) |
+| **Authority Votes** | Every **1 hour** | ~5-10 min before consensus (9 votes/hour, one per authority) |
+| **Bandwidth Measurements** | Every **~1 hour** | ~:36-:50 past hour (4-5 files from different scanners) |
+| **Voting Delay** | 300 seconds | Time authorities wait before voting |
+| **Distribution Delay** | 300 seconds | Time after voting before consensus published |
+| **Consensus Valid Period** | 1 hour | `valid-after` to `fresh-until` |
+| **Consensus Expiry** | 3 hours | `valid-after` to `valid-until` |
+
+**Consensus Document Lifecycle:**
+```
+Hour H:00:00 → valid-after (consensus becomes valid)
+Hour H+1:00:00 → fresh-until (new consensus expected)
+Hour H+3:00:00 → valid-until (consensus expires - CRITICAL if no new one)
+```
 
 ---
 
-#### Implementation Plan
+#### Data Sources with Specific CollecTor Endpoints
 
-##### Phase 1: Real-Time Authority Health (Week 1-2)
+| Data Point | Source | Endpoint | Update Frequency | File Format |
+|------------|--------|----------|------------------|-------------|
+| **Consensus Documents** | CollecTor | `/recent/relay-descriptors/consensuses/` | Hourly | `YYYY-MM-DD-HH-00-00-consensus` (~3.8MB) |
+| **Authority Votes** | CollecTor | `/recent/relay-descriptors/votes/` | Hourly | `YYYY-MM-DD-HH-00-00-vote-{fingerprint}-{digest}` (~5.7-6.5MB each) |
+| **Bandwidth Measurements** | CollecTor | `/recent/relay-descriptors/bandwidths/` | ~Hourly | `YYYY-MM-DD-HH-MM-SS-bandwidth-{hash}` (~7.2-7.7MB) |
+| **Authority Details** | Onionoo | `/details?flag=Authority` | ~30 min | JSON (✅ implemented) |
+| **Authority Uptime** | Onionoo | `/uptime?flag=Authority` | ~30 min | JSON (✅ implemented) |
+| **Real-time Latency** | Direct HTTP | `http://{authority}:{port}/tor/status-vote/current/consensus` | On-demand | Binary consensus |
+
+**CollecTor Base URL:** `https://collector.torproject.org`
+
+---
+
+#### Consensus Document Fields (from CollecTor)
+
+Key fields to parse from consensus documents:
+
+```
+network-status-version 3
+vote-status consensus
+consensus-method 33                    ← Current consensus method
+valid-after 2025-12-26 03:00:00       ← When this consensus becomes valid
+fresh-until 2025-12-26 04:00:00       ← When new consensus expected
+valid-until 2025-12-26 06:00:00       ← When this consensus expires
+voting-delay 300 300                   ← Voting and distribution delays (seconds)
+known-flags Authority BadExit Exit Fast Guard HSDir...
+dir-source dannenberg {fingerprint}... ← Authority that contributed
+vote-digest {hash}                     ← Digest of authority's vote
+```
+
+---
+
+#### Implementation Plan (Phased - Real-Time First, Historical Later)
+
+**Update Strategy:** Hourly updates aligned with Tor consensus cycle
+
+---
+
+##### 🚀 PHASE 1: Real-Time Authority Health Checks (Week 1-2)
+**Focus:** Direct HTTP latency checks, updated every hour
+
+**Data Source:** Direct HTTP to authority directory ports
+
 ```python
 # File: allium/lib/authority_monitor.py
 
 class DirectoryAuthorityMonitor:
     """Monitor directory authority health in real-time."""
     
+    # Authoritative list from consensus document dir-source entries
     AUTHORITIES = {
-        'moria1': {'address': '128.31.0.34:9131', 'fingerprint': '9695DFC35FFEB861...'},
-        'tor26': {'address': '86.59.21.38:80', 'fingerprint': '847B1F850344D787...'},
-        'dizum': {'address': '45.66.33.45:80', 'fingerprint': '7EA6EAD6FD830830...'},
-        'gabelmoo': {'address': '131.188.40.189:80', 'fingerprint': 'F2044413DAC2E02E...'},
-        'dannenberg': {'address': '193.23.244.244:80', 'fingerprint': '585769C78764D58...'},
-        'maatuska': {'address': '171.25.193.9:443', 'fingerprint': 'BD6A829255CB653...'},
-        'faravahar': {'address': '154.35.175.225:80', 'fingerprint': 'CF6D0AAFB385BE7...'},
-        'longclaw': {'address': '199.58.81.140:80', 'fingerprint': '74A910646BCEEFB...'},
-        'bastet': {'address': '204.13.164.118:80', 'fingerprint': '24E2F139121D4394...'},
+        'dannenberg': {
+            'address': '193.23.244.244:80',
+            'fingerprint': '0232AF901C31A04EE9848595AF9BB7620D4C5B2E',
+            'contact': 'Andreas Lehner'
+        },
+        'longclaw': {
+            'address': '199.58.81.140:80',
+            'fingerprint': '23D15D965BC35114467363C165C4F724B64B4F66',
+            'contact': 'Riseup Networks'
+        },
+        'bastet': {
+            'address': '204.13.164.118:80',
+            'fingerprint': '27102BC123E7AF1D4741AE047E160C91ADC76B21',
+            'contact': 'stefani'
+        },
+        'tor26': {
+            'address': '217.196.147.77:80',
+            'fingerprint': '2F3DF9CA0E5D36F2685A2DA67184EB8DCB8CBA8C',
+            'contact': 'Peter Palfrader'
+        },
+        'maatuska': {
+            'address': '171.25.193.9:443',
+            'fingerprint': '49015F787433103580E3B66A1707A00E60F2D15B',
+            'contact': 'Linus Nordberg'
+        },
+        'faravahar': {
+            'address': '216.218.219.41:80',
+            'fingerprint': '70849B868D606BAECFB6128C5E3D782029AA394F',
+            'contact': 'Sina Rabbani'
+        },
+        'dizum': {
+            'address': '45.66.35.11:80',
+            'fingerprint': 'E8A9C45EDE6D711294FADF8E7951F4DE6CA56B58',
+            'contact': 'Alex de Joode'
+        },
+        'gabelmoo': {
+            'address': '131.188.40.189:80',
+            'fingerprint': 'ED03BB616EB2F60BEC80151114BB25CEF515B226',
+            'contact': 'Sebastian Hahn'
+        },
+        'moria1': {
+            'address': '128.31.0.39:9231',
+            'fingerprint': 'F533C81CEF0BC0267857C99B2F471ADF249FA232',
+            'contact': 'arma'
+        },
     }
     
     async def check_all_authorities(self) -> Dict:
-        """Check health of all authorities in parallel."""
+        """Check health of all 9 authorities in parallel. Run hourly."""
         tasks = [self._check_single_authority(name, info) 
                  for name, info in self.AUTHORITIES.items()]
         results = await asyncio.gather(*tasks, return_exceptions=True)
-        return self._process_results(results)
+        return {
+            'authorities': self._process_results(results),
+            'checked_at': datetime.utcnow().isoformat(),
+            'next_check': (datetime.utcnow() + timedelta(hours=1)).isoformat()
+        }
     
     async def _check_single_authority(self, name: str, info: Dict) -> Dict:
-        """Check a single authority's directory port."""
+        """Check a single authority's directory port for latency."""
         start = time.time()
         try:
+            # Request consensus from authority's directory port
             url = f"http://{info['address']}/tor/status-vote/current/consensus"
             async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=5) as response:
+                async with session.head(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
                     latency_ms = (time.time() - start) * 1000
                     return {
                         'name': name,
+                        'fingerprint': info['fingerprint'],
                         'status': 'online' if response.status == 200 else 'degraded',
                         'latency_ms': round(latency_ms, 1),
-                        'http_status': response.status
+                        'http_status': response.status,
+                        'checked_at': datetime.utcnow().isoformat()
                     }
         except asyncio.TimeoutError:
-            return {'name': name, 'status': 'timeout', 'latency_ms': None}
+            return {'name': name, 'fingerprint': info['fingerprint'], 
+                    'status': 'timeout', 'latency_ms': None, 'error': 'Connection timeout (10s)'}
         except Exception as e:
-            return {'name': name, 'status': 'offline', 'error': str(e)}
+            return {'name': name, 'fingerprint': info['fingerprint'],
+                    'status': 'offline', 'latency_ms': None, 'error': str(e)}
 ```
 
-##### Phase 2: Consensus Health Integration (Week 2-3)
+**Output:** Authority latency status, updated hourly
+
+---
+
+##### 🚀 PHASE 2: Consensus Document Parsing (Week 2-3)
+**Focus:** Parse latest consensus from CollecTor, updated hourly
+
+**Data Source:** `https://collector.torproject.org/recent/relay-descriptors/consensuses/`
+
 ```python
 # File: allium/lib/consensus_health_scraper.py
 
 class ConsensusHealthScraper:
-    """Scrape and analyze consensus documents from CollecTor."""
+    """Scrape and parse consensus documents from CollecTor. Run hourly."""
     
-    COLLECTOR_URL = "https://collector.torproject.org/recent/relay-descriptors/consensuses/"
+    COLLECTOR_CONSENSUSES = "https://collector.torproject.org/recent/relay-descriptors/consensuses/"
     
     async def fetch_latest_consensus(self) -> Dict:
-        """Fetch and parse the most recent consensus document."""
-        # 1. List available consensus files
-        # 2. Download most recent
-        # 3. Parse header (valid-after, fresh-until, method, etc.)
-        # 4. Calculate flag distribution
-        # 5. Return structured data
-        
-    def parse_consensus_document(self, content: str) -> Dict:
-        """Parse consensus document and extract metrics."""
-        return {
-            'valid_after': self._extract_timestamp('valid-after', content),
-            'fresh_until': self._extract_timestamp('fresh-until', content),
-            'valid_until': self._extract_timestamp('valid-until', content),
-            'consensus_method': self._extract_method(content),
-            'relay_count': self._count_relays(content),
-            'flag_distribution': self._calculate_flag_distribution(content),
-            'total_bandwidth': self._sum_bandwidth(content)
+        """Fetch the most recent consensus document (published hourly)."""
+        async with aiohttp.ClientSession() as session:
+            # 1. List consensus files to find most recent
+            async with session.get(self.COLLECTOR_CONSENSUSES) as response:
+                html = await response.text()
+                files = re.findall(r'href="(\d{4}-\d{2}-\d{2}-\d{2}-00-00-consensus)"', html)
+                if not files:
+                    return {'error': 'No consensus files found'}
+                latest_file = sorted(files)[-1]  # Most recent
+            
+            # 2. Download consensus document (~3.8MB)
+            consensus_url = f"{self.COLLECTOR_CONSENSUSES}{latest_file}"
+            async with session.get(consensus_url) as response:
+                content = await response.text()
+                return self._parse_consensus_document(content, latest_file)
+    
+    def _parse_consensus_document(self, content: str, filename: str) -> Dict:
+        """Parse consensus and extract key metrics."""
+        lines = content.split('\n')
+        result = {
+            'filename': filename,
+            'fetched_at': datetime.utcnow().isoformat()
         }
+        
+        # Parse header fields
+        for line in lines[:100]:  # Header is in first 100 lines
+            if line.startswith('valid-after '):
+                result['valid_after'] = line.split(' ', 1)[1]
+            elif line.startswith('fresh-until '):
+                result['fresh_until'] = line.split(' ', 1)[1]
+            elif line.startswith('valid-until '):
+                result['valid_until'] = line.split(' ', 1)[1]
+            elif line.startswith('consensus-method '):
+                result['consensus_method'] = int(line.split(' ')[1])
+            elif line.startswith('voting-delay '):
+                delays = line.split(' ')[1:]
+                result['voting_delay'] = int(delays[0])
+                result['dist_delay'] = int(delays[1])
+            elif line.startswith('dir-source '):
+                # Count authorities that contributed
+                result.setdefault('authorities_voted', 0)
+                result['authorities_voted'] += 1
+        
+        # Count relays and calculate flag distribution
+        result['relay_count'] = len([l for l in lines if l.startswith('r ')])
+        result['flag_distribution'] = self._calculate_flag_distribution(lines)
+        
+        # Calculate consensus freshness
+        result['freshness_status'] = self._assess_freshness(result)
+        
+        return result
+    
+    def _calculate_flag_distribution(self, lines: List[str]) -> Dict:
+        """Count relays with each flag."""
+        flags = {'Running': 0, 'Fast': 0, 'Stable': 0, 'Guard': 0, 
+                 'Exit': 0, 'HSDir': 0, 'V2Dir': 0, 'Authority': 0}
+        for line in lines:
+            if line.startswith('s '):
+                for flag in flags.keys():
+                    if flag in line:
+                        flags[flag] += 1
+        return flags
+    
+    def _assess_freshness(self, consensus: Dict) -> str:
+        """Check if consensus is fresh, stale, or expired."""
+        if 'fresh_until' not in consensus:
+            return 'unknown'
+        fresh_until = datetime.strptime(consensus['fresh_until'], '%Y-%m-%d %H:%M:%S')
+        now = datetime.utcnow()
+        if now < fresh_until:
+            return 'fresh'
+        elif 'valid_until' in consensus:
+            valid_until = datetime.strptime(consensus['valid_until'], '%Y-%m-%d %H:%M:%S')
+            if now < valid_until:
+                return 'stale'
+        return 'expired'
 ```
 
-##### Phase 3: Alert System (Week 3-4)
+**Output:** Current consensus metrics including freshness, relay count, flag distribution
+
+---
+
+##### 🚀 PHASE 3: Vote Tracking (Week 3)
+**Focus:** Parse authority votes to check voting participation, updated hourly
+
+**Data Source:** `https://collector.torproject.org/recent/relay-descriptors/votes/`
+
+```python
+# File: allium/lib/vote_tracker.py
+
+class VoteTracker:
+    """Track authority voting participation. Run hourly."""
+    
+    COLLECTOR_VOTES = "https://collector.torproject.org/recent/relay-descriptors/votes/"
+    
+    async def fetch_latest_votes(self) -> Dict:
+        """Fetch votes for the most recent consensus period."""
+        async with aiohttp.ClientSession() as session:
+            async with session.get(self.COLLECTOR_VOTES) as response:
+                html = await response.text()
+                
+                # Find all vote files for current hour
+                # Format: YYYY-MM-DD-HH-00-00-vote-{fingerprint}-{digest}
+                current_hour = datetime.utcnow().strftime('%Y-%m-%d-%H')
+                vote_pattern = rf'href="({current_hour}-00-00-vote-([A-F0-9]+)-[A-F0-9]+)"'
+                votes = re.findall(vote_pattern, html)
+                
+                return {
+                    'period': current_hour,
+                    'votes_found': len(votes),
+                    'expected_votes': 9,  # 9 directory authorities
+                    'voting_authorities': [v[1][:16] + '...' for v in votes],
+                    'all_voted': len(votes) == 9,
+                    'checked_at': datetime.utcnow().isoformat()
+                }
+```
+
+**Output:** Voting participation status for current consensus period
+
+---
+
+##### 🚀 PHASE 4: Bandwidth Measurement Tracking (Week 3-4)
+**Focus:** Track bandwidth scanner activity, updated hourly
+
+**Data Source:** `https://collector.torproject.org/recent/relay-descriptors/bandwidths/`
+
+```python
+# File: allium/lib/bandwidth_tracker.py
+
+class BandwidthMeasurementTracker:
+    """Track bandwidth scanner activity. Run hourly."""
+    
+    COLLECTOR_BANDWIDTHS = "https://collector.torproject.org/recent/relay-descriptors/bandwidths/"
+    
+    async def fetch_recent_measurements(self) -> Dict:
+        """Check for recent bandwidth measurement files."""
+        async with aiohttp.ClientSession() as session:
+            async with session.get(self.COLLECTOR_BANDWIDTHS) as response:
+                html = await response.text()
+                
+                # Find bandwidth files from last 2 hours
+                now = datetime.utcnow()
+                recent_files = []
+                
+                # Format: YYYY-MM-DD-HH-MM-SS-bandwidth-{hash}
+                bw_pattern = r'href="(\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}-bandwidth-[A-F0-9]+)"'
+                all_files = re.findall(bw_pattern, html)
+                
+                for f in all_files[-20:]:  # Check last 20 files
+                    file_time = datetime.strptime(f[:19], '%Y-%m-%d-%H-%M-%S')
+                    age_hours = (now - file_time).total_seconds() / 3600
+                    if age_hours <= 2:
+                        recent_files.append({
+                            'filename': f,
+                            'timestamp': file_time.isoformat(),
+                            'age_minutes': round(age_hours * 60)
+                        })
+                
+                return {
+                    'recent_measurements': len(recent_files),
+                    'expected_per_hour': 4,  # ~4-5 scanners per hour
+                    'files': recent_files,
+                    'status': 'healthy' if len(recent_files) >= 3 else 'degraded',
+                    'checked_at': datetime.utcnow().isoformat()
+                }
+```
+
+**Output:** Bandwidth scanner activity status
+
+---
+
+##### 🚀 PHASE 5: Alert System & Integration (Week 4)
+**Focus:** Combine all data sources, generate alerts, create dashboard
+
 ```python
 # File: allium/lib/authority_alerts.py
 
@@ -473,45 +733,74 @@ class AuthorityAlertSystem:
     """Generate alerts based on authority health status."""
     
     THRESHOLDS = {
-        'latency_warning': 50,      # ms
-        'latency_critical': 200,    # ms
-        'uptime_warning': 99.0,     # %
-        'uptime_critical': 95.0,    # %
-        'offline_critical': 2,      # number of authorities
+        'latency_warning_ms': 100,
+        'latency_critical_ms': 500,
+        'offline_warning': 1,
+        'offline_critical': 3,  # Network at risk if 3+ authorities offline
+        'consensus_stale_warning_min': 30,
+        'bandwidth_files_min': 2,
     }
     
-    def generate_alerts(self, authority_status: List[Dict], consensus_data: Dict) -> List[Dict]:
-        """Generate alerts based on current status."""
+    def generate_alerts(self, health_data: Dict) -> List[Dict]:
+        """Generate alerts from combined health data. Run hourly."""
         alerts = []
         
-        # Check offline authorities
-        offline = [a for a in authority_status if a['status'] in ['offline', 'timeout']]
+        # Authority connectivity alerts
+        offline = [a for a in health_data.get('authorities', []) 
+                   if a.get('status') in ['offline', 'timeout']]
         if len(offline) >= self.THRESHOLDS['offline_critical']:
             alerts.append({
                 'level': 'critical',
-                'category': 'connectivity',
-                'message': f"{len(offline)} authorities offline: {', '.join(a['name'] for a in offline)}",
-                'since': datetime.utcnow().isoformat()
+                'category': 'authority_connectivity',
+                'message': f"CRITICAL: {len(offline)} authorities offline - network consensus at risk",
+                'authorities': [a['name'] for a in offline]
             })
-        
-        # Check slow authorities
-        slow = [a for a in authority_status 
-                if a.get('latency_ms', 0) > self.THRESHOLDS['latency_warning']]
-        for auth in slow:
+        elif len(offline) >= self.THRESHOLDS['offline_warning']:
             alerts.append({
                 'level': 'warning',
-                'category': 'performance', 
-                'message': f"{auth['name']} response time: {auth['latency_ms']}ms",
-                'since': datetime.utcnow().isoformat()
+                'category': 'authority_connectivity',
+                'message': f"{len(offline)} authority offline: {offline[0]['name']}"
+            })
+        
+        # Consensus freshness alert
+        if health_data.get('consensus', {}).get('freshness_status') == 'stale':
+            alerts.append({
+                'level': 'warning',
+                'category': 'consensus_health',
+                'message': 'Consensus is stale - new consensus overdue'
+            })
+        elif health_data.get('consensus', {}).get('freshness_status') == 'expired':
+            alerts.append({
+                'level': 'critical',
+                'category': 'consensus_health',
+                'message': 'CRITICAL: Consensus has expired - network operation impaired'
+            })
+        
+        # Voting participation alert
+        if not health_data.get('votes', {}).get('all_voted', True):
+            missing = 9 - health_data.get('votes', {}).get('votes_found', 0)
+            alerts.append({
+                'level': 'warning',
+                'category': 'voting',
+                'message': f'{missing} authorities did not submit votes this period'
             })
         
         return alerts
 ```
 
-##### Phase 4: Template & Integration (Week 4)
-- Create `misc-authorities-health.html` template with all views
-- Update `workers.py` to use real implementation
-- Add to navigation and coordinator
+---
+
+##### 📅 PHASE 6 (LATER): Historical Data & Trends
+**Deferred to future milestone** - Focus on real-time first
+
+Future enhancements requiring historical data storage:
+- 7-day authority uptime trends
+- Consensus formation time analysis
+- Voting participation history
+- Bandwidth measurement consistency tracking
+- Performance degradation detection
+
+**Requires:** Database or file-based storage for historical data points
 
 ---
 
@@ -519,34 +808,81 @@ class AuthorityAlertSystem:
 
 | File | Action | Purpose |
 |------|--------|---------|
-| `allium/lib/authority_monitor.py` | **CREATE** | Real-time authority health checks |
-| `allium/lib/consensus_health_scraper.py` | **CREATE** | CollecTor consensus parsing |
-| `allium/lib/authority_alerts.py` | **CREATE** | Alert generation system |
-| `allium/lib/authority_analytics.py` | **CREATE** | Performance scoring |
-| `allium/lib/workers.py` | **MODIFY** | Implement `fetch_consensus_health()` |
-| `allium/templates/misc-authorities-health.html` | **CREATE** | New dashboard template |
+| `allium/lib/authority_monitor.py` | **CREATE** | Real-time authority HTTP health checks |
+| `allium/lib/consensus_health_scraper.py` | **CREATE** | Parse CollecTor consensus documents |
+| `allium/lib/vote_tracker.py` | **CREATE** | Track authority voting participation |
+| `allium/lib/bandwidth_tracker.py` | **CREATE** | Monitor bandwidth scanner activity |
+| `allium/lib/authority_alerts.py` | **CREATE** | Alert generation from all sources |
+| `allium/lib/authority_analytics.py` | **CREATE** | Performance scoring (Phase 6 - historical) |
+| `allium/lib/workers.py` | **MODIFY** | Replace `fetch_consensus_health()` placeholder |
+| `allium/templates/misc-authorities-health.html` | **CREATE** | New comprehensive dashboard template |
 | `allium/templates/misc-authorities.html` | **MODIFY** | Add link to health dashboard |
+
+---
+
+#### Data Source Summary with CollecTor Reference
+
+| Metric | Data Source | URL | Update Freq | Phase |
+|--------|-------------|-----|-------------|-------|
+| Authority latency | Direct HTTP | `http://{auth_ip}:{port}/tor/status-vote/current/consensus` | On-demand | 1 |
+| Authority details | Onionoo API | `https://onionoo.torproject.org/details?flag=Authority` | ~30 min | ✅ Done |
+| Authority uptime | Onionoo API | `https://onionoo.torproject.org/uptime?flag=Authority` | ~30 min | ✅ Done |
+| Consensus doc | CollecTor | `/recent/relay-descriptors/consensuses/YYYY-MM-DD-HH-00-00-consensus` | Hourly | 2 |
+| Authority votes | CollecTor | `/recent/relay-descriptors/votes/YYYY-MM-DD-HH-00-00-vote-{fp}-{digest}` | Hourly | 3 |
+| BW measurements | CollecTor | `/recent/relay-descriptors/bandwidths/YYYY-MM-DD-HH-MM-SS-bandwidth-{hash}` | Hourly | 4 |
+
+**CollecTor Base URL:** `https://collector.torproject.org`
+
+---
+
+#### Hourly Update Schedule
+
+Align Allium updates with Tor consensus cycle:
+
+```
+:00 - New consensus published on Tor network
+:05 - Allium fetches consensus from CollecTor (wait for propagation)
+:10 - Allium checks authority latency via direct HTTP
+:15 - Allium parses votes and bandwidth files from CollecTor
+:20 - Allium generates alerts and updates dashboard cache
+:55 - Prepare for next cycle
+```
+
+**Recommended cron:** `5,10,15,20 * * * *` (4 jobs per hour)
 
 ---
 
 #### Success Criteria
 
-- [ ] Real-time latency checks for all 9 authorities (< 5s refresh)
-- [ ] Consensus document parsing from CollecTor
-- [ ] Voting participation tracking with historical data
-- [ ] Flag distribution visualization
-- [ ] Performance scorecard with 30-day metrics
-- [ ] Alert system with configurable thresholds
-- [ ] Geographic distribution map of authorities
+**Phase 1-5 (Real-Time Focus):**
+- [ ] Real-time latency checks for all 9 authorities (< 10s response)
+- [ ] Consensus document parsing from CollecTor (hourly)
+- [ ] Voting participation tracking (hourly - count votes per period)
+- [ ] Bandwidth measurement activity tracking (hourly)
+- [ ] Alert system for offline authorities and stale consensus
+- [ ] Flag distribution from latest consensus
 - [ ] < 2 second page load time
+
+**Phase 6 (Historical - Later):**
+- [ ] 7-day authority uptime trend graphs
+- [ ] Historical voting participation analysis
+- [ ] Performance scorecard with 30-day metrics
+- [ ] Geographic distribution map of authorities
 
 ---
 
 #### Dependencies
 
-- `aiohttp` - Async HTTP requests for parallel authority checks
-- `asyncio` - Async/await coordination
-- `statistics` - Z-score and performance calculations (already available)
+**Python Libraries:**
+- `aiohttp` - Async HTTP requests for parallel authority checks and CollecTor fetches
+- `asyncio` - Async/await coordination for concurrent data fetching
+- `statistics` - Z-score and performance calculations (already in stdlib)
+- `re` - Regex for parsing CollecTor directory listings and consensus documents
+
+**External APIs:**
+- **CollecTor** (no auth required) - Consensus, votes, bandwidth files
+- **Onionoo** (no auth required) - Authority details and uptime (already integrated)
+- **Direct HTTP** - Authority directory ports for latency checks (no auth, public ports)
 
 ---
 
