@@ -1,13 +1,13 @@
 # RouteFluxMap Integration Plan for Allium
 
-**Status**: 🚀 Phase 1 & 3 LIVE, Phase 2 Pending  
+**Status**: ✅ Phase 1-3 COMPLETE & LIVE  
 **Last Updated**: December 24, 2024  
 **Last Verified**: December 24, 2024 (live site check)  
 **Document Type**: Technical Integration Strategy
 
 > **Quick Status:**
 > - ✅ **Phase 1**: Cross-linking config — **LIVE** ✓
-> - 🔲 **Phase 2**: RouteFluxMap → Allium country links — NOT STARTED
+> - ✅ **Phase 2**: RouteFluxMap → Allium country links — **LIVE** ✓
 > - ✅ **Phase 3**: Allium → RouteFluxMap links — **LIVE** ✓
 > - 🔲 **Phase 4+**: Optional data schema enhancements  
 
@@ -180,124 +180,71 @@ Deployed changes:
 
 ---
 
-### Phase 2: Add Country Deep Links from RouteFluxMap (Day 3-5) — 🔲 NOT YET IMPLEMENTED
+### Phase 2: Add Country Deep Links from RouteFluxMap (Day 3-5) — ✅ LIVE
 
-RouteFluxMap's `CountryLayer.tsx` shows country data on hover. Add click-through to Allium country pages.
+**Commit `7aa1b30a`:** "feat(country-tooltip): show relay count and improve link text"
 
-**Current State:**
-- ✅ `CountryLayer.tsx` exists with hover tooltips
-- ✅ `CountryTooltip` component shows country name and client count
-- 🔲 **No link to Allium country pages yet**
-- 🔲 **`getCountryMetricsUrl()` helper doesn't exist yet**
-- 🔲 **`getASMetricsUrl()` helper doesn't exist yet**
+RouteFluxMap's `CountryLayer.tsx` now links to Allium country pages.
 
-#### 2.1 Create Country Link Helper — 🔲 TODO
+**Implementation Status (verified Dec 24, 2024):**
+- ✅ `CountryLayer.tsx` has hover tooltips with relay count
+- ✅ `CountryTooltip` shows country name, client count, AND relay count
+- ✅ **"View relays in country" link to Allium** — LIVE
+- ✅ **`getCountryMetricsUrl()` helper implemented** — LIVE
+- 🔲 `getASMetricsUrl()` helper not implemented (optional, low priority)
+
+#### 2.1 Create Country Link Helper — ✅ LIVE
+
+**Implemented in `routefluxmap/src/lib/config.ts`:**
 
 ```typescript
-// routefluxmap/src/lib/config.ts - ADD these functions
-
-/**
- * Build URL to country detail page on metrics site
- * @param countryCode - ISO 3166-1 alpha-2 code (e.g., 'US', 'DE')
- */
 export function getCountryMetricsUrl(countryCode: string): string {
-  const cleanCode = countryCode.toUpperCase().replace(/[^A-Z]/g, '');
-  
-  if (!/^[A-Z]{2}$/.test(cleanCode)) {
+  // Country codes must be exactly 2 alphabetic characters (ISO 3166-1 alpha-2)
+  const cleaned = countryCode.replace(COUNTRY_CODE_CLEAN_REGEX, '').toUpperCase();
+  if (cleaned.length !== 2) {
     console.warn(`Invalid country code: ${countryCode}`);
-    return config.metricsUrl;
+    return `${config.metricsUrl}/country/`;
   }
-  
-  // After Allium migration: use UPPERCASE
-  return `${config.metricsUrl}/country/${cleanCode}/`;
-}
-
-/**
- * Build URL to AS detail page on metrics site
- * @param asNumber - AS number (e.g., 'AS12345' or '12345')
- */
-export function getASMetricsUrl(asNumber: string): string {
-  const match = asNumber.match(/(\d+)/);
-  if (!match) {
-    console.warn(`Invalid AS number: ${asNumber}`);
-    return config.metricsUrl;
-  }
-  
-  return `${config.metricsUrl}/as/AS${match[1]}/`;
+  return `${config.metricsUrl}/country/${cleaned}/`;
 }
 ```
 
-**Implementation Notes:**
-- Add both functions to `src/lib/config.ts` alongside existing `getRelayMetricsUrl()`
-- Country codes use UPPERCASE after Allium migration (Section 4.1.2)
-- AS numbers already compatible (both use `AS{number}` format)
+**Note:** `getASMetricsUrl()` was not implemented (optional, low priority since RouteFluxMap doesn't currently expose AS data in tooltips).
 
-#### 2.2 Update Country Tooltip Component — 🔲 TODO
+#### 2.2 Update Country Tooltip Component — ✅ LIVE
 
-**Current `CountryTooltip` (in `CountryLayer.tsx`):**
-- Shows country name and estimated client count
-- No link to external metrics
+**Commit `7aa1b30a`:** "feat(country-tooltip): show relay count and improve link text"
 
-**Enhanced version with Allium link:**
+**Implemented features:**
+- ✅ Shows country name and estimated client count
+- ✅ Shows relay count (e.g., "1,234 relays")
+- ✅ "View relays in country" link to Allium (only shown when relays exist)
+- ✅ Uses shared `findNearestCountry()` and `getCountryRelayStats()` utilities
+
+**Live implementation in `CountryLayer.tsx`:**
 
 ```typescript
-// routefluxmap/src/components/map/CountryLayer.tsx - Enhance CountryTooltip
-
-import { getCountryMetricsUrl } from '../../lib/config';
-
-interface CountryTooltipProps {
-  countryCode: string;
-  countryName: string;
-  clientCount: number;
-  hasBounds: boolean;
-  lower: number;
-  upper: number;
-  x: number;
-  y: number;
-}
-
-export const CountryTooltip = forwardRef<HTMLDivElement, CountryTooltipProps>(
-  ({ countryCode, countryName, clientCount, hasBounds, lower, upper, x, y }, ref) => {
-    const metricsUrl = getCountryMetricsUrl(countryCode);
-    
-    return (
-      <div
-        ref={ref}
-        className="absolute z-20 bg-black/90 text-white text-sm px-3 py-2 rounded-lg 
-                   shadow-lg border border-purple-500/30 pointer-events-auto"
-        style={{ left: x + TOOLTIP_OFFSET, top: y + TOOLTIP_OFFSET }}
-      >
-        <div className="font-medium text-purple-400">{countryName}</div>
-        <div className="text-gray-400">
-          ~{formatCompact(clientCount)} Tor clients
-        </div>
-        {hasBounds && (
-          <div className="text-gray-500 text-xs">
-            Est. range: {formatRange(lower, upper)}
-          </div>
-        )}
-        {/* NEW: Link to Allium country page */}
-        <a
-          href={metricsUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-xs text-tor-green hover:underline mt-1.5 pt-1.5 
-                     border-t border-white/10 block"
-        >
-          View relay details →
-        </a>
-      </div>
-    );
-  }
-);
+{/* Link to metrics site - shown only when country has relays */}
+<a
+  className="country-link text-tor-green hover:text-tor-green-dim text-xs mt-1 
+             inline-flex items-center gap-1 hover:underline transition-colors"
+  href=""
+  target="_blank"
+  rel="noopener noreferrer"
+  aria-label="View relays in country on metrics site"
+  style={{ display: 'none' }}  // Dynamically shown when relays > 0
+>
+  View relays in country
+  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={EXTERNAL_LINK_PATH} />
+  </svg>
+</a>
 ```
 
-**Key Changes:**
-1. Import `getCountryMetricsUrl` from config
-2. Add `pointer-events-auto` to make tooltip clickable
-3. Add link with external icon to Allium country page
-4. Style link to match existing UI (tor-green color)
-```
+**Optimizations added:**
+- `findNearestCountry()` in `geo.ts` for centroid matching
+- `getCountryRelayStats()` for aggregating relay counts by country
+- Link only shown for countries that have relays (metrics site only has pages for countries with relays)
 
 ---
 
@@ -1512,13 +1459,13 @@ RouteFluxMap could be packaged as a `<tor-map>` web component for embedding anyw
   │  (Python Static Gen)    │         │      (Astro/React/WebGL)            │
   ├─────────────────────────┤         ├─────────────────────────────────────┤
   │                         │         │                                     │
-  │  /relay/{fingerprint}/  │◄────────│  RelayPopup "View Metrics" link     │
-  │  /country/{cc}/         │◄────────│  CountryTooltip "View details" link │
-  │  /as/{asn}/             │◄────────│  (future) AS detail links           │
+  │  /relay/{fingerprint}/  │◄────────│  RelayPopup "View on Metrics" ✅    │
+  │  /country/{CC}/         │◄────────│  CountryTooltip "View relays" ✅    │
+  │  /as/{asn}/             │◄────────│  (optional) AS detail links         │
   │  /contact/{hash}/       │         │                                     │
   │                         │         │                                     │
-  │  Templates include:     │─────────►  /#CC={cc} (country deep link)      │
-  │  "View on Map" links    │─────────►  /#ML={lng},{lat},{zoom} (location) │
+  │  Templates include:     │─────────►  /#CC={CC} (country deep link) ✅   │
+  │  "View on Map" links    │─────────►  /#relay={FP} (relay link) ✅       │
   │                         │─────────►  /#date={YYYY-MM-DD} (historical)   │
   │                         │         │                                     │
   └────────────┬────────────┘         └──────────────────┬──────────────────┘
@@ -1762,14 +1709,14 @@ This integration transforms both projects:
 | Normalize country codes at ingestion | Allium | ✅ LIVE | Dec 24 |
 | Deploy Allium with UPPERCASE URLs | Allium | ✅ LIVE | Dec 24 |
 
-### Phase 2: Country Deep Links from RouteFluxMap — 🔲 NOT STARTED
+### Phase 2: Country Deep Links from RouteFluxMap — ✅ LIVE
 
-| Task | Owner | Status | Notes |
-|------|-------|--------|-------|
-| Add `getCountryMetricsUrl()` to `config.ts` | RouteFluxMap | 🔲 TODO | Section 2.1 |
-| Add `getASMetricsUrl()` to `config.ts` | RouteFluxMap | 🔲 TODO | Section 2.1 |
-| Update `CountryTooltip` with metrics link | RouteFluxMap | 🔲 TODO | Section 2.2 |
-| Test country links work | Both | 🔲 TODO | Hover country → click link |
+| Task | Owner | Status | Verified |
+|------|-------|--------|----------|
+| Add `getCountryMetricsUrl()` to `config.ts` | RouteFluxMap | ✅ LIVE | Dec 24 |
+| Add `getASMetricsUrl()` to `config.ts` | RouteFluxMap | 🔲 Skipped | Optional |
+| Update `CountryTooltip` with metrics link | RouteFluxMap | ✅ LIVE | Dec 24 |
+| Add relay count to tooltip | RouteFluxMap | ✅ LIVE | Dec 24 |
 
 ### Phase 3: RouteFluxMap Links from Allium — ✅ LIVE
 
@@ -1815,18 +1762,17 @@ Allium → RouteFluxMap:
 
 RouteFluxMap → Allium:
   Click relay → "View on Metrics" → metrics.1aeo.com/relay/{FP}/ ✅
-  Hover country → (no link yet) 🔲
+  Hover country → "View relays in country" → metrics.1aeo.com/country/{CC}/ ✅
 ```
 
 ### What's Remaining 🔲
 
-**Phase 2 (RouteFluxMap → Allium country links):**
-- `getCountryMetricsUrl()` helper in RouteFluxMap config.ts
-- `getASMetricsUrl()` helper in RouteFluxMap config.ts
-- CountryTooltip enhancement with "View country details" link to Allium
+**All core integration phases (1-3) are COMPLETE and LIVE.**
 
-**Phase 4+ (Optional):**
+**Phase 4+ (Optional future enhancements):**
+- `getASMetricsUrl()` helper (low priority - AS data not in tooltips)
 - Shared data exports for rarity visualization
+- AROI operator data visualization
 
 ---
 
