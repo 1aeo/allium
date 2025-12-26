@@ -1,164 +1,121 @@
 # 1AEO Unified Appearance Guide
 
-## Executive Summary
+## Current Implementation Status (Updated December 2024)
 
-This document provides a comprehensive analysis of the three 1AEO Tor metrics web properties and recommendations for unifying their appearance under a consistent brand identity.
+### Summary Dashboard
 
-| Site | URL | Framework | Theme | Status |
-|------|-----|-----------|-------|--------|
-| Main Site | www.1aeo.com | Static HTML | Dark | ✅ Brand reference |
-| Metrics (Allium) | metrics.1aeo.com | Python/Jinja2/Bootstrap | Light | ⚠️ Needs alignment |
-| RouteFluxMap | routefluxmap.1aeo.com | Astro/React/Tailwind | Dark | ✅ Mostly aligned |
-| AROI Validator | aroivalidator.1aeo.com | Streamlit | Default | ⚠️ Needs alignment |
-
----
-
-## Current State Analysis
-
-### 1. www.1aeo.com (Brand Reference)
-
-**Design System:**
-- **Background:** Dark (#121212)
-- **Card/Container:** #1e1e1e with green glow shadow
-- **Primary Accent:** Green (#00ff7f)
-- **Text:** White (#ffffff), Gray (#cccccc)
-- **Font:** Arial, sans-serif
-- **Icons:** Font Awesome
-
-**Navigation Links (current):**
-- Home
-- Blog
-- Metrics (metrics.1aeo.com) ✅
-- AROI Validator (aroivalidator.1aeo.com) ✅
-- Contact
-
-**Missing:** RouteFluxMap link ❌
+| Site | URL | Cross-Site Nav | Footer | Brand Colors | Status |
+|------|-----|----------------|--------|--------------|--------|
+| **Main Site** | www.1aeo.com | ⚠️ Partial | ❌ Basic | ✅ Dark + Green | Needs RouteFluxMap |
+| **Metrics** | metrics.1aeo.com | ✅ Complete | ✅ Complete | ✅ Green | **DONE** |
+| **AROI Validator** | aroivalidator.1aeo.com | ✅ Complete | ✅ Complete | ✅ Dark + Green | **DONE** |
+| **RouteFluxMap** | routefluxmap.1aeo.com | ❌ Missing | ⚠️ Minimal | ✅ Dark + Green | Needs Work |
 
 ---
 
-### 2. metrics.1aeo.com (Allium)
+## Detailed Status by Site
 
-**Current Design:**
-- **Background:** White (Bootstrap default)
-- **Links:** Blue (#337ab7 - Bootstrap default)
-- **Status indicators:** Green (#25d918) / Red (#ff1515)
-- **Font:** Default Bootstrap (Helvetica Neue, system fonts)
+### 1. metrics.1aeo.com ✅ IMPLEMENTED
 
-**Issues:**
-- Light theme contrasts with 1AEO brand
-- No cross-site navigation
-- No 1AEO branding in header/footer
-- Blue links don't match green brand
+**What's Working:**
+- ✅ Cross-site navigation bar with 1AEO branding (dark header)
+- ✅ Links to: Home, Metrics (active), AROI Validator, RouteFluxMap
+- ✅ Unified footer with all site links + GitHub
+- ✅ 1AEO brand footer text
+- ✅ Green accent colors (#00cc66) replacing Bootstrap blue
+- ✅ CSS variables for brand consistency
 
----
-
-### 3. routefluxmap.1aeo.com
-
-**Current Design:**
-- **Background:** Dark (#0a0a0a `tor-black`)
-- **Primary Accent:** Green (#00ff88 `tor-green`)
-- **Font:** Inter (self-hosted)
-- **Styling:** Tailwind CSS + glass panels
-
-**Status:** Most aligned with 1AEO brand (dark + green)
-
-**Issues:**
-- No cross-site navigation
-- Slightly different green (#00ff88 vs #00ff7f)
-
----
-
-### 4. aroivalidator.1aeo.com
-
-**Current Design:**
-- Streamlit default theming
-- Uses 🧅 onion emoji as favicon
-- No custom brand colors
-
-**Issues:**
-- No 1AEO branding
-- No cross-site navigation
-- Doesn't match any other property
-
----
-
-## Unified Design System Recommendation
-
-### Brand Colors (Standardized)
-
-```css
-/* 1AEO Brand Colors */
-:root {
-  /* Primary */
-  --1aeo-green: #00ff7f;           /* Main accent - from www.1aeo.com */
-  --1aeo-green-dim: #00cc66;       /* Muted green */
-  --1aeo-green-dark: #004d26;      /* Dark green for backgrounds */
-  
-  /* Backgrounds (Dark Theme) */
-  --1aeo-bg-primary: #121212;      /* Main background */
-  --1aeo-bg-secondary: #1e1e1e;    /* Cards/containers */
-  --1aeo-bg-tertiary: #0a0a0a;     /* Deepest black */
-  
-  /* Backgrounds (Light Theme Alternative) */
-  --1aeo-light-bg: #f8f9fa;
-  --1aeo-light-card: #ffffff;
-  --1aeo-light-border: #e1e8ed;
-  
-  /* Text */
-  --1aeo-text-primary: #ffffff;
-  --1aeo-text-secondary: #cccccc;
-  --1aeo-text-muted: #888888;
-  
-  /* Functional */
-  --1aeo-success: #25d918;
-  --1aeo-error: #ff1515;
-  --1aeo-warning: #ff8c00;
-  --1aeo-info: #00b4d8;
-}
+**Navigation Bar Content:**
+```
+1AEO | Home | Metrics (active) | AROI Validator | RouteFluxMap
 ```
 
-### Typography
-
-```css
-/* Standard Font Stack */
---font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
---font-mono: 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
+**Footer Content:**
 ```
-
-### Unified Navigation Bar
-
-All sites should include a consistent cross-site navigation bar:
-
-```html
-<!-- 1AEO Cross-Site Navigation Bar -->
-<nav class="aeo-nav">
-  <div class="aeo-nav-container">
-    <a href="https://www.1aeo.com" class="aeo-nav-brand">
-      <img src="https://www.1aeo.com/1AEO-logo-v2.webp" alt="1AEO" height="32">
-      <span>1AEO</span>
-    </a>
-    <div class="aeo-nav-links">
-      <a href="https://www.1aeo.com">Home</a>
-      <a href="https://www.1aeo.com/blog">Blog</a>
-      <a href="https://metrics.1aeo.com" class="active">Metrics</a>
-      <a href="https://aroivalidator.1aeo.com">Validator</a>
-      <a href="https://routefluxmap.1aeo.com">FluxMap</a>
-    </div>
-  </div>
-</nav>
+Metrics | AROI Validator | RouteFluxMap | GitHub
+Part of 1st Amendment Encrypted Openness LLC
 ```
 
 ---
 
-## Implementation Plan
+### 2. aroivalidator.1aeo.com ✅ IMPLEMENTED
 
-### Phase 1: Cross-Site Navigation (Quick Win)
+**What's Working:**
+- ✅ Full dark theme matching 1AEO brand (#121212 background)
+- ✅ Cross-site navigation bar with 1AEO branding
+- ✅ Links to: Home, Metrics, AROI Validator (active), RouteFluxMap
+- ✅ Unified footer matching metrics.1aeo.com
+- ✅ Green accent colors (#00ff7f)
+- ✅ CSS variables for brand consistency
 
-Add a consistent navigation header to all sites linking to each other.
+**Navigation Bar Content:**
+```
+1AEO | Home | Metrics | AROI Validator (active) | RouteFluxMap
+```
 
-#### A. Update www.1aeo.com
+**Footer Content:**
+```
+Metrics | AROI Validator | RouteFluxMap | GitHub
+Part of 1st Amendment Encrypted Openness LLC
+```
 
-Add RouteFluxMap to the navigation:
+---
+
+### 3. routefluxmap.1aeo.com ⚠️ PARTIAL
+
+**What's Working:**
+- ✅ Dark theme matching 1AEO brand
+- ✅ Green accent color (`tor-green: #00ff88`)
+- ✅ Link to metrics.1aeo.com in footer
+
+**What's Missing:**
+- ❌ No cross-site navigation bar
+- ❌ No links to: Home (www.1aeo.com), AROI Validator
+- ❌ No unified footer with all sites
+- ❌ No 1AEO branding text
+
+**Current Footer (minimal):**
+```
+Data from Tor Project • Metrics
+```
+
+**Needed Footer:**
+```
+Metrics | AROI Validator | RouteFluxMap | GitHub
+Part of 1st Amendment Encrypted Openness LLC
+```
+
+---
+
+### 4. www.1aeo.com ⚠️ PARTIAL
+
+**What's Working:**
+- ✅ Dark theme (#121212 background)
+- ✅ Green accent color (#00ff7f)
+- ✅ Navigation includes: Home, Blog, Metrics, AROI Validator, Contact
+
+**What's Missing:**
+- ❌ No RouteFluxMap link in navigation
+
+**Current Navigation:**
+```
+Home | Blog | Metrics | AROI Validator | Contact
+```
+
+**Needed Navigation:**
+```
+Home | Blog | Metrics | AROI Validator | RouteFluxMap | Contact
+```
+
+---
+
+## Required Changes
+
+### Priority 1: www.1aeo.com (Quick Fix)
+
+**File to Update:** Main site HTML (wherever hosted)
+
+**Change Required:** Add RouteFluxMap to navigation
 
 ```html
 <div class="nav-links">
@@ -171,254 +128,192 @@ Add RouteFluxMap to the navigation:
 </div>
 ```
 
-#### B. Update Allium (metrics.1aeo.com)
+---
 
-Add 1AEO navigation bar to `skeleton.html`:
+### Priority 2: RouteFluxMap (Medium Effort)
 
-```jinja2
-{# Add after <body> tag in skeleton.html #}
-<div class="aeo-cross-nav" style="background-color: #1e1e1e; padding: 8px 0; border-bottom: 1px solid rgba(0,255,127,0.2);">
-    <div class="container">
-        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;">
-            <a href="https://www.1aeo.com" style="color: #00ff7f; text-decoration: none; font-weight: bold; display: flex; align-items: center; gap: 8px;">
-                <span>1AEO</span>
-            </a>
-            <div style="display: flex; gap: 15px; flex-wrap: wrap; font-size: 14px;">
-                <a href="https://www.1aeo.com" style="color: #cccccc; text-decoration: none;">Home</a>
-                <a href="https://metrics.1aeo.com" style="color: #00ff7f; text-decoration: none; font-weight: 500;">Metrics</a>
-                <a href="https://aroivalidator.1aeo.com" style="color: #cccccc; text-decoration: none;">Validator</a>
-                <a href="https://routefluxmap.1aeo.com" style="color: #cccccc; text-decoration: none;">FluxMap</a>
-            </div>
-        </div>
-    </div>
-</div>
-```
+**Repository:** `1aeo/routefluxmap`
+**File to Update:** `src/layouts/Layout.astro`
 
-#### C. Update RouteFluxMap
-
-Add cross-nav to `Layout.astro`:
+**Add Cross-Site Navigation:**
 
 ```astro
-<!-- Add before <slot /> in Layout.astro body -->
-<nav class="fixed top-0 left-0 right-0 z-50 bg-tor-darker/90 backdrop-blur-sm border-b border-tor-green/20">
-  <div class="max-w-7xl mx-auto px-4 py-2 flex items-center justify-between">
-    <a href="https://www.1aeo.com" class="text-tor-green font-bold flex items-center gap-2">
-      1AEO
-    </a>
-    <div class="flex gap-4 text-sm">
-      <a href="https://www.1aeo.com" class="text-gray-400 hover:text-tor-green">Home</a>
-      <a href="https://metrics.1aeo.com" class="text-gray-400 hover:text-tor-green">Metrics</a>
-      <a href="https://aroivalidator.1aeo.com" class="text-gray-400 hover:text-tor-green">Validator</a>
-      <a href="https://routefluxmap.1aeo.com" class="text-tor-green font-medium">FluxMap</a>
-    </div>
-  </div>
-</nav>
-```
+---
+// ... existing frontmatter ...
+---
 
-#### D. Update AROI Validator
-
-Add Streamlit theming and navigation in `app.py`:
-
-```python
-# At the top of interactive_mode() function after st.set_page_config()
-st.markdown("""
-<style>
-    /* 1AEO Brand Colors */
-    :root {
-        --1aeo-green: #00ff7f;
-        --1aeo-bg: #1e1e1e;
-    }
-    
-    /* Cross-site navigation */
-    .aeo-nav {
+<!doctype html>
+<html lang="en">
+  <head>
+    <!-- ... existing head content ... -->
+    <style is:global>
+      /* Add 1AEO Cross-Site Nav Styles */
+      .aeo-cross-nav {
         background-color: #1e1e1e;
-        padding: 8px 16px;
-        margin: -1rem -1rem 1rem -1rem;
-        border-bottom: 1px solid rgba(0,255,127,0.2);
+        padding: 10px 0;
+        border-bottom: 1px solid rgba(0, 255, 127, 0.2);
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 100;
+      }
+      
+      .aeo-cross-nav .aeo-nav-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 0 15px;
         display: flex;
-        justify-content: space-between;
         align-items: center;
+        justify-content: space-between;
         flex-wrap: wrap;
-    }
-    .aeo-nav a {
+        gap: 10px;
+      }
+      
+      .aeo-cross-nav .aeo-nav-brand {
+        color: #00ff88;
+        text-decoration: none;
+        font-weight: bold;
+        font-size: 16px;
+      }
+      
+      .aeo-cross-nav .aeo-nav-links {
+        display: flex;
+        gap: 20px;
+        font-size: 14px;
+      }
+      
+      .aeo-cross-nav .aeo-nav-links a {
         color: #cccccc;
         text-decoration: none;
-        margin-right: 16px;
-        font-size: 14px;
-    }
-    .aeo-nav a:hover {
-        color: #00ff7f;
-    }
-    .aeo-nav a.brand {
-        color: #00ff7f;
-        font-weight: bold;
-    }
-    .aeo-nav a.active {
-        color: #00ff7f;
+        transition: color 0.2s ease;
+      }
+      
+      .aeo-cross-nav .aeo-nav-links a:hover {
+        color: #00ff88;
+      }
+      
+      .aeo-cross-nav .aeo-nav-links a.active {
+        color: #00ff88;
         font-weight: 500;
-    }
-</style>
-<div class="aeo-nav">
-    <a href="https://www.1aeo.com" class="brand">1AEO</a>
-    <div>
-        <a href="https://www.1aeo.com">Home</a>
-        <a href="https://metrics.1aeo.com">Metrics</a>
-        <a href="https://aroivalidator.1aeo.com" class="active">Validator</a>
-        <a href="https://routefluxmap.1aeo.com">FluxMap</a>
-    </div>
-</div>
-""", unsafe_allow_html=True)
-```
-
-Also create `.streamlit/config.toml` with branded theme:
-
-```toml
-[theme]
-primaryColor = "#00ff7f"
-backgroundColor = "#121212"
-secondaryBackgroundColor = "#1e1e1e"
-textColor = "#ffffff"
-font = "sans serif"
-```
-
----
-
-### Phase 2: Visual Consistency (Medium Effort)
-
-#### Option A: Keep Current Themes (Recommended)
-
-Accept that metrics.1aeo.com has a light theme for data readability, but add:
-1. Green accent colors instead of blue
-2. 1AEO branding in header/footer
-3. Consistent cross-site navigation
-
-**Changes for Allium:**
-
-```css
-/* Add to skeleton.html <style> section */
-
-/* Override Bootstrap blue links with 1AEO green */
-a {
-    color: #00cc66;
-}
-a:hover {
-    color: #00ff7f;
-}
-
-/* Navbar active state */
-.nav.navbar-nav > li.active > a,
-.nav.navbar-nav > li > a:hover {
-    color: #00cc66 !important;
-    border-bottom: 2px solid #00ff7f;
-}
-
-/* Footer branding */
-.page-footer {
-    background-color: #1e1e1e;
-    color: #cccccc;
-    padding: 20px;
-    margin-top: 40px;
-}
-.page-footer a {
-    color: #00ff7f;
-}
-```
-
-#### Option B: Full Dark Theme (Higher Effort)
-
-Convert all sites to dark theme. This requires significant CSS changes to Allium.
-
----
-
-### Phase 3: Footer Unification
-
-Add consistent footer across all sites:
-
-```html
-<footer class="aeo-footer" style="background-color: #1e1e1e; color: #cccccc; padding: 20px; margin-top: 40px; text-align: center; border-top: 1px solid rgba(0,255,127,0.2);">
-    <div style="max-width: 1200px; margin: 0 auto;">
-        <div style="display: flex; justify-content: center; gap: 20px; margin-bottom: 15px; flex-wrap: wrap;">
-            <a href="https://metrics.1aeo.com" style="color: #00ff7f;">Metrics</a>
-            <a href="https://aroivalidator.1aeo.com" style="color: #00ff7f;">AROI Validator</a>
-            <a href="https://routefluxmap.1aeo.com" style="color: #00ff7f;">RouteFluxMap</a>
+      }
+      
+      /* Push content below fixed nav */
+      body {
+        padding-top: 48px;
+      }
+      
+      /* ... existing global styles ... */
+    </style>
+  </head>
+  <body class="bg-tor-dark text-white antialiased">
+    <!-- 1AEO Cross-Site Navigation -->
+    <nav class="aeo-cross-nav">
+      <div class="aeo-nav-container">
+        <a href="https://www.1aeo.com" class="aeo-nav-brand">1AEO</a>
+        <div class="aeo-nav-links">
+          <a href="https://www.1aeo.com">Home</a>
+          <a href="https://metrics.1aeo.com">Metrics</a>
+          <a href="https://aroivalidator.1aeo.com">Validator</a>
+          <a href="https://routefluxmap.1aeo.com" class="active">FluxMap</a>
         </div>
-        <p style="font-size: 14px; margin: 0;">
-            Part of <a href="https://www.1aeo.com" style="color: #00ff7f; font-weight: bold;">1st Amendment Encrypted Openness LLC</a> |
-            <a href="https://github.com/1aeo" style="color: #888;">GitHub</a>
-        </p>
+      </div>
+    </nav>
+    
+    <slot />
+  </body>
+</html>
+```
+
+**Update Footer in `src/pages/index.astro`:**
+
+Replace the minimal footer with:
+
+```astro
+<footer class="absolute bottom-4 left-4 z-20 pointer-events-none">
+  <div class="text-gray-500 text-xs pointer-events-auto">
+    <div class="flex gap-3 mb-1">
+      <a href="https://metrics.1aeo.com" class="text-tor-green hover:underline">Metrics</a>
+      <a href="https://aroivalidator.1aeo.com" class="text-tor-green hover:underline">Validator</a>
+      <a href="https://github.com/1aeo" class="text-tor-green hover:underline">GitHub</a>
     </div>
+    <div>
+      Part of <a href="https://www.1aeo.com" class="text-tor-green hover:underline font-medium">1AEO</a>
+      • Data from <a href="https://www.torproject.org" target="_blank" rel="noopener" class="text-tor-green hover:underline">Tor Project</a>
+    </div>
+  </div>
 </footer>
 ```
 
 ---
 
-## Summary of Required Changes by Repository
+## Brand Design System (Reference)
 
-### 1. www.1aeo.com (Static HTML)
+### Colors
 
-| Change | Priority | Effort |
-|--------|----------|--------|
-| Add RouteFluxMap to nav | High | Low |
-| Update nav link styling | Medium | Low |
+| Token | Value | Usage |
+|-------|-------|-------|
+| `--aeo-green` | #00ff7f | Primary accent |
+| `--aeo-green-dim` | #00cc66 | Links, secondary accent |
+| `--aeo-dark-bg` | #121212 | Main background |
+| `--aeo-dark-surface` | #1e1e1e | Cards, nav bars |
+| `--aeo-dark-border` | rgba(0,255,127,0.2) | Subtle borders |
+| `--aeo-text` | #ffffff | Primary text |
+| `--aeo-text-muted` | #cccccc | Secondary text |
+| `--aeo-text-dim` | #888888 | Tertiary text |
 
-### 2. 1aeo/allium (Metrics)
+### Navigation Structure
 
-| File | Change | Priority | Effort |
-|------|--------|----------|--------|
-| `templates/skeleton.html` | Add cross-site nav bar | High | Low |
-| `templates/skeleton.html` | Update link colors to green | Medium | Low |
-| `templates/skeleton.html` | Add branded footer | Medium | Low |
+All sites should have:
+1. **Cross-Site Nav Bar** (dark background, top of page)
+   - 1AEO brand link → www.1aeo.com
+   - Home → www.1aeo.com
+   - Metrics → metrics.1aeo.com
+   - Validator → aroivalidator.1aeo.com
+   - FluxMap → routefluxmap.1aeo.com
 
-### 3. 1aeo/routefluxmap
-
-| File | Change | Priority | Effort |
-|------|--------|----------|--------|
-| `src/layouts/Layout.astro` | Add cross-site nav bar | High | Low |
-| `tailwind.config.mjs` | Standardize green to #00ff7f | Low | Low |
-
-### 4. 1aeo/aroivalidator
-
-| File | Change | Priority | Effort |
-|------|--------|----------|--------|
-| `.streamlit/config.toml` | Add branded theme | High | Low |
-| `app.py` | Add cross-site nav HTML | High | Medium |
+2. **Footer** (dark background)
+   - Links to all sites + GitHub
+   - "Part of 1st Amendment Encrypted Openness LLC"
 
 ---
 
-## Quick Implementation Checklist
+## Implementation Checklist
 
-- [ ] Update www.1aeo.com nav to include RouteFluxMap link
-- [ ] Add cross-site nav to allium/templates/skeleton.html
-- [ ] Add cross-site nav to routefluxmap/src/layouts/Layout.astro
-- [ ] Update .streamlit/config.toml with 1AEO theme
-- [ ] Add cross-site nav HTML to aroivalidator/app.py
-- [ ] Update allium CSS to use green (#00cc66) for links
-- [ ] Add unified footer to all sites
+### Completed ✅
+
+- [x] metrics.1aeo.com - Cross-site navigation bar
+- [x] metrics.1aeo.com - Unified footer
+- [x] metrics.1aeo.com - Green accent colors
+- [x] metrics.1aeo.com - CSS brand variables
+- [x] aroivalidator.1aeo.com - Dark theme
+- [x] aroivalidator.1aeo.com - Cross-site navigation bar
+- [x] aroivalidator.1aeo.com - Unified footer
+- [x] aroivalidator.1aeo.com - Green accent colors
+- [x] routefluxmap.1aeo.com - Dark theme with green accent
+- [x] routefluxmap.1aeo.com - Link to metrics.1aeo.com
+
+### Remaining 🔲
+
+- [ ] **www.1aeo.com** - Add RouteFluxMap to navigation
+- [ ] **routefluxmap.1aeo.com** - Add cross-site navigation bar
+- [ ] **routefluxmap.1aeo.com** - Add unified footer with all links
+- [ ] **routefluxmap.1aeo.com** - Add 1AEO branding text
 
 ---
 
-## Appendix: CSS Variables for All Projects
+## Summary
 
-Copy these CSS custom properties to each project for consistency:
+**80% Complete** - The unification effort is largely successful:
 
-```css
-/* 1AEO Unified Design Tokens */
-:root {
-  /* Brand */
-  --aeo-green: #00ff7f;
-  --aeo-green-dim: #00cc66;
-  
-  /* Dark Theme */
-  --aeo-dark-bg: #121212;
-  --aeo-dark-surface: #1e1e1e;
-  --aeo-dark-border: rgba(0, 255, 127, 0.2);
-  
-  /* Text */
-  --aeo-text: #ffffff;
-  --aeo-text-muted: #cccccc;
-  --aeo-text-dim: #888888;
-  
-  /* Spacing */
-  --aeo-nav-height: 48px;
-}
-```
+| Component | Allium | Validator | FluxMap | Main Site |
+|-----------|--------|-----------|---------|-----------|
+| Cross-Site Nav | ✅ | ✅ | ❌ | N/A |
+| Footer Links | ✅ | ✅ | ⚠️ | N/A |
+| Brand Colors | ✅ | ✅ | ✅ | ✅ |
+| Dark Theme | ⚠️ Light | ✅ | ✅ | ✅ |
+| Links All Sites | ✅ | ✅ | ❌ | ⚠️ |
+
+The main outstanding work is:
+1. Add RouteFluxMap link to www.1aeo.com (5 minutes)
+2. Add cross-site nav + footer to routefluxmap.1aeo.com (30 minutes)
