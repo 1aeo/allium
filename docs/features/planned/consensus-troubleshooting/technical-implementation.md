@@ -6,6 +6,45 @@
 
 ---
 
+## ⏱️ Data Update Frequencies Reference
+
+### Consensus Cycle Timing
+
+The Tor network operates on a **1-hour consensus cycle**:
+
+```
+Hour XX:00 UTC
+├── XX:00-XX:05  Authorities publish votes
+├── XX:05-XX:10  Consensus computed and published
+├── XX:10-XX:40  CollecTor collects and publishes files
+├── XX:36-XX:40  Bandwidth files published (by those that measure)
+└── XX:59        Cycle ends, next consensus begins
+
+Valid-after:  XX:00 UTC
+Fresh-until:  XX+1:00 UTC  (1 hour)
+Valid-until:  XX+3:00 UTC  (3 hours with warnings)
+```
+
+### Data Freshness by Source
+
+| Source | Freshness | Best For |
+|--------|-----------|----------|
+| **Direct Authority** | Real-time (seconds) | Testing authority reachability |
+| **CollecTor** | 5-40 min delay | Production use, bulk data |
+| **Consensus Health** | ~15 min delay | Formatted thresholds, quick checks |
+| **Onionoo** | ~30-60 min delay | Relay details, uptime |
+
+### Recommended Refresh Intervals for Allium
+
+| Data Type | Refresh Interval | Rationale |
+|-----------|------------------|-----------|
+| Authority Votes | 1 hour | Matches consensus cycle |
+| Bandwidth Files | 1 hour | Matches publication frequency |
+| Flag Thresholds | 1 hour | Derived from votes |
+| Consensus | 1 hour | Matches validity period |
+
+---
+
 ## Architecture Overview
 
 ```
@@ -41,16 +80,78 @@
 
 ---
 
-## Directory Authority Configuration
+## Data Source Configuration
 
-### Authority Endpoints
+### Primary Source: Tor Project CollecTor (Recommended)
+
+```python
+# lib/consensus/collector.py
+
+"""
+CollecTor API configuration for fetching consensus data.
+
+CollecTor is the Tor Project's data aggregation service that collects
+and archives all directory authority data in one place.
+
+Benefits:
+- Single endpoint for all data
+- No load on individual authorities
+- Historical data available
+- Reliable Tor Project infrastructure
+"""
+
+COLLECTOR_CONFIG = {
+    'base_url': 'https://collector.torproject.org',
+    'recent_path': '/recent/relay-descriptors',
+    'archive_path': '/archive/relay-descriptors',
+    
+    # Data endpoints
+    'endpoints': {
+        'votes': '/votes/',           # All authority votes
+        'consensuses': '/consensuses/', # Merged consensus documents
+        'bandwidths': '/bandwidths/',   # Bandwidth authority files
+        'server_descriptors': '/server-descriptors/',
+        'extra_infos': '/extra-infos/',
+    },
+    
+    # Index endpoint for listing available files
+    'index_json': '/index/index.json',
+    
+    # Timing expectations
+    'vote_delay_minutes': 35,      # Votes available ~35 min after XX:00
+    'consensus_delay_minutes': 40, # Consensus available ~40 min after XX:00
+    'bandwidth_delay_minutes': 45, # BW files available ~45 min after XX:00
+    
+    # Retention in /recent/
+    'recent_retention_hours': 72,  # Files kept for 72 hours
+}
+
+def get_latest_votes_url() -> str:
+    """Get URL to fetch latest vote files."""
+    return f"{COLLECTOR_CONFIG['base_url']}{COLLECTOR_CONFIG['recent_path']}/votes/"
+
+def get_latest_consensus_url() -> str:
+    """Get URL to fetch latest consensus."""
+    return f"{COLLECTOR_CONFIG['base_url']}{COLLECTOR_CONFIG['recent_path']}/consensuses/"
+
+def get_latest_bandwidth_url() -> str:
+    """Get URL to fetch latest bandwidth files."""
+    return f"{COLLECTOR_CONFIG['base_url']}{COLLECTOR_CONFIG['recent_path']}/bandwidths/"
+```
+
+### Alternative Source: Direct Authority Access
+
+Use direct authority access only when:
+- CollecTor is unavailable
+- Need data within minutes of publication
+- Testing specific authority reachability
 
 ```python
 # lib/consensus/authorities.py
 
 """
-Directory Authority configuration for consensus troubleshooting.
-Data sourced from consensus-health.torproject.org
+Directory Authority configuration for direct access.
+Use CollecTor (above) for production; use this for fallback/testing.
 """
 
 DIRECTORY_AUTHORITIES = {
@@ -155,6 +256,28 @@ DIRECTORY_AUTHORITIES = {
     }
 }
 
+# Authority fingerprint to name mapping (for parsing CollecTor filenames)
+AUTHORITY_FINGERPRINTS = {
+    '9695DFC35FFEB861329B9F1AB04C46397020CE31': 'moria1',
+    '847B1F850344D7876491A54892F904934E4EB85D': 'tor26',
+    '7EA6EAD6FD83083C538F44038BBFA077587DD755': 'dizum',
+    'F2044413DAC2E02E3D6BCF4735A19BCA1DE97281': 'gabelmoo',
+    '7BE683E65D48141321C5ED92F075C55364AC7123': 'dannenberg',
+    'BD6A829255CB08E66FBE7D3748363586E46B3810': 'maatuska',
+    '23D15D965BC35114467363C165C4F724B64B4F66': 'longclaw',
+    '27102BC123E7AF1D4741AE047E160C91ADC76B21': 'bastet',
+    'CF6D0AAFB385BE71B8E111FC5CFF4B47923733BC': 'faravahar',
+}
+
+# Bandwidth authorities (7 of 9 run sbws bandwidth scanners)
+BANDWIDTH_AUTHORITIES = [
+    'moria1', 'tor26', 'gabelmoo', 'maatuska', 
+    'longclaw', 'bastet', 'faravahar'
+]
+
+# Non-bandwidth authorities (do not measure relay bandwidth)
+NON_BANDWIDTH_AUTHORITIES = ['dizum', 'dannenberg']
+
 def get_vote_url(authority_name: str) -> str:
     """Get the URL to fetch an authority's current vote."""
     auth = DIRECTORY_AUTHORITIES.get(authority_name)
@@ -180,6 +303,107 @@ def get_bandwidth_authorities() -> list:
 ---
 
 ## Vote Parser Implementation
+
+### CollecTor-Based Vote Fetcher (Recommended)
+
+```python
+# lib/consensus/collector_fetcher.py
+
+"""
+Fetch and parse votes from CollecTor (centralized Tor Project archive).
+This is the recommended approach - single source, no authority load.
+"""
+
+import re
+import urllib.request
+from typing import Dict, List, Optional
+from datetime import datetime
+import logging
+
+from .collector import COLLECTOR_CONFIG, get_latest_votes_url
+from .authorities import AUTHORITY_FINGERPRINTS
+
+logger = logging.getLogger(__name__)
+
+
+class CollectorVoteFetcher:
+    """Fetch authority votes from CollecTor."""
+    
+    def __init__(self, cache_manager=None):
+        self.cache_manager = cache_manager
+        self.base_url = f"{COLLECTOR_CONFIG['base_url']}{COLLECTOR_CONFIG['recent_path']}"
+    
+    def fetch_latest_votes(self, timeout: int = 60) -> Dict[str, dict]:
+        """
+        Fetch all authority votes for the most recent consensus period.
+        
+        Returns:
+            Dict mapping authority names to parsed vote data
+        """
+        # Step 1: Get directory listing of vote files
+        votes_url = f"{self.base_url}/votes/"
+        index_html = self._fetch_url(votes_url, timeout)
+        
+        # Step 2: Parse filenames to find latest votes
+        latest_votes = self._find_latest_vote_files(index_html)
+        logger.info(f"Found {len(latest_votes)} vote files for latest consensus")
+        
+        # Step 3: Fetch and parse each vote
+        votes = {}
+        for filename, auth_fingerprint in latest_votes.items():
+            auth_name = AUTHORITY_FINGERPRINTS.get(auth_fingerprint, auth_fingerprint[:8])
+            try:
+                vote_url = f"{votes_url}{filename}"
+                vote_text = self._fetch_url(vote_url, timeout)
+                votes[auth_name] = self._parse_vote(vote_text, auth_name)
+                logger.info(f"Parsed vote from {auth_name}")
+            except Exception as e:
+                logger.warning(f"Failed to fetch vote from {auth_name}: {e}")
+                votes[auth_name] = {'error': str(e), 'relays': {}}
+        
+        return votes
+    
+    def _find_latest_vote_files(self, index_html: str) -> Dict[str, str]:
+        """
+        Parse CollecTor index to find latest vote files.
+        
+        Vote filename format:
+        YYYY-MM-DD-HH-00-00-vote-[AUTHORITY_FINGERPRINT]-[VOTE_DIGEST]
+        
+        Returns:
+            Dict mapping filename to authority fingerprint
+        """
+        # Pattern: 2025-12-26-04-00-00-vote-FINGERPRINT-DIGEST
+        vote_pattern = r'href="(\d{4}-\d{2}-\d{2}-(\d{2})-00-00-vote-([A-F0-9]{40})-[A-F0-9]+)"'
+        matches = re.findall(vote_pattern, index_html)
+        
+        if not matches:
+            return {}
+        
+        # Group by hour, get latest
+        votes_by_hour = {}
+        for filename, hour, fingerprint in matches:
+            if hour not in votes_by_hour:
+                votes_by_hour[hour] = {}
+            votes_by_hour[hour][filename] = fingerprint
+        
+        # Return votes from the latest hour
+        latest_hour = max(votes_by_hour.keys())
+        logger.info(f"Using votes from hour {latest_hour}:00 UTC")
+        return votes_by_hour[latest_hour]
+    
+    def _fetch_url(self, url: str, timeout: int) -> str:
+        """Fetch content from URL."""
+        req = urllib.request.Request(url, headers={'User-Agent': 'Allium/1.0'})
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            return response.read().decode('utf-8', errors='replace')
+    
+    def _parse_vote(self, vote_text: str, authority_name: str) -> dict:
+        """Parse vote document - delegates to VoteParser."""
+        from .vote_parser import VoteParser
+        parser = VoteParser()
+        return parser._parse_vote(vote_text, authority_name)
+```
 
 ### Core Vote Parser
 

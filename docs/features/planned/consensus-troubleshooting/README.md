@@ -332,16 +332,98 @@ Create a new page `misc/consensus-troubleshooter.html`:
 
 ---
 
+## ⏱️ Directory Authority Update Frequencies
+
+Understanding when data updates is critical for effective troubleshooting:
+
+### Consensus Timing (Tor Directory Protocol)
+
+| Event | Timing | Notes |
+|-------|--------|-------|
+| **Consensus Valid Period** | 1 hour | Each consensus is valid for 1 hour (e.g., 04:00-05:00 UTC) |
+| **Voting Round Start** | XX:00 UTC | Authorities begin voting at the top of each hour |
+| **Vote Publication** | XX:00-XX:05 UTC | All 9 authorities publish their votes |
+| **Consensus Published** | ~XX:05-XX:10 UTC | Final consensus computed and published |
+| **Fresh Until** | +1 hour | Consensus remains fresh for voting period |
+| **Valid Until** | +3 hours | Consensus remains valid (with warnings) for 3 hours |
+
+### Data Update Frequencies by Type
+
+| Data Type | Update Frequency | Typical Latency | Size |
+|-----------|-----------------|-----------------|------|
+| **Consensus** | Every hour (XX:00 UTC) | ~5-10 min after valid-after | ~3.8 MB |
+| **Authority Votes** | Every hour (XX:00 UTC) | ~5-35 min after valid-after | ~5.7-6.5 MB each |
+| **Bandwidth Files** | Every ~1 hour | ~36-40 min offset | ~7.3-7.7 MB each |
+| **Flag Thresholds** | Every hour (in votes) | Derived from votes | N/A |
+
+### Bandwidth Authority Schedule
+
+Only 7 of the 9 directory authorities run bandwidth scanners:
+
+| Authority | Is BW Authority | Measurement Interval |
+|-----------|-----------------|---------------------|
+| moria1 | ✅ Yes | ~1 hour |
+| tor26 | ✅ Yes | ~1 hour |
+| dizum | ❌ No | N/A |
+| gabelmoo | ✅ Yes | ~1 hour |
+| dannenberg | ❌ No | N/A |
+| maatuska | ✅ Yes | ~1 hour |
+| longclaw | ✅ Yes | ~1 hour |
+| bastet | ✅ Yes | ~1 hour |
+| faravahar | ✅ Yes | ~1 hour |
+
+---
+
 ## 🏗️ Technical Implementation Plan
 
 ### Data Sources Integration
 
-| Data Source | URL Pattern | Data Provided | Refresh Rate |
-|-------------|-------------|---------------|--------------|
-| Authority Votes | `http://[auth-ip]/tor/status-vote/current/authority` | Per-relay flags, measured values | 1 hour |
-| Bandwidth Files | `http://[auth-ip]/tor/status-vote/next/bandwidth` | Bandwidth measurements | 1 hour |
-| Consensus | `http://[auth-ip]/tor/status-vote/current/consensus` | Final consensus data | 1 hour |
-| Consensus Health | `https://consensus-health.torproject.org/` | Aggregated metrics, thresholds | 15 min |
+**⭐ RECOMMENDED: Use Tor Project CollecTor (Centralized)**
+
+CollecTor aggregates all directory authority data in one place, eliminating the need to fetch from each authority individually:
+
+| Data Source | URL Pattern | Data Provided | Update Frequency |
+|-------------|-------------|---------------|------------------|
+| **CollecTor Votes** | `https://collector.torproject.org/recent/relay-descriptors/votes/` | All authority votes | Hourly (~5-35 min delay) |
+| **CollecTor Consensus** | `https://collector.torproject.org/recent/relay-descriptors/consensuses/` | Final consensus | Hourly (~5-40 min delay) |
+| **CollecTor Bandwidth** | `https://collector.torproject.org/recent/relay-descriptors/bandwidths/` | All BW authority files | ~Hourly per authority |
+| **Consensus Health** | `https://consensus-health.torproject.org/` | Aggregated metrics, thresholds | ~15 min |
+
+### CollecTor File Naming Convention
+
+```
+# Consensus files
+2025-12-26-04-00-00-consensus
+
+# Vote files (includes authority fingerprint)
+2025-12-26-04-00-00-vote-[AUTHORITY_FINGERPRINT]-[VOTE_DIGEST]
+
+# Bandwidth files (includes digest)
+2025-12-26-04-36-17-bandwidth-[FILE_DIGEST]
+```
+
+### Benefits of Using CollecTor
+
+| Benefit | Description |
+|---------|-------------|
+| **Single Source** | Fetch all data from one reliable endpoint |
+| **No Authority Load** | Don't burden individual authorities with requests |
+| **Historical Data** | Access recent files (last 72 hours in `/recent/`) |
+| **Reliable** | Tor Project infrastructure with good uptime |
+| **Consistent Format** | Standardized file naming and structure |
+
+### Alternative: Direct Authority Fetching
+
+Only use direct authority fetching if:
+- CollecTor is unavailable
+- Need real-time data (within minutes of publication)
+- Testing authority reachability specifically
+
+| Data Source | URL Pattern | Notes |
+|-------------|-------------|-------|
+| Authority Votes | `http://[auth-ip]:[dir-port]/tor/status-vote/current/authority` | Real-time, per-authority |
+| Bandwidth Files | `http://[auth-ip]:[dir-port]/tor/status-vote/next/bandwidth` | Only 7 authorities |
+| Consensus | `http://[auth-ip]:[dir-port]/tor/status-vote/current/consensus` | Real-time |
 
 ### New Files Required
 
@@ -368,15 +450,33 @@ allium/
 This implementation aligns with the existing multi-API plan (`docs/features/planned/multi-api-implementation-plan.md`):
 
 ```python
-# lib/workers.py - Add new worker functions
+# lib/workers.py - Add new worker functions using CollecTor
+
+COLLECTOR_BASE = "https://collector.torproject.org/recent/relay-descriptors"
 
 def fetch_authority_votes():
-    """Fetch votes from all directory authorities."""
+    """
+    Fetch votes from CollecTor (centralized source).
+    
+    CollecTor aggregates all authority votes, updated hourly.
+    Files available ~5-35 minutes after vote publication.
+    """
     try:
+        # Get list of latest vote files from CollecTor
+        votes_index = _fetch_collector_index(f"{COLLECTOR_BASE}/votes/")
+        latest_votes = _get_latest_vote_files(votes_index)
+        
         votes = {}
-        for auth_name, auth_url in AUTHORITY_VOTE_URLS.items():
-            votes[auth_name] = _fetch_and_parse_vote(auth_url)
-        _save_cache('authority_votes', votes)
+        for vote_file in latest_votes:
+            auth_fingerprint = _extract_authority_from_filename(vote_file)
+            vote_content = _fetch_collector_file(f"{COLLECTOR_BASE}/votes/{vote_file}")
+            votes[auth_fingerprint] = _parse_vote(vote_content)
+        
+        _save_cache('authority_votes', {
+            'votes': votes,
+            'source': 'collector',
+            'fetched_at': datetime.utcnow().isoformat()
+        })
         _mark_ready('authority_votes')
         return votes
     except Exception as e:
@@ -384,12 +484,27 @@ def fetch_authority_votes():
         return _load_cache('authority_votes')
 
 def fetch_bandwidth_files():
-    """Fetch bandwidth files from bandwidth authorities."""
+    """
+    Fetch bandwidth files from CollecTor.
+    
+    Bandwidth files are published ~hourly by 7 bandwidth authorities.
+    Files appear on CollecTor ~36-40 minutes after vote valid-after time.
+    """
     try:
+        bw_index = _fetch_collector_index(f"{COLLECTOR_BASE}/bandwidths/")
+        latest_bw_files = _get_latest_bandwidth_files(bw_index)
+        
         bw_data = {}
-        for auth_name in BANDWIDTH_AUTHORITIES:
-            bw_data[auth_name] = _fetch_and_parse_bandwidth(auth_name)
-        _save_cache('bandwidth_files', bw_data)
+        for bw_file in latest_bw_files:
+            bw_content = _fetch_collector_file(f"{COLLECTOR_BASE}/bandwidths/{bw_file}")
+            auth_fingerprint = _identify_bw_authority(bw_content)
+            bw_data[auth_fingerprint] = _parse_bandwidth_file(bw_content)
+        
+        _save_cache('bandwidth_files', {
+            'bandwidth': bw_data,
+            'source': 'collector',
+            'fetched_at': datetime.utcnow().isoformat()
+        })
         _mark_ready('bandwidth_files')
         return bw_data
     except Exception as e:
@@ -397,15 +512,50 @@ def fetch_bandwidth_files():
         return _load_cache('bandwidth_files')
 
 def fetch_flag_thresholds():
-    """Fetch current flag thresholds from consensus-health."""
+    """
+    Extract flag thresholds from authority votes.
+    
+    Thresholds are included in each authority's vote document.
+    Can also scrape consensus-health.torproject.org for formatted view.
+    """
     try:
-        thresholds = _scrape_consensus_health_thresholds()
-        _save_cache('flag_thresholds', thresholds)
+        # Option 1: Extract from cached votes
+        votes_cache = _load_cache('authority_votes')
+        if votes_cache:
+            thresholds = _extract_thresholds_from_votes(votes_cache['votes'])
+        else:
+            # Option 2: Scrape consensus-health.torproject.org
+            thresholds = _scrape_consensus_health_thresholds()
+        
+        _save_cache('flag_thresholds', {
+            'per_authority': thresholds,
+            'network_median': _calculate_median_thresholds(thresholds),
+            'fetched_at': datetime.utcnow().isoformat()
+        })
         _mark_ready('flag_thresholds')
         return thresholds
     except Exception as e:
         _mark_stale('flag_thresholds', str(e))
         return _load_cache('flag_thresholds')
+
+def _get_latest_vote_files(index_html: str) -> list:
+    """
+    Parse CollecTor index to find the most recent vote files.
+    
+    Vote files are named: YYYY-MM-DD-HH-00-00-vote-[AUTH_FP]-[DIGEST]
+    We want the latest hour's votes (9 files, one per authority).
+    """
+    import re
+    vote_pattern = r'(\d{4}-\d{2}-\d{2}-\d{2})-00-00-vote-([A-F0-9]{40})-[A-F0-9]+'
+    matches = re.findall(vote_pattern, index_html)
+    
+    if not matches:
+        return []
+    
+    # Group by timestamp, get latest
+    latest_timestamp = max(m[0] for m in matches)
+    return [f for f in index_html.split('"') 
+            if f.startswith(latest_timestamp) and '-vote-' in f]
 ```
 
 ---
