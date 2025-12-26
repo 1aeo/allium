@@ -37,219 +37,265 @@ This document outlines a comprehensive plan to enhance Allium with consensus tro
 
 ---
 
-## 🎯 Proposed Features by Priority
+## 🎯 Proposed Features - Per-Relay Consensus Diagnostics
 
-### Phase 1: Per-Relay Vote Lookup (Critical Priority)
+All phases 1-4 add new sections to the individual **relay detail page** (`relay-info.html`), providing comprehensive consensus troubleshooting for each relay. Data is fetched from **CollecTor** and cached hourly.
+
+### Relay Page Enhancement Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ View Relay "YourRelayNickname"                                      │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│ [Existing relay info sections...]                                   │
+│                                                                     │
+│ ═══════════════════════════════════════════════════════════════════ │
+│ 🔍 CONSENSUS DIAGNOSTICS (NEW - Phases 1-4)                        │
+│ ═══════════════════════════════════════════════════════════════════ │
+│                                                                     │
+│ ┌─ Phase 1: Authority Votes ────────────────────────────────────┐  │
+│ │ Which authorities voted for this relay?                        │  │
+│ └────────────────────────────────────────────────────────────────┘  │
+│                                                                     │
+│ ┌─ Phase 2: Flag Eligibility ───────────────────────────────────┐  │
+│ │ Why does/doesn't this relay have certain flags?               │  │
+│ └────────────────────────────────────────────────────────────────┘  │
+│                                                                     │
+│ ┌─ Phase 3: Reachability Analysis ──────────────────────────────┐  │
+│ │ Can authorities reach this relay? (IPv4/IPv6)                  │  │
+│ └────────────────────────────────────────────────────────────────┘  │
+│                                                                     │
+│ ┌─ Phase 4: Bandwidth Measurements ─────────────────────────────┐  │
+│ │ How do bandwidth authorities measure this relay?               │  │
+│ └────────────────────────────────────────────────────────────────┘  │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Phase 1: Authority Votes Section (Critical Priority)
 
 **Problem Solved**: "Why is my relay not in consensus?" / "Which authorities see my relay?"
 
-**Implementation**:
-Add a **"Directory Authority Votes"** section to each relay detail page (`relay-info.html`) showing:
+**Location**: New section on `relay-info.html`
 
+**Data Source**: CollecTor votes (`https://collector.torproject.org/recent/relay-descriptors/votes/`)
+
+**Mockup**:
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│ 🗳️ Directory Authority Votes for YourRelayNickname                 │
+│ 🗳️ Directory Authority Votes                                       │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
-│ ✅ In Consensus: Yes (8/9 authorities voted for this relay)        │
+│ Consensus Status: ✅ IN CONSENSUS (8/9 authorities)                │
+│ Data from: 2025-12-26 04:00 UTC consensus (CollecTor)              │
 │                                                                     │
-│ Authority    │ Voted │ Flags Assigned          │ Bandwidth  │ Issue │
-│ ────────────────────────────────────────────────────────────────── │
-│ moria1       │  ✅   │ Fast Guard Stable Valid │ 45000      │       │
-│ tor26        │  ✅   │ Fast Guard Stable Valid │ 44800      │       │
-│ dizum        │  ✅   │ Fast Stable Valid       │ 43200      │ No Guard │
-│ gabelmoo     │  ✅   │ Fast Guard Stable Valid │ 45100      │       │
-│ dannenberg   │  ✅   │ Fast Guard Stable Valid │ 44950      │       │
-│ maatuska     │  ✅   │ Fast Guard Stable Valid │ 45000      │       │
-│ longclaw     │  ✅   │ Fast Stable Valid       │ 43800      │ No Guard │
-│ bastet       │  ✅   │ Fast Guard Stable Valid │ 44700      │       │
-│ faravahar    │  ❌   │ Not in vote             │ N/A        │ ⚠️ Missing │
+│ ┌────────────┬───────┬─────────────────────────┬──────────┬───────┐│
+│ │ Authority  │ Voted │ Flags Assigned          │ Bandwidth│ Issue ││
+│ ├────────────┼───────┼─────────────────────────┼──────────┼───────┤│
+│ │ moria1     │  ✅   │ Fast Guard Stable Valid │ 45,000   │       ││
+│ │ tor26      │  ✅   │ Fast Guard Stable Valid │ 44,800   │       ││
+│ │ dizum      │  ✅   │ Fast Stable Valid       │ 43,200   │ ⚠️    ││
+│ │ gabelmoo   │  ✅   │ Fast Guard Stable Valid │ 45,100   │       ││
+│ │ dannenberg │  ✅   │ Fast Guard Stable Valid │ 44,950   │       ││
+│ │ maatuska   │  ✅   │ Fast Guard Stable Valid │ 45,000   │       ││
+│ │ longclaw   │  ✅   │ Fast Stable Valid       │ 43,800   │ ⚠️    ││
+│ │ bastet     │  ✅   │ Fast Guard Stable Valid │ 44,700   │       ││
+│ │ faravahar  │  ❌   │ Not in vote             │ N/A      │ ⚠️    ││
+│ └────────────┴───────┴─────────────────────────┴──────────┴───────┘│
 │                                                                     │
-│ ⚠️ Alerts:                                                          │
-│ • faravahar did not include this relay in vote - check reachability │
-│ • dizum, longclaw: Not assigning Guard flag                        │
+│ ⚠️ Issues Detected:                                                 │
+│ • faravahar: Relay not in vote - check reachability to this auth   │
+│ • dizum, longclaw: Not assigning Guard flag (see thresholds below) │
 │                                                                     │
-│ 📖 Troubleshooting Guide:                                           │
-│ • If missing from 1-2 authorities: May be reachability issue       │
-│ • If missing flags: Check thresholds below                          │
-│ • If missing from all: Check relay is running and ports are open   │
+│ 💡 Troubleshooting Tips:                                            │
+│ • Missing from 1-2 authorities → Likely reachability issue         │
+│ • Missing from all → Check relay is running, ORPort accessible     │
+│ • Different flags → Each authority has different thresholds        │
 └─────────────────────────────────────────────────────────────────────┘
-```
-
-**Data Source**: Parse individual authority votes from:
-- `http://[authority-ip]/tor/status-vote/current/authority`
-- Cache votes and refresh every consensus period (1 hour)
-
-**Technical Implementation**:
-```python
-# lib/vote_parser.py
-class VoteParser:
-    """Parse and compare directory authority votes for relay troubleshooting."""
-    
-    AUTHORITIES = {
-        'moria1': 'http://128.31.0.39:9231/tor/status-vote/current/authority',
-        'tor26': 'http://217.196.147.77:80/tor/status-vote/current/authority',
-        'dizum': 'http://45.66.35.11:80/tor/status-vote/current/authority',
-        'gabelmoo': 'http://131.188.40.189:80/tor/status-vote/current/authority',
-        'dannenberg': 'http://193.23.244.244:80/tor/status-vote/current/authority',
-        'maatuska': 'http://171.25.193.9:443/tor/status-vote/current/authority',
-        'longclaw': 'http://199.58.81.140:80/tor/status-vote/current/authority',
-        'bastet': 'http://204.13.164.118:80/tor/status-vote/current/authority',
-        'faravahar': 'http://216.218.219.41:80/tor/status-vote/current/authority',
-    }
-    
-    def get_relay_vote_status(self, fingerprint: str) -> dict:
-        """Get voting status from all authorities for a specific relay."""
-        vote_status = {}
-        for auth_name, vote_url in self.AUTHORITIES.items():
-            vote_status[auth_name] = self._check_relay_in_vote(fingerprint, vote_url)
-        return vote_status
 ```
 
 ---
 
-### Phase 2: Flag Threshold Comparison (High Priority)
+### Phase 2: Flag Eligibility Section (High Priority)
 
-**Problem Solved**: "Why doesn't my relay have the Guard flag?" / "Why did I lose Stable?"
+**Problem Solved**: "Why doesn't my relay have Guard?" / "Why did I lose Stable?"
 
-**Implementation**:
-Add **"Flag Eligibility Analysis"** section showing current thresholds vs relay stats:
+**Location**: New section on `relay-info.html` (below Authority Votes)
 
+**Data Source**: Flag thresholds extracted from CollecTor votes
+
+**Mockup**:
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│ 🎯 Flag Eligibility Analysis for YourRelayNickname                 │
+│ 🎯 Flag Eligibility Analysis                                        │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
 │ Current Flags: Fast, Stable, Valid, V2Dir, HSDir                   │
-│ Missing Flags: Guard (analysis below)                               │
+│ Missing Flags: Guard ← Analysis below                               │
 │                                                                     │
-│ Guard Flag Requirements (from consensus-health):                    │
-│ ┌──────────────────────────────────────────────────────────────┐   │
-│ │ Metric           │ Your Value │ Threshold │ Status           │   │
-│ ├──────────────────┼────────────┼───────────┼──────────────────┤   │
-│ │ WFU (Uptime)     │ 96.2%      │ ≥98%      │ ❌ Below (1.8%)  │   │
-│ │ Time Known       │ 45 days    │ ≥8 days   │ ✅ Above         │   │
-│ │ Bandwidth        │ 25 MB/s    │ ≥29 MB/s  │ ❌ Below (14%)   │   │
-│ └──────────────────┴────────────┴───────────┴──────────────────┘   │
+│ ══ Guard Flag Requirements ════════════════════════════════════════ │
+│ ┌────────────────────┬────────────┬────────────┬──────────────────┐│
+│ │ Requirement        │ Your Value │ Threshold  │ Status           ││
+│ ├────────────────────┼────────────┼────────────┼──────────────────┤│
+│ │ WFU (Uptime)       │ 96.2%      │ ≥98%       │ ❌ Below (-1.8%) ││
+│ │ Time Known         │ 45 days    │ ≥8 days    │ ✅ Above         ││
+│ │ Bandwidth (w/Exit) │ 25 MB/s    │ ≥29 MB/s   │ ❌ Below (-14%)  ││
+│ │ Bandwidth (no Exit)│ 25 MB/s    │ ≥28 MB/s   │ ❌ Below (-11%)  ││
+│ └────────────────────┴────────────┴────────────┴──────────────────┘│
 │                                                                     │
-│ 💡 Recommendation: To gain Guard flag, increase:                    │
-│    • Uptime to ≥98% (currently 96.2%)                              │
-│    • Bandwidth to ≥29 MB/s (currently 25 MB/s)                     │
+│ 💡 To gain Guard flag:                                              │
+│    • Increase uptime to ≥98% (currently 96.2%)                     │
+│    • Increase bandwidth to ≥29 MB/s (currently 25 MB/s)            │
 │                                                                     │
-│ Stable Flag Requirements:                                           │
-│ ┌──────────────────────────────────────────────────────────────┐   │
-│ │ Metric           │ Your Value │ Threshold │ Status           │   │
-│ ├──────────────────┼────────────┼───────────┼──────────────────┤   │
-│ │ Uptime           │ 45 days    │ ≥20 days  │ ✅ Above         │   │
-│ │ MTBF             │ 89 days    │ ≥45 days  │ ✅ Above         │   │
-│ └──────────────────┴────────────┴───────────┴──────────────────┘   │
+│ ══ Stable Flag Requirements ═══════════════════════════════════════ │
+│ ┌────────────────────┬────────────┬────────────┬──────────────────┐│
+│ │ Requirement        │ Your Value │ Threshold  │ Status           ││
+│ ├────────────────────┼────────────┼────────────┼──────────────────┤│
+│ │ Uptime             │ 20.2 days  │ ≥20.2 days │ ✅ At threshold  ││
+│ │ MTBF               │ 45.1 days  │ ≥36.2 days │ ✅ Above         ││
+│ └────────────────────┴────────────┴────────────┴──────────────────┘│
 │                                                                     │
-│ Fast Flag Requirements:                                             │
-│ ┌──────────────────────────────────────────────────────────────┐   │
-│ │ Metric           │ Your Value │ Threshold │ Status           │   │
-│ ├──────────────────┼────────────┼───────────┼──────────────────┤   │
-│ │ Bandwidth        │ 25 MB/s    │ ≥102 KB/s │ ✅ Above         │   │
-│ └──────────────────┴────────────┴───────────┴──────────────────┘   │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-**Data Source**: Parse flag thresholds from consensus-health.torproject.org:
-```
-flag-thresholds stable-uptime=1749590 stable-mtbf=31256159 fast-speed=1048000 
-guard-wfu=0.98 guard-tk=691200 guard-bw-inc-exits=29000000 guard-bw-exc-exits=28000000
-```
-
----
-
-### Phase 3: Authority Reachability Diagnostic (High Priority)
-
-**Problem Solved**: "Can the directory authorities reach my relay?"
-
-**Implementation**:
-Add **"Authority Reachability Check"** to relay page:
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│ 🌐 Authority Reachability for YourRelayNickname                    │
-├─────────────────────────────────────────────────────────────────────┤
+│ ══ Fast Flag Requirements ═════════════════════════════════════════ │
+│ ┌────────────────────┬────────────┬────────────┬──────────────────┐│
+│ │ Requirement        │ Your Value │ Threshold  │ Status           ││
+│ ├────────────────────┼────────────┼────────────┼──────────────────┤│
+│ │ Bandwidth          │ 25 MB/s    │ ≥102 KB/s  │ ✅ Above         ││
+│ └────────────────────┴────────────┴────────────┴──────────────────┘│
 │                                                                     │
-│ IPv4 ORPort (1.2.3.4:9001):                                        │
-│   moria1:    ✅ Reachable (included in vote)                       │
-│   tor26:     ✅ Reachable (included in vote)                       │
-│   ...                                                               │
+│ ══ HSDir Flag Requirements ════════════════════════════════════════ │
+│ ┌────────────────────┬────────────┬────────────┬──────────────────┐│
+│ │ Requirement        │ Your Value │ Threshold  │ Status           ││
+│ ├────────────────────┼────────────┼────────────┼──────────────────┤│
+│ │ WFU (Uptime)       │ 96.2%      │ ≥98%       │ ❌ Below         ││
+│ │ Time Known         │ 45 days    │ ≥9.9 days  │ ✅ Above         ││
+│ └────────────────────┴────────────┴────────────┴──────────────────┘│
 │                                                                     │
-│ IPv6 ORPort ([2001:db8::1]:9001):                                  │
-│   moria1:    ✅ ReachableIPv6 flag assigned                        │
-│   tor26:     ❌ NoIPv6Consensus - not reachable via IPv6           │
-│   dizum:     N/A - Does not test IPv6                              │
-│   ...                                                               │
-│                                                                     │
-│ ⚠️ IPv6 Issues Detected:                                            │
-│ • tor26 cannot reach your IPv6 address                             │
-│ • Recommendation: Check IPv6 connectivity to 217.196.147.77        │
-│                                                                     │
-│ 📋 Self-Check Commands:                                             │
-│ ping6 -c2 2001:858:2:2:aabb:0:563b:1526 && \                       │
-│ ping6 -c2 2620:13:4000:6000::1000:118 && \                         │
-│ ping6 -c2 2001:67c:289c::9 && echo "IPv6 OK"                       │
+│ ℹ️ Thresholds from: moria1 vote (network median may vary slightly)  │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### Phase 4: Consensus Weight Analysis (Medium Priority)
+### Phase 3: Reachability Analysis Section (High Priority)
 
-**Problem Solved**: "Why is my consensus weight so low?" / "Why did my consensus weight drop?"
+**Problem Solved**: "Can directory authorities reach my relay?" / "Why is IPv6 not working?"
 
-**Implementation**:
-Add **"Consensus Weight Analysis"** showing:
+**Location**: New section on `relay-info.html` (below Flag Eligibility)
 
+**Data Source**: CollecTor votes (presence in vote = reachable, flags indicate IPv6 status)
+
+**Mockup**:
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│ 📊 Consensus Weight Analysis for YourRelayNickname                  │
+│ 🌐 Authority Reachability Analysis                                  │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
-│ Current Weight: 45,000 (0.23% of network)                          │
-│ Measured: ✅ Yes (by 5/6 bandwidth authorities)                    │
+│ ══ IPv4 Reachability (1.2.3.4:9001) ═══════════════════════════════ │
+│ ┌────────────┬────────────┬─────────────────────────────────────┐  │
+│ │ Authority  │ Reachable  │ Evidence                            │  │
+│ ├────────────┼────────────┼─────────────────────────────────────┤  │
+│ │ moria1     │ ✅ Yes     │ Included in vote with Running flag  │  │
+│ │ tor26      │ ✅ Yes     │ Included in vote with Running flag  │  │
+│ │ dizum      │ ✅ Yes     │ Included in vote with Running flag  │  │
+│ │ gabelmoo   │ ✅ Yes     │ Included in vote with Running flag  │  │
+│ │ dannenberg │ ✅ Yes     │ Included in vote with Running flag  │  │
+│ │ maatuska   │ ✅ Yes     │ Included in vote with Running flag  │  │
+│ │ longclaw   │ ✅ Yes     │ Included in vote with Running flag  │  │
+│ │ bastet     │ ✅ Yes     │ Included in vote with Running flag  │  │
+│ │ faravahar  │ ❌ No      │ NOT in faravahar's vote             │  │
+│ └────────────┴────────────┴─────────────────────────────────────┘  │
 │                                                                     │
-│ Bandwidth Authority Measurements:                                   │
-│ ┌──────────────────────────────────────────────────────────────┐   │
-│ │ Authority    │ Measured │ Value    │ Deviation             │   │
-│ ├──────────────┼──────────┼──────────┼───────────────────────┤   │
-│ │ moria1       │ ✅       │ 46,200   │ +2.7%                 │   │
-│ │ gabelmoo     │ ✅       │ 44,100   │ -2.0%                 │   │
-│ │ maatuska     │ ✅       │ 45,800   │ +1.8%                 │   │
-│ │ longclaw     │ ✅       │ 44,500   │ -1.1%                 │   │
-│ │ bastet       │ ✅       │ 44,900   │ -0.2%                 │   │
-│ │ faravahar    │ ✅       │ 45,500   │ +1.1%                 │   │
-│ │ dizum        │ ❌       │ N/A      │ Not a bw authority    │   │
-│ │ dannenberg   │ ❌       │ N/A      │ Not a bw authority    │   │
-│ └──────────────┴──────────┴──────────┴───────────────────────┘   │
+│ ══ IPv6 Reachability ([2001:db8::1]:9001) ═════════════════════════ │
+│ ┌────────────┬────────────┬─────────────────────────────────────┐  │
+│ │ Authority  │ Reachable  │ Flags / Notes                       │  │
+│ ├────────────┼────────────┼─────────────────────────────────────┤  │
+│ │ moria1     │ ✅ Yes     │ ReachableIPv6 flag assigned         │  │
+│ │ tor26      │ ❌ No      │ NoIPv6Consensus flag                │  │
+│ │ dizum      │ ⚪ N/A     │ Does not test IPv6                  │  │
+│ │ gabelmoo   │ ✅ Yes     │ ReachableIPv6 flag assigned         │  │
+│ │ dannenberg │ ✅ Yes     │ ReachableIPv6 flag assigned         │  │
+│ │ maatuska   │ ✅ Yes     │ ReachableIPv6 flag assigned         │  │
+│ │ longclaw   │ ⚪ N/A     │ Does not test IPv6                  │  │
+│ │ bastet     │ ✅ Yes     │ ReachableIPv6 flag assigned         │  │
+│ │ faravahar  │ ❌ No      │ NOT in vote (IPv4 issue first)      │  │
+│ └────────────┴────────────┴─────────────────────────────────────┘  │
 │                                                                     │
-│ Weight Efficiency:                                                  │
-│ • Observed BW: 50 MB/s                                             │
-│ • Consensus Weight: 45,000                                         │
-│ • Efficiency: 90% (network median: 85%)                            │
+│ ⚠️ Reachability Issues Detected:                                    │
+│ • faravahar cannot reach your relay via IPv4                       │
+│ • tor26 cannot reach your relay via IPv6                           │
 │                                                                     │
-│ ℹ️ If Unmeasured:                                                   │
-│ • Relay needs to be measured by ≥3 bandwidth authorities           │
+│ 📋 Self-Diagnostic Commands:                                        │
+│ # Test IPv6 connectivity to authorities:                           │
+│ ping6 -c2 2001:858:2:2:aabb:0:563b:1526 &&  # moria1               │
+│ ping6 -c2 2001:638:a000:4140::ffff:189 &&   # gabelmoo             │
+│ ping6 -c2 2001:678:558:1000::244 &&         # dannenberg           │
+│ ping6 -c2 2620:13:4000:6000::1000:118 &&    # bastet               │
+│ echo "IPv6 connectivity OK"                                         │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Phase 4: Bandwidth Measurements Section (Medium Priority)
+
+**Problem Solved**: "Why is my consensus weight so low?" / "Why is my relay unmeasured?"
+
+**Location**: New section on `relay-info.html` (below Reachability)
+
+**Data Source**: CollecTor bandwidth files (`https://collector.torproject.org/recent/relay-descriptors/bandwidths/`)
+
+**Mockup**:
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ 📊 Bandwidth Authority Measurements                                 │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│ Consensus Weight: 45,000 (0.23% of network)                        │
+│ Measurement Status: ✅ MEASURED (by 6/7 bandwidth authorities)     │
+│                                                                     │
+│ ┌────────────┬──────────┬───────────┬────────────┬────────────────┐│
+│ │ BW Auth    │ Measured │ bw Value  │ Deviation  │ Last Scan      ││
+│ ├────────────┼──────────┼───────────┼────────────┼────────────────┤│
+│ │ moria1     │ ✅       │ 46,200    │ +2.7%      │ 2h ago         ││
+│ │ tor26      │ ✅       │ 44,800    │ -0.4%      │ 1h ago         ││
+│ │ gabelmoo   │ ✅       │ 44,100    │ -2.0%      │ 3h ago         ││
+│ │ maatuska   │ ✅       │ 45,800    │ +1.8%      │ 2h ago         ││
+│ │ longclaw   │ ✅       │ 44,500    │ -1.1%      │ 1h ago         ││
+│ │ bastet     │ ✅       │ 44,900    │ -0.2%      │ 2h ago         ││
+│ │ faravahar  │ ❌       │ N/A       │ N/A        │ Not measured   ││
+│ └────────────┴──────────┴───────────┴────────────┴────────────────┘│
+│                                                                     │
+│ 📈 Weight Analysis:                                                 │
+│ • Observed Bandwidth: 50 MB/s (from descriptor)                    │
+│ • Consensus Weight: 45,000                                          │
+│ • Weight/Bandwidth Ratio: 0.90 (network median: 0.85)              │
+│ • Efficiency: ✅ Above average                                      │
+│                                                                     │
+│ ℹ️ Measurement Notes:                                                │
+│ • dizum, dannenberg do not run bandwidth scanners                  │
+│ • Relay must be measured by ≥3 authorities to be "Measured"        │
 │ • New relays may take 1-2 weeks to be fully measured               │
-│ • Check bandwidth authority reachability                           │
+│ • Measurement variance ±5% between authorities is normal           │
+│                                                                     │
+│ ⚠️ If your relay shows "Unmeasured":                                │
+│ • Check reachability to bandwidth authorities (see above)          │
+│ • Ensure relay has been running continuously for >1 week           │
+│ • High packet loss can prevent accurate measurements               │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-**Data Source**: Parse bandwidth files from:
-- `http://[authority-ip]/tor/status-vote/next/bandwidth`
-
 ---
 
-### Phase 5: Consensus Troubleshooting Wizard (Medium Priority)
+### Phase 5: Troubleshooting Wizard Page (Lower Priority)
 
-**Problem Solved**: Guided troubleshooting for common consensus issues
+**Problem Solved**: Guided troubleshooting for users who don't know their relay's fingerprint
+
+**Location**: New standalone page `misc/consensus-troubleshooter.html`
 
 **Implementation**:
-Create a new page `misc/consensus-troubleshooter.html`:
-
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │ 🔧 Consensus Troubleshooting Wizard                                │
@@ -281,11 +327,11 @@ Create a new page `misc/consensus-troubleshooter.html`:
 
 ---
 
-### Phase 6: Enhanced Directory Authorities Page (Medium Priority)
+### Phase 6: Enhanced Directory Authorities Page (Lower Priority)
 
-**Problem Solved**: Centralized view of authority health and voting patterns
+**Problem Solved**: Centralized view of authority health and network-wide voting patterns
 
-**Enhancements to existing `misc-authorities.html`**:
+**Location**: Enhanced existing `misc-authorities.html`
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -430,167 +476,111 @@ Only use direct authority fetching if:
 ```
 allium/
 ├── lib/
-│   ├── vote_parser.py          # Parse authority votes
-│   ├── threshold_analyzer.py   # Analyze flag thresholds
-│   ├── bandwidth_analyzer.py   # Analyze bandwidth measurements
-│   └── consensus_fetcher.py    # Fetch consensus data from authorities
+│   └── consensus/
+│       ├── __init__.py
+│       ├── collector.py           # CollecTor configuration
+│       ├── authorities.py         # Authority fingerprint mapping
+│       ├── collector_fetcher.py   # Main data fetcher (votes + bandwidth)
+│       ├── vote_parser.py         # Vote parsing logic (optional, for direct access)
+│       └── threshold_analyzer.py  # Flag threshold analysis
 ├── templates/
-│   ├── relay-info.html         # MODIFY: Add vote section
-│   ├── misc-authorities.html   # MODIFY: Add enhanced sections
-│   └── misc-troubleshooter.html # NEW: Troubleshooting wizard
-└── data/
-    └── cache/
-        ├── votes/              # Cached authority votes
-        ├── bandwidth/          # Cached bandwidth files
-        └── thresholds.json     # Cached flag thresholds
+│   └── relay-info.html            # MODIFY: Add consensus diagnostics section
+└── cache/
+    └── consensus/
+        └── collector_data.json    # Cached CollecTor data (votes + bandwidth)
 ```
 
 ### Integration with Multi-API Architecture
 
-This implementation aligns with the existing multi-API plan (`docs/features/planned/multi-api-implementation-plan.md`):
+This implementation uses a single unified `CollectorFetcher` class that fetches all needed data from CollecTor:
 
 ```python
-# lib/workers.py - Add new worker functions using CollecTor
+# lib/workers.py - Single worker for all consensus data
 
-COLLECTOR_BASE = "https://collector.torproject.org/recent/relay-descriptors"
+from lib.consensus.collector_fetcher import CollectorFetcher
 
-def fetch_authority_votes():
-    """
-    Fetch votes from CollecTor (centralized source).
-    
-    CollecTor aggregates all authority votes, updated hourly.
-    Files available ~5-35 minutes after vote publication.
-    """
-    try:
-        # Get list of latest vote files from CollecTor
-        votes_index = _fetch_collector_index(f"{COLLECTOR_BASE}/votes/")
-        latest_votes = _get_latest_vote_files(votes_index)
-        
-        votes = {}
-        for vote_file in latest_votes:
-            auth_fingerprint = _extract_authority_from_filename(vote_file)
-            vote_content = _fetch_collector_file(f"{COLLECTOR_BASE}/votes/{vote_file}")
-            votes[auth_fingerprint] = _parse_vote(vote_content)
-        
-        _save_cache('authority_votes', {
-            'votes': votes,
-            'source': 'collector',
-            'fetched_at': datetime.utcnow().isoformat()
-        })
-        _mark_ready('authority_votes')
-        return votes
-    except Exception as e:
-        _mark_stale('authority_votes', str(e))
-        return _load_cache('authority_votes')
+_collector_fetcher = None
 
-def fetch_bandwidth_files():
+def fetch_collector_data():
     """
-    Fetch bandwidth files from CollecTor.
+    Fetch ALL consensus troubleshooting data from CollecTor.
     
-    Bandwidth files are published ~hourly by 7 bandwidth authorities.
-    Files appear on CollecTor ~36-40 minutes after vote valid-after time.
+    Single worker fetches:
+    - 9 authority votes (for Phases 1-3)
+    - 7 bandwidth files (for Phase 4)
+    - Flag thresholds (extracted from votes)
+    
+    Data is indexed by relay fingerprint for O(1) lookup during page generation.
     """
-    try:
-        bw_index = _fetch_collector_index(f"{COLLECTOR_BASE}/bandwidths/")
-        latest_bw_files = _get_latest_bandwidth_files(bw_index)
-        
-        bw_data = {}
-        for bw_file in latest_bw_files:
-            bw_content = _fetch_collector_file(f"{COLLECTOR_BASE}/bandwidths/{bw_file}")
-            auth_fingerprint = _identify_bw_authority(bw_content)
-            bw_data[auth_fingerprint] = _parse_bandwidth_file(bw_content)
-        
-        _save_cache('bandwidth_files', {
-            'bandwidth': bw_data,
-            'source': 'collector',
-            'fetched_at': datetime.utcnow().isoformat()
-        })
-        _mark_ready('bandwidth_files')
-        return bw_data
-    except Exception as e:
-        _mark_stale('bandwidth_files', str(e))
-        return _load_cache('bandwidth_files')
+    global _collector_fetcher
+    
+    _collector_fetcher = CollectorFetcher()
+    data = _collector_fetcher.fetch_all_data(timeout=120)
+    
+    # Log results
+    vote_count = len([v for v in data['votes'].values() if 'error' not in v])
+    bw_count = len([b for b in data['bandwidth_files'].values() if 'error' not in b])
+    relay_count = len(data['relay_index'])
+    
+    logger.info(f"CollecTor: {vote_count}/9 votes, {bw_count}/7 BW files, {relay_count} relays")
+    
+    _save_cache('collector_data', data)
+    return data
 
-def fetch_flag_thresholds():
+def get_relay_diagnostics(fingerprint: str) -> dict:
     """
-    Extract flag thresholds from authority votes.
-    
-    Thresholds are included in each authority's vote document.
-    Can also scrape consensus-health.torproject.org for formatted view.
+    Get complete diagnostics for a relay (called during page generation).
+    Returns data for all 4 phases on the relay-info.html page.
     """
-    try:
-        # Option 1: Extract from cached votes
-        votes_cache = _load_cache('authority_votes')
-        if votes_cache:
-            thresholds = _extract_thresholds_from_votes(votes_cache['votes'])
-        else:
-            # Option 2: Scrape consensus-health.torproject.org
-            thresholds = _scrape_consensus_health_thresholds()
-        
-        _save_cache('flag_thresholds', {
-            'per_authority': thresholds,
-            'network_median': _calculate_median_thresholds(thresholds),
-            'fetched_at': datetime.utcnow().isoformat()
-        })
-        _mark_ready('flag_thresholds')
-        return thresholds
-    except Exception as e:
-        _mark_stale('flag_thresholds', str(e))
-        return _load_cache('flag_thresholds')
-
-def _get_latest_vote_files(index_html: str) -> list:
-    """
-    Parse CollecTor index to find the most recent vote files.
+    global _collector_fetcher
     
-    Vote files are named: YYYY-MM-DD-HH-00-00-vote-[AUTH_FP]-[DIGEST]
-    We want the latest hour's votes (9 files, one per authority).
-    """
-    import re
-    vote_pattern = r'(\d{4}-\d{2}-\d{2}-\d{2})-00-00-vote-([A-F0-9]{40})-[A-F0-9]+'
-    matches = re.findall(vote_pattern, index_html)
+    if _collector_fetcher is None:
+        cached = _load_cache('collector_data')
+        if cached:
+            _collector_fetcher = CollectorFetcher()
+            _collector_fetcher.votes = cached.get('votes', {})
+            _collector_fetcher.bandwidth_files = cached.get('bandwidth_files', {})
+            _collector_fetcher.relay_index = cached.get('relay_index', {})
+            _collector_fetcher.flag_thresholds = cached.get('flag_thresholds', {})
     
-    if not matches:
-        return []
-    
-    # Group by timestamp, get latest
-    latest_timestamp = max(m[0] for m in matches)
-    return [f for f in index_html.split('"') 
-            if f.startswith(latest_timestamp) and '-vote-' in f]
+    return _collector_fetcher.get_relay_diagnostics(fingerprint)
 ```
+
+See `technical-implementation.md` for complete `CollectorFetcher` class implementation.
 
 ---
 
 ## 📅 Implementation Timeline
 
-### Phase 1: Foundation (Weeks 1-2)
-- [ ] Create `vote_parser.py` to parse authority votes
-- [ ] Create `threshold_analyzer.py` for flag threshold analysis
-- [ ] Implement vote caching system
-- [ ] Add basic relay vote lookup API
+### Sprint 1: Core Infrastructure (Week 1)
+- [ ] Create `lib/consensus/` directory structure
+- [ ] Implement `collector.py` - CollecTor configuration
+- [ ] Implement `authorities.py` - Authority fingerprint mapping
+- [ ] Implement `collector_fetcher.py` - Main data fetcher
 
-### Phase 2: Relay Page Enhancement (Weeks 3-4)
-- [ ] Modify `relay-info.html` to add vote section
-- [ ] Add flag eligibility analysis section
-- [ ] Implement visual indicators for vote status
-- [ ] Add troubleshooting tips contextually
+### Sprint 2: Worker Integration (Week 2)
+- [ ] Add `fetch_collector_data()` worker to `lib/workers.py`
+- [ ] Implement `get_relay_diagnostics()` lookup function
+- [ ] Set up hourly caching for CollecTor data
+- [ ] Test with multi-API coordinator
 
-### Phase 3: Authority Page Enhancement (Weeks 5-6)
-- [ ] Enhance `misc-authorities.html` with threshold display
-- [ ] Add real-time vote/consensus links
-- [ ] Show relay counts per authority
-- [ ] Display bandwidth authority status
+### Sprint 3: Relay Page - Phases 1-2 (Week 3)
+- [ ] Add Phase 1 (Authority Votes) section to `relay-info.html`
+- [ ] Add Phase 2 (Flag Eligibility) section to `relay-info.html`
+- [ ] Add CSS styles for diagnostic components
+- [ ] Implement Jinja2 filters for formatting
 
-### Phase 4: Troubleshooting Wizard (Weeks 7-8)
-- [ ] Create `misc-troubleshooter.html` template
-- [ ] Implement guided troubleshooting flow
-- [ ] Add fingerprint lookup functionality
-- [ ] Create issue-specific diagnostic pages
+### Sprint 4: Relay Page - Phases 3-4 (Week 4)
+- [ ] Add Phase 3 (Reachability Analysis) section
+- [ ] Add Phase 4 (Bandwidth Measurements) section
+- [ ] Add troubleshooting tips and recommendations
+- [ ] Implement error handling and graceful degradation
 
-### Phase 5: Testing & Documentation (Weeks 9-10)
-- [ ] Comprehensive testing with real relay data
-- [ ] Create user documentation
-- [ ] Performance optimization
-- [ ] Community feedback integration
+### Sprint 5: Testing & Polish (Week 5)
+- [ ] Unit tests for CollecTor parsing
+- [ ] Integration tests with real data
+- [ ] Performance testing with 7000+ relays
+- [ ] Documentation and user guide
 
 ---
 
@@ -630,5 +620,8 @@ def _get_latest_vote_files(index_html: str) -> list:
 
 ---
 
-**Document Status**: Research complete, ready for implementation review  
+**Document Status**: Research complete, ready for implementation  
+**Primary Data Source**: Tor Project CollecTor (https://collector.torproject.org)  
+**Target Location**: Per-relay detail pages (`relay-info.html`)  
+**Estimated Effort**: 5 sprints (~5 weeks)  
 **Next Steps**: Technical review and Phase 1 implementation kickoff

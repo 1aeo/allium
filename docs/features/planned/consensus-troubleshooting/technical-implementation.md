@@ -47,35 +47,59 @@ Valid-until:  XX+3:00 UTC  (3 hours with warnings)
 
 ## Architecture Overview
 
+All consensus diagnostics are focused on the **per-relay page** (`relay-info.html`), with CollecTor as the primary data source.
+
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                    Allium Consensus Troubleshooting                │
+│             Allium Per-Relay Consensus Diagnostics                 │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                │
-│  │  Authority  │  │  Bandwidth  │  │  Consensus  │                │
-│  │   Votes     │  │    Files    │  │   Health    │                │
-│  │   Parser    │  │   Parser    │  │   Scraper   │                │
-│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘                │
-│         │                │                │                        │
-│         └────────────────┼────────────────┘                        │
-│                          │                                          │
-│                          ▼                                          │
-│               ┌─────────────────────┐                              │
-│               │   Consensus Data    │                              │
-│               │      Manager        │                              │
-│               │  (lib/consensus/)   │                              │
-│               └──────────┬──────────┘                              │
-│                          │                                          │
-│         ┌────────────────┼────────────────┐                        │
-│         ▼                ▼                ▼                        │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                │
-│  │ relay-info  │  │ authorities │  │troubleshoot │                │
-│  │   .html     │  │   .html     │  │    .html    │                │
-│  │ (enhanced)  │  │ (enhanced)  │  │   (new)     │                │
-│  └─────────────┘  └─────────────┘  └─────────────┘                │
+│  PRIMARY DATA SOURCE: CollecTor (https://collector.torproject.org) │
+│                                                                     │
+│  ┌────────────────────────────────────────────────────────────────┐│
+│  │                    CollecTor Fetcher                           ││
+│  │   /recent/relay-descriptors/votes/       → Authority Votes     ││
+│  │   /recent/relay-descriptors/bandwidths/  → BW Measurements     ││
+│  │   /recent/relay-descriptors/consensuses/ → Final Consensus     ││
+│  └────────────────────────────────────────────────────────────────┘│
+│                              │                                      │
+│                              ▼                                      │
+│  ┌────────────────────────────────────────────────────────────────┐│
+│  │                 Consensus Data Manager                         ││
+│  │  • Parses all 9 authority votes (from CollecTor)               ││
+│  │  • Parses 7 bandwidth files (from CollecTor)                   ││
+│  │  • Extracts flag thresholds from votes                         ││
+│  │  • Caches data for 1 hour (matches consensus cycle)            ││
+│  └────────────────────────────────────────────────────────────────┘│
+│                              │                                      │
+│                              ▼                                      │
+│  ┌────────────────────────────────────────────────────────────────┐│
+│  │              Per-Relay Analysis (on relay-info.html)           ││
+│  │                                                                ││
+│  │  Phase 1: Authority Vote Status                                ││
+│  │  ├─ Which authorities voted for this relay?                    ││
+│  │  └─ What flags did each authority assign?                      ││
+│  │                                                                ││
+│  │  Phase 2: Flag Eligibility Analysis                            ││
+│  │  ├─ Compare relay metrics against thresholds                   ││
+│  │  └─ Explain why flags are missing                              ││
+│  │                                                                ││
+│  │  Phase 3: Reachability Analysis                                ││
+│  │  ├─ IPv4 reachability per authority (presence in vote)         ││
+│  │  └─ IPv6 reachability (ReachableIPv6 flag)                     ││
+│  │                                                                ││
+│  │  Phase 4: Bandwidth Measurements                               ││
+│  │  ├─ Per-authority bandwidth values                             ││
+│  │  └─ Measurement status and variance                            ││
+│  └────────────────────────────────────────────────────────────────┘│
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
+
+Data Flow:
+1. Worker pool fetches votes + bandwidth files from CollecTor (hourly)
+2. Data is parsed, indexed by relay fingerprint, and cached
+3. When generating relay-info.html, lookup relay in cached data
+4. Render Phases 1-4 sections with analysis results
 ```
 
 ---
@@ -304,64 +328,104 @@ def get_bandwidth_authorities() -> list:
 
 ## Vote Parser Implementation
 
-### CollecTor-Based Vote Fetcher (Recommended)
+### CollecTor Data Fetcher (Primary Implementation)
+
+All consensus troubleshooting data is fetched from CollecTor to minimize load on individual directory authorities and provide a reliable, centralized data source.
 
 ```python
 # lib/consensus/collector_fetcher.py
 
 """
-Fetch and parse votes from CollecTor (centralized Tor Project archive).
-This is the recommended approach - single source, no authority load.
+Fetch votes and bandwidth files from CollecTor.
+This is the PRIMARY data source for all consensus troubleshooting features.
+
+Benefits of CollecTor:
+- Single source for all 9 authority votes
+- Single source for all 7 bandwidth files  
+- No load on individual authorities
+- Reliable Tor Project infrastructure
+- Files available within 35-45 minutes of consensus
 """
 
 import re
 import urllib.request
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 import logging
 
-from .collector import COLLECTOR_CONFIG, get_latest_votes_url
-from .authorities import AUTHORITY_FINGERPRINTS
+from .collector import COLLECTOR_CONFIG
+from .authorities import AUTHORITY_FINGERPRINTS, BANDWIDTH_AUTHORITIES
 
 logger = logging.getLogger(__name__)
 
 
-class CollectorVoteFetcher:
-    """Fetch authority votes from CollecTor."""
+class CollectorFetcher:
+    """
+    Unified fetcher for all CollecTor data needed for per-relay diagnostics.
     
-    def __init__(self, cache_manager=None):
-        self.cache_manager = cache_manager
-        self.base_url = f"{COLLECTOR_CONFIG['base_url']}{COLLECTOR_CONFIG['recent_path']}"
+    Fetches:
+    - All 9 authority votes (for Phases 1-3)
+    - All 7 bandwidth files (for Phase 4)
+    """
     
-    def fetch_latest_votes(self, timeout: int = 60) -> Dict[str, dict]:
+    def __init__(self, cache_dir: str = None):
+        self.base_url = COLLECTOR_CONFIG['base_url']
+        self.recent_path = COLLECTOR_CONFIG['recent_path']
+        self.cache_dir = cache_dir
+        
+        # Parsed data storage
+        self.votes = {}           # authority_name -> parsed vote
+        self.bandwidth_files = {} # authority_name -> parsed bandwidth data
+        self.relay_index = {}     # fingerprint -> {votes: [], bw: []}
+        self.flag_thresholds = {} # authority_name -> thresholds dict
+        
+    def fetch_all_data(self, timeout: int = 60) -> dict:
         """
-        Fetch all authority votes for the most recent consensus period.
+        Fetch all data needed for relay diagnostics.
         
         Returns:
-            Dict mapping authority names to parsed vote data
+            Dict with 'votes', 'bandwidth_files', 'relay_index', 'flag_thresholds'
         """
-        # Step 1: Get directory listing of vote files
-        votes_url = f"{self.base_url}/votes/"
-        index_html = self._fetch_url(votes_url, timeout)
+        # Fetch votes and bandwidth files in sequence (could parallelize)
+        self._fetch_votes(timeout)
+        self._fetch_bandwidth_files(timeout)
+        self._build_relay_index()
+        self._extract_flag_thresholds()
         
-        # Step 2: Parse filenames to find latest votes
-        latest_votes = self._find_latest_vote_files(index_html)
-        logger.info(f"Found {len(latest_votes)} vote files for latest consensus")
+        return {
+            'votes': self.votes,
+            'bandwidth_files': self.bandwidth_files,
+            'relay_index': self.relay_index,
+            'flag_thresholds': self.flag_thresholds,
+            'fetched_at': datetime.utcnow().isoformat()
+        }
+    
+    # ═══════════════════════════════════════════════════════════════════
+    # VOTES FETCHING (Phase 1-3)
+    # ═══════════════════════════════════════════════════════════════════
+    
+    def _fetch_votes(self, timeout: int) -> None:
+        """Fetch all authority votes from CollecTor."""
+        votes_url = f"{self.base_url}{self.recent_path}/votes/"
         
-        # Step 3: Fetch and parse each vote
-        votes = {}
-        for filename, auth_fingerprint in latest_votes.items():
-            auth_name = AUTHORITY_FINGERPRINTS.get(auth_fingerprint, auth_fingerprint[:8])
-            try:
-                vote_url = f"{votes_url}{filename}"
-                vote_text = self._fetch_url(vote_url, timeout)
-                votes[auth_name] = self._parse_vote(vote_text, auth_name)
-                logger.info(f"Parsed vote from {auth_name}")
-            except Exception as e:
-                logger.warning(f"Failed to fetch vote from {auth_name}: {e}")
-                votes[auth_name] = {'error': str(e), 'relays': {}}
-        
-        return votes
+        try:
+            index_html = self._fetch_url(votes_url, timeout)
+            latest_votes = self._find_latest_vote_files(index_html)
+            logger.info(f"Found {len(latest_votes)} vote files for latest consensus")
+            
+            for filename, auth_fingerprint in latest_votes.items():
+                auth_name = AUTHORITY_FINGERPRINTS.get(auth_fingerprint, auth_fingerprint[:8])
+                try:
+                    vote_url = f"{votes_url}{filename}"
+                    vote_text = self._fetch_url(vote_url, timeout)
+                    self.votes[auth_name] = self._parse_vote(vote_text, auth_name)
+                    logger.info(f"Parsed vote from {auth_name}: {self.votes[auth_name]['relay_count']} relays")
+                except Exception as e:
+                    logger.warning(f"Failed to fetch vote from {auth_name}: {e}")
+                    self.votes[auth_name] = {'error': str(e), 'relays': {}}
+                    
+        except Exception as e:
+            logger.error(f"Failed to fetch vote index from CollecTor: {e}")
     
     def _find_latest_vote_files(self, index_html: str) -> Dict[str, str]:
         """
@@ -392,20 +456,436 @@ class CollectorVoteFetcher:
         logger.info(f"Using votes from hour {latest_hour}:00 UTC")
         return votes_by_hour[latest_hour]
     
+    def _parse_vote(self, vote_text: str, authority_name: str) -> dict:
+        """Parse a vote document into structured data."""
+        parsed = {
+            'authority': authority_name,
+            'published': None,
+            'valid_after': None,
+            'flag_thresholds': {},
+            'known_flags': [],
+            'relays': {},  # fingerprint -> relay data
+            'relay_count': 0
+        }
+        
+        lines = vote_text.split('\n')
+        current_relay = None
+        
+        for line in lines:
+            # Parse header
+            if line.startswith('published '):
+                parsed['published'] = line.split(' ', 1)[1]
+            elif line.startswith('valid-after '):
+                parsed['valid_after'] = line.split(' ', 1)[1]
+            elif line.startswith('known-flags '):
+                parsed['known_flags'] = line.split(' ')[1:]
+            elif line.startswith('flag-thresholds '):
+                parsed['flag_thresholds'] = self._parse_flag_thresholds(line)
+            
+            # Parse relay entries
+            elif line.startswith('r '):
+                parts = line.split(' ')
+                if len(parts) >= 8:
+                    fingerprint = self._decode_fingerprint(parts[2])
+                    current_relay = {
+                        'nickname': parts[1],
+                        'fingerprint': fingerprint,
+                        'ip': parts[5],
+                        'or_port': parts[6],
+                        'dir_port': parts[7],
+                        'flags': [],
+                        'bandwidth': None,
+                        'measured': False
+                    }
+                    parsed['relays'][fingerprint] = current_relay
+                    parsed['relay_count'] += 1
+            
+            elif line.startswith('a ') and current_relay:
+                # IPv6 address line: a [2001:db8::1]:9001
+                current_relay['ipv6'] = line.split(' ', 1)[1] if len(line) > 2 else None
+            
+            elif line.startswith('s ') and current_relay:
+                current_relay['flags'] = line.split(' ')[1:]
+            
+            elif line.startswith('w ') and current_relay:
+                bw_match = re.search(r'Bandwidth=(\d+)', line)
+                if bw_match:
+                    current_relay['bandwidth'] = int(bw_match.group(1))
+                current_relay['measured'] = 'Measured' in line
+        
+        return parsed
+    
+    # ═══════════════════════════════════════════════════════════════════
+    # BANDWIDTH FILES FETCHING (Phase 4)
+    # ═══════════════════════════════════════════════════════════════════
+    
+    def _fetch_bandwidth_files(self, timeout: int) -> None:
+        """Fetch bandwidth files from CollecTor."""
+        bw_url = f"{self.base_url}{self.recent_path}/bandwidths/"
+        
+        try:
+            index_html = self._fetch_url(bw_url, timeout)
+            latest_bw_files = self._find_latest_bandwidth_files(index_html)
+            logger.info(f"Found {len(latest_bw_files)} bandwidth files")
+            
+            for filename, auth_name in latest_bw_files.items():
+                try:
+                    file_url = f"{bw_url}{filename}"
+                    bw_text = self._fetch_url(file_url, timeout)
+                    self.bandwidth_files[auth_name] = self._parse_bandwidth_file(bw_text, auth_name)
+                    logger.info(f"Parsed bandwidth file from {auth_name}: {len(self.bandwidth_files[auth_name]['relays'])} relays")
+                except Exception as e:
+                    logger.warning(f"Failed to fetch bandwidth file from {auth_name}: {e}")
+                    self.bandwidth_files[auth_name] = {'error': str(e), 'relays': {}}
+                    
+        except Exception as e:
+            logger.error(f"Failed to fetch bandwidth index from CollecTor: {e}")
+    
+    def _find_latest_bandwidth_files(self, index_html: str) -> Dict[str, str]:
+        """
+        Parse CollecTor index to find latest bandwidth files.
+        
+        Bandwidth filename format:
+        YYYY-MM-DD-HH-MM-SS-bandwidth-[SOURCE_NAME]
+        
+        Returns:
+            Dict mapping filename to authority/scanner name
+        """
+        # Pattern: 2025-12-26-04-36-14-bandwidth-moria1
+        bw_pattern = r'href="(\d{4}-\d{2}-\d{2}-(\d{2})-\d{2}-\d{2}-bandwidth-(\w+))"'
+        matches = re.findall(bw_pattern, index_html)
+        
+        if not matches:
+            return {}
+        
+        # Group by hour, get latest for each authority
+        bw_by_hour = {}
+        for filename, hour, auth_name in matches:
+            if hour not in bw_by_hour:
+                bw_by_hour[hour] = {}
+            # Keep latest file per authority (overwrite if same hour)
+            bw_by_hour[hour][filename] = auth_name
+        
+        # Return bandwidth files from the latest hour
+        latest_hour = max(bw_by_hour.keys())
+        logger.info(f"Using bandwidth files from hour {latest_hour}:XX UTC")
+        return bw_by_hour[latest_hour]
+    
+    def _parse_bandwidth_file(self, bw_text: str, authority_name: str) -> dict:
+        """
+        Parse a bandwidth file into structured data.
+        
+        Format:
+        1734567890  # timestamp
+        version=1.4.0
+        ...
+        bw=12345 node_id=$FINGERPRINT nick=RelayName ...
+        """
+        parsed = {
+            'authority': authority_name,
+            'timestamp': None,
+            'version': None,
+            'relays': {},  # fingerprint -> bw value
+            'relay_count': 0
+        }
+        
+        for line in bw_text.split('\n'):
+            if line.startswith('bw='):
+                # Parse bandwidth line
+                bw_match = re.search(r'bw=(\d+)', line)
+                node_match = re.search(r'node_id=\$([A-F0-9]{40})', line)
+                
+                if bw_match and node_match:
+                    fingerprint = node_match.group(1)
+                    parsed['relays'][fingerprint] = {
+                        'bandwidth': int(bw_match.group(1)),
+                        'authority': authority_name
+                    }
+                    parsed['relay_count'] += 1
+            
+            elif line.startswith('version='):
+                parsed['version'] = line.split('=', 1)[1]
+            elif line.isdigit():
+                parsed['timestamp'] = int(line)
+        
+        return parsed
+    
+    # ═══════════════════════════════════════════════════════════════════
+    # RELAY INDEX & THRESHOLD EXTRACTION
+    # ═══════════════════════════════════════════════════════════════════
+    
+    def _build_relay_index(self) -> None:
+        """
+        Build index mapping fingerprint -> data from all sources.
+        This enables fast per-relay lookups during page generation.
+        """
+        # Index votes
+        for auth_name, vote_data in self.votes.items():
+            if 'error' in vote_data:
+                continue
+            for fingerprint, relay_data in vote_data.get('relays', {}).items():
+                if fingerprint not in self.relay_index:
+                    self.relay_index[fingerprint] = {'votes': {}, 'bandwidth': {}}
+                self.relay_index[fingerprint]['votes'][auth_name] = relay_data
+        
+        # Index bandwidth measurements
+        for auth_name, bw_data in self.bandwidth_files.items():
+            if 'error' in bw_data:
+                continue
+            for fingerprint, bw_info in bw_data.get('relays', {}).items():
+                if fingerprint not in self.relay_index:
+                    self.relay_index[fingerprint] = {'votes': {}, 'bandwidth': {}}
+                self.relay_index[fingerprint]['bandwidth'][auth_name] = bw_info
+        
+        logger.info(f"Built relay index with {len(self.relay_index)} relays")
+    
+    def _extract_flag_thresholds(self) -> None:
+        """Extract flag thresholds from all authority votes."""
+        for auth_name, vote_data in self.votes.items():
+            if 'flag_thresholds' in vote_data and vote_data['flag_thresholds']:
+                self.flag_thresholds[auth_name] = vote_data['flag_thresholds']
+        
+        logger.info(f"Extracted thresholds from {len(self.flag_thresholds)} authorities")
+    
+    # ═══════════════════════════════════════════════════════════════════
+    # PER-RELAY ANALYSIS (Called during page generation)
+    # ═══════════════════════════════════════════════════════════════════
+    
+    def get_relay_diagnostics(self, fingerprint: str) -> dict:
+        """
+        Get complete diagnostics for a single relay.
+        Returns data for all 4 phases of the relay page.
+        """
+        fingerprint = fingerprint.upper()
+        
+        if fingerprint not in self.relay_index:
+            return {
+                'error': 'Relay not found in any authority vote',
+                'in_consensus': False,
+                'phases': {}
+            }
+        
+        relay_data = self.relay_index[fingerprint]
+        
+        return {
+            'fingerprint': fingerprint,
+            'in_consensus': len(relay_data['votes']) >= 5,  # Majority
+            'phases': {
+                'authority_votes': self._analyze_authority_votes(fingerprint, relay_data),
+                'flag_eligibility': self._analyze_flag_eligibility(fingerprint, relay_data),
+                'reachability': self._analyze_reachability(fingerprint, relay_data),
+                'bandwidth': self._analyze_bandwidth(fingerprint, relay_data)
+            },
+            'analyzed_at': datetime.utcnow().isoformat()
+        }
+    
+    def _analyze_authority_votes(self, fingerprint: str, relay_data: dict) -> dict:
+        """Phase 1: Which authorities voted for this relay?"""
+        result = {
+            'voted_count': len(relay_data['votes']),
+            'total_authorities': 9,
+            'per_authority': {},
+            'issues': []
+        }
+        
+        all_authorities = list(AUTHORITY_FINGERPRINTS.values())
+        
+        for auth_name in all_authorities:
+            if auth_name in relay_data['votes']:
+                vote_info = relay_data['votes'][auth_name]
+                result['per_authority'][auth_name] = {
+                    'voted': True,
+                    'flags': vote_info.get('flags', []),
+                    'bandwidth': vote_info.get('bandwidth'),
+                    'measured': vote_info.get('measured', False)
+                }
+            else:
+                result['per_authority'][auth_name] = {
+                    'voted': False,
+                    'flags': [],
+                    'bandwidth': None,
+                    'measured': False
+                }
+                result['issues'].append(f"{auth_name}: Relay not in vote")
+        
+        # Detect flag discrepancies
+        flag_counts = {}
+        for auth_name, info in result['per_authority'].items():
+            if info['voted']:
+                for flag in info['flags']:
+                    flag_counts[flag] = flag_counts.get(flag, 0) + 1
+        
+        for flag, count in flag_counts.items():
+            if 0 < count < result['voted_count']:
+                missing = [a for a, i in result['per_authority'].items() 
+                          if i['voted'] and flag not in i['flags']]
+                if missing:
+                    result['issues'].append(f"{', '.join(missing)}: Not assigning {flag} flag")
+        
+        return result
+    
+    def _analyze_flag_eligibility(self, fingerprint: str, relay_data: dict) -> dict:
+        """Phase 2: Why doesn't relay have certain flags?"""
+        # Get median thresholds
+        median_thresholds = self._get_median_thresholds()
+        
+        # Get relay's current flags from majority vote
+        current_flags = set()
+        for vote_info in relay_data['votes'].values():
+            current_flags.update(vote_info.get('flags', []))
+        
+        return {
+            'current_flags': list(current_flags),
+            'thresholds': median_thresholds,
+            'analysis': {
+                'Guard': self._check_flag_requirements('Guard', relay_data, median_thresholds),
+                'Stable': self._check_flag_requirements('Stable', relay_data, median_thresholds),
+                'Fast': self._check_flag_requirements('Fast', relay_data, median_thresholds),
+                'HSDir': self._check_flag_requirements('HSDir', relay_data, median_thresholds)
+            }
+        }
+    
+    def _analyze_reachability(self, fingerprint: str, relay_data: dict) -> dict:
+        """Phase 3: Can authorities reach this relay?"""
+        result = {
+            'ipv4': {},
+            'ipv6': {},
+            'issues': []
+        }
+        
+        all_authorities = list(AUTHORITY_FINGERPRINTS.values())
+        ipv6_testing_auths = ['moria1', 'gabelmoo', 'dannenberg', 'maatuska', 'bastet']
+        
+        for auth_name in all_authorities:
+            # IPv4 reachability = presence in vote with Running flag
+            if auth_name in relay_data['votes']:
+                flags = relay_data['votes'][auth_name].get('flags', [])
+                result['ipv4'][auth_name] = {
+                    'reachable': 'Running' in flags,
+                    'evidence': 'Running flag in vote' if 'Running' in flags else 'In vote but no Running'
+                }
+                
+                # IPv6 reachability
+                if auth_name in ipv6_testing_auths:
+                    has_ipv6 = 'ReachableIPv6' in flags
+                    no_ipv6 = 'NoIPv6Consensus' in flags
+                    result['ipv6'][auth_name] = {
+                        'reachable': has_ipv6,
+                        'evidence': 'ReachableIPv6' if has_ipv6 else ('NoIPv6Consensus' if no_ipv6 else 'No IPv6 flags')
+                    }
+                    if no_ipv6:
+                        result['issues'].append(f"{auth_name}: Cannot reach via IPv6")
+                else:
+                    result['ipv6'][auth_name] = {'reachable': None, 'evidence': 'Does not test IPv6'}
+            else:
+                result['ipv4'][auth_name] = {'reachable': False, 'evidence': 'Not in vote'}
+                result['ipv6'][auth_name] = {'reachable': False, 'evidence': 'Not in vote'}
+                result['issues'].append(f"{auth_name}: Relay not reachable (not in vote)")
+        
+        return result
+    
+    def _analyze_bandwidth(self, fingerprint: str, relay_data: dict) -> dict:
+        """Phase 4: Bandwidth authority measurements."""
+        result = {
+            'measured_by': [],
+            'not_measured_by': [],
+            'per_authority': {},
+            'consensus_weight': None,
+            'measurement_variance': None
+        }
+        
+        bw_values = []
+        
+        for auth_name in BANDWIDTH_AUTHORITIES:
+            if auth_name in relay_data['bandwidth']:
+                bw_info = relay_data['bandwidth'][auth_name]
+                bw_value = bw_info.get('bandwidth', 0)
+                result['per_authority'][auth_name] = {
+                    'measured': True,
+                    'value': bw_value
+                }
+                result['measured_by'].append(auth_name)
+                bw_values.append(bw_value)
+            else:
+                result['per_authority'][auth_name] = {
+                    'measured': False,
+                    'value': None
+                }
+                result['not_measured_by'].append(auth_name)
+        
+        # Calculate statistics
+        if bw_values:
+            avg = sum(bw_values) / len(bw_values)
+            result['average_measurement'] = avg
+            if len(bw_values) > 1:
+                variance = sum((v - avg) ** 2 for v in bw_values) / len(bw_values)
+                result['measurement_variance'] = (variance ** 0.5) / avg * 100  # CV as %
+        
+        return result
+    
+    # ═══════════════════════════════════════════════════════════════════
+    # HELPER METHODS
+    # ═══════════════════════════════════════════════════════════════════
+    
     def _fetch_url(self, url: str, timeout: int) -> str:
         """Fetch content from URL."""
         req = urllib.request.Request(url, headers={'User-Agent': 'Allium/1.0'})
         with urllib.request.urlopen(req, timeout=timeout) as response:
             return response.read().decode('utf-8', errors='replace')
     
-    def _parse_vote(self, vote_text: str, authority_name: str) -> dict:
-        """Parse vote document - delegates to VoteParser."""
-        from .vote_parser import VoteParser
-        parser = VoteParser()
-        return parser._parse_vote(vote_text, authority_name)
+    def _parse_flag_thresholds(self, line: str) -> dict:
+        """Parse flag-thresholds line."""
+        thresholds = {}
+        parts = line.split(' ')[1:]
+        for part in parts:
+            if '=' in part:
+                key, value = part.split('=', 1)
+                try:
+                    thresholds[key] = float(value) if '.' in value else int(value)
+                except ValueError:
+                    thresholds[key] = value
+        return thresholds
+    
+    def _decode_fingerprint(self, b64_fingerprint: str) -> str:
+        """Decode base64 fingerprint to hex."""
+        import base64
+        try:
+            decoded = base64.b64decode(b64_fingerprint + '==')
+            return decoded.hex().upper()
+        except Exception:
+            return b64_fingerprint
+    
+    def _get_median_thresholds(self) -> dict:
+        """Calculate median thresholds across all authorities."""
+        if not self.flag_thresholds:
+            return {}
+        
+        all_keys = set()
+        for thresholds in self.flag_thresholds.values():
+            all_keys.update(thresholds.keys())
+        
+        median_thresholds = {}
+        for key in all_keys:
+            values = [t[key] for t in self.flag_thresholds.values() if key in t]
+            if values:
+                values.sort()
+                mid = len(values) // 2
+                median_thresholds[key] = values[mid] if len(values) % 2 else (values[mid-1] + values[mid]) / 2
+        
+        return median_thresholds
+    
+    def _check_flag_requirements(self, flag: str, relay_data: dict, thresholds: dict) -> dict:
+        """Check if relay meets requirements for a specific flag."""
+        # This would compare relay metrics against thresholds
+        # Simplified for now - full implementation in ThresholdAnalyzer
+        return {
+            'eligible': None,  # Would calculate based on relay metrics
+            'requirements': [],
+            'missing': []
+        }
 ```
 
-### Core Vote Parser
+### Core Vote Parser (Alternative - Direct Authority Access)
 
 ```python
 # lib/consensus/vote_parser.py
@@ -1018,271 +1498,277 @@ class ThresholdAnalyzer:
 
 ## Worker Integration
 
+The worker fetches all data from CollecTor once per hour and caches it. Per-relay lookups are then done from the cached data during page generation.
+
 ```python
 # lib/workers.py additions
 
 """
-Add consensus troubleshooting workers to existing multi-API architecture.
+Consensus troubleshooting worker using CollecTor as the primary data source.
 """
 
-import threading
-from lib.consensus.vote_parser import VoteParser
-from lib.consensus.threshold_analyzer import ThresholdAnalyzer
-from lib.consensus.authorities import DIRECTORY_AUTHORITIES
+import json
+import os
+from datetime import datetime
+from typing import Optional
 
-# Global parser instances
-_vote_parser = None
-_threshold_analyzer = None
+from lib.consensus.collector_fetcher import CollectorFetcher
+
+# Global fetcher instance (persists between page generations)
+_collector_fetcher: Optional[CollectorFetcher] = None
+_last_fetch_time: Optional[datetime] = None
+_cache_dir = 'cache/consensus'
 
 
-def fetch_authority_votes():
+def fetch_collector_data() -> dict:
     """
-    Worker function to fetch votes from all directory authorities.
-    Runs as part of the multi-API worker pool.
+    Worker function to fetch all consensus data from CollecTor.
+    
+    This single worker replaces multiple individual fetchers because
+    CollecTor provides ALL data from a single source:
+    - All 9 authority votes
+    - All 7 bandwidth files
+    - Flag thresholds (extracted from votes)
+    
+    Called once per hour by the multi-API worker pool.
     """
-    global _vote_parser
+    global _collector_fetcher, _last_fetch_time
     
     try:
-        progress_logger.log("Fetching directory authority votes...")
+        progress_logger.log("Fetching consensus data from CollecTor...")
         
-        _vote_parser = VoteParser()
-        votes = _vote_parser.fetch_all_votes(timeout=30)
+        _collector_fetcher = CollectorFetcher(cache_dir=_cache_dir)
+        data = _collector_fetcher.fetch_all_data(timeout=120)  # 2 min timeout for all files
         
-        # Cache the parsed votes
-        _save_cache('authority_votes', {
-            'votes': {name: _serialize_vote(vote) for name, vote in votes.items()},
-            'fetched_at': datetime.utcnow().isoformat()
-        })
-        _mark_ready('authority_votes')
+        # Log results
+        vote_count = len([v for v in data['votes'].values() if 'error' not in v])
+        bw_count = len([b for b in data['bandwidth_files'].values() if 'error' not in b])
+        relay_count = len(data['relay_index'])
         
-        successful = sum(1 for v in votes.values() if 'error' not in v)
-        progress_logger.log(f"Fetched votes from {successful}/{len(DIRECTORY_AUTHORITIES)} authorities")
+        progress_logger.log(
+            f"CollecTor fetch complete: {vote_count}/9 votes, "
+            f"{bw_count}/7 bandwidth files, {relay_count} relays indexed"
+        )
         
-        return votes
+        # Save to cache for graceful degradation
+        _save_collector_cache(data)
+        _mark_ready('collector_data')
+        _last_fetch_time = datetime.utcnow()
+        
+        return data
         
     except Exception as e:
-        error_msg = f"Failed to fetch authority votes: {str(e)}"
+        error_msg = f"Failed to fetch CollecTor data: {str(e)}"
         progress_logger.log(error_msg)
-        _mark_stale('authority_votes', error_msg)
-        return _load_cache('authority_votes')
+        _mark_stale('collector_data', error_msg)
+        
+        # Try to load from cache
+        cached = _load_collector_cache()
+        if cached:
+            progress_logger.log("Using cached CollecTor data")
+            _collector_fetcher = CollectorFetcher(cache_dir=_cache_dir)
+            _collector_fetcher.votes = cached.get('votes', {})
+            _collector_fetcher.bandwidth_files = cached.get('bandwidth_files', {})
+            _collector_fetcher.relay_index = cached.get('relay_index', {})
+            _collector_fetcher.flag_thresholds = cached.get('flag_thresholds', {})
+            return cached
+        
+        return {'error': error_msg}
 
 
-def fetch_flag_thresholds():
+def get_relay_diagnostics(fingerprint: str) -> dict:
     """
-    Worker function to fetch and parse flag thresholds.
-    Uses the cached vote data to extract thresholds.
-    """
-    global _threshold_analyzer
+    Get complete diagnostics for a relay (Phases 1-4).
+    Called during relay-info.html generation.
     
-    try:
-        progress_logger.log("Extracting flag thresholds from votes...")
+    Args:
+        fingerprint: Relay fingerprint (hex, 40 chars)
         
-        # Load cached votes
-        votes_cache = _load_cache('authority_votes')
-        if not votes_cache:
-            raise ValueError("Authority votes not available")
-        
-        # Extract thresholds from each authority's vote
-        authority_thresholds = {}
-        for auth_name, vote_data in votes_cache.get('votes', {}).items():
-            if 'flag_thresholds' in vote_data:
-                authority_thresholds[auth_name] = vote_data['flag_thresholds']
-        
-        _threshold_analyzer = ThresholdAnalyzer(authority_thresholds)
-        network_thresholds = _threshold_analyzer.get_network_thresholds()
-        
-        _save_cache('flag_thresholds', {
-            'per_authority': authority_thresholds,
-            'network_median': network_thresholds,
-            'fetched_at': datetime.utcnow().isoformat()
-        })
-        _mark_ready('flag_thresholds')
-        
-        progress_logger.log(f"Extracted thresholds from {len(authority_thresholds)} authorities")
-        
-        return network_thresholds
-        
-    except Exception as e:
-        error_msg = f"Failed to extract flag thresholds: {str(e)}"
-        progress_logger.log(error_msg)
-        _mark_stale('flag_thresholds', error_msg)
-        return _load_cache('flag_thresholds')
+    Returns:
+        Dict with all diagnostic data for the relay page
+    """
+    global _collector_fetcher
+    
+    # Ensure fetcher is initialized
+    if _collector_fetcher is None:
+        cached = _load_collector_cache()
+        if cached:
+            _collector_fetcher = CollectorFetcher(cache_dir=_cache_dir)
+            _collector_fetcher.votes = cached.get('votes', {})
+            _collector_fetcher.bandwidth_files = cached.get('bandwidth_files', {})
+            _collector_fetcher.relay_index = cached.get('relay_index', {})
+            _collector_fetcher.flag_thresholds = cached.get('flag_thresholds', {})
+        else:
+            return {'error': 'CollecTor data not available'}
+    
+    return _collector_fetcher.get_relay_diagnostics(fingerprint)
 
 
-def _serialize_vote(vote_data: dict) -> dict:
-    """Serialize vote data for caching (without full relay list)."""
+def get_network_flag_thresholds() -> dict:
+    """
+    Get current network flag thresholds (median across authorities).
+    Useful for the Directory Authorities page and troubleshooting wizard.
+    """
+    global _collector_fetcher
+    
+    if _collector_fetcher is None:
+        cached = _load_collector_cache()
+        if cached:
+            return {
+                'per_authority': cached.get('flag_thresholds', {}),
+                'median': _calculate_median_thresholds(cached.get('flag_thresholds', {}))
+            }
+        return {'error': 'Threshold data not available'}
+    
     return {
-        'authority': vote_data.get('authority'),
-        'published': vote_data.get('published'),
-        'valid_after': vote_data.get('valid_after'),
-        'flag_thresholds': vote_data.get('flag_thresholds'),
-        'known_flags': vote_data.get('known_flags'),
-        'relay_count': vote_data.get('relay_count'),
-        # Don't serialize full relay list - too large
-        # Keep fingerprint index for lookups
-        'relay_fingerprints': list(vote_data.get('relays', {}).keys())
+        'per_authority': _collector_fetcher.flag_thresholds,
+        'median': _collector_fetcher._get_median_thresholds()
     }
 
 
-def get_relay_consensus_analysis(fingerprint: str) -> dict:
-    """
-    Get consensus analysis for a specific relay.
-    Called from template rendering.
-    """
-    global _vote_parser
+def _save_collector_cache(data: dict) -> None:
+    """Save CollecTor data to cache file."""
+    os.makedirs(_cache_dir, exist_ok=True)
+    cache_file = os.path.join(_cache_dir, 'collector_data.json')
     
-    if _vote_parser is None:
-        # Try to initialize from cache
-        votes_cache = _load_cache('authority_votes')
-        if votes_cache:
-            _vote_parser = VoteParser()
-            # Would need to re-fetch or use cached fingerprint lists
+    # Don't cache full relay data (too large) - just index and metadata
+    cache_data = {
+        'fetched_at': data.get('fetched_at'),
+        'votes': {
+            name: {
+                'authority': v.get('authority'),
+                'published': v.get('published'),
+                'valid_after': v.get('valid_after'),
+                'flag_thresholds': v.get('flag_thresholds'),
+                'relay_count': v.get('relay_count'),
+                # Store relays dict for lookups
+                'relays': v.get('relays', {})
+            } for name, v in data.get('votes', {}).items()
+        },
+        'bandwidth_files': {
+            name: {
+                'authority': b.get('authority'),
+                'timestamp': b.get('timestamp'),
+                'relay_count': b.get('relay_count'),
+                'relays': b.get('relays', {})
+            } for name, b in data.get('bandwidth_files', {}).items()
+        },
+        'flag_thresholds': data.get('flag_thresholds', {}),
+        'relay_index': data.get('relay_index', {})
+    }
     
-    if _vote_parser:
-        return _vote_parser.analyze_relay_consensus_status(fingerprint)
-    
-    return {'error': 'Vote data not available'}
+    with open(cache_file, 'w') as f:
+        json.dump(cache_data, f)
 
 
-def get_relay_flag_eligibility(relay_data: dict) -> dict:
-    """
-    Get flag eligibility analysis for a relay.
-    Called from template rendering.
-    """
-    global _threshold_analyzer
+def _load_collector_cache() -> Optional[dict]:
+    """Load CollecTor data from cache file."""
+    cache_file = os.path.join(_cache_dir, 'collector_data.json')
+    if os.path.exists(cache_file):
+        try:
+            with open(cache_file) as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return None
+
+
+def _calculate_median_thresholds(per_authority: dict) -> dict:
+    """Calculate median thresholds from per-authority data."""
+    if not per_authority:
+        return {}
     
-    if _threshold_analyzer is None:
-        thresholds_cache = _load_cache('flag_thresholds')
-        if thresholds_cache:
-            _threshold_analyzer = ThresholdAnalyzer(
-                thresholds_cache.get('per_authority', {})
-            )
+    all_keys = set()
+    for thresholds in per_authority.values():
+        all_keys.update(thresholds.keys())
     
-    if _threshold_analyzer:
-        return _threshold_analyzer.generate_full_eligibility_report(relay_data)
+    median_thresholds = {}
+    for key in all_keys:
+        values = [t[key] for t in per_authority.values() if key in t]
+        if values:
+            values.sort()
+            mid = len(values) // 2
+            median_thresholds[key] = values[mid] if len(values) % 2 else (values[mid-1] + values[mid]) / 2
     
-    return {'error': 'Threshold data not available'}
+    return median_thresholds
 ```
 
 ---
 
 ## Template Integration
 
-### relay-info.html Additions
+### relay-info.html - Complete Consensus Diagnostics Section
+
+All 4 phases are rendered as a unified "Consensus Diagnostics" section on the relay detail page.
 
 ```html
-{# Add after existing relay information sections #}
+{# ═══════════════════════════════════════════════════════════════════════════
+   CONSENSUS DIAGNOSTICS SECTION
+   Add this after existing relay information sections in relay-info.html
+   
+   Data source: relay.diagnostics (from get_relay_diagnostics() in workers.py)
+   ═══════════════════════════════════════════════════════════════════════════ #}
 
-{% if relay.consensus_analysis %}
-<div id="consensus-votes" class="section">
-    <h3>
-        <a href="#consensus-votes" class="anchor-link">🗳️ Directory Authority Votes</a>
-    </h3>
+{% if relay.diagnostics and not relay.diagnostics.error %}
+{% set diag = relay.diagnostics %}
+
+<div id="consensus-diagnostics" class="section">
+    <h2>
+        <a href="#consensus-diagnostics" class="anchor-link">🔍 Consensus Diagnostics</a>
+    </h2>
     
-    <div class="consensus-summary">
-        {% set analysis = relay.consensus_analysis %}
-        {% if analysis.in_consensus %}
-            <span class="status-good">✅ In Consensus</span>
-            ({{ analysis.voted_count }}/{{ analysis.total_authorities }} authorities)
+    <div class="diagnostics-summary">
+        {% if diag.in_consensus %}
+            <span class="status-good">✅ IN CONSENSUS</span>
         {% else %}
-            <span class="status-bad">❌ Not in Consensus</span>
-            ({{ analysis.voted_count }}/{{ analysis.total_authorities }} authorities)
+            <span class="status-bad">❌ NOT IN CONSENSUS</span>
         {% endif %}
+        <small>(Data from CollecTor, analyzed {{ diag.analyzed_at|timeago }})</small>
     </div>
-    
-    <table class="table table-condensed authority-votes-table">
-        <thead>
-            <tr>
-                <th>Authority</th>
-                <th>Voted</th>
-                <th>Flags Assigned</th>
-                <th>Bandwidth</th>
-                <th>Issue</th>
-            </tr>
-        </thead>
-        <tbody>
-        {% for auth_name, status in analysis.per_authority_status.items() %}
-            <tr>
-                <td>{{ auth_name }}</td>
-                <td>
-                    {% if status.voted %}
-                        <span class="status-good">✅</span>
-                    {% else %}
-                        <span class="status-bad">❌</span>
-                    {% endif %}
-                </td>
-                <td>{{ status.flags|join(' ') if status.flags else 'N/A' }}</td>
-                <td>{{ status.bandwidth if status.bandwidth else 'N/A' }}</td>
-                <td>
-                    {% if not status.voted %}
-                        <span class="issue-warning">⚠️ {{ status.error }}</span>
-                    {% endif %}
-                </td>
-            </tr>
-        {% endfor %}
-        </tbody>
-    </table>
-    
-    {% if analysis.recommendations %}
-    <div class="recommendations">
-        <h4>💡 Troubleshooting Recommendations</h4>
-        <ul>
-        {% for rec in analysis.recommendations %}
-            <li>{{ rec }}</li>
-        {% endfor %}
-        </ul>
-    </div>
-    {% endif %}
-</div>
-{% endif %}
 
-{% if relay.flag_eligibility %}
-<div id="flag-eligibility" class="section">
-    <h3>
-        <a href="#flag-eligibility" class="anchor-link">🎯 Flag Eligibility Analysis</a>
-    </h3>
+    {# ════════════════════════════════════════════════════════════════════════
+       PHASE 1: Authority Votes
+       ════════════════════════════════════════════════════════════════════════ #}
     
-    {% set eligibility = relay.flag_eligibility %}
-    
-    <div class="current-flags">
-        <strong>Current Flags:</strong> {{ eligibility.current_flags|join(', ') }}
-    </div>
-    
-    {% for flag, analysis in eligibility.flag_eligibility.items() %}
-    <div class="flag-analysis">
-        <h4>
-            {{ flag }}
-            {% if flag in eligibility.current_flags %}
-                <span class="has-flag">✅ Has Flag</span>
-            {% elif analysis.eligible %}
-                <span class="eligible">🟡 Eligible</span>
-            {% else %}
-                <span class="not-eligible">❌ Not Eligible</span>
-            {% endif %}
-        </h4>
+    <div id="authority-votes" class="diagnostic-phase">
+        <h3>
+            <a href="#authority-votes" class="anchor-link">🗳️ Phase 1: Directory Authority Votes</a>
+        </h3>
         
-        <table class="table table-condensed requirements-table">
+        {% set votes = diag.phases.authority_votes %}
+        <p class="phase-summary">
+            Voted by <strong>{{ votes.voted_count }}/{{ votes.total_authorities }}</strong> authorities
+        </p>
+        
+        <table class="table table-condensed">
             <thead>
                 <tr>
-                    <th>Requirement</th>
-                    <th>Your Value</th>
-                    <th>Threshold</th>
-                    <th>Status</th>
+                    <th>Authority</th>
+                    <th>Voted</th>
+                    <th>Flags Assigned</th>
+                    <th>Bandwidth</th>
                 </tr>
             </thead>
             <tbody>
-            {% for req in analysis.requirements %}
-                <tr class="{% if req.met %}req-met{% else %}req-not-met{% endif %}">
-                    <td>{{ req.description }}</td>
-                    <td>{{ req.relay_value|format_threshold_value(req.unit) }}</td>
-                    <td>{{ req.threshold|format_threshold_value(req.unit) }}</td>
+            {% for auth_name, status in votes.per_authority.items()|sort %}
+                <tr class="{% if not status.voted %}row-warning{% endif %}">
+                    <td>{{ auth_name }}</td>
                     <td>
-                        {% if req.met %}
-                            ✅ Met
-                        {% elif req.met is none %}
-                            ❓ Unknown
+                        {% if status.voted %}✅{% else %}❌{% endif %}
+                    </td>
+                    <td>
+                        {% if status.voted %}
+                            {{ status.flags|join(' ') or 'No flags' }}
                         {% else %}
-                            ❌ Below
+                            <span class="text-muted">Not in vote</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if status.bandwidth %}
+                            {{ status.bandwidth|format_bandwidth }}
+                            {% if status.measured %}<span class="badge">Measured</span>{% endif %}
+                        {% else %}
+                            <span class="text-muted">N/A</span>
                         {% endif %}
                     </td>
                 </tr>
@@ -1290,19 +1776,323 @@ def get_relay_flag_eligibility(relay_data: dict) -> dict:
             </tbody>
         </table>
         
-        {% if analysis.recommendations %}
-        <div class="flag-recommendations">
-            <small>
-            {% for rec in analysis.recommendations %}
-                • {{ rec }}<br>
+        {% if votes.issues %}
+        <div class="issues-box">
+            <strong>⚠️ Issues Detected:</strong>
+            <ul>
+            {% for issue in votes.issues %}
+                <li>{{ issue }}</li>
             {% endfor %}
-            </small>
+            </ul>
         </div>
         {% endif %}
     </div>
-    {% endfor %}
+
+    {# ════════════════════════════════════════════════════════════════════════
+       PHASE 2: Flag Eligibility
+       ════════════════════════════════════════════════════════════════════════ #}
+    
+    <div id="flag-eligibility" class="diagnostic-phase">
+        <h3>
+            <a href="#flag-eligibility" class="anchor-link">🎯 Phase 2: Flag Eligibility Analysis</a>
+        </h3>
+        
+        {% set flags = diag.phases.flag_eligibility %}
+        <p class="phase-summary">
+            Current flags: <strong>{{ flags.current_flags|join(', ') or 'None' }}</strong>
+        </p>
+        
+        {% for flag_name, analysis in flags.analysis.items() %}
+        <div class="flag-card">
+            <h4>
+                {{ flag_name }}
+                {% if flag_name in flags.current_flags %}
+                    <span class="badge badge-success">✅ Has Flag</span>
+                {% elif analysis.eligible %}
+                    <span class="badge badge-warning">🟡 Eligible</span>
+                {% else %}
+                    <span class="badge badge-danger">❌ Not Eligible</span>
+                {% endif %}
+            </h4>
+            
+            {% if analysis.requirements %}
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Requirement</th>
+                        <th>Your Value</th>
+                        <th>Threshold</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for req in analysis.requirements %}
+                    <tr class="{% if not req.met %}row-danger{% endif %}">
+                        <td>{{ req.description }}</td>
+                        <td>{{ req.relay_value|format_metric(req.unit) }}</td>
+                        <td>{{ req.threshold|format_metric(req.unit) }}</td>
+                        <td>
+                            {% if req.met %}✅ Met{% elif req.met is none %}❓{% else %}❌ Below{% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+            
+            {% if analysis.missing %}
+            <p class="recommendation">
+                💡 To gain {{ flag_name }}: {{ analysis.missing|join(', ') }}
+            </p>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+
+    {# ════════════════════════════════════════════════════════════════════════
+       PHASE 3: Reachability Analysis
+       ════════════════════════════════════════════════════════════════════════ #}
+    
+    <div id="reachability" class="diagnostic-phase">
+        <h3>
+            <a href="#reachability" class="anchor-link">🌐 Phase 3: Authority Reachability</a>
+        </h3>
+        
+        {% set reach = diag.phases.reachability %}
+        
+        <div class="row">
+            <div class="col-md-6">
+                <h4>IPv4 Reachability ({{ relay.or_addresses[0] if relay.or_addresses else 'N/A' }})</h4>
+                <table class="table table-sm">
+                    <thead>
+                        <tr><th>Authority</th><th>Status</th><th>Evidence</th></tr>
+                    </thead>
+                    <tbody>
+                    {% for auth_name, status in reach.ipv4.items()|sort %}
+                        <tr class="{% if not status.reachable %}row-warning{% endif %}">
+                            <td>{{ auth_name }}</td>
+                            <td>{% if status.reachable %}✅{% else %}❌{% endif %}</td>
+                            <td><small>{{ status.evidence }}</small></td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="col-md-6">
+                <h4>IPv6 Reachability</h4>
+                <table class="table table-sm">
+                    <thead>
+                        <tr><th>Authority</th><th>Status</th><th>Evidence</th></tr>
+                    </thead>
+                    <tbody>
+                    {% for auth_name, status in reach.ipv6.items()|sort %}
+                        <tr class="{% if status.reachable == false %}row-warning{% endif %}">
+                            <td>{{ auth_name }}</td>
+                            <td>
+                                {% if status.reachable is none %}⚪{% elif status.reachable %}✅{% else %}❌{% endif %}
+                            </td>
+                            <td><small>{{ status.evidence }}</small></td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        {% if reach.issues %}
+        <div class="issues-box">
+            <strong>⚠️ Reachability Issues:</strong>
+            <ul>
+            {% for issue in reach.issues %}
+                <li>{{ issue }}</li>
+            {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+
+    {# ════════════════════════════════════════════════════════════════════════
+       PHASE 4: Bandwidth Measurements
+       ════════════════════════════════════════════════════════════════════════ #}
+    
+    <div id="bandwidth-measurements" class="diagnostic-phase">
+        <h3>
+            <a href="#bandwidth-measurements" class="anchor-link">📊 Phase 4: Bandwidth Authority Measurements</a>
+        </h3>
+        
+        {% set bw = diag.phases.bandwidth %}
+        <p class="phase-summary">
+            Measured by <strong>{{ bw.measured_by|length }}/7</strong> bandwidth authorities
+            {% if bw.measurement_variance %}
+                (variance: {{ bw.measurement_variance|round(1) }}%)
+            {% endif %}
+        </p>
+        
+        <table class="table table-condensed">
+            <thead>
+                <tr>
+                    <th>BW Authority</th>
+                    <th>Measured</th>
+                    <th>Value</th>
+                    <th>Deviation</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for auth_name, status in bw.per_authority.items()|sort %}
+                <tr class="{% if not status.measured %}row-muted{% endif %}">
+                    <td>{{ auth_name }}</td>
+                    <td>{% if status.measured %}✅{% else %}❌{% endif %}</td>
+                    <td>
+                        {% if status.value %}
+                            {{ status.value|format_bandwidth }}
+                        {% else %}
+                            <span class="text-muted">N/A</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if status.value and bw.average_measurement %}
+                            {% set deviation = ((status.value - bw.average_measurement) / bw.average_measurement * 100) %}
+                            <span class="{% if deviation > 10 or deviation < -10 %}text-warning{% endif %}">
+                                {{ '%+.1f'|format(deviation) }}%
+                            </span>
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        
+        {% if bw.not_measured_by %}
+        <div class="info-box">
+            <strong>ℹ️ Not measured by:</strong> {{ bw.not_measured_by|join(', ') }}
+            <br><small>Note: dizum and dannenberg do not run bandwidth scanners.</small>
+        </div>
+        {% endif %}
+        
+        {% if bw.measured_by|length < 3 %}
+        <div class="warning-box">
+            <strong>⚠️ Unmeasured Status</strong>
+            <p>This relay is measured by fewer than 3 bandwidth authorities, which may result in "Unmeasured" status in consensus.</p>
+            <ul>
+                <li>New relays may take 1-2 weeks to be fully measured</li>
+                <li>Check reachability to bandwidth authorities above</li>
+                <li>Ensure relay has stable connectivity</li>
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+
 </div>
 {% endif %}
+
+{# Show error message if diagnostics failed #}
+{% if relay.diagnostics and relay.diagnostics.error %}
+<div id="consensus-diagnostics" class="section">
+    <h2>🔍 Consensus Diagnostics</h2>
+    <div class="error-box">
+        <strong>⚠️ Diagnostics Unavailable</strong>
+        <p>{{ relay.diagnostics.error }}</p>
+        <p>This may indicate the relay is not currently in consensus, or data is being refreshed.</p>
+    </div>
+</div>
+{% endif %}
+```
+
+### CSS Additions for Diagnostics
+
+```css
+/* Add to allium.css */
+
+/* Diagnostics Section */
+#consensus-diagnostics {
+    margin-top: 2rem;
+    border-top: 2px solid #e0e0e0;
+    padding-top: 1rem;
+}
+
+.diagnostics-summary {
+    font-size: 1.2rem;
+    margin-bottom: 1rem;
+    padding: 0.5rem 1rem;
+    background: #f8f9fa;
+    border-radius: 4px;
+}
+
+.diagnostic-phase {
+    margin-top: 1.5rem;
+    padding: 1rem;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+}
+
+.diagnostic-phase h3 {
+    margin-top: 0;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #eee;
+}
+
+.phase-summary {
+    margin-bottom: 1rem;
+    color: #555;
+}
+
+/* Status indicators */
+.status-good { color: #28a745; font-weight: bold; }
+.status-bad { color: #dc3545; font-weight: bold; }
+
+/* Issue boxes */
+.issues-box, .warning-box {
+    margin-top: 1rem;
+    padding: 0.75rem 1rem;
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 4px;
+}
+
+.info-box {
+    margin-top: 1rem;
+    padding: 0.75rem 1rem;
+    background: #e7f3ff;
+    border: 1px solid #007bff;
+    border-radius: 4px;
+}
+
+.error-box {
+    padding: 1rem;
+    background: #f8d7da;
+    border: 1px solid #dc3545;
+    border-radius: 4px;
+}
+
+/* Table row states */
+.row-warning { background: #fff3cd; }
+.row-danger { background: #f8d7da; }
+.row-muted { color: #6c757d; }
+
+/* Flag cards */
+.flag-card {
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.flag-card h4 {
+    margin: 0 0 0.5rem 0;
+}
+
+/* Badges */
+.badge { 
+    padding: 0.25rem 0.5rem; 
+    border-radius: 3px; 
+    font-size: 0.8rem;
+}
+.badge-success { background: #28a745; color: white; }
+.badge-warning { background: #ffc107; color: black; }
+.badge-danger { background: #dc3545; color: white; }
 ```
 
 ---
@@ -1421,20 +2211,60 @@ class TestThresholdAnalyzer:
 
 ## Deployment Checklist
 
+### Phase 1: Core Infrastructure
 - [ ] Create `lib/consensus/` directory structure
-- [ ] Implement `authorities.py` with endpoint configuration
-- [ ] Implement `vote_parser.py` with parsing logic
-- [ ] Implement `threshold_analyzer.py` with eligibility analysis
-- [ ] Add worker functions to `lib/workers.py`
-- [ ] Update `relay-info.html` template
-- [ ] Update `misc-authorities.html` template
-- [ ] Create `misc-troubleshooter.html` template
-- [ ] Add unit tests
-- [ ] Add integration tests
-- [ ] Update documentation
-- [ ] Performance testing with production data
+- [ ] Implement `collector.py` - CollecTor configuration
+- [ ] Implement `authorities.py` - Authority configuration and fingerprint mapping
+- [ ] Implement `collector_fetcher.py` - Main data fetcher from CollecTor
+
+### Phase 2: Worker Integration  
+- [ ] Add `fetch_collector_data()` to `lib/workers.py`
+- [ ] Add `get_relay_diagnostics()` lookup function
+- [ ] Implement caching strategy for CollecTor data
+- [ ] Test worker with multi-API coordinator
+
+### Phase 3: Template Updates
+- [ ] Update `relay-info.html` with Consensus Diagnostics section
+- [ ] Add CSS styles for diagnostic components
+- [ ] Add Jinja2 filters for formatting (`format_bandwidth`, `format_metric`, `timeago`)
+- [ ] Test rendering with sample relay data
+
+### Phase 4: Testing
+- [ ] Unit tests for `CollectorFetcher` parsing
+- [ ] Unit tests for per-relay analysis functions
+- [ ] Integration test with real CollecTor data
+- [ ] Performance testing (7000+ relays)
+
+### Phase 5: Documentation
+- [ ] Update README with new features
+- [ ] Document CollecTor data dependencies
+- [ ] Add troubleshooting FAQ for operators
+
+---
+
+## Performance Considerations
+
+### Data Size Estimates
+| Data | Estimated Size | Parse Time |
+|------|----------------|------------|
+| 9 Authority Votes | ~50 MB total | ~5-10 sec |
+| 7 Bandwidth Files | ~50 MB total | ~3-5 sec |
+| Relay Index (7000 relays) | ~10 MB in memory | Instant |
+| Per-relay lookup | <1 KB | <1 ms |
+
+### Caching Strategy
+1. **CollecTor data**: Cache for 1 hour (matches consensus cycle)
+2. **Relay index**: Keep in memory for fast lookups during page generation
+3. **Per-relay diagnostics**: Compute on-demand (already indexed)
+
+### Graceful Degradation
+- If CollecTor fetch fails, use cached data (may be up to 3 hours old)
+- Show "Data may be stale" warning when using cached data
+- Individual phase sections can be hidden if data unavailable
 
 ---
 
 **Document Status**: Technical specification complete  
-**Next Steps**: Implementation review and Phase 1 kickoff
+**Primary Data Source**: Tor Project CollecTor (https://collector.torproject.org)  
+**Target Location**: Per-relay detail pages (`relay-info.html`)  
+**Next Steps**: Implementation review and core infrastructure development
