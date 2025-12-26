@@ -289,13 +289,191 @@ All phases 1-4 add new sections to the individual **relay detail page** (`relay-
 
 ---
 
-### Phase 5: Troubleshooting Wizard Page (Lower Priority)
+## 🏛️ Directory Authority Health Dashboard (Phases 5-6)
+
+**Merged from**: [TOP_10_PRIORITIZED_FEATURES.md Feature #4](https://github.com/1aeo/allium/blob/cursor/future-features-review-5147/docs/features/planned/TOP_10_PRIORITIZED_FEATURES.md)
+
+This section extends the per-relay diagnostics (Phases 1-4) with a **network-wide Directory Authority Health Dashboard** that monitors the health and performance of all 9 directory authorities.
+
+### Current Implementation Status
+
+| Component | Status | Location |
+|-----------|--------|----------|
+| Basic authority table | ✅ Implemented | `misc-authorities.html` |
+| Authority uptime stats (1M/6M/1Y/5Y) | ✅ Implemented | `relays.py` |
+| Z-score outlier detection | ✅ Implemented | `relays.py` |
+| Version compliance tracking | ✅ Implemented | `misc-authorities.html` |
+| `fetch_consensus_health()` | ⚠️ Placeholder only | `workers.py` |
+| Real-time voting status | ❌ Not implemented | — |
+| Latency monitoring | ❌ Not implemented | — |
+| Consensus formation analysis | ❌ Not implemented | — |
+| Alert system | ❌ Not implemented | — |
+
+---
+
+### Phase 5: Directory Authority Health Dashboard (Medium Priority)
+
+**Problem Solved**: "Is there a problem with the Tor network itself?" / "Are all authorities functioning?"
+
+**Location**: Enhanced `misc-authorities.html` or new `misc-authorities-health.html`
+
+**Data Sources**: 
+- CollecTor (votes, consensus, bandwidth files)
+- Direct HTTP latency checks to authority directory ports
+- Onionoo (authority details, uptime - already integrated)
+
+#### Main Dashboard Mockup
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ 🏛️ Directory Authority Health Dashboard                         │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│ ┌───────────────────┐ ┌───────────────────┐ ┌─────────────────┐│
+│ │ Consensus Status  │ │ Authority Voting  │ │ Network Sync    ││
+│ │                   │ │                   │ │                 ││
+│ │ ✅ CURRENT        │ │ 9/9 ACTIVE        │ │ 99.2% SYNC      ││
+│ │ Fresh: 14:32 UTC  │ │ Last Vote: Recent │ │ 8.9/9 Agreement ││
+│ │ Next: 15:00 UTC   │ │ All Participating │ │                 ││
+│ └───────────────────┘ └───────────────────┘ └─────────────────┘│
+│                                                                 │
+│ Directory Authorities Status (Real-Time):                       │
+│ ┌──────────────────────────────────────────────────────────────┐│
+│ │ Authority    │ Status │ Vote │ BW Scan │ Latency │ Uptime   ││
+│ ├──────────────┼────────┼──────┼─────────┼─────────┼──────────┤│
+│ │ moria1       │ 🟢 OK  │ ✅   │ ✅      │ 12ms    │ 99.9%    ││
+│ │ tor26        │ 🟢 OK  │ ✅   │ ✅      │ 8ms     │ 99.9%    ││
+│ │ dizum        │ 🟢 OK  │ ✅   │ ❌ N/A  │ 15ms    │ 99.8%    ││
+│ │ gabelmoo     │ 🟢 OK  │ ✅   │ ✅      │ 11ms    │ 99.9%    ││
+│ │ dannenberg   │ 🟢 OK  │ ✅   │ ❌ N/A  │ 19ms    │ 99.7%    ││
+│ │ maatuska     │ 🟢 OK  │ ✅   │ ✅      │ 7ms     │ 99.9%    ││
+│ │ faravahar    │ 🟡 SLOW│ ✅   │ ⚠️      │ 89ms    │ 97.8%    ││
+│ │ longclaw     │ 🟢 OK  │ ✅   │ ✅      │ 14ms    │ 99.6%    ││
+│ │ bastet       │ 🟢 OK  │ ✅   │ ✅      │ 16ms    │ 99.5%    ││
+│ └──────────────┴────────┴──────┴─────────┴─────────┴──────────┘│
+│                                                                 │
+│ ⚠️ Active Alerts (1):                                           │
+│ ┌──────────────────────────────────────────────────────────────┐│
+│ │ 🟡 WARNING: faravahar bandwidth scanning slower than usual   ││
+│ │    Response time: 89ms (threshold: 50ms) • Since: 14:15 UTC  ││
+│ └──────────────────────────────────────────────────────────────┘│
+│                                                                 │
+│ Recent Consensus Events:                                        │
+│ • 14:32 - Consensus published successfully (9/9 authorities)   │
+│ • 14:31 - Voting round completed in 127 seconds                │
+│ • 14:29 - All authorities synchronized                         │
+│                                                                 │
+│ Last updated: 14:45:23 UTC • Auto-refresh: 60s                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Consensus Health Metrics View
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ 📊 Consensus Health Metrics                                     │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│ Current Consensus (2025-01-06 15:00:00):                       │
+│ ┌──────────────────────────────────────────────────────────────┐│
+│ │ Method: 33              Valid: 15:00-16:00 UTC               ││
+│ │ Relays: 8,247           Voting Delay: 300s                   ││
+│ │ Authorities: 9/9        Distribution Delay: 300s             ││
+│ │ Bandwidth Sum: 1.2TB/s  Consensus Size: 2.3MB               ││
+│ └──────────────────────────────────────────────────────────────┘│
+│                                                                 │
+│ Flag Distribution:                                              │
+│ ┌──────────────────────────────────────────────────────────────┐│
+│ │ Running  ████████████████████████████████ 7,234 (87.7%)     ││
+│ │ Fast     ████████████████████████████     6,891 (83.6%)     ││
+│ │ Stable   ████████████████████████         5,678 (68.9%)     ││
+│ │ Guard    ████████████████                 2,845 (34.5%)     ││
+│ │ Exit     ███████████                      1,923 (23.3%)     ││
+│ │ V2Dir    ████████████████████████████████ 7,156 (86.8%)     ││
+│ │ HSDir    ███████████████████████████████  6,987 (84.7%)     ││
+│ └──────────────────────────────────────────────────────────────┘│
+│                                                                 │
+│ Flag Thresholds (Current):                                      │
+│ ┌──────────────────────────────────────────────────────────────┐│
+│ │ Flag    │ Requirement              │ Current Value           ││
+│ ├─────────┼──────────────────────────┼─────────────────────────┤│
+│ │ Stable  │ Uptime ≥ median          │ ≥20.2 days              ││
+│ │ Stable  │ MTBF ≥ median            │ ≥36.2 days              ││
+│ │ Fast    │ Bandwidth ≥ 7/8 * median │ ≥102 KB/s               ││
+│ │ Guard   │ WFU ≥ 98%                │ ≥98%                    ││
+│ │ Guard   │ Time Known ≥ 8 days      │ ≥8 days                 ││
+│ │ Guard   │ Bandwidth (inc exits)    │ ≥29 MB/s                ││
+│ │ Guard   │ Bandwidth (exc exits)    │ ≥28 MB/s                ││
+│ │ HSDir   │ WFU ≥ 98%                │ ≥98%                    ││
+│ │ HSDir   │ Time Known ≥ median      │ ≥9.9 days               ││
+│ └─────────┴──────────────────────────┴─────────────────────────┘│
+│                                                                 │
+│ Quality Indicators:                                             │
+│ ✅ Consensus freshness: Excellent (12 minutes until stale)     │
+│ ✅ Authority participation: 100% (9/9)                         │
+│ ✅ Flag consistency: 98.7% agreement across authorities        │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Implementation Components
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| Authority Latency Checker | `lib/consensus/authority_monitor.py` | Direct HTTP checks to authority directory ports |
+| Consensus Parser | `lib/consensus/collector_fetcher.py` | Parse consensus docs from CollecTor |
+| Vote Tracker | `lib/consensus/collector_fetcher.py` | Track voting participation |
+| Bandwidth Tracker | `lib/consensus/collector_fetcher.py` | Monitor BW scanner activity |
+| Alert System | `lib/consensus/authority_alerts.py` | Generate alerts from health data |
+
+---
+
+### Phase 6: Historical Analytics & Troubleshooting Wizard (Lower Priority)
+
+#### Part A: Authority Performance Analytics (Historical)
+
+**Problem Solved**: "How reliable is each authority over time?"
+
+**Location**: Additional section on authority health dashboard
+
+**Data Required**: Historical storage (database or file-based)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ 📈 Authority Performance Analytics (30 days)                    │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│ Performance Scorecard:                                          │
+│ ┌──────────────────────────────────────────────────────────────┐│
+│ │ Authority    Uptime  Votes  BW-Scan  Consensus  Score        ││
+│ ├──────────────────────────────────────────────────────────────┤│
+│ │ moria1       99.8%   100%   98.2%    99.1%     ⭐⭐⭐⭐⭐      ││
+│ │ tor26        99.9%   100%   97.8%    99.3%     ⭐⭐⭐⭐⭐      ││
+│ │ dizum        99.4%   99.7%  N/A      98.9%     ⭐⭐⭐⭐        ││
+│ │ gabelmoo     99.7%   100%   98.9%    99.2%     ⭐⭐⭐⭐⭐      ││
+│ │ dannenberg   99.2%   99.8%  N/A      98.6%     ⭐⭐⭐⭐        ││
+│ │ maatuska     99.9%   100%   99.1%    99.4%     ⭐⭐⭐⭐⭐      ││
+│ │ faravahar    97.8%   98.9%  89.2%    97.1%     ⭐⭐⭐          ││
+│ │ longclaw     99.5%   100%   97.4%    99.0%     ⭐⭐⭐⭐        ││
+│ │ bastet       99.6%   99.9%  98.7%    99.3%     ⭐⭐⭐⭐⭐      ││
+│ └──────────────────────────────────────────────────────────────┘│
+│                                                                 │
+│ Performance Score Calculation:                                  │
+│ • Uptime: 30% weight (core availability)                       │
+│ • Voting: 25% weight (consensus participation)                 │
+│ • BW Scanning: 20% weight (measurement accuracy)               │
+│ • Consensus Agreement: 25% weight (flag consistency)           │
+│                                                                 │
+│ Network Impact Analysis:                                        │
+│ • Consensus Reliability: 99.4% (Excellent)                     │
+│ • Authority Redundancy: 9 active (tolerates 4 failures)        │
+│ • Geographic Distribution: 6 countries, 3 continents           │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Part B: Troubleshooting Wizard
 
 **Problem Solved**: Guided troubleshooting for users who don't know their relay's fingerprint
 
 **Location**: New standalone page `misc/consensus-troubleshooter.html`
 
-**Implementation**:
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │ 🔧 Consensus Troubleshooting Wizard                                │
@@ -322,57 +500,6 @@ All phases 1-4 add new sections to the individual **relay detail page** (`relay-
 │                                                                     │
 │ ❓ My relay identity/fingerprint changed unexpectedly               │
 │    → Check: Key files, relay restart history, first_seen date      │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-### Phase 6: Enhanced Directory Authorities Page (Lower Priority)
-
-**Problem Solved**: Centralized view of authority health and network-wide voting patterns
-
-**Location**: Enhanced existing `misc-authorities.html`
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│ 🏛️ Directory Authorities - Enhanced View                           │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│ Consensus Status: ✅ Current (Valid 04:00-05:00 UTC)               │
-│ Next Consensus: 05:00 UTC (in 23 minutes)                          │
-│                                                                     │
-│ Authority Voting Summary:                                           │
-│ ┌────────────────┬────────┬────────┬────────┬────────┬──────────┐ │
-│ │ Authority      │ Online │ Voted  │ BW Auth│ Relays │ Last Vote│ │
-│ ├────────────────┼────────┼────────┼────────┼────────┼──────────┤ │
-│ │ moria1         │ ✅     │ ✅     │ ✅     │ 10,064 │ 14:32    │ │
-│ │ tor26          │ ✅     │ ✅     │ ✅     │ 9,903  │ 14:31    │ │
-│ │ dizum          │ ✅     │ ✅     │ ❌     │ 10,671 │ 14:33    │ │
-│ │ gabelmoo       │ ✅     │ ✅     │ ✅     │ 9,845  │ 14:32    │ │
-│ │ dannenberg     │ ✅     │ ✅     │ ❌     │ 9,756  │ 14:31    │ │
-│ │ maatuska       │ ✅     │ ✅     │ ✅     │ 9,912  │ 14:32    │ │
-│ │ longclaw       │ ✅     │ ✅     │ ✅     │ 9,889  │ 14:33    │ │
-│ │ bastet         │ ✅     │ ✅     │ ✅     │ 9,901  │ 14:32    │ │
-│ │ faravahar      │ ✅     │ ✅     │ ✅     │ 9,878  │ 14:31    │ │
-│ └────────────────┴────────┴────────┴────────┴────────┴──────────┘ │
-│                                                                     │
-│ Flag Thresholds (Current Consensus):                                │
-│ ┌──────────────────────────────────────────────────────────────┐   │
-│ │ Flag    │ Requirement                       │ Current Value  │   │
-│ ├─────────┼───────────────────────────────────┼────────────────┤   │
-│ │ Stable  │ Uptime ≥ median                   │ ≥20.2 days     │   │
-│ │ Stable  │ MTBF ≥ median                     │ ≥36.2 days     │   │
-│ │ Fast    │ Bandwidth ≥ 7/8 * median          │ ≥102 KB/s      │   │
-│ │ Guard   │ WFU ≥ 98%                         │ ≥98%           │   │
-│ │ Guard   │ Time Known ≥ 8 days               │ ≥8 days        │   │
-│ │ Guard   │ Bandwidth (with exits) ≥          │ ≥29 MB/s       │   │
-│ │ Guard   │ Bandwidth (without exits) ≥       │ ≥28 MB/s       │   │
-│ │ HSDir   │ WFU ≥ 98%                         │ ≥98%           │   │
-│ │ HSDir   │ Time Known ≥ median               │ ≥9.9 days      │   │
-│ └─────────┴───────────────────────────────────┴────────────────┘   │
-│                                                                     │
-│ Quick Links to Authority Data:                                      │
-│ • [Consensus] [Votes] [Descriptors] [Bandwidth Files]              │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -478,16 +605,24 @@ allium/
 ├── lib/
 │   └── consensus/
 │       ├── __init__.py
-│       ├── collector.py           # CollecTor configuration
-│       ├── authorities.py         # Authority fingerprint mapping
-│       ├── collector_fetcher.py   # Main data fetcher (votes + bandwidth)
-│       ├── vote_parser.py         # Vote parsing logic (optional, for direct access)
-│       └── threshold_analyzer.py  # Flag threshold analysis
+│       ├── collector.py              # CollecTor configuration
+│       ├── authorities.py            # Authority fingerprint mapping
+│       ├── collector_fetcher.py      # Main data fetcher (votes + bandwidth)
+│       ├── threshold_analyzer.py     # Flag threshold analysis
+│       ├── authority_monitor.py      # Real-time authority latency checks (Phase 5)
+│       └── authority_alerts.py       # Alert generation system (Phase 5)
 ├── templates/
-│   └── relay-info.html            # MODIFY: Add consensus diagnostics section
+│   ├── relay-info.html               # MODIFY: Add consensus diagnostics (Phases 1-4)
+│   ├── misc-authorities.html         # MODIFY: Add health indicators (Phase 5)
+│   ├── misc-authorities-health.html  # NEW: Full authority health dashboard (Phase 5)
+│   └── misc-troubleshooter.html      # NEW: Troubleshooting wizard (Phase 6)
+├── static/
+│   └── css/
+│       └── diagnostics.css           # NEW: Styles for diagnostic components
 └── cache/
     └── consensus/
-        └── collector_data.json    # Cached CollecTor data (votes + bandwidth)
+        ├── collector_data.json       # Cached CollecTor data (votes + bandwidth)
+        └── authority_health.json     # Cached authority latency checks
 ```
 
 ### Integration with Multi-API Architecture
@@ -552,35 +687,84 @@ See `technical-implementation.md` for complete `CollectorFetcher` class implemen
 
 ## 📅 Implementation Timeline
 
-### Sprint 1: Core Infrastructure (Week 1)
+### 🚀 Milestone 1: Per-Relay Diagnostics (Phases 1-4) - 5 Weeks
+
+#### Sprint 1: Core Infrastructure (Week 1)
 - [ ] Create `lib/consensus/` directory structure
 - [ ] Implement `collector.py` - CollecTor configuration
 - [ ] Implement `authorities.py` - Authority fingerprint mapping
 - [ ] Implement `collector_fetcher.py` - Main data fetcher
 
-### Sprint 2: Worker Integration (Week 2)
+#### Sprint 2: Worker Integration (Week 2)
 - [ ] Add `fetch_collector_data()` worker to `lib/workers.py`
 - [ ] Implement `get_relay_diagnostics()` lookup function
 - [ ] Set up hourly caching for CollecTor data
 - [ ] Test with multi-API coordinator
 
-### Sprint 3: Relay Page - Phases 1-2 (Week 3)
+#### Sprint 3: Relay Page - Phases 1-2 (Week 3)
 - [ ] Add Phase 1 (Authority Votes) section to `relay-info.html`
 - [ ] Add Phase 2 (Flag Eligibility) section to `relay-info.html`
 - [ ] Add CSS styles for diagnostic components
 - [ ] Implement Jinja2 filters for formatting
 
-### Sprint 4: Relay Page - Phases 3-4 (Week 4)
+#### Sprint 4: Relay Page - Phases 3-4 (Week 4)
 - [ ] Add Phase 3 (Reachability Analysis) section
 - [ ] Add Phase 4 (Bandwidth Measurements) section
 - [ ] Add troubleshooting tips and recommendations
 - [ ] Implement error handling and graceful degradation
 
-### Sprint 5: Testing & Polish (Week 5)
+#### Sprint 5: Testing & Polish (Week 5)
 - [ ] Unit tests for CollecTor parsing
 - [ ] Integration tests with real data
 - [ ] Performance testing with 7000+ relays
 - [ ] Documentation and user guide
+
+---
+
+### 🏛️ Milestone 2: Authority Health Dashboard (Phases 5-6) - 4-6 Weeks
+
+#### Sprint 6: Real-Time Authority Monitoring (Week 6-7)
+- [ ] Implement `authority_monitor.py` - Direct HTTP latency checks
+- [ ] Add real-time status indicators (online/slow/degraded/offline)
+- [ ] Integrate latency data into existing `misc-authorities.html`
+- [ ] Add authority status summary cards
+
+#### Sprint 7: Consensus & Voting Analysis (Week 8)
+- [ ] Add consensus document parsing (valid-after, fresh-until, etc.)
+- [ ] Implement vote tracking (votes submitted per period)
+- [ ] Add flag distribution chart from consensus
+- [ ] Display consensus freshness indicators
+
+#### Sprint 8: Alert System & Dashboard (Week 9)
+- [ ] Implement `authority_alerts.py` - Alert generation
+- [ ] Create comprehensive authority health dashboard
+- [ ] Add alert thresholds and history
+- [ ] Create `misc-authorities-health.html` template
+
+#### Sprint 9: Historical Analytics (Week 10-11) - Optional
+- [ ] Set up historical data storage (file-based or database)
+- [ ] Implement 7-day/30-day trend graphs
+- [ ] Add performance scorecard calculations
+- [ ] Create troubleshooting wizard page
+
+---
+
+### Success Criteria
+
+#### Phases 1-4 (Per-Relay Diagnostics):
+- [ ] Authority vote lookup for any relay (< 100ms response)
+- [ ] Flag eligibility analysis with threshold comparison
+- [ ] IPv4/IPv6 reachability per authority
+- [ ] Bandwidth measurement display from all 7 BW authorities
+- [ ] < 2 second page load time for relay-info.html
+
+#### Phases 5-6 (Authority Health Dashboard):
+- [ ] Real-time latency checks for all 9 authorities (< 10s total)
+- [ ] Consensus document parsing from CollecTor (hourly)
+- [ ] Voting participation tracking (9 votes per consensus)
+- [ ] Bandwidth measurement activity tracking
+- [ ] Alert system for offline authorities and stale consensus
+- [ ] Flag distribution visualization from latest consensus
 
 ---
 
@@ -622,6 +806,13 @@ See `technical-implementation.md` for complete `CollectorFetcher` class implemen
 
 **Document Status**: Research complete, ready for implementation  
 **Primary Data Source**: Tor Project CollecTor (https://collector.torproject.org)  
-**Target Location**: Per-relay detail pages (`relay-info.html`)  
-**Estimated Effort**: 5 sprints (~5 weeks)  
-**Next Steps**: Technical review and Phase 1 implementation kickoff
+**Merged From**: [TOP_10_PRIORITIZED_FEATURES.md Feature #4](https://github.com/1aeo/allium/blob/cursor/future-features-review-5147/docs/features/planned/TOP_10_PRIORITIZED_FEATURES.md)
+
+### Feature Summary
+
+| Milestone | Target | Phases | Timeline |
+|-----------|--------|--------|----------|
+| **Milestone 1** | Per-relay diagnostics (`relay-info.html`) | 1-4 | 5 weeks |
+| **Milestone 2** | Authority health dashboard | 5-6 | 4-6 weeks |
+
+**Next Steps**: Technical review and Sprint 1 implementation kickoff

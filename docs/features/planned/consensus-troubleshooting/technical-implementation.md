@@ -2187,13 +2187,407 @@ class TestThresholdAnalyzer:
 
 ---
 
+## Authority Health Dashboard Implementation (Phases 5-6)
+
+This section covers the network-wide authority monitoring dashboard, extending the per-relay diagnostics.
+
+### Authority Latency Monitor
+
+```python
+# lib/consensus/authority_monitor.py
+
+"""
+Real-time directory authority health monitoring.
+Checks latency to each authority's directory port.
+"""
+
+import asyncio
+import aiohttp
+import time
+from typing import Dict, List
+from datetime import datetime, timedelta
+
+from .authorities import DIRECTORY_AUTHORITIES
+
+
+class DirectoryAuthorityMonitor:
+    """Monitor directory authority health via direct HTTP checks."""
+    
+    # Status thresholds (milliseconds)
+    LATENCY_OK = 50
+    LATENCY_SLOW = 100
+    LATENCY_DEGRADED = 500
+    TIMEOUT_SECONDS = 10
+    
+    async def check_all_authorities(self) -> Dict:
+        """
+        Check health of all 9 authorities in parallel.
+        Run hourly (or more frequently for real-time monitoring).
+        """
+        tasks = [
+            self._check_single_authority(name, info) 
+            for name, info in DIRECTORY_AUTHORITIES.items()
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Process results
+        authority_status = {}
+        online_count = 0
+        slow_count = 0
+        offline_count = 0
+        
+        for result in results:
+            if isinstance(result, Exception):
+                continue
+            name = result['name']
+            authority_status[name] = result
+            
+            if result['status'] == 'online':
+                online_count += 1
+            elif result['status'] == 'slow':
+                slow_count += 1
+            else:
+                offline_count += 1
+        
+        return {
+            'authorities': authority_status,
+            'summary': {
+                'online': online_count,
+                'slow': slow_count,
+                'offline': offline_count,
+                'total': len(DIRECTORY_AUTHORITIES)
+            },
+            'checked_at': datetime.utcnow().isoformat(),
+            'next_check': (datetime.utcnow() + timedelta(hours=1)).isoformat()
+        }
+    
+    async def _check_single_authority(self, name: str, info: Dict) -> Dict:
+        """Check a single authority's directory port for latency."""
+        url = f"http://{info['ipv4']}:{info['dir_port']}/tor/status-vote/current/consensus"
+        
+        start = time.time()
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.head(
+                    url, 
+                    timeout=aiohttp.ClientTimeout(total=self.TIMEOUT_SECONDS)
+                ) as response:
+                    latency_ms = (time.time() - start) * 1000
+                    
+                    # Determine status based on latency
+                    if latency_ms < self.LATENCY_OK:
+                        status = 'online'
+                    elif latency_ms < self.LATENCY_SLOW:
+                        status = 'slow'
+                    elif latency_ms < self.LATENCY_DEGRADED:
+                        status = 'degraded'
+                    else:
+                        status = 'very_slow'
+                    
+                    return {
+                        'name': name,
+                        'fingerprint': info['fingerprint'],
+                        'status': status,
+                        'latency_ms': round(latency_ms, 1),
+                        'http_status': response.status,
+                        'is_bw_authority': info['is_bw_authority'],
+                        'checked_at': datetime.utcnow().isoformat()
+                    }
+                    
+        except asyncio.TimeoutError:
+            return {
+                'name': name,
+                'fingerprint': info['fingerprint'],
+                'status': 'timeout',
+                'latency_ms': None,
+                'error': f'Connection timeout ({self.TIMEOUT_SECONDS}s)',
+                'is_bw_authority': info['is_bw_authority'],
+                'checked_at': datetime.utcnow().isoformat()
+            }
+        except Exception as e:
+            return {
+                'name': name,
+                'fingerprint': info['fingerprint'],
+                'status': 'offline',
+                'latency_ms': None,
+                'error': str(e),
+                'is_bw_authority': info['is_bw_authority'],
+                'checked_at': datetime.utcnow().isoformat()
+            }
+```
+
+### Authority Alert System
+
+```python
+# lib/consensus/authority_alerts.py
+
+"""
+Generate alerts based on authority health status.
+"""
+
+from typing import Dict, List
+from datetime import datetime
+
+
+class AuthorityAlertSystem:
+    """Generate alerts from combined authority health data."""
+    
+    # Alert thresholds
+    THRESHOLDS = {
+        'latency_warning_ms': 100,
+        'latency_critical_ms': 500,
+        'offline_warning': 1,
+        'offline_critical': 3,  # Network at risk if 3+ authorities offline
+        'consensus_stale_warning_min': 30,
+        'consensus_stale_critical_min': 60,
+        'bandwidth_files_min': 2,
+    }
+    
+    def generate_alerts(self, health_data: Dict) -> List[Dict]:
+        """Generate alerts from combined health data. Run hourly."""
+        alerts = []
+        
+        # Authority connectivity alerts
+        authorities = health_data.get('authorities', {})
+        offline = [name for name, a in authorities.items() 
+                   if a.get('status') in ['offline', 'timeout']]
+        slow = [name for name, a in authorities.items() 
+                if a.get('status') in ['slow', 'degraded', 'very_slow']]
+        
+        if len(offline) >= self.THRESHOLDS['offline_critical']:
+            alerts.append({
+                'level': 'critical',
+                'category': 'authority_connectivity',
+                'message': f"CRITICAL: {len(offline)} authorities offline - network consensus at risk",
+                'authorities': offline,
+                'timestamp': datetime.utcnow().isoformat()
+            })
+        elif len(offline) >= self.THRESHOLDS['offline_warning']:
+            alerts.append({
+                'level': 'warning',
+                'category': 'authority_connectivity',
+                'message': f"{len(offline)} authority offline: {', '.join(offline)}",
+                'authorities': offline,
+                'timestamp': datetime.utcnow().isoformat()
+            })
+        
+        if slow:
+            alerts.append({
+                'level': 'info',
+                'category': 'authority_performance',
+                'message': f"{len(slow)} authorities responding slowly: {', '.join(slow)}",
+                'authorities': slow,
+                'timestamp': datetime.utcnow().isoformat()
+            })
+        
+        # Consensus freshness alerts
+        consensus = health_data.get('consensus', {})
+        if consensus.get('freshness_status') == 'stale':
+            alerts.append({
+                'level': 'warning',
+                'category': 'consensus_health',
+                'message': 'Consensus is stale - new consensus overdue',
+                'timestamp': datetime.utcnow().isoformat()
+            })
+        elif consensus.get('freshness_status') == 'expired':
+            alerts.append({
+                'level': 'critical',
+                'category': 'consensus_health',
+                'message': 'CRITICAL: Consensus has expired - network operation impaired',
+                'timestamp': datetime.utcnow().isoformat()
+            })
+        
+        # Voting participation alerts
+        votes = health_data.get('votes', {})
+        votes_found = votes.get('votes_found', 9)
+        if votes_found < 9:
+            missing = 9 - votes_found
+            alerts.append({
+                'level': 'warning',
+                'category': 'voting',
+                'message': f'{missing} authorities did not submit votes this period',
+                'timestamp': datetime.utcnow().isoformat()
+            })
+        
+        return alerts
+```
+
+### Consensus Document Analyzer
+
+```python
+# lib/consensus/consensus_analyzer.py
+
+"""
+Parse and analyze consensus documents from CollecTor.
+"""
+
+import re
+from typing import Dict, Optional
+from datetime import datetime
+
+
+class ConsensusAnalyzer:
+    """Analyze consensus documents for health metrics."""
+    
+    def parse_consensus_header(self, content: str) -> Dict:
+        """Parse consensus document header for key metrics."""
+        result = {
+            'parsed_at': datetime.utcnow().isoformat()
+        }
+        
+        # Parse first 200 lines (header section)
+        lines = content.split('\n')[:200]
+        
+        for line in lines:
+            if line.startswith('valid-after '):
+                result['valid_after'] = line.split(' ', 1)[1]
+            elif line.startswith('fresh-until '):
+                result['fresh_until'] = line.split(' ', 1)[1]
+            elif line.startswith('valid-until '):
+                result['valid_until'] = line.split(' ', 1)[1]
+            elif line.startswith('consensus-method '):
+                result['consensus_method'] = int(line.split(' ')[1])
+            elif line.startswith('voting-delay '):
+                delays = line.split(' ')[1:]
+                result['voting_delay'] = int(delays[0])
+                result['dist_delay'] = int(delays[1])
+            elif line.startswith('known-flags '):
+                result['known_flags'] = line.split(' ')[1:]
+            elif line.startswith('dir-source '):
+                result.setdefault('authorities_voted', 0)
+                result['authorities_voted'] += 1
+        
+        # Calculate freshness status
+        result['freshness_status'] = self._calculate_freshness(result)
+        
+        return result
+    
+    def _calculate_freshness(self, parsed: Dict) -> str:
+        """Determine consensus freshness status."""
+        now = datetime.utcnow()
+        
+        try:
+            fresh_until = datetime.strptime(
+                parsed.get('fresh_until', ''), '%Y-%m-%d %H:%M:%S'
+            )
+            valid_until = datetime.strptime(
+                parsed.get('valid_until', ''), '%Y-%m-%d %H:%M:%S'
+            )
+            
+            if now < fresh_until:
+                return 'fresh'
+            elif now < valid_until:
+                return 'stale'
+            else:
+                return 'expired'
+        except (ValueError, TypeError):
+            return 'unknown'
+    
+    def count_flags(self, content: str) -> Dict[str, int]:
+        """Count relay flag distribution in consensus."""
+        flag_counts = {}
+        
+        # Find all 's ' lines (flag lines in router entries)
+        flag_pattern = r'^s (.+)$'
+        for match in re.finditer(flag_pattern, content, re.MULTILINE):
+            flags = match.group(1).split(' ')
+            for flag in flags:
+                flag_counts[flag] = flag_counts.get(flag, 0) + 1
+        
+        return flag_counts
+```
+
+### Worker Integration for Authority Dashboard
+
+```python
+# Add to lib/workers.py
+
+import asyncio
+from lib.consensus.authority_monitor import DirectoryAuthorityMonitor
+from lib.consensus.authority_alerts import AuthorityAlertSystem
+from lib.consensus.consensus_analyzer import ConsensusAnalyzer
+
+_authority_monitor = None
+_alert_system = None
+
+
+def fetch_authority_health():
+    """
+    Worker function to fetch authority health data.
+    Combines latency checks with consensus analysis.
+    """
+    global _authority_monitor, _alert_system
+    
+    try:
+        progress_logger.log("Checking directory authority health...")
+        
+        # Initialize monitors
+        _authority_monitor = DirectoryAuthorityMonitor()
+        _alert_system = AuthorityAlertSystem()
+        
+        # Run async latency checks
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        latency_results = loop.run_until_complete(
+            _authority_monitor.check_all_authorities()
+        )
+        loop.close()
+        
+        # Get consensus health from CollecTor data
+        collector_data = _load_cache('collector_data')
+        consensus_health = {}
+        if collector_data and 'votes' in collector_data:
+            # Extract consensus metrics from cached vote data
+            votes = collector_data.get('votes', {})
+            consensus_health = {
+                'votes_found': len([v for v in votes.values() if 'error' not in v]),
+                'latest_vote_time': collector_data.get('fetched_at'),
+            }
+        
+        # Combine data
+        health_data = {
+            'authorities': latency_results.get('authorities', {}),
+            'summary': latency_results.get('summary', {}),
+            'consensus': consensus_health,
+            'votes': {'votes_found': consensus_health.get('votes_found', 0)},
+            'checked_at': datetime.utcnow().isoformat()
+        }
+        
+        # Generate alerts
+        alerts = _alert_system.generate_alerts(health_data)
+        health_data['alerts'] = alerts
+        
+        # Cache results
+        _save_cache('authority_health', health_data)
+        _mark_ready('authority_health')
+        
+        online = latency_results.get('summary', {}).get('online', 0)
+        progress_logger.log(f"Authority health check complete: {online}/9 online")
+        
+        return health_data
+        
+    except Exception as e:
+        error_msg = f"Failed to check authority health: {str(e)}"
+        progress_logger.log(error_msg)
+        _mark_stale('authority_health', error_msg)
+        return _load_cache('authority_health')
+
+
+def get_authority_health() -> Dict:
+    """Get cached authority health data."""
+    return _load_cache('authority_health') or {'error': 'Health data not available'}
+```
+
+---
+
 ## Performance Considerations
 
 ### Caching Strategy
 
-1. **Authority Votes**: Cache for 1 hour (consensus period)
-2. **Flag Thresholds**: Cache for 1 hour (extracted from votes)
-3. **Per-Relay Analysis**: Compute on-demand, cache for 15 minutes
+1. **CollecTor Data (votes, bandwidth)**: Cache for 1 hour (consensus period)
+2. **Authority Latency Checks**: Cache for 1 hour (or shorter for real-time dashboard)
+3. **Flag Thresholds**: Cache for 1 hour (extracted from votes)
+4. **Per-Relay Analysis**: Compute on-demand, cache for 15 minutes
 
 ### Memory Optimization
 
@@ -2203,42 +2597,68 @@ class TestThresholdAnalyzer:
 
 ### Network Optimization
 
-- Fetch votes in parallel from all authorities
-- Implement timeouts and retries for unreliable authorities
+- Fetch votes in parallel from CollecTor
+- Run authority latency checks concurrently with `asyncio`
+- Implement timeouts and retries for unreliable sources
 - Fall back to cached data if fetch fails
 
 ---
 
 ## Deployment Checklist
 
-### Phase 1: Core Infrastructure
+### Milestone 1: Per-Relay Diagnostics (Phases 1-4)
+
+#### Sprint 1: Core Infrastructure
 - [ ] Create `lib/consensus/` directory structure
 - [ ] Implement `collector.py` - CollecTor configuration
 - [ ] Implement `authorities.py` - Authority configuration and fingerprint mapping
 - [ ] Implement `collector_fetcher.py` - Main data fetcher from CollecTor
 
-### Phase 2: Worker Integration  
+#### Sprint 2: Worker Integration  
 - [ ] Add `fetch_collector_data()` to `lib/workers.py`
 - [ ] Add `get_relay_diagnostics()` lookup function
 - [ ] Implement caching strategy for CollecTor data
 - [ ] Test worker with multi-API coordinator
 
-### Phase 3: Template Updates
+#### Sprint 3-4: Template Updates
 - [ ] Update `relay-info.html` with Consensus Diagnostics section
+- [ ] Add all 4 phases (Votes, Eligibility, Reachability, Bandwidth)
 - [ ] Add CSS styles for diagnostic components
 - [ ] Add Jinja2 filters for formatting (`format_bandwidth`, `format_metric`, `timeago`)
-- [ ] Test rendering with sample relay data
 
-### Phase 4: Testing
+#### Sprint 5: Testing
 - [ ] Unit tests for `CollectorFetcher` parsing
 - [ ] Unit tests for per-relay analysis functions
 - [ ] Integration test with real CollecTor data
 - [ ] Performance testing (7000+ relays)
 
-### Phase 5: Documentation
-- [ ] Update README with new features
-- [ ] Document CollecTor data dependencies
-- [ ] Add troubleshooting FAQ for operators
+---
+
+### Milestone 2: Authority Health Dashboard (Phases 5-6)
+
+#### Sprint 6-7: Real-Time Authority Monitoring
+- [ ] Implement `authority_monitor.py` - Async HTTP latency checks
+- [ ] Implement `authority_alerts.py` - Alert generation system
+- [ ] Add `fetch_authority_health()` worker function
+- [ ] Integrate with existing `misc-authorities.html`
+
+#### Sprint 8: Consensus & Voting Analysis
+- [ ] Implement `consensus_analyzer.py` - Parse consensus documents
+- [ ] Add consensus freshness indicators
+- [ ] Add voting participation tracking
+- [ ] Display flag distribution from consensus
+
+#### Sprint 9: Dashboard & Alerts
+- [ ] Create `misc-authorities-health.html` dashboard template
+- [ ] Add alert display and history
+- [ ] Add auto-refresh functionality
+- [ ] Create troubleshooting wizard page (optional)
+
+#### Sprint 10: Historical Analytics (Optional)
+- [ ] Set up historical data storage
+- [ ] Implement trend graphs (7-day, 30-day)
+- [ ] Add performance scorecard calculations
+- [ ] Document all features
 
 ---
 
@@ -2266,5 +2686,13 @@ class TestThresholdAnalyzer:
 
 **Document Status**: Technical specification complete  
 **Primary Data Source**: Tor Project CollecTor (https://collector.torproject.org)  
-**Target Location**: Per-relay detail pages (`relay-info.html`)  
-**Next Steps**: Implementation review and core infrastructure development
+**Merged From**: TOP_10_PRIORITIZED_FEATURES.md Feature #4 (Directory Authority Health Dashboard)
+
+### Feature Summary
+
+| Milestone | Target | Phases | Timeline |
+|-----------|--------|--------|----------|
+| **Milestone 1** | Per-relay detail pages (`relay-info.html`) | 1-4 | 5 weeks |
+| **Milestone 2** | Authority health dashboard (`misc-authorities-health.html`) | 5-6 | 4-6 weeks |
+
+**Next Steps**: Implementation review and Sprint 1 kickoff
