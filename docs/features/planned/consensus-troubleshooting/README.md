@@ -72,15 +72,38 @@ Add consensus troubleshooting features to Allium using CollecTor as the primary 
 │ ══ Flag Eligibility ═════════════════════════════════════════════════════════│
 │ Why doesn't this relay have the Guard flag?                                  │
 │                                                                              │
-│ ┌────────────────────┬────────────┬────────────┬────────────────────────────┐│
-│ │ Requirement        │ Your Value │ Threshold  │ Status                     ││
-│ ├────────────────────┼────────────┼────────────┼────────────────────────────┤│
-│ │ WFU (Uptime)       │ 96.2%      │ ≥98%       │ 96.2% (below by 1.8%)      ││  ← red text
-│ │ Time Known         │ 45 days    │ ≥8 days    │ 45 days (meets threshold)  ││  ← green text
-│ │ Bandwidth          │ 25 MB/s    │ ≥29 MB/s   │ 25 MB/s (below by 14%)     ││  ← red text
-│ └────────────────────┴────────────┴────────────┴────────────────────────────┘│
+│ Assigning Guard: 6/9 authorities │ Need: 5/9 (majority) to appear in consensus│
+│                                                                              │
+│ ┌────────────────────┬────────────┬──────────────────────┬──────────────────┐│
+│ │ Requirement        │ Your Value │ Threshold (per auth) │ Status           ││
+│ ├────────────────────┼────────────┼──────────────────────┼──────────────────┤│
+│ │ WFU (Uptime)       │ 96.2%      │ ≥98% (all)           │ 96.2% (below)    ││  ← red
+│ │ Time Known         │ 45 days    │ ≥8 days (all)        │ 45 days (meets)  ││  ← green
+│ │ Bandwidth          │ 25 MB/s    │ 10-35 MB/s (varies)  │ see breakdown ↓  ││
+│ └────────────────────┴────────────┴──────────────────────┴──────────────────┘│
+│                                                                              │
+│ Bandwidth threshold breakdown (varies by authority):                         │
+│ ┌────────────┬───────────┬────────────┬─────────────────────────────────────┐│
+│ │ Authority  │ Threshold │ Your Value │ Status                              ││
+│ ├────────────┼───────────┼────────────┼─────────────────────────────────────┤│
+│ │ moria1     │ ≥30 MB/s  │ 25 MB/s    │ below by 17% - NOT assigning Guard  ││  ← red
+│ │ tor26      │ ≥34 MB/s  │ 25 MB/s    │ below by 26% - NOT assigning Guard  ││  ← red
+│ │ dizum      │ ≥10 MB/s  │ 25 MB/s    │ meets - assigning Guard             ││  ← green
+│ │ gabelmoo   │ ≥35 MB/s  │ 25 MB/s    │ below by 29% - NOT assigning Guard  ││  ← red
+│ │ bastet     │ ≥10 MB/s  │ 25 MB/s    │ meets - assigning Guard             ││  ← green
+│ │ dannenberg │ ≥35 MB/s  │ 25 MB/s    │ below by 29% - NOT assigning Guard  ││  ← red
+│ │ maatuska   │ ≥10 MB/s  │ 25 MB/s    │ meets - assigning Guard             ││  ← green
+│ │ longclaw   │ ≥28 MB/s  │ 25 MB/s    │ below by 11% - NOT assigning Guard  ││  ← red
+│ │ faravahar  │ ≥10 MB/s  │ 25 MB/s    │ meets - assigning Guard             ││  ← green
+│ └────────────┴───────────┴────────────┴─────────────────────────────────────┘│
+│                                                                              │
+│ Summary: 4/9 authorities have Guard BW threshold ≤25 MB/s (your value)      │
+│ To get Guard from more authorities, increase bandwidth to ≥35 MB/s          │
 │                                                                              │
 │ Legend: green = meets requirement, red = below threshold                     │
+│ Note: Thresholds are calculated independently by each authority based on    │
+│       the relays they observe. WFU is consistent (98%), but bandwidth       │
+│       thresholds vary significantly (10-35 MB/s).                           │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 

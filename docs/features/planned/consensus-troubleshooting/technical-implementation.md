@@ -954,11 +954,19 @@ def format_relay_diagnostics(
 
 def _format_flag_eligibility(
     current_flags: set,
-    flag_thresholds: Dict,
+    flag_thresholds: Dict,  # Per-authority thresholds
     relay_data: Dict,
+    authorities: List[Dict],
+    authority_votes: List[Dict],  # Which authorities assigned which flags
 ) -> Optional[Dict]:
     """
-    Format flag eligibility analysis.
+    Format flag eligibility analysis with per-authority transparency.
+    
+    Shows:
+    - Which authorities ARE assigning the flag vs NOT
+    - Per-authority thresholds (they vary!)
+    - Relay's value compared to each authority's threshold
+    
     Returns data for color-coded display (green=met, red=below).
     NO checkmarks - uses text color only.
     """
@@ -974,40 +982,95 @@ def _format_flag_eligibility(
     if not target_flag:
         return None  # Relay has all important flags
     
-    # Get median thresholds
-    median_thresholds = _get_median_thresholds(flag_thresholds)
+    # Count how many authorities are assigning this flag
+    assigning_count = sum(
+        1 for av in authority_votes 
+        if av['voted'] and target_flag in av.get('flags', [])
+    )
     
-    # Build requirements list based on target flag
+    # Build per-authority breakdown for variable thresholds (like bandwidth)
+    per_authority_breakdown = []
+    
+    for auth in authorities:
+        auth_name = auth['nickname']
+        auth_thresholds = flag_thresholds.get(auth_name, {})
+        
+        # Check if this authority is assigning the flag
+        auth_vote = next((av for av in authority_votes if av['authority'] == auth_name), None)
+        is_assigning = auth_vote and target_flag in auth_vote.get('flags', [])
+        
+        if target_flag == 'Guard':
+            # Guard bandwidth threshold varies significantly (10-35 MB/s)
+            threshold_bw = auth_thresholds.get('guard-bw-inc-exits', 0) / 1_000_000  # Convert to MB/s
+            relay_bw = 25  # Would come from relay data
+            meets_bw = relay_bw >= threshold_bw
+            
+            per_authority_breakdown.append({
+                'authority': auth_name,
+                'fingerprint': auth['fingerprint'],
+                'threshold': threshold_bw,
+                'threshold_display': f"≥{threshold_bw:.0f} MB/s",
+                'relay_value': relay_bw,
+                'relay_value_display': f"{relay_bw} MB/s",
+                'meets': meets_bw,
+                'is_assigning': is_assigning,
+                'difference_pct': ((threshold_bw - relay_bw) / threshold_bw * 100) if threshold_bw > relay_bw else 0,
+            })
+    
+    # Calculate threshold range for summary
+    thresholds_list = [p['threshold'] for p in per_authority_breakdown if p['threshold'] > 0]
+    threshold_min = min(thresholds_list) if thresholds_list else 0
+    threshold_max = max(thresholds_list) if thresholds_list else 0
+    
+    # Build summary requirements (for consistent thresholds like WFU)
     requirements = []
     
     if target_flag == 'Guard':
-        requirements = [
-            {
-                'name': 'WFU (Uptime)',
-                'your_value': '96.2%',  # Would come from relay data
-                'threshold': f"≥{median_thresholds.get('guard-wfu', 98)}%",
-                'met': False,  # Would be calculated
-                'difference': '1.8%',
-            },
-            {
-                'name': 'Time Known',
-                'your_value': '45 days',
-                'threshold': '≥8 days',
-                'met': True,
-                'difference': None,
-            },
-            {
-                'name': 'Bandwidth',
-                'your_value': '25 MB/s',
-                'threshold': f"≥{median_thresholds.get('guard-bw-inc-exits', 29000000) / 1000000:.0f} MB/s",
-                'met': False,
-                'difference': '14%',
-            },
-        ]
+        # WFU is consistent across authorities (98%)
+        requirements.append({
+            'name': 'WFU (Uptime)',
+            'your_value': '96.2%',  # Would come from relay data
+            'threshold_display': '≥98% (all authorities)',
+            'is_variable': False,
+            'met': False,
+            'difference': '1.8%',
+        })
+        
+        # Time known is consistent
+        requirements.append({
+            'name': 'Time Known',
+            'your_value': '45 days',
+            'threshold_display': '≥8 days (all authorities)',
+            'is_variable': False,
+            'met': True,
+            'difference': None,
+        })
+        
+        # Bandwidth varies - show range, link to breakdown
+        requirements.append({
+            'name': 'Bandwidth',
+            'your_value': '25 MB/s',
+            'threshold_display': f"{threshold_min:.0f}-{threshold_max:.0f} MB/s (varies by authority)",
+            'is_variable': True,
+            'met': None,  # Varies by authority
+            'see_breakdown': True,
+        })
+    
+    # Calculate actionable advice
+    relay_bw = 25  # Would come from relay data
+    authorities_if_increased = sum(1 for p in per_authority_breakdown if relay_bw >= p['threshold'])
     
     return {
         'target_flag': target_flag,
+        'assigning_count': assigning_count,
+        'total_authorities': len(authorities),
         'requirements': requirements,
+        'per_authority_breakdown': per_authority_breakdown,
+        'threshold_range': {
+            'min': threshold_min,
+            'max': threshold_max,
+        },
+        'advice': f"To get {target_flag} from all authorities, increase bandwidth to ≥{threshold_max:.0f} MB/s",
     }
 
 
@@ -1128,33 +1191,41 @@ def _get_median_thresholds(flag_thresholds: Dict) -> Dict:
   
   {# Flag Eligibility - color-coded text, no checkmarks #}
   {% if relay.collector_diagnostics.flag_eligibility %}
+  {% set elig = relay.collector_diagnostics.flag_eligibility %}
   <h4>Flag Eligibility</h4>
   <p class="eligibility-question">
-    Why doesn't this relay have the <strong>{{ relay.collector_diagnostics.flag_eligibility.target_flag }}</strong> flag?
+    Why doesn't this relay have the <strong>{{ elig.target_flag }}</strong> flag?
   </p>
   
+  <p class="eligibility-summary">
+    Assigning {{ elig.target_flag }}: 
+    <strong>{{ elig.assigning_count }}/{{ elig.total_authorities }}</strong> authorities
+    │ Need: {{ (elig.total_authorities // 2) + 1 }}/{{ elig.total_authorities }} (majority) to appear in consensus
+  </p>
+  
+  {# Requirements table - shows consistent thresholds #}
   <table class="flag-eligibility">
     <thead>
       <tr>
         <th>Requirement</th>
         <th>Your Value</th>
-        <th>Threshold</th>
+        <th>Threshold (per authority)</th>
         <th>Status</th>
       </tr>
     </thead>
     <tbody>
-    {% for req in relay.collector_diagnostics.flag_eligibility.requirements %}
+    {% for req in elig.requirements %}
       <tr>
         <td>{{ req.name }}</td>
         <td>{{ req.your_value }}</td>
-        <td>{{ req.threshold }}</td>
-        {# Color-coded status - green for met, red for below - NO checkmarks #}
-        <td class="{% if req.met %}status-met{% else %}status-below{% endif %}">
-          {{ req.your_value }}
-          {% if req.met %}
-            (meets threshold)
+        <td>{{ req.threshold_display }}</td>
+        <td>
+          {% if req.is_variable %}
+            <a href="#bw-breakdown">see breakdown ↓</a>
+          {% elif req.met %}
+            <span class="status-met">{{ req.your_value }} (meets)</span>
           {% else %}
-            (below by {{ req.difference }})
+            <span class="status-below">{{ req.your_value }} (below by {{ req.difference }})</span>
           {% endif %}
         </td>
       </tr>
@@ -1162,9 +1233,54 @@ def _get_median_thresholds(flag_thresholds: Dict) -> Dict:
     </tbody>
   </table>
   
+  {# Per-authority breakdown for variable thresholds (like bandwidth) #}
+  {% if elig.per_authority_breakdown %}
+  <h5 id="bw-breakdown">Bandwidth threshold breakdown (varies by authority):</h5>
+  <table class="per-authority-breakdown">
+    <thead>
+      <tr>
+        <th>Authority</th>
+        <th>Threshold</th>
+        <th>Your Value</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for auth in elig.per_authority_breakdown %}
+      <tr>
+        <td>
+          <a href="{{ path_prefix }}relay/{{ auth.fingerprint }}.html">{{ auth.authority }}</a>
+        </td>
+        <td>{{ auth.threshold_display }}</td>
+        <td>{{ auth.relay_value_display }}</td>
+        <td class="{% if auth.meets %}status-met{% else %}status-below{% endif %}">
+          {% if auth.meets %}
+            meets - assigning {{ elig.target_flag }}
+          {% else %}
+            below by {{ auth.difference_pct|round(0)|int }}% - NOT assigning {{ elig.target_flag }}
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  
+  <p class="eligibility-advice">
+    <strong>Summary:</strong> 
+    {{ elig.per_authority_breakdown|selectattr('meets')|list|length }}/{{ elig.total_authorities }} 
+    authorities have threshold ≤ your bandwidth value.
+    <br>
+    <strong>Advice:</strong> {{ elig.advice }}
+  </p>
+  {% endif %}
+  
   <p class="eligibility-legend">
     <span class="status-met">Green</span> = meets requirement • 
     <span class="status-below">Red</span> = below threshold
+    <br>
+    <em>Note: Thresholds are calculated independently by each authority based on 
+    the relays they observe. Some thresholds (like WFU at 98%) are consistent, 
+    while others (like Guard bandwidth) vary significantly.</em>
   </p>
   {% endif %}
 </section>
