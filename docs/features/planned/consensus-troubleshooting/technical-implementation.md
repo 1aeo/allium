@@ -1168,17 +1168,17 @@ def _get_median_thresholds(flag_thresholds: Dict) -> Dict:
   <table class="authority-table merged-table">
     <thead>
       <tr>
-        <th>Authority</th>
-        <th>IPv4</th>
-        <th>IPv6</th>
-        <th>Flags Assigned</th>
-        <th>Meas. BW</th>
-        {# All thresholds shown in tooltips - values pulled dynamically from each authority's vote file #}
-        <th title="Weighted Fractional Uptime (guard-wfu threshold shown per-row)">WFU ⓘ</th>
-        <th title="Time Known (guard-tk threshold shown per-row)">TK ⓘ</th>
-        <th title="Guard bandwidth threshold (guard-bw-inc-exits, varies by authority)">Guard BW</th>
-        <th title="Stable uptime threshold (stable-uptime, varies by authority)">Stable</th>
-        <th title="Fast speed threshold (fast-speed, varies by authority)">Fast</th>
+        {# Each column has detailed tooltip: Source → File → Field #}
+        <th title="Source: Onionoo | File: details | Field: nickname, fingerprint">Authority</th>
+        <th title="Source: CollecTor | File: vote | Relay reachable via IPv4 (has 'r' entry)">IPv4</th>
+        <th title="Source: CollecTor | File: vote | Field: 'a' line (IPv6 address) | ⚪=not tested">IPv6</th>
+        <th title="Source: CollecTor | File: vote | Field: 's' line (e.g., s Fast Guard Stable)">Flags</th>
+        <th title="Source: CollecTor | File: vote | Field: w Measured=X | N/A if no bandwidth-file-headers">Meas. BW</th>
+        <th title="Source: CollecTor | File: vote | Value: stats wfu=X | Threshold: flag-thresholds guard-wfu=X">WFU ⓘ</th>
+        <th title="Source: CollecTor | File: vote | Value: stats tk=X | Threshold: flag-thresholds guard-tk=X">TK ⓘ</th>
+        <th title="Source: CollecTor | File: vote | Threshold: flag-thresholds guard-bw-inc-exits=X">Guard BW</th>
+        <th title="Source: CollecTor | File: vote | Threshold: flag-thresholds stable-uptime=X">Stable</th>
+        <th title="Source: CollecTor | File: vote | Threshold: flag-thresholds fast-speed=X">Fast</th>
       </tr>
     </thead>
     <tbody>
@@ -1283,21 +1283,24 @@ def _get_median_thresholds(flag_thresholds: Dict) -> Dict:
   
   {# ============== RELAY VALUES SUMMARY ============== #}
   <h4>Your Relay's Values Summary</h4>
+  <p class="table-description">
+    Hover column headers for data source details (Source → File → Field).
+  </p>
   {% set rv = relay.collector_diagnostics.relay_values %}
   <table class="relay-values-summary">
     <thead>
       <tr>
-        <th>Metric</th>
-        <th>Your Value</th>
-        <th>Threshold</th>
+        <th title="Metric name and CollecTor field reference">Metric</th>
+        <th title="Your relay's value from CollecTor vote stats line">Your Value</th>
+        <th title="Threshold from CollecTor vote flag-thresholds line">Threshold</th>
         <th>Status</th>
       </tr>
     </thead>
     <tbody>
-      <tr>
+      <tr title="Source: CollecTor | File: vote | Value: stats wfu=X | Threshold: flag-thresholds guard-wfu=X">
         <td>WFU (guard-wfu)</td>
         <td>{{ '%.1f' % (rv.wfu * 100) }}%</td>
-        <td>≥98% (constant, all authorities)</td>
+        <td>≥{{ '%.1f' % (rv.guard_wfu_threshold * 100) }}% (from authorities)</td>
         <td>
           {% if rv.wfu >= 0.98 %}
             <span class="status-met">✅ MEETS</span>
@@ -1306,20 +1309,20 @@ def _get_median_thresholds(flag_thresholds: Dict) -> Dict:
           {% endif %}
         </td>
       </tr>
-      <tr>
+      <tr title="Source: CollecTor | File: vote | Value: stats tk=X | Threshold: flag-thresholds guard-tk=X">
         <td>Time Known (tk)</td>
         <td>{{ (rv.tk / 86400) | round(1) }} days</td>
-        <td>≥8 days (constant, all authorities)</td>
+        <td>≥{{ (rv.guard_tk_threshold / 86400) | round(1) }} days (from authorities)</td>
         <td>
-          {% if rv.tk >= 691200 %}
+          {% if rv.tk >= rv.guard_tk_threshold %}
             <span class="status-met">✅ MEETS</span>
           {% else %}
-            <span class="status-below">❌ BELOW - need {{ ((691200 - rv.tk) / 86400) | round(1) }} more days</span>
+            <span class="status-below">❌ BELOW - need {{ ((rv.guard_tk_threshold - rv.tk) / 86400) | round(1) }} more days</span>
           {% endif %}
         </td>
       </tr>
-      <tr>
-        <td>Measured BW</td>
+      <tr title="Source: CollecTor | File: vote | Value: w Measured=X | Threshold: flag-thresholds guard-bw-inc-exits=X">
+        <td>Guard BW</td>
         <td>{{ rv.measured_bw | format_bandwidth }}</td>
         <td>varies: {{ rv.guard_bw_range }}</td>
         <td>
@@ -1332,7 +1335,7 @@ def _get_median_thresholds(flag_thresholds: Dict) -> Dict:
           {% endif %}
         </td>
       </tr>
-      <tr>
+      <tr title="Source: CollecTor | File: vote | Value: stats tk=X (proxy) | Threshold: flag-thresholds stable-uptime=X">
         <td>Stable Uptime</td>
         <td>{{ (rv.uptime / 86400) | round(1) }} days</td>
         <td>varies: {{ rv.stable_range }}</td>
@@ -1344,7 +1347,7 @@ def _get_median_thresholds(flag_thresholds: Dict) -> Dict:
           {% endif %}
         </td>
       </tr>
-      <tr>
+      <tr title="Source: CollecTor | File: vote | Value: w Measured=X | Threshold: flag-thresholds fast-speed=X">
         <td>Fast Speed</td>
         <td>{{ rv.fast_speed | format_bandwidth }}</td>
         <td>varies: {{ rv.fast_range }}</td>
@@ -1939,23 +1942,24 @@ def check_authorities_sync() -> Dict:
     {%- endif %}
     
     {# Main table: EXISTING columns + 3 NEW columns (Vote, BW Auth, Latency) #}
+    {# Each column has detailed tooltip: Source → File → Field #}
     <table class="table table-condensed" style="font-size: 13px;">
         <tr>
-            <th>Authority Name</th>
-            <th>Online Status</th>
-            {# NEW columns inserted here #}
-            <th title="Submitted vote this consensus period">Voted</th>
-            <th title="Runs bandwidth scanner (sbws)">BW Auth</th>
-            <th title="Response time to directory port">Latency</th>
-            {# Existing columns continue #}
-            <th>AS Number</th>
-            <th>AS Name</th>
-            <th>Country</th>
-            <th title="Percentage of time authority was online over 1 month, 6 months, 1 year, and 5 years periods">Uptime (1M/6M/1Y/5Y)</th>
-            <th>Version</th>
-            <th title="Version compliance: ✅ = On recommended version, ❌ = Not on recommended version">Rec. Ver.</th>
-            <th>First Seen</th>
-            <th>Last Restarted</th>
+            <th title="Source: Onionoo | File: details | Field: nickname (has Authority flag)">Authority Name</th>
+            <th title="Source: Onionoo | File: details | Field: running">Online Status</th>
+            {# NEW columns with detailed tooltips #}
+            <th title="Source: CollecTor | File: vote | Vote file exists for this consensus hour">Voted</th>
+            <th title="Source: CollecTor | File: vote | Has 'bandwidth-file-headers' line = runs sbws scanner">BW Auth</th>
+            <th title="Source: Direct HTTP | HEAD request to dir_address | Response time in ms">Latency</th>
+            {# Existing columns with tooltips #}
+            <th title="Source: Onionoo | File: details | Field: as">AS Number</th>
+            <th title="Source: Onionoo | File: details | Field: as_name">AS Name</th>
+            <th title="Source: Onionoo | File: details | Field: country">Country</th>
+            <th title="Source: Onionoo | File: uptime | 1M/6M/1Y/5Y uptime percentages">Uptime (1M/6M/1Y/5Y)</th>
+            <th title="Source: Onionoo | File: details | Field: version">Version</th>
+            <th title="Source: Onionoo | File: details | Field: recommended_version">Rec. Ver.</th>
+            <th title="Source: Onionoo | File: details | Field: first_seen">First Seen</th>
+            <th title="Source: Onionoo | File: details | Field: last_restarted">Last Restarted</th>
         </tr>
         <tbody>
         {% for authority in relays.authorities_data -%}
@@ -2098,36 +2102,44 @@ def check_authorities_sync() -> Dict:
     <h3>Flag Thresholds by Authority</h3>
     <p class="text-muted">
         Each authority calculates its own thresholds based on the relays it observes. 
-        These values determine which relays receive Guard/Stable/Fast flags.
+        ALL values pulled dynamically from each authority's vote file. Hover columns for source.
     </p>
     
+    {# Each column has detailed tooltip: Source → File → Field #}
     <table class="table table-condensed" style="font-size: 13px;">
         <tr>
-            <th>Authority</th>
-            <th title="Bandwidth required for Guard flag (guard-bw-inc-exits)">Guard BW</th>
-            <th title="Uptime required for Stable flag (stable-uptime)">Stable Uptime</th>
-            <th title="Bandwidth required for Fast flag (fast-speed)">Fast Speed</th>
-            <th title="Weighted Fractional Uptime required for Guard (guard-wfu)">WFU</th>
+            <th title="Source: Onionoo | File: details | Field: nickname (has Authority flag)">Authority</th>
+            <th title="Source: CollecTor | File: vote | Field: flag-thresholds guard-bw-inc-exits=X">Guard BW</th>
+            <th title="Source: CollecTor | File: vote | Field: flag-thresholds guard-tk=X">Guard TK</th>
+            <th title="Source: CollecTor | File: vote | Field: flag-thresholds guard-wfu=X">Guard WFU</th>
+            <th title="Source: CollecTor | File: vote | Field: flag-thresholds stable-uptime=X">Stable</th>
+            <th title="Source: CollecTor | File: vote | Field: flag-thresholds fast-speed=X">Fast</th>
+            <th title="Source: CollecTor | File: vote | Field: flag-thresholds hsdir-wfu=X">HSDir WFU</th>
+            <th title="Source: CollecTor | File: vote | Field: flag-thresholds hsdir-tk=X">HSDir TK</th>
         </tr>
         <tbody>
         {% for auth_name, thresholds in relays.flag_thresholds.per_authority.items() %}
             <tr>
                 <td>{{ auth_name }}</td>
                 <td>{{ "%.1f"|format(thresholds.guard_bw) }} MB/s</td>
-                <td>{{ "%.1f"|format(thresholds.stable_uptime) }} days</td>
+                <td>{{ "%.1f"|format(thresholds.guard_tk / 86400) }} days</td>
+                <td>{{ "%.1f"|format(thresholds.guard_wfu * 100) }}%</td>
+                <td>{{ "%.1f"|format(thresholds.stable_uptime / 86400) }} days</td>
                 <td>{{ "%.1f"|format(thresholds.fast_speed / 1000000) }} MB/s</td>
-                <td>{{ "%.0f"|format(thresholds.wfu) }}%</td>
+                <td>{{ "%.1f"|format(thresholds.hsdir_wfu * 100) }}%</td>
+                <td>{{ "%.1f"|format(thresholds.hsdir_tk / 86400) }} days</td>
             </tr>
         {% endfor %}
         </tbody>
     </table>
     
-    {# Threshold ranges summary #}
+    {# Threshold ranges summary - all values dynamic #}
     <p style="font-size: 12px; color: #666;">
-        <strong>Ranges:</strong> 
+        <strong>Ranges (all from flag-thresholds):</strong> 
         Guard BW {{ "%.0f"|format(relays.flag_thresholds.ranges.guard_bw_min) }}-{{ "%.0f"|format(relays.flag_thresholds.ranges.guard_bw_max) }} MB/s │
+        Guard TK {{ "%.1f"|format(relays.flag_thresholds.ranges.guard_tk_min) }}-{{ "%.1f"|format(relays.flag_thresholds.ranges.guard_tk_max) }} days │
         Stable {{ "%.1f"|format(relays.flag_thresholds.ranges.stable_min) }}-{{ "%.1f"|format(relays.flag_thresholds.ranges.stable_max) }} days │
-        WFU 98% (all authorities)
+        Fast {{ "%.1f"|format(relays.flag_thresholds.ranges.fast_min) }}-{{ "%.1f"|format(relays.flag_thresholds.ranges.fast_max) }} MB/s
     </p>
     {% endif %}
 
