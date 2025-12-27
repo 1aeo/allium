@@ -208,23 +208,96 @@ self.api_workers.append(("collector_consensus", fetch_collector_consensus_data, 
 
 ---
 
+## 🧪 Testing Strategy
+
+### Baseline Validation (Before Starting)
+
+```bash
+# Run BEFORE any code changes - save baseline output
+cd /workspace/allium
+python allium.py --progress --output-dir baseline_output/ 2>&1 | tee baseline_run.log
+
+# Save file list and checksums for comparison
+find baseline_output/ -type f -name "*.html" | sort > baseline_files.txt
+md5sum baseline_output/**/*.html > baseline_checksums.txt
+
+# Run existing test suite
+pytest tests/ -v 2>&1 | tee baseline_tests.log
+```
+
+### Unit Test Requirements
+
+| New File | Test File | Run After |
+|----------|-----------|-----------|
+| `lib/consensus/__init__.py` | `tests/test_consensus_init.py` | File created |
+| `lib/consensus/collector_fetcher.py` | `tests/test_collector_fetcher.py` | File created |
+| `lib/consensus/authority_monitor.py` | `tests/test_authority_monitor.py` | File created |
+
+### Test Checkpoints
+
+```bash
+# After EACH new file:
+pytest tests/test_<new_file>.py -v
+
+# After EACH week/milestone:
+pytest tests/ -v
+
+# After EACH phase:
+pytest tests/ -v
+python allium.py --progress --output-dir phase_output/
+diff -r baseline_output/ phase_output/ --brief | grep -v "new_feature"
+```
+
+---
+
 ## 📅 Implementation Timeline
 
 ### Phase 1: Per-Relay Diagnostics (4 weeks)
 
-| Sprint | Focus | Deliverables |
-|--------|-------|--------------|
-| **Week 1** | Core Infrastructure | `lib/consensus/` module, `collector_fetcher.py`, relay index builder |
-| **Week 2** | Worker Integration | Add to `workers.py`, integrate with `Coordinator`, caching |
-| **Week 3** | Template Implementation | Update `relay-info.html` with diagnostics section, CSS |
-| **Week 4** | Testing & Polish | Unit tests, integration tests, error handling |
+| Sprint | Focus | Deliverables | Tests |
+|--------|-------|--------------|-------|
+| **Week 1** | Core Infrastructure | `lib/consensus/__init__.py`, `collector_fetcher.py` | `pytest tests/test_collector_fetcher.py -v` |
+| **Week 2** | Worker Integration | Add to `workers.py`, `Coordinator` | `pytest tests/test_workers.py tests/test_coordinator.py -v` |
+| **Week 3** | Template Implementation | Update `relay-info.html`, CSS | `pytest tests/ -v` + manual template review |
+| **Week 4** | Phase 1 Validation | Integration tests, error handling | **Full test suite + baseline comparison** |
+
+**Phase 1 Completion Checklist:**
+```bash
+# 1. Run full test suite
+pytest tests/ -v
+
+# 2. Generate site and compare to baseline
+python allium.py --progress --output-dir phase1_output/
+
+# 3. Verify only expected changes
+diff -r baseline_output/ phase1_output/ --brief
+
+# 4. Verify new diagnostics section appears
+grep -l "Consensus Diagnostics" phase1_output/relay/*.html | wc -l
+# Expected: ~7000 files
+```
 
 ### Phase 2: Authority Dashboard (2-3 weeks)
 
-| Sprint | Focus | Deliverables |
-|--------|-------|--------------|
-| **Week 5** | Authority Health Data | `authority_monitor.py` for latency checks, alert system |
-| **Week 6-7** | Template Enhancement | Update `misc-authorities.html`, flag thresholds, distribution bars |
+| Sprint | Focus | Deliverables | Tests |
+|--------|-------|--------------|-------|
+| **Week 5** | Authority Health | `authority_monitor.py` | `pytest tests/test_authority_monitor.py -v` |
+| **Week 6-7** | Template Enhancement | Update `misc-authorities.html` | `pytest tests/ -v` + manual review |
+
+**Phase 2 Completion Checklist:**
+```bash
+# 1. Run full test suite
+pytest tests/ -v
+
+# 2. Generate final site
+python allium.py --progress --output-dir final_output/
+
+# 3. Compare to baseline - only relay-info.html and misc-authorities.html should differ
+diff -r baseline_output/ final_output/ --brief
+
+# 4. Verify authority dashboard enhancements
+grep -l "Flag Thresholds" final_output/misc/authorities.html
+```
 
 ---
 
@@ -242,9 +315,12 @@ allium/
 ├── templates/
 │   ├── relay-info.html               # MODIFY: Add diagnostics section
 │   └── misc-authorities.html         # MODIFY: Add dashboard enhancements
-└── cache/
-    └── consensus/
-        └── collector_data.json       # NEW: Cached indexed data
+├── cache/
+│   └── consensus/
+│       └── collector_data.json       # NEW: Cached indexed data
+└── tests/
+    ├── test_collector_fetcher.py     # NEW: Unit tests for collector_fetcher.py
+    └── test_authority_monitor.py     # NEW: Unit tests for authority_monitor.py
 ```
 
 ---
@@ -252,16 +328,21 @@ allium/
 ## ✅ Success Criteria
 
 ### Phase 1
+- [ ] `pytest tests/test_collector_fetcher.py -v` passes
+- [ ] `pytest tests/test_workers_collector.py -v` passes  
 - [ ] Per-relay vote/reachability lookup (< 100ms)
 - [ ] Flag eligibility analysis with thresholds
 - [ ] Bandwidth measurements with deviation coloring
 - [ ] No increase in hourly compute time (data indexed once)
+- [ ] Baseline comparison shows only expected changes
 
 ### Phase 2
+- [ ] `pytest tests/test_authority_monitor.py -v` passes
 - [ ] Authority latency checks (< 10s total)
 - [ ] Flag thresholds from latest consensus
 - [ ] Flag distribution visualization
 - [ ] Simple alert for offline/slow authorities
+- [ ] Final regression test passes
 
 ---
 

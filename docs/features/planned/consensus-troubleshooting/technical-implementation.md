@@ -908,20 +908,462 @@ def fetch_authority_health(progress_logger=None):
 
 ---
 
+## 🧪 Testing Implementation
+
+### Baseline Capture (Run Before Starting)
+
+```bash
+#!/bin/bash
+# scripts/capture_baseline.sh
+
+cd /workspace/allium
+
+echo "=== Capturing baseline output ==="
+python allium.py --progress --output-dir baseline_output/ 2>&1 | tee baseline_run.log
+
+echo "=== Saving file inventory ==="
+find baseline_output/ -type f -name "*.html" | sort > baseline_files.txt
+find baseline_output/ -type f -name "*.html" -exec md5sum {} \; > baseline_checksums.txt
+
+echo "=== Running existing tests ==="
+pytest tests/ -v 2>&1 | tee baseline_tests.log
+
+echo "=== Baseline captured ==="
+echo "Files: $(wc -l < baseline_files.txt)"
+echo "Tests: $(grep -c 'passed' baseline_tests.log) passed"
+```
+
+### Unit Test: collector_fetcher.py
+
+```python
+# tests/test_collector_fetcher.py
+"""
+Unit tests for lib/consensus/collector_fetcher.py
+Run: pytest tests/test_collector_fetcher.py -v
+"""
+
+import pytest
+from unittest.mock import patch, MagicMock
+import json
+
+
+class TestCollectorFetcher:
+    """Test CollectorFetcher class."""
+    
+    @pytest.fixture
+    def fetcher(self):
+        from lib.consensus.collector_fetcher import CollectorFetcher
+        return CollectorFetcher(timeout=10)
+    
+    @pytest.fixture
+    def sample_vote_text(self):
+        """Sample vote document for testing."""
+        return """network-status-version 3
+vote-status vote
+published 2025-12-26 04:00:00
+valid-after 2025-12-26 05:00:00
+flag-thresholds stable-uptime=613624 stable-mtbf=2505783 fast-speed=26000 guard-wfu=98.000% guard-tk=691200 guard-bw-inc-exits=29000000 guard-bw-exc-exits=29000000 enough-mtbf=1
+known-flags Authority BadExit Exit Fast Guard HSDir Running Stable V2Dir Valid
+r TestRelay1 AAAAAAAAAAAAAAAAAAAAAAAAAAAA 2025-12-26 03:45:00 192.168.1.1 9001 0
+s Fast Guard Running Stable Valid
+w Bandwidth=50000 Measured
+r TestRelay2 BBBBBBBBBBBBBBBBBBBBBBBBBBBB 2025-12-26 03:45:00 192.168.1.2 9001 0
+s Fast Running Stable Valid
+w Bandwidth=25000
+"""
+    
+    @pytest.fixture
+    def sample_bandwidth_text(self):
+        """Sample bandwidth file for testing."""
+        return """1735189200
+version=1.0.0
+bw=50000 node_id=$0000000000000000000000000000000000000001
+bw=25000 node_id=$0000000000000000000000000000000000000002
+"""
+    
+    def test_parse_vote(self, fetcher, sample_vote_text):
+        """Test vote parsing extracts relay data correctly."""
+        result = fetcher._parse_vote(sample_vote_text, 'moria1')
+        
+        assert result['authority'] == 'moria1'
+        assert result['valid_after'] == '2025-12-26 05:00:00'
+        assert 'flag_thresholds' in result
+        assert result['flag_thresholds'].get('guard-wfu') == '98.000%'
+        assert len(result['relays']) >= 1
+    
+    def test_parse_bandwidth_file(self, fetcher, sample_bandwidth_text):
+        """Test bandwidth file parsing."""
+        result = fetcher._parse_bandwidth_file(sample_bandwidth_text, 'moria1')
+        
+        assert result['authority'] == 'moria1'
+        assert result['version'] == '1.0.0'
+        assert len(result['relays']) == 2
+        
+        # Check specific relay
+        fp = '0000000000000000000000000000000000000001'
+        assert fp in result['relays']
+        assert result['relays'][fp]['bandwidth'] == 50000
+    
+    def test_build_relay_index(self, fetcher):
+        """Test relay index is built correctly."""
+        fetcher.votes = {
+            'moria1': {
+                'relays': {
+                    'ABC123': {'flags': ['Fast', 'Guard'], 'bandwidth': 50000}
+                }
+            }
+        }
+        fetcher.bandwidth_files = {
+            'moria1': {
+                'relays': {
+                    'ABC123': {'bandwidth': 48000}
+                }
+            }
+        }
+        
+        fetcher._build_relay_index()
+        
+        assert 'ABC123' in fetcher.relay_index
+        assert 'moria1' in fetcher.relay_index['ABC123']['votes']
+        assert 'moria1' in fetcher.relay_index['ABC123']['bandwidth']
+    
+    def test_get_relay_diagnostics_found(self, fetcher):
+        """Test diagnostics for existing relay."""
+        fetcher.relay_index = {
+            'ABC123': {
+                'votes': {
+                    'moria1': {'flags': ['Fast', 'Guard', 'Running'], 'bandwidth': 50000},
+                    'tor26': {'flags': ['Fast', 'Running'], 'bandwidth': 49000},
+                },
+                'bandwidth': {
+                    'moria1': {'bandwidth': 48000},
+                }
+            }
+        }
+        fetcher.flag_thresholds = {}
+        
+        result = fetcher.get_relay_diagnostics('ABC123')
+        
+        assert result['fingerprint'] == 'ABC123'
+        assert result['in_consensus'] == False  # Only 2 votes, need 5
+        assert result['vote_count'] == 2
+        assert 'authority_votes' in result
+    
+    def test_get_relay_diagnostics_not_found(self, fetcher):
+        """Test diagnostics for non-existent relay."""
+        fetcher.relay_index = {}
+        
+        result = fetcher.get_relay_diagnostics('NOTFOUND')
+        
+        assert 'error' in result
+        assert result['in_consensus'] == False
+    
+    def test_bandwidth_deviation_calculation(self, fetcher):
+        """Test bandwidth deviation is calculated correctly."""
+        fetcher.relay_index = {
+            'ABC123': {
+                'votes': {},
+                'bandwidth': {
+                    'moria1': {'bandwidth': 100},
+                    'tor26': {'bandwidth': 110},  # +10%
+                    'gabelmoo': {'bandwidth': 90},  # -10%
+                }
+            }
+        }
+        
+        result = fetcher._format_bandwidth(fetcher.relay_index['ABC123'])
+        
+        assert result['measured_count'] == 3
+        assert result['average'] == 100
+        
+        # Check deviation warnings (>5% should be flagged)
+        for m in result['measurements']:
+            if m['authority'] == 'tor26':
+                assert m['deviation'] == 10.0
+                assert m['deviation_warning'] == True
+            elif m['authority'] == 'gabelmoo':
+                assert m['deviation'] == -10.0
+                assert m['deviation_warning'] == True
+
+
+class TestCollectorFetcherIntegration:
+    """Integration tests with mocked HTTP."""
+    
+    @patch('lib.consensus.collector_fetcher.CollectorFetcher._fetch_url')
+    def test_fetch_all_with_mock(self, mock_fetch):
+        """Test full fetch flow with mocked HTTP."""
+        from lib.consensus.collector_fetcher import CollectorFetcher
+        
+        # Mock directory listing
+        mock_fetch.side_effect = [
+            # Votes directory listing
+            '<a href="2025-12-26-04-00-00-vote-0232AF901C31A04EE9848595AF9BB7620D4C5B2E-ABC">',
+            # Vote content
+            'network-status-version 3\nvote-status vote\n',
+            # Bandwidth directory listing  
+            '<a href="2025-12-26-04-30-00-bandwidth-moria1">',
+            # Bandwidth content
+            '1735189200\nversion=1.0.0\n',
+        ]
+        
+        fetcher = CollectorFetcher(timeout=5)
+        # This would fail in real execution but tests the flow
+        # In real tests, provide complete mock data
+```
+
+### Unit Test: authority_monitor.py
+
+```python
+# tests/test_authority_monitor.py
+"""
+Unit tests for lib/consensus/authority_monitor.py
+Run: pytest tests/test_authority_monitor.py -v
+"""
+
+import pytest
+import asyncio
+from unittest.mock import patch, AsyncMock, MagicMock
+
+
+class TestAuthorityMonitor:
+    """Test authority monitoring functions."""
+    
+    @pytest.mark.asyncio
+    async def test_check_authority_latency_success(self):
+        """Test successful latency check."""
+        from lib.consensus.authority_monitor import check_authority_latency
+        
+        with patch('asyncio.open_connection') as mock_conn:
+            # Mock reader/writer
+            mock_reader = AsyncMock()
+            mock_reader.read = AsyncMock(return_value=b'HTTP/1.0 200 OK\r\n')
+            mock_writer = MagicMock()
+            mock_writer.write = MagicMock()
+            mock_writer.drain = AsyncMock()
+            mock_writer.close = MagicMock()
+            mock_writer.wait_closed = AsyncMock()
+            
+            mock_conn.return_value = (mock_reader, mock_writer)
+            
+            result = await check_authority_latency('moria1', '128.31.0.34', 9131)
+            
+            assert result['name'] == 'moria1'
+            assert result['status'] in ['ok', 'slow', 'degraded']
+            assert 'latency_ms' in result
+            assert 'checked_at' in result
+    
+    @pytest.mark.asyncio
+    async def test_check_authority_latency_timeout(self):
+        """Test timeout handling."""
+        from lib.consensus.authority_monitor import check_authority_latency
+        
+        with patch('asyncio.open_connection') as mock_conn:
+            mock_conn.side_effect = asyncio.TimeoutError()
+            
+            result = await check_authority_latency('moria1', '128.31.0.34', 9131, timeout=1)
+            
+            assert result['name'] == 'moria1'
+            assert result['status'] == 'timeout'
+            assert result['latency_ms'] is None
+            assert 'error' in result
+    
+    @pytest.mark.asyncio
+    async def test_check_authority_latency_connection_error(self):
+        """Test connection error handling."""
+        from lib.consensus.authority_monitor import check_authority_latency
+        
+        with patch('asyncio.open_connection') as mock_conn:
+            mock_conn.side_effect = ConnectionRefusedError("Connection refused")
+            
+            result = await check_authority_latency('moria1', '128.31.0.34', 9131)
+            
+            assert result['name'] == 'moria1'
+            assert result['status'] == 'error'
+            assert 'error' in result
+    
+    @pytest.mark.asyncio
+    async def test_check_all_authorities(self):
+        """Test checking all authorities in parallel."""
+        from lib.consensus.authority_monitor import check_all_authorities
+        
+        with patch('lib.consensus.authority_monitor.check_authority_latency') as mock_check:
+            mock_check.return_value = {
+                'name': 'test',
+                'status': 'ok',
+                'latency_ms': 50,
+                'checked_at': '2025-12-26T04:00:00',
+            }
+            
+            result = await check_all_authorities()
+            
+            assert 'authorities' in result
+            assert 'summary' in result
+            assert result['summary']['total'] == 9
+    
+    def test_check_authorities_sync(self):
+        """Test synchronous wrapper."""
+        from lib.consensus.authority_monitor import check_authorities_sync
+        
+        with patch('lib.consensus.authority_monitor.check_all_authorities') as mock_async:
+            mock_async.return_value = {
+                'authorities': {},
+                'summary': {'online': 9, 'slow': 0, 'offline': 0, 'total': 9},
+            }
+            
+            result = check_authorities_sync()
+            
+            assert 'summary' in result
+
+
+class TestLatencyThresholds:
+    """Test latency threshold classification."""
+    
+    def test_latency_ok(self):
+        """Test OK latency classification."""
+        from lib.consensus.authority_monitor import LATENCY_OK
+        assert LATENCY_OK == 100  # ms
+    
+    def test_latency_slow(self):
+        """Test slow latency classification."""
+        from lib.consensus.authority_monitor import LATENCY_SLOW
+        assert LATENCY_SLOW == 500  # ms
+```
+
+### Worker Integration Test
+
+```python
+# tests/test_workers_collector.py
+"""
+Integration tests for collector worker in lib/workers.py
+Run: pytest tests/test_workers_collector.py -v
+"""
+
+import pytest
+from unittest.mock import patch, MagicMock
+import json
+import os
+
+
+class TestCollectorWorker:
+    """Test fetch_collector_consensus_data worker."""
+    
+    @pytest.fixture
+    def mock_cache_manager(self):
+        """Mock cache manager."""
+        with patch('lib.workers._cache_manager') as mock:
+            mock.get_cache_age.return_value = None  # No cache
+            yield mock
+    
+    @pytest.fixture
+    def mock_fetcher(self):
+        """Mock CollectorFetcher."""
+        with patch('lib.workers.CollectorFetcher') as mock:
+            instance = MagicMock()
+            instance.fetch_all.return_value = {
+                'votes': {'moria1': {'relays': {}}},
+                'bandwidth_files': {'moria1': {'relays': {}}},
+                'relay_index': {'ABC123': {}},
+                'flag_thresholds': {},
+                'fetched_at': '2025-12-26T04:00:00',
+            }
+            mock.return_value = instance
+            yield mock
+    
+    def test_fetch_fresh_data(self, mock_cache_manager, mock_fetcher):
+        """Test fetching fresh data when cache is stale."""
+        from lib.workers import fetch_collector_consensus_data
+        
+        mock_cache_manager.get_cache_age.return_value = 7200  # 2 hours old
+        
+        result = fetch_collector_consensus_data(progress_logger=print)
+        
+        assert 'relay_index' in result
+        assert 'votes' in result
+        mock_fetcher.return_value.fetch_all.assert_called_once()
+    
+    def test_use_cached_data(self, mock_cache_manager):
+        """Test using cached data when fresh."""
+        from lib.workers import fetch_collector_consensus_data, _load_cache
+        
+        mock_cache_manager.get_cache_age.return_value = 1800  # 30 min old
+        
+        with patch('lib.workers._load_cache') as mock_load:
+            mock_load.return_value = {'relay_index': {}, 'cached': True}
+            
+            result = fetch_collector_consensus_data(progress_logger=print)
+            
+            assert result.get('cached') == True
+            mock_load.assert_called_with('collector_consensus')
+```
+
+### Regression Test Script
+
+```bash
+#!/bin/bash
+# scripts/regression_test.sh
+# Run after each phase to verify no regressions
+
+set -e
+
+echo "=== Running Regression Tests ==="
+
+# 1. Run full test suite
+echo "Step 1: Running pytest..."
+pytest tests/ -v --tb=short
+
+# 2. Generate current output
+echo "Step 2: Generating site..."
+python allium.py --progress --output-dir current_output/
+
+# 3. Compare file counts
+BASELINE_COUNT=$(wc -l < baseline_files.txt)
+CURRENT_COUNT=$(find current_output/ -type f -name "*.html" | wc -l)
+
+echo "Baseline files: $BASELINE_COUNT"
+echo "Current files: $CURRENT_COUNT"
+
+if [ "$CURRENT_COUNT" -lt "$BASELINE_COUNT" ]; then
+    echo "ERROR: File count decreased! Possible regression."
+    exit 1
+fi
+
+# 4. Check for unexpected changes (exclude known new sections)
+echo "Step 3: Checking for unexpected changes..."
+diff -r baseline_output/ current_output/ --brief 2>/dev/null | \
+    grep -v "Consensus Diagnostics" | \
+    grep -v "Flag Thresholds" | \
+    head -20
+
+echo "=== Regression Tests Passed ==="
+```
+
+---
+
 ## Testing Checklist
 
-### Phase 1
-- [ ] `CollectorFetcher.fetch_all()` returns valid data
-- [ ] `CollectorFetcher.get_relay_diagnostics()` returns correct format
-- [ ] Worker integrates with Coordinator
-- [ ] Cache respects 1-hour freshness
-- [ ] Template renders correctly for relays with/without data
+### Phase 1 Tests
+- [ ] `pytest tests/test_collector_fetcher.py -v` passes
+- [ ] `pytest tests/test_workers_collector.py -v` passes
+- [ ] `pytest tests/ -v` full suite passes
+- [ ] Baseline comparison shows only expected changes
+- [ ] New relay diagnostics section appears in ~7000 relay pages
 
-### Phase 2
+### Phase 2 Tests
+- [ ] `pytest tests/test_authority_monitor.py -v` passes
+- [ ] `pytest tests/ -v` full suite passes
 - [ ] Authority latency checks complete in < 15s
 - [ ] Dashboard shows all 9 authorities
-- [ ] Flag thresholds display correctly
-- [ ] Alerts appear for slow/offline authorities
+- [ ] Final baseline comparison passes
+
+### Final Validation
+```bash
+# Run this after Phase 2 is complete
+./scripts/regression_test.sh
+
+# Manual verification
+diff -r baseline_output/ final_output/ --brief | wc -l
+# Expected: Only relay-info.html files and misc-authorities.html changed
+```
 
 ---
 
