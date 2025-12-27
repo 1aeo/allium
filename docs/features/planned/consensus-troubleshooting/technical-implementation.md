@@ -690,11 +690,31 @@ Format CollecTor data for template display.
 Keeps formatting logic separate from fetching/parsing.
 """
 
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 
+# Authority fingerprints for linking to relay pages
+AUTHORITY_FINGERPRINTS = {
+    'moria1': '9695DFC35FFEB861329B9F1AB04C46397020CE31',
+    'tor26': '847B1F850344D7876491A54892F904934E4EB85D',
+    'dizum': '7EA6EAD6FD83083C538F44038BBFA077587DD755',
+    'gabelmoo': 'F2044413DAC2E02E3D6BCF4735A19BCA1DE97281',
+    'bastet': '27102BC123E7AF1D4741AE047E160C91ADC76B21',
+    'dannenberg': '0232AF901C31A04EE9848595AF9BB7620D4C5B2E',
+    'maatuska': 'BD6A829255CB08E66FBE7D3748363586E46B3810',
+    'longclaw': '23D15D965BC35114467363C165C4F724B64B4F66',
+    'faravahar': 'EFCBE720AB3A82B99F9E953CD5BF50F7EEFC7B97',
+}
+
+# Which authorities run bandwidth scanners (7 of 9)
 BANDWIDTH_AUTHORITIES = ['moria1', 'tor26', 'gabelmoo', 'bastet', 'longclaw', 'faravahar', 'maatuska']
+
+# Which authorities test IPv6 reachability (5 of 9)
 IPV6_TESTING_AUTHORITIES = ['moria1', 'gabelmoo', 'dannenberg', 'maatuska', 'bastet']
+
+# All authorities in display order
+ALL_AUTHORITIES = ['moria1', 'tor26', 'dizum', 'gabelmoo', 'bastet', 
+                   'dannenberg', 'maatuska', 'longclaw', 'faravahar']
 
 
 def format_relay_diagnostics(
@@ -707,7 +727,10 @@ def format_relay_diagnostics(
     Format indexed CollecTor data for template display.
     
     Called once per relay during _reprocess_collector_data().
-    Returns dict suitable for Jinja2 template.
+    Returns dict suitable for Jinja2 template with:
+    - Combined authority votes & bandwidth (single table)
+    - Authority names linked via fingerprint
+    - Color-coded flag eligibility (no checkmarks)
     """
     votes = indexed_data.get('votes', {})
     bandwidth = indexed_data.get('bandwidth', {})
@@ -716,88 +739,176 @@ def format_relay_diagnostics(
     # Consensus requires majority (5/9)
     in_consensus = vote_count >= 5
     
-    # Format authority votes with reachability
+    # Collect bandwidth values for deviation calculation
+    bw_values = []
+    for auth_name in BANDWIDTH_AUTHORITIES:
+        if auth_name in bandwidth:
+            bw_values.append(bandwidth[auth_name].get('bandwidth', 0))
+    avg_bw = sum(bw_values) / len(bw_values) if bw_values else 0
+    
+    # Build combined authority data (votes + bandwidth in single list)
     authority_votes = []
     all_flags = set()
+    issues = []
     
-    for auth_name in ['moria1', 'tor26', 'dizum', 'gabelmoo', 'bastet', 
-                      'dannenberg', 'maatuska', 'longclaw', 'faravahar']:
+    for auth_name in ALL_AUTHORITIES:
+        is_bw_authority = auth_name in BANDWIDTH_AUTHORITIES
+        tests_ipv6 = auth_name in IPV6_TESTING_AUTHORITIES
+        
+        auth_data = {
+            'authority': auth_name,
+            'fingerprint': AUTHORITY_FINGERPRINTS.get(auth_name, ''),  # For linking
+            'is_bw_authority': is_bw_authority,
+            'tests_ipv6': tests_ipv6,
+        }
+        
         if auth_name in votes:
             vote = votes[auth_name]
             flags = vote.get('flags', [])
             all_flags.update(flags)
             
-            # IPv4 reachable if Running flag present
-            ipv4_ok = 'Running' in flags
-            
-            # IPv6 only tested by some authorities
-            ipv6_ok = None
-            if auth_name in IPV6_TESTING_AUTHORITIES:
-                ipv6_ok = 'ReachableIPv6' in flags
-            
-            authority_votes.append({
-                'authority': auth_name,
+            auth_data.update({
                 'voted': True,
-                'ipv4_reachable': ipv4_ok,
-                'ipv6_reachable': ipv6_ok,
+                'ipv4_reachable': 'Running' in flags,
+                'ipv6_reachable': 'ReachableIPv6' in flags if tests_ipv6 else None,
                 'flags': flags,
-                'bandwidth': vote.get('bandwidth'),
             })
+            
+            # Track issues
+            if 'Running' not in flags:
+                issues.append(f"{auth_name}: IPv4 not reachable")
         else:
-            authority_votes.append({
-                'authority': auth_name,
+            auth_data.update({
                 'voted': False,
                 'ipv4_reachable': False,
-                'ipv6_reachable': False,
+                'ipv6_reachable': False if tests_ipv6 else None,
                 'flags': [],
-                'bandwidth': None,
             })
-    
-    # Format bandwidth measurements with deviation
-    bw_measurements = []
-    bw_values = []
-    
-    for auth_name in BANDWIDTH_AUTHORITIES:
-        if auth_name in bandwidth:
-            bw = bandwidth[auth_name].get('bandwidth', 0)
-            bw_measurements.append({
-                'authority': auth_name,
-                'measured': True,
-                'value': bw,
-            })
-            bw_values.append(bw)
+            issues.append(f"{auth_name}: cannot reach relay")
+        
+        # Add bandwidth data (N/A for non-BW authorities)
+        if is_bw_authority:
+            if auth_name in bandwidth:
+                bw = bandwidth[auth_name].get('bandwidth', 0)
+                deviation = ((bw - avg_bw) / avg_bw * 100) if avg_bw > 0 else 0
+                auth_data.update({
+                    'bw_value': bw,
+                    'bw_deviation': deviation,
+                    'bw_deviation_warning': abs(deviation) > 5.0,
+                })
+            else:
+                auth_data.update({
+                    'bw_value': None,
+                    'bw_deviation': None,
+                    'bw_deviation_warning': False,
+                })
         else:
-            bw_measurements.append({
-                'authority': auth_name,
-                'measured': False,
-                'value': None,
+            # Non-bandwidth authority - mark as N/A
+            auth_data.update({
+                'bw_value': None,
+                'bw_deviation': None,
+                'bw_deviation_warning': False,
             })
+        
+        authority_votes.append(auth_data)
     
-    # Calculate deviation (red if >±5%)
-    avg_bw = sum(bw_values) / len(bw_values) if bw_values else 0
-    for m in bw_measurements:
-        if m['measured'] and avg_bw > 0:
-            m['deviation'] = ((m['value'] - avg_bw) / avg_bw) * 100
-            m['deviation_warning'] = abs(m['deviation']) > 5.0
-        else:
-            m['deviation'] = None
-            m['deviation_warning'] = False
+    # Format flag eligibility (color-coded, no checkmarks)
+    flag_eligibility = _format_flag_eligibility(
+        current_flags=all_flags,
+        flag_thresholds=flag_thresholds,
+        relay_data=indexed_data,
+    )
     
     return {
         'fingerprint': fingerprint,
         'in_consensus': in_consensus,
         'vote_count': vote_count,
         'total_authorities': 9,
-        'authority_votes': authority_votes,
+        'authority_votes': authority_votes,  # Combined votes + bandwidth
         'current_flags': list(all_flags),
-        'bandwidth': {
-            'measured_count': len(bw_values),
-            'total_authorities': len(BANDWIDTH_AUTHORITIES),
-            'average': avg_bw,
-            'measurements': bw_measurements,
-        },
+        'issues': issues if issues else None,
+        'flag_eligibility': flag_eligibility,
         'fetched_at': fetched_at,
     }
+
+
+def _format_flag_eligibility(
+    current_flags: set,
+    flag_thresholds: Dict,
+    relay_data: Dict,
+) -> Optional[Dict]:
+    """
+    Format flag eligibility analysis.
+    Returns data for color-coded display (green=met, red=below).
+    NO checkmarks - uses text color only.
+    """
+    # Determine which flag to analyze (first missing important flag)
+    important_flags = ['Guard', 'Stable', 'Fast', 'HSDir']
+    target_flag = None
+    
+    for flag in important_flags:
+        if flag not in current_flags:
+            target_flag = flag
+            break
+    
+    if not target_flag:
+        return None  # Relay has all important flags
+    
+    # Get median thresholds
+    median_thresholds = _get_median_thresholds(flag_thresholds)
+    
+    # Build requirements list based on target flag
+    requirements = []
+    
+    if target_flag == 'Guard':
+        requirements = [
+            {
+                'name': 'WFU (Uptime)',
+                'your_value': '96.2%',  # Would come from relay data
+                'threshold': f"≥{median_thresholds.get('guard-wfu', 98)}%",
+                'met': False,  # Would be calculated
+                'difference': '1.8%',
+            },
+            {
+                'name': 'Time Known',
+                'your_value': '45 days',
+                'threshold': '≥8 days',
+                'met': True,
+                'difference': None,
+            },
+            {
+                'name': 'Bandwidth',
+                'your_value': '25 MB/s',
+                'threshold': f"≥{median_thresholds.get('guard-bw-inc-exits', 29000000) / 1000000:.0f} MB/s",
+                'met': False,
+                'difference': '14%',
+            },
+        ]
+    
+    return {
+        'target_flag': target_flag,
+        'requirements': requirements,
+    }
+
+
+def _get_median_thresholds(flag_thresholds: Dict) -> Dict:
+    """Calculate median threshold values across all authorities."""
+    if not flag_thresholds:
+        return {}
+    
+    all_keys = set()
+    for thresholds in flag_thresholds.values():
+        all_keys.update(thresholds.keys())
+    
+    result = {}
+    for key in all_keys:
+        values = [t[key] for t in flag_thresholds.values() if key in t]
+        if values:
+            values.sort()
+            mid = len(values) // 2
+            result[key] = values[mid]
+    
+    return result
 ```
 
 ### 1.4 Template Integration
@@ -812,77 +923,123 @@ def format_relay_diagnostics(
     Data from: {{ relay.collector_diagnostics.fetched_at | format_datetime }}
   </p>
   
-  {# Authority Votes & Reachability #}
-  <h4>Authority Votes & Reachability</h4>
+  {# Combined Authority Votes & Bandwidth (single table) #}
+  <h4>Authority Votes & Bandwidth</h4>
   <p>
     {% if relay.collector_diagnostics.in_consensus %}
-      <span class="status-ok">✅ IN CONSENSUS</span>
+      <span class="status-ok">IN CONSENSUS</span>
     {% else %}
-      <span class="status-warn">⚠️ NOT IN CONSENSUS</span>
+      <span class="status-warn">NOT IN CONSENSUS</span>
     {% endif %}
     ({{ relay.collector_diagnostics.vote_count }}/9 authorities)
   </p>
   
-  <table class="authority-votes">
+  <table class="authority-table">
     <thead>
       <tr>
         <th>Authority</th>
         <th>IPv4</th>
         <th>IPv6</th>
-        <th>Vote</th>
         <th>Flags</th>
-        <th>Bandwidth</th>
-      </tr>
-    </thead>
-    <tbody>
-    {% for auth in relay.collector_diagnostics.authority_votes %}
-      <tr>
-        <td>{{ auth.authority }}</td>
-        <td>{% if auth.ipv4_reachable %}✅{% else %}❌{% endif %}</td>
-        <td>
-          {% if auth.ipv6_reachable is none %}⚪{% elif auth.ipv6_reachable %}✅{% else %}❌{% endif %}
-        </td>
-        <td>{% if auth.voted %}✅{% else %}❌{% endif %}</td>
-        <td>{{ auth.flags | join(' ') }}</td>
-        <td>{{ auth.bandwidth | format_bandwidth if auth.bandwidth else '—' }}</td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-  
-  {# Bandwidth Measurements #}
-  {% if relay.collector_diagnostics.bandwidth %}
-  <h4>Bandwidth Measurements</h4>
-  <p>
-    Measured by: {{ relay.collector_diagnostics.bandwidth.measured_count }}/{{ relay.collector_diagnostics.bandwidth.total_authorities }} bandwidth authorities
-  </p>
-  
-  <table class="bandwidth-measurements">
-    <thead>
-      <tr>
-        <th>BW Authority</th>
-        <th>Measured</th>
-        <th>Value</th>
+        <th>BW Value</th>
         <th title="Values outside ±5% shown in red">Deviation</th>
       </tr>
     </thead>
     <tbody>
-    {% for m in relay.collector_diagnostics.bandwidth.measurements %}
-      <tr>
-        <td>{{ m.authority }}</td>
-        <td>{% if m.measured %}✅{% else %}❌{% endif %}</td>
-        <td>{{ m.value | format_bandwidth if m.value else '—' }}</td>
-        <td class="{% if m.deviation_warning %}deviation-warning{% endif %}">
-          {% if m.deviation is not none %}
-            {{ '%+.1f' % m.deviation }}%
+    {% for auth in relay.collector_diagnostics.authority_votes %}
+      <tr class="{% if not auth.voted %}row-not-voted{% endif %}">
+        {# Authority name links to their relay page #}
+        <td>
+          <a href="{{ path_prefix }}relay/{{ auth.fingerprint }}.html" 
+             title="View {{ auth.authority }} relay details">
+            {{ auth.authority }}
+          </a>
+        </td>
+        <td>{% if auth.ipv4_reachable %}✅{% else %}❌{% endif %}</td>
+        <td>
+          {% if auth.ipv6_reachable is none %}
+            <span title="This authority doesn't test IPv6">⚪</span>
+          {% elif auth.ipv6_reachable %}✅
+          {% else %}❌{% endif %}
+        </td>
+        <td>{{ auth.flags | join(' ') if auth.flags else '—' }}</td>
+        {# Bandwidth - show N/A for non-bandwidth authorities #}
+        <td>
+          {% if auth.is_bw_authority %}
+            {{ auth.bw_value | format_bandwidth if auth.bw_value else '—' }}
           {% else %}
-            —
+            <span class="not-applicable" title="This authority doesn't run a bandwidth scanner">N/A</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if auth.is_bw_authority %}
+            {% if auth.bw_deviation is not none %}
+              <span class="{% if auth.bw_deviation_warning %}deviation-warning{% endif %}"
+                    title="{% if auth.bw_deviation_warning %}Deviation >±5% may indicate measurement issues{% endif %}">
+                {{ '%+.1f' % auth.bw_deviation }}%
+              </span>
+            {% else %}—{% endif %}
+          {% else %}
+            <span class="not-applicable">N/A</span>
           {% endif %}
         </td>
       </tr>
     {% endfor %}
     </tbody>
   </table>
+  
+  <p class="table-legend">
+    IPv6: ⚪ = authority doesn't test IPv6 • 
+    BW: N/A = authority doesn't run bandwidth scanner (dizum, dannenberg)
+  </p>
+  
+  {# Issues summary #}
+  {% if relay.collector_diagnostics.issues %}
+  <div class="issues-summary">
+    ⚠️ Issues: {{ relay.collector_diagnostics.issues | join(' • ') }}
+  </div>
+  {% endif %}
+  
+  {# Flag Eligibility - color-coded text, no checkmarks #}
+  {% if relay.collector_diagnostics.flag_eligibility %}
+  <h4>Flag Eligibility</h4>
+  <p class="eligibility-question">
+    Why doesn't this relay have the <strong>{{ relay.collector_diagnostics.flag_eligibility.target_flag }}</strong> flag?
+  </p>
+  
+  <table class="flag-eligibility">
+    <thead>
+      <tr>
+        <th>Requirement</th>
+        <th>Your Value</th>
+        <th>Threshold</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for req in relay.collector_diagnostics.flag_eligibility.requirements %}
+      <tr>
+        <td>{{ req.name }}</td>
+        <td>{{ req.your_value }}</td>
+        <td>{{ req.threshold }}</td>
+        {# Color-coded status - green for met, red for below - NO checkmarks #}
+        <td class="{% if req.met %}status-met{% else %}status-below{% endif %}">
+          {{ req.your_value }}
+          {% if req.met %}
+            (meets threshold)
+          {% else %}
+            (below by {{ req.difference }})
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  
+  <p class="eligibility-legend">
+    <span class="status-met">Green</span> = meets requirement • 
+    <span class="status-below">Red</span> = below threshold
+  </p>
   {% endif %}
 </section>
 {% endif %}
@@ -905,29 +1062,76 @@ def format_relay_diagnostics(
   padding-bottom: 0.3em;
 }
 
-.authority-votes, .bandwidth-measurements {
+.authority-table, .flag-eligibility {
   width: 100%;
   border-collapse: collapse;
+  margin-bottom: 0.5em;
 }
 
-.authority-votes th, .authority-votes td,
-.bandwidth-measurements th, .bandwidth-measurements td {
+.authority-table th, .authority-table td,
+.flag-eligibility th, .flag-eligibility td {
   padding: 0.5em;
   border: 1px solid #ddd;
   text-align: left;
 }
 
+/* Authority name links */
+.authority-table td a {
+  color: #0066cc;
+  text-decoration: none;
+}
+.authority-table td a:hover {
+  text-decoration: underline;
+}
+
+/* Row styling for authorities that didn't vote */
+.row-not-voted {
+  opacity: 0.6;
+  background-color: #f9f9f9;
+}
+
+/* N/A styling for non-bandwidth authorities */
+.not-applicable {
+  color: #999;
+  font-style: italic;
+}
+
+/* Deviation warning (>±5%) */
 .deviation-warning {
   color: #c00;
   font-weight: bold;
 }
 
+/* Flag eligibility status - COLOR ONLY, no symbols */
+.status-met {
+  color: #080;  /* Green for meets threshold */
+  font-weight: 500;
+}
+.status-below {
+  color: #c00;  /* Red for below threshold */
+  font-weight: 500;
+}
+
+/* General status indicators */
 .status-ok { color: #080; }
 .status-warn { color: #c80; }
 
-.data-freshness {
-  font-size: 0.9em;
+.data-freshness, .table-legend, .eligibility-legend {
+  font-size: 0.85em;
   color: #666;
+  margin-top: 0.3em;
+}
+
+.issues-summary {
+  margin: 1em 0;
+  padding: 0.5em;
+  background-color: #fff8e1;
+  border-left: 3px solid #ffc107;
+}
+
+.eligibility-question {
+  font-style: italic;
+  color: #555;
 }
 ```
 
