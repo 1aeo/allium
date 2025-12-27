@@ -146,7 +146,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# 9 Directory Authorities (all vote, 7 run bandwidth scanners)
+# Directory Authority fingerprint → name mapping
+# NOTE: This is a fallback - authorities should be discovered dynamically from Onionoo
 AUTHORITIES = {
     '0232AF901C31A04EE9848595AF9BB7620D4C5B2E': 'moria1',
     '14C131DFC5C6F93646BE72FA1401C02A8DF2E8B4': 'tor26',
@@ -159,8 +160,10 @@ AUTHORITIES = {
     'EFCBE720AB3A82B99F9E953CD5BF50F7EEFC7B97': 'faravahar',
 }
 
-BANDWIDTH_AUTHORITIES = ['moria1', 'tor26', 'gabelmoo', 'bastet', 'longclaw', 'faravahar', 'maatuska']
-IPV6_TESTING_AUTHORITIES = ['moria1', 'gabelmoo', 'dannenberg', 'maatuska', 'bastet']
+# REMOVED: Static bandwidth authority list - now detected dynamically from vote files
+# An authority runs a bandwidth scanner if their vote contains "bandwidth-file-headers"
+
+# REMOVED: Static IPv6 testing authority list - now detected from actual reachability data
 
 COLLECTOR_BASE = 'https://collector.torproject.org'
 VOTES_PATH = '/recent/relay-descriptors/votes/'
@@ -349,13 +352,21 @@ class CollectorFetcher:
         return by_hour[latest_hour]
     
     def _parse_vote(self, vote_text: str, auth_name: str) -> dict:
-        """Parse vote document into structured data."""
+        """
+        Parse vote document into structured data.
+        
+        Extracts:
+        - Header: published, valid_after, known_flags, flag_thresholds
+        - has_bandwidth_file_headers: True if authority runs bandwidth scanner
+        - Per-relay: fingerprint, flags, bandwidth, wfu, tk, mtbf
+        """
         parsed = {
             'authority': auth_name,
             'published': None,
             'valid_after': None,
-            'flag_thresholds': {},
+            'flag_thresholds': {},  # ALL thresholds - dynamically extracted
             'known_flags': [],
+            'has_bandwidth_file_headers': False,  # Dynamically detect BW authority
             'relays': {},
         }
         
@@ -374,6 +385,10 @@ class CollectorFetcher:
                         'flags': [],
                         'bandwidth': None,
                         'measured': False,
+                        # Per-relay stats - dynamically extracted
+                        'wfu': None,
+                        'tk': None,
+                        'mtbf': None,
                     }
                     parsed['relays'][fingerprint] = current_relay
             
@@ -390,7 +405,24 @@ class CollectorFetcher:
                 bw_match = re.search(r'Bandwidth=(\d+)', line)
                 if bw_match:
                     current_relay['bandwidth'] = int(bw_match.group(1))
-                current_relay['measured'] = 'Measured' in line
+                measured_match = re.search(r'Measured=(\d+)', line)
+                if measured_match:
+                    current_relay['measured'] = int(measured_match.group(1))
+                else:
+                    current_relay['measured'] = 'Measured' in line
+            
+            # Stats line (wfu, tk, mtbf) - per-relay values
+            elif line.startswith('stats ') and current_relay:
+                # Example: stats wfu=0.957168 tk=853402 mtbf=1203750817
+                wfu_match = re.search(r'wfu=([0-9.]+)', line)
+                tk_match = re.search(r'tk=(\d+)', line)
+                mtbf_match = re.search(r'mtbf=(\d+)', line)
+                if wfu_match:
+                    current_relay['wfu'] = float(wfu_match.group(1))
+                if tk_match:
+                    current_relay['tk'] = int(tk_match.group(1))
+                if mtbf_match:
+                    current_relay['mtbf'] = int(mtbf_match.group(1))
             
             # Header fields
             elif line.startswith('published '):
@@ -400,7 +432,11 @@ class CollectorFetcher:
             elif line.startswith('known-flags '):
                 parsed['known_flags'] = line.split(' ')[1:]
             elif line.startswith('flag-thresholds '):
+                # Extract ALL thresholds dynamically - no hardcoded values
                 parsed['flag_thresholds'] = self._parse_flag_thresholds(line)
+            # Detect if authority runs bandwidth scanner
+            elif line.startswith('bandwidth-file-headers '):
+                parsed['has_bandwidth_file_headers'] = True
         
         return parsed
     
@@ -1137,11 +1173,12 @@ def _get_median_thresholds(flag_thresholds: Dict) -> Dict:
         <th>IPv6</th>
         <th>Flags Assigned</th>
         <th>Meas. BW</th>
-        <th title="Weighted Fractional Uptime. Threshold: ≥98% (constant). Your value: {{ relay.collector_diagnostics.relay_values.wfu }}">WFU ⓘ</th>
-        <th title="Time Known to authority. Threshold: ≥8 days (constant). Your value: {{ relay.collector_diagnostics.relay_values.tk }}">TK ⓘ</th>
-        <th title="Guard bandwidth threshold (varies by authority)">Guard BW Req</th>
-        <th title="Stable uptime threshold (varies by authority)">Stable Req</th>
-        <th title="Fast speed threshold (varies by authority)">Fast Req</th>
+        {# All thresholds shown in tooltips - values pulled dynamically from each authority's vote file #}
+        <th title="Weighted Fractional Uptime (guard-wfu threshold shown per-row)">WFU ⓘ</th>
+        <th title="Time Known (guard-tk threshold shown per-row)">TK ⓘ</th>
+        <th title="Guard bandwidth threshold (guard-bw-inc-exits, varies by authority)">Guard BW</th>
+        <th title="Stable uptime threshold (stable-uptime, varies by authority)">Stable</th>
+        <th title="Fast speed threshold (fast-speed, varies by authority)">Fast</th>
       </tr>
     </thead>
     <tbody>
@@ -1172,20 +1209,24 @@ def _get_median_thresholds(flag_thresholds: Dict) -> Dict:
           {% endif %}
         </td>
         
-        {# WFU - relay value shown, threshold (98%) in column tooltip #}
+        {# WFU - relay value shown, threshold from this authority in tooltip #}
         <td>
           {% if auth.voted %}
-            <span class="{% if auth.wfu_meets %}status-met{% else %}status-below{% endif %}">
+            <span class="{% if auth.wfu_meets %}status-met{% else %}status-below{% endif %}"
+                  title="Threshold: ≥{{ '%.1f' % (auth.guard_wfu_threshold * 100) }}% (from {{ auth.authority }})">
               {{ '%.1f' % (auth.relay_wfu * 100) }}%
+              {% if auth.wfu_meets %}✅{% else %}❌{% endif %}
             </span>
           {% else %}—{% endif %}
         </td>
         
-        {# Time Known - relay value shown, threshold (8 days) in column tooltip #}
+        {# Time Known - relay value shown, threshold from this authority in tooltip #}
         <td>
           {% if auth.voted %}
-            <span class="{% if auth.tk_meets %}status-met{% else %}status-below{% endif %}">
-              {{ (auth.relay_tk / 86400) | round(1) }} days
+            <span class="{% if auth.tk_meets %}status-met{% else %}status-below{% endif %}"
+                  title="Threshold: ≥{{ (auth.guard_tk_threshold / 86400) | round(1) }} days (from {{ auth.authority }})">
+              {{ (auth.relay_tk / 86400) | round(1) }}d
+              {% if auth.tk_meets %}✅{% else %}❌{% endif %}
             </span>
           {% else %}—{% endif %}
         </td>
@@ -1383,12 +1424,24 @@ def format_relay_diagnostics(
         vote = vote_data.get(auth_name, {})
         bw = bw_data.get(auth_name, {})
         
-        # Get thresholds (with defaults)
-        guard_wfu_threshold = 0.98  # Constant
-        guard_tk_threshold = 691200  # ~8 days, constant
+        # Get ALL thresholds dynamically from vote file (no hardcoded values)
+        # Even "constant" thresholds like guard-wfu can change - always pull from source
+        guard_wfu_threshold = auth_thresholds.get('guard-wfu', 0)  # Typically ~0.98
+        if isinstance(guard_wfu_threshold, str):
+            guard_wfu_threshold = float(guard_wfu_threshold.replace('%', '')) / 100
+        guard_tk_threshold = auth_thresholds.get('guard-tk', 0)  # Typically ~691200 (~8 days)
         guard_bw_threshold = auth_thresholds.get('guard-bw-inc-exits', 0)
+        guard_bw_exc_threshold = auth_thresholds.get('guard-bw-exc-exits', 0)
         stable_threshold = auth_thresholds.get('stable-uptime', 0)
+        stable_mtbf_threshold = auth_thresholds.get('stable-mtbf', 0)
         fast_threshold = auth_thresholds.get('fast-speed', 0)
+        hsdir_wfu_threshold = auth_thresholds.get('hsdir-wfu', 0)
+        if isinstance(hsdir_wfu_threshold, str):
+            hsdir_wfu_threshold = float(hsdir_wfu_threshold.replace('%', '')) / 100
+        hsdir_tk_threshold = auth_thresholds.get('hsdir-tk', 0)
+        
+        # Detect if authority runs bandwidth scanner (has bandwidth-file-headers in vote)
+        is_bw_authority = vote.get('has_bandwidth_file_headers', False)
         
         authority_votes.append({
             'authority': auth_name,
@@ -1397,24 +1450,33 @@ def format_relay_diagnostics(
             'ipv4_reachable': vote.get('ipv4_reachable', False),
             'ipv6_reachable': vote.get('ipv6_reachable'),  # None if not tested
             'flags': vote.get('flags', []),
-            'is_bw_authority': auth.get('is_bw_authority', True),
+            'is_bw_authority': is_bw_authority,  # Dynamically detected from vote file
             'bw_value': bw.get('measured') or vote.get('measured'),
             
             # Relay's values as seen by this authority
             'relay_wfu': relay_wfu or vote.get('wfu', 0),
             'relay_tk': relay_tk or vote.get('tk', 0),
+            'relay_mtbf': vote.get('mtbf', 0),
             
-            # Thresholds
+            # ALL thresholds - dynamically pulled from vote file (no hardcoded values)
+            'guard_wfu_threshold': guard_wfu_threshold,
+            'guard_tk_threshold': guard_tk_threshold,
             'guard_bw_threshold': guard_bw_threshold,
+            'guard_bw_exc_threshold': guard_bw_exc_threshold,
             'stable_threshold': stable_threshold,
+            'stable_mtbf_threshold': stable_mtbf_threshold,
             'fast_threshold': fast_threshold,
+            'hsdir_wfu_threshold': hsdir_wfu_threshold,
+            'hsdir_tk_threshold': hsdir_tk_threshold,
             
-            # Status checks
-            'wfu_meets': (relay_wfu or 0) >= guard_wfu_threshold,
-            'tk_meets': (relay_tk or 0) >= guard_tk_threshold,
-            'guard_bw_meets': (relay_measured_bw or 0) >= guard_bw_threshold,
-            'stable_meets': (relay_tk or 0) >= stable_threshold,  # Using tk as proxy for uptime
-            'fast_meets': (relay_measured_bw or 0) >= fast_threshold,
+            # Status checks - compare relay values to this authority's thresholds
+            'wfu_meets': (relay_wfu or 0) >= guard_wfu_threshold if guard_wfu_threshold else True,
+            'tk_meets': (relay_tk or 0) >= guard_tk_threshold if guard_tk_threshold else True,
+            'guard_bw_meets': (relay_measured_bw or 0) >= guard_bw_threshold if guard_bw_threshold else True,
+            'stable_meets': (relay_tk or 0) >= stable_threshold if stable_threshold else True,
+            'fast_meets': (relay_measured_bw or 0) >= fast_threshold if fast_threshold else True,
+            'hsdir_wfu_meets': (relay_wfu or 0) >= hsdir_wfu_threshold if hsdir_wfu_threshold else True,
+            'hsdir_tk_meets': (relay_tk or 0) >= hsdir_tk_threshold if hsdir_tk_threshold else True,
         })
     
     # Calculate summary stats
@@ -1512,25 +1574,39 @@ def _identify_issues(authority_votes: List[Dict]) -> List[str]:
     'ipv4_reachable': True,
     'ipv6_reachable': True,  # or None if not tested
     'flags': ['Fast', 'Guard', 'Stable', 'Valid'],
-    'is_bw_authority': True,
+    'is_bw_authority': True,  # Dynamically detected from bandwidth-file-headers presence
     'bw_value': 46200000,
     
-    # Relay's values
+    # Relay's values (from vote stats line)
     'relay_wfu': 0.962,
     'relay_tk': 3888000,  # ~45 days in seconds
+    'relay_mtbf': 1203750817,
     
-    # Per-authority thresholds (variable)
-    'guard_bw_threshold': 30000000,  # 30 MB/s
-    'stable_threshold': 1693440,     # ~19.6 days
-    'fast_threshold': 1000000,       # 1 MB/s
+    # ALL thresholds - dynamically pulled from flag-thresholds line (no hardcoded values)
+    'guard_wfu_threshold': 0.98,       # From guard-wfu
+    'guard_tk_threshold': 691200,      # From guard-tk (~8 days)
+    'guard_bw_threshold': 30000000,    # From guard-bw-inc-exits (30 MB/s)
+    'guard_bw_exc_threshold': 28000000,# From guard-bw-exc-exits
+    'stable_threshold': 1693440,       # From stable-uptime (~19.6 days)
+    'stable_mtbf_threshold': 29386592, # From stable-mtbf
+    'fast_threshold': 1048000,         # From fast-speed (~1 MB/s)
+    'hsdir_wfu_threshold': 0.98,       # From hsdir-wfu
+    'hsdir_tk_threshold': 848480,      # From hsdir-tk
     
-    # Status checks
-    'wfu_meets': False,   # 96.2% < 98%
-    'tk_meets': True,     # 45 days > 8 days
-    'guard_bw_meets': False,  # 25 MB/s < 30 MB/s
+    # Status checks - relay value vs this authority's thresholds
+    'wfu_meets': False,        # 96.2% < 98%
+    'tk_meets': True,          # 45 days > 8 days
+    'guard_bw_meets': False,   # 25 MB/s < 30 MB/s
     'stable_meets': True,
     'fast_meets': True,
+    'hsdir_wfu_meets': False,  # 96.2% < 98%
+    'hsdir_tk_meets': True,
 }
+```
+
+**Known flags** (from `known-flags` line in vote header):
+```
+Authority BadExit Exit Fast Guard HSDir MiddleOnly Running Stable StaleDesc Sybil V2Dir Valid
 ```
 
 ### 1.7 CSS Styles for Merged Table
@@ -1868,7 +1944,7 @@ def check_authorities_sync() -> Dict:
             <th>Authority Name</th>
             <th>Online Status</th>
             {# NEW columns inserted here #}
-            <th title="Submitted vote this consensus period">Vote</th>
+            <th title="Submitted vote this consensus period">Voted</th>
             <th title="Runs bandwidth scanner (sbws)">BW Auth</th>
             <th title="Response time to directory port">Latency</th>
             {# Existing columns continue #}

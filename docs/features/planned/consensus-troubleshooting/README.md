@@ -64,31 +64,32 @@ Add consensus troubleshooting features to Allium using CollecTor as the primary 
 │                                                                                                                        │
 │ ══ Per-Authority Voting Details ════════════════════════════════════════════════════════════════════════════════════════│
 │                                                                                                                        │
-│ Single table with ALL authority data. Constant thresholds (WFU, TK) have threshold in column tooltip.                  │
+│ Single table with ALL authority data. ALL thresholds pulled dynamically from each authority's vote file.              │
 │                                                                                                                        │
-│ ┌────────────┬──────┬──────┬──────────────────┬──────────┬─────────┬─────────┬──────────────┬─────────────┬───────────┐│
-│ │ Authority  │ IPv4 │ IPv6 │ Flags Assigned   │ Meas. BW │ WFU [ⓘ]│ TK [ⓘ] │ Guard BW Req │ Stable Req  │ Fast Req  ││
-│ ├────────────┼──────┼──────┼──────────────────┼──────────┼─────────┼─────────┼──────────────┼─────────────┼───────────┤│
-│ │ moria1 ↗   │  ✅  │  ✅  │ Fast Guard Stable│ 46.2 MB/s│ 96.2%   │ 45 days │ ≥30 MB/s  ❌ │ ≥19.6 days ✅│ ≥1.0 MB/s ✅││
-│ │ tor26 ↗    │  ✅  │  ❌  │ Fast Stable      │ 44.8 MB/s│ 96.2%   │ 45 days │ ≥34 MB/s  ❌ │ ≥19.8 days ✅│ ≥0.1 MB/s ✅││
-│ │ dizum ↗    │  ✅  │  ⚪  │ Fast Guard Stable│ N/A      │ 96.2%   │ 45 days │ ≥10 MB/s  ✅ │ ≥14.2 days ✅│ ≥0.1 MB/s ✅││
-│ │ gabelmoo ↗ │  ✅  │  ✅  │ Fast Stable      │ 44.1 MB/s│ 96.2%   │ 45 days │ ≥35 MB/s  ❌ │ ≥19.6 days ✅│ ≥0.1 MB/s ✅││
-│ │ bastet ↗   │  ✅  │  ✅  │ Fast Guard Stable│ 43.9 MB/s│ 96.2%   │ 45 days │ ≥10 MB/s  ✅ │ ≥14.3 days ✅│ ≥0.1 MB/s ✅││
-│ │ dannenberg↗│  ✅  │  ✅  │ Fast Stable      │ N/A      │ 96.2%   │ 45 days │ ≥35 MB/s  ❌ │ ≥19.2 days ✅│ ≥0.1 MB/s ✅││
-│ │ maatuska ↗ │  ✅  │  ✅  │ Fast Guard Stable│ 45.1 MB/s│ 96.2%   │ 45 days │ ≥10 MB/s  ✅ │ ≥19.3 days ✅│ ≥0.1 MB/s ✅││
-│ │ longclaw ↗ │  ✅  │  ⚪  │ Fast Guard Stable│ 44.5 MB/s│ 96.2%   │ 45 days │ ≥28 MB/s  ❌ │ ≥18.5 days ✅│ ≥0.1 MB/s ✅││
-│ │ faravahar↗ │  ❌  │  ❌  │ —                │ —        │ —       │ —       │ —            │ —           │ —         ││
-│ └────────────┴──────┴──────┴──────────────────┴──────────┴─────────┴─────────┴──────────────┴─────────────┴───────────┘│
+│ ┌────────────┬──────┬──────┬──────────────────┬──────────┬──────────────┬──────────────┬──────────────┬─────────────┬───────────┐│
+│ │ Authority  │ IPv4 │ IPv6 │ Flags Assigned   │ Meas. BW │ WFU [ⓘ]     │ TK [ⓘ]      │ Guard BW Req │ Stable Req  │ Fast Req  ││
+│ ├────────────┼──────┼──────┼──────────────────┼──────────┼──────────────┼──────────────┼──────────────┼─────────────┼───────────┤│
+│ │ moria1 ↗   │  ✅  │  ✅  │ Fast Guard Stable│ 46.2 MB/s│ 96.2% ≥98%❌ │ 45d ≥8d  ✅  │ ≥30 MB/s  ❌ │ ≥19.6 days ✅│ ≥1.0 MB/s ✅││
+│ │ tor26 ↗    │  ✅  │  ❌  │ Fast Stable      │ 44.8 MB/s│ 96.2% ≥98%❌ │ 45d ≥8d  ✅  │ ≥34 MB/s  ❌ │ ≥19.8 days ✅│ ≥0.1 MB/s ✅││
+│ │ dizum ↗    │  ✅  │  ⚪  │ Fast Guard Stable│ N/A      │ 96.2% ≥98%❌ │ 45d ≥8d  ✅  │ ≥10 MB/s  ✅ │ ≥14.2 days ✅│ ≥0.1 MB/s ✅││
+│ │ gabelmoo ↗ │  ✅  │  ✅  │ Fast Stable      │ 44.1 MB/s│ 96.2% ≥98%❌ │ 45d ≥8d  ✅  │ ≥35 MB/s  ❌ │ ≥19.6 days ✅│ ≥0.1 MB/s ✅││
+│ │ bastet ↗   │  ✅  │  ✅  │ Fast Guard Stable│ 43.9 MB/s│ 96.2% ≥98%❌ │ 45d ≥8d  ✅  │ ≥10 MB/s  ✅ │ ≥14.3 days ✅│ ≥0.1 MB/s ✅││
+│ │ dannenberg↗│  ✅  │  ✅  │ Fast Stable      │ N/A      │ 96.2% ≥98%❌ │ 45d ≥8d  ✅  │ ≥35 MB/s  ❌ │ ≥19.2 days ✅│ ≥0.1 MB/s ✅││
+│ │ maatuska ↗ │  ✅  │  ✅  │ Fast Guard Stable│ 45.1 MB/s│ 96.2% ≥98%❌ │ 45d ≥8d  ✅  │ ≥10 MB/s  ✅ │ ≥19.3 days ✅│ ≥0.1 MB/s ✅││
+│ │ longclaw ↗ │  ✅  │  ⚪  │ Fast Guard Stable│ 44.5 MB/s│ 96.2% ≥98%❌ │ 45d ≥8d  ✅  │ ≥28 MB/s  ❌ │ ≥18.5 days ✅│ ≥0.1 MB/s ✅││
+│ │ faravahar↗ │  ❌  │  ❌  │ —                │ —        │ —            │ —            │ —            │ —           │ —         ││
+│ └────────────┴──────┴──────┴──────────────────┴──────────┴──────────────┴──────────────┴──────────────┴─────────────┴───────────┘│
 │                                                                                                                        │
-│ Column tooltips:                                                                                                       │
-│   • WFU [ⓘ]: "Weighted Fractional Uptime. Threshold: ≥98% (constant). Your value: 96.2%"                              │
-│   • TK [ⓘ]: "Time Known to authority. Threshold: ≥8 days (constant). Your value: 45 days"                             │
+│ Column tooltips (thresholds pulled dynamically from each authority's vote file):                                       │
+│   • WFU [ⓘ]: "Weighted Fractional Uptime. Your value: 96.2%. Threshold from moria1: ≥98%"                             │
+│   • TK [ⓘ]: "Time Known. Your value: 45 days. Threshold from moria1: ≥8 days"                                         │
 │                                                                                                                        │
 │ Legend:                                                                                                                │
 │   ↗ = link to authority relay page                                                                                     │
-│   ✅/❌ in threshold columns = meets/below threshold (relay value: 25 MB/s BW, 45 days stable, 25 MB/s fast)           │
-│   ⚪ = authority doesn't test this (IPv6 not tested by dizum, longclaw)                                                │
-│   N/A = authority does not run bandwidth scanner (dizum, dannenberg)                                                   │
+│   ✅/❌ in threshold columns = meets/below threshold                                                                   │
+│   ⚪ = authority doesn't test this (IPv6)                                                                              │
+│   N/A = authority does not run bandwidth scanner (detected from absence of bandwidth-file-headers in vote)             │
+│   All thresholds are DYNAMIC - pulled from each authority's flag-thresholds line in their vote file                   │
 │                                                                                                                        │
 │ ⚠️ Issues: faravahar cannot reach relay • 4/9 authorities NOT assigning Guard (BW below threshold)                    │
 │                                                                                                                        │
@@ -97,23 +98,26 @@ Add consensus troubleshooting features to Allium using CollecTor as the primary 
 │ Your relay's current values (from CollecTor vote stats):                                                               │
 │                                                                                                                        │
 │ ┌───────────────────┬────────────┬─────────────────────────────┬───────────────────────────────────────────────────────┐│
-│ │ Metric            │ Your Value │ Threshold                   │ Status                                                ││
+│ │ Metric            │ Your Value │ Threshold (all dynamic)     │ Status                                                ││
 │ ├───────────────────┼────────────┼─────────────────────────────┼───────────────────────────────────────────────────────┤│
-│ │ WFU (guard-wfu)   │ 96.2%      │ ≥98% (constant, all auths)  │ ❌ BELOW - cannot get Guard from ANY authority        ││
-│ │ Time Known (tk)   │ 45 days    │ ≥8 days (constant, all)     │ ✅ MEETS - eligible for Guard (time requirement)      ││
-│ │ Measured BW       │ 25 MB/s    │ varies: 10-35 MB/s          │ ⚠️ PARTIAL - meets for 5/9 authorities                ││
+│ │ WFU (guard-wfu)   │ 96.2%      │ ≥98% (from all auths)       │ ❌ BELOW - cannot get Guard from ANY authority        ││
+│ │ Time Known (tk)   │ 45 days    │ ≥8 days (from all auths)    │ ✅ MEETS - eligible for Guard (time requirement)      ││
+│ │ Guard BW          │ 25 MB/s    │ varies: 10-35 MB/s          │ ⚠️ PARTIAL - meets for 5/9 authorities                ││
 │ │ Stable Uptime     │ 45 days    │ varies: 14.2-19.8 days      │ ✅ MEETS - all authorities assigning Stable           ││
 │ │ Fast Speed        │ 25 MB/s    │ varies: 0.1-1.0 MB/s        │ ✅ MEETS - all authorities assigning Fast             ││
 │ └───────────────────┴────────────┴─────────────────────────────┴───────────────────────────────────────────────────────┘│
 │                                                                                                                        │
 │ 💡 Advice: To get Guard flag, increase WFU to ≥98%. Current uptime pattern is too variable.                           │
 │                                                                                                                        │
-│ Note: Each authority calculates thresholds based on the relays it observes. WFU and Time Known are consistent         │
-│ across authorities, but bandwidth-related thresholds vary significantly (10-35 MB/s for Guard BW).                    │
+│ Note: ALL thresholds are pulled dynamically from each authority's vote file (flag-thresholds line).                   │
+│ Even thresholds that typically appear consistent (like WFU 98%) could change - we never hardcode values.              │
+│ BW Authority status is detected dynamically by checking for bandwidth-file-headers presence in each vote.             │
 └────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Data Available from CollecTor Votes
+
+**All values are pulled dynamically** - no hardcoded constants. Even thresholds that appear consistent (like WFU 98%) could change.
 
 **Per-relay stats** (in `stats` line of each relay entry):
 | Field | Description | Example |
@@ -128,17 +132,27 @@ Add consensus troubleshooting features to Allium using CollecTor as the primary 
 | `Bandwidth` | Advertised bandwidth | 10000 |
 | `Measured` | Measured bandwidth (from BW scanner) | 66000 |
 
-**Per-authority thresholds** (in `flag-thresholds` header):
-| Field | Description | Varies? |
-|-------|-------------|---------|
-| `guard-wfu` | WFU threshold for Guard | No (98%) |
-| `guard-tk` | Time Known threshold for Guard | No (~8 days) |
-| `guard-bw-inc-exits` | Guard BW threshold (with exits) | Yes (10-35 MB/s) |
-| `guard-bw-exc-exits` | Guard BW threshold (no exits) | Yes |
-| `stable-uptime` | Stable flag uptime threshold | Yes (14-20 days) |
-| `fast-speed` | Fast flag speed threshold | Yes (0.1-1.0 MB/s) |
-| `hsdir-wfu` | HSDir WFU threshold | No (98%) |
-| `hsdir-tk` | HSDir Time Known threshold | Slightly |
+**Per-authority thresholds** (in `flag-thresholds` header) - **ALL pulled dynamically**:
+| Field | Description | Typical Value |
+|-------|-------------|---------------|
+| `guard-wfu` | WFU threshold for Guard | ~98% |
+| `guard-tk` | Time Known threshold for Guard | ~8 days |
+| `guard-bw-inc-exits` | Guard BW threshold (with exits) | 10-35 MB/s |
+| `guard-bw-exc-exits` | Guard BW threshold (no exits) | varies |
+| `stable-uptime` | Stable flag uptime threshold | 14-20 days |
+| `stable-mtbf` | Stable flag MTBF threshold | varies |
+| `fast-speed` | Fast flag speed threshold | 0.1-1.0 MB/s |
+| `hsdir-wfu` | HSDir WFU threshold | ~98% |
+| `hsdir-tk` | HSDir Time Known threshold | varies |
+
+**Known flags** (from `known-flags` line) - all flags authorities can assign:
+```
+Authority BadExit Exit Fast Guard HSDir MiddleOnly Running Stable StaleDesc Sybil V2Dir Valid
+```
+
+**BW Authority detection** - dynamically determined by presence of `bandwidth-file-headers` in vote file:
+- If present → authority runs bandwidth scanner (sbws)
+- If absent → authority does NOT run bandwidth scanner
 
 ---
 
@@ -192,7 +206,7 @@ Add consensus troubleshooting features to Allium using CollecTor as the primary 
 ├──────────────────────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                                  │
 │ ┌─────────┬────────┬──────┬───────┬───────┬────────┬─────────────────┬─────────┬───────┬───────┐│
-│ │Authority│ Online │ Vote │BW Auth│Latency│ AS     │Uptime(1M/6M/1Y) │ Version │Rec.Ver│Country││
+│ │Authority│ Online │Voted │BW Auth│Latency│ AS     │Uptime(1M/6M/1Y) │ Version │Rec.Ver│Country││
 │ ├─────────┼────────┼──────┼───────┼───────┼────────┼─────────────────┼─────────┼───────┼───────┤│
 │ │moria1 ↗ │ 🟢     │  ✅  │  ✅   │  12ms │AS3     │99.9/99.8/99.7 Z:0.5│ 0.4.8.9│  ✅   │  US   ││
 │ │tor26 ↗  │ 🟢     │  ✅  │  ✅   │  45ms │AS680   │99.8/99.7/99.5 Z:0.3│ 0.4.8.9│  ✅   │  AT   ││
@@ -208,26 +222,26 @@ Add consensus troubleshooting features to Allium using CollecTor as the primary 
 │ ⚠️ Alerts: faravahar responding slowly (89ms) │ dannenberg on non-recommended version           │
 │                                                                                                  │
 ├──────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ TABLE 2: FLAG THRESHOLDS BY AUTHORITY (varies per authority)                          [NEW]      │
+│ TABLE 2: FLAG THRESHOLDS BY AUTHORITY (ALL pulled dynamically from vote files)        [NEW]      │
 ├──────────────────────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                                  │
-│ Each authority calculates thresholds based on the relays it observes. Values vary.              │
+│ Each authority calculates thresholds based on the relays it observes. ALL values dynamic.       │
 │                                                                                                  │
-│ ┌─────────┬───────────┬────────────┬────────────┬─────────┐                                     │
-│ │Authority│ Guard BW  │ Stable     │ Fast Speed │  WFU    │                                     │
-│ ├─────────┼───────────┼────────────┼────────────┼─────────┤                                     │
-│ │moria1   │ 30 MB/s   │ 19.6 days  │ 1.0 MB/s   │  98%    │                                     │
-│ │tor26    │ 34 MB/s   │ 19.8 days  │ 0.1 MB/s   │  98%    │                                     │
-│ │dizum    │ 10 MB/s   │ 14.2 days  │ 0.1 MB/s   │  98%    │                                     │
-│ │gabelmoo │ 35 MB/s   │ 19.6 days  │ 0.1 MB/s   │  98%    │                                     │
-│ │bastet   │ 10 MB/s   │ 14.3 days  │ 0.1 MB/s   │  98%    │                                     │
-│ │dannenb. │ 35 MB/s   │ 19.2 days  │ 0.1 MB/s   │  98%    │                                     │
-│ │maatuska │ 10 MB/s   │ 19.3 days  │ 0.1 MB/s   │  98%    │                                     │
-│ │longclaw │ 28 MB/s   │ 18.5 days  │ 0.1 MB/s   │  98%    │                                     │
-│ │faravahar│ 10 MB/s   │ 19.1 days  │ 0.1 MB/s   │  98%    │                                     │
-│ └─────────┴───────────┴────────────┴────────────┴─────────┘                                     │
+│ ┌─────────┬───────────┬────────────┬────────────┬─────────┬─────────┬─────────┬─────────┐       │
+│ │Authority│ Guard BW  │ Guard TK   │ Guard WFU  │ Stable  │ Fast    │HSDir WFU│HSDir TK │       │
+│ ├─────────┼───────────┼────────────┼────────────┼─────────┼─────────┼─────────┼─────────┤       │
+│ │moria1   │ 30 MB/s   │ 8.0 days   │ 98%        │ 19.6 d  │ 1.0 MB/s│ 98%     │ 9.8 d   │       │
+│ │tor26    │ 34 MB/s   │ 8.0 days   │ 98%        │ 19.8 d  │ 0.1 MB/s│ 98%     │ 9.8 d   │       │
+│ │dizum    │ 10 MB/s   │ 8.0 days   │ 98%        │ 14.2 d  │ 0.1 MB/s│ 98%     │ 9.8 d   │       │
+│ │gabelmoo │ 35 MB/s   │ 8.0 days   │ 98%        │ 19.6 d  │ 0.1 MB/s│ 98%     │ 9.8 d   │       │
+│ │bastet   │ 10 MB/s   │ 8.0 days   │ 98%        │ 14.3 d  │ 0.1 MB/s│ 98%     │ 9.8 d   │       │
+│ │dannenb. │ 35 MB/s   │ 8.0 days   │ 98%        │ 19.2 d  │ 0.1 MB/s│ 98%     │ 9.8 d   │       │
+│ │maatuska │ 10 MB/s   │ 8.0 days   │ 98%        │ 19.3 d  │ 0.1 MB/s│ 98%     │ 9.8 d   │       │
+│ │longclaw │ 28 MB/s   │ 8.0 days   │ 98%        │ 18.5 d  │ 0.1 MB/s│ 98%     │ 9.8 d   │       │
+│ │faravahar│ 10 MB/s   │ 8.0 days   │ 98%        │ 19.1 d  │ 0.1 MB/s│ 98%     │ 9.8 d   │       │
+│ └─────────┴───────────┴────────────┴────────────┴─────────┴─────────┴─────────┴─────────┘       │
 │                                                                                                  │
-│ Ranges: Guard BW 10-35 MB/s │ Stable 14.2-19.8 days │ Fast 0.1-1.0 MB/s │ WFU 98% (all)        │
+│ All values from flag-thresholds line in each authority's vote file (no hardcoded values)        │
 │                                                                                                  │
 ├──────────────────────────────────────────────────────────────────────────────────────────────────┤
 │ NETWORK FLAG TOTALS                                                                   [NEW]      │
@@ -240,14 +254,16 @@ Add consensus troubleshooting features to Allium using CollecTor as the primary 
 ├──────────────────────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                                  │
 │ • Online: 🟢 = Online, 🟡 = Slow (>100ms latency), 🔴 = Offline                                 │
-│ • Vote: ✅ = Submitted vote this consensus period                                               │
-│ • BW Auth: ✅ = Runs bandwidth scanner (sbws), ❌ = Does not run scanner                        │
+│ • Voted: ✅ = Submitted vote this consensus period                                              │
+│ • BW Auth: ✅/❌ = Runs bandwidth scanner (detected from bandwidth-file-headers in vote)       │
 │ • Latency: Response time to authority's directory port (checked hourly)              [NEW]      │
 │ • Uptime Z-Score: Statistical deviation from average (green >0.3, red ≤-2.0)                    │
 │ • Rec. Ver.: ✅ = On recommended Tor version, ❌ = Not recommended                              │
-│ • Flag Thresholds: Requirements for relays to receive Guard/Stable/Fast flags        [NEW]      │
-│   - Guard BW: Bandwidth required for Guard flag (guard-bw-inc-exits)                            │
-│   - Stable: Uptime required for Stable flag (stable-uptime)                                     │
+│ • Flag Thresholds: ALL values pulled dynamically from each authority's vote file     [NEW]      │
+│   - Guard: BW (guard-bw-inc-exits), TK (guard-tk), WFU (guard-wfu)                              │
+│   - Stable: uptime (stable-uptime), MTBF (stable-mtbf)                                          │
+│   - Fast: speed (fast-speed)                                                                    │
+│   - HSDir: WFU (hsdir-wfu), TK (hsdir-tk)                                                       │
 │   - Fast Speed: Bandwidth required for Fast flag (fast-speed)                                   │
 │   - WFU: Weighted Fractional Uptime required (guard-wfu)                                        │
 │                                                                                                  │
@@ -264,8 +280,8 @@ Add consensus troubleshooting features to Allium using CollecTor as the primary 
 | Section | Content |
 |---------|---------|
 | **Summary** | Authority count, consensus status, version compliance, uptime status, latency status |
-| **Table 1: Authority Status** | Existing columns (Name, Online, AS, Country, Uptime, Version, Rec.Ver, First Seen, Last Restarted) + NEW columns (Vote, BW Auth, Latency) |
-| **Table 2: Flag Thresholds** | Per-authority thresholds (Guard BW, Stable Uptime, Fast Speed, WFU) |
+| **Table 1: Authority Status** | Existing columns (Name, Online, AS, Country, Uptime, Version, Rec.Ver, First Seen, Last Restarted) + NEW columns (Voted, BW Auth, Latency) |
+| **Table 2: Flag Thresholds** | Per-authority thresholds for ALL flags (Guard BW/TK/WFU, Stable, Fast, HSDir) - all dynamic |
 | **Alerts** | Warnings about slow/down authorities, non-recommended versions |
 | **Network Totals** | Flag distribution (Running, Fast, Stable, Guard, Exit, HSDir) |
 | **Legend** | Explanation of all columns and indicators |
@@ -274,18 +290,30 @@ Add consensus troubleshooting features to Allium using CollecTor as the primary 
 
 | Column | Source | Description |
 |--------|--------|-------------|
-| `Vote` | CollecTor | ✅ if authority submitted vote this period |
-| `BW Auth` | Known list | ✅ if runs bandwidth scanner (7 of 9) |
+| `Voted` | CollecTor | ✅ if authority submitted vote this consensus period |
+| `BW Auth` | CollecTor (dynamic) | ✅ if vote contains `bandwidth-file-headers` (runs sbws scanner) |
 | `Latency` | Direct HTTP | Response time to dir port (ms) |
 
-### New Section: Flag Thresholds Table
+**BW Authority Detection**: Dynamically determined from each authority's vote file by checking for the presence of the `bandwidth-file-headers` line. This is more reliable than a static list and automatically adapts if authorities start/stop running bandwidth scanners.
 
-| Column | Source | Description |
-|--------|--------|-------------|
-| `Guard BW` | guard-bw-inc-exits | Bandwidth required for Guard flag (10-35 MB/s) |
-| `Stable` | stable-uptime | Uptime required for Stable flag (14-20 days) |
-| `Fast Speed` | fast-speed | Bandwidth required for Fast flag |
-| `WFU` | guard-wfu | Weighted Fractional Uptime required (always 98%) |
+### New Section: Flag Thresholds Table (All Dynamic)
+
+**All thresholds pulled dynamically from each authority's `flag-thresholds` line** - no hardcoded values.
+
+| Column | Source Field | Description |
+|--------|--------------|-------------|
+| `Guard BW` | guard-bw-inc-exits | Bandwidth required for Guard flag |
+| `Guard BW (no exit)` | guard-bw-exc-exits | Guard BW for non-exit relays |
+| `Guard WFU` | guard-wfu | WFU required for Guard flag |
+| `Guard TK` | guard-tk | Time Known required for Guard flag |
+| `Stable Uptime` | stable-uptime | Uptime required for Stable flag |
+| `Stable MTBF` | stable-mtbf | MTBF required for Stable flag |
+| `Fast Speed` | fast-speed | Speed required for Fast flag |
+| `HSDir WFU` | hsdir-wfu | WFU required for HSDir flag |
+| `HSDir TK` | hsdir-tk | Time Known required for HSDir flag |
+
+**All flags authorities can assign** (from `known-flags` line):
+- Authority, BadExit, Exit, Fast, Guard, HSDir, MiddleOnly, Running, Stable, StaleDesc, Sybil, V2Dir, Valid
 
 ---
 
