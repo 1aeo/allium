@@ -1096,6 +1096,8 @@ def _get_median_thresholds(flag_thresholds: Dict) -> Dict:
 
 ### 1.4 Template Integration
 
+**Single merged table** with all authority data including votes, bandwidth, and threshold comparisons.
+
 ```jinja2
 {# templates/relay-info.html - ADD AFTER existing sections #}
 
@@ -1106,10 +1108,8 @@ def _get_median_thresholds(flag_thresholds: Dict) -> Dict:
     Data from: {{ relay.collector_diagnostics.fetched_at | format_datetime }}
   </p>
   
-  {# Combined Authority Votes & Bandwidth (single table) #}
-  <h4>Authority Votes & Bandwidth</h4>
+  {# Consensus status with dynamic tooltip explaining majority requirement #}
   <p>
-    {# Consensus status with dynamic tooltip explaining majority requirement #}
     <span class="consensus-status 
                  {% if relay.collector_diagnostics.in_consensus %}status-ok{% else %}status-warn{% endif %}"
           title="{{ relay.collector_diagnostics.consensus_tooltip }}">
@@ -1123,15 +1123,25 @@ def _get_median_thresholds(flag_thresholds: Dict) -> Dict:
     <span class="tooltip-hint" title="{{ relay.collector_diagnostics.consensus_tooltip }}">ⓘ</span>
   </p>
   
-  <table class="authority-table">
+  {# ============== SINGLE MERGED TABLE ============== #}
+  <h4>Per-Authority Voting Details</h4>
+  <p class="table-description">
+    All authority data in one table. Constant thresholds (WFU, TK) have threshold in column tooltip.
+  </p>
+  
+  <table class="authority-table merged-table">
     <thead>
       <tr>
         <th>Authority</th>
         <th>IPv4</th>
         <th>IPv6</th>
-        <th>Flags</th>
-        <th>BW Value</th>
-        <th title="Values outside ±5% shown in red">Deviation</th>
+        <th>Flags Assigned</th>
+        <th>Meas. BW</th>
+        <th title="Weighted Fractional Uptime. Threshold: ≥98% (constant). Your value: {{ relay.collector_diagnostics.relay_values.wfu }}">WFU ⓘ</th>
+        <th title="Time Known to authority. Threshold: ≥8 days (constant). Your value: {{ relay.collector_diagnostics.relay_values.tk }}">TK ⓘ</th>
+        <th title="Guard bandwidth threshold (varies by authority)">Guard BW Req</th>
+        <th title="Stable uptime threshold (varies by authority)">Stable Req</th>
+        <th title="Fast speed threshold (varies by authority)">Fast Req</th>
       </tr>
     </thead>
     <tbody>
@@ -1152,25 +1162,65 @@ def _get_median_thresholds(flag_thresholds: Dict) -> Dict:
           {% else %}❌{% endif %}
         </td>
         <td>{{ auth.flags | join(' ') if auth.flags else '—' }}</td>
-        {# Bandwidth - show N/A for non-bandwidth authorities #}
+        
+        {# Measured Bandwidth - N/A for non-BW authorities #}
         <td>
           {% if auth.is_bw_authority %}
             {{ auth.bw_value | format_bandwidth if auth.bw_value else '—' }}
           {% else %}
-            <span class="not-applicable" title="This authority doesn't run a bandwidth scanner">N/A</span>
+            <span class="not-applicable" title="Does not run bandwidth scanner">N/A</span>
           {% endif %}
         </td>
+        
+        {# WFU - relay value shown, threshold (98%) in column tooltip #}
         <td>
-          {% if auth.is_bw_authority %}
-            {% if auth.bw_deviation is not none %}
-              <span class="{% if auth.bw_deviation_warning %}deviation-warning{% endif %}"
-                    title="{% if auth.bw_deviation_warning %}Deviation >±5% may indicate measurement issues{% endif %}">
-                {{ '%+.1f' % auth.bw_deviation }}%
-              </span>
-            {% else %}—{% endif %}
-          {% else %}
-            <span class="not-applicable">N/A</span>
-          {% endif %}
+          {% if auth.voted %}
+            <span class="{% if auth.wfu_meets %}status-met{% else %}status-below{% endif %}">
+              {{ '%.1f' % (auth.relay_wfu * 100) }}%
+            </span>
+          {% else %}—{% endif %}
+        </td>
+        
+        {# Time Known - relay value shown, threshold (8 days) in column tooltip #}
+        <td>
+          {% if auth.voted %}
+            <span class="{% if auth.tk_meets %}status-met{% else %}status-below{% endif %}">
+              {{ (auth.relay_tk / 86400) | round(1) }} days
+            </span>
+          {% else %}—{% endif %}
+        </td>
+        
+        {# Guard BW - threshold varies, show both threshold and status #}
+        <td>
+          {% if auth.voted %}
+            <span class="{% if auth.guard_bw_meets %}status-met{% else %}status-below{% endif %}"
+                  title="Threshold: {{ auth.guard_bw_threshold | format_bandwidth }}">
+              ≥{{ auth.guard_bw_threshold | format_bandwidth }}
+              {% if auth.guard_bw_meets %}✅{% else %}❌{% endif %}
+            </span>
+          {% else %}—{% endif %}
+        </td>
+        
+        {# Stable Uptime - threshold varies #}
+        <td>
+          {% if auth.voted %}
+            <span class="{% if auth.stable_meets %}status-met{% else %}status-below{% endif %}"
+                  title="Threshold: {{ (auth.stable_threshold / 86400) | round(1) }} days">
+              ≥{{ (auth.stable_threshold / 86400) | round(1) }}d
+              {% if auth.stable_meets %}✅{% else %}❌{% endif %}
+            </span>
+          {% else %}—{% endif %}
+        </td>
+        
+        {# Fast Speed - threshold varies #}
+        <td>
+          {% if auth.voted %}
+            <span class="{% if auth.fast_meets %}status-met{% else %}status-below{% endif %}"
+                  title="Threshold: {{ auth.fast_threshold | format_bandwidth }}">
+              ≥{{ auth.fast_threshold | format_bandwidth }}
+              {% if auth.fast_meets %}✅{% else %}❌{% endif %}
+            </span>
+          {% else %}—{% endif %}
         </td>
       </tr>
     {% endfor %}
@@ -1178,8 +1228,9 @@ def _get_median_thresholds(flag_thresholds: Dict) -> Dict:
   </table>
   
   <p class="table-legend">
-    IPv6: ⚪ = authority doesn't test IPv6 • 
-    BW: N/A = authority doesn't run bandwidth scanner (dizum, dannenberg)
+    ⚪ = authority doesn't test IPv6 • 
+    N/A = authority doesn't run bandwidth scanner (dizum, dannenberg) •
+    ✅/❌ = meets/below threshold
   </p>
   
   {# Issues summary #}
@@ -1189,103 +1240,300 @@ def _get_median_thresholds(flag_thresholds: Dict) -> Dict:
   </div>
   {% endif %}
   
-  {# Flag Eligibility - color-coded text, no checkmarks #}
-  {% if relay.collector_diagnostics.flag_eligibility %}
-  {% set elig = relay.collector_diagnostics.flag_eligibility %}
-  <h4>Flag Eligibility</h4>
-  <p class="eligibility-question">
-    Why doesn't this relay have the <strong>{{ elig.target_flag }}</strong> flag?
-  </p>
-  
-  <p class="eligibility-summary">
-    Assigning {{ elig.target_flag }}: 
-    <strong>{{ elig.assigning_count }}/{{ elig.total_authorities }}</strong> authorities
-    │ Need: {{ (elig.total_authorities // 2) + 1 }}/{{ elig.total_authorities }} (majority) to appear in consensus
-  </p>
-  
-  {# Requirements table - shows consistent thresholds #}
-  <table class="flag-eligibility">
+  {# ============== RELAY VALUES SUMMARY ============== #}
+  <h4>Your Relay's Values Summary</h4>
+  {% set rv = relay.collector_diagnostics.relay_values %}
+  <table class="relay-values-summary">
     <thead>
       <tr>
-        <th>Requirement</th>
+        <th>Metric</th>
         <th>Your Value</th>
-        <th>Threshold (per authority)</th>
-        <th>Status</th>
-      </tr>
-    </thead>
-    <tbody>
-    {% for req in elig.requirements %}
-      <tr>
-        <td>{{ req.name }}</td>
-        <td>{{ req.your_value }}</td>
-        <td>{{ req.threshold_display }}</td>
-        <td>
-          {% if req.is_variable %}
-            <a href="#bw-breakdown">see breakdown ↓</a>
-          {% elif req.met %}
-            <span class="status-met">{{ req.your_value }} (meets)</span>
-          {% else %}
-            <span class="status-below">{{ req.your_value }} (below by {{ req.difference }})</span>
-          {% endif %}
-        </td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-  
-  {# Per-authority breakdown for variable thresholds (like bandwidth) #}
-  {% if elig.per_authority_breakdown %}
-  <h5 id="bw-breakdown">Bandwidth threshold breakdown (varies by authority):</h5>
-  <table class="per-authority-breakdown">
-    <thead>
-      <tr>
-        <th>Authority</th>
         <th>Threshold</th>
-        <th>Your Value</th>
         <th>Status</th>
       </tr>
     </thead>
     <tbody>
-    {% for auth in elig.per_authority_breakdown %}
       <tr>
+        <td>WFU (guard-wfu)</td>
+        <td>{{ '%.1f' % (rv.wfu * 100) }}%</td>
+        <td>≥98% (constant, all authorities)</td>
         <td>
-          <a href="{{ path_prefix }}relay/{{ auth.fingerprint }}.html">{{ auth.authority }}</a>
-        </td>
-        <td>{{ auth.threshold_display }}</td>
-        <td>{{ auth.relay_value_display }}</td>
-        <td class="{% if auth.meets %}status-met{% else %}status-below{% endif %}">
-          {% if auth.meets %}
-            meets - assigning {{ elig.target_flag }}
+          {% if rv.wfu >= 0.98 %}
+            <span class="status-met">✅ MEETS</span>
           {% else %}
-            below by {{ auth.difference_pct|round(0)|int }}% - NOT assigning {{ elig.target_flag }}
+            <span class="status-below">❌ BELOW - cannot get Guard from ANY authority</span>
           {% endif %}
         </td>
       </tr>
-    {% endfor %}
+      <tr>
+        <td>Time Known (tk)</td>
+        <td>{{ (rv.tk / 86400) | round(1) }} days</td>
+        <td>≥8 days (constant, all authorities)</td>
+        <td>
+          {% if rv.tk >= 691200 %}
+            <span class="status-met">✅ MEETS</span>
+          {% else %}
+            <span class="status-below">❌ BELOW - need {{ ((691200 - rv.tk) / 86400) | round(1) }} more days</span>
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td>Measured BW</td>
+        <td>{{ rv.measured_bw | format_bandwidth }}</td>
+        <td>varies: {{ rv.guard_bw_range }}</td>
+        <td>
+          {% if rv.guard_bw_meets_all %}
+            <span class="status-met">✅ MEETS - all authorities</span>
+          {% elif rv.guard_bw_meets_some %}
+            <span class="status-partial">⚠️ PARTIAL - meets for {{ rv.guard_bw_meets_count }}/{{ rv.total_authorities }} authorities</span>
+          {% else %}
+            <span class="status-below">❌ BELOW - no authorities</span>
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td>Stable Uptime</td>
+        <td>{{ (rv.uptime / 86400) | round(1) }} days</td>
+        <td>varies: {{ rv.stable_range }}</td>
+        <td>
+          {% if rv.stable_meets_all %}
+            <span class="status-met">✅ MEETS - all authorities assigning Stable</span>
+          {% else %}
+            <span class="status-partial">⚠️ PARTIAL - meets for {{ rv.stable_meets_count }}/{{ rv.total_authorities }}</span>
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td>Fast Speed</td>
+        <td>{{ rv.fast_speed | format_bandwidth }}</td>
+        <td>varies: {{ rv.fast_range }}</td>
+        <td>
+          {% if rv.fast_meets_all %}
+            <span class="status-met">✅ MEETS - all authorities assigning Fast</span>
+          {% else %}
+            <span class="status-partial">⚠️ PARTIAL - meets for {{ rv.fast_meets_count }}/{{ rv.total_authorities }}</span>
+          {% endif %}
+        </td>
+      </tr>
     </tbody>
   </table>
   
-  <p class="eligibility-advice">
-    <strong>Summary:</strong> 
-    {{ elig.per_authority_breakdown|selectattr('meets')|list|length }}/{{ elig.total_authorities }} 
-    authorities have threshold ≤ your bandwidth value.
-    <br>
-    <strong>Advice:</strong> {{ elig.advice }}
+  {# Advice based on what's missing #}
+  {% if relay.collector_diagnostics.advice %}
+  <p class="advice">
+    💡 <strong>Advice:</strong> {{ relay.collector_diagnostics.advice }}
   </p>
   {% endif %}
   
-  <p class="eligibility-legend">
-    <span class="status-met">Green</span> = meets requirement • 
-    <span class="status-below">Red</span> = below threshold
-    <br>
-    <em>Note: Thresholds are calculated independently by each authority based on 
-    the relays they observe. Some thresholds (like WFU at 98%) are consistent, 
-    while others (like Guard bandwidth) vary significantly.</em>
+  <p class="note">
+    Note: Each authority calculates thresholds based on the relays it observes. 
+    WFU (98%) and Time Known (8 days) are constant across authorities, 
+    but bandwidth-related thresholds vary significantly.
   </p>
-  {% endif %}
 </section>
 {% endif %}
 ```
+
+### 1.5 Diagnostics Formatting (Updated for Merged Table)
+
+```python
+# lib/consensus/diagnostics.py - Updated for merged table
+
+def format_relay_diagnostics(
+    fingerprint: str, 
+    indexed_data: Dict, 
+    flag_thresholds: Dict, 
+    fetched_at: str,
+    authorities: List[Dict],
+    consensus_requirement: Dict,
+) -> Dict:
+    """
+    Format CollecTor data for the merged authority table template.
+    
+    Returns:
+        Dict with:
+        - authority_votes: list of per-authority data (votes, BW, WFU, TK, thresholds)
+        - relay_values: summary of relay's values across all authorities
+        - in_consensus: bool
+        - vote_count: int
+        - consensus_tooltip: str
+        - advice: str (actionable recommendation)
+    """
+    vote_data = indexed_data.get('votes', {})
+    bw_data = indexed_data.get('bandwidth', {})
+    
+    # Extract relay's values (use first available authority's stats)
+    relay_wfu = None
+    relay_tk = None
+    relay_measured_bw = None
+    
+    for auth_name, vote in vote_data.items():
+        if relay_wfu is None and 'wfu' in vote:
+            relay_wfu = vote['wfu']
+        if relay_tk is None and 'tk' in vote:
+            relay_tk = vote['tk']
+        if relay_measured_bw is None and 'measured' in vote:
+            relay_measured_bw = vote['measured']
+    
+    # Build per-authority data for merged table
+    authority_votes = []
+    for auth in authorities:
+        auth_name = auth['nickname']
+        auth_thresholds = flag_thresholds.get(auth_name, {})
+        vote = vote_data.get(auth_name, {})
+        bw = bw_data.get(auth_name, {})
+        
+        # Get thresholds (with defaults)
+        guard_wfu_threshold = 0.98  # Constant
+        guard_tk_threshold = 691200  # ~8 days, constant
+        guard_bw_threshold = auth_thresholds.get('guard-bw-inc-exits', 0)
+        stable_threshold = auth_thresholds.get('stable-uptime', 0)
+        fast_threshold = auth_thresholds.get('fast-speed', 0)
+        
+        authority_votes.append({
+            'authority': auth_name,
+            'fingerprint': auth['fingerprint'],
+            'voted': auth_name in vote_data,
+            'ipv4_reachable': vote.get('ipv4_reachable', False),
+            'ipv6_reachable': vote.get('ipv6_reachable'),  # None if not tested
+            'flags': vote.get('flags', []),
+            'is_bw_authority': auth.get('is_bw_authority', True),
+            'bw_value': bw.get('measured') or vote.get('measured'),
+            
+            # Relay's values as seen by this authority
+            'relay_wfu': relay_wfu or vote.get('wfu', 0),
+            'relay_tk': relay_tk or vote.get('tk', 0),
+            
+            # Thresholds
+            'guard_bw_threshold': guard_bw_threshold,
+            'stable_threshold': stable_threshold,
+            'fast_threshold': fast_threshold,
+            
+            # Status checks
+            'wfu_meets': (relay_wfu or 0) >= guard_wfu_threshold,
+            'tk_meets': (relay_tk or 0) >= guard_tk_threshold,
+            'guard_bw_meets': (relay_measured_bw or 0) >= guard_bw_threshold,
+            'stable_meets': (relay_tk or 0) >= stable_threshold,  # Using tk as proxy for uptime
+            'fast_meets': (relay_measured_bw or 0) >= fast_threshold,
+        })
+    
+    # Calculate summary stats
+    guard_bw_thresholds = [a['guard_bw_threshold'] for a in authority_votes if a['voted']]
+    stable_thresholds = [a['stable_threshold'] for a in authority_votes if a['voted']]
+    fast_thresholds = [a['fast_threshold'] for a in authority_votes if a['voted']]
+    
+    relay_values = {
+        'wfu': relay_wfu or 0,
+        'tk': relay_tk or 0,
+        'measured_bw': relay_measured_bw or 0,
+        'uptime': relay_tk or 0,  # Using TK as proxy
+        'fast_speed': relay_measured_bw or 0,
+        'total_authorities': len(authorities),
+        
+        # Ranges
+        'guard_bw_range': f"{min(guard_bw_thresholds)/1e6:.0f}-{max(guard_bw_thresholds)/1e6:.0f} MB/s" if guard_bw_thresholds else "N/A",
+        'stable_range': f"{min(stable_thresholds)/86400:.1f}-{max(stable_thresholds)/86400:.1f} days" if stable_thresholds else "N/A",
+        'fast_range': f"{min(fast_thresholds)/1e6:.1f}-{max(fast_thresholds)/1e6:.1f} MB/s" if fast_thresholds else "N/A",
+        
+        # Counts
+        'guard_bw_meets_count': sum(1 for a in authority_votes if a['guard_bw_meets']),
+        'guard_bw_meets_all': all(a['guard_bw_meets'] for a in authority_votes if a['voted']),
+        'guard_bw_meets_some': any(a['guard_bw_meets'] for a in authority_votes if a['voted']),
+        'stable_meets_count': sum(1 for a in authority_votes if a['stable_meets']),
+        'stable_meets_all': all(a['stable_meets'] for a in authority_votes if a['voted']),
+        'fast_meets_count': sum(1 for a in authority_votes if a['fast_meets']),
+        'fast_meets_all': all(a['fast_meets'] for a in authority_votes if a['voted']),
+    }
+    
+    # Generate advice
+    advice = _generate_advice(relay_values, guard_wfu_threshold, guard_tk_threshold)
+    
+    vote_count = sum(1 for v in authority_votes if v['voted'])
+    majority_required = consensus_requirement['majority_required']
+    
+    return {
+        'authority_votes': authority_votes,
+        'relay_values': relay_values,
+        'in_consensus': vote_count >= majority_required,
+        'vote_count': vote_count,
+        'authority_count': len(authorities),
+        'consensus_tooltip': consensus_requirement['tooltip'],
+        'fetched_at': fetched_at,
+        'issues': _identify_issues(authority_votes),
+        'advice': advice,
+    }
+
+
+def _generate_advice(relay_values: Dict, wfu_threshold: float, tk_threshold: int) -> str:
+    """Generate actionable advice based on relay's values."""
+    issues = []
+    
+    if relay_values['wfu'] < wfu_threshold:
+        pct_below = (wfu_threshold - relay_values['wfu']) * 100
+        issues.append(f"Increase WFU to ≥98% (currently {relay_values['wfu']*100:.1f}%, {pct_below:.1f}% below)")
+    
+    if relay_values['tk'] < tk_threshold:
+        days_needed = (tk_threshold - relay_values['tk']) / 86400
+        issues.append(f"Keep relay running for {days_needed:.1f} more days to meet Time Known requirement")
+    
+    if not relay_values['guard_bw_meets_all'] and relay_values['guard_bw_meets_some']:
+        issues.append(f"Increase bandwidth to meet highest authority threshold for Guard on all authorities")
+    
+    if not issues:
+        return "Relay meets all requirements for flag assignment."
+    
+    return " ".join(issues)
+
+
+def _identify_issues(authority_votes: List[Dict]) -> List[str]:
+    """Identify issues from authority votes."""
+    issues = []
+    
+    unreachable = [a['authority'] for a in authority_votes if not a['voted']]
+    if unreachable:
+        issues.append(f"{', '.join(unreachable)} cannot reach relay")
+    
+    not_assigning_guard = [a['authority'] for a in authority_votes 
+                          if a['voted'] and not a['guard_bw_meets'] and 'Guard' not in a.get('flags', [])]
+    if not_assigning_guard:
+        issues.append(f"{len(not_assigning_guard)}/{len(authority_votes)} authorities NOT assigning Guard (BW below threshold)")
+    
+    return issues
+```
+
+### 1.6 Data Structure Reference
+
+**Per-authority vote entry** (`authority_votes` list item):
+```python
+{
+    'authority': 'moria1',
+    'fingerprint': 'F533C81CEF0BC0267857C99B2F471ADF249FA232',
+    'voted': True,
+    'ipv4_reachable': True,
+    'ipv6_reachable': True,  # or None if not tested
+    'flags': ['Fast', 'Guard', 'Stable', 'Valid'],
+    'is_bw_authority': True,
+    'bw_value': 46200000,
+    
+    # Relay's values
+    'relay_wfu': 0.962,
+    'relay_tk': 3888000,  # ~45 days in seconds
+    
+    # Per-authority thresholds (variable)
+    'guard_bw_threshold': 30000000,  # 30 MB/s
+    'stable_threshold': 1693440,     # ~19.6 days
+    'fast_threshold': 1000000,       # 1 MB/s
+    
+    # Status checks
+    'wfu_meets': False,   # 96.2% < 98%
+    'tk_meets': True,     # 45 days > 8 days
+    'guard_bw_meets': False,  # 25 MB/s < 30 MB/s
+    'stable_meets': True,
+    'fast_meets': True,
+}
+```
+
+### 1.7 CSS Styles for Merged Table
 
 ```css
 /* templates/static/css/style.css - ADD */

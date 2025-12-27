@@ -26,86 +26,119 @@ Add consensus troubleshooting features to Allium using CollecTor as the primary 
 
 | Section | Data Source | What It Shows |
 |---------|-------------|---------------|
-| **Authority Votes & Reachability** | CollecTor votes | Which authorities voted, IPv4/IPv6 reachability, flags assigned |
-| **Flag Eligibility** | CollecTor votes (thresholds) | Why relay has/doesn't have Guard, Stable, Fast, HSDir flags |
-| **Bandwidth Measurements** | CollecTor bandwidth files | Per-authority bw values, deviation (red if >±5%), relay uptime |
+**Single merged table** combining authority votes, bandwidth, and all flag thresholds:
+
+| Column | Data Source | Description |
+|--------|-------------|-------------|
+| **Authority** | Onionoo (dynamic) | Authority name, links to relay page |
+| **IPv4/IPv6** | CollecTor votes | Reachability status per authority |
+| **Flags Assigned** | CollecTor votes | Which flags this authority is assigning |
+| **Measured BW** | CollecTor votes | Measured bandwidth (N/A for non-BW authorities) |
+| **WFU** | CollecTor votes (`stats wfu=`) | Relay's WFU value (threshold ≥98% in tooltip) |
+| **Time Known** | CollecTor votes (`stats tk=`) | Relay's TK value (threshold ≥8 days in tooltip) |
+| **Guard BW Req** | CollecTor thresholds | Per-authority threshold vs relay's value (varies) |
+| **Stable Req** | CollecTor thresholds | Per-authority threshold vs relay's value (varies) |
+| **Fast Req** | CollecTor thresholds | Per-authority threshold vs relay's value (varies) |
 
 ### Mockup
 
 **Design notes**:
+- **Single merged table** - Authority votes, bandwidth, and all threshold data in ONE table
 - Authority names link to their dedicated relay page (e.g., `/relay/FINGERPRINT.html`)
-- Flag eligibility uses **color only** (green text = meets requirement, red text = below)
-- Authority Votes and Bandwidth Measurements **merged into single table** (N/A for non-BW authorities)
+- For **constant thresholds** (WFU ≥98%, Time Known ≥8 days): threshold shown in **column tooltip**, relay value shown in cell
+- For **variable thresholds** (Guard BW, Stable Uptime, Fast Speed): both threshold and relay value shown
 - Consensus requirement shown as **tooltip** (hover over status to see "5/9 = majority")
 - Authority count is **dynamic** (discovered from Onionoo, not hardcoded)
 
+**Data sources from CollecTor votes:**
+- Per-relay stats: `wfu`, `tk` (time known), `mtbf`, `Measured` (bandwidth)
+- Per-authority thresholds: `guard-wfu`, `guard-tk`, `guard-bw-inc-exits`, `stable-uptime`, `fast-speed`
+
 ```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│ 🔍 Consensus Diagnostics                                                     │
-│ Data from: 2025-12-26 04:00 UTC (latest CollecTor)                          │
-├──────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│ ══ Authority Votes & Bandwidth ══════════════════════════════════════════════│
-│ Status: IN CONSENSUS (8/9 authorities) [?]                                   │
-│         └─ tooltip: "Consensus requires majority: 5/9 (9÷2+1=5)"            │
-│                                                                              │
-│ ┌────────────┬──────┬──────┬─────────────────────┬───────────┬─────────────┐│
-│ │ Authority  │ IPv4 │ IPv6 │ Flags               │ BW Value  │ Deviation   ││
-│ ├────────────┼──────┼──────┼─────────────────────┼───────────┼─────────────┤│
-│ │ moria1 ↗   │  ✅  │  ✅  │ Fast Guard Stable   │ 46,200    │ +2.7%       ││
-│ │ tor26 ↗    │  ✅  │  ❌  │ Fast Guard Stable   │ 44,800    │ -0.4%       ││
-│ │ dizum ↗    │  ✅  │  ⚪  │ Fast Stable         │ N/A       │ N/A         ││
-│ │ gabelmoo ↗ │  ✅  │  ✅  │ Fast Guard Stable   │ 44,100    │ -2.0%       ││
-│ │ bastet ↗   │  ✅  │  ✅  │ Fast Guard Stable   │ 43,900    │ -2.4%       ││
-│ │ dannenberg↗│  ✅  │  ✅  │ Fast Guard Stable   │ N/A       │ N/A         ││
-│ │ maatuska ↗ │  ✅  │  ✅  │ Fast Guard Stable   │ 45,100    │ +0.2%       ││
-│ │ longclaw ↗ │  ✅  │  ⚪  │ Fast Guard Stable   │ 44,500    │ -1.1%       ││
-│ │ faravahar↗ │  ❌  │  ❌  │ —                   │ —         │ —           ││
-│ └────────────┴──────┴──────┴─────────────────────┴───────────┴─────────────┘│
-│                                                                              │
-│ ↗ = link to authority relay page                                            │
-│ IPv6: ⚪ = authority doesn't test IPv6                                       │
-│ Deviation: values outside ±5% shown in red (hover for explanation)          │
-│                                                                              │
-│ ⚠️ Issues: faravahar cannot reach relay • dizum not assigning Guard         │
-│                                                                              │
-│ ══ Flag Eligibility ═════════════════════════════════════════════════════════│
-│ Why doesn't this relay have the Guard flag?                                  │
-│                                                                              │
-│ Assigning Guard: 6/9 authorities │ Need: 5/9 (majority) to appear in consensus│
-│                                                                              │
-│ ┌────────────────────┬────────────┬──────────────────────┬──────────────────┐│
-│ │ Requirement        │ Your Value │ Threshold (per auth) │ Status           ││
-│ ├────────────────────┼────────────┼──────────────────────┼──────────────────┤│
-│ │ WFU (Uptime)       │ 96.2%      │ ≥98% (all)           │ 96.2% (below)    ││  ← red
-│ │ Time Known         │ 45 days    │ ≥8 days (all)        │ 45 days (meets)  ││  ← green
-│ │ Bandwidth          │ 25 MB/s    │ 10-35 MB/s (varies)  │ see breakdown ↓  ││
-│ └────────────────────┴────────────┴──────────────────────┴──────────────────┘│
-│                                                                              │
-│ Bandwidth threshold breakdown (varies by authority):                         │
-│ ┌────────────┬───────────┬────────────┬─────────────────────────────────────┐│
-│ │ Authority  │ Threshold │ Your Value │ Status                              ││
-│ ├────────────┼───────────┼────────────┼─────────────────────────────────────┤│
-│ │ moria1     │ ≥30 MB/s  │ 25 MB/s    │ below by 17% - NOT assigning Guard  ││  ← red
-│ │ tor26      │ ≥34 MB/s  │ 25 MB/s    │ below by 26% - NOT assigning Guard  ││  ← red
-│ │ dizum      │ ≥10 MB/s  │ 25 MB/s    │ meets - assigning Guard             ││  ← green
-│ │ gabelmoo   │ ≥35 MB/s  │ 25 MB/s    │ below by 29% - NOT assigning Guard  ││  ← red
-│ │ bastet     │ ≥10 MB/s  │ 25 MB/s    │ meets - assigning Guard             ││  ← green
-│ │ dannenberg │ ≥35 MB/s  │ 25 MB/s    │ below by 29% - NOT assigning Guard  ││  ← red
-│ │ maatuska   │ ≥10 MB/s  │ 25 MB/s    │ meets - assigning Guard             ││  ← green
-│ │ longclaw   │ ≥28 MB/s  │ 25 MB/s    │ below by 11% - NOT assigning Guard  ││  ← red
-│ │ faravahar  │ ≥10 MB/s  │ 25 MB/s    │ meets - assigning Guard             ││  ← green
-│ └────────────┴───────────┴────────────┴─────────────────────────────────────┘│
-│                                                                              │
-│ Summary: 4/9 authorities have Guard BW threshold ≤25 MB/s (your value)      │
-│ To get Guard from more authorities, increase bandwidth to ≥35 MB/s          │
-│                                                                              │
-│ Legend: green = meets requirement, red = below threshold                     │
-│ Note: Thresholds are calculated independently by each authority based on    │
-│       the relays they observe. WFU is consistent (98%), but bandwidth       │
-│       thresholds vary significantly (10-35 MB/s).                           │
-└──────────────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ 🔍 Consensus Diagnostics                                                                                               │
+│ Data from: 2025-12-26 04:00 UTC (latest CollecTor)                                                                    │
+├────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                                                        │
+│ Status: IN CONSENSUS (8/9 authorities) [ⓘ]    ← tooltip: "Consensus requires majority: 5/9 (9÷2+1=5)"                 │
+│                                                                                                                        │
+│ ══ Per-Authority Voting Details ════════════════════════════════════════════════════════════════════════════════════════│
+│                                                                                                                        │
+│ Single table with ALL authority data. Constant thresholds (WFU, TK) have threshold in column tooltip.                  │
+│                                                                                                                        │
+│ ┌────────────┬──────┬──────┬──────────────────┬──────────┬─────────┬─────────┬──────────────┬─────────────┬───────────┐│
+│ │ Authority  │ IPv4 │ IPv6 │ Flags Assigned   │ Meas. BW │ WFU [ⓘ]│ TK [ⓘ] │ Guard BW Req │ Stable Req  │ Fast Req  ││
+│ ├────────────┼──────┼──────┼──────────────────┼──────────┼─────────┼─────────┼──────────────┼─────────────┼───────────┤│
+│ │ moria1 ↗   │  ✅  │  ✅  │ Fast Guard Stable│ 46.2 MB/s│ 96.2%   │ 45 days │ ≥30 MB/s  ❌ │ ≥19.6 days ✅│ ≥1.0 MB/s ✅││
+│ │ tor26 ↗    │  ✅  │  ❌  │ Fast Stable      │ 44.8 MB/s│ 96.2%   │ 45 days │ ≥34 MB/s  ❌ │ ≥19.8 days ✅│ ≥0.1 MB/s ✅││
+│ │ dizum ↗    │  ✅  │  ⚪  │ Fast Guard Stable│ N/A      │ 96.2%   │ 45 days │ ≥10 MB/s  ✅ │ ≥14.2 days ✅│ ≥0.1 MB/s ✅││
+│ │ gabelmoo ↗ │  ✅  │  ✅  │ Fast Stable      │ 44.1 MB/s│ 96.2%   │ 45 days │ ≥35 MB/s  ❌ │ ≥19.6 days ✅│ ≥0.1 MB/s ✅││
+│ │ bastet ↗   │  ✅  │  ✅  │ Fast Guard Stable│ 43.9 MB/s│ 96.2%   │ 45 days │ ≥10 MB/s  ✅ │ ≥14.3 days ✅│ ≥0.1 MB/s ✅││
+│ │ dannenberg↗│  ✅  │  ✅  │ Fast Stable      │ N/A      │ 96.2%   │ 45 days │ ≥35 MB/s  ❌ │ ≥19.2 days ✅│ ≥0.1 MB/s ✅││
+│ │ maatuska ↗ │  ✅  │  ✅  │ Fast Guard Stable│ 45.1 MB/s│ 96.2%   │ 45 days │ ≥10 MB/s  ✅ │ ≥19.3 days ✅│ ≥0.1 MB/s ✅││
+│ │ longclaw ↗ │  ✅  │  ⚪  │ Fast Guard Stable│ 44.5 MB/s│ 96.2%   │ 45 days │ ≥28 MB/s  ❌ │ ≥18.5 days ✅│ ≥0.1 MB/s ✅││
+│ │ faravahar↗ │  ❌  │  ❌  │ —                │ —        │ —       │ —       │ —            │ —           │ —         ││
+│ └────────────┴──────┴──────┴──────────────────┴──────────┴─────────┴─────────┴──────────────┴─────────────┴───────────┘│
+│                                                                                                                        │
+│ Column tooltips:                                                                                                       │
+│   • WFU [ⓘ]: "Weighted Fractional Uptime. Threshold: ≥98% (constant). Your value: 96.2%"                              │
+│   • TK [ⓘ]: "Time Known to authority. Threshold: ≥8 days (constant). Your value: 45 days"                             │
+│                                                                                                                        │
+│ Legend:                                                                                                                │
+│   ↗ = link to authority relay page                                                                                     │
+│   ✅/❌ in threshold columns = meets/below threshold (relay value: 25 MB/s BW, 45 days stable, 25 MB/s fast)           │
+│   ⚪ = authority doesn't test this (IPv6 not tested by dizum, longclaw)                                                │
+│   N/A = authority does not run bandwidth scanner (dizum, dannenberg)                                                   │
+│                                                                                                                        │
+│ ⚠️ Issues: faravahar cannot reach relay • 4/9 authorities NOT assigning Guard (BW below threshold)                    │
+│                                                                                                                        │
+│ ══ Relay Values Summary ════════════════════════════════════════════════════════════════════════════════════════════════│
+│                                                                                                                        │
+│ Your relay's current values (from CollecTor vote stats):                                                               │
+│                                                                                                                        │
+│ ┌───────────────────┬────────────┬─────────────────────────────┬───────────────────────────────────────────────────────┐│
+│ │ Metric            │ Your Value │ Threshold                   │ Status                                                ││
+│ ├───────────────────┼────────────┼─────────────────────────────┼───────────────────────────────────────────────────────┤│
+│ │ WFU (guard-wfu)   │ 96.2%      │ ≥98% (constant, all auths)  │ ❌ BELOW - cannot get Guard from ANY authority        ││
+│ │ Time Known (tk)   │ 45 days    │ ≥8 days (constant, all)     │ ✅ MEETS - eligible for Guard (time requirement)      ││
+│ │ Measured BW       │ 25 MB/s    │ varies: 10-35 MB/s          │ ⚠️ PARTIAL - meets for 5/9 authorities                ││
+│ │ Stable Uptime     │ 45 days    │ varies: 14.2-19.8 days      │ ✅ MEETS - all authorities assigning Stable           ││
+│ │ Fast Speed        │ 25 MB/s    │ varies: 0.1-1.0 MB/s        │ ✅ MEETS - all authorities assigning Fast             ││
+│ └───────────────────┴────────────┴─────────────────────────────┴───────────────────────────────────────────────────────┘│
+│                                                                                                                        │
+│ 💡 Advice: To get Guard flag, increase WFU to ≥98%. Current uptime pattern is too variable.                           │
+│                                                                                                                        │
+│ Note: Each authority calculates thresholds based on the relays it observes. WFU and Time Known are consistent         │
+│ across authorities, but bandwidth-related thresholds vary significantly (10-35 MB/s for Guard BW).                    │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+### Data Available from CollecTor Votes
+
+**Per-relay stats** (in `stats` line of each relay entry):
+| Field | Description | Example |
+|-------|-------------|---------|
+| `wfu` | Weighted Fractional Uptime | 0.957168 (95.7%) |
+| `tk` | Time Known (seconds) | 853402 (~9.8 days) |
+| `mtbf` | Mean Time Between Failures | 1203750817 |
+
+**Per-relay bandwidth** (in `w` line):
+| Field | Description | Example |
+|-------|-------------|---------|
+| `Bandwidth` | Advertised bandwidth | 10000 |
+| `Measured` | Measured bandwidth (from BW scanner) | 66000 |
+
+**Per-authority thresholds** (in `flag-thresholds` header):
+| Field | Description | Varies? |
+|-------|-------------|---------|
+| `guard-wfu` | WFU threshold for Guard | No (98%) |
+| `guard-tk` | Time Known threshold for Guard | No (~8 days) |
+| `guard-bw-inc-exits` | Guard BW threshold (with exits) | Yes (10-35 MB/s) |
+| `guard-bw-exc-exits` | Guard BW threshold (no exits) | Yes |
+| `stable-uptime` | Stable flag uptime threshold | Yes (14-20 days) |
+| `fast-speed` | Fast flag speed threshold | Yes (0.1-1.0 MB/s) |
+| `hsdir-wfu` | HSDir WFU threshold | No (98%) |
+| `hsdir-tk` | HSDir Time Known threshold | Slightly |
 
 ---
 
