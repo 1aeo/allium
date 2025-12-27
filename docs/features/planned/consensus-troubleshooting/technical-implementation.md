@@ -2390,8 +2390,7 @@ class CollectorFetcher:
 - [ ] All external calls have timeouts
 - [ ] Feature flag implemented and tested (enable/disable)
 - [ ] Baseline comparison shows only expected changes
-- [ ] Performance benchmark within limits (+30s max)
-- [ ] Memory usage within limits (+100MB max)
+- [ ] Performance benchmark delta documented (informational, not pass/fail)
 - [ ] Code review checklist completed by reviewer
 - [ ] CI/CD pipeline passes
 

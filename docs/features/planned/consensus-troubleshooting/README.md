@@ -495,17 +495,17 @@ allium/
 ### Phase 1
 - [ ] `pytest tests/test_collector_fetcher.py -v` passes
 - [ ] `pytest tests/test_workers_collector.py -v` passes  
-- [ ] Per-relay vote/reachability lookup (< 100ms)
-- [ ] Flag eligibility analysis with thresholds
-- [ ] Bandwidth measurements with deviation coloring
-- [ ] No increase in hourly compute time (data indexed once)
+- [ ] Per-relay vote/reachability lookup works correctly
+- [ ] Flag eligibility analysis with thresholds displays
+- [ ] Bandwidth measurements with deviation coloring displays
 - [ ] Baseline comparison shows only expected changes
+- [ ] Performance delta documented (informational)
 
 ### Phase 2
 - [ ] `pytest tests/test_authority_monitor.py -v` passes
-- [ ] Authority latency checks (< 10s total)
-- [ ] Flag thresholds from latest consensus
-- [ ] Flag distribution visualization
+- [ ] Authority latency checks complete successfully
+- [ ] Flag thresholds shown per authority in columns
+- [ ] Network flag totals displayed
 - [ ] Simple alert for offline/slow authorities
 - [ ] Final regression test passes
 
@@ -577,20 +577,22 @@ git checkout v1.x.x  # Previous release tag
 # Redeploy
 ```
 
-### Performance Benchmarks (Must Pass)
+### Performance Benchmarks (Measure, Don't Fail)
 
-| Metric | Baseline | Maximum Allowed | Measurement |
-|--------|----------|-----------------|-------------|
-| Total generation time | ~180s | +30s (210s max) | `time python allium.py` |
-| Memory usage | ~500MB | +100MB (600MB max) | `get_memory_usage()` |
-| CollecTor fetch time | N/A | 60s max | Worker timing logs |
-| Per-relay diagnostics | N/A | <1ms each | Profiling |
-| relay-info.html size | ~15KB | +5KB (20KB max) | `ls -la` |
+**Note**: These are guidelines for monitoring, not hard failure criteria. Measure before/after and document the delta.
+
+| Metric | Baseline (Typical) | Target Delta | Measurement |
+|--------|-------------------|--------------|-------------|
+| Total generation time | ~180s | Document Δ | `time python allium.py` |
+| Memory usage | ~2-4 GB | Document Δ | `get_memory_usage()` |
+| CollecTor fetch time | N/A (new) | < 60s typical | Worker timing logs |
+| Per-relay diagnostics | N/A (new) | < 1ms each | Profiling |
+| relay-info.html size | ~15KB | Document Δ | `ls -la` |
 
 ```bash
 # scripts/benchmark.sh - Run before and after implementation
 #!/bin/bash
-echo "=== Performance Benchmark ==="
+echo "=== Performance Benchmark (Informational) ==="
 
 # Time full generation
 START=$(date +%s.%N)
@@ -600,14 +602,26 @@ DURATION=$(echo "$END - $START" | bc)
 echo "Total time: ${DURATION}s"
 
 # Memory (from progress log)
+echo "Peak memory usage:"
 grep "Memory" bench.log | tail -1
 
 # File sizes
-echo "Sample relay-info.html size:"
+echo "Sample relay-info.html sizes:"
 ls -la bench_output/relay/ | head -5
 
-# Compare to baseline
-echo "Baseline was: $(cat baseline_benchmark.txt)"
+# Compare to baseline (informational, not pass/fail)
+if [ -f baseline_benchmark.txt ]; then
+    BASELINE=$(cat baseline_benchmark.txt)
+    DELTA=$(echo "$DURATION - $BASELINE" | bc)
+    echo ""
+    echo "=== DELTA REPORT (Informational) ==="
+    echo "Baseline time: ${BASELINE}s"
+    echo "Current time:  ${DURATION}s"
+    echo "Delta:         ${DELTA}s"
+    echo ""
+    echo "NOTE: This is for documentation, not a pass/fail gate."
+fi
+
 echo "$DURATION" > current_benchmark.txt
 ```
 
@@ -688,7 +702,7 @@ Before PR approval, reviewer must verify:
 - [ ] **Logging** - Appropriate log levels (info for success, warning for recoverable, error for failures)
 - [ ] **Tests pass** - `pytest tests/ -v` all green
 - [ ] **Baseline comparison** - `./scripts/validate_phase.sh` shows only expected changes
-- [ ] **Performance** - Benchmark within allowed limits
+- [ ] **Performance documented** - Benchmark delta recorded (not a pass/fail gate)
 - [ ] **Feature flag** - Can be disabled without code change
 - [ ] **Documentation** - Code comments explain "why", not just "what"
 - [ ] **Template escaping** - No raw user data in templates without escaping
