@@ -92,25 +92,42 @@ Add consensus troubleshooting features to Allium using CollecTor as the primary 
 
 ### Mockup
 
+**Note**: Flag thresholds are **unique per authority** (each calculates based on relays it sees). Show as columns.
+
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│ 🏛️ Directory Authorities                                        │
-├─────────────────────────────────────────────────────────────────┤
-│ Consensus: ✅ FRESH │ 9/9 Voted │ Next: 15:00 UTC (23 min)     │
-├─────────────────────────────────────────────────────────────────┤
-│ ┌──────────┬────────┬──────┬───────┬─────────┬────────┬───────┐│
-│ │Authority │ Status │ Vote │BW Auth│ Latency │ Uptime │Relays ││
-│ ├──────────┼────────┼──────┼───────┼─────────┼────────┼───────┤│
-│ │ moria1   │ 🟢 OK  │  ✅  │  ✅   │  12ms   │ 99.9%  │ 8,247 ││
-│ │ faravahar│ 🟡 SLOW│  ✅  │  ✅   │  89ms   │ 97.8%  │ 8,178 ││
-│ └──────────┴────────┴──────┴───────┴─────────┴────────┴───────┘│
-│ ⚠️ Alert: faravahar responding slowly (89ms)                   │
-├─────────────────────────────────────────────────────────────────┤
-│ Flag Thresholds: Guard WFU≥98%, BW≥29MB/s │ Stable ≥20.2 days │
-├─────────────────────────────────────────────────────────────────┤
-│ Running 7,234 │ Fast 6,891 │ Guard 2,845 │ Exit 1,923          │
-└─────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────────────┐
+│ 🏛️ Directory Authorities                                                      │
+├───────────────────────────────────────────────────────────────────────────────┤
+│ Consensus: ✅ FRESH │ 9/9 Voted │ Next: 15:00 UTC (23 min)                   │
+├───────────────────────────────────────────────────────────────────────────────┤
+│                                                                               │
+│ ┌──────────┬────────┬──────┬───────┬─────────┬────────┬───────┬─────────────┐│
+│ │Authority │ Status │ Vote │BW Auth│ Latency │ Uptime │Relays │Guard BW Req ││
+│ ├──────────┼────────┼──────┼───────┼─────────┼────────┼───────┼─────────────┤│
+│ │ moria1   │ 🟢 OK  │  ✅  │  ✅   │  12ms   │ 99.9%  │ 8,247 │ 30 MB/s     ││
+│ │ tor26    │ 🟢 OK  │  ✅  │  ✅   │  45ms   │ 99.8%  │ 8,201 │ 34 MB/s     ││
+│ │ dizum    │ 🟢 OK  │  ✅  │  ❌   │  38ms   │ 99.7%  │ 8,156 │ 10 MB/s     ││
+│ │ gabelmoo │ 🟢 OK  │  ✅  │  ✅   │  52ms   │ 99.9%  │ 8,234 │ 35 MB/s     ││
+│ │ bastet   │ 🟢 OK  │  ✅  │  ✅   │  67ms   │ 99.6%  │ 8,189 │ 10 MB/s     ││
+│ │ dannenberg│🟢 OK  │  ✅  │  ❌   │  41ms   │ 99.8%  │ 8,178 │ 35 MB/s     ││
+│ │ maatuska │ 🟢 OK  │  ✅  │  ✅   │  73ms   │ 99.5%  │ 8,167 │ 10 MB/s     ││
+│ │ longclaw │ 🟢 OK  │  ✅  │  ✅   │  58ms   │ 99.7%  │ 8,145 │ 28 MB/s     ││
+│ │ faravahar│ 🟡 SLOW│  ✅  │  ✅   │  89ms   │ 97.8%  │ 8,123 │ 10 MB/s     ││
+│ └──────────┴────────┴──────┴───────┴─────────┴────────┴───────┴─────────────┘│
+│                                                                               │
+│ ⚠️ faravahar responding slowly (89ms)                                        │
+│                                                                               │
+├───────────────────────────────────────────────────────────────────────────────┤
+│ Threshold Ranges: Guard BW 10-35 MB/s │ Stable Uptime 14-20 days │ WFU ≥98% │
+├───────────────────────────────────────────────────────────────────────────────┤
+│ Network Totals: Running 7,234 │ Fast 6,891 │ Guard 2,845 │ Exit 1,923       │
+└───────────────────────────────────────────────────────────────────────────────┘
 ```
+
+**Threshold columns** (expandable per authority):
+- `Guard BW Req` - guard-bw-inc-exits (varies 10-35 MB/s)
+- `Stable Uptime` - stable-uptime (varies 14-20 days)  
+- `Fast Speed` - fast-speed threshold
 
 ---
 
@@ -446,6 +463,227 @@ allium/
 - [ ] Flag distribution visualization
 - [ ] Simple alert for offline/slow authorities
 - [ ] Final regression test passes
+
+---
+
+---
+
+## 🚀 Production Readiness Checklist
+
+### Pre-Implementation
+
+- [ ] **Baseline captured** - `./scripts/capture_baseline.sh` run and committed
+- [ ] **Branch created** - Feature branch from main
+- [ ] **Dependencies reviewed** - No new external dependencies required (uses stdlib)
+
+### Error Handling Requirements
+
+| Scenario | Handling | User Experience |
+|----------|----------|-----------------|
+| CollecTor unreachable | Use cache (up to 3 hours old) | Show "Data from: X hours ago" |
+| CollecTor returns partial data | Use available data, log warning | Show partial diagnostics |
+| Malformed vote/bandwidth file | Skip that authority, continue | "8/9 authorities available" |
+| Cache corruption | Delete cache, refetch | Automatic recovery |
+| Timeout during fetch | Use cache if available | Graceful degradation |
+
+```python
+# Error handling pattern (required in all new code)
+try:
+    result = risky_operation()
+except SpecificException as e:
+    logger.warning(f"Operation failed: {e}")
+    result = fallback_value
+    # NEVER let exceptions propagate to page generation
+```
+
+### Feature Flag (Gradual Rollout)
+
+```python
+# lib/config.py or environment variable
+ENABLE_COLLECTOR_DIAGNOSTICS = os.environ.get('ALLIUM_COLLECTOR_DIAGNOSTICS', 'true').lower() == 'true'
+
+# lib/coordinator.py - respect feature flag
+if self.enabled_apis == 'all' and ENABLE_COLLECTOR_DIAGNOSTICS:
+    self.api_workers.append(("collector_consensus", fetch_collector_consensus_data, [...]))
+```
+
+**Rollout plan**:
+1. Week 1: Deploy with `ALLIUM_COLLECTOR_DIAGNOSTICS=false` (disabled)
+2. Week 2: Enable on staging, monitor for 48 hours
+3. Week 3: Enable on production, monitor closely
+4. Week 4: Remove feature flag, code is permanent
+
+### Rollback Plan
+
+```bash
+#!/bin/bash
+# scripts/rollback.sh - Emergency rollback procedure
+
+# Option 1: Disable feature via environment
+export ALLIUM_COLLECTOR_DIAGNOSTICS=false
+# Restart allium - feature disabled, no code changes needed
+
+# Option 2: Git revert (if code issue)
+git revert HEAD~N  # Revert last N commits
+git push origin main
+
+# Option 3: Deploy previous known-good version
+git checkout v1.x.x  # Previous release tag
+# Redeploy
+```
+
+### Performance Benchmarks (Must Pass)
+
+| Metric | Baseline | Maximum Allowed | Measurement |
+|--------|----------|-----------------|-------------|
+| Total generation time | ~180s | +30s (210s max) | `time python allium.py` |
+| Memory usage | ~500MB | +100MB (600MB max) | `get_memory_usage()` |
+| CollecTor fetch time | N/A | 60s max | Worker timing logs |
+| Per-relay diagnostics | N/A | <1ms each | Profiling |
+| relay-info.html size | ~15KB | +5KB (20KB max) | `ls -la` |
+
+```bash
+# scripts/benchmark.sh - Run before and after implementation
+#!/bin/bash
+echo "=== Performance Benchmark ==="
+
+# Time full generation
+START=$(date +%s.%N)
+python allium.py --progress --output-dir bench_output/ 2>&1 | tee bench.log
+END=$(date +%s.%N)
+DURATION=$(echo "$END - $START" | bc)
+echo "Total time: ${DURATION}s"
+
+# Memory (from progress log)
+grep "Memory" bench.log | tail -1
+
+# File sizes
+echo "Sample relay-info.html size:"
+ls -la bench_output/relay/ | head -5
+
+# Compare to baseline
+echo "Baseline was: $(cat baseline_benchmark.txt)"
+echo "$DURATION" > current_benchmark.txt
+```
+
+### Security Considerations
+
+| Risk | Mitigation |
+|------|------------|
+| CollecTor data tampering | HTTPS only, validate response structure |
+| Injection via relay nicknames | Already escaped by `bulk_escaper` in `_preprocess_template_data()` |
+| DoS via large response | Timeout + max response size limit |
+| Cache poisoning | Validate JSON structure before caching |
+
+```python
+# Required validation in collector_fetcher.py
+def _validate_vote_structure(self, vote_data: dict) -> bool:
+    """Validate vote has expected structure before use."""
+    required_keys = ['relays', 'authority']
+    return all(key in vote_data for key in required_keys)
+```
+
+### CI/CD Integration
+
+```yaml
+# .github/workflows/collector-tests.yml (add to existing CI)
+name: Collector Feature Tests
+
+on: [push, pull_request]
+
+jobs:
+  test-collector:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: pip install -r config/requirements.txt -r config/requirements-dev.txt
+      
+      - name: Run collector unit tests
+        run: pytest tests/test_collector_fetcher.py tests/test_authority_monitor.py -v
+      
+      - name: Run full test suite
+        run: pytest tests/ -v
+      
+      - name: Generate site (smoke test)
+        run: |
+          cd allium
+          timeout 300 python allium.py --progress --output-dir ci_output/ || exit 1
+      
+      - name: Check for new diagnostics section
+        run: |
+          grep -l "Consensus Diagnostics" allium/ci_output/relay/*.html | wc -l
+```
+
+### Edge Cases and Failure Modes
+
+| Edge Case | Expected Behavior | Test |
+|-----------|-------------------|------|
+| New relay (no votes yet) | `collector_diagnostics = None`, section hidden | Unit test |
+| Relay in 4/9 votes (not consensus) | Show "NOT IN CONSENSUS (4/9)" | Unit test |
+| Authority down during fetch | Skip that authority, show 8/9 | Integration test |
+| All authorities down | Use cache, show "Data from: X ago" | Integration test |
+| Relay has IPv6 but not tested | Show "⚪" (not tested) | Unit test |
+| Bandwidth deviation >100% | Show red, cap display at ±999% | Unit test |
+| Empty fingerprint | Skip relay, log warning | Unit test |
+| Unicode in relay nickname | Already escaped, renders safely | Existing tests |
+
+### Code Review Checklist
+
+Before PR approval, reviewer must verify:
+
+- [ ] **No new relay loops** - Uses `_reprocess_collector_data()` pattern
+- [ ] **Error handling** - All external calls wrapped in try/except
+- [ ] **Logging** - Appropriate log levels (info for success, warning for recoverable, error for failures)
+- [ ] **Tests pass** - `pytest tests/ -v` all green
+- [ ] **Baseline comparison** - `./scripts/validate_phase.sh` shows only expected changes
+- [ ] **Performance** - Benchmark within allowed limits
+- [ ] **Feature flag** - Can be disabled without code change
+- [ ] **Documentation** - Code comments explain "why", not just "what"
+- [ ] **Template escaping** - No raw user data in templates without escaping
+
+### Documentation Requirements
+
+| Document | Status | Location |
+|----------|--------|----------|
+| Implementation plan | This document | `docs/features/planned/consensus-troubleshooting/` |
+| Technical spec | Complete | `technical-implementation.md` |
+| User guide | Write after Phase 1 | `docs/features/implemented/consensus-diagnostics/` |
+| API reference | In code docstrings | `lib/consensus/*.py` |
+| Changelog entry | Write at release | `CHANGELOG.md` |
+
+### Post-Deployment Monitoring
+
+```bash
+# Hourly cron job to verify feature health
+#!/bin/bash
+# scripts/monitor_collector.sh
+
+# Check if diagnostics are being generated
+DIAG_COUNT=$(grep -l "Consensus Diagnostics" /var/www/allium/relay/*.html 2>/dev/null | wc -l)
+RELAY_COUNT=$(ls /var/www/allium/relay/*.html 2>/dev/null | wc -l)
+
+if [ "$DIAG_COUNT" -lt "$((RELAY_COUNT * 90 / 100))" ]; then
+    echo "WARNING: Only $DIAG_COUNT/$RELAY_COUNT relays have diagnostics"
+    # Send alert
+fi
+
+# Check cache freshness
+CACHE_AGE=$(stat -c %Y /path/to/cache/collector_consensus.json 2>/dev/null || echo 0)
+NOW=$(date +%s)
+AGE_HOURS=$(( (NOW - CACHE_AGE) / 3600 ))
+
+if [ "$AGE_HOURS" -gt 3 ]; then
+    echo "WARNING: CollecTor cache is $AGE_HOURS hours old"
+    # Send alert
+fi
+```
 
 ---
 

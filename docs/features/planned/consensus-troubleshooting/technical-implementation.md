@@ -1065,7 +1065,161 @@ def check_authorities_sync() -> Dict:
     return asyncio.run(check_all_authorities())
 ```
 
-### 2.2 Worker for Authority Health
+### 2.2 Authority Dashboard Template
+
+**Important**: Flag thresholds are **unique per authority** - each calculates based on the relays it observes. Must show as columns, not single values.
+
+```jinja2
+{# templates/misc-authorities.html - Enhanced dashboard #}
+
+<section class="authority-dashboard">
+  <h2>🏛️ Directory Authorities</h2>
+  
+  {# Consensus status bar #}
+  <div class="consensus-status">
+    <span class="status-{{ consensus.freshness }}">
+      {% if consensus.freshness == 'fresh' %}✅ FRESH{% else %}⚠️ {{ consensus.freshness|upper }}{% endif %}
+    </span>
+    │ {{ authorities|selectattr('voted')|list|length }}/9 Voted
+    │ Next: {{ consensus.next_consensus_time }} ({{ consensus.minutes_until_next }} min)
+  </div>
+  
+  {# Authority table with per-authority thresholds #}
+  <table class="authority-table">
+    <thead>
+      <tr>
+        <th>Authority</th>
+        <th>Status</th>
+        <th>Vote</th>
+        <th>BW Auth</th>
+        <th>Latency</th>
+        <th>Uptime</th>
+        <th>Relays</th>
+        <th title="Guard bandwidth threshold (varies per authority)">Guard BW</th>
+        <th title="Stable uptime threshold (varies per authority)">Stable</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for auth in authorities %}
+      <tr class="status-{{ auth.health_status }}">
+        <td>{{ auth.name }}</td>
+        <td>
+          {% if auth.health_status == 'ok' %}🟢 OK
+          {% elif auth.health_status == 'slow' %}🟡 SLOW
+          {% else %}🔴 DOWN{% endif %}
+        </td>
+        <td>{% if auth.voted %}✅{% else %}❌{% endif %}</td>
+        <td>{% if auth.is_bw_authority %}✅{% else %}❌{% endif %}</td>
+        <td>{{ auth.latency_ms|default('—') }}ms</td>
+        <td>{{ auth.uptime_pct|default('—') }}%</td>
+        <td>{{ auth.relay_count|default('—')|format_number }}</td>
+        {# Per-authority thresholds - UNIQUE values #}
+        <td title="guard-bw-inc-exits">{{ auth.thresholds.guard_bw|format_bandwidth }}</td>
+        <td title="stable-uptime">{{ auth.thresholds.stable_uptime|format_days }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  
+  {# Alerts #}
+  {% if alerts %}
+  <div class="authority-alerts">
+    {% for alert in alerts %}
+      <div class="alert alert-{{ alert.level }}">⚠️ {{ alert.message }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  
+  {# Threshold ranges summary (computed from per-authority values) #}
+  <div class="threshold-summary">
+    Threshold Ranges: 
+    Guard BW {{ thresholds.guard_bw.min|format_bandwidth }}-{{ thresholds.guard_bw.max|format_bandwidth }} │
+    Stable {{ thresholds.stable.min|format_days }}-{{ thresholds.stable.max|format_days }} │
+    WFU ≥{{ thresholds.wfu }}%
+  </div>
+  
+  {# Network flag distribution #}
+  <div class="flag-distribution">
+    Network Totals:
+    Running {{ network.running|format_number }} │
+    Fast {{ network.fast|format_number }} │
+    Guard {{ network.guard|format_number }} │
+    Exit {{ network.exit|format_number }}
+  </div>
+</section>
+```
+
+### 2.3 Format Authority Thresholds
+
+```python
+# lib/consensus/diagnostics.py - Add threshold formatting
+
+def format_authority_thresholds(flag_thresholds: Dict[str, Dict]) -> Dict:
+    """
+    Format per-authority thresholds for template display.
+    Each authority has UNIQUE thresholds based on relays it observes.
+    
+    Args:
+        flag_thresholds: {auth_name: {threshold_key: value, ...}, ...}
+    
+    Returns:
+        Dict with per-authority formatted values and computed ranges
+    """
+    formatted = {
+        'per_authority': {},
+        'ranges': {},
+    }
+    
+    # Collect values for range calculation
+    guard_bw_values = []
+    stable_values = []
+    
+    for auth_name, thresholds in flag_thresholds.items():
+        # Guard bandwidth threshold (in bytes, convert to MB/s)
+        guard_bw = thresholds.get('guard-bw-inc-exits', 0)
+        guard_bw_mb = guard_bw / 1_000_000  # Convert to MB/s
+        
+        # Stable uptime threshold (in seconds, convert to days)
+        stable_uptime = thresholds.get('stable-uptime', 0)
+        stable_days = stable_uptime / 86400  # Convert to days
+        
+        # WFU is consistent across authorities (98%)
+        wfu = thresholds.get('guard-wfu', 0.98)
+        if isinstance(wfu, str):
+            wfu = float(wfu.replace('%', '')) / 100
+        
+        formatted['per_authority'][auth_name] = {
+            'guard_bw': guard_bw_mb,
+            'guard_bw_raw': guard_bw,
+            'stable_uptime': stable_days,
+            'stable_uptime_raw': stable_uptime,
+            'wfu': wfu * 100,  # As percentage
+            'fast_speed': thresholds.get('fast-speed', 0),
+        }
+        
+        guard_bw_values.append(guard_bw_mb)
+        stable_values.append(stable_days)
+    
+    # Calculate ranges for summary display
+    if guard_bw_values:
+        formatted['ranges']['guard_bw'] = {
+            'min': min(guard_bw_values),
+            'max': max(guard_bw_values),
+        }
+    
+    if stable_values:
+        formatted['ranges']['stable'] = {
+            'min': min(stable_values),
+            'max': max(stable_values),
+        }
+    
+    # WFU is always 98% across all authorities
+    formatted['ranges']['wfu'] = 98.0
+    
+    return formatted
+```
+
+### 2.4 Worker for Authority Health
 
 ```python
 # lib/workers.py - ADD THIS FUNCTION
@@ -1621,6 +1775,301 @@ exit $TEST_RESULT
 diff -r baseline_output/ final_output/ --brief | wc -l
 # Expected: Only relay-info.html files and misc-authorities.html changed
 ```
+
+---
+
+## 🚀 Production Quality Requirements
+
+### Error Handling (Required in All New Code)
+
+```python
+# lib/consensus/collector_fetcher.py - Error handling pattern
+
+class CollectorFetcher:
+    def fetch_all(self) -> dict:
+        """
+        Fetch all data with comprehensive error handling.
+        NEVER let exceptions propagate - always return usable data or empty fallback.
+        """
+        result = {
+            'votes': {},
+            'bandwidth_files': {},
+            'relay_index': {},
+            'flag_thresholds': {},
+            'fetched_at': datetime.utcnow().isoformat(),
+            'errors': [],  # Track all errors for debugging
+        }
+        
+        # Fetch votes with individual error handling
+        try:
+            result['votes'] = self._fetch_all_votes()
+        except Exception as e:
+            logger.error(f"Failed to fetch votes: {e}")
+            result['errors'].append(f"votes: {e}")
+            # Continue with empty votes - don't fail entire fetch
+        
+        # Fetch bandwidth with individual error handling
+        try:
+            result['bandwidth_files'] = self._fetch_all_bandwidth_files()
+        except Exception as e:
+            logger.error(f"Failed to fetch bandwidth: {e}")
+            result['errors'].append(f"bandwidth: {e}")
+        
+        # Build index only if we have some data
+        if result['votes'] or result['bandwidth_files']:
+            try:
+                self._build_relay_index()
+                result['relay_index'] = self.relay_index
+                result['flag_thresholds'] = self.flag_thresholds
+            except Exception as e:
+                logger.error(f"Failed to build index: {e}")
+                result['errors'].append(f"index: {e}")
+        
+        return result
+    
+    def _fetch_url(self, url: str) -> str:
+        """Fetch URL with timeout, size limit, and error handling."""
+        MAX_RESPONSE_SIZE = 100 * 1024 * 1024  # 100MB limit
+        
+        req = urllib.request.Request(url, headers={'User-Agent': 'Allium/1.0'})
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as response:
+                # Check content length before reading
+                content_length = response.headers.get('Content-Length')
+                if content_length and int(content_length) > MAX_RESPONSE_SIZE:
+                    raise ValueError(f"Response too large: {content_length} bytes")
+                
+                data = response.read(MAX_RESPONSE_SIZE + 1)
+                if len(data) > MAX_RESPONSE_SIZE:
+                    raise ValueError(f"Response exceeded {MAX_RESPONSE_SIZE} bytes")
+                
+                return data.decode('utf-8', errors='replace')
+                
+        except urllib.error.HTTPError as e:
+            logger.warning(f"HTTP {e.code} for {url}")
+            raise
+        except urllib.error.URLError as e:
+            logger.warning(f"URL error for {url}: {e.reason}")
+            raise
+        except socket.timeout:
+            logger.warning(f"Timeout fetching {url}")
+            raise
+```
+
+### Data Validation (Required)
+
+```python
+# lib/consensus/collector_fetcher.py - Validation functions
+
+def _validate_vote_structure(self, vote_data: dict, auth_name: str) -> bool:
+    """
+    Validate vote data structure before use.
+    Returns False if data is malformed (will be skipped).
+    """
+    if not isinstance(vote_data, dict):
+        logger.warning(f"Vote from {auth_name} is not a dict")
+        return False
+    
+    if 'relays' not in vote_data:
+        logger.warning(f"Vote from {auth_name} missing 'relays' key")
+        return False
+    
+    if not isinstance(vote_data.get('relays'), dict):
+        logger.warning(f"Vote from {auth_name} has invalid 'relays' type")
+        return False
+    
+    return True
+
+def _validate_fingerprint(self, fingerprint: str) -> bool:
+    """Validate fingerprint is 40 hex characters."""
+    if not fingerprint:
+        return False
+    if len(fingerprint) != 40:
+        return False
+    try:
+        int(fingerprint, 16)
+        return True
+    except ValueError:
+        return False
+```
+
+### Feature Flag Implementation
+
+```python
+# lib/consensus/__init__.py
+"""
+Consensus troubleshooting module.
+Feature flag: ALLIUM_COLLECTOR_DIAGNOSTICS (default: true)
+"""
+
+import os
+
+COLLECTOR_DIAGNOSTICS_ENABLED = os.environ.get(
+    'ALLIUM_COLLECTOR_DIAGNOSTICS', 'true'
+).lower() == 'true'
+
+def is_enabled() -> bool:
+    """Check if collector diagnostics feature is enabled."""
+    return COLLECTOR_DIAGNOSTICS_ENABLED
+```
+
+```python
+# lib/coordinator.py - Use feature flag
+from lib.consensus import is_enabled as collector_enabled
+
+# In __init__, add to api_workers only if enabled
+if self.enabled_apis == 'all' and collector_enabled():
+    self.api_workers.append(("collector_consensus", fetch_collector_consensus_data, [...]))
+```
+
+```jinja2
+{# templates/relay-info.html - Check for data before rendering #}
+{% if relay.collector_diagnostics %}
+<section class="consensus-diagnostics">
+  {# ... diagnostics content ... #}
+</section>
+{% endif %}
+{# If disabled or no data, section simply doesn't appear - graceful degradation #}
+```
+
+### Logging Standards
+
+```python
+# Logging levels and when to use them
+import logging
+logger = logging.getLogger(__name__)
+
+# DEBUG: Detailed internal state (not in production logs)
+logger.debug(f"Parsing vote from {auth_name}, {len(lines)} lines")
+
+# INFO: Normal operation milestones
+logger.info(f"Fetched {len(votes)} authority votes")
+logger.info(f"Indexed {len(relay_index)} relays")
+
+# WARNING: Recoverable issues (operation continues)
+logger.warning(f"Failed to fetch vote from {auth_name}: {e}")
+logger.warning(f"Relay {fp} has invalid fingerprint, skipping")
+
+# ERROR: Serious issues (feature may be degraded)
+logger.error(f"Failed to fetch any votes from CollecTor")
+logger.error(f"Cache corruption detected, clearing cache")
+
+# CRITICAL: Should never happen (requires investigation)
+logger.critical(f"Unexpected exception in _build_relay_index: {e}")
+```
+
+### Cache Integrity
+
+```python
+# lib/workers.py - Cache validation
+
+def _load_cache_with_validation(api_name: str) -> Optional[dict]:
+    """Load cache with structure validation."""
+    try:
+        data = _load_cache(api_name)
+        if data is None:
+            return None
+        
+        # Validate expected structure
+        if api_name == 'collector_consensus':
+            required_keys = ['votes', 'relay_index', 'fetched_at']
+            if not all(key in data for key in required_keys):
+                logger.warning(f"Cache {api_name} missing required keys, invalidating")
+                _invalidate_cache(api_name)
+                return None
+            
+            # Validate fetched_at is not too old
+            fetched_at = data.get('fetched_at', '')
+            if _cache_too_old(fetched_at, max_hours=3):
+                logger.info(f"Cache {api_name} too old ({fetched_at}), will refetch")
+                return None
+        
+        return data
+        
+    except json.JSONDecodeError as e:
+        logger.error(f"Cache {api_name} corrupted: {e}")
+        _invalidate_cache(api_name)
+        return None
+
+def _invalidate_cache(api_name: str) -> None:
+    """Safely delete corrupted cache file."""
+    cache_file = os.path.join(CACHE_DIR, f"{api_name}_cache.json")
+    try:
+        if os.path.exists(cache_file):
+            os.remove(cache_file)
+            logger.info(f"Invalidated cache: {cache_file}")
+    except OSError as e:
+        logger.error(f"Failed to invalidate cache {cache_file}: {e}")
+```
+
+### Performance Profiling Points
+
+```python
+# lib/consensus/collector_fetcher.py - Add timing instrumentation
+
+import time
+
+class CollectorFetcher:
+    def fetch_all(self) -> dict:
+        timings = {}
+        
+        start = time.time()
+        self._fetch_all_votes()
+        timings['fetch_votes'] = time.time() - start
+        
+        start = time.time()
+        self._fetch_all_bandwidth_files()
+        timings['fetch_bandwidth'] = time.time() - start
+        
+        start = time.time()
+        self._build_relay_index()
+        timings['build_index'] = time.time() - start
+        
+        # Log performance metrics
+        total = sum(timings.values())
+        logger.info(f"CollecTor fetch complete in {total:.1f}s: "
+                   f"votes={timings['fetch_votes']:.1f}s, "
+                   f"bw={timings['fetch_bandwidth']:.1f}s, "
+                   f"index={timings['build_index']:.1f}s")
+        
+        # Warn if too slow
+        if total > 60:
+            logger.warning(f"CollecTor fetch took {total:.1f}s (>60s threshold)")
+        
+        return {..., 'timings': timings}
+```
+
+---
+
+## Final Pre-Production Checklist
+
+### Before Merging to Main
+
+- [ ] All unit tests pass: `pytest tests/ -v`
+- [ ] All new code has error handling (no bare exceptions)
+- [ ] All external calls have timeouts
+- [ ] Feature flag implemented and tested (enable/disable)
+- [ ] Baseline comparison shows only expected changes
+- [ ] Performance benchmark within limits (+30s max)
+- [ ] Memory usage within limits (+100MB max)
+- [ ] Code review checklist completed by reviewer
+- [ ] CI/CD pipeline passes
+
+### Before Enabling in Production
+
+- [ ] Feature deployed with flag disabled
+- [ ] Staging environment tested for 48 hours
+- [ ] Monitoring scripts deployed
+- [ ] Rollback procedure documented and tested
+- [ ] On-call team briefed on new feature
+
+### After Production Rollout
+
+- [ ] Monitor error rates for 24 hours
+- [ ] Monitor performance metrics for 24 hours
+- [ ] Verify diagnostics appearing on relay pages
+- [ ] Check cache refresh working hourly
+- [ ] Remove feature flag after 1 week stable
 
 ---
 
