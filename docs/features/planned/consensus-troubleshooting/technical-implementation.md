@@ -1514,95 +1514,351 @@ def check_authorities_sync() -> Dict:
 ### 2.2 Authority Dashboard Template
 
 **Important**: 
+- **Enhances existing** `misc-authorities.html` - ONE PAGE, not a new page
 - Authority list is **DYNAMIC** - discovered from Onionoo (relays with "Authority" flag)
-- Flag thresholds are **unique per authority** - shown as columns by default (not expandable)
+- **TWO TABLES**: 
+  - Table 1: Main authority status (existing columns + 3 new: Vote, BW Auth, Latency)
+  - Table 2: Flag thresholds per authority (new section below main table)
 
 ```jinja2
-{# templates/misc-authorities.html - Enhanced dashboard with dynamic authorities #}
+{# templates/misc-authorities.html - MERGED: existing + new health features #}
+{% from "macros.html" import navigation %}
+{% extends "skeleton.html" -%}
+{% block title -%}
+    Relay Radar :: Directory Authorities by Network Health
+{% endblock -%}
+{% block body -%}
+    <h2>Directory Authorities by Network Health</h2>
+    
+    {{ navigation('authorities', page_ctx) }}
+    
+    <p>
+        Directory authorities vote on the status of relays in the Tor network 
+        and provide bandwidth measurements. Monitor their health and consensus participation.
+    </p>
 
-<section class="authority-dashboard">
-  <h2>🏛️ Directory Authorities ({{ authorities|length }} discovered)</h2>
-  
-  {# Consensus status bar #}
-  <div class="consensus-status-bar">
-    <span class="status-{{ consensus.freshness }}">
-      {% if consensus.freshness == 'fresh' %}✅ FRESH{% else %}⚠️ {{ consensus.freshness|upper }}{% endif %}
-    </span>
-    │ {{ authorities|selectattr('voted')|list|length }}/{{ authorities|length }} Voted
-    │ Next: {{ consensus.next_consensus_time }} ({{ consensus.minutes_until_next }} min)
-  </div>
-  
-  {# Authority table with ALL threshold columns shown by default #}
-  <table class="authority-table">
-    <thead>
-      <tr>
-        <th>Authority</th>
-        <th>Status</th>
-        <th>Vote</th>
-        <th>BW Auth</th>
-        <th>Latency</th>
-        <th>Relays</th>
-        {# Threshold columns - shown by default, not expandable #}
-        <th title="Guard bandwidth threshold (guard-bw-inc-exits)">Guard BW</th>
-        <th title="Stable uptime threshold (stable-uptime)">Stable</th>
-        <th title="Fast speed threshold (fast-speed)">Fast</th>
-        <th title="Weighted Fractional Uptime (guard-wfu)">WFU</th>
-      </tr>
-    </thead>
-    <tbody>
-    {# Loop over dynamic authority list (from Onionoo discovery) #}
-    {% for auth in authorities %}
-      <tr class="status-{{ auth.health_status }}">
-        {# Authority name links to relay page #}
-        <td>
-          <a href="{{ path_prefix }}relay/{{ auth.fingerprint }}.html"
-             title="View {{ auth.nickname }} relay details">
-            {{ auth.nickname }}
-          </a>
-        </td>
-        <td>
-          {% if auth.health_status == 'ok' %}🟢 OK
-          {% elif auth.health_status == 'slow' %}🟡 SLOW
-          {% else %}🔴 DOWN{% endif %}
-        </td>
-        <td>{% if auth.voted %}✅{% else %}❌{% endif %}</td>
-        <td>{% if auth.is_bw_authority %}✅{% else %}❌{% endif %}</td>
-        <td>{{ auth.latency_ms|default('—') }} ms</td>
-        <td>{{ auth.relay_count|default('—')|format_number }}</td>
-        {# Per-authority thresholds - ALL columns shown by default #}
-        <td>{{ auth.thresholds.guard_bw|format_bandwidth }}</td>
-        <td>{{ auth.thresholds.stable_uptime|format_days }}</td>
-        <td>{{ auth.thresholds.fast_speed|format_bandwidth }}</td>
-        <td>{{ auth.thresholds.wfu|format_percent }}</td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-  
-  {# Legend #}
-  <p class="table-legend">
-    ↗ Authority names link to their relay page │ 
-    Thresholds vary per authority (each calculates based on relays it observes)
-  </p>
-  
-  {# Alerts #}
-  {% if alerts %}
-  <div class="authority-alerts">
-    {% for alert in alerts %}
-      <div class="alert alert-{{ alert.level }}">⚠️ {{ alert.message }}</div>
-    {% endfor %}
-  </div>
-  {% endif %}
-  
-  {# Network flag distribution #}
-  <div class="flag-distribution">
-    Network Totals:
-    Running {{ network.running|format_number }} │
-    Fast {{ network.fast|format_number }} │
-    Guard {{ network.guard|format_number }} │
-    Exit {{ network.exit|format_number }}
-  </div>
-</section>
+    {# ============== SUMMARY SECTION (ENHANCED) ============== #}
+    <ul style="margin-bottom: 15px;">
+        <li><strong>Directory Authorities:</strong> {{ relays.authorities_summary.total_authorities }} discovered (dynamic from Onionoo)</li>
+        
+        {# NEW: Consensus status #}
+        {% if relays.consensus_status %}
+        <li><strong>Consensus Status:</strong> 
+            <span class="status-{{ relays.consensus_status.freshness }}">
+                {% if relays.consensus_status.freshness == 'fresh' %}✅ FRESH{% else %}⚠️ {{ relays.consensus_status.freshness|upper }}{% endif %}
+            </span>
+            │ {{ relays.consensus_status.voted_count }}/{{ relays.authorities_summary.total_authorities }} Voted
+            {% if relays.consensus_status.next_consensus_time %}
+            │ Next: {{ relays.consensus_status.next_consensus_time }} ({{ relays.consensus_status.minutes_until_next }} min)
+            {% endif %}
+        </li>
+        {% endif %}
+        
+        <li><strong>Version Compliance:</strong> 
+            {% set compliant_authorities = relays.authorities_data | selectattr('recommended_version', 'equalto', true) | list %}
+            {% set non_compliant_authorities = relays.authorities_data | selectattr('recommended_version', 'equalto', false) | list %}
+            {{ compliant_authorities|length }}/{{ relays.authorities_summary.total_authorities }} on recommended version │ 
+            {{ non_compliant_authorities|length }}/{{ relays.authorities_summary.total_authorities }} non-compliant
+        </li>
+        <li><strong>Uptime Status (1M):</strong> 
+            {% if relays.authorities_summary.above_average_uptime -%}
+                <span style="color: green; font-weight: bold;">{{ relays.authorities_summary.above_average_uptime|length }} above average</span>
+            {% else -%}
+                <span style="color: green; font-weight: bold;">0 above average</span>
+            {%- endif %} │ 
+            {% if relays.authorities_summary.below_average_uptime -%}
+                <span style="color: #ff8c00; font-weight: bold;">{{ relays.authorities_summary.below_average_uptime|length }} below average</span>
+            {% else -%}
+                <span style="color: #ff8c00; font-weight: bold;">0 below average</span>
+            {%- endif %} │ 
+            {% if relays.authorities_summary.problem_uptime -%}
+                <span style="color: red; font-weight: bold;">{{ relays.authorities_summary.problem_uptime|length }} problematic</span>
+            {% else -%}
+                <span style="color: red; font-weight: bold;">0 problematic</span>
+            {%- endif %}
+        </li>
+        
+        {# NEW: Latency status #}
+        {% if relays.latency_summary %}
+        <li><strong>Latency Status:</strong> 
+            <span style="color: green;">{{ relays.latency_summary.ok_count }}/{{ relays.authorities_summary.total_authorities }} OK</span> │
+            {% if relays.latency_summary.slow_count > 0 %}
+            <span style="color: #ff8c00;">{{ relays.latency_summary.slow_count }} slow</span> │
+            {% endif %}
+            {% if relays.latency_summary.down_count > 0 %}
+            <span style="color: red;">{{ relays.latency_summary.down_count }} down</span>
+            {% endif %}
+        </li>
+        {% endif %}
+        
+        <li><strong>Key:</strong> BW = Observed Bandwidth Capacity, CW = Consensus Weight, Z = Z-score (statistical uptime deviation)</li>
+    </ul>
+
+    {# ============== TABLE 1: MAIN AUTHORITY STATUS ============== #}
+    <h3>Directory Authority Status</h3>
+    
+    <p class="text-muted" style="margin-bottom: 15px;">
+        <small>Last updated: {{ relays.timestamp }}. Data from Onionoo API + CollecTor (votes, thresholds).</small>
+    </p>
+    
+    {# Uptime data status notification (existing) #}
+    {% if relays.uptime_metadata -%}
+        {% if relays.uptime_metadata.status == 'not_modified' -%}
+            <div style="background: #fff3cd; border: 1px solid #ffeaa7; color: #856404; padding: 10px; border-radius: 5px; margin-bottom: 15px;">
+                <strong>ℹ️ Uptime Data Status:</strong> Uptime statistics unchanged since last check.
+            </div>
+        {% elif relays.uptime_metadata.status == 'error' -%}
+            <div style="background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; padding: 10px; border-radius: 5px; margin-bottom: 15px;">
+                <strong>⚠️ Uptime Data Error:</strong> {{ relays.uptime_metadata.message }}
+            </div>
+        {%- endif %}
+    {%- endif %}
+    
+    {# Main table: EXISTING columns + 3 NEW columns (Vote, BW Auth, Latency) #}
+    <table class="table table-condensed" style="font-size: 13px;">
+        <tr>
+            <th>Authority Name</th>
+            <th>Online Status</th>
+            {# NEW columns inserted here #}
+            <th title="Submitted vote this consensus period">Vote</th>
+            <th title="Runs bandwidth scanner (sbws)">BW Auth</th>
+            <th title="Response time to directory port">Latency</th>
+            {# Existing columns continue #}
+            <th>AS Number</th>
+            <th>AS Name</th>
+            <th>Country</th>
+            <th title="Percentage of time authority was online over 1 month, 6 months, 1 year, and 5 years periods">Uptime (1M/6M/1Y/5Y)</th>
+            <th>Version</th>
+            <th title="Version compliance: ✅ = On recommended version, ❌ = Not on recommended version">Rec. Ver.</th>
+            <th>First Seen</th>
+            <th>Last Restarted</th>
+        </tr>
+        <tbody>
+        {% for authority in relays.authorities_data -%}
+            <tr>
+                {% set is_problematic = not authority.running or (authority.uptime_zscore and authority.uptime_zscore <= -2.0) -%}
+                <td>
+                    <a href="{{ page_ctx.path_prefix }}relay/{{ authority.fingerprint }}/" 
+                       {% if is_problematic %}style="color: #dc3545; font-weight: bold; text-decoration: underline;"
+                       {% else %}style="text-decoration: underline;"{% endif %}>
+                        {{ authority.nickname }}
+                    </a>
+                </td>
+                <td>
+                    {% if authority.running -%}
+                        <span style="color: green; font-weight: bold;">🟢 Online</span>
+                    {% else -%}
+                        <span style="color: red; font-weight: bold;">🔴 Offline</span>
+                    {%- endif %}
+                </td>
+                
+                {# NEW: Vote status #}
+                <td>
+                    {% if authority.collector_data and authority.collector_data.voted %}
+                        <span style="color: green;" title="Vote received">✅</span>
+                    {% else %}
+                        <span style="color: red;" title="No vote received">❌</span>
+                    {% endif %}
+                </td>
+                
+                {# NEW: BW Authority status #}
+                <td>
+                    {% if authority.is_bw_authority %}
+                        <span style="color: green;" title="Runs bandwidth scanner">✅</span>
+                    {% else %}
+                        <span style="color: gray;" title="Does not run scanner">❌</span>
+                    {% endif %}
+                </td>
+                
+                {# NEW: Latency #}
+                <td>
+                    {% if authority.latency_ms is defined and authority.latency_ms is not none %}
+                        {% if authority.latency_ms > 100 %}
+                            <span style="color: #ff8c00;">{{ authority.latency_ms }} ms</span>
+                        {% else %}
+                            {{ authority.latency_ms }} ms
+                        {% endif %}
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+                
+                {# Existing columns (AS, Country, Uptime, Version, etc.) #}
+                <td>
+                    {% if authority.as -%}
+                        <a href="{{ page_ctx.path_prefix }}as/{{ authority.as }}/">{{ authority.as }}</a>
+                    {% else -%}
+                        N/A
+                    {%- endif %}
+                </td>
+                <td>
+                    {% if authority.as_name -%}
+                        <a href="https://bgp.tools/{{ authority.as }}" title="{{ authority.as_name }}">{{ authority.as_name|truncate(length=20) }}</a>
+                    {% else -%}
+                        Unknown
+                    {%- endif %}
+                </td>
+                <td>
+                    {% if authority.country -%}
+                        <a href="{{ page_ctx.path_prefix }}country/{{ authority.country }}/">
+                            <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ authority.country|lower }}.png"
+                                 title="{{ authority.country_name }}"
+                                 alt="{{ authority.country_name }}">
+                        </a>
+                        {{ authority.country }}
+                    {% else -%}
+                        Unknown
+                    {%- endif %}
+                </td>
+                <td>
+                    {% if authority.uptime_percentages and authority.uptime_percentages.get('1_month') is not none -%}
+                        {{ "%.1f%%"|format(authority.uptime_percentages['1_month']) }}
+                    {% else -%}
+                        N/A
+                    {%- endif %} / 
+                    {% if authority.uptime_percentages and authority.uptime_percentages.get('6_months') is not none -%}
+                        {{ "%.1f%%"|format(authority.uptime_percentages['6_months']) }}
+                    {% else -%}
+                        N/A
+                    {%- endif %} / 
+                    {% if authority.uptime_percentages and authority.uptime_percentages.get('1_year') is not none -%}
+                        {{ "%.1f%%"|format(authority.uptime_percentages['1_year']) }}
+                    {% else -%}
+                        N/A
+                    {%- endif %} / 
+                    {% if authority.uptime_percentages and authority.uptime_percentages.get('5_years') is not none -%}
+                        {{ "%.1f%%"|format(authority.uptime_percentages['5_years']) }}
+                    {% else -%}
+                        N/A
+                    {%- endif %}
+                    {% if authority.uptime_zscore is not none -%}
+                        │ <span 
+                        {% if authority.uptime_zscore > 0.3 -%}
+                            style="color: green; font-weight: bold;"
+                        {% elif authority.uptime_zscore <= -2.0 -%}
+                            style="color: red; font-weight: bold;"
+                        {% else -%}
+                            style="color: #ff8c00; font-weight: bold;"
+                        {%- endif %}
+                        title="Z-score: Statistical measure of uptime deviation">Z: {{ "%.1f"|format(authority.uptime_zscore) }}</span>
+                    {%- endif %}
+                </td>
+                <td>{{ authority.version if authority.version else "Unknown" }}</td>
+                <td>
+                    {% if authority.recommended_version is not none -%}
+                        {% if authority.recommended_version -%}
+                            <span style="color: green; font-weight: bold;" title="Running recommended version">✅</span>
+                        {% else -%}
+                            <span style="color: red; font-weight: bold;" title="Not running recommended version">❌</span>
+                        {%- endif %}
+                    {% else -%}
+                        Unknown
+                    {%- endif %}
+                </td>
+                <td>
+                    {% if authority.first_seen -%}
+                        <a href="{{ page_ctx.path_prefix }}first_seen/{{ authority.first_seen.split(' ')[0].replace('-', '') }}/">{{ authority.first_seen.split(' ')[0] }}</a>
+                    {% else -%}
+                        Unknown
+                    {%- endif %}
+                </td>
+                <td>{{ authority.last_restarted.split(' ')[0] if authority.last_restarted else "Unknown" }}</td>
+            </tr>
+        {% endfor -%}
+        </tbody>
+    </table>
+
+    {# ============== TABLE 2: FLAG THRESHOLDS BY AUTHORITY (NEW) ============== #}
+    {% if relays.flag_thresholds %}
+    <br><br>
+    <h3>Flag Thresholds by Authority</h3>
+    <p class="text-muted">
+        Each authority calculates its own thresholds based on the relays it observes. 
+        These values determine which relays receive Guard/Stable/Fast flags.
+    </p>
+    
+    <table class="table table-condensed" style="font-size: 13px;">
+        <tr>
+            <th>Authority</th>
+            <th title="Bandwidth required for Guard flag (guard-bw-inc-exits)">Guard BW</th>
+            <th title="Uptime required for Stable flag (stable-uptime)">Stable Uptime</th>
+            <th title="Bandwidth required for Fast flag (fast-speed)">Fast Speed</th>
+            <th title="Weighted Fractional Uptime required for Guard (guard-wfu)">WFU</th>
+        </tr>
+        <tbody>
+        {% for auth_name, thresholds in relays.flag_thresholds.per_authority.items() %}
+            <tr>
+                <td>{{ auth_name }}</td>
+                <td>{{ "%.1f"|format(thresholds.guard_bw) }} MB/s</td>
+                <td>{{ "%.1f"|format(thresholds.stable_uptime) }} days</td>
+                <td>{{ "%.1f"|format(thresholds.fast_speed / 1000000) }} MB/s</td>
+                <td>{{ "%.0f"|format(thresholds.wfu) }}%</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    
+    {# Threshold ranges summary #}
+    <p style="font-size: 12px; color: #666;">
+        <strong>Ranges:</strong> 
+        Guard BW {{ "%.0f"|format(relays.flag_thresholds.ranges.guard_bw_min) }}-{{ "%.0f"|format(relays.flag_thresholds.ranges.guard_bw_max) }} MB/s │
+        Stable {{ "%.1f"|format(relays.flag_thresholds.ranges.stable_min) }}-{{ "%.1f"|format(relays.flag_thresholds.ranges.stable_max) }} days │
+        WFU 98% (all authorities)
+    </p>
+    {% endif %}
+
+    {# ============== ALERTS (NEW) ============== #}
+    {% if relays.authority_alerts %}
+    <br>
+    <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 10px; border-radius: 5px;">
+        <strong>⚠️ Alerts:</strong>
+        <ul style="margin: 5px 0; padding-left: 20px;">
+        {% for alert in relays.authority_alerts %}
+            <li>{{ alert }}</li>
+        {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    {# ============== NETWORK FLAG TOTALS (NEW) ============== #}
+    {% if relays.network_flag_totals %}
+    <br><br>
+    <h3>Network Flag Totals</h3>
+    <div style="background: #f0f0f0; padding: 15px; border-radius: 6px;">
+        <strong>Running:</strong> {{ relays.network_flag_totals.running|format_number }} │
+        <strong>Fast:</strong> {{ relays.network_flag_totals.fast|format_number }} │
+        <strong>Stable:</strong> {{ relays.network_flag_totals.stable|format_number }} │
+        <strong>Guard:</strong> {{ relays.network_flag_totals.guard|format_number }} │
+        <strong>Exit:</strong> {{ relays.network_flag_totals.exit|format_number }} │
+        <strong>HSDir:</strong> {{ relays.network_flag_totals.hsdir|format_number }}
+    </div>
+    {% endif %}
+
+    <br><br>
+
+    {# ============== LEGEND (ENHANCED) ============== #}
+    <div style="background: #f0f0f0; padding: 15px; border-radius: 6px;">
+        <h4>Legend:</h4>
+        <ul style="margin: 0; padding-left: 20px;">
+            <li><strong>Online:</strong> 🟢 = Online, 🔴 = Offline</li>
+            <li><strong>Vote:</strong> ✅ = Submitted vote this consensus period, ❌ = No vote received</li>
+            <li><strong>BW Auth:</strong> ✅ = Runs bandwidth scanner (sbws), ❌ = Does not run scanner (dizum, dannenberg)</li>
+            <li><strong>Latency:</strong> Response time to authority's directory port (checked hourly). Orange = >100ms</li>
+            <li><strong>Uptime (1M/6M/1Y/5Y):</strong> Percentage of time authority was online over 1 month, 6 months, 1 year, and 5 years</li>
+            <li><strong>Uptime Z-Score:</strong> Statistical measure comparing this authority's 1-month uptime to others. 
+                <span style="color: green; font-weight: bold;">Green (above average)</span>, 
+                <span style="color: #ff8c00; font-weight: bold;">Yellow (normal)</span>, 
+                <span style="color: red; font-weight: bold;">Red (significantly below, ≤-2.0)</span></li>
+            <li><strong>Rec. Ver.:</strong> ✅ = On recommended Tor version, ❌ = Not recommended</li>
+            <li><strong>Flag Thresholds:</strong> Requirements for relays to receive Guard/Stable/Fast flags (varies per authority)</li>
+        </ul>
+    </div>
+
+    <br><br>
+    <p><i>Data sources: Onionoo API (relay data), CollecTor (votes, thresholds)</i></p>
+    <p><i>Last updated: {{ relays.timestamp }} (refreshes hourly)</i></p>
+
+{% endblock -%}
 ```
 
 ### 2.3 Format Authority Thresholds
