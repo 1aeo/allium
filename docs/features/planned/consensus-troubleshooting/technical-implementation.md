@@ -8,40 +8,96 @@
 
 ## Architecture Overview
 
-### Consensus Voting Requirement
+### Dynamic Authority Discovery
 
-Per Tor Directory Spec: A relay appears in the consensus if **at least half (majority)** of authorities vote for it.
-- With 9 authorities: **5 votes required** (⌊9/2⌋ + 1 = 5)
-- `in_consensus = vote_count >= 5`
+Authority list is **NOT hardcoded** - discovered from Onionoo API by finding relays with "Authority" flag.
 
-### Data Flow
+```python
+# During Onionoo processing - extract authorities dynamically
+def _discover_authorities(relays: list) -> list:
+    """
+    Discover directory authorities from relay list.
+    Returns list of authority relay dicts with fingerprints, nicknames, IPs.
+    """
+    authorities = [
+        {
+            'fingerprint': r['fingerprint'],
+            'nickname': r['nickname'],
+            'address': r.get('or_addresses', [''])[0].split(':')[0],
+            'dir_port': r.get('dir_address', '').split(':')[-1] or '80',
+            'is_bw_authority': 'V2Dir' in r.get('flags', []),  # Heuristic
+        }
+        for r in relays 
+        if 'Authority' in r.get('flags', [])
+    ]
+    return authorities
+```
+
+### Consensus Voting Requirement (Dynamic)
+
+Calculated based on discovered authority count - displayed as **tooltip** on relay pages.
+
+```python
+def calculate_consensus_requirement(authority_count: int) -> dict:
+    """
+    Calculate majority required for consensus.
+    Formula: floor(authority_count / 2) + 1
+    """
+    majority = (authority_count // 2) + 1
+    return {
+        'authority_count': authority_count,
+        'majority_required': majority,
+        'tooltip': f"Consensus requires majority: {majority}/{authority_count} ({authority_count}÷2+1={majority})"
+    }
+
+# Examples:
+# 9 authorities → 5 required (current)
+# 10 authorities → 6 required
+# 8 authorities → 5 required
+```
+
+### Data Flow (Two-Phase: Onionoo THEN CollecTor)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        HOURLY EXECUTION                             │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
+│  PHASE 1: Parallel API Fetch (existing threads)                     │
 │  Coordinator.fetch_all_apis_threaded()                              │
-│  ├── Thread: fetch_onionoo_details()          (existing)            │
-│  ├── Thread: fetch_onionoo_uptime()           (existing)            │
-│  ├── Thread: fetch_onionoo_bandwidth()        (existing)            │
-│  ├── Thread: fetch_aroi_validation()          (existing)            │
-│  └── Thread: fetch_collector_consensus_data() (NEW)                 │
+│  ├── Thread: fetch_onionoo_details()          (existing) ──┐        │
+│  ├── Thread: fetch_onionoo_uptime()           (existing)   │        │
+│  ├── Thread: fetch_onionoo_bandwidth()        (existing)   │        │
+│  └── Thread: fetch_aroi_validation()          (existing)   │        │
+│                                                             │        │
+│       ↓ Onionoo details completes                          │        │
+│                                                             ▼        │
+│  PHASE 2: Extract authorities, then fetch CollecTor        │        │
+│  ┌─────────────────────────────────────────────────────────┤        │
+│  │  authorities = _discover_authorities(onionoo_relays)    │        │
+│  │  consensus_req = calculate_consensus_requirement(len)   │        │
+│  │                                                         │        │
+│  │  collector_data = fetch_collector_consensus_data(       │        │
+│  │      authorities=authorities  # Pass discovered list    │        │
+│  │  )                                                      │        │
+│  └─────────────────────────────────────────────────────────┘        │
 │                                                                     │
-│       All threads complete (~60 seconds total)                      │
-│       ↓                                                             │
+│       ↓ All data available                                          │
 │                                                                     │
 │  Coordinator.create_relay_set():                                    │
-│       ├── setattr(relay_set, 'collector_data', ...)                │
+│       ├── relay_set.authorities = authorities              (NEW)   │
+│       ├── relay_set.consensus_requirement = consensus_req  (NEW)   │
 │       ├── relay_set._reprocess_uptime_data()      (existing)       │
 │       ├── relay_set._reprocess_bandwidth_data()   (existing)       │
-│       └── relay_set._reprocess_collector_data()   (NEW - NO NEW LOOP)│
+│       └── relay_set._reprocess_collector_data()   (NEW)            │
 │                                                                     │
 │       ↓                                                             │
 │                                                                     │
 │  Page Generation (parallel via mp_workers)                          │
 │  ├── relay-info.html × 7000   → Uses relay['collector_diagnostics'] │
-│  └── misc-authorities.html    → Uses relay_set.collector_data       │
+│  │                              + consensus_requirement for tooltip │
+│  └── misc-authorities.html    → Uses relay_set.authorities          │
+│                                 (dynamic, not hardcoded)            │
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -637,6 +693,38 @@ if collector_data:
 ```python
 # lib/relays.py - ADD METHOD (follows _reprocess_uptime_data pattern)
 
+def _discover_authorities(self):
+    """
+    Discover directory authorities from relay list (dynamic, not hardcoded).
+    Called during preprocessing, before CollecTor fetch.
+    """
+    authorities = []
+    for relay in self.json.get("relays", []):
+        if 'Authority' in relay.get('flags', []):
+            authorities.append({
+                'fingerprint': relay['fingerprint'],
+                'nickname': relay.get('nickname', ''),
+                'address': relay.get('or_addresses', [''])[0].split(':')[0] if relay.get('or_addresses') else '',
+                'dir_address': relay.get('dir_address', ''),
+            })
+    
+    # Calculate consensus requirement based on discovered count
+    authority_count = len(authorities)
+    majority_required = (authority_count // 2) + 1
+    
+    self.authorities = authorities
+    self.consensus_requirement = {
+        'authority_count': authority_count,
+        'majority_required': majority_required,
+        'tooltip': f"Consensus requires majority: {majority_required}/{authority_count} ({authority_count}÷2+1={majority_required})"
+    }
+    
+    if self.progress:
+        self._log_progress(f"Discovered {authority_count} directory authorities from Onionoo")
+    
+    return authorities
+
+
 def _reprocess_collector_data(self):
     """
     Process CollecTor data for per-relay consensus diagnostics.
@@ -646,9 +734,15 @@ def _reprocess_collector_data(self):
     
     EFFICIENCY: Single pass through relays, O(1) lookup per relay.
     NO NEW LOOPS - integrates with existing relay processing.
+    
+    DYNAMIC: Uses discovered authorities list, not hardcoded.
     """
     if not hasattr(self, 'collector_data') or not self.collector_data:
         return
+    
+    # Get dynamic authority list (discovered from Onionoo)
+    if not hasattr(self, 'authorities'):
+        self._discover_authorities()
     
     relay_index = self.collector_data.get('relay_index', {})
     flag_thresholds = self.collector_data.get('flag_thresholds', {})
@@ -663,14 +757,15 @@ def _reprocess_collector_data(self):
         
         if fingerprint in relay_index:
             indexed_data = relay_index[fingerprint]
-            vote_count = len(indexed_data.get('votes', {}))
             
-            # Attach pre-formatted diagnostics for template use
+            # Pass dynamic authorities and consensus requirement
             relay['collector_diagnostics'] = format_relay_diagnostics(
                 fingerprint=fingerprint,
                 indexed_data=indexed_data,
                 flag_thresholds=flag_thresholds,
                 fetched_at=fetched_at,
+                authorities=self.authorities,  # Dynamic list
+                consensus_requirement=self.consensus_requirement,  # Dynamic calculation
             )
         else:
             # Relay not in any authority vote (new relay or offline)
@@ -688,13 +783,16 @@ def _reprocess_collector_data(self):
 """
 Format CollecTor data for template display.
 Keeps formatting logic separate from fetching/parsing.
+
+NOTE: Authority list is DYNAMIC - passed in from Onionoo discovery, not hardcoded.
 """
 
 from typing import Dict, List, Optional
 
 
-# Authority fingerprints for linking to relay pages
-AUTHORITY_FINGERPRINTS = {
+# These are used as FALLBACK only if dynamic discovery fails
+# Primary source is Onionoo API (relays with "Authority" flag)
+FALLBACK_AUTHORITY_FINGERPRINTS = {
     'moria1': '9695DFC35FFEB861329B9F1AB04C46397020CE31',
     'tor26': '847B1F850344D7876491A54892F904934E4EB85D',
     'dizum': '7EA6EAD6FD83083C538F44038BBFA077587DD755',
@@ -706,15 +804,12 @@ AUTHORITY_FINGERPRINTS = {
     'faravahar': 'EFCBE720AB3A82B99F9E953CD5BF50F7EEFC7B97',
 }
 
-# Which authorities run bandwidth scanners (7 of 9)
-BANDWIDTH_AUTHORITIES = ['moria1', 'tor26', 'gabelmoo', 'bastet', 'longclaw', 'faravahar', 'maatuska']
+# Known bandwidth authority nicknames (used to identify BW authorities from dynamic list)
+# This is a static list because running sbws is a configuration choice, not detectable from flags
+KNOWN_BW_AUTHORITY_NICKNAMES = {'moria1', 'tor26', 'gabelmoo', 'bastet', 'longclaw', 'faravahar', 'maatuska'}
 
-# Which authorities test IPv6 reachability (5 of 9)
-IPV6_TESTING_AUTHORITIES = ['moria1', 'gabelmoo', 'dannenberg', 'maatuska', 'bastet']
-
-# All authorities in display order
-ALL_AUTHORITIES = ['moria1', 'tor26', 'dizum', 'gabelmoo', 'bastet', 
-                   'dannenberg', 'maatuska', 'longclaw', 'faravahar']
+# Known IPv6 testing authorities (detectable by presence of ReachableIPv6 flag in their votes)
+KNOWN_IPV6_TESTING_NICKNAMES = {'moria1', 'gabelmoo', 'dannenberg', 'maatuska', 'bastet'}
 
 
 def format_relay_diagnostics(
@@ -722,6 +817,8 @@ def format_relay_diagnostics(
     indexed_data: Dict,
     flag_thresholds: Dict,
     fetched_at: str,
+    authorities: List[Dict],  # Dynamic list from Onionoo discovery
+    consensus_requirement: Dict,  # {authority_count, majority_required, tooltip}
 ) -> Dict:
     """
     Format indexed CollecTor data for template display.
@@ -729,19 +826,35 @@ def format_relay_diagnostics(
     Called once per relay during _reprocess_collector_data().
     Returns dict suitable for Jinja2 template with:
     - Combined authority votes & bandwidth (single table)
-    - Authority names linked via fingerprint
+    - Authority names linked via fingerprint (from dynamic list)
     - Color-coded flag eligibility (no checkmarks)
+    - Consensus requirement as tooltip (dynamic based on authority count)
+    
+    Args:
+        fingerprint: Relay fingerprint
+        indexed_data: Pre-indexed CollecTor data for this relay
+        flag_thresholds: Per-authority flag thresholds
+        fetched_at: Timestamp of CollecTor data
+        authorities: Dynamic list of authorities from Onionoo discovery
+        consensus_requirement: {authority_count, majority_required, tooltip}
     """
     votes = indexed_data.get('votes', {})
     bandwidth = indexed_data.get('bandwidth', {})
     vote_count = len(votes)
     
-    # Consensus requires majority (5/9)
-    in_consensus = vote_count >= 5
+    # Consensus requires majority - DYNAMIC based on discovered authority count
+    authority_count = consensus_requirement.get('authority_count', len(authorities))
+    majority_required = consensus_requirement.get('majority_required', (authority_count // 2) + 1)
+    in_consensus = vote_count >= majority_required
+    
+    # Build authority lookup from dynamic list
+    auth_by_nickname = {a['nickname']: a for a in authorities}
+    auth_by_fingerprint = {a['fingerprint']: a for a in authorities}
     
     # Collect bandwidth values for deviation calculation
     bw_values = []
-    for auth_name in BANDWIDTH_AUTHORITIES:
+    for auth in authorities:
+        auth_name = auth['nickname']
         if auth_name in bandwidth:
             bw_values.append(bandwidth[auth_name].get('bandwidth', 0))
     avg_bw = sum(bw_values) / len(bw_values) if bw_values else 0
@@ -751,13 +864,18 @@ def format_relay_diagnostics(
     all_flags = set()
     issues = []
     
-    for auth_name in ALL_AUTHORITIES:
-        is_bw_authority = auth_name in BANDWIDTH_AUTHORITIES
-        tests_ipv6 = auth_name in IPV6_TESTING_AUTHORITIES
+    # Use dynamic authority list instead of hardcoded
+    for auth in authorities:
+        auth_name = auth['nickname']
+        auth_fingerprint = auth['fingerprint']
+        
+        # Check if this authority runs bandwidth scanner
+        is_bw_authority = auth_name in KNOWN_BW_AUTHORITY_NICKNAMES
+        tests_ipv6 = auth_name in KNOWN_IPV6_TESTING_NICKNAMES
         
         auth_data = {
             'authority': auth_name,
-            'fingerprint': AUTHORITY_FINGERPRINTS.get(auth_name, ''),  # For linking
+            'fingerprint': auth_fingerprint,  # From dynamic discovery
             'is_bw_authority': is_bw_authority,
             'tests_ipv6': tests_ipv6,
         }
@@ -823,7 +941,9 @@ def format_relay_diagnostics(
         'fingerprint': fingerprint,
         'in_consensus': in_consensus,
         'vote_count': vote_count,
-        'total_authorities': 9,
+        'authority_count': authority_count,  # Dynamic, not hardcoded 9
+        'majority_required': majority_required,  # Dynamic (authority_count // 2 + 1)
+        'consensus_tooltip': consensus_requirement.get('tooltip', ''),  # For hover
         'authority_votes': authority_votes,  # Combined votes + bandwidth
         'current_flags': list(all_flags),
         'issues': issues if issues else None,
@@ -926,12 +1046,18 @@ def _get_median_thresholds(flag_thresholds: Dict) -> Dict:
   {# Combined Authority Votes & Bandwidth (single table) #}
   <h4>Authority Votes & Bandwidth</h4>
   <p>
-    {% if relay.collector_diagnostics.in_consensus %}
-      <span class="status-ok">IN CONSENSUS</span>
-    {% else %}
-      <span class="status-warn">NOT IN CONSENSUS</span>
-    {% endif %}
-    ({{ relay.collector_diagnostics.vote_count }}/9 authorities)
+    {# Consensus status with dynamic tooltip explaining majority requirement #}
+    <span class="consensus-status 
+                 {% if relay.collector_diagnostics.in_consensus %}status-ok{% else %}status-warn{% endif %}"
+          title="{{ relay.collector_diagnostics.consensus_tooltip }}">
+      {% if relay.collector_diagnostics.in_consensus %}
+        IN CONSENSUS
+      {% else %}
+        NOT IN CONSENSUS
+      {% endif %}
+      ({{ relay.collector_diagnostics.vote_count }}/{{ relay.collector_diagnostics.authority_count }} authorities)
+    </span>
+    <span class="tooltip-hint" title="{{ relay.collector_diagnostics.consensus_tooltip }}">ⓘ</span>
   </p>
   
   <table class="authority-table">
@@ -1271,24 +1397,26 @@ def check_authorities_sync() -> Dict:
 
 ### 2.2 Authority Dashboard Template
 
-**Important**: Flag thresholds are **unique per authority** - each calculates based on the relays it observes. Must show as columns, not single values.
+**Important**: 
+- Authority list is **DYNAMIC** - discovered from Onionoo (relays with "Authority" flag)
+- Flag thresholds are **unique per authority** - shown as columns by default (not expandable)
 
 ```jinja2
-{# templates/misc-authorities.html - Enhanced dashboard #}
+{# templates/misc-authorities.html - Enhanced dashboard with dynamic authorities #}
 
 <section class="authority-dashboard">
-  <h2>🏛️ Directory Authorities</h2>
+  <h2>🏛️ Directory Authorities ({{ authorities|length }} discovered)</h2>
   
   {# Consensus status bar #}
-  <div class="consensus-status">
+  <div class="consensus-status-bar">
     <span class="status-{{ consensus.freshness }}">
       {% if consensus.freshness == 'fresh' %}✅ FRESH{% else %}⚠️ {{ consensus.freshness|upper }}{% endif %}
     </span>
-    │ {{ authorities|selectattr('voted')|list|length }}/9 Voted
+    │ {{ authorities|selectattr('voted')|list|length }}/{{ authorities|length }} Voted
     │ Next: {{ consensus.next_consensus_time }} ({{ consensus.minutes_until_next }} min)
   </div>
   
-  {# Authority table with per-authority thresholds #}
+  {# Authority table with ALL threshold columns shown by default #}
   <table class="authority-table">
     <thead>
       <tr>
@@ -1297,16 +1425,25 @@ def check_authorities_sync() -> Dict:
         <th>Vote</th>
         <th>BW Auth</th>
         <th>Latency</th>
-        <th>Uptime</th>
         <th>Relays</th>
-        <th title="Guard bandwidth threshold (varies per authority)">Guard BW</th>
-        <th title="Stable uptime threshold (varies per authority)">Stable</th>
+        {# Threshold columns - shown by default, not expandable #}
+        <th title="Guard bandwidth threshold (guard-bw-inc-exits)">Guard BW</th>
+        <th title="Stable uptime threshold (stable-uptime)">Stable</th>
+        <th title="Fast speed threshold (fast-speed)">Fast</th>
+        <th title="Weighted Fractional Uptime (guard-wfu)">WFU</th>
       </tr>
     </thead>
     <tbody>
+    {# Loop over dynamic authority list (from Onionoo discovery) #}
     {% for auth in authorities %}
       <tr class="status-{{ auth.health_status }}">
-        <td>{{ auth.name }}</td>
+        {# Authority name links to relay page #}
+        <td>
+          <a href="{{ path_prefix }}relay/{{ auth.fingerprint }}.html"
+             title="View {{ auth.nickname }} relay details">
+            {{ auth.nickname }}
+          </a>
+        </td>
         <td>
           {% if auth.health_status == 'ok' %}🟢 OK
           {% elif auth.health_status == 'slow' %}🟡 SLOW
@@ -1314,16 +1451,23 @@ def check_authorities_sync() -> Dict:
         </td>
         <td>{% if auth.voted %}✅{% else %}❌{% endif %}</td>
         <td>{% if auth.is_bw_authority %}✅{% else %}❌{% endif %}</td>
-        <td>{{ auth.latency_ms|default('—') }}ms</td>
-        <td>{{ auth.uptime_pct|default('—') }}%</td>
+        <td>{{ auth.latency_ms|default('—') }} ms</td>
         <td>{{ auth.relay_count|default('—')|format_number }}</td>
-        {# Per-authority thresholds - UNIQUE values #}
-        <td title="guard-bw-inc-exits">{{ auth.thresholds.guard_bw|format_bandwidth }}</td>
-        <td title="stable-uptime">{{ auth.thresholds.stable_uptime|format_days }}</td>
+        {# Per-authority thresholds - ALL columns shown by default #}
+        <td>{{ auth.thresholds.guard_bw|format_bandwidth }}</td>
+        <td>{{ auth.thresholds.stable_uptime|format_days }}</td>
+        <td>{{ auth.thresholds.fast_speed|format_bandwidth }}</td>
+        <td>{{ auth.thresholds.wfu|format_percent }}</td>
       </tr>
     {% endfor %}
     </tbody>
   </table>
+  
+  {# Legend #}
+  <p class="table-legend">
+    ↗ Authority names link to their relay page │ 
+    Thresholds vary per authority (each calculates based on relays it observes)
+  </p>
   
   {# Alerts #}
   {% if alerts %}
@@ -1333,14 +1477,6 @@ def check_authorities_sync() -> Dict:
     {% endfor %}
   </div>
   {% endif %}
-  
-  {# Threshold ranges summary (computed from per-authority values) #}
-  <div class="threshold-summary">
-    Threshold Ranges: 
-    Guard BW {{ thresholds.guard_bw.min|format_bandwidth }}-{{ thresholds.guard_bw.max|format_bandwidth }} │
-    Stable {{ thresholds.stable.min|format_days }}-{{ thresholds.stable.max|format_days }} │
-    WFU ≥{{ thresholds.wfu }}%
-  </div>
   
   {# Network flag distribution #}
   <div class="flag-distribution">
