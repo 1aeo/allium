@@ -2,7 +2,8 @@
 
 **Status**: 📋 Ready for Implementation  
 **Dependencies**: Multi-API Architecture (Phase 1 complete)  
-**Estimated Effort**: 8-10 weeks
+**Data Scope**: Most recent CollecTor data only (latest hour) - NO historical parsing  
+**Estimated Effort**: 6-7 weeks (Milestone 1: 4 weeks, Milestone 2: 2-3 weeks)
 
 ---
 
@@ -2606,27 +2607,30 @@ def get_authority_health() -> Dict:
 
 ## Deployment Checklist
 
-### Milestone 1: Per-Relay Diagnostics (Phases 1-4)
+**Data Scope**: Most recent CollecTor data only - NO historical parsing
+
+### Milestone 1: Per-Relay Diagnostics (Phases 1-3) - 4 Weeks
 
 #### Sprint 1: Core Infrastructure
 - [ ] Create `lib/consensus/` directory structure
 - [ ] Implement `collector.py` - CollecTor configuration
 - [ ] Implement `authorities.py` - Authority configuration and fingerprint mapping
-- [ ] Implement `collector_fetcher.py` - Main data fetcher from CollecTor
+- [ ] Implement `collector_fetcher.py` - Fetch latest votes + bandwidth from CollecTor
 
 #### Sprint 2: Worker Integration  
 - [ ] Add `fetch_collector_data()` to `lib/workers.py`
 - [ ] Add `get_relay_diagnostics()` lookup function
-- [ ] Implement caching strategy for CollecTor data
+- [ ] Implement hourly caching (latest data only)
 - [ ] Test worker with multi-API coordinator
 
-#### Sprint 3-4: Template Updates
+#### Sprint 3: Template Updates
 - [ ] Update `relay-info.html` with Consensus Diagnostics section
-- [ ] Add all 4 phases (Votes, Eligibility, Reachability, Bandwidth)
-- [ ] Add CSS styles for diagnostic components
-- [ ] Add Jinja2 filters for formatting (`format_bandwidth`, `format_metric`, `timeago`)
+- [ ] Add Phase 1 (Votes & Reachability - merged)
+- [ ] Add Phase 2 (Flag Eligibility)
+- [ ] Add Phase 3 (Bandwidth Measurements with deviation coloring)
+- [ ] Add CSS styles and Jinja2 filters
 
-#### Sprint 5: Testing
+#### Sprint 4: Testing
 - [ ] Unit tests for `CollectorFetcher` parsing
 - [ ] Unit tests for per-relay analysis functions
 - [ ] Integration test with real CollecTor data
@@ -2634,31 +2638,30 @@ def get_authority_health() -> Dict:
 
 ---
 
-### Milestone 2: Authority Health Dashboard (Phases 5-6)
+### Milestone 2: Authority Dashboard Enhancement (Phase 4) - 2-3 Weeks
 
-#### Sprint 6-7: Real-Time Authority Monitoring
+#### Sprint 5: Authority Health Data
 - [ ] Implement `authority_monitor.py` - Async HTTP latency checks
-- [ ] Implement `authority_alerts.py` - Alert generation system
-- [ ] Add `fetch_authority_health()` worker function
-- [ ] Integrate with existing `misc-authorities.html`
-
-#### Sprint 8: Consensus & Voting Analysis
-- [ ] Implement `consensus_analyzer.py` - Parse consensus documents
+- [ ] Implement `authority_alerts.py` - Simple alert generation
 - [ ] Add consensus freshness indicators
-- [ ] Add voting participation tracking
-- [ ] Display flag distribution from consensus
+- [ ] Add voting participation count
 
-#### Sprint 9: Dashboard & Alerts
-- [ ] Create `misc-authorities-health.html` dashboard template
-- [ ] Add alert display and history
-- [ ] Add auto-refresh functionality
-- [ ] Create troubleshooting wizard page (optional)
+#### Sprint 6: Enhanced misc-authorities.html
+- [ ] Add authority status table with latency
+- [ ] Add flag thresholds display
+- [ ] Add flag distribution bars
+- [ ] Add simple alert display
 
-#### Sprint 10: Historical Analytics (Optional)
-- [ ] Set up historical data storage
-- [ ] Implement trend graphs (7-day, 30-day)
-- [ ] Add performance scorecard calculations
-- [ ] Document all features
+---
+
+### NOT IN SCOPE (Future - Requires Historical Data)
+
+The following are explicitly **not implemented** in this plan:
+- [ ] Historical trend graphs (7-day, 30-day)
+- [ ] Authority performance scorecards
+- [ ] Voting participation history
+- [ ] Troubleshooting wizard page
+- [ ] Any feature requiring data storage beyond latest hour
 
 ---
 
@@ -2685,14 +2688,16 @@ def get_authority_health() -> Dict:
 ---
 
 **Document Status**: Technical specification complete  
+**Data Scope**: Most recent CollecTor data only (latest hour) - NO historical parsing  
 **Primary Data Source**: Tor Project CollecTor (https://collector.torproject.org)  
 **Merged From**: TOP_10_PRIORITIZED_FEATURES.md Feature #4 (Directory Authority Health Dashboard)
 
-### Feature Summary
+### Implementation Summary
 
 | Milestone | Target | Phases | Timeline |
 |-----------|--------|--------|----------|
-| **Milestone 1** | Per-relay detail pages (`relay-info.html`) | 1-4 | 5 weeks |
-| **Milestone 2** | Authority health dashboard (`misc-authorities-health.html`) | 5-6 | 4-6 weeks |
+| **Milestone 1** | Per-relay diagnostics (`relay-info.html`) | 1-3 | 4 weeks |
+| **Milestone 2** | Authority dashboard (`misc-authorities.html`) | 4 | 2-3 weeks |
 
-**Next Steps**: Implementation review and Sprint 1 kickoff
+**Total Effort**: 6-7 weeks  
+**Next Steps**: Sprint 1 - Core Infrastructure
