@@ -116,6 +116,12 @@ Add consensus troubleshooting features to Allium using CollecTor as the primary 
 
 ## ⚡ Compute Efficiency Design
 
+### Consensus Voting Requirement
+
+Per Tor Directory Spec: A relay appears in the consensus if **at least half (majority)** of authorities vote for it.
+- With 9 authorities: **5 votes required** (⌊9/2⌋ + 1 = 5)
+- `in_consensus = vote_count >= 5`
+
 ### Data Flow (Minimizing Hourly Compute)
 
 ```
@@ -123,22 +129,16 @@ Add consensus troubleshooting features to Allium using CollecTor as the primary 
 │                    HOURLY DATA FETCH (ONCE)                        │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
-│  CollecTor API                                                      │
+│  CollecTor API (runs in parallel with other workers)               │
 │  ├─ GET /recent/relay-descriptors/votes/      (~50MB, 9 files)     │
 │  └─ GET /recent/relay-descriptors/bandwidths/ (~50MB, 7 files)     │
 │                                                                     │
-│         ↓ Parse ONCE                                                │
+│         ↓ Parse ONCE, Index by fingerprint                         │
 │                                                                     │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │              RELAY INDEX (built once, O(1) lookup)          │   │
-│  │                                                              │   │
-│  │  relay_index[fingerprint] = {                               │   │
-│  │      'votes': {auth_name: {flags, bandwidth, ...}},         │   │
-│  │      'bandwidth': {auth_name: {bw_value, ...}}              │   │
-│  │  }                                                           │   │
-│  │                                                              │   │
-│  │  ~7,000 relays indexed                                       │   │
-│  └─────────────────────────────────────────────────────────────┘   │
+│  relay_index[fingerprint] = {                                       │
+│      'votes': {auth_name: {flags, bandwidth, ...}},                │
+│      'bandwidth': {auth_name: {bw_value, ...}}                     │
+│  }                                                                  │
 │                                                                     │
 │         ↓ Cache to disk                                             │
 │                                                                     │
@@ -147,13 +147,42 @@ Add consensus troubleshooting features to Allium using CollecTor as the primary 
 └─────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────┐
-│                    PAGE GENERATION (per relay)                      │
+│  INTEGRATION: Uses EXISTING relay loops (NO new loops)             │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
-│  get_relay_diagnostics(fingerprint):                                │
-│      return relay_index[fingerprint]  # O(1) lookup, no parsing    │
+│  coordinator.create_relay_set():                                    │
+│      relay_set.collector_data = {...}  # Attach indexed data       │
+│                                                                     │
+│  relays._reprocess_collector_data():  # NEW - follows existing     │
+│      # Called from coordinator AFTER collector_data is attached    │
+│      # Single pass through relays, like _reprocess_uptime_data()   │
+│      for relay in self.json["relays"]:                             │
+│          fp = relay['fingerprint']                                  │
+│          relay['collector_diagnostics'] = index.get(fp)  # O(1)    │
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
+```
+
+### Modular Architecture (follows existing patterns)
+
+```
+lib/consensus/                        # NEW MODULE
+├── __init__.py                       # Module init, exports
+├── collector_fetcher.py              # CollectorFetcher class (fetch + parse)
+├── authority_monitor.py              # Authority latency checks (Phase 2)
+└── diagnostics.py                    # Per-relay diagnostic formatting
+
+lib/workers.py                        # MODIFY (add worker function)
+├── fetch_collector_consensus_data()  # Follows fetch_onionoo_uptime() pattern
+
+lib/coordinator.py                    # MODIFY (add to api_workers)
+├── api_workers.append(...)           # Add collector worker
+├── get_collector_consensus_data()    # Getter method
+└── create_relay_set()                # Attach + trigger reprocess
+
+lib/relays.py                         # MODIFY (add reprocess method)
+├── _reprocess_collector_data()       # Follows _reprocess_uptime_data() pattern
+└── (NO NEW LOOPS - uses existing preprocessing)
 ```
 
 ### Key Efficiency Principles
@@ -162,48 +191,48 @@ Add consensus troubleshooting features to Allium using CollecTor as the primary 
 |-----------|----------------|
 | **Fetch once, use many** | CollecTor data fetched once/hour, indexed, cached |
 | **Parallel fetching** | Uses existing `Coordinator.fetch_all_apis_threaded()` pattern |
-| **Index by fingerprint** | O(1) lookup during page generation, no per-relay parsing |
-| **No re-parsing** | Index built once after fetch, persisted to cache |
+| **NO new relay loops** | `_reprocess_collector_data()` follows `_reprocess_uptime_data()` pattern |
+| **Index by fingerprint** | O(1) lookup during reprocessing, no per-relay parsing |
 | **Graceful degradation** | If fetch fails, use cached data (up to 3 hours old) |
 
-### Integration with Existing Architecture
+### Integration with Existing Relay Processing
 
 ```python
-# In lib/workers.py - NEW WORKER (follows existing pattern)
-def fetch_collector_consensus_data(progress_logger=None):
+# lib/relays.py - NEW METHOD (follows _reprocess_uptime_data pattern)
+def _reprocess_collector_data(self):
     """
-    Fetch votes + bandwidth from CollecTor.
-    Runs in parallel with other API workers via Coordinator.
+    Process CollecTor data for per-relay diagnostics.
+    
+    Called from coordinator AFTER collector_data is attached.
+    Follows same pattern as _reprocess_uptime_data() and _reprocess_bandwidth_data().
+    
+    NO NEW LOOPS - attaches pre-indexed data to relays in single pass.
     """
-    api_name = "collector_consensus"
+    if not hasattr(self, 'collector_data') or not self.collector_data:
+        return
     
-    # Check cache age - only fetch if older than 1 hour
-    cache_age = _cache_manager.get_cache_age(api_name)
-    if cache_age and cache_age < 3600:
-        return _load_cache(api_name)
+    relay_index = self.collector_data.get('relay_index', {})
+    flag_thresholds = self.collector_data.get('flag_thresholds', {})
     
-    # Fetch from CollecTor (parallel HTTP requests for 9 votes + 7 bw files)
-    votes = _fetch_collector_votes()        # ~5-10 sec
-    bandwidth = _fetch_collector_bandwidth() # ~3-5 sec
-    
-    # Build relay index ONCE
-    relay_index = _build_relay_index(votes, bandwidth)
-    
-    # Cache the indexed data
-    data = {
-        'votes': votes,
-        'bandwidth': bandwidth,
-        'relay_index': relay_index,
-        'flag_thresholds': _extract_thresholds(votes),
-        'fetched_at': time.time()
-    }
-    _save_cache(api_name, data)
-    _mark_ready(api_name)
-    
-    return data
+    # Single pass through relays (same loop pattern as _reprocess_uptime_data)
+    for relay in self.json["relays"]:
+        fingerprint = relay.get('fingerprint', '')
+        
+        if fingerprint in relay_index:
+            indexed_data = relay_index[fingerprint]
+            relay['collector_diagnostics'] = {
+                'vote_count': len(indexed_data.get('votes', {})),
+                'in_consensus': len(indexed_data.get('votes', {})) >= 5,  # Majority
+                'authority_votes': indexed_data.get('votes', {}),
+                'bandwidth_measurements': indexed_data.get('bandwidth', {}),
+            }
+        else:
+            relay['collector_diagnostics'] = None
 
-# In lib/coordinator.py - ADD TO api_workers LIST
-self.api_workers.append(("collector_consensus", fetch_collector_consensus_data, [self._log_progress]))
+# lib/coordinator.py - MODIFY create_relay_set() (around line 275)
+# Add after existing reprocess calls:
+if collector_data:
+    relay_set._reprocess_collector_data()
 ```
 
 ---
@@ -213,16 +242,32 @@ self.api_workers.append(("collector_consensus", fetch_collector_consensus_data, 
 ### Baseline Validation (Before Starting)
 
 ```bash
-# Run BEFORE any code changes - save baseline output
+#!/bin/bash
+# scripts/capture_baseline.sh - Run BEFORE any code changes
+
 cd /workspace/allium
+
+echo "=== Step 1: Capture baseline output ==="
 python allium.py --progress --output-dir baseline_output/ 2>&1 | tee baseline_run.log
 
-# Save file list and checksums for comparison
+echo "=== Step 2: Save file inventory ==="
 find baseline_output/ -type f -name "*.html" | sort > baseline_files.txt
-md5sum baseline_output/**/*.html > baseline_checksums.txt
+wc -l baseline_files.txt
 
-# Run existing test suite
+echo "=== Step 3: Create normalized baseline (remove timestamps) ==="
+# Strip timestamps for diff comparison
+mkdir -p baseline_normalized/
+for f in $(find baseline_output/ -name "*.html"); do
+    # Remove dynamic content: timestamps, generation dates
+    sed -E 's/[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}/TIMESTAMP/g' "$f" | \
+    sed -E 's/Generated: .*/Generated: TIMESTAMP/g' > \
+    "baseline_normalized/$(basename $f)"
+done
+
+echo "=== Step 4: Run existing test suite ==="
 pytest tests/ -v 2>&1 | tee baseline_tests.log
+
+echo "=== Baseline captured ==="
 ```
 
 ### Unit Test Requirements
@@ -242,10 +287,68 @@ pytest tests/test_<new_file>.py -v
 # After EACH week/milestone:
 pytest tests/ -v
 
-# After EACH phase:
+# After EACH phase - full validation:
+./scripts/validate_phase.sh
+```
+
+### Baseline Diff Comparison Script
+
+```bash
+#!/bin/bash
+# scripts/validate_phase.sh - Run after each phase
+
+cd /workspace/allium
+
+echo "=== Step 1: Generate current output ==="
+python allium.py --progress --output-dir current_output/ 2>&1 | tee current_run.log
+
+echo "=== Step 2: Normalize current output (remove timestamps) ==="
+mkdir -p current_normalized/
+for f in $(find current_output/ -name "*.html"); do
+    sed -E 's/[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}/TIMESTAMP/g' "$f" | \
+    sed -E 's/Generated: .*/Generated: TIMESTAMP/g' > \
+    "current_normalized/$(basename $f)"
+done
+
+echo "=== Step 3: Run full test suite ==="
 pytest tests/ -v
-python allium.py --progress --output-dir phase_output/
-diff -r baseline_output/ phase_output/ --brief | grep -v "new_feature"
+TEST_RESULT=$?
+
+echo "=== Step 4: Compare to baseline (excluding new sections) ==="
+# Full diff showing ALL changes
+diff -r baseline_normalized/ current_normalized/ \
+    --exclude="*.log" \
+    > full_diff.txt 2>&1
+
+# Count changes by type
+echo ""
+echo "=== DIFF SUMMARY ==="
+echo "Files only in baseline: $(grep -c 'Only in baseline' full_diff.txt || echo 0)"
+echo "Files only in current:  $(grep -c 'Only in current' full_diff.txt || echo 0)"
+echo "Files that differ:      $(grep -c 'differ$' full_diff.txt || echo 0)"
+
+echo ""
+echo "=== EXPECTED NEW SECTIONS (should appear in diff) ==="
+grep -l "Consensus Diagnostics" current_output/relay/*.html 2>/dev/null | wc -l
+echo "relay pages with new Consensus Diagnostics section"
+
+echo ""
+echo "=== UNEXPECTED CHANGES (review these!) ==="
+# Show changes that are NOT the new feature sections
+diff -r baseline_normalized/ current_normalized/ \
+    --exclude="*.log" | \
+    grep -v "Consensus Diagnostics" | \
+    grep -v "Authority Votes" | \
+    grep -v "Flag Eligibility" | \
+    grep -v "Bandwidth Measurements" | \
+    grep -v "Flag Thresholds" | \
+    head -50
+
+echo ""
+echo "=== Full diff saved to: full_diff.txt ==="
+echo "=== Test result: $TEST_RESULT ==="
+
+exit $TEST_RESULT
 ```
 
 ---

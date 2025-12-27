@@ -8,32 +8,63 @@
 
 ## Architecture Overview
 
+### Consensus Voting Requirement
+
+Per Tor Directory Spec: A relay appears in the consensus if **at least half (majority)** of authorities vote for it.
+- With 9 authorities: **5 votes required** (⌊9/2⌋ + 1 = 5)
+- `in_consensus = vote_count >= 5`
+
+### Data Flow
+
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        HOURLY EXECUTION                             │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
 │  Coordinator.fetch_all_apis_threaded()                              │
-│  ├── Thread: fetch_onionoo_details()     (existing)                 │
-│  ├── Thread: fetch_onionoo_uptime()      (existing)                 │
-│  ├── Thread: fetch_onionoo_bandwidth()   (existing)                 │
-│  ├── Thread: fetch_aroi_validation()     (existing)                 │
-│  └── Thread: fetch_collector_consensus() (NEW - this feature)       │
+│  ├── Thread: fetch_onionoo_details()          (existing)            │
+│  ├── Thread: fetch_onionoo_uptime()           (existing)            │
+│  ├── Thread: fetch_onionoo_bandwidth()        (existing)            │
+│  ├── Thread: fetch_aroi_validation()          (existing)            │
+│  └── Thread: fetch_collector_consensus_data() (NEW)                 │
 │                                                                     │
 │       All threads complete (~60 seconds total)                      │
 │       ↓                                                             │
 │                                                                     │
-│  relay_set = Coordinator.create_relay_set()                         │
-│       │                                                             │
-│       ├── relay_set.collector_data = {...}  # Indexed by fingerprint│
-│       │                                                             │
+│  Coordinator.create_relay_set():                                    │
+│       ├── setattr(relay_set, 'collector_data', ...)                │
+│       ├── relay_set._reprocess_uptime_data()      (existing)       │
+│       ├── relay_set._reprocess_bandwidth_data()   (existing)       │
+│       └── relay_set._reprocess_collector_data()   (NEW - NO NEW LOOP)│
+│                                                                     │
 │       ↓                                                             │
 │                                                                     │
 │  Page Generation (parallel via mp_workers)                          │
-│  ├── relay-info.html × 7000   → O(1) lookup per relay              │
-│  └── misc-authorities.html    → Authority dashboard                 │
+│  ├── relay-info.html × 7000   → Uses relay['collector_diagnostics'] │
+│  └── misc-authorities.html    → Uses relay_set.collector_data       │
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
+```
+
+### Modular Structure
+
+```
+lib/consensus/                        # NEW MODULE (self-contained)
+├── __init__.py                       # Exports: CollectorFetcher, AuthorityMonitor
+├── collector_fetcher.py              # Fetch + parse + index (no relay loop)
+├── authority_monitor.py              # Authority latency checks (Phase 2)
+└── diagnostics.py                    # Format diagnostics for templates
+
+lib/workers.py                        # MODIFY: +1 function
+└── fetch_collector_consensus_data()  # Follows fetch_onionoo_uptime() pattern
+
+lib/coordinator.py                    # MODIFY: +3 lines
+├── api_workers.append(...)           # Add to existing list
+├── get_collector_consensus_data()    # Getter (like get_uptime_data)
+└── create_relay_set() +1 line        # Call _reprocess_collector_data()
+
+lib/relays.py                         # MODIFY: +1 method (~30 lines)
+└── _reprocess_collector_data()       # Follows _reprocess_uptime_data() pattern
 ```
 
 ---
@@ -126,6 +157,10 @@ class CollectorFetcher:
         """
         Get diagnostics for a single relay.
         O(1) lookup after index is built.
+        
+        NOTE: This is called during _reprocess_collector_data() in relays.py,
+        NOT during page generation. The result is attached to each relay
+        as relay['collector_diagnostics'] for template access.
         """
         fingerprint = fingerprint.upper()
         if fingerprint not in self.relay_index:
@@ -134,10 +169,15 @@ class CollectorFetcher:
         relay = self.relay_index[fingerprint]
         vote_count = len(relay['votes'])
         
+        # Tor consensus requires MAJORITY of authorities (5 out of 9)
+        # Per dir-spec: relay appears in consensus if ≥ half of authorities vote for it
+        in_consensus = vote_count >= 5  # floor(9/2) + 1 = 5
+        
         return {
             'fingerprint': fingerprint,
-            'in_consensus': vote_count >= 5,  # Majority required
+            'in_consensus': in_consensus,
             'vote_count': vote_count,
+            'total_authorities': 9,
             'authority_votes': self._format_authority_votes(relay),
             'flag_eligibility': self._analyze_flag_eligibility(relay),
             'bandwidth': self._format_bandwidth(relay),
@@ -563,9 +603,9 @@ def fetch_collector_consensus_data(progress_logger=None):
 ### 1.3 Coordinator Integration
 
 ```python
-# lib/coordinator.py - MODIFY __init__
+# lib/coordinator.py - MODIFY __init__ (around line 66-72)
 
-# Add to api_workers list (around line 66-72)
+# Add to api_workers list
 if self.enabled_apis == 'all':
     self.api_workers.append(("onionoo_uptime", fetch_onionoo_uptime, [self.onionoo_uptime_url, self._log_progress]))
     self.api_workers.append(("onionoo_bandwidth", fetch_onionoo_bandwidth, [self.onionoo_bandwidth_url, self.bandwidth_cache_hours, self._log_progress]))
@@ -573,15 +613,191 @@ if self.enabled_apis == 'all':
     # NEW: CollecTor consensus data for per-relay diagnostics
     self.api_workers.append(("collector_consensus", fetch_collector_consensus_data, [self._log_progress]))
 
-# lib/coordinator.py - MODIFY create_relay_set (around line 268-269)
-
-# After attaching other data:
-setattr(relay_set, 'collector_data', self.get_collector_consensus_data())
-
-# Add getter method:
+# lib/coordinator.py - ADD getter method (around line 224)
 def get_collector_consensus_data(self):
     """Get CollecTor consensus data if available."""
     return self.worker_data.get('collector_consensus')
+
+# lib/coordinator.py - MODIFY create_relay_set (around line 268-295)
+# After existing reprocess calls, add:
+
+# COLLECTOR PROCESSING: Process CollecTor data for per-relay diagnostics
+# Follows same pattern as uptime/bandwidth processing
+collector_data = self.get_collector_consensus_data()
+if collector_data:
+    setattr(relay_set, 'collector_data', collector_data)
+    try:
+        relay_set._reprocess_collector_data()
+    except Exception as e:
+        print(f"Warning: CollecTor processing failed ({e}), continuing without diagnostics")
+```
+
+### 1.4 Relays Integration (NO NEW LOOPS)
+
+```python
+# lib/relays.py - ADD METHOD (follows _reprocess_uptime_data pattern)
+
+def _reprocess_collector_data(self):
+    """
+    Process CollecTor data for per-relay consensus diagnostics.
+    
+    Called from coordinator AFTER collector_data is attached.
+    Follows same pattern as _reprocess_uptime_data() and _reprocess_bandwidth_data().
+    
+    EFFICIENCY: Single pass through relays, O(1) lookup per relay.
+    NO NEW LOOPS - integrates with existing relay processing.
+    """
+    if not hasattr(self, 'collector_data') or not self.collector_data:
+        return
+    
+    relay_index = self.collector_data.get('relay_index', {})
+    flag_thresholds = self.collector_data.get('flag_thresholds', {})
+    fetched_at = self.collector_data.get('fetched_at', '')
+    
+    # Import diagnostics formatter (lazy import to avoid circular deps)
+    from .consensus.diagnostics import format_relay_diagnostics
+    
+    # Single pass through relays - same loop pattern as _reprocess_uptime_data
+    for relay in self.json["relays"]:
+        fingerprint = relay.get('fingerprint', '')
+        
+        if fingerprint in relay_index:
+            indexed_data = relay_index[fingerprint]
+            vote_count = len(indexed_data.get('votes', {}))
+            
+            # Attach pre-formatted diagnostics for template use
+            relay['collector_diagnostics'] = format_relay_diagnostics(
+                fingerprint=fingerprint,
+                indexed_data=indexed_data,
+                flag_thresholds=flag_thresholds,
+                fetched_at=fetched_at,
+            )
+        else:
+            # Relay not in any authority vote (new relay or offline)
+            relay['collector_diagnostics'] = None
+    
+    if self.progress:
+        indexed_count = sum(1 for r in self.json["relays"] if r.get('collector_diagnostics'))
+        self._log_progress(f"CollecTor diagnostics attached to {indexed_count} relays")
+```
+
+### 1.5 Diagnostics Formatter Module
+
+```python
+# lib/consensus/diagnostics.py
+"""
+Format CollecTor data for template display.
+Keeps formatting logic separate from fetching/parsing.
+"""
+
+from typing import Dict, Optional
+
+
+BANDWIDTH_AUTHORITIES = ['moria1', 'tor26', 'gabelmoo', 'bastet', 'longclaw', 'faravahar', 'maatuska']
+IPV6_TESTING_AUTHORITIES = ['moria1', 'gabelmoo', 'dannenberg', 'maatuska', 'bastet']
+
+
+def format_relay_diagnostics(
+    fingerprint: str,
+    indexed_data: Dict,
+    flag_thresholds: Dict,
+    fetched_at: str,
+) -> Dict:
+    """
+    Format indexed CollecTor data for template display.
+    
+    Called once per relay during _reprocess_collector_data().
+    Returns dict suitable for Jinja2 template.
+    """
+    votes = indexed_data.get('votes', {})
+    bandwidth = indexed_data.get('bandwidth', {})
+    vote_count = len(votes)
+    
+    # Consensus requires majority (5/9)
+    in_consensus = vote_count >= 5
+    
+    # Format authority votes with reachability
+    authority_votes = []
+    all_flags = set()
+    
+    for auth_name in ['moria1', 'tor26', 'dizum', 'gabelmoo', 'bastet', 
+                      'dannenberg', 'maatuska', 'longclaw', 'faravahar']:
+        if auth_name in votes:
+            vote = votes[auth_name]
+            flags = vote.get('flags', [])
+            all_flags.update(flags)
+            
+            # IPv4 reachable if Running flag present
+            ipv4_ok = 'Running' in flags
+            
+            # IPv6 only tested by some authorities
+            ipv6_ok = None
+            if auth_name in IPV6_TESTING_AUTHORITIES:
+                ipv6_ok = 'ReachableIPv6' in flags
+            
+            authority_votes.append({
+                'authority': auth_name,
+                'voted': True,
+                'ipv4_reachable': ipv4_ok,
+                'ipv6_reachable': ipv6_ok,
+                'flags': flags,
+                'bandwidth': vote.get('bandwidth'),
+            })
+        else:
+            authority_votes.append({
+                'authority': auth_name,
+                'voted': False,
+                'ipv4_reachable': False,
+                'ipv6_reachable': False,
+                'flags': [],
+                'bandwidth': None,
+            })
+    
+    # Format bandwidth measurements with deviation
+    bw_measurements = []
+    bw_values = []
+    
+    for auth_name in BANDWIDTH_AUTHORITIES:
+        if auth_name in bandwidth:
+            bw = bandwidth[auth_name].get('bandwidth', 0)
+            bw_measurements.append({
+                'authority': auth_name,
+                'measured': True,
+                'value': bw,
+            })
+            bw_values.append(bw)
+        else:
+            bw_measurements.append({
+                'authority': auth_name,
+                'measured': False,
+                'value': None,
+            })
+    
+    # Calculate deviation (red if >±5%)
+    avg_bw = sum(bw_values) / len(bw_values) if bw_values else 0
+    for m in bw_measurements:
+        if m['measured'] and avg_bw > 0:
+            m['deviation'] = ((m['value'] - avg_bw) / avg_bw) * 100
+            m['deviation_warning'] = abs(m['deviation']) > 5.0
+        else:
+            m['deviation'] = None
+            m['deviation_warning'] = False
+    
+    return {
+        'fingerprint': fingerprint,
+        'in_consensus': in_consensus,
+        'vote_count': vote_count,
+        'total_authorities': 9,
+        'authority_votes': authority_votes,
+        'current_flags': list(all_flags),
+        'bandwidth': {
+            'measured_count': len(bw_values),
+            'total_authorities': len(BANDWIDTH_AUTHORITIES),
+            'average': avg_bw,
+            'measurements': bw_measurements,
+        },
+        'fetched_at': fetched_at,
+    }
 ```
 
 ### 1.4 Template Integration
@@ -914,23 +1130,33 @@ def fetch_authority_health(progress_logger=None):
 
 ```bash
 #!/bin/bash
-# scripts/capture_baseline.sh
+# scripts/capture_baseline.sh - Run BEFORE any code changes
 
+set -e
 cd /workspace/allium
 
-echo "=== Capturing baseline output ==="
+echo "=== Step 1: Capture baseline output ==="
 python allium.py --progress --output-dir baseline_output/ 2>&1 | tee baseline_run.log
 
-echo "=== Saving file inventory ==="
+echo "=== Step 2: Save file inventory ==="
 find baseline_output/ -type f -name "*.html" | sort > baseline_files.txt
-find baseline_output/ -type f -name "*.html" -exec md5sum {} \; > baseline_checksums.txt
+echo "Total HTML files: $(wc -l < baseline_files.txt)"
 
-echo "=== Running existing tests ==="
+echo "=== Step 3: Create normalized baseline (remove timestamps for diff) ==="
+mkdir -p baseline_normalized/
+for f in $(find baseline_output/ -name "*.html"); do
+    # Normalize: remove timestamps, generation dates
+    sed -E 's/[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}/TIMESTAMP/g' "$f" | \
+    sed -E 's/Generated: .*/Generated: TIMESTAMP/g' > \
+    "baseline_normalized/$(basename $f)"
+done
+
+echo "=== Step 4: Run existing test suite ==="
 pytest tests/ -v 2>&1 | tee baseline_tests.log
 
 echo "=== Baseline captured ==="
 echo "Files: $(wc -l < baseline_files.txt)"
-echo "Tests: $(grep -c 'passed' baseline_tests.log) passed"
+echo "Tests: $(grep -c 'passed' baseline_tests.log || echo 0) passed"
 ```
 
 ### Unit Test: collector_fetcher.py
@@ -1300,41 +1526,72 @@ class TestCollectorWorker:
 
 ```bash
 #!/bin/bash
-# scripts/regression_test.sh
-# Run after each phase to verify no regressions
+# scripts/validate_phase.sh - Run after each phase to verify no regressions
 
 set -e
+cd /workspace/allium
 
-echo "=== Running Regression Tests ==="
+echo "=== Step 1: Generate current output ==="
+python allium.py --progress --output-dir current_output/ 2>&1 | tee current_run.log
 
-# 1. Run full test suite
-echo "Step 1: Running pytest..."
+echo "=== Step 2: Normalize current output (remove timestamps) ==="
+mkdir -p current_normalized/
+for f in $(find current_output/ -name "*.html"); do
+    sed -E 's/[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}/TIMESTAMP/g' "$f" | \
+    sed -E 's/Generated: .*/Generated: TIMESTAMP/g' > \
+    "current_normalized/$(basename $f)"
+done
+
+echo "=== Step 3: Run full test suite ==="
 pytest tests/ -v --tb=short
+TEST_RESULT=$?
 
-# 2. Generate current output
-echo "Step 2: Generating site..."
-python allium.py --progress --output-dir current_output/
-
-# 3. Compare file counts
+echo "=== Step 4: Compare file counts ==="
 BASELINE_COUNT=$(wc -l < baseline_files.txt)
 CURRENT_COUNT=$(find current_output/ -type f -name "*.html" | wc -l)
-
 echo "Baseline files: $BASELINE_COUNT"
-echo "Current files: $CURRENT_COUNT"
+echo "Current files:  $CURRENT_COUNT"
 
 if [ "$CURRENT_COUNT" -lt "$BASELINE_COUNT" ]; then
     echo "ERROR: File count decreased! Possible regression."
     exit 1
 fi
 
-# 4. Check for unexpected changes (exclude known new sections)
-echo "Step 3: Checking for unexpected changes..."
-diff -r baseline_output/ current_output/ --brief 2>/dev/null | \
-    grep -v "Consensus Diagnostics" | \
-    grep -v "Flag Thresholds" | \
-    head -20
+echo "=== Step 5: Full diff (saved to full_diff.txt) ==="
+diff -r baseline_normalized/ current_normalized/ \
+    --exclude="*.log" > full_diff.txt 2>&1 || true
 
-echo "=== Regression Tests Passed ==="
+echo ""
+echo "=== DIFF SUMMARY ==="
+echo "Files only in baseline: $(grep -c 'Only in baseline' full_diff.txt || echo 0)"
+echo "Files only in current:  $(grep -c 'Only in current' full_diff.txt || echo 0)"  
+echo "Files that differ:      $(grep -c 'differ$' full_diff.txt || echo 0)"
+
+echo ""
+echo "=== EXPECTED CHANGES (new feature sections) ==="
+DIAG_COUNT=$(grep -l "Consensus Diagnostics" current_output/relay/*.html 2>/dev/null | wc -l || echo 0)
+echo "$DIAG_COUNT relay pages have new Consensus Diagnostics section"
+
+echo ""
+echo "=== UNEXPECTED CHANGES (review these!) ==="
+# Show changes that are NOT the new feature sections
+diff -r baseline_normalized/ current_normalized/ \
+    --exclude="*.log" 2>/dev/null | \
+    grep -v "Consensus Diagnostics" | \
+    grep -v "Authority Votes" | \
+    grep -v "Flag Eligibility" | \
+    grep -v "Bandwidth Measurements" | \
+    grep -v "Flag Thresholds" | \
+    grep -v "^---" | \
+    grep -v "^+++" | \
+    grep -v "^@@" | \
+    head -30 || echo "(none found)"
+
+echo ""
+echo "=== Full diff saved to: full_diff.txt ==="
+echo "=== Test result: $TEST_RESULT ==="
+
+exit $TEST_RESULT
 ```
 
 ---
