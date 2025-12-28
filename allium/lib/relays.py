@@ -2232,22 +2232,44 @@ class Relays:
             
             for authority in authorities:
                 auth_nickname = authority.get('nickname', '').lower()
-                auth_fingerprint = authority.get('fingerprint', '')
-                auth_fp_prefix = auth_fingerprint[:8].upper() if auth_fingerprint else ''
+                auth_fingerprint = authority.get('fingerprint', '').upper()
+                auth_fp_prefix = auth_fingerprint[:8] if auth_fingerprint else ''
                 
                 # Check if this authority voted (has a vote file)
-                # Match by nickname or fingerprint prefix (some votes use partial fingerprint)
-                voted = any(
-                    auth_name.lower() == auth_nickname or 
-                    auth_name.upper() == auth_fp_prefix
-                    for auth_name in votes.keys()
-                )
+                # Priority: 1) Full fingerprint match, 2) Fingerprint prefix match, 3) Nickname match
+                voted = False
+                for vote_key in votes.keys():
+                    vote_key_upper = vote_key.upper()
+                    # Try full fingerprint match first
+                    if auth_fingerprint and vote_key_upper == auth_fingerprint:
+                        voted = True
+                        break
+                    # Try fingerprint prefix match (8 chars)
+                    if auth_fp_prefix and vote_key_upper == auth_fp_prefix:
+                        voted = True
+                        break
+                    # Fall back to nickname match
+                    if vote_key.lower() == auth_nickname:
+                        voted = True
+                        break
+                
                 # Check if this authority is a bandwidth authority
-                # Match by nickname or fingerprint prefix
-                is_bw = any(
-                    b.lower() == auth_nickname or b.upper() == auth_fp_prefix
-                    for b in bw_authorities
-                )
+                # Same priority: fingerprint first, then nickname
+                is_bw = False
+                for bw_auth in bw_authorities:
+                    bw_auth_upper = bw_auth.upper()
+                    # Try full fingerprint match first
+                    if auth_fingerprint and bw_auth_upper == auth_fingerprint:
+                        is_bw = True
+                        break
+                    # Try fingerprint prefix match (8 chars)
+                    if auth_fp_prefix and bw_auth_upper == auth_fp_prefix:
+                        is_bw = True
+                        break
+                    # Fall back to nickname match
+                    if bw_auth.lower() == auth_nickname:
+                        is_bw = True
+                        break
                 
                 authority['collector_data'] = {
                     'voted': voted,
