@@ -370,13 +370,17 @@ These flags are determined by other criteria (not from `flag-thresholds`):
 │ │ Metric [ⓘ]     │ Your Value  │ Consensus Threshold [ⓘ] │ Status                                                    ││
 │ ├─────────────────┼─────────────┼──────────────────────────┼───────────────────────────────────────────────────────────┤│
 │ │ In Consensus    │ 8/9 auths   │ ≥5/9 (majority)          │ IN CONSENSUS                                  (green)    ││
-│ │ WFU             │ 96.2%       │ ≥98% (all auths)         │ BELOW - cannot get Guard                      (red)      ││
-│ │ Time Known      │ 45 days     │ ≥8 days (all auths)      │ MEETS                                         (green)    ││
-│ │ Guard BW        │ 25 MB/s     │ 10-35 MB/s (varies)      │ PARTIAL - meets 5/9 auths                     (yellow)   ││
-│ │ Stable Uptime   │ 45 days     │ 14.2-19.8 days (varies)  │ MEETS - all auths                             (green)    ││
-│ │ Fast Speed      │ 25 MB/s     │ 0.1-1.0 MB/s (varies)    │ MEETS - all auths                             (green)    ││
 │ │ IPv4 Reachable  │ 8/9 auths   │ ≥5/9 (majority)          │ REACHABLE                                     (green)    ││
 │ │ IPv6 Reachable  │ 5/7 tested  │ ≥majority of testers     │ PARTIAL - 2 auths can't reach                 (yellow)   ││
+│ ├─────────────────┼─────────────┼──────────────────────────┼───────────────────────────────────────────────────────────┤│
+│ │ WFU             │ 96.2%       │ ≥98% (guard-wfu)         │ BELOW - cannot get Guard/HSDir                (red)      ││
+│ │ Time Known      │ 45 days     │ ≥8 days (guard-tk)       │ MEETS                                         (green)    ││
+│ │ Guard BW        │ 25 MB/s     │ 10-35 MB/s (varies)      │ PARTIAL - meets 5/9 auths                     (yellow)   ││
+│ │ Stable Uptime   │ 45 days     │ 14.2-19.8 days (varies)  │ MEETS - all auths                             (green)    ││
+│ │ Stable MTBF     │ 340 days    │ varies by authority      │ MEETS - all auths                             (green)    ││
+│ │ Fast Speed      │ 25 MB/s     │ 0.1-1.0 MB/s (varies)    │ MEETS - all auths                             (green)    ││
+│ │ HSDir WFU       │ 96.2%       │ ≥98% (hsdir-wfu)         │ BELOW - cannot get HSDir                      (red)      ││
+│ │ HSDir TK        │ 45 days     │ ≥10 days (hsdir-tk)      │ MEETS                                         (green)    ││
 │ └─────────────────┴─────────────┴──────────────────────────┴───────────────────────────────────────────────────────────┘│
 │                                                                                                                        │
 │ 💡 Advice: To get Guard flag, increase WFU to ≥98% (maintain better uptime).                                          │
@@ -432,39 +436,6 @@ These flags are determined by other criteria (not from `flag-thresholds`):
 │   All thresholds are DYNAMIC - pulled from each authority's flag-thresholds line in their vote file                   │
 │                                                                                                                        │
 │ ⚠️ Issues: faravahar cannot reach relay • 4/9 authorities NOT assigning Guard (BW below threshold)                    │
-│                                                                                                                        │
-│ ══ Relay Values Summary ════════════════════════════════════════════════════════════════════════════════════════════════│
-│                                                                                                                        │
-│ Your relay's current values (from CollecTor vote stats line). Hover column headers for data source details.            │
-│                                                                                                                        │
-│ ┌───────────────────┬────────────┬─────────────────────────────┬───────────────────────────────────────────────────────┐│
-│ │ Metric [ⓘ]       │ Your Value │ Threshold [ⓘ]              │ Status                                                ││
-│ ├───────────────────┼────────────┼─────────────────────────────┼───────────────────────────────────────────────────────┤│
-│ │ WFU              │ 96.2%      │ ≥98% (guard-wfu, hsdir-wfu) │ BELOW - cannot get Guard/HSDir (red)                  ││
-│ │ Time Known       │ 45 days    │ ≥8 days (guard-tk)          │ MEETS - eligible for Guard (green)                    ││
-│ │ Guard BW         │ 25 MB/s    │ varies: 10-35 MB/s          │ PARTIAL - meets 5/9 authorities (yellow)              ││
-│ │ Stable Uptime    │ 45 days    │ varies: 14.2-19.8 days      │ MEETS - all authorities (green)                       ││
-│ │ Fast Speed       │ 25 MB/s    │ varies: 0.1-1.0 MB/s        │ MEETS - all authorities (green)                       ││
-│ │ HSDir TK         │ 45 days    │ ≥10 days (hsdir-tk)         │ MEETS - all authorities (green)                       ││
-│ └───────────────────┴────────────┴─────────────────────────────┴───────────────────────────────────────────────────────┘│
-│                                                                                                                        │
-│ Metric column tooltips:                                                                                                │
-│   • WFU: "Source: CollecTor | stats wfu=X | Weighted Fractional Uptime (0-1 scale, used for Guard & HSDir)"           │
-│   • Time Known: "Source: CollecTor | stats tk=X | Seconds authority has known relay"                                  │
-│   • Guard BW: "Source: CollecTor | w Measured=X | Bandwidth measured by sbws scanner"                                 │
-│   • Stable Uptime: "Source: CollecTor | stats tk=X | Used as proxy for stable-uptime threshold"                       │
-│   • Fast Speed: "Source: CollecTor | w Measured=X | Same as Guard BW value"                                           │
-│   • HSDir TK: "Source: CollecTor | stats tk=X | Time Known for HSDir flag eligibility"                                │
-│                                                                                                                        │
-│ Threshold column tooltips (ALL from flag-thresholds line):                                                             │
-│   • WFU: "guard-wfu=98.00000% | Also hsdir-wfu (typically same value)"                                                │
-│   • TK: "guard-tk=691200 (~8 days)"                                                                                   │
-│   • Guard BW: "guard-bw-inc-exits=X (varies 10-35 MB/s) | guard-bw-exc-exits=X"                                       │
-│   • Stable: "stable-uptime=X (varies 14-20 days) | stable-mtbf=X"                                                     │
-│   • Fast: "fast-speed=X (varies 0.1-1.0 MB/s)"                                                                        │
-│   • HSDir TK: "hsdir-tk=X (~10 days) | hsdir-wfu=X (typically 98%)"                                                   │
-│                                                                                                                        │
-│ 💡 Advice: To get Guard flag, increase WFU to ≥98%. Current uptime pattern is too variable.                           │
 │                                                                                                                        │
 │ Note: ALL thresholds are pulled dynamically from each authority's vote file (flag-thresholds line).                   │
 │ Even thresholds that typically appear consistent (like WFU 98%) could change - we never hardcode values.              │

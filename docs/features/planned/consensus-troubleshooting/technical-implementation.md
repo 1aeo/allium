@@ -1239,6 +1239,18 @@ def _get_median_thresholds(flag_thresholds: Dict) -> Dict:
           {% endif %}
         </td>
       </tr>
+      <tr title="Source: CollecTor | File: vote | Value: stats mtbf=X | Threshold: flag-thresholds stable-mtbf=X">
+        <td>Stable MTBF</td>
+        <td>{{ (rv.mtbf / 86400) | round(0) }} days</td>
+        <td>{{ rv.stable_mtbf_range }} (varies)</td>
+        <td>
+          {% if rv.stable_mtbf_meets_all %}
+            <span class="text-success">MEETS - all authorities</span>
+          {% else %}
+            <span class="text-warning">PARTIAL - {{ rv.stable_mtbf_meets_count }}/{{ rv.total_authorities }}</span>
+          {% endif %}
+        </td>
+      </tr>
       <tr title="Source: CollecTor | File: vote | Value: w Measured=X | Threshold: flag-thresholds fast-speed=X">
         <td>Fast Speed</td>
         <td>{{ rv.fast_speed | format_bandwidth }}</td>
