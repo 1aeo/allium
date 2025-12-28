@@ -153,18 +153,13 @@ class CollectorFetcher:
         if self.votes or self.bandwidth_files:
             start_time = time.time()
             try:
+                # _build_relay_index() now also extracts flag_thresholds in single pass
                 self._build_relay_index()
                 result['relay_index'] = self.relay_index
+                result['flag_thresholds'] = self.flag_thresholds
             except Exception as e:
                 logger.error(f"Failed to build relay index: {e}")
                 result['errors'].append(f"relay_index: {e}")
-            
-            try:
-                self._extract_flag_thresholds()
-                result['flag_thresholds'] = self.flag_thresholds
-            except Exception as e:
-                logger.error(f"Failed to extract flag thresholds: {e}")
-                result['errors'].append(f"flag_thresholds: {e}")
             
             self._timings['index'] = time.time() - start_time
         
@@ -779,7 +774,7 @@ class CollectorFetcher:
             
             # HSDir flag eligibility
             hsdir_wfu = thresholds.get('hsdir-wfu', 0.98)
-            hsdir_tk = thresholds.get('hsdir-tk', GUARD_TK_DEFAULT)
+            hsdir_tk = thresholds.get('hsdir-tk', HSDIR_TK_DEFAULT)
             
             hsdir_eligible = relay_wfu >= hsdir_wfu and relay_tk >= hsdir_tk
             if hsdir_eligible:

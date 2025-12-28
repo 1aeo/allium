@@ -13,6 +13,7 @@ import urllib.request
 import urllib.error
 import socket
 import threading
+from datetime import datetime
 from pathlib import Path
 from .error_handlers import handle_file_io_errors, handle_http_errors, handle_json_errors
 
@@ -599,7 +600,6 @@ def _validate_collector_cache(data):
     fetched_at = data.get('fetched_at', '')
     if fetched_at:
         try:
-            from datetime import datetime
             fetch_time = datetime.fromisoformat(fetched_at.replace('Z', '+00:00'))
             age_hours = (datetime.utcnow() - fetch_time.replace(tzinfo=None)).total_seconds() / 3600
             if age_hours > 3:

@@ -7,24 +7,28 @@ Provides display-ready formatting of consensus troubleshooting data.
 
 from typing import Dict, List, Optional, Any
 
-# Import authority country codes
+# Import authority country codes and shared constants from collector_fetcher
+# Centralizes constants to avoid duplication and ensure consistency
 try:
-    from .collector_fetcher import AUTHORITY_COUNTRIES
+    from .collector_fetcher import (
+        AUTHORITY_COUNTRIES,
+        GUARD_TK_DEFAULT,
+        HSDIR_TK_DEFAULT, 
+        SECONDS_PER_DAY,
+    )
 except ImportError:
     AUTHORITY_COUNTRIES = {}
+    GUARD_TK_DEFAULT = 691200
+    HSDIR_TK_DEFAULT = 864000
+    SECONDS_PER_DAY = 86400
 
 
 # ============================================================================
-# SHARED CONSTANTS - Avoid magic numbers throughout the codebase
+# MODULE-SPECIFIC CONSTANTS - Not shared with collector_fetcher
 # ============================================================================
 # Bandwidth thresholds (bytes/second)
 GUARD_BW_GUARANTEE = 2_000_000   # AuthDirGuardBWGuarantee: 2 MB/s minimum for Guard
 FAST_BW_MINIMUM = 100_000       # 100 KB/s minimum for Fast flag
-
-# Time thresholds (seconds)
-GUARD_TK_DEFAULT = 691200       # 8 days - default Guard time-known requirement
-HSDIR_TK_DEFAULT = 864000       # 10 days - default HSDir time-known requirement
-SECONDS_PER_DAY = 86400
 
 # WFU thresholds (fractions)
 DEFAULT_WFU_THRESHOLD = 0.98    # 98% uptime for Guard/HSDir
