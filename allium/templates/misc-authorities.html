@@ -15,7 +15,25 @@
     </p>
 
     <ul style="margin-bottom: 15px;">
-        <li><strong>Directory Authorities:</strong> {{ relays.authorities_summary.total_authorities }} authorities currently active</li>
+        <li><strong>Directory Authorities:</strong> {{ relays.authorities_summary.total_authorities }} authorities discovered (dynamic from Onionoo)</li>
+        
+        {# Consensus status from CollecTor #}
+        {% if relays.consensus_status %}
+        <li><strong>Consensus Status:</strong> 
+            {% if relays.consensus_status.freshness == 'fresh' %}
+                <span style="color: green; font-weight: bold;">FRESH</span>
+            {% elif relays.consensus_status.freshness == 'stale' %}
+                <span style="color: #ff8c00; font-weight: bold;">STALE</span>
+            {% else %}
+                <span style="color: red; font-weight: bold;">{{ relays.consensus_status.freshness|upper }}</span>
+            {% endif %}
+            | {{ relays.consensus_status.voted_count|default(0) }}/{{ relays.authorities_summary.total_authorities }} Voted
+            {% if relays.consensus_status.next_consensus_time %}
+            | Next: {{ relays.consensus_status.next_consensus_time }}
+            {% endif %}
+        </li>
+        {% endif %}
+        
         <li><strong>Version Compliance:</strong> 
             {% set compliant_authorities = relays.authorities_data | selectattr('recommended_version', 'equalto', true) | list %}
             {% set non_compliant_authorities = relays.authorities_data | selectattr('recommended_version', 'equalto', false) | list %}
@@ -38,7 +56,21 @@
                 <span style="color: red; font-weight: bold;">0 problematic</span>
             {%- endif %}
         </li>
-                    <li><strong>Key:</strong> BW = Observed Bandwidth Capacity, CW = Consensus Weight, Z = Z-score (statistical uptime deviation)</li>
+        
+        {# Latency status #}
+        {% if relays.latency_summary %}
+        <li><strong>Latency Status:</strong> 
+            <span style="color: green;">{{ relays.latency_summary.ok_count|default(0) }}/{{ relays.authorities_summary.total_authorities }} OK</span>
+            {% if relays.latency_summary.slow_count > 0 %}
+            | <span style="color: #ff8c00;">{{ relays.latency_summary.slow_count }} slow</span>
+            {% endif %}
+            {% if relays.latency_summary.down_count > 0 %}
+            | <span style="color: red;">{{ relays.latency_summary.down_count }} down</span>
+            {% endif %}
+        </li>
+        {% endif %}
+        
+        <li><strong>Key:</strong> BW = Observed Bandwidth Capacity, CW = Consensus Weight, Z = Z-score (statistical uptime deviation)</li>
     </ul>
 
     <br>
@@ -48,7 +80,7 @@
     <br>
     
     <p class="text-muted" style="margin-bottom: 15px;">
-    <small>Last updated: {{ relays.timestamp }}. Refreshed every 30 minutes from the Tor directory authorities via <a href="https://onionoo.torproject.org/">Tor Project's onionoo API</a>.</small>
+    <small>Last updated: {{ relays.timestamp }}. Data from <a href="https://onionoo.torproject.org/">Onionoo API</a> + <a href="https://collector.torproject.org" target="_blank" rel="noopener">CollecTor</a> (votes, thresholds).</small>
     </p>
     
     <!-- UPTIME DATA STATUS NOTIFICATION -->
@@ -78,19 +110,24 @@
         {%- endif %}
     {%- endif %}
     
+    {# Main table: EXISTING columns + 3 NEW columns (Voted, BW Auth, Latency) #}
     <table class="table table-condensed" style="font-size: 13px;">
         <tr>
-            <th>Authority Name</th>
-            <th>Online Status</th>
-            <th>AS Number</th>
-            <th>AS Name</th>
-            <th>Country</th>
-            <th title="Percentage of time authority was online over 1 month, 6 months, 1 year, and 5 years periods">Uptime (1M/6M/1Y/5Y)</th>
-            <th>Version</th>
-            <th>Platform</th>
-            <th title="Version compliance: ✅ = On recommended version, ❌ = Not on recommended version">Rec. Ver.</th>
-            <th>First Seen</th>
-            <th>Last Restarted</th>
+            <th title="Source: Onionoo | File: details | Field: nickname (has Authority flag)">Authority Name</th>
+            <th title="Source: Onionoo | File: details | Field: running">Online Status</th>
+            {# NEW columns with detailed tooltips #}
+            <th title="Source: CollecTor | File: vote | Vote file exists for this consensus hour">Voted</th>
+            <th title="Source: CollecTor | File: vote | Has 'bandwidth-file-headers' line = runs sbws scanner">BW Auth</th>
+            <th title="Source: Direct HTTP | HEAD request to dir_address | Response time in ms">Latency</th>
+            {# Existing columns #}
+            <th title="Source: Onionoo | File: details | Field: as">AS Number</th>
+            <th title="Source: Onionoo | File: details | Field: as_name">AS Name</th>
+            <th title="Source: Onionoo | File: details | Field: country">Country</th>
+            <th title="Source: Onionoo | File: uptime | 1M/6M/1Y/5Y uptime percentages">Uptime (1M/6M/1Y/5Y)</th>
+            <th title="Source: Onionoo | File: details | Field: version">Version</th>
+            <th title="Source: Onionoo | File: details | Field: recommended_version">Rec. Ver.</th>
+            <th title="Source: Onionoo | File: details | Field: first_seen">First Seen</th>
+            <th title="Source: Onionoo | File: details | Field: last_restarted">Last Restarted</th>
         </tr>
         <tbody>
         {% for authority in relays.authorities_data -%}
@@ -107,9 +144,45 @@
                     {% if authority.running -%}
                         <span style="color: green; font-weight: bold;">🟢 Online</span>
                     {% else -%}
-                        <span style="color: red; font-weight: bold;">🔴 Offline (last seen: {{ authority.last_seen }})</span>
+                        <span style="color: red; font-weight: bold;">🔴 Offline</span>
                     {%- endif %}
                 </td>
+                
+                {# NEW: Voted status - colored text #}
+                <td>
+                    {% if authority.collector_data and authority.collector_data.voted %}
+                        <span style="color: #28a745; font-weight: bold;" title="Vote received this consensus period">Yes</span>
+                    {% elif authority.collector_data is defined %}
+                        <span style="color: #dc3545; font-weight: bold;" title="No vote received">No</span>
+                    {% else %}
+                        <span style="color: #6c757d;" title="CollecTor data not available">—</span>
+                    {% endif %}
+                </td>
+                
+                {# NEW: BW Authority status #}
+                <td>
+                    {% if authority.is_bw_authority %}
+                        <span style="color: #28a745; font-weight: bold;" title="Runs bandwidth scanner (sbws)">Yes</span>
+                    {% else %}
+                        <span style="color: #6c757d;" title="Does not run bandwidth scanner">No</span>
+                    {% endif %}
+                </td>
+                
+                {# NEW: Latency #}
+                <td>
+                    {% if authority.latency_ms is defined and authority.latency_ms is not none %}
+                        {% if authority.latency_ms > 500 %}
+                            <span style="color: #dc3545; font-weight: bold;">{{ authority.latency_ms }} ms</span>
+                        {% elif authority.latency_ms > 200 %}
+                            <span style="color: #ff8c00;">{{ authority.latency_ms }} ms</span>
+                        {% else %}
+                            {{ authority.latency_ms }} ms
+                        {% endif %}
+                    {% else %}
+                        <span style="color: #6c757d;" title="Latency data not available">—</span>
+                    {% endif %}
+                </td>
+                
                 <td>
                     {% if authority.as -%}
                         <a href="{{ page_ctx.path_prefix }}as/{{ authority.as }}/">{{ authority.as }}</a>
@@ -171,18 +244,11 @@
                 </td>
                 <td>{{ authority.version if authority.version else "Unknown" }}</td>
                 <td>
-                    {% if authority.platform -%}
-                        <a href="{{ page_ctx.path_prefix }}platform/{{ authority.platform|escape }}/">{{ authority.platform|escape }}</a>
-                    {% else -%}
-                        Unknown
-                    {%- endif %}
-                </td>
-                <td>
                     {% if authority.recommended_version is not none -%}
                         {% if authority.recommended_version -%}
-                            <span style="color: green; font-weight: bold;" title="Running recommended version">✅</span>
+                            <span style="color: #28a745; font-weight: bold;" title="Running recommended version">Yes</span>
                         {% else -%}
-                            <span style="color: red; font-weight: bold;" title="Not running recommended version">❌</span>
+                            <span style="color: #dc3545; font-weight: bold;" title="Not running recommended version">No</span>
                         {%- endif %}
                     {% else -%}
                         Unknown
@@ -203,17 +269,33 @@
 
     <br><br>
 
+    {# ALERTS SECTION (NEW) #}
+    {% if relays.authority_alerts %}
+    <br>
+    <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 6px;">
+        <strong>⚠️ Alerts:</strong>
+        <ul style="margin: 5px 0; padding-left: 20px;">
+        {% for alert in relays.authority_alerts %}
+            <li>{{ alert }}</li>
+        {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    <br><br>
+
     <!-- LEGEND/NOTES -->
     <div style="background: #f0f0f0; padding: 15px; border-radius: 6px;">
         <h4>Legend:</h4>
         <ul style="margin: 0; padding-left: 20px;">
+            <li><strong>Online:</strong> 🟢 = Online, 🔴 = Offline</li>
+            <li><strong>Voted:</strong> <span style="color: #28a745; font-weight: bold;">Yes</span> = Submitted vote this consensus period, <span style="color: #dc3545; font-weight: bold;">No</span> = No vote received</li>
+            <li><strong>BW Auth:</strong> <span style="color: #28a745; font-weight: bold;">Yes</span> = Runs bandwidth scanner (sbws), <span style="color: #6c757d;">No</span> = Does not run scanner</li>
+            <li><strong>Latency:</strong> Response time to authority's directory port (checked on page load). <span style="color: #ff8c00;">Orange = &gt;200ms</span>, <span style="color: #dc3545; font-weight: bold;">Red = &gt;500ms</span></li>
             <li><strong>Uptime (1M/6M/1Y/5Y):</strong> Percentage of time authority was online over 1 month, 6 months, 1 year, and 5 years periods</li>
             <li><strong>Uptime Z-Score:</strong> Statistical measure comparing this authority's 1-month uptime to other authorities. <span style="color: green; font-weight: bold;">Green (above average)</span>, <span style="color: #ff8c00; font-weight: bold;">Yellow (normal)</span>, <span style="color: red; font-weight: bold;">Red (significantly below average, ≤-2.0)</span></li>
-            <li><strong>Version:</strong> Current Tor software version running on the authority</li>
-            <li><strong>Platform:</strong> Full platform description including Tor version and operating system</li>
-            <li><strong>Rec. Ver.:</strong> Recommended version compliance. <span style="color: green; font-weight: bold;">✅ = On recommended version</span>, <span style="color: red; font-weight: bold;">❌ = Not on recommended version</span></li>
-            <li><strong>First Seen:</strong> When this authority first appeared in the directory consensus</li>
-            <li><strong>Last Restarted:</strong> When the authority software was last restarted</li>
+            <li><strong>Rec. Ver.:</strong> <span style="color: green; font-weight: bold;">Yes</span> = On recommended version, <span style="color: red; font-weight: bold;">No</span> = Not recommended</li>
+            <li><strong>Flag Thresholds:</strong> Requirements for relays to receive Guard/Stable/Fast flags (varies per authority)</li>
         </ul>
     </div>
 

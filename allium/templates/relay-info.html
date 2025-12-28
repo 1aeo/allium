@@ -447,11 +447,12 @@ Version (Running | Recommended | Status)
 {# Consensus Diagnostics Section - Shows per-authority voting information #}
 {% if relay.collector_diagnostics and relay.collector_diagnostics.available %}
 {% set diag = relay.collector_diagnostics %}
+{% set rv = diag.relay_values %}
 <div class="row" style="margin-top: 20px;">
 <div class="col-md-12">
 <h3 id="consensus-diagnostics">
 <div class="section-header">
-<a href="#consensus-diagnostics" class="anchor-link">Consensus Diagnostics</a>
+<a href="#consensus-diagnostics" class="anchor-link">🔍 Consensus Diagnostics</a>
 </div>
 </h3>
 <p class="text-muted" style="font-size: 13px; margin-bottom: 15px;">
@@ -492,41 +493,204 @@ Real-time data from <a href="https://collector.torproject.org" target="_blank" r
 </div>
 {% endif %}
 
-{# Per-Authority Voting Table #}
-<h4 id="authority-votes">
+{# ============== TABLE 1: SUMMARY (Quick Answers) ============== #}
+<h4 id="relay-summary">
 <div class="section-header">
-<a href="#authority-votes" class="anchor-link">Per-Authority Voting Details</a>
+<a href="#relay-summary" class="anchor-link">Summary: Your Relay vs Consensus</a>
 </div>
 </h4>
 <p class="text-muted" style="font-size: 12px; margin-bottom: 10px;">
-Shows how each directory authority sees this relay. Hover over column headers for explanations.
+Quick overview showing your relay's values vs what the MAJORITY of authorities require.
+<span style="color: #28a745;">Green</span> = meets threshold, <span style="color: #dc3545;">Red</span> = below threshold, <span style="color: #ffc107;">Yellow</span> = partial.
 </p>
+{% if rv %}
 <div style="overflow-x: auto;">
 <table class="table table-condensed table-striped" style="font-size: 12px;">
 <thead>
 <tr>
-    <th>Authority</th>
-    <th title="Did this authority vote for this relay?">Voted</th>
-    <th title="IPv4 reachability: Can this authority reach the relay's ORPort?">IPv4</th>
-    <th title="IPv6 reachability: Can this authority reach the relay's IPv6 address? Some authorities don't test IPv6.">IPv6</th>
-    <th title="Flags assigned by this authority">Flags</th>
-    <th title="Bandwidth weight assigned by this authority (KB/s)">Bandwidth</th>
-    <th title="Measured bandwidth from bandwidth scanner (if this authority runs one)">Measured</th>
-    <th title="Weighted Fractional Uptime: Percentage of time relay has been online. ≥98% required for Guard/HSDir flags.">WFU</th>
-    <th title="Time Known: How long this authority has known about this relay. ≥8 days required for Guard flag.">Time Known</th>
+    <th title="Source: CollecTor | File: vote | Metric being measured">Metric</th>
+    <th title="Source: CollecTor | File: vote | Your relay's value">Your Value</th>
+    <th title="Source: CollecTor | File: vote | From flag-thresholds line">Consensus Threshold</th>
+    <th>Status</th>
+</tr>
+</thead>
+<tbody>
+    <tr title="Source: CollecTor | Majority = floor(authority_count/2)+1">
+        <td>In Consensus</td>
+        <td>{{ diag.vote_count }}/{{ diag.total_authorities }} authorities</td>
+        <td>≥{{ diag.majority_required }}/{{ diag.total_authorities }} (majority)</td>
+        <td>
+            {% if diag.in_consensus %}
+                <span style="color: #28a745; font-weight: bold;">IN CONSENSUS</span>
+            {% else %}
+                <span style="color: #dc3545; font-weight: bold;">NOT IN CONSENSUS</span>
+            {% endif %}
+        </td>
+    </tr>
+    <tr title="Source: CollecTor | File: vote | Value: stats wfu=X | Threshold: flag-thresholds guard-wfu=X">
+        <td>WFU (guard-wfu)</td>
+        <td>{{ rv.wfu_display }}</td>
+        <td>≥98% (all authorities)</td>
+        <td>
+            {% if rv.wfu_meets %}
+                <span style="color: #28a745; font-weight: bold;">MEETS</span>
+            {% else %}
+                <span style="color: #dc3545; font-weight: bold;">BELOW - cannot get Guard</span>
+            {% endif %}
+        </td>
+    </tr>
+    <tr title="Source: CollecTor | File: vote | Value: stats tk=X | Threshold: flag-thresholds guard-tk=X">
+        <td>Time Known (tk)</td>
+        <td>{{ rv.tk_display }}</td>
+        <td>≥8 days (all authorities)</td>
+        <td>
+            {% if rv.tk_meets %}
+                <span style="color: #28a745; font-weight: bold;">MEETS</span>
+            {% else %}
+                <span style="color: #dc3545; font-weight: bold;">BELOW - need {{ "%.1f"|format(rv.tk_days_needed) }} more days</span>
+            {% endif %}
+        </td>
+    </tr>
+    <tr title="Source: CollecTor | File: vote | Value: w Measured=X | Threshold: flag-thresholds guard-bw-inc-exits=X">
+        <td>Guard BW</td>
+        <td>{{ rv.measured_bw_display }}</td>
+        <td>{{ rv.guard_bw_range }} (varies)</td>
+        <td>
+            {% if rv.guard_bw_meets_all %}
+                <span style="color: #28a745; font-weight: bold;">MEETS - all authorities</span>
+            {% elif rv.guard_bw_meets_some %}
+                <span style="color: #ffc107; font-weight: bold;">PARTIAL - {{ rv.guard_bw_meets_count }}/{{ rv.total_authorities }} authorities</span>
+            {% else %}
+                <span style="color: #dc3545; font-weight: bold;">BELOW - no authorities</span>
+            {% endif %}
+        </td>
+    </tr>
+    <tr title="Source: CollecTor | File: vote | Value: stats tk=X | Threshold: flag-thresholds stable-uptime=X">
+        <td>Stable Uptime</td>
+        <td>{{ rv.tk_display }}</td>
+        <td>{{ rv.stable_range }} (varies)</td>
+        <td>
+            {% if rv.stable_meets_all %}
+                <span style="color: #28a745; font-weight: bold;">MEETS - all authorities</span>
+            {% else %}
+                <span style="color: #ffc107; font-weight: bold;">PARTIAL - {{ rv.stable_meets_count }}/{{ rv.total_authorities }}</span>
+            {% endif %}
+        </td>
+    </tr>
+    <tr title="Source: CollecTor | File: vote | Value: w Measured=X | Threshold: flag-thresholds fast-speed=X">
+        <td>Fast Speed</td>
+        <td>{{ rv.fast_speed_display }}</td>
+        <td>{{ rv.fast_range }} (varies)</td>
+        <td>
+            {% if rv.fast_meets_all %}
+                <span style="color: #28a745; font-weight: bold;">MEETS - all authorities</span>
+            {% else %}
+                <span style="color: #ffc107; font-weight: bold;">PARTIAL - {{ rv.fast_meets_count }}/{{ rv.total_authorities }}</span>
+            {% endif %}
+        </td>
+    </tr>
+    <tr title="Source: CollecTor | File: vote | Threshold: flag-thresholds hsdir-wfu=X (typically 98%)">
+        <td>HSDir WFU</td>
+        <td>{{ rv.wfu_display }}</td>
+        <td>≥{{ "%.1f"|format(rv.hsdir_wfu_threshold * 100) }}% (from all auths)</td>
+        <td>
+            {% if rv.hsdir_wfu_meets %}
+                <span style="color: #28a745; font-weight: bold;">MEETS</span>
+            {% else %}
+                <span style="color: #dc3545; font-weight: bold;">BELOW - cannot get HSDir</span>
+            {% endif %}
+        </td>
+    </tr>
+    <tr title="Source: CollecTor | File: vote | Threshold: flag-thresholds hsdir-tk=X (~10 days)">
+        <td>HSDir TK</td>
+        <td>{{ rv.tk_display }}</td>
+        <td>≥{{ "%.1f"|format(rv.hsdir_tk_threshold / 86400) }} days (from all auths)</td>
+        <td>
+            {% if rv.hsdir_tk_meets %}
+                <span style="color: #28a745; font-weight: bold;">MEETS</span>
+            {% else %}
+                <span style="color: #dc3545; font-weight: bold;">BELOW - need {{ "%.1f"|format(rv.hsdir_tk_days_needed) }} more days</span>
+            {% endif %}
+        </td>
+    </tr>
+    <tr title="Source: CollecTor | File: vote | Has 'r' entry = IPv4 reachable">
+        <td>IPv4 Reachable</td>
+        <td>{{ rv.ipv4_reachable_count }}/{{ rv.total_authorities }} authorities</td>
+        <td>≥{{ diag.majority_required }}/{{ diag.total_authorities }} (majority)</td>
+        <td>
+            {% if rv.ipv4_reachable_count >= diag.majority_required %}
+                <span style="color: #28a745; font-weight: bold;">REACHABLE</span>
+            {% else %}
+                <span style="color: #dc3545; font-weight: bold;">NOT REACHABLE</span>
+            {% endif %}
+        </td>
+    </tr>
+    <tr title="Source: CollecTor | File: vote | Has 'a' line = IPv6 reachable | Some authorities don't test IPv6">
+        <td>IPv6 Reachable</td>
+        <td>{{ rv.ipv6_reachable_count }}/{{ rv.ipv6_tested_count }} tested</td>
+        <td>≥majority of testers</td>
+        <td>
+            {% if rv.ipv6_tested_count == 0 %}
+                <span style="color: #6c757d; font-weight: bold;">NOT TESTED</span>
+            {% elif rv.ipv6_reachable_count >= (rv.ipv6_tested_count // 2 + 1) %}
+                <span style="color: #28a745; font-weight: bold;">REACHABLE</span>
+            {% elif rv.ipv6_reachable_count > 0 %}
+                <span style="color: #ffc107; font-weight: bold;">PARTIAL</span>
+            {% else %}
+                <span style="color: #dc3545; font-weight: bold;">NOT REACHABLE</span>
+            {% endif %}
+        </td>
+    </tr>
+</tbody>
+</table>
+</div>
+{% endif %}
+
+{# Actionable advice based on issues #}
+{% if diag.advice %}
+<div style="background: #e7f3ff; border: 1px solid #b3d7ff; border-radius: 6px; padding: 15px; margin: 20px 0;">
+    <strong>💡 Advice:</strong>
+    <ul style="margin: 5px 0 0 0; padding-left: 20px;">
+    {% for advice_item in diag.advice %}
+        <li>{{ advice_item }}</li>
+    {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+{# ============== TABLE 2: PER-AUTHORITY DETAILS (Diagnosis) ============== #}
+<h4 id="authority-votes">
+<div class="section-header">
+<a href="#authority-votes" class="anchor-link">Per-Authority Details</a>
+</div>
+</h4>
+<p class="text-muted" style="font-size: 12px; margin-bottom: 10px;">
+Detailed breakdown showing what EACH authority sees. Use to diagnose specific issues.
+Text color: <span style="color: #28a745;">green</span> = meets threshold, 
+<span style="color: #dc3545;">red</span> = below threshold,
+<span style="color: #6c757d;">gray</span> = not tested/not applicable.
+</p>
+<div style="overflow-x: auto;">
+<table class="table table-condensed table-striped" style="font-size: 11px;">
+<thead>
+<tr>
+    <th title="Source: Onionoo | File: details | Field: nickname, fingerprint">Authority</th>
+    <th title="Source: CollecTor | File: vote | Relay reachable via IPv4 (has 'r' entry)">IPv4</th>
+    <th title="Source: CollecTor | File: vote | Field: 'a' line | N/T = authority doesn't test IPv6">IPv6</th>
+    <th title="Source: CollecTor | File: vote | Field: 's' line (ALL flags)">Flags</th>
+    <th title="Source: CollecTor | File: vote | Field: w Measured=X | N/A = no bandwidth-file-headers">Meas. BW</th>
+    <th title="Source: CollecTor | File: vote | Your: stats wfu=X | Threshold: guard-wfu=X, hsdir-wfu=X">WFU</th>
+    <th title="Source: CollecTor | File: vote | Your: stats tk=X | Threshold: guard-tk=X">TK</th>
+    <th title="Source: CollecTor | File: vote | Threshold: guard-bw-inc-exits=X (varies by authority)">Guard BW</th>
+    <th title="Source: CollecTor | File: vote | Threshold: stable-uptime=X, stable-mtbf=X">Stable</th>
+    <th title="Source: CollecTor | File: vote | Threshold: fast-speed=X (varies by authority)">Fast</th>
+    <th title="Source: CollecTor | File: vote | Threshold: hsdir-tk=X (~10 days), requires hsdir-wfu">HSDir TK</th>
 </tr>
 </thead>
 <tbody>
 {% for vote in diag.authority_table %}
-<tr>
+<tr class="{% if not vote.voted %}row-not-voted{% endif %}">
     <td><strong>{{ vote.authority }}</strong>{% if vote.is_bw_authority %} <span title="Runs bandwidth scanner">📊</span>{% endif %}</td>
-    <td>
-        {% if vote.voted %}
-            <span style="color: #28a745; font-weight: bold;">✓</span>
-        {% else %}
-            <span style="color: #dc3545; font-weight: bold;">✗</span>
-        {% endif %}
-    </td>
     <td>
         {% if vote.ipv4_reachable %}
             <span style="color: #28a745;">Yes</span>
@@ -540,10 +704,10 @@ Shows how each directory authority sees this relay. Hover over column headers fo
         {% elif vote.ipv6_reachable == false %}
             <span style="color: #dc3545;">No</span>
         {% else %}
-            <span style="color: #6c757d;" title="Authority doesn't test IPv6">N/T</span>
+            <span style="color: #6c757d;" title="This authority doesn't test IPv6">N/T</span>
         {% endif %}
     </td>
-    <td style="max-width: 200px; word-wrap: break-word;">
+    <td style="max-width: 150px; word-wrap: break-word; font-size: 10px;">
         {% if vote.flags %}
             {{ vote.flags_display }}
         {% else %}
@@ -551,24 +715,20 @@ Shows how each directory authority sees this relay. Hover over column headers fo
         {% endif %}
     </td>
     <td>
-        {% if vote.bandwidth is not none %}
-            {{ vote.bandwidth_display }}
+        {% if vote.is_bw_authority %}
+            {% if vote.measured is not none %}
+                {{ vote.measured_display }}
+            {% else %}
+                <span style="color: #6c757d;">—</span>
+            {% endif %}
         {% else %}
-            <span style="color: #6c757d;">—</span>
+            <span style="color: #6c757d;" title="Does not run bandwidth scanner">N/A</span>
         {% endif %}
     </td>
     <td>
-        {% if vote.measured is not none %}
-            {{ vote.measured_display }}
-        {% elif not vote.is_bw_authority %}
-            <span style="color: #6c757d;" title="Not a bandwidth authority">N/A</span>
-        {% else %}
-            <span style="color: #6c757d;">—</span>
-        {% endif %}
-    </td>
-    <td>
-        {% if vote.wfu is not none %}
-            <span class="{% if vote.wfu_class == 'success' %}text-success{% elif vote.wfu_class == 'danger' %}text-danger{% elif vote.wfu_class == 'warning' %}text-warning{% endif %}">
+        {% if vote.voted and vote.wfu is not none %}
+            <span style="color: {% if vote.wfu_meets %}#28a745{% else %}#dc3545{% endif %};"
+                  title="Threshold: ≥{{ "%.1f"|format(vote.guard_wfu_threshold * 100) }}%">
                 {{ vote.wfu_display }}
             </span>
         {% else %}
@@ -576,9 +736,50 @@ Shows how each directory authority sees this relay. Hover over column headers fo
         {% endif %}
     </td>
     <td>
-        {% if vote.tk is not none %}
-            <span class="{% if vote.tk_class == 'success' %}text-success{% elif vote.tk_class == 'danger' %}text-danger{% elif vote.tk_class == 'warning' %}text-warning{% endif %}">
+        {% if vote.voted and vote.tk is not none %}
+            <span style="color: {% if vote.tk_meets %}#28a745{% else %}#dc3545{% endif %};"
+                  title="Threshold: ≥{{ "%.1f"|format(vote.guard_tk_threshold / 86400) }} days">
                 {{ vote.tk_display }}
+            </span>
+        {% else %}
+            <span style="color: #6c757d;">—</span>
+        {% endif %}
+    </td>
+    <td>
+        {% if vote.voted and vote.guard_bw_threshold %}
+            <span style="color: {% if vote.guard_bw_meets %}#28a745{% else %}#dc3545{% endif %};"
+                  title="Your BW: {{ rv.measured_bw_display if rv else 'N/A' }}">
+                ≥{{ vote.guard_bw_threshold_display }}
+            </span>
+        {% else %}
+            <span style="color: #6c757d;">—</span>
+        {% endif %}
+    </td>
+    <td>
+        {% if vote.voted and vote.stable_threshold %}
+            <span style="color: {% if vote.stable_meets %}#28a745{% else %}#dc3545{% endif %};"
+                  title="Your uptime: {{ rv.tk_display if rv else 'N/A' }}">
+                ≥{{ vote.stable_threshold_display }}
+            </span>
+        {% else %}
+            <span style="color: #6c757d;">—</span>
+        {% endif %}
+    </td>
+    <td>
+        {% if vote.voted and vote.fast_threshold %}
+            <span style="color: {% if vote.fast_meets %}#28a745{% else %}#dc3545{% endif %};"
+                  title="Your speed: {{ rv.fast_speed_display if rv else 'N/A' }}">
+                ≥{{ vote.fast_threshold_display }}
+            </span>
+        {% else %}
+            <span style="color: #6c757d;">—</span>
+        {% endif %}
+    </td>
+    <td>
+        {% if vote.voted and vote.hsdir_tk_threshold %}
+            <span style="color: {% if vote.hsdir_tk_meets %}#28a745{% else %}#dc3545{% endif %};"
+                  title="Your TK: {{ rv.tk_display if rv else 'N/A' }} | HSDir WFU: {{ "%.1f"|format(vote.hsdir_wfu_threshold * 100) }}%">
+                ≥{{ vote.hsdir_tk_threshold_display }}
             </span>
         {% else %}
             <span style="color: #6c757d;">—</span>
@@ -589,6 +790,12 @@ Shows how each directory authority sees this relay. Hover over column headers fo
 </tbody>
 </table>
 </div>
+
+<p style="font-size: 11px; color: #666; margin-top: 5px;">
+N/T = authority doesn't test IPv6 • 
+N/A = authority doesn't run bandwidth scanner •
+📊 = runs bandwidth scanner
+</p>
 
 {# Flag Eligibility Summary #}
 <h4 id="flag-eligibility" style="margin-top: 20px;">
@@ -688,11 +895,22 @@ Shows eligibility for major flags based on each authority's thresholds. Need maj
     <strong>Legend:</strong>
     <ul style="margin: 5px 0 0 0; padding-left: 20px;">
         <li><strong>WFU (Weighted Fractional Uptime):</strong> Must be ≥98% for Guard and HSDir flags. <span style="color: #28a745;">Green</span> = meets threshold, <span style="color: #dc3545;">Red</span> = below threshold.</li>
-        <li><strong>Time Known (TK):</strong> How long the authority has tracked this relay. Must be ≥8 days for Guard flag.</li>
+        <li><strong>Time Known (TK):</strong> How long the authority has tracked this relay. Must be ≥8 days for Guard flag, ~10 days for HSDir.</li>
+        <li><strong>Guard BW:</strong> Minimum bandwidth to be considered for Guard flag. Varies by authority.</li>
+        <li><strong>Stable:</strong> Minimum uptime to get Stable flag. Varies by authority.</li>
+        <li><strong>Fast:</strong> Minimum speed to get Fast flag. Varies by authority.</li>
         <li><strong>N/T:</strong> Not Tested - authority doesn't test this (e.g., some don't test IPv6).</li>
+        <li><strong>N/A:</strong> Not Applicable - authority doesn't provide this data (e.g., non-BW authorities don't measure bandwidth).</li>
         <li><strong>📊:</strong> Authority runs a bandwidth scanner and provides measured bandwidth values.</li>
     </ul>
 </div>
+
+<p style="margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 4px; font-size: 12px; color: #666;">
+    <strong>Note:</strong> Each authority calculates thresholds based on the relays it observes.
+    WFU (98% for Guard/HSDir) and Time Known (8 days for Guard, ~10 days for HSDir) are typically constant,
+    but bandwidth-related thresholds (Guard BW, Stable, Fast) vary significantly across authorities.
+    All threshold values are pulled dynamically from the flag-thresholds line in each authority's vote file.
+</p>
 
 </div>
 </div>

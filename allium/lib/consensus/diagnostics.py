@@ -19,7 +19,13 @@ def format_relay_diagnostics(diagnostics: dict, flag_thresholds: dict = None) ->
     Returns:
         dict: Formatted diagnostics ready for template rendering
     """
-    if not diagnostics or diagnostics.get('error'):
+    if not diagnostics:
+        return {
+            'available': False,
+            'error': 'No diagnostic data available',
+            'in_consensus': False,
+        }
+    if diagnostics.get('error'):
         return {
             'available': False,
             'error': diagnostics.get('error', 'No diagnostic data available'),
@@ -37,8 +43,11 @@ def format_relay_diagnostics(diagnostics: dict, flag_thresholds: dict = None) ->
         # Consensus status display
         'consensus_status': _format_consensus_status(diagnostics),
         
+        # Relay values summary (for Summary table)
+        'relay_values': _format_relay_values(diagnostics, flag_thresholds),
+        
         # Per-authority voting details
-        'authority_table': _format_authority_table(diagnostics),
+        'authority_table': _format_authority_table_enhanced(diagnostics, flag_thresholds),
         
         # Flag eligibility summary
         'flag_summary': _format_flag_summary(diagnostics),
@@ -55,6 +64,246 @@ def format_relay_diagnostics(diagnostics: dict, flag_thresholds: dict = None) ->
     }
     
     return formatted
+
+
+def _format_relay_values(diagnostics: dict, flag_thresholds: dict = None) -> dict:
+    """
+    Format relay values summary for the Summary table.
+    Shows your relay's values vs consensus thresholds.
+    """
+    authority_votes = diagnostics.get('authority_votes', [])
+    flag_eligibility = diagnostics.get('flag_eligibility', {})
+    reachability = diagnostics.get('reachability', {})
+    total_authorities = diagnostics.get('total_authorities', 9)
+    majority_required = diagnostics.get('majority_required', 5)
+    
+    # Extract relay's values from first available authority
+    relay_wfu = None
+    relay_tk = None
+    relay_bw = None
+    
+    for vote in authority_votes:
+        if relay_wfu is None and vote.get('wfu') is not None:
+            relay_wfu = vote['wfu']
+        if relay_tk is None and vote.get('tk') is not None:
+            relay_tk = vote['tk']
+        if relay_bw is None:
+            relay_bw = vote.get('measured') or vote.get('bandwidth')
+    
+    # Calculate threshold ranges from flag_thresholds
+    guard_wfu_threshold = 0.98  # Default
+    guard_tk_threshold = 691200  # 8 days default
+    hsdir_wfu_threshold = 0.98
+    hsdir_tk_threshold = 864000  # 10 days default
+    
+    guard_bw_values = []
+    stable_uptime_values = []
+    stable_mtbf_values = []
+    fast_speed_values = []
+    
+    if flag_thresholds:
+        for auth_name, thresholds in flag_thresholds.items():
+            if 'guard-wfu' in thresholds:
+                val = thresholds['guard-wfu']
+                if isinstance(val, str):
+                    val = float(val.replace('%', '')) / 100
+                guard_wfu_threshold = max(guard_wfu_threshold, val) if val else guard_wfu_threshold
+            if 'guard-tk' in thresholds:
+                guard_tk_threshold = max(guard_tk_threshold, thresholds['guard-tk'] or 0)
+            if 'guard-bw-inc-exits' in thresholds:
+                guard_bw_values.append(thresholds['guard-bw-inc-exits'])
+            if 'stable-uptime' in thresholds:
+                stable_uptime_values.append(thresholds['stable-uptime'])
+            if 'stable-mtbf' in thresholds:
+                stable_mtbf_values.append(thresholds['stable-mtbf'])
+            if 'fast-speed' in thresholds:
+                fast_speed_values.append(thresholds['fast-speed'])
+            if 'hsdir-wfu' in thresholds:
+                val = thresholds['hsdir-wfu']
+                if isinstance(val, str):
+                    val = float(val.replace('%', '')) / 100
+                hsdir_wfu_threshold = max(hsdir_wfu_threshold, val) if val else hsdir_wfu_threshold
+            if 'hsdir-tk' in thresholds:
+                hsdir_tk_threshold = max(hsdir_tk_threshold, thresholds['hsdir-tk'] or 0)
+    
+    # Calculate Guard BW analysis
+    guard_bw_meets_count = flag_eligibility.get('guard', {}).get('eligible_count', 0)
+    guard_bw_meets_all = guard_bw_meets_count == total_authorities
+    guard_bw_meets_some = guard_bw_meets_count > 0
+    guard_bw_range = _format_range(guard_bw_values, _format_bandwidth_value) if guard_bw_values else 'N/A'
+    
+    # Calculate Stable analysis
+    stable_meets_count = flag_eligibility.get('stable', {}).get('eligible_count', 0)
+    stable_meets_all = stable_meets_count == total_authorities
+    stable_range = _format_range(stable_uptime_values, lambda x: f"{x/86400:.1f}d") if stable_uptime_values else 'N/A'
+    stable_mtbf_range = _format_range(stable_mtbf_values, lambda x: f"{x/86400:.1f}d") if stable_mtbf_values else 'N/A'
+    
+    # Calculate Fast analysis
+    fast_meets_count = flag_eligibility.get('fast', {}).get('eligible_count', 0)
+    fast_meets_all = fast_meets_count == total_authorities
+    fast_range = _format_range(fast_speed_values, _format_bandwidth_value) if fast_speed_values else 'N/A'
+    
+    # IPv4/IPv6 reachability
+    ipv4_reachable_count = reachability.get('ipv4_reachable_count', 0)
+    ipv6_reachable_count = reachability.get('ipv6_reachable_count', 0)
+    ipv6_not_tested = reachability.get('ipv6_not_tested_authorities', [])
+    ipv6_tested_count = total_authorities - len(ipv6_not_tested)
+    
+    return {
+        # WFU values
+        'wfu': relay_wfu,
+        'wfu_display': f"{relay_wfu * 100:.1f}%" if relay_wfu else 'N/A',
+        'wfu_meets': relay_wfu and relay_wfu >= guard_wfu_threshold,
+        'guard_wfu_threshold': guard_wfu_threshold,
+        
+        # Time Known values
+        'tk': relay_tk,
+        'tk_display': f"{relay_tk / 86400:.1f} days" if relay_tk else 'N/A',
+        'tk_meets': relay_tk and relay_tk >= guard_tk_threshold,
+        'guard_tk_threshold': guard_tk_threshold,
+        'tk_days_needed': (guard_tk_threshold - (relay_tk or 0)) / 86400 if relay_tk and relay_tk < guard_tk_threshold else 0,
+        
+        # Guard BW values
+        'measured_bw': relay_bw,
+        'measured_bw_display': _format_bandwidth_value(relay_bw),
+        'guard_bw_range': guard_bw_range,
+        'guard_bw_meets_all': guard_bw_meets_all,
+        'guard_bw_meets_some': guard_bw_meets_some,
+        'guard_bw_meets_count': guard_bw_meets_count,
+        
+        # Stable values
+        'stable_range': stable_range,
+        'stable_meets_all': stable_meets_all,
+        'stable_meets_count': stable_meets_count,
+        'stable_mtbf_range': stable_mtbf_range,
+        
+        # Fast values
+        'fast_speed': relay_bw,
+        'fast_speed_display': _format_bandwidth_value(relay_bw),
+        'fast_range': fast_range,
+        'fast_meets_all': fast_meets_all,
+        'fast_meets_count': fast_meets_count,
+        
+        # HSDir values
+        'hsdir_wfu_threshold': hsdir_wfu_threshold,
+        'hsdir_tk_threshold': hsdir_tk_threshold,
+        'hsdir_wfu_meets': relay_wfu and relay_wfu >= hsdir_wfu_threshold,
+        'hsdir_tk_meets': relay_tk and relay_tk >= hsdir_tk_threshold,
+        'hsdir_tk_days_needed': (hsdir_tk_threshold - (relay_tk or 0)) / 86400 if relay_tk and relay_tk < hsdir_tk_threshold else 0,
+        
+        # Reachability values
+        'ipv4_reachable_count': ipv4_reachable_count,
+        'ipv6_reachable_count': ipv6_reachable_count,
+        'ipv6_tested_count': ipv6_tested_count,
+        'total_authorities': total_authorities,
+        'majority_required': majority_required,
+    }
+
+
+def _format_range(values: list, formatter) -> str:
+    """Format a range of values."""
+    if not values:
+        return 'N/A'
+    values = [v for v in values if v is not None and v > 0]
+    if not values:
+        return 'N/A'
+    min_val = min(values)
+    max_val = max(values)
+    if min_val == max_val:
+        return formatter(min_val)
+    return f"{formatter(min_val)}-{formatter(max_val)}"
+
+
+def _format_authority_table_enhanced(diagnostics: dict, flag_thresholds: dict = None) -> List[dict]:
+    """Format authority votes into table rows with threshold comparison."""
+    authority_votes = diagnostics.get('authority_votes', [])
+    
+    rows = []
+    for vote in authority_votes:
+        auth_name = vote.get('authority', 'Unknown')
+        thresholds = flag_thresholds.get(auth_name, {}) if flag_thresholds else {}
+        
+        # Get threshold values for this authority
+        guard_wfu_threshold = thresholds.get('guard-wfu', 0.98)
+        if isinstance(guard_wfu_threshold, str):
+            guard_wfu_threshold = float(guard_wfu_threshold.replace('%', '')) / 100
+        guard_tk_threshold = thresholds.get('guard-tk', 691200)
+        guard_bw_threshold = thresholds.get('guard-bw-inc-exits', 0)
+        stable_threshold = thresholds.get('stable-uptime', 0)
+        fast_threshold = thresholds.get('fast-speed', 0)
+        hsdir_tk_threshold = thresholds.get('hsdir-tk', 864000)
+        hsdir_wfu_threshold = thresholds.get('hsdir-wfu', 0.98)
+        if isinstance(hsdir_wfu_threshold, str):
+            hsdir_wfu_threshold = float(hsdir_wfu_threshold.replace('%', '')) / 100
+        
+        relay_wfu = vote.get('wfu')
+        relay_tk = vote.get('tk')
+        relay_bw = vote.get('measured') or vote.get('bandwidth')
+        
+        row = {
+            'authority': auth_name,
+            'voted': vote.get('voted', False),
+            'voted_display': 'Yes' if vote.get('voted') else 'No',
+            'voted_class': 'success' if vote.get('voted') else 'danger',
+            
+            # Flags
+            'flags': vote.get('flags', []),
+            'flags_display': ', '.join(vote.get('flags', [])) or 'None',
+            
+            # Bandwidth
+            'bandwidth': vote.get('bandwidth'),
+            'bandwidth_display': _format_bandwidth_value(vote.get('bandwidth')),
+            'measured': vote.get('measured'),
+            'measured_display': _format_bandwidth_value(vote.get('measured')),
+            'is_bw_authority': vote.get('is_bw_authority', False),
+            
+            # WFU with threshold comparison
+            'wfu': relay_wfu,
+            'wfu_display': vote.get('wfu_display', 'N/A'),
+            'wfu_class': _get_wfu_class(relay_wfu),
+            'wfu_meets': relay_wfu and relay_wfu >= guard_wfu_threshold,
+            'guard_wfu_threshold': guard_wfu_threshold,
+            
+            # TK with threshold comparison
+            'tk': relay_tk,
+            'tk_display': vote.get('tk_display', 'N/A'),
+            'tk_class': _get_tk_class(relay_tk),
+            'tk_meets': relay_tk and relay_tk >= guard_tk_threshold,
+            'guard_tk_threshold': guard_tk_threshold,
+            
+            # Guard BW threshold
+            'guard_bw_threshold': guard_bw_threshold,
+            'guard_bw_threshold_display': _format_bandwidth_value(guard_bw_threshold),
+            'guard_bw_meets': relay_bw and relay_bw >= guard_bw_threshold if guard_bw_threshold else True,
+            
+            # Stable threshold
+            'stable_threshold': stable_threshold,
+            'stable_threshold_display': f"{stable_threshold/86400:.1f}d" if stable_threshold else 'N/A',
+            'stable_meets': relay_tk and relay_tk >= stable_threshold if stable_threshold else True,
+            
+            # Fast threshold
+            'fast_threshold': fast_threshold,
+            'fast_threshold_display': _format_bandwidth_value(fast_threshold),
+            'fast_meets': relay_bw and relay_bw >= fast_threshold if fast_threshold else True,
+            
+            # HSDir thresholds
+            'hsdir_tk_threshold': hsdir_tk_threshold,
+            'hsdir_tk_threshold_display': f"{hsdir_tk_threshold/86400:.1f}d" if hsdir_tk_threshold else 'N/A',
+            'hsdir_tk_meets': relay_tk and relay_tk >= hsdir_tk_threshold,
+            'hsdir_wfu_threshold': hsdir_wfu_threshold,
+            
+            # Reachability
+            'ipv4_reachable': vote.get('ipv4_reachable', False),
+            'ipv4_display': 'Yes' if vote.get('ipv4_reachable') else 'No',
+            'ipv4_class': 'success' if vote.get('ipv4_reachable') else 'danger',
+            
+            'ipv6_reachable': vote.get('ipv6_reachable'),
+            'ipv6_display': _format_ipv6_status(vote.get('ipv6_reachable'), vote.get('ipv6_address')),
+            'ipv6_class': _get_ipv6_class(vote.get('ipv6_reachable')),
+        }
+        rows.append(row)
+    
+    return rows
 
 
 def format_authority_diagnostics(
