@@ -161,7 +161,7 @@
                 
                 {# NEW: BW Authority status #}
                 <td>
-                    {% if authority.is_bw_authority %}
+                    {% if authority.collector_data and authority.collector_data.is_bw_authority %}
                         <span style="color: #28a745; font-weight: bold;" title="Runs bandwidth scanner (sbws)">Yes</span>
                     {% else %}
                         <span style="color: #6c757d;" title="Does not run bandwidth scanner">No</span>

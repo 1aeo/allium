@@ -345,9 +345,11 @@ class CollectorFetcher:
             
             # Parse relay entry (r line)
             elif line.startswith('r '):
-                if current_relay:
+                if current_relay and current_relay.get('fingerprint'):
                     vote['relays'][current_relay['fingerprint']] = current_relay
                 current_relay = self._parse_relay_r_line(line)
+                if current_relay is None:
+                    continue  # Skip malformed relay entries
             
             # Parse additional relay lines
             elif current_relay:
@@ -361,18 +363,22 @@ class CollectorFetcher:
                     # IPv6 address line
                     current_relay['ipv6_address'] = line[2:]
                     current_relay['ipv6_reachable'] = True
+                elif line.startswith('stats '):
+                    # Stats line: stats wfu=X.XX tk=XXXX mtbf=XXXX
+                    current_relay.update(self._parse_stats_line(line))
         
         # Don't forget the last relay
-        if current_relay:
+        if current_relay and current_relay.get('fingerprint'):
             vote['relays'][current_relay['fingerprint']] = current_relay
         
         return vote
     
     def _parse_relay_r_line(self, line: str) -> Optional[dict]:
         """Parse an 'r' line from a vote (relay entry)."""
-        # r <nickname> <identity> <digest> <publication> <IP> <ORPort> <DirPort>
+        # r <nickname> <identity> <digest> <publication_date> <publication_time> <IP> <ORPort> <DirPort>
+        # Example: r lisdex AAAErLudKby6FyVrs1ko3b/Iq6k YpRTARWdwmwEVbePGq0/dy8d3I4 2025-12-27 11:01:03 152.53.144.50 8443 0
         parts = line.split()
-        if len(parts) < 8:
+        if len(parts) < 9:  # Need at least 9 parts (r + 8 fields)
             return None
         
         try:
@@ -385,12 +391,13 @@ class CollectorFetcher:
             identity_bytes = base64.b64decode(identity_b64)
             fingerprint = identity_bytes.hex().upper()
             
+            # Note: parts[4] is date, parts[5] is time, parts[6] is IP
             return {
                 'nickname': parts[1],
                 'fingerprint': fingerprint,
-                'ip': parts[5],
-                'or_port': int(parts[6]),
-                'dir_port': int(parts[7]),
+                'ip': parts[6],
+                'or_port': int(parts[7]),
+                'dir_port': int(parts[8]),
                 'flags': [],
                 'bandwidth': None,
                 'measured': None,
@@ -415,6 +422,27 @@ class CollectorFetcher:
                         result['bandwidth'] = int(value)
                     elif key == 'Measured':
                         result['measured'] = int(value)
+                except ValueError:
+                    pass
+        
+        return result
+    
+    def _parse_stats_line(self, line: str) -> dict:
+        """Parse a 'stats' line (wfu, tk, mtbf values)."""
+        result = {}
+        # stats wfu=0.987654 tk=1234567 mtbf=7654321
+        parts = line[6:].split()  # Skip 'stats '
+        
+        for part in parts:
+            if '=' in part:
+                key, value = part.split('=', 1)
+                try:
+                    if key == 'wfu':
+                        result['wfu'] = float(value)
+                    elif key == 'tk':
+                        result['tk'] = int(value)
+                    elif key == 'mtbf':
+                        result['mtbf'] = int(value)
                 except ValueError:
                     pass
         
@@ -557,6 +585,9 @@ class CollectorFetcher:
         """
         authority_votes = []
         
+        # Create reverse lookup for fingerprint -> name
+        name_to_fingerprint = {v: k for k, v in AUTHORITIES.items()}
+        
         for auth_name in sorted(AUTHORITIES.values()):
             vote_info = relay.get('votes', {}).get(auth_name, {})
             
@@ -565,6 +596,7 @@ class CollectorFetcher:
             
             authority_votes.append({
                 'authority': auth_name,
+                'fingerprint': name_to_fingerprint.get(auth_name, ''),
                 'voted': voted,
                 'flags': flags,
                 'bandwidth': vote_info.get('bandwidth'),

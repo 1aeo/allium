@@ -2224,6 +2224,36 @@ class Relays:
         # Filter authorities from existing relay data (no new processing)
         authorities = [relay for relay in self.json["relays"] if 'Authority' in relay.get('flags', [])]
         
+        # Attach collector data to authorities if available
+        collector_data = getattr(self, 'collector_consensus_data', None)
+        if collector_data:
+            votes = collector_data.get('votes', {})
+            bw_authorities = set(collector_data.get('bw_authorities', []))
+            
+            for authority in authorities:
+                auth_nickname = authority.get('nickname', '').lower()
+                auth_fingerprint = authority.get('fingerprint', '')
+                auth_fp_prefix = auth_fingerprint[:8].upper() if auth_fingerprint else ''
+                
+                # Check if this authority voted (has a vote file)
+                # Match by nickname or fingerprint prefix (some votes use partial fingerprint)
+                voted = any(
+                    auth_name.lower() == auth_nickname or 
+                    auth_name.upper() == auth_fp_prefix
+                    for auth_name in votes.keys()
+                )
+                # Check if this authority is a bandwidth authority
+                # Match by nickname or fingerprint prefix
+                is_bw = any(
+                    b.lower() == auth_nickname or b.upper() == auth_fp_prefix
+                    for b in bw_authorities
+                )
+                
+                authority['collector_data'] = {
+                    'voted': voted,
+                    'is_bw_authority': is_bw,
+                }
+        
         # Reuse existing consolidated uptime results (already computed)
         authority_network_stats = {}
         above_average_uptime = []

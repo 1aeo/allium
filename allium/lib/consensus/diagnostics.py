@@ -176,6 +176,9 @@ def _format_relay_values(diagnostics: dict, flag_thresholds: dict = None) -> dic
         'stable_meets_all': stable_meets_all,
         'stable_meets_count': stable_meets_count,
         'stable_mtbf_range': stable_mtbf_range,
+        'stable_mtbf_meets_all': stable_meets_all,  # Same count for simplicity
+        'stable_mtbf_meets_count': stable_meets_count,
+        'mtbf_display': f"{relay_tk / 86400:.0f} days" if relay_tk else 'N/A',
         
         # Fast values
         'fast_speed': relay_bw,
@@ -242,6 +245,7 @@ def _format_authority_table_enhanced(diagnostics: dict, flag_thresholds: dict = 
         
         row = {
             'authority': auth_name,
+            'fingerprint': vote.get('fingerprint', ''),
             'voted': vote.get('voted', False),
             'voted_display': 'Yes' if vote.get('voted') else 'No',
             'voted_class': 'success' if vote.get('voted') else 'danger',

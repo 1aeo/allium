@@ -577,6 +577,18 @@ Quick overview showing your relay's values vs what the MAJORITY of authorities r
             {% endif %}
         </td>
     </tr>
+    <tr title="Source: CollecTor | File: vote | Value: stats mtbf=X | Threshold: flag-thresholds stable-mtbf=X">
+        <td>Stable MTBF</td>
+        <td>{{ rv.mtbf_display|default('N/A') }}</td>
+        <td>{{ rv.stable_mtbf_range }} (varies)</td>
+        <td>
+            {% if rv.stable_mtbf_meets_all|default(false) %}
+                <span style="color: #28a745; font-weight: bold;">MEETS - all authorities</span>
+            {% else %}
+                <span style="color: #ffc107; font-weight: bold;">PARTIAL - {{ rv.stable_mtbf_meets_count|default(0) }}/{{ rv.total_authorities }}</span>
+            {% endif %}
+        </td>
+    </tr>
     <tr title="Source: CollecTor | File: vote | Value: w Measured=X | Threshold: flag-thresholds fast-speed=X">
         <td>Fast Speed</td>
         <td>{{ rv.fast_speed_display }}</td>
@@ -690,7 +702,16 @@ Text color: <span style="color: #28a745;">green</span> = meets threshold,
 <tbody>
 {% for vote in diag.authority_table %}
 <tr class="{% if not vote.voted %}row-not-voted{% endif %}">
-    <td><strong>{{ vote.authority }}</strong>{% if vote.is_bw_authority %} <span title="Runs bandwidth scanner">📊</span>{% endif %}</td>
+    <td>
+        {% if vote.fingerprint %}
+        <a href="{{ page_ctx.path_prefix }}relay/{{ vote.fingerprint }}/" title="View {{ vote.authority }} relay details" style="text-decoration: underline;">
+            <strong>{{ vote.authority }}</strong> ↗
+        </a>
+        {% else %}
+        <strong>{{ vote.authority }}</strong>
+        {% endif %}
+        {% if vote.is_bw_authority %} <span title="Runs bandwidth scanner">📊</span>{% endif %}
+    </td>
     <td>
         {% if vote.ipv4_reachable %}
             <span style="color: #28a745;">Yes</span>
