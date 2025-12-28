@@ -1251,6 +1251,30 @@ def _get_median_thresholds(flag_thresholds: Dict) -> Dict:
           {% endif %}
         </td>
       </tr>
+      <tr title="Source: CollecTor | File: vote | Threshold: flag-thresholds hsdir-wfu=X (typically 98%)">
+        <td>HSDir WFU</td>
+        <td>{{ '%.1f' % (rv.wfu * 100) }}%</td>
+        <td>≥{{ '%.1f' % (rv.hsdir_wfu_threshold * 100) }}% (from all auths)</td>
+        <td>
+          {% if rv.wfu >= rv.hsdir_wfu_threshold %}
+            <span class="text-success">MEETS</span>
+          {% else %}
+            <span class="text-danger">BELOW - cannot get HSDir</span>
+          {% endif %}
+        </td>
+      </tr>
+      <tr title="Source: CollecTor | File: vote | Threshold: flag-thresholds hsdir-tk=X (~10 days)">
+        <td>HSDir TK</td>
+        <td>{{ (rv.tk / 86400) | round(1) }} days</td>
+        <td>≥{{ (rv.hsdir_tk_threshold / 86400) | round(1) }} days (from all auths)</td>
+        <td>
+          {% if rv.tk >= rv.hsdir_tk_threshold %}
+            <span class="text-success">MEETS</span>
+          {% else %}
+            <span class="text-danger">BELOW - need {{ ((rv.hsdir_tk_threshold - rv.tk) / 86400) | round(1) }} more days</span>
+          {% endif %}
+        </td>
+      </tr>
       <tr title="Source: CollecTor | File: vote | Has 'r' entry = IPv4 reachable">
         <td>IPv4 Reachable</td>
         <td>{{ rv.ipv4_reachable_count }}/{{ rv.total_authorities }} authorities</td>
@@ -1306,13 +1330,14 @@ def _get_median_thresholds(flag_thresholds: Dict) -> Dict:
         <th title="Source: Onionoo | File: details | Field: nickname, fingerprint">Authority</th>
         <th title="Source: CollecTor | File: vote | Relay reachable via IPv4 (has 'r' entry)">IPv4</th>
         <th title="Source: CollecTor | File: vote | Field: 'a' line | N/T = authority doesn't test IPv6">IPv6</th>
-        <th title="Source: CollecTor | File: vote | Field: 's' line (e.g., s Fast Guard Stable)">Flags</th>
+        <th title="Source: CollecTor | File: vote | Field: 's' line (ALL flags: Fast Guard Stable HSDir etc)">Flags</th>
         <th title="Source: CollecTor | File: vote | Field: w Measured=X | N/A = no bandwidth-file-headers">Meas. BW</th>
-        <th title="Source: CollecTor | File: vote | Your: stats wfu=X | Threshold: guard-wfu=X">WFU</th>
+        <th title="Source: CollecTor | File: vote | Your: stats wfu=X | Threshold: guard-wfu=X, hsdir-wfu=X">WFU</th>
         <th title="Source: CollecTor | File: vote | Your: stats tk=X | Threshold: guard-tk=X">TK</th>
-        <th title="Source: CollecTor | File: vote | Your: 25 MB/s | Threshold: guard-bw-inc-exits=X">Guard BW</th>
-        <th title="Source: CollecTor | File: vote | Your: 45d | Threshold: stable-uptime=X">Stable</th>
-        <th title="Source: CollecTor | File: vote | Your: 25 MB/s | Threshold: fast-speed=X">Fast</th>
+        <th title="Source: CollecTor | File: vote | Threshold: guard-bw-inc-exits=X (varies by authority)">Guard BW</th>
+        <th title="Source: CollecTor | File: vote | Threshold: stable-uptime=X, stable-mtbf=X">Stable</th>
+        <th title="Source: CollecTor | File: vote | Threshold: fast-speed=X (varies by authority)">Fast</th>
+        <th title="Source: CollecTor | File: vote | Threshold: hsdir-tk=X (~10 days), requires hsdir-wfu">HSDir TK</th>
       </tr>
     </thead>
     <tbody>
@@ -1417,6 +1442,18 @@ def _get_median_thresholds(flag_thresholds: Dict) -> Dict:
             <span class="text-muted">—</span>
           {% endif %}
         </td>
+        
+        {# HSDir TK - threshold for HSDir flag eligibility #}
+        <td>
+          {% if auth.voted %}
+            <span class="{% if auth.hsdir_tk_meets %}text-success{% else %}text-danger{% endif %}"
+                  title="Your TK: {{ (rv.tk / 86400) | round(1) }} days | HSDir WFU: {{ '%.1f' % (auth.hsdir_wfu_threshold * 100) }}%">
+              ≥{{ (auth.hsdir_tk_threshold / 86400) | round(1) }}d
+            </span>
+          {% else %}
+            <span class="text-muted">—</span>
+          {% endif %}
+        </td>
       </tr>
     {% endfor %}
     </tbody>
@@ -1436,9 +1473,10 @@ def _get_median_thresholds(flag_thresholds: Dict) -> Dict:
   {% endif %}
   
   <p class="note">
-    Note: Each authority calculates thresholds based on the relays it observes. 
-    WFU (98%) and Time Known (8 days) are typically constant across authorities, 
-    but bandwidth-related thresholds (Guard BW, Stable, Fast) vary significantly.
+    Note: Each authority calculates thresholds based on the relays it observes.
+    WFU (98% for Guard/HSDir) and Time Known (8 days for Guard, ~10 days for HSDir) are typically constant,
+    but bandwidth-related thresholds (Guard BW, Stable, Fast) vary significantly across authorities.
+    All threshold values are pulled dynamically from the flag-thresholds line in each authority's vote file.
   </p>
 </section>
 {% endif %}

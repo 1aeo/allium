@@ -226,10 +226,79 @@ These are real questions from the **tor-relays mailing list** and **Tor Project 
 | Guard flag? | CollecTor votes | `stats wfu=`, `stats tk=`, `flag-thresholds guard-*` |
 | Stable flag? | CollecTor votes | `flag-thresholds stable-uptime` |
 | Fast flag? | CollecTor votes | `flag-thresholds fast-speed` |
+| HSDir flag? | CollecTor votes | `flag-thresholds hsdir-wfu`, `hsdir-tk` |
 | Measured bandwidth? | CollecTor votes | `w Measured=X` |
 | Authority reachability? | CollecTor votes | `r` line (IPv4), `a` line (IPv6) |
 | BW scanner status? | CollecTor votes | `bandwidth-file-headers` line present |
 | Authority health? | Direct HTTP + Onionoo | Latency, running status |
+
+---
+
+## 📊 Complete Flag Reference
+
+Directory authorities publish these flags in their `known-flags` line:
+
+```
+Authority BadExit Exit Fast Guard HSDir MiddleOnly Running Stable StaleDesc Sybil V2Dir Valid
+```
+
+### Flags WITH Numeric Thresholds (from `flag-thresholds`)
+
+These flags have thresholds we can display and compare against:
+
+| Flag | Threshold Fields | Description | Shown On |
+|------|------------------|-------------|----------|
+| **Fast** | `fast-speed` | Relay bandwidth exceeds network median | Relay Page, Authority Health |
+| **Guard** | `guard-bw-inc-exits`, `guard-bw-exc-exits`, `guard-tk`, `guard-wfu` | Entry guard eligibility | Relay Page, Authority Health |
+| **HSDir** | `hsdir-wfu`, `hsdir-tk` | Hidden service directory eligibility | Relay Page, Authority Health |
+| **Stable** | `stable-uptime`, `stable-mtbf` | Long-running relay | Relay Page, Authority Health |
+
+**Threshold Details:**
+
+| Threshold | Typical Value | Description |
+|-----------|---------------|-------------|
+| `fast-speed` | 0.1-1.0 MB/s | Minimum bandwidth for Fast flag |
+| `guard-bw-inc-exits` | 10-35 MB/s | Guard bandwidth (including exits) |
+| `guard-bw-exc-exits` | 10-35 MB/s | Guard bandwidth (excluding exits) |
+| `guard-tk` | ~8 days (691200s) | Time authority has known relay |
+| `guard-wfu` | 98% | Weighted Fractional Uptime |
+| `stable-uptime` | 14-20 days | Uptime requirement for Stable |
+| `stable-mtbf` | varies | Mean Time Between Failures |
+| `hsdir-wfu` | 98% | WFU for HSDir |
+| `hsdir-tk` | ~10 days | Time Known for HSDir |
+
+### Flags WITHOUT Numeric Thresholds
+
+These flags are determined by other criteria (not from `flag-thresholds`):
+
+| Flag | How It's Determined | Can We Show? |
+|------|---------------------|--------------|
+| **Authority** | Hardcoded list of directory authorities | ✓ Yes (relay has Authority flag in Onionoo) |
+| **BadExit** | Manually flagged by Tor Project for misbehaving exits | ✓ Yes (check if flag present) |
+| **Exit** | Exit policy allows ports 80, 443 | ✓ Yes (check exit_policy field) |
+| **MiddleOnly** | Manually assigned to suspicious relays | ✓ Yes (check if flag present) |
+| **Running** | Authority can reach relay (reachability test) | ✓ Yes (check IPv4/IPv6 reachability) |
+| **StaleDesc** | Descriptor older than 18 hours | ✓ Yes (check descriptor age) |
+| **Sybil** | Suspected Sybil attack node (manual) | ✓ Yes (check if flag present) |
+| **V2Dir** | Supports v2 directory protocol | ✓ Yes (check if flag present) |
+| **Valid** | Meets minimum requirements (valid identity) | ✓ Yes (check if flag present) |
+
+### Where Each Flag Is Shown
+
+**Relay Page (`relay-info.html`):**
+
+| Section | Flags Shown |
+|---------|-------------|
+| Summary Table | Fast, Guard, HSDir, Stable (with thresholds) |
+| Detail Table → Flags Column | ALL flags assigned by each authority |
+| Detail Table → Threshold Columns | Fast, Guard BW, Guard TK, Guard WFU, Stable, HSDir WFU, HSDir TK |
+
+**Authority Health Page (`misc-authorities.html`):**
+
+| Section | Flags Shown |
+|---------|-------------|
+| Flag Thresholds Table | All threshold-based flags (Fast, Guard, HSDir, Stable) |
+| Network Flag Totals | Running, Fast, Stable, Guard, Exit, HSDir counts |
 
 ---
 
@@ -321,19 +390,19 @@ These are real questions from the **tor-relays mailing list** and **Tor Project 
 │ Detailed breakdown showing what EACH authority sees. Use this to diagnose specific issues.                            │
 │ Text color: green = meets this authority's threshold, red = below threshold                                           │
 │                                                                                                                        │
-│ ┌────────────┬──────┬──────┬──────────────────┬──────────┬─────────┬─────────┬──────────┬──────────┬──────────┐        │
-│ │ Authority  │ IPv4 │ IPv6 │ Flags Assigned   │ Meas. BW │ WFU     │ TK      │ Guard BW │ Stable   │ Fast     │        │
-│ ├────────────┼──────┼──────┼──────────────────┼──────────┼─────────┼─────────┼──────────┼──────────┼──────────┤        │
-│ │ moria1 ↗   │ Yes  │ Yes  │ Fast Stable      │ 46.2 MB/s│ 96.2%*  │ 45d     │ ≥30 MB/s*│ ≥19.6d   │ ≥1.0 MB/s│        │
-│ │ tor26 ↗    │ Yes  │ No*  │ Fast Stable      │ 44.8 MB/s│ 96.2%*  │ 45d     │ ≥34 MB/s*│ ≥19.8d   │ ≥0.1 MB/s│        │
-│ │ dizum ↗    │ Yes  │ N/T  │ Fast Guard Stable│ N/A      │ 96.2%*  │ 45d     │ ≥10 MB/s │ ≥14.2d   │ ≥0.1 MB/s│        │
-│ │ gabelmoo ↗ │ Yes  │ Yes  │ Fast Stable      │ 44.1 MB/s│ 96.2%*  │ 45d     │ ≥35 MB/s*│ ≥19.6d   │ ≥0.1 MB/s│        │
-│ │ bastet ↗   │ Yes  │ Yes  │ Fast Guard Stable│ 43.9 MB/s│ 96.2%*  │ 45d     │ ≥10 MB/s │ ≥14.3d   │ ≥0.1 MB/s│        │
-│ │ dannenberg↗│ Yes  │ Yes  │ Fast Stable      │ N/A      │ 96.2%*  │ 45d     │ ≥35 MB/s*│ ≥19.2d   │ ≥0.1 MB/s│        │
-│ │ maatuska ↗ │ Yes  │ Yes  │ Fast Guard Stable│ 45.1 MB/s│ 96.2%*  │ 45d     │ ≥10 MB/s │ ≥19.3d   │ ≥0.1 MB/s│        │
-│ │ longclaw ↗ │ Yes  │ N/T  │ Fast Guard Stable│ 44.5 MB/s│ 96.2%*  │ 45d     │ ≥28 MB/s*│ ≥18.5d   │ ≥0.1 MB/s│        │
-│ │ faravahar↗ │ No*  │ No*  │ —                │ —        │ —       │ —       │ —        │ —        │ —        │        │
-│ └────────────┴──────┴──────┴──────────────────┴──────────┴─────────┴─────────┴──────────┴──────────┴──────────┘        │
+│ ┌────────────┬──────┬──────┬──────────────────┬──────────┬─────────┬─────────┬──────────┬──────────┬──────────┬──────────┐│
+│ │ Authority  │ IPv4 │ IPv6 │ Flags Assigned   │ Meas. BW │ WFU     │ TK      │ Guard BW │ Stable   │ Fast     │ HSDir TK ││
+│ ├────────────┼──────┼──────┼──────────────────┼──────────┼─────────┼─────────┼──────────┼──────────┼──────────┼──────────┤│
+│ │ moria1 ↗   │ Yes  │ Yes  │ Fast Stable      │ 46.2 MB/s│ 96.2%*  │ 45d     │ ≥30 MB/s*│ ≥19.6d   │ ≥1.0 MB/s│ ≥9.8d    ││
+│ │ tor26 ↗    │ Yes  │ No*  │ Fast Stable      │ 44.8 MB/s│ 96.2%*  │ 45d     │ ≥34 MB/s*│ ≥19.8d   │ ≥0.1 MB/s│ ≥9.8d    ││
+│ │ dizum ↗    │ Yes  │ N/T  │ Fast Guard Stable│ N/A      │ 96.2%*  │ 45d     │ ≥10 MB/s │ ≥14.2d   │ ≥0.1 MB/s│ ≥9.8d    ││
+│ │ gabelmoo ↗ │ Yes  │ Yes  │ Fast Stable      │ 44.1 MB/s│ 96.2%*  │ 45d     │ ≥35 MB/s*│ ≥19.6d   │ ≥0.1 MB/s│ ≥9.8d    ││
+│ │ bastet ↗   │ Yes  │ Yes  │ Fast Guard Stable│ 43.9 MB/s│ 96.2%*  │ 45d     │ ≥10 MB/s │ ≥14.3d   │ ≥0.1 MB/s│ ≥9.8d    ││
+│ │ dannenberg↗│ Yes  │ Yes  │ Fast Stable      │ N/A      │ 96.2%*  │ 45d     │ ≥35 MB/s*│ ≥19.2d   │ ≥0.1 MB/s│ ≥9.8d    ││
+│ │ maatuska ↗ │ Yes  │ Yes  │ Fast Guard Stable│ 45.1 MB/s│ 96.2%*  │ 45d     │ ≥10 MB/s │ ≥19.3d   │ ≥0.1 MB/s│ ≥9.8d    ││
+│ │ longclaw ↗ │ Yes  │ N/T  │ Fast Guard Stable│ 44.5 MB/s│ 96.2%*  │ 45d     │ ≥28 MB/s*│ ≥18.5d   │ ≥0.1 MB/s│ ≥9.8d    ││
+│ │ faravahar↗ │ No*  │ No*  │ —                │ —        │ —       │ —       │ —        │ —        │ —        │ —        ││
+│ └────────────┴──────┴──────┴──────────────────┴──────────┴─────────┴─────────┴──────────┴──────────┴──────────┴──────────┘│
 │                                                                                                                        │
 │ Color coding: green text = meets threshold, red text (marked with *) = below threshold                                │
 │ N/T = Not Tested (gray), N/A = No bandwidth scanner (gray), ↗ = link to authority relay page                          │
@@ -342,16 +411,17 @@ These are real questions from the **tor-relays mailing list** and **Tor Project 
 │ ┌──────────────────┬────────────────────────────────────────────────────────────────────────────────────────────────┐  │
 │ │ Column           │ Tooltip Content                                                                                │  │
 │ ├──────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────┤  │
-│ │ Authority        │ "Source: Onionoo API | File: details | Field: nickname, fingerprint"                          │  │
+│ │ Authority        │ "Source: Onionoo | Field: nickname, fingerprint"                                              │  │
 │ │ IPv4             │ "Source: CollecTor | File: vote | Relay reachable via IPv4 (has 'r' entry)"                   │  │
 │ │ IPv6             │ "Source: CollecTor | File: vote | Field: 'a' line | N/T = authority doesn't test IPv6"        │  │
-│ │ Flags Assigned   │ "Source: CollecTor | File: vote | Field: 's' line (e.g., s Fast Guard Stable Valid)"         │  │
+│ │ Flags Assigned   │ "Source: CollecTor | File: vote | Field: 's' line (ALL flags authority assigns)"              │  │
 │ │ Meas. BW         │ "Source: CollecTor | File: vote | Field: w Measured=X | N/A = no bandwidth-file-headers"      │  │
-│ │ WFU              │ "Source: CollecTor | File: vote | Your: stats wfu=X | Threshold: guard-wfu=X"                 │  │
-│ │ TK               │ "Source: CollecTor | File: vote | Your: stats tk=X | Threshold: guard-tk=X"                   │  │
-│ │ Guard BW         │ "Source: CollecTor | File: vote | Your: 25 MB/s | Threshold: guard-bw-inc-exits=X"            │  │
-│ │ Stable           │ "Source: CollecTor | File: vote | Your: 45d | Threshold: stable-uptime=X"                     │  │
-│ │ Fast             │ "Source: CollecTor | File: vote | Your: 25 MB/s | Threshold: fast-speed=X"                    │  │
+│ │ WFU              │ "Source: CollecTor | Your: stats wfu=X | Threshold: guard-wfu=X (also used for hsdir-wfu)"    │  │
+│ │ TK               │ "Source: CollecTor | Your: stats tk=X | Threshold: guard-tk=X"                                │  │
+│ │ Guard BW         │ "Source: CollecTor | Your BW vs Threshold: guard-bw-inc-exits=X"                              │  │
+│ │ Stable           │ "Source: CollecTor | Threshold: stable-uptime=X | Also needs stable-mtbf"                     │  │
+│ │ Fast             │ "Source: CollecTor | Threshold: fast-speed=X"                                                 │  │
+│ │ HSDir TK         │ "Source: CollecTor | Threshold: hsdir-tk=X | Also needs hsdir-wfu (same as guard-wfu)"        │  │
 │ └──────────────────┴────────────────────────────────────────────────────────────────────────────────────────────────┘  │
 │                                                                                                                        │
 │ Legend:                                                                                                                │
@@ -370,26 +440,29 @@ These are real questions from the **tor-relays mailing list** and **Tor Project 
 │ ┌───────────────────┬────────────┬─────────────────────────────┬───────────────────────────────────────────────────────┐│
 │ │ Metric [ⓘ]       │ Your Value │ Threshold [ⓘ]              │ Status                                                ││
 │ ├───────────────────┼────────────┼─────────────────────────────┼───────────────────────────────────────────────────────┤│
-│ │ WFU              │ 96.2%      │ ≥98% (from all auths)       │ BELOW - cannot get Guard (red)                        ││
-│ │ Time Known       │ 45 days    │ ≥8 days (from all auths)    │ MEETS - eligible for Guard (green)                    ││
+│ │ WFU              │ 96.2%      │ ≥98% (guard-wfu, hsdir-wfu) │ BELOW - cannot get Guard/HSDir (red)                  ││
+│ │ Time Known       │ 45 days    │ ≥8 days (guard-tk)          │ MEETS - eligible for Guard (green)                    ││
 │ │ Guard BW         │ 25 MB/s    │ varies: 10-35 MB/s          │ PARTIAL - meets 5/9 authorities (yellow)              ││
 │ │ Stable Uptime    │ 45 days    │ varies: 14.2-19.8 days      │ MEETS - all authorities (green)                       ││
 │ │ Fast Speed       │ 25 MB/s    │ varies: 0.1-1.0 MB/s        │ MEETS - all authorities (green)                       ││
+│ │ HSDir TK         │ 45 days    │ ≥10 days (hsdir-tk)         │ MEETS - all authorities (green)                       ││
 │ └───────────────────┴────────────┴─────────────────────────────┴───────────────────────────────────────────────────────┘│
 │                                                                                                                        │
 │ Metric column tooltips:                                                                                                │
-│   • WFU: "Source: CollecTor | File: vote | Field: stats wfu=X | Weighted Fractional Uptime (0-1 scale)"               │
-│   • Time Known: "Source: CollecTor | File: vote | Field: stats tk=X | Seconds authority has known relay"              │
-│   • Guard BW: "Source: CollecTor | File: vote | Field: w Measured=X | Bandwidth measured by sbws scanner"             │
-│   • Stable Uptime: "Source: CollecTor | File: vote | Field: stats tk=X | Used as proxy for uptime"                    │
-│   • Fast Speed: "Source: CollecTor | File: vote | Field: w Measured=X | Same as Guard BW value"                       │
+│   • WFU: "Source: CollecTor | stats wfu=X | Weighted Fractional Uptime (0-1 scale, used for Guard & HSDir)"           │
+│   • Time Known: "Source: CollecTor | stats tk=X | Seconds authority has known relay"                                  │
+│   • Guard BW: "Source: CollecTor | w Measured=X | Bandwidth measured by sbws scanner"                                 │
+│   • Stable Uptime: "Source: CollecTor | stats tk=X | Used as proxy for stable-uptime threshold"                       │
+│   • Fast Speed: "Source: CollecTor | w Measured=X | Same as Guard BW value"                                           │
+│   • HSDir TK: "Source: CollecTor | stats tk=X | Time Known for HSDir flag eligibility"                                │
 │                                                                                                                        │
-│ Threshold column tooltips:                                                                                             │
-│   • WFU threshold: "Source: CollecTor | File: vote | Field: flag-thresholds guard-wfu=98.00000%"                      │
-│   • TK threshold: "Source: CollecTor | File: vote | Field: flag-thresholds guard-tk=691200"                           │
-│   • Guard BW threshold: "Source: CollecTor | File: vote | Field: flag-thresholds guard-bw-inc-exits=X"                │
-│   • Stable threshold: "Source: CollecTor | File: vote | Field: flag-thresholds stable-uptime=X"                       │
-│   • Fast threshold: "Source: CollecTor | File: vote | Field: flag-thresholds fast-speed=X"                            │
+│ Threshold column tooltips (ALL from flag-thresholds line):                                                             │
+│   • WFU: "guard-wfu=98.00000% | Also hsdir-wfu (typically same value)"                                                │
+│   • TK: "guard-tk=691200 (~8 days)"                                                                                   │
+│   • Guard BW: "guard-bw-inc-exits=X (varies 10-35 MB/s) | guard-bw-exc-exits=X"                                       │
+│   • Stable: "stable-uptime=X (varies 14-20 days) | stable-mtbf=X"                                                     │
+│   • Fast: "fast-speed=X (varies 0.1-1.0 MB/s)"                                                                        │
+│   • HSDir TK: "hsdir-tk=X (~10 days) | hsdir-wfu=X (typically 98%)"                                                   │
 │                                                                                                                        │
 │ 💡 Advice: To get Guard flag, increase WFU to ≥98%. Current uptime pattern is too variable.                           │
 │                                                                                                                        │
@@ -522,28 +595,30 @@ Authority BadExit Exit Fast Guard HSDir MiddleOnly Running Stable StaleDesc Sybi
 │                                                                                                  │
 │ Each authority calculates thresholds based on the relays it observes. Hover columns for source. │
 │                                                                                                  │
-│ ┌─────────┬───────────┬────────────┬────────────┬─────────┬─────────┬─────────┬─────────┐       │
-│ │Authority│Guard BW[ⓘ]│Guard TK[ⓘ]│Guard WFU[ⓘ]│Stable[ⓘ]│ Fast[ⓘ]│HSDir WFU│HSDir TK │       │
-│ ├─────────┼───────────┼────────────┼────────────┼─────────┼─────────┼─────────┼─────────┤       │
-│ │moria1   │ 30 MB/s   │ 8.0 days   │ 98%        │ 19.6 d  │ 1.0 MB/s│ 98%     │ 9.8 d   │       │
-│ │tor26    │ 34 MB/s   │ 8.0 days   │ 98%        │ 19.8 d  │ 0.1 MB/s│ 98%     │ 9.8 d   │       │
-│ │dizum    │ 10 MB/s   │ 8.0 days   │ 98%        │ 14.2 d  │ 0.1 MB/s│ 98%     │ 9.8 d   │       │
-│ │...      │ ...       │ ...        │ ...        │ ...     │ ...     │ ...     │ ...     │       │
-│ └─────────┴───────────┴────────────┴────────────┴─────────┴─────────┴─────────┴─────────┘       │
+│ ┌─────────┬──────────┬─────────┬─────────┬─────────┬──────────┬────────┬─────────┬─────────┐    │
+│ │Authority│Guard BW  │Guard TK │Guard WFU│Stable   │Stable    │ Fast   │HSDir WFU│HSDir TK │    │
+│ │         │[ⓘ]      │[ⓘ]     │[ⓘ]     │Uptime[ⓘ]│MTBF[ⓘ]  │[ⓘ]    │[ⓘ]     │[ⓘ]     │    │
+│ ├─────────┼──────────┼─────────┼─────────┼─────────┼──────────┼────────┼─────────┼─────────┤    │
+│ │moria1   │ 30 MB/s  │ 8.0 d   │ 98%     │ 19.6 d  │ 340 d    │1.0 MB/s│ 98%     │ 9.8 d   │    │
+│ │tor26    │ 34 MB/s  │ 8.0 d   │ 98%     │ 19.8 d  │ 342 d    │0.1 MB/s│ 98%     │ 9.8 d   │    │
+│ │dizum    │ 10 MB/s  │ 8.0 d   │ 98%     │ 14.2 d  │ 280 d    │0.1 MB/s│ 98%     │ 9.8 d   │    │
+│ │...      │ ...      │ ...     │ ...     │ ...     │ ...      │ ...    │ ...     │ ...     │    │
+│ └─────────┴──────────┴─────────┴─────────┴─────────┴──────────┴────────┴─────────┴─────────┘    │
 │                                                                                                  │
 │ Column tooltips (hover for data source):                                                         │
-│ ┌────────────┬───────────────────────────────────────────────────────────────────────────────┐  │
-│ │ Column     │ Tooltip                                                                       │  │
-│ ├────────────┼───────────────────────────────────────────────────────────────────────────────┤  │
-│ │ Authority  │ "Source: Onionoo | File: details | Field: nickname (relays with Authority)"  │  │
-│ │ Guard BW   │ "Source: CollecTor | File: vote | Field: flag-thresholds guard-bw-inc-exits" │  │
-│ │ Guard TK   │ "Source: CollecTor | File: vote | Field: flag-thresholds guard-tk"           │  │
-│ │ Guard WFU  │ "Source: CollecTor | File: vote | Field: flag-thresholds guard-wfu"          │  │
-│ │ Stable     │ "Source: CollecTor | File: vote | Field: flag-thresholds stable-uptime"      │  │
-│ │ Fast       │ "Source: CollecTor | File: vote | Field: flag-thresholds fast-speed"         │  │
-│ │ HSDir WFU  │ "Source: CollecTor | File: vote | Field: flag-thresholds hsdir-wfu"          │  │
-│ │ HSDir TK   │ "Source: CollecTor | File: vote | Field: flag-thresholds hsdir-tk"           │  │
-│ └────────────┴───────────────────────────────────────────────────────────────────────────────┘  │
+│ ┌─────────────┬──────────────────────────────────────────────────────────────────────────────┐  │
+│ │ Column      │ Tooltip                                                                      │  │
+│ ├─────────────┼──────────────────────────────────────────────────────────────────────────────┤  │
+│ │ Authority   │ "Source: Onionoo | Field: nickname (relays with Authority flag)"            │  │
+│ │ Guard BW    │ "Source: CollecTor | flag-thresholds guard-bw-inc-exits (varies 10-35 MB/s)"│  │
+│ │ Guard TK    │ "Source: CollecTor | flag-thresholds guard-tk (typically 8 days)"           │  │
+│ │ Guard WFU   │ "Source: CollecTor | flag-thresholds guard-wfu (typically 98%)"             │  │
+│ │ Stable Up   │ "Source: CollecTor | flag-thresholds stable-uptime (varies 14-20 days)"     │  │
+│ │ Stable MTBF │ "Source: CollecTor | flag-thresholds stable-mtbf (Mean Time Between Failures)"│
+│ │ Fast        │ "Source: CollecTor | flag-thresholds fast-speed (varies by authority)"      │  │
+│ │ HSDir WFU   │ "Source: CollecTor | flag-thresholds hsdir-wfu (typically 98%)"             │  │
+│ │ HSDir TK    │ "Source: CollecTor | flag-thresholds hsdir-tk (typically ~10 days)"         │  │
+│ └─────────────┴──────────────────────────────────────────────────────────────────────────────┘  │
 │                                                                                                  │
 ├──────────────────────────────────────────────────────────────────────────────────────────────────┤
 │ NETWORK FLAG TOTALS                                                                   [NEW]      │
