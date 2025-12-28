@@ -1084,26 +1084,382 @@ allium/
 
 ---
 
-## ✅ Success Criteria
+## ✅ Implementation Checklist
 
-### Phase 1
-- [ ] `pytest tests/test_collector_fetcher.py -v` passes
-- [ ] `pytest tests/test_workers_collector.py -v` passes  
-- [ ] Per-relay vote/reachability lookup works correctly
-- [ ] Flag eligibility analysis with thresholds displays
-- [ ] Bandwidth measurements with deviation coloring displays
-- [ ] Baseline comparison shows only expected changes
-- [ ] Performance delta documented (informational)
+### Quick Reference
 
-### Phase 2
-- [ ] `pytest tests/test_authority_monitor.py -v` passes
-- [ ] Authority latency checks complete successfully
-- [ ] Flag thresholds shown per authority in columns
-- [ ] Network flag totals displayed
-- [ ] Simple alert for offline/slow authorities
-- [ ] Final regression test passes
+| Phase | Duration | Key Deliverables | Test Command |
+|-------|----------|------------------|--------------|
+| **Pre-Implementation** | 1 day | Baseline capture, branch setup | `./scripts/capture_baseline.sh` |
+| **Phase 1 Week 1** | 1 week | `collector_fetcher.py`, `diagnostics.py` | `pytest tests/test_collector_fetcher.py tests/test_diagnostics.py -v` |
+| **Phase 1 Week 2** | 1 week | Worker + Coordinator integration | `pytest tests/test_workers_collector.py tests/test_coordinator.py -v` |
+| **Phase 1 Week 3** | 1 week | `relay-info.html` template | Manual review + `pytest tests/ -v` |
+| **Phase 1 Week 4** | 1 week | Phase 1 validation | `./scripts/validate_phase.sh` |
+| **Phase 2 Week 5** | 1 week | `authority_monitor.py` | `pytest tests/test_authority_monitor.py -v` |
+| **Phase 2 Week 6-7** | 1-2 weeks | `misc-authorities.html` template | Manual review + full test suite |
+| **Post-Implementation** | 1 week | Production deployment | Monitor logs |
+
+**Total estimated time: 6-7 weeks**
+
+### Files Checklist
+
+**New Files to Create:**
+- [ ] `lib/consensus/__init__.py`
+- [ ] `lib/consensus/collector_fetcher.py`
+- [ ] `lib/consensus/diagnostics.py`
+- [ ] `lib/consensus/authority_monitor.py`
+- [ ] `tests/test_consensus_init.py`
+- [ ] `tests/test_collector_fetcher.py`
+- [ ] `tests/test_diagnostics.py`
+- [ ] `tests/test_workers_collector.py`
+- [ ] `tests/test_authority_monitor.py`
+- [ ] `scripts/capture_baseline.sh`
+- [ ] `scripts/validate_phase.sh`
+- [ ] `scripts/benchmark.sh`
+
+**Existing Files to Modify:**
+- [ ] `lib/workers.py` - Add `fetch_collector_consensus_data()`
+- [ ] `lib/coordinator.py` - Add to api_workers, add getter, modify create_relay_set()
+- [ ] `lib/relays.py` - Add `_discover_authorities()`, `_reprocess_collector_data()`
+- [ ] `templates/relay-info.html` - Add Consensus Diagnostics section
+- [ ] `templates/misc-authorities.html` - Add health dashboard enhancements
+- [ ] `templates/static/css/style.css` - Add new CSS classes
 
 ---
+
+### Pre-Implementation Setup
+
+- [ ] **1.1** Create feature branch from main
+- [ ] **1.2** Run baseline capture script: `./scripts/capture_baseline.sh`
+- [ ] **1.3** Commit baseline files to branch (for reference)
+- [ ] **1.4** Verify existing test suite passes: `pytest tests/ -v`
+- [ ] **1.5** Document current performance metrics (generation time, memory)
+
+---
+
+### Phase 1: Per-Relay Consensus Diagnostics
+
+#### Week 1: Core Infrastructure
+
+**1.1 Create lib/consensus module**
+- [ ] **1.1.1** Create `lib/consensus/` directory
+- [ ] **1.1.2** Create `lib/consensus/__init__.py` with feature flag
+  - [ ] Add `COLLECTOR_DIAGNOSTICS_ENABLED` env var check
+  - [ ] Add module docstring explaining purpose
+- [ ] **1.1.3** Run test: `pytest tests/test_consensus_init.py -v`
+
+**1.2 Create CollectorFetcher**
+- [ ] **1.2.1** Create `lib/consensus/collector_fetcher.py`
+- [ ] **1.2.2** Implement `CollectorFetcher` class:
+  - [ ] `__init__(timeout, authorities)` - accept dynamic authority list
+  - [ ] `fetch_all()` - fetch votes + bandwidth files in parallel
+  - [ ] `_fetch_vote(authority)` - fetch single vote file
+  - [ ] `_parse_vote(vote_text, auth_name)` - parse vote file
+  - [ ] `_parse_flag_thresholds(line)` - extract ALL thresholds dynamically
+  - [ ] `_build_relay_index(votes)` - create O(1) lookup by fingerprint
+- [ ] **1.2.3** Implement vote parsing:
+  - [ ] Parse `r` lines (relay entries, IPv4)
+  - [ ] Parse `a` lines (IPv6 addresses)
+  - [ ] Parse `s` lines (flags: ALL flags from known-flags)
+  - [ ] Parse `w` lines (bandwidth: Measured, Bandwidth)
+  - [ ] Parse `stats` lines (wfu, tk, mtbf)
+  - [ ] Parse `flag-thresholds` line (ALL thresholds dynamically)
+  - [ ] Parse `known-flags` line
+  - [ ] Detect `bandwidth-file-headers` for BW authority detection
+- [ ] **1.2.4** Add error handling:
+  - [ ] HTTP timeout handling
+  - [ ] Malformed response handling
+  - [ ] Missing fields handling (graceful defaults)
+  - [ ] Response size limits (prevent memory issues)
+- [ ] **1.2.5** Add logging:
+  - [ ] Log fetch start/complete times
+  - [ ] Log parse success/failure per authority
+  - [ ] Log relay count indexed
+- [ ] **1.2.6** Create unit tests `tests/test_collector_fetcher.py`:
+  - [ ] Test vote parsing with sample data
+  - [ ] Test flag-thresholds parsing
+  - [ ] Test relay indexing
+  - [ ] Test error handling (timeout, malformed)
+  - [ ] Test BW authority detection
+- [ ] **1.2.7** Run tests: `pytest tests/test_collector_fetcher.py -v`
+
+**1.3 Create Diagnostics Formatter**
+- [ ] **1.3.1** Create `lib/consensus/diagnostics.py`
+- [ ] **1.3.2** Implement `format_relay_diagnostics()`:
+  - [ ] Accept fingerprint, indexed_data, flag_thresholds, authorities, consensus_requirement
+  - [ ] Build authority_votes list with all per-authority data
+  - [ ] Calculate relay_values summary (meets_all, meets_some, ranges)
+  - [ ] Calculate vote_count, in_consensus status
+  - [ ] Generate consensus_tooltip (dynamic majority calculation)
+- [ ] **1.3.3** Implement `_generate_advice()`:
+  - [ ] Consensus issues (not in consensus, unreachable)
+  - [ ] Guard flag issues (WFU, TK, BW)
+  - [ ] Stable flag issues (uptime, MTBF)
+  - [ ] Fast flag issues
+  - [ ] HSDir flag issues
+  - [ ] Bandwidth measurement issues
+  - [ ] New relay advice
+  - [ ] Multiple issue combination
+- [ ] **1.3.4** Implement `_identify_issues()`:
+  - [ ] Unreachable authorities
+  - [ ] IPv6 reachability issues
+  - [ ] WFU below threshold
+  - [ ] Guard BW issues
+  - [ ] Stable/Fast/HSDir issues
+  - [ ] Not measured by BW authorities
+- [ ] **1.3.5** Create unit tests `tests/test_diagnostics.py`:
+  - [ ] Test advice generation for each scenario
+  - [ ] Test issue identification
+  - [ ] Test relay values calculation
+- [ ] **1.3.6** Run tests: `pytest tests/test_diagnostics.py -v`
+
+#### Week 2: Worker Integration
+
+**2.1 Integrate with workers.py**
+- [ ] **2.1.1** Add import for `CollectorFetcher`
+- [ ] **2.1.2** Add `COLLECTOR_CACHE_MAX_AGE_HOURS = 1`
+- [ ] **2.1.3** Implement `fetch_collector_consensus_data()` worker:
+  - [ ] Check cache age
+  - [ ] Accept `authorities` parameter (dynamic list)
+  - [ ] Instantiate `CollectorFetcher`
+  - [ ] Call `fetcher.fetch_all()`
+  - [ ] Save to cache
+  - [ ] Mark ready/stale appropriately
+- [ ] **2.1.4** Add `@handle_http_errors` decorator (critical=False)
+- [ ] **2.1.5** Create unit tests `tests/test_workers_collector.py`:
+  - [ ] Test cache loading
+  - [ ] Test fresh fetch
+  - [ ] Test error handling
+- [ ] **2.1.6** Run tests: `pytest tests/test_workers_collector.py -v`
+
+**2.2 Integrate with coordinator.py**
+- [ ] **2.2.1** Import feature flag from `lib/consensus`
+- [ ] **2.2.2** Add `fetch_collector_consensus_data` to `api_workers` list (conditional on feature flag)
+- [ ] **2.2.3** Add `get_collector_consensus_data()` getter method
+- [ ] **2.2.4** Modify `create_relay_set()`:
+  - [ ] Attach `collector_data` to relay_set
+  - [ ] Attach `authorities` to relay_set
+  - [ ] Attach `consensus_requirement` to relay_set
+  - [ ] Call `relay_set._reprocess_collector_data()`
+- [ ] **2.2.5** Run coordinator tests: `pytest tests/test_coordinator.py -v`
+
+**2.3 Integrate with lib/relays.py**
+- [ ] **2.3.1** Add `_discover_authorities()` method:
+  - [ ] Find relays with Authority flag from Onionoo data
+  - [ ] Extract fingerprint, nickname, address, dir_address
+  - [ ] Calculate majority_required: `floor(count/2) + 1`
+  - [ ] Store as `self.authorities` and `self.consensus_requirement`
+- [ ] **2.3.2** Add `_reprocess_collector_data()` method:
+  - [ ] Check if `collector_data` exists
+  - [ ] Ensure authorities discovered
+  - [ ] Iterate through existing `self.json["relays"]` loop (NO new loop)
+  - [ ] Call `format_relay_diagnostics()` for each relay
+  - [ ] Attach `collector_diagnostics` to each relay dict
+- [ ] **2.3.3** Run relays tests: `pytest tests/test_relays.py -v`
+
+#### Week 3: Template Implementation
+
+**3.1 Update relay-info.html template**
+- [ ] **3.1.1** Add conditional block: `{% if relay.collector_diagnostics %}`
+- [ ] **3.1.2** Add section header: "🔍 Consensus Diagnostics"
+- [ ] **3.1.3** Add data freshness indicator
+- [ ] **3.1.4** Add consensus status with tooltip
+- [ ] **3.1.5** Implement TABLE 1 (Summary):
+  - [ ] In Consensus row
+  - [ ] IPv4 Reachable row
+  - [ ] IPv6 Reachable row
+  - [ ] WFU row
+  - [ ] Time Known row
+  - [ ] Guard BW row
+  - [ ] Stable Uptime row
+  - [ ] Stable MTBF row
+  - [ ] Fast Speed row
+  - [ ] HSDir WFU row
+  - [ ] HSDir TK row
+  - [ ] All tooltips with data source info
+- [ ] **3.1.6** Add advice box: `{% if relay.collector_diagnostics.advice %}`
+- [ ] **3.1.7** Implement TABLE 2 (Per-Authority Details):
+  - [ ] Authority column (with link)
+  - [ ] IPv4 column (colored text)
+  - [ ] IPv6 column (colored text, N/T)
+  - [ ] Flags Assigned column
+  - [ ] Meas. BW column (N/A for non-BW)
+  - [ ] WFU column (colored, threshold in tooltip)
+  - [ ] TK column (colored, threshold in tooltip)
+  - [ ] Guard BW column (threshold, colored)
+  - [ ] Stable column (threshold, colored)
+  - [ ] Fast column (threshold, colored)
+  - [ ] HSDir TK column (threshold, colored)
+  - [ ] All tooltips with data source info
+- [ ] **3.1.8** Add legend
+- [ ] **3.1.9** Add issues summary
+- [ ] **3.1.10** Add closing note about dynamic thresholds
+
+**3.2 Add CSS styles**
+- [ ] **3.2.1** Add `.text-success` (green)
+- [ ] **3.2.2** Add `.text-danger` (red)
+- [ ] **3.2.3** Add `.text-warning` (yellow)
+- [ ] **3.2.4** Add `.text-muted` (gray)
+- [ ] **3.2.5** Add `.relay-summary-table` styles
+- [ ] **3.2.6** Add `.authority-details-table` styles
+- [ ] **3.2.7** Add `.advice-box` styles
+- [ ] **3.2.8** Add `.row-not-voted` styles
+- [ ] **3.2.9** Add `.consensus-diagnostics` section styles
+
+**3.3 Manual template testing**
+- [ ] **3.3.1** Generate site with feature enabled
+- [ ] **3.3.2** Review 5+ relay pages manually
+- [ ] **3.3.3** Verify all columns render correctly
+- [ ] **3.3.4** Verify tooltips show correct data sources
+- [ ] **3.3.5** Verify colored text (no emoji checkmarks)
+- [ ] **3.3.6** Verify authority links work
+- [ ] **3.3.7** Verify advice messages are contextual
+
+#### Week 4: Phase 1 Validation
+
+**4.1 Integration testing**
+- [ ] **4.1.1** Run full test suite: `pytest tests/ -v`
+- [ ] **4.1.2** All tests pass
+- [ ] **4.1.3** No new warnings
+
+**4.2 Baseline comparison**
+- [ ] **4.2.1** Run validation script: `./scripts/validate_phase.sh`
+- [ ] **4.2.2** Review diff output
+- [ ] **4.2.3** Verify only expected changes (Consensus Diagnostics sections)
+- [ ] **4.2.4** No unexpected changes to existing content
+
+**4.3 Performance measurement**
+- [ ] **4.3.1** Run benchmark script: `./scripts/benchmark.sh`
+- [ ] **4.3.2** Document generation time delta
+- [ ] **4.3.3** Document memory usage delta
+- [ ] **4.3.4** Document CollecTor fetch time
+
+**4.4 Error scenario testing**
+- [ ] **4.4.1** Test with CollecTor unreachable (use cache)
+- [ ] **4.4.2** Test with partial CollecTor data
+- [ ] **4.4.3** Test with cache corruption (recovery)
+- [ ] **4.4.4** Test with feature flag disabled
+- [ ] **4.4.5** Verify graceful degradation in all cases
+
+**4.5 Phase 1 sign-off**
+- [ ] **4.5.1** All Phase 1 tests pass
+- [ ] **4.5.2** Baseline comparison approved
+- [ ] **4.5.3** Performance delta documented and acceptable
+- [ ] **4.5.4** Error handling verified
+- [ ] **4.5.5** Code review completed
+- [ ] **4.5.6** Documentation updated
+
+---
+
+### Phase 2: Enhanced Directory Authorities Page
+
+#### Week 5: Authority Health Monitor
+
+**5.1 Create Authority Monitor**
+- [ ] **5.1.1** Create `lib/consensus/authority_monitor.py`
+- [ ] **5.1.2** Implement `check_authority_latency()`:
+  - [ ] HTTP HEAD request to dir_address
+  - [ ] Timeout handling
+  - [ ] Return latency_ms, status, error
+- [ ] **5.1.3** Implement `check_all_authorities()`:
+  - [ ] Parallel checks using asyncio/aiohttp
+  - [ ] Aggregate results
+- [ ] **5.1.4** Implement `check_authorities_sync()`:
+  - [ ] Sync wrapper for async function
+- [ ] **5.1.5** Add error handling:
+  - [ ] Timeout handling
+  - [ ] Connection refused handling
+  - [ ] DNS resolution failure handling
+- [ ] **5.1.6** Create unit tests `tests/test_authority_monitor.py`:
+  - [ ] Test latency check success
+  - [ ] Test latency check timeout
+  - [ ] Test parallel checks
+- [ ] **5.1.7** Run tests: `pytest tests/test_authority_monitor.py -v`
+
+#### Week 6-7: Template Enhancement
+
+**6.1 Update misc-authorities.html template**
+- [ ] **6.1.1** Add TABLE 1 (Authority Status) new columns:
+  - [ ] Voted column (Yes/No colored text)
+  - [ ] BW Auth column (Yes/No colored text, dynamic detection)
+  - [ ] Latency column (ms, colored if slow)
+  - [ ] All tooltips with data source info
+- [ ] **6.1.2** Add TABLE 2 (Flag Thresholds):
+  - [ ] Authority column
+  - [ ] Guard BW column
+  - [ ] Guard TK column
+  - [ ] Guard WFU column
+  - [ ] Stable Uptime column
+  - [ ] Stable MTBF column
+  - [ ] Fast column
+  - [ ] HSDir WFU column
+  - [ ] HSDir TK column
+  - [ ] All tooltips with data source info
+- [ ] **6.1.3** Add Network Flag Totals section:
+  - [ ] Running count
+  - [ ] Fast count
+  - [ ] Stable count
+  - [ ] Guard count
+  - [ ] Exit count
+  - [ ] HSDir count
+- [ ] **6.1.4** Add Legend section
+- [ ] **6.1.5** Add alerts for offline/slow authorities
+
+**6.2 Manual template testing**
+- [ ] **6.2.1** Generate site
+- [ ] **6.2.2** Review misc-authorities.html manually
+- [ ] **6.2.3** Verify all columns render correctly
+- [ ] **6.2.4** Verify tooltips show correct data sources
+- [ ] **6.2.5** Verify flag thresholds display (varies by authority)
+- [ ] **6.2.6** Verify network totals are accurate
+
+#### Week 7: Phase 2 Validation
+
+**7.1 Integration testing**
+- [ ] **7.1.1** Run full test suite: `pytest tests/ -v`
+- [ ] **7.1.2** All tests pass
+
+**7.2 Baseline comparison**
+- [ ] **7.2.1** Run validation script: `./scripts/validate_phase.sh`
+- [ ] **7.2.2** Verify only expected changes to misc-authorities.html
+- [ ] **7.2.3** Verify relay-info.html changes from Phase 1 still present
+
+**7.3 Phase 2 sign-off**
+- [ ] **7.3.1** All Phase 2 tests pass
+- [ ] **7.3.2** Baseline comparison approved
+- [ ] **7.3.3** Code review completed
+- [ ] **7.3.4** Documentation updated
+
+---
+
+### Post-Implementation
+
+#### Final Validation
+
+- [ ] **F.1** Run complete test suite: `pytest tests/ -v`
+- [ ] **F.2** Run full site generation: `python allium.py --progress`
+- [ ] **F.3** Run final baseline comparison
+- [ ] **F.4** Verify ~7000 relay pages have Consensus Diagnostics
+- [ ] **F.5** Verify misc-authorities.html has all enhancements
+- [ ] **F.6** Document final performance metrics
+
+#### Production Deployment
+
+- [ ] **P.1** Deploy with `ALLIUM_COLLECTOR_DIAGNOSTICS=false` (disabled)
+- [ ] **P.2** Verify site generates correctly (no new features visible)
+- [ ] **P.3** Enable on staging: `ALLIUM_COLLECTOR_DIAGNOSTICS=true`
+- [ ] **P.4** Monitor staging for 48 hours
+- [ ] **P.5** Enable on production
+- [ ] **P.6** Monitor production for 1 week
+- [ ] **P.7** Remove feature flag (code is permanent)
+
+#### Documentation
+
+- [ ] **D.1** Update README with new features
+- [ ] **D.2** Add user guide for Consensus Diagnostics
+- [ ] **D.3** Document all advice messages
+- [ ] **D.4** Document data sources and refresh rates
+- [ ] **D.5** Archive implementation plan (mark as completed)
 
 ---
 
