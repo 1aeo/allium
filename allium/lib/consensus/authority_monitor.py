@@ -119,51 +119,68 @@ class AuthorityMonitor:
     
     def _check_authority(self, name: str, endpoint: str) -> dict:
         """
-        Check a single authority's responsiveness.
+        Check a single authority's responsiveness using TCP socket connection.
+        
+        This is more reliable than HTTP HEAD requests as some authorities
+        may not respond to HEAD requests or specific paths.
         
         Args:
             name: Authority name
-            endpoint: Authority endpoint URL
+            endpoint: Authority endpoint URL (http://ip:port)
             
         Returns:
             dict: Health status for this authority
         """
+        from urllib.parse import urlparse
+        
+        # Parse endpoint to get host and port
+        parsed = urlparse(endpoint)
+        host = parsed.hostname
+        port = parsed.port or (443 if parsed.scheme == 'https' else 80)
+        
         start_time = time.time()
         
         try:
-            req = urllib.request.Request(
-                f"{endpoint}/tor/status-vote/current/consensus-microdesc",
-                headers={'User-Agent': 'Allium/1.0'},
-                method='HEAD'  # Only check if reachable, don't download
-            )
+            # Use TCP socket connection to measure latency
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(self.timeout)
             
-            with urllib.request.urlopen(req, timeout=self.timeout) as response:
-                latency_ms = (time.time() - start_time) * 1000
-                
+            result = sock.connect_ex((host, port))
+            latency_ms = (time.time() - start_time) * 1000
+            sock.close()
+            
+            if result == 0:
                 return {
                     'online': True,
                     'latency_ms': round(latency_ms, 1),
-                    'status_code': response.status,
+                    'status_code': None,
                     'error': None,
                     'checked_at': datetime.utcnow().isoformat(),
                 }
+            else:
+                return {
+                    'online': False,
+                    'latency_ms': round(latency_ms, 1),
+                    'status_code': None,
+                    'error': f"Connection refused (code {result})",
+                    'checked_at': datetime.utcnow().isoformat(),
+                }
                 
-        except urllib.error.HTTPError as e:
-            latency_ms = (time.time() - start_time) * 1000
-            return {
-                'online': False,
-                'latency_ms': round(latency_ms, 1),
-                'status_code': e.code,
-                'error': f"HTTP {e.code}",
-                'checked_at': datetime.utcnow().isoformat(),
-            }
-            
-        except (urllib.error.URLError, socket.timeout) as e:
+        except socket.timeout:
             return {
                 'online': False,
                 'latency_ms': None,
                 'status_code': None,
-                'error': str(e.reason) if hasattr(e, 'reason') else str(e),
+                'error': 'Connection timed out',
+                'checked_at': datetime.utcnow().isoformat(),
+            }
+            
+        except socket.gaierror as e:
+            return {
+                'online': False,
+                'latency_ms': None,
+                'status_code': None,
+                'error': f"DNS resolution failed: {e}",
                 'checked_at': datetime.utcnow().isoformat(),
             }
             

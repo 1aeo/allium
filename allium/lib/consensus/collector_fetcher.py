@@ -37,6 +37,19 @@ AUTHORITIES = {
     'F533C81CEF0BC0267857C99B2F471ADF249FA232': 'moria1',
 }
 
+# Authority country codes (based on known hosting locations)
+AUTHORITY_COUNTRIES = {
+    'dannenberg': 'DE',    # Germany
+    'longclaw': 'US',      # USA
+    'bastet': 'US',        # USA
+    'tor26': 'AT',         # Austria
+    'maatuska': 'SE',      # Sweden
+    'faravahar': 'US',     # USA
+    'dizum': 'NL',         # Netherlands
+    'gabelmoo': 'DE',      # Germany
+    'moria1': 'US',        # USA
+}
+
 COLLECTOR_BASE = 'https://collector.torproject.org'
 VOTES_PATH = '/recent/relay-descriptors/votes/'
 BANDWIDTH_PATH = '/recent/relay-descriptors/bandwidths/'
@@ -394,12 +407,20 @@ class CollectorFetcher:
             fingerprint = identity_bytes.hex().upper()
             
             # Note: parts[4] is date, parts[5] is time, parts[6] is IP
+            # Parse descriptor published timestamp
+            descriptor_published = None
+            try:
+                descriptor_published = f"{parts[4]} {parts[5]}"  # e.g., "2025-12-27 11:01:03"
+            except:
+                pass
+            
             return {
                 'nickname': parts[1],
                 'fingerprint': fingerprint,
                 'ip': parts[6],
                 'or_port': int(parts[7]),
                 'dir_port': int(parts[8]),
+                'descriptor_published': descriptor_published,  # When relay's descriptor was published
                 'flags': [],
                 'bandwidth': None,
                 'measured': None,
@@ -548,6 +569,7 @@ class CollectorFetcher:
                     'mtbf': relay_data.get('mtbf'),
                     'ipv6_reachable': relay_data.get('ipv6_reachable'),
                     'ipv6_address': relay_data.get('ipv6_address'),
+                    'descriptor_published': relay_data.get('descriptor_published'),  # Timestamp from r line
                 }
         
         # Add bandwidth measurements from bandwidth files
@@ -612,6 +634,7 @@ class CollectorFetcher:
                 'ipv6_reachable': vote_info.get('ipv6_reachable'),
                 'ipv6_address': vote_info.get('ipv6_address'),
                 'is_bw_authority': auth_name in self.bw_authorities,
+                'descriptor_published': vote_info.get('descriptor_published'),  # Timestamp of relay's descriptor
             })
         
         return authority_votes
@@ -634,7 +657,18 @@ class CollectorFetcher:
     def _analyze_flag_eligibility(self, relay: dict) -> dict:
         """
         Analyze flag eligibility across all authorities.
+        
+        Guard flag requirements per Tor dir-spec:
+        1. Must be Fast
+        2. Must be Stable
+        3. WFU >= guard-wfu threshold
+        4. TK >= guard-tk threshold (makes relay "familiar")
+        5. Bandwidth >= AuthDirGuardBWGuarantee (2 MB/s default) OR in top 25% (>= guard-bw-inc-exits)
+        6. Must have V2Dir flag
         """
+        # AuthDirGuardBWGuarantee default: 2 MB/s (2,000,000 bytes/s)
+        AUTH_DIR_GUARD_BW_GUARANTEE = 2_000_000
+        
         eligibility = {
             'guard': {'eligible_count': 0, 'details': []},
             'stable': {'eligible_count': 0, 'details': []},
@@ -650,16 +684,24 @@ class CollectorFetcher:
             # Guard flag eligibility
             guard_wfu_threshold = thresholds.get('guard-wfu', 0.98)
             guard_tk_threshold = thresholds.get('guard-tk', 691200)  # 8 days default
-            guard_bw_threshold = thresholds.get('guard-bw-inc-exits', 0)
+            guard_bw_top25_threshold = thresholds.get('guard-bw-inc-exits', 0)  # Top 25% cutoff
             
             relay_wfu = vote_info.get('wfu', 0)
             relay_tk = vote_info.get('tk', 0)
-            relay_bw = vote_info.get('bandwidth', 0)
+            # Use measured bandwidth (from sbws) for Guard eligibility, fall back to self-reported
+            relay_measured_bw = vote_info.get('measured') or vote_info.get('bandwidth', 0)
+            
+            # Guard BW check: bandwidth >= 2 MB/s (guarantee) OR in top 25% (>= guard-bw-inc-exits)
+            # Per Tor dir-spec: "bandwidth is at least AuthDirGuardBWGuarantee (2 MB by default), 
+            # OR its bandwidth is among the 25% fastest relays"
+            guard_bw_meets_guarantee = relay_measured_bw >= AUTH_DIR_GUARD_BW_GUARANTEE
+            guard_bw_in_top25 = relay_measured_bw >= guard_bw_top25_threshold
+            guard_bw_eligible = guard_bw_meets_guarantee or guard_bw_in_top25
             
             guard_eligible = (
                 relay_wfu >= guard_wfu_threshold and
                 relay_tk >= guard_tk_threshold and
-                relay_bw >= guard_bw_threshold
+                guard_bw_eligible
             )
             
             if guard_eligible:
@@ -674,9 +716,12 @@ class CollectorFetcher:
                 'tk_threshold': guard_tk_threshold,
                 'tk_value': relay_tk,
                 'tk_met': relay_tk >= guard_tk_threshold,
-                'bw_threshold': guard_bw_threshold,
-                'bw_value': relay_bw,
-                'bw_met': relay_bw >= guard_bw_threshold,
+                'bw_guarantee': AUTH_DIR_GUARD_BW_GUARANTEE,  # 2 MB/s minimum
+                'bw_top25_threshold': guard_bw_top25_threshold,  # Top 25% cutoff
+                'bw_value': relay_measured_bw,
+                'bw_meets_guarantee': guard_bw_meets_guarantee,
+                'bw_in_top25': guard_bw_in_top25,
+                'bw_met': guard_bw_eligible,
             })
             
             # Stable flag eligibility
@@ -695,9 +740,9 @@ class CollectorFetcher:
                 'mtbf_value': relay_mtbf,
             })
             
-            # Fast flag eligibility
+            # Fast flag eligibility - use measured bandwidth
             fast_speed = thresholds.get('fast-speed', 0)
-            fast_eligible = relay_bw >= fast_speed
+            fast_eligible = relay_measured_bw >= fast_speed
             if fast_eligible:
                 eligibility['fast']['eligible_count'] += 1
             
@@ -705,7 +750,7 @@ class CollectorFetcher:
                 'authority': auth_name,
                 'eligible': fast_eligible,
                 'speed_threshold': fast_speed,
-                'speed_value': relay_bw,
+                'speed_value': relay_measured_bw,
             })
             
             # HSDir flag eligibility
@@ -743,11 +788,20 @@ class CollectorFetcher:
         bandwidth_values.extend(measurements.values())
         
         if not bandwidth_values:
-            return {'average': None, 'min': None, 'max': None, 'deviation': None}
+            return {'median': None, 'average': None, 'min': None, 'max': None, 'deviation': None}
+        
+        # Calculate median (what Tor consensus actually uses)
+        sorted_values = sorted(bandwidth_values)
+        n = len(sorted_values)
+        if n % 2 == 0:
+            median = (sorted_values[n // 2 - 1] + sorted_values[n // 2]) / 2
+        else:
+            median = sorted_values[n // 2]
         
         avg = sum(bandwidth_values) / len(bandwidth_values)
         return {
-            'average': avg,
+            'median': median,  # Tor consensus uses median
+            'average': avg,    # For reference
             'min': min(bandwidth_values),
             'max': max(bandwidth_values),
             'deviation': max(bandwidth_values) - min(bandwidth_values) if len(bandwidth_values) > 1 else 0,
