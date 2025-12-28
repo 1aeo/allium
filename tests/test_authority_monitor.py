@@ -2,6 +2,13 @@
 Tests for authority_monitor.py
 
 Tests the AuthorityMonitor class that monitors directory authority health.
+
+IMPORTANT: These tests verify authority health monitoring functionality.
+If directory authority endpoints change (IP addresses, ports), update
+DEFAULT_AUTHORITY_ENDPOINTS in authority_monitor.py.
+
+Current directory authorities (as of 2025):
+- moria1, tor26, dizum, gabelmoo, bastet, dannenberg, maatuska, longclaw, faravahar
 """
 
 import pytest
@@ -17,6 +24,15 @@ from consensus.authority_monitor import (
     AuthorityMonitor,
     DEFAULT_AUTHORITY_ENDPOINTS,
 )
+
+
+# ============================================================================
+# Expected authority names - update if Tor adds/removes authorities
+# ============================================================================
+EXPECTED_AUTHORITY_NAMES = {
+    'moria1', 'tor26', 'dizum', 'gabelmoo', 'bastet',
+    'dannenberg', 'maatuska', 'longclaw', 'faravahar'
+}
 
 
 class TestAuthorityMonitor:
@@ -255,21 +271,142 @@ class TestAuthorityMonitor:
 
 
 class TestDefaultAuthorityEndpoints:
-    """Tests for DEFAULT_AUTHORITY_ENDPOINTS constant."""
+    """Tests for DEFAULT_AUTHORITY_ENDPOINTS constant.
+    
+    IMPORTANT: If directory authority endpoints change (new IP, new port),
+    update DEFAULT_AUTHORITY_ENDPOINTS in authority_monitor.py.
+    """
     
     def test_endpoint_count(self):
-        """Test that we have endpoints for all known authorities."""
-        assert len(DEFAULT_AUTHORITY_ENDPOINTS) == 9
+        """Test that we have endpoints for all 9 known authorities."""
+        assert len(DEFAULT_AUTHORITY_ENDPOINTS) == 9, \
+            f"Expected 9 authority endpoints, got {len(DEFAULT_AUTHORITY_ENDPOINTS)}. " \
+            "If Tor added/removed authorities, update DEFAULT_AUTHORITY_ENDPOINTS."
     
     def test_endpoint_format(self):
-        """Test that all endpoints are valid URLs."""
+        """Test that all endpoints are valid HTTP URLs with ports."""
         for name, endpoint in DEFAULT_AUTHORITY_ENDPOINTS.items():
-            assert endpoint.startswith('http://')
-            assert ':' in endpoint.split('//')[1]  # Has port
+            assert endpoint.startswith('http://'), \
+                f"Endpoint for {name} should start with http://"
+            
+            # Should have format http://IP:PORT
+            parts = endpoint.replace('http://', '').split(':')
+            assert len(parts) == 2, \
+                f"Endpoint for {name} should have format http://IP:PORT"
+            
+            # Port should be a number
+            try:
+                port = int(parts[1])
+                assert 1 <= port <= 65535, \
+                    f"Invalid port {port} for {name}"
+            except ValueError:
+                pytest.fail(f"Port is not a number for {name}: {parts[1]}")
     
-    def test_known_authorities(self):
-        """Test that known authorities are present."""
-        assert 'moria1' in DEFAULT_AUTHORITY_ENDPOINTS
-        assert 'tor26' in DEFAULT_AUTHORITY_ENDPOINTS
-        assert 'gabelmoo' in DEFAULT_AUTHORITY_ENDPOINTS
-        assert 'faravahar' in DEFAULT_AUTHORITY_ENDPOINTS
+    def test_all_expected_authorities_present(self):
+        """Test that all expected directory authorities have endpoints."""
+        missing = EXPECTED_AUTHORITY_NAMES - set(DEFAULT_AUTHORITY_ENDPOINTS.keys())
+        extra = set(DEFAULT_AUTHORITY_ENDPOINTS.keys()) - EXPECTED_AUTHORITY_NAMES
+        
+        assert not missing, f"Missing authority endpoints: {missing}"
+        assert not extra, f"Unknown authority endpoints: {extra}"
+    
+    def test_endpoints_are_unique(self):
+        """Test that no two authorities share the same endpoint."""
+        endpoints = list(DEFAULT_AUTHORITY_ENDPOINTS.values())
+        assert len(endpoints) == len(set(endpoints)), \
+            "Duplicate authority endpoints detected"
+
+
+class TestAuthorityHealthSummary:
+    """Tests for authority health summary calculations."""
+    
+    def test_summary_counts_online_offline(self):
+        """Test that summary correctly counts online/offline authorities."""
+        monitor = AuthorityMonitor()
+        
+        status = {
+            'moria1': {'online': True, 'latency_ms': 50},
+            'tor26': {'online': True, 'latency_ms': 75},
+            'dizum': {'online': False, 'latency_ms': None, 'error': 'Timeout'},
+        }
+        
+        summary = monitor.get_summary(status)
+        
+        assert summary['online_count'] == 2
+        assert summary['offline_count'] == 1
+    
+    def test_summary_identifies_slow_authorities(self):
+        """Test that authorities with high latency are flagged as slow.
+        
+        Note: The slow threshold is >500ms based on the implementation.
+        """
+        monitor = AuthorityMonitor()
+        
+        status = {
+            'moria1': {'online': True, 'latency_ms': 50},   # Fast
+            'tor26': {'online': True, 'latency_ms': 450},   # Normal (<=500ms)
+            'dizum': {'online': True, 'latency_ms': 600},   # Slow (>500ms)
+        }
+        
+        summary = monitor.get_summary(status)
+        
+        # Only dizum should be in slow_authorities (>500ms)
+        assert 'dizum' in summary['slow_authorities']
+        assert 'moria1' not in summary['slow_authorities']
+        assert 'tor26' not in summary['slow_authorities']
+    
+    def test_summary_calculates_average_latency(self):
+        """Test that average latency is calculated correctly."""
+        monitor = AuthorityMonitor()
+        
+        status = {
+            'moria1': {'online': True, 'latency_ms': 100},
+            'tor26': {'online': True, 'latency_ms': 200},
+            'dizum': {'online': False, 'latency_ms': None},  # Should be excluded
+        }
+        
+        summary = monitor.get_summary(status)
+        
+        # Average of 100 and 200 = 150
+        assert summary['average_latency_ms'] == 150
+
+
+class TestAlertGeneration:
+    """Tests for alert generation logic."""
+    
+    def test_critical_alert_threshold(self):
+        """Test that critical alert is generated when many authorities offline."""
+        monitor = AuthorityMonitor()
+        
+        # 5 out of 9 offline = critical
+        status = {
+            'moria1': {'online': False, 'error': 'Timeout'},
+            'tor26': {'online': False, 'error': 'Timeout'},
+            'dizum': {'online': False, 'error': 'Timeout'},
+            'gabelmoo': {'online': False, 'error': 'Timeout'},
+            'bastet': {'online': False, 'error': 'Timeout'},
+            'dannenberg': {'online': True, 'latency_ms': 50},
+            'maatuska': {'online': True, 'latency_ms': 50},
+            'longclaw': {'online': True, 'latency_ms': 50},
+            'faravahar': {'online': True, 'latency_ms': 50},
+        }
+        
+        alerts = monitor.get_alerts(status)
+        
+        critical_alerts = [a for a in alerts if a['severity'] == 'critical']
+        assert len(critical_alerts) >= 1
+    
+    def test_alert_includes_authority_name(self):
+        """Test that alerts include the authority name."""
+        monitor = AuthorityMonitor()
+        
+        status = {
+            'moria1': {'online': False, 'error': 'Connection refused'},
+            'tor26': {'online': True, 'latency_ms': 50},
+        }
+        
+        alerts = monitor.get_alerts(status)
+        
+        # Should have alert for moria1
+        moria1_alerts = [a for a in alerts if a.get('authority') == 'moria1']
+        assert len(moria1_alerts) >= 1

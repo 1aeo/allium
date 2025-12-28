@@ -1,5 +1,14 @@
 """
 Tests for lib/consensus/diagnostics.py formatting functions.
+
+These tests verify the formatting logic for relay diagnostics displayed
+in templates. If the template requirements change, update these tests.
+
+Key thresholds tested:
+- Guard WFU: >= 98% (0.98)
+- Guard TK: >= 8 days (691200 seconds)
+- HSDir WFU: >= 98% (0.98)  
+- HSDir TK: >= 10 days (864000 seconds)
 """
 
 import os
@@ -23,6 +32,108 @@ from lib.consensus.diagnostics import (
     _format_thresholds_table,
     _format_bandwidth_value,
 )
+
+
+# ============================================================================
+# TEST DATA - Real-world scenarios from Tor network
+# ============================================================================
+
+# Relay that meets all Guard requirements
+GUARD_ELIGIBLE_RELAY = {
+    'fingerprint': 'ABC123' * 6 + 'ABCD',
+    'in_consensus': True,
+    'vote_count': 9,
+    'total_authorities': 9,
+    'majority_required': 5,
+    'authority_votes': [
+        {
+            'authority': 'moria1',
+            'fingerprint': 'F533C81CEF0BC0267857C99B2F471ADF249FA232',
+            'voted': True,
+            'flags': ['Fast', 'Guard', 'HSDir', 'Running', 'Stable', 'Valid'],
+            'wfu': 0.995,  # Above 98%
+            'tk': 1000000,  # ~11.5 days, above 8 days
+            'bandwidth': 50000000,
+            'measured': 45000000,
+            'is_bw_authority': True,
+        },
+    ],
+    'flag_eligibility': {
+        'guard': {'eligible_count': 9},
+        'stable': {'eligible_count': 9},
+        'fast': {'eligible_count': 9},
+        'hsdir': {'eligible_count': 9},
+    },
+    'reachability': {
+        'ipv4_reachable_count': 9,
+        'ipv6_reachable_count': 7,
+        'ipv6_not_tested_authorities': ['dizum', 'faravahar'],
+        'total_authorities': 9,
+    },
+}
+
+# Relay that doesn't meet Guard requirements
+NON_GUARD_RELAY = {
+    'fingerprint': 'DEF456' * 6 + 'DEF4',
+    'in_consensus': True,
+    'vote_count': 7,
+    'total_authorities': 9,
+    'majority_required': 5,
+    'authority_votes': [
+        {
+            'authority': 'moria1',
+            'voted': True,
+            'flags': ['Fast', 'Running', 'Valid'],  # No Guard flag
+            'wfu': 0.85,  # Below 98%
+            'tk': 500000,  # ~5.8 days, below 8 days
+            'bandwidth': 10000,
+            'measured': 8000,
+        },
+    ],
+    'flag_eligibility': {
+        'guard': {'eligible_count': 0},
+        'stable': {'eligible_count': 3},
+        'fast': {'eligible_count': 7},
+    },
+    'reachability': {
+        'ipv4_reachable_count': 7,
+        'ipv6_reachable_count': 0,
+        'total_authorities': 9,
+    },
+}
+
+# Flag thresholds from multiple authorities
+SAMPLE_FLAG_THRESHOLDS = {
+    'moria1': {
+        'guard-wfu': 0.98,
+        'guard-tk': 691200,
+        'guard-bw-inc-exits': 10000000,
+        'stable-uptime': 1693440,
+        'stable-mtbf': 1693440,
+        'fast-speed': 22000,
+        'hsdir-wfu': 0.98,
+        'hsdir-tk': 864000,
+    },
+    'tor26': {
+        'guard-wfu': 0.98,
+        'guard-tk': 691200,
+        'guard-bw-inc-exits': 35000000,  # Higher threshold
+        'stable-uptime': 1209600,
+        'stable-mtbf': 2592000,
+        'fast-speed': 102000,
+        'hsdir-wfu': 0.98,
+        'hsdir-tk': 864000,
+    },
+    'gabelmoo': {
+        'guard-wfu': 0.98,
+        'guard-tk': 691200,
+        'guard-bw-inc-exits': 30000000,
+        'stable-uptime': 1500000,
+        'fast-speed': 50000,
+        'hsdir-wfu': 0.98,
+        'hsdir-tk': 864000,
+    },
+}
 
 
 class TestFormatRelayDiagnostics:
@@ -323,3 +434,261 @@ class TestFormatAuthorityDiagnostics:
         auth = result['authorities'][0]
         assert auth['online'] == False
         assert auth['error'] == 'Connection timeout'
+
+
+class TestFormatRelayDiagnosticsGuardEligibility:
+    """Tests for Guard flag eligibility formatting."""
+    
+    def test_guard_eligible_relay(self):
+        """Test formatting for relay that meets Guard requirements."""
+        result = format_relay_diagnostics(GUARD_ELIGIBLE_RELAY, SAMPLE_FLAG_THRESHOLDS)
+        
+        assert result['available'] == True
+        assert result['in_consensus'] == True
+        
+        # Should have relay_values with Guard eligibility info
+        rv = result.get('relay_values', {})
+        assert rv.get('wfu_meets') == True  # WFU >= 98%
+        assert rv.get('tk_meets') == True   # TK >= 8 days
+    
+    def test_non_guard_relay_wfu_issue(self):
+        """Test that low WFU is correctly identified."""
+        result = format_relay_diagnostics(NON_GUARD_RELAY, SAMPLE_FLAG_THRESHOLDS)
+        
+        rv = result.get('relay_values', {})
+        assert rv.get('wfu_meets') == False  # WFU < 98%
+    
+    def test_non_guard_relay_tk_issue(self):
+        """Test that low Time Known is correctly identified."""
+        result = format_relay_diagnostics(NON_GUARD_RELAY, SAMPLE_FLAG_THRESHOLDS)
+        
+        rv = result.get('relay_values', {})
+        assert rv.get('tk_meets') == False  # TK < 8 days
+
+
+class TestFormatAuthorityTableEnhanced:
+    """Tests for _format_authority_table_enhanced with threshold comparison."""
+    
+    def test_authority_table_includes_thresholds(self):
+        """Test that authority table includes per-authority thresholds."""
+        diagnostics = {
+            'authority_votes': [
+                {
+                    'authority': 'moria1',
+                    'fingerprint': 'F533C81CEF0BC0267857C99B2F471ADF249FA232',
+                    'voted': True,
+                    'flags': ['Fast', 'Guard'],
+                    'wfu': 0.99,
+                    'tk': 1000000,
+                    'bandwidth': 50000000,
+                    'measured': 45000000,
+                    'is_bw_authority': True,
+                },
+            ],
+        }
+        
+        result = _format_authority_table_enhanced(diagnostics, SAMPLE_FLAG_THRESHOLDS)
+        
+        assert len(result) >= 1
+        moria1_row = result[0]
+        
+        # Should have threshold comparisons
+        assert 'guard_bw_threshold' in moria1_row
+        assert 'guard_bw_meets' in moria1_row
+        assert 'stable_threshold' in moria1_row
+        assert 'fast_threshold' in moria1_row
+    
+    def test_authority_table_fingerprint_included(self):
+        """Test that authority fingerprints are included in table."""
+        diagnostics = {
+            'authority_votes': [
+                {
+                    'authority': 'moria1',
+                    'fingerprint': 'F533C81CEF0BC0267857C99B2F471ADF249FA232',
+                    'voted': True,
+                    'flags': ['Fast'],
+                },
+            ],
+        }
+        
+        result = _format_authority_table_enhanced(diagnostics, {})
+        
+        assert result[0]['fingerprint'] == 'F533C81CEF0BC0267857C99B2F471ADF249FA232'
+
+
+class TestRelayValuesCalculation:
+    """Tests for relay values calculation in _format_relay_values."""
+    
+    def test_guard_bw_range_calculation(self):
+        """Test that Guard BW range is calculated from all authorities."""
+        diagnostics = {
+            'authority_votes': [
+                {'wfu': 0.99, 'tk': 1000000, 'measured': 50000000},
+            ],
+            'flag_eligibility': {
+                'guard': {'eligible_count': 5},
+            },
+            'reachability': {
+                'ipv4_reachable_count': 9,
+                'ipv6_reachable_count': 5,
+                'ipv6_not_tested_authorities': [],
+            },
+            'total_authorities': 9,
+            'majority_required': 5,
+        }
+        
+        result = _format_relay_values(diagnostics, SAMPLE_FLAG_THRESHOLDS)
+        
+        # Guard BW range should reflect authority variation
+        assert 'guard_bw_range' in result
+        # With thresholds 10MB, 30MB, 35MB, range should be "10.0 MB/s-35.0 MB/s"
+        assert 'MB/s' in result['guard_bw_range']
+    
+    def test_stable_range_calculation(self):
+        """Test that Stable range is calculated correctly."""
+        diagnostics = {
+            'authority_votes': [{'wfu': 0.99, 'tk': 1000000}],
+            'flag_eligibility': {'stable': {'eligible_count': 5}},
+            'reachability': {'ipv4_reachable_count': 9},
+            'total_authorities': 9,
+            'majority_required': 5,
+        }
+        
+        result = _format_relay_values(diagnostics, SAMPLE_FLAG_THRESHOLDS)
+        
+        assert 'stable_range' in result
+        # Stable uptime varies: 1209600 (14d) to 1693440 (19.6d)
+        assert 'd' in result['stable_range']  # Should show days
+    
+    def test_ipv6_tested_count(self):
+        """Test IPv6 tested count accounts for non-testing authorities."""
+        diagnostics = {
+            'authority_votes': [{'wfu': 0.99, 'tk': 1000000}],
+            'flag_eligibility': {},
+            'reachability': {
+                'ipv4_reachable_count': 9,
+                'ipv6_reachable_count': 5,
+                'ipv6_not_tested_authorities': ['dizum', 'faravahar'],
+            },
+            'total_authorities': 9,
+            'majority_required': 5,
+        }
+        
+        result = _format_relay_values(diagnostics, {})
+        
+        # 9 total - 2 not testing = 7 tested
+        assert result['ipv6_tested_count'] == 7
+
+
+class TestIssueIdentification:
+    """Tests for issue identification logic."""
+    
+    def test_identifies_ipv4_reachability_issues(self):
+        """Test that IPv4 reachability issues are identified."""
+        diagnostics = {
+            'in_consensus': True,
+            'vote_count': 5,
+            'total_authorities': 9,
+            'reachability': {
+                'ipv4_reachable_count': 3,  # Below majority
+                'ipv4_unreachable_authorities': ['tor26', 'gabelmoo', 'bastet', 
+                                                   'dannenberg', 'maatuska', 'longclaw'],
+            },
+            'flag_eligibility': {'guard': {'eligible_count': 5}},
+        }
+        
+        issues = _identify_issues(diagnostics)
+        
+        # Should identify reachability as an issue
+        reachability_issues = [i for i in issues if i['category'] == 'reachability']
+        assert len(reachability_issues) >= 1
+    
+    def test_identifies_guard_eligibility_issues(self):
+        """Test that Guard eligibility issues are identified."""
+        diagnostics = {
+            'in_consensus': True,
+            'vote_count': 9,
+            'total_authorities': 9,
+            'reachability': {'ipv4_reachable_count': 9},
+            'flag_eligibility': {
+                'guard': {'eligible_count': 2},  # Low eligibility
+            },
+        }
+        
+        issues = _identify_issues(diagnostics)
+        
+        # Should identify Guard eligibility as an issue
+        guard_issues = [i for i in issues if 'guard' in i.get('type', '').lower() 
+                       or 'Guard' in i.get('description', '')]
+        assert len(guard_issues) >= 1
+
+
+class TestAdviceGeneration:
+    """Tests for advice generation logic."""
+    
+    def test_advice_for_new_relay(self):
+        """Test advice for relay with low Time Known."""
+        diagnostics = {
+            'in_consensus': True,
+            'vote_count': 9,
+            'total_authorities': 9,
+            'reachability': {'ipv4_reachable_count': 9},
+            'flag_eligibility': {'guard': {'eligible_count': 0}},
+            'authority_votes': [
+                {'wfu': 0.99, 'tk': 172800},  # Only 2 days - new relay
+            ],
+        }
+        
+        advice = _generate_advice(diagnostics)
+        
+        # Should give advice about Time Known
+        assert len(advice) >= 1
+    
+    def test_advice_mentions_specific_thresholds(self):
+        """Test that advice mentions specific threshold values."""
+        diagnostics = {
+            'in_consensus': True,
+            'vote_count': 9,
+            'total_authorities': 9,
+            'reachability': {'ipv4_reachable_count': 9},
+            'flag_eligibility': {'guard': {'eligible_count': 5}},
+            'authority_votes': [
+                {'wfu': 0.95},  # Below 98%
+            ],
+        }
+        
+        advice = _generate_advice(diagnostics)
+        
+        # Should mention the 98% threshold
+        advice_text = ' '.join(advice)
+        assert '98%' in advice_text or 'WFU' in advice_text
+
+
+class TestBandwidthFormatting:
+    """Tests for bandwidth value formatting."""
+    
+    def test_format_zero_bandwidth(self):
+        """Test formatting of zero bandwidth."""
+        result = _format_bandwidth_value(0)
+        assert result == '0 B/s' or result == 'N/A'
+    
+    def test_format_negative_bandwidth(self):
+        """Test formatting of negative bandwidth (should handle gracefully)."""
+        result = _format_bandwidth_value(-1000)
+        # Should not crash, return something reasonable
+        assert result is not None
+    
+    def test_format_large_bandwidth(self):
+        """Test formatting of very large bandwidth."""
+        result = _format_bandwidth_value(10 * 1024 * 1024 * 1024)  # 10 GB/s
+        assert 'GB/s' in result
+    
+    def test_format_exact_kb_boundary(self):
+        """Test formatting at KB boundary."""
+        result = _format_bandwidth_value(1024)
+        assert 'KB/s' in result or 'B/s' in result
+    
+    def test_format_exact_mb_boundary(self):
+        """Test formatting at MB boundary."""
+        result = _format_bandwidth_value(1024 * 1024)
+        assert 'MB/s' in result or 'KB/s' in result

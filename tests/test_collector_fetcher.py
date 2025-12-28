@@ -3,6 +3,12 @@ Tests for collector_fetcher.py
 
 Tests the CollectorFetcher class that fetches and indexes CollecTor data
 for per-relay diagnostics.
+
+IMPORTANT: These tests are designed to catch changes in CollecTor vote file
+format. If these tests fail after a Tor update, it likely means the vote
+file format has changed and our parsing code needs to be updated.
+
+Vote file format reference: https://spec.torproject.org/dir-spec/
 """
 
 import pytest
@@ -19,6 +25,57 @@ from consensus.collector_fetcher import (
     calculate_consensus_requirement,
     AUTHORITIES,
 )
+
+
+# ============================================================================
+# SAMPLE DATA FROM REAL COLLECTOR VOTE FILES
+# If these formats change in Tor, update these samples and the parsing code
+# ============================================================================
+
+# Sample 'r' line format from vote file (relay entry)
+# Format: r <nickname> <identity_b64> <digest_b64> <date> <time> <IP> <ORPort> <DirPort>
+SAMPLE_R_LINE = "r lisdex AAAErLudKby6FyVrs1ko3b/Iq6k YpRTARWdwmwEVbePGq0/dy8d3I4 2025-12-27 11:01:03 152.53.144.50 8443 0"
+SAMPLE_R_LINE_IPV6 = "r MyRelay ABCD1234abcd5678EFGH9012ijkl3456 XYZabc123def456ghi789jkl012mno 2025-12-28 15:30:00 192.168.1.1 9001 0"
+
+# Sample 's' line format (flags assigned to relay)
+SAMPLE_S_LINE = "s Fast Guard HSDir Running Stable V2Dir Valid"
+SAMPLE_S_LINE_MINIMAL = "s Running Valid"
+SAMPLE_S_LINE_EXIT = "s Exit Fast Guard Running Stable Valid"
+
+# Sample 'a' line format (IPv6 address if reachable)
+SAMPLE_A_LINE = "a [2001:db8::1]:9001"
+SAMPLE_A_LINE_FULL = "a [2607:5300:203:51d2::1]:443"
+
+# Sample 'w' line format (bandwidth weights)
+SAMPLE_W_LINE = "w Bandwidth=12345 Measured=67890"
+SAMPLE_W_LINE_NO_MEASURED = "w Bandwidth=5000"
+SAMPLE_W_LINE_UNMEASURED = "w Bandwidth=1000 Unmeasured=1"
+
+# Sample 'stats' line format (wfu, tk, mtbf values)
+SAMPLE_STATS_LINE = "stats wfu=0.965815 tk=1040813 mtbf=2592000"
+SAMPLE_STATS_LINE_LOW_WFU = "stats wfu=0.85 tk=500000 mtbf=1000000"
+SAMPLE_STATS_LINE_HIGH_TK = "stats wfu=0.99 tk=8640000 mtbf=5000000"
+
+# Sample 'flag-thresholds' line format
+SAMPLE_FLAG_THRESHOLDS = "flag-thresholds stable-uptime=1693440 stable-mtbf=1693440 fast-speed=22000 guard-wfu=98% guard-tk=691200 guard-bw-inc-exits=10000000 guard-bw-exc-exits=10000000 enough-mtbf=1 hsdir-wfu=98% hsdir-tk=864000"
+SAMPLE_FLAG_THRESHOLDS_VARIANT = "flag-thresholds stable-uptime=1209600 stable-mtbf=2592000 fast-speed=102000 guard-wfu=98% guard-tk=691200 guard-bw-inc-exits=35000000"
+
+# Sample bandwidth-file-headers line (indicates bandwidth authority)
+SAMPLE_BW_FILE_HEADERS = "bandwidth-file-headers timestamp=2025-12-28T02:45:10 version=1.4.0"
+
+# Current authority V3 identity key fingerprints (from vote filenames)
+# If these change, update AUTHORITIES in collector_fetcher.py
+EXPECTED_AUTHORITIES = {
+    '0232AF901C31A04EE9848595AF9BB7620D4C5B2E': 'dannenberg',
+    '23D15D965BC35114467363C165C4F724B64B4F66': 'longclaw',
+    '27102BC123E7AF1D4741AE047E160C91ADC76B21': 'bastet',
+    '2F3DF9CA0E5D36F2685A2DA67184EB8DCB8CBA8C': 'tor26',
+    '49015F787433103580E3B66A1707A00E60F2D15B': 'maatuska',
+    '70849B868D606BAECFB6128C5E3D782029AA394F': 'faravahar',
+    'E8A9C45EDE6D711294FADF8E7951F4DE6CA56B58': 'dizum',
+    'ED03BB616EB2F60BEC80151114BB25CEF515B226': 'gabelmoo',
+    'F533C81CEF0BC0267857C99B2F471ADF249FA232': 'moria1',
+}
 
 
 class TestCollectorFetcher:
@@ -268,23 +325,442 @@ class TestCalculateConsensusRequirement:
 
 
 class TestAuthoritiesConstant:
-    """Tests for AUTHORITIES constant."""
+    """Tests for AUTHORITIES constant.
+    
+    IMPORTANT: If directory authority signing keys change, these tests will fail.
+    Update AUTHORITIES in collector_fetcher.py with new fingerprints from vote files.
+    """
     
     def test_authority_count(self):
-        """Test that we have the expected number of authorities."""
-        assert len(AUTHORITIES) == 9
+        """Test that we have the expected number of authorities (currently 9)."""
+        assert len(AUTHORITIES) == 9, \
+            f"Expected 9 authorities, got {len(AUTHORITIES)}. " \
+            "If Tor added/removed authorities, update AUTHORITIES constant."
     
     def test_authority_names(self):
-        """Test that known authorities are present."""
-        names = list(AUTHORITIES.values())
-        assert 'moria1' in names
-        assert 'tor26' in names
-        assert 'gabelmoo' in names
-        assert 'faravahar' in names
+        """Test that all known authority nicknames are present."""
+        expected_names = {'moria1', 'tor26', 'gabelmoo', 'faravahar', 'dizum', 
+                         'bastet', 'dannenberg', 'maatuska', 'longclaw'}
+        actual_names = set(AUTHORITIES.values())
+        
+        missing = expected_names - actual_names
+        extra = actual_names - expected_names
+        
+        assert not missing, f"Missing authorities: {missing}"
+        assert not extra, f"Unknown authorities: {extra}"
     
     def test_fingerprint_format(self):
-        """Test that all fingerprints are valid format."""
+        """Test that all fingerprints are valid 40-char hex format."""
         for fingerprint in AUTHORITIES.keys():
-            assert len(fingerprint) == 40
+            assert len(fingerprint) == 40, \
+                f"Fingerprint {fingerprint} is not 40 chars"
             # Should be valid hex
-            int(fingerprint, 16)
+            try:
+                int(fingerprint, 16)
+            except ValueError:
+                pytest.fail(f"Fingerprint {fingerprint} is not valid hex")
+    
+    def test_expected_fingerprints_match(self):
+        """Test that AUTHORITIES matches expected current fingerprints.
+        
+        If this test fails, authority signing keys have changed.
+        Run the vote fingerprint discovery script to get new values.
+        """
+        for fp, name in EXPECTED_AUTHORITIES.items():
+            assert fp in AUTHORITIES, \
+                f"Fingerprint {fp} for {name} not in AUTHORITIES. " \
+                f"Authority signing keys may have changed."
+            assert AUTHORITIES[fp] == name, \
+                f"Fingerprint {fp} maps to {AUTHORITIES[fp]}, expected {name}"
+
+
+class TestParseRelayRLine:
+    """Tests for _parse_relay_r_line method.
+    
+    The 'r' line format is:
+    r <nickname> <identity_b64> <digest_b64> <date> <time> <IP> <ORPort> <DirPort>
+    
+    If this format changes in Tor, update the parsing code in collector_fetcher.py
+    """
+    
+    def test_parse_valid_r_line(self):
+        """Test parsing a valid 'r' line from vote file."""
+        fetcher = CollectorFetcher()
+        result = fetcher._parse_relay_r_line(SAMPLE_R_LINE)
+        
+        assert result is not None, "Failed to parse valid r line"
+        assert result['nickname'] == 'lisdex'
+        assert result['ip'] == '152.53.144.50'
+        assert result['or_port'] == 8443
+        assert result['dir_port'] == 0
+        assert len(result['fingerprint']) == 40  # Hex fingerprint from base64 identity
+    
+    def test_parse_r_line_extracts_fingerprint(self):
+        """Test that fingerprint is correctly decoded from base64 identity."""
+        fetcher = CollectorFetcher()
+        result = fetcher._parse_relay_r_line(SAMPLE_R_LINE)
+        
+        # Fingerprint should be uppercase hex
+        assert result['fingerprint'].isupper() or result['fingerprint'].isdigit()
+        assert all(c in '0123456789ABCDEF' for c in result['fingerprint'])
+    
+    def test_parse_r_line_with_different_ports(self):
+        """Test parsing r line with various port configurations."""
+        fetcher = CollectorFetcher()
+        
+        # Test with dir_port > 0
+        line_with_dirport = "r TestRelay AAAErLudKby6FyVrs1ko3b/Iq6k YpRTAR 2025-12-27 11:01:03 192.168.1.1 9001 9030"
+        result = fetcher._parse_relay_r_line(line_with_dirport)
+        
+        assert result is not None
+        assert result['or_port'] == 9001
+        assert result['dir_port'] == 9030
+    
+    def test_parse_r_line_invalid_too_short(self):
+        """Test that malformed r line returns None."""
+        fetcher = CollectorFetcher()
+        
+        # Too few fields
+        result = fetcher._parse_relay_r_line("r lisdex ABC123")
+        assert result is None
+    
+    def test_parse_r_line_initializes_fields(self):
+        """Test that parsed relay has all expected fields initialized."""
+        fetcher = CollectorFetcher()
+        result = fetcher._parse_relay_r_line(SAMPLE_R_LINE)
+        
+        assert 'flags' in result
+        assert 'bandwidth' in result
+        assert 'measured' in result
+        assert 'wfu' in result
+        assert 'tk' in result
+        assert 'mtbf' in result
+
+
+class TestParseStatsLine:
+    """Tests for _parse_stats_line method.
+    
+    The 'stats' line format is:
+    stats wfu=<float> tk=<int> mtbf=<int>
+    
+    Values:
+    - wfu: Weighted Fractional Uptime (0.0 to 1.0)
+    - tk: Time Known in seconds
+    - mtbf: Mean Time Between Failures in seconds
+    """
+    
+    def test_parse_stats_line(self):
+        """Test parsing a valid stats line."""
+        fetcher = CollectorFetcher()
+        result = fetcher._parse_stats_line(SAMPLE_STATS_LINE)
+        
+        assert result['wfu'] == pytest.approx(0.965815, rel=1e-5)
+        assert result['tk'] == 1040813
+        assert result['mtbf'] == 2592000
+    
+    def test_parse_stats_line_low_wfu(self):
+        """Test parsing stats line with low WFU (below Guard threshold)."""
+        fetcher = CollectorFetcher()
+        result = fetcher._parse_stats_line(SAMPLE_STATS_LINE_LOW_WFU)
+        
+        assert result['wfu'] == 0.85
+        assert result['wfu'] < 0.98  # Below Guard/HSDir threshold
+    
+    def test_parse_stats_line_high_tk(self):
+        """Test parsing stats line with high Time Known."""
+        fetcher = CollectorFetcher()
+        result = fetcher._parse_stats_line(SAMPLE_STATS_LINE_HIGH_TK)
+        
+        assert result['tk'] == 8640000  # 100 days in seconds
+        assert result['tk'] > 691200  # Above Guard TK threshold (8 days)
+    
+    def test_parse_stats_empty_result(self):
+        """Test parsing stats line without expected values."""
+        fetcher = CollectorFetcher()
+        result = fetcher._parse_stats_line("stats")
+        
+        # Should return empty dict, not fail
+        assert isinstance(result, dict)
+
+
+class TestParseWLine:
+    """Tests for _parse_w_line method.
+    
+    The 'w' line format is:
+    w Bandwidth=<int> [Measured=<int>] [Unmeasured=1]
+    
+    Values are in bytes/second.
+    """
+    
+    def test_parse_w_line_with_measured(self):
+        """Test parsing w line with both Bandwidth and Measured."""
+        fetcher = CollectorFetcher()
+        result = fetcher._parse_w_line(SAMPLE_W_LINE)
+        
+        assert result['bandwidth'] == 12345
+        assert result['measured'] == 67890
+    
+    def test_parse_w_line_no_measured(self):
+        """Test parsing w line without Measured value."""
+        fetcher = CollectorFetcher()
+        result = fetcher._parse_w_line(SAMPLE_W_LINE_NO_MEASURED)
+        
+        assert result['bandwidth'] == 5000
+        assert 'measured' not in result or result.get('measured') is None
+    
+    def test_parse_w_line_unmeasured(self):
+        """Test parsing w line with Unmeasured flag."""
+        fetcher = CollectorFetcher()
+        result = fetcher._parse_w_line(SAMPLE_W_LINE_UNMEASURED)
+        
+        assert result['bandwidth'] == 1000
+
+
+class TestParseFlagThresholds:
+    """Tests for _parse_flag_thresholds method.
+    
+    The 'flag-thresholds' line contains dynamic thresholds for flag assignment.
+    These values can change based on network conditions.
+    
+    Key thresholds:
+    - guard-wfu: Usually 98% (0.98)
+    - guard-tk: Usually 691200 seconds (8 days)
+    - stable-uptime: Varies, ~14-20 days
+    - fast-speed: Varies by network
+    """
+    
+    def test_parse_flag_thresholds_complete(self):
+        """Test parsing complete flag-thresholds line."""
+        fetcher = CollectorFetcher()
+        result = fetcher._parse_flag_thresholds(SAMPLE_FLAG_THRESHOLDS)
+        
+        # Guard thresholds
+        assert result['guard-wfu'] == 0.98  # Percentage converted
+        assert result['guard-tk'] == 691200  # 8 days in seconds
+        assert result['guard-bw-inc-exits'] == 10000000
+        
+        # Stable thresholds
+        assert result['stable-uptime'] == 1693440
+        assert result['stable-mtbf'] == 1693440
+        
+        # Fast threshold
+        assert result['fast-speed'] == 22000
+        
+        # HSDir thresholds
+        assert result['hsdir-wfu'] == 0.98
+        assert result['hsdir-tk'] == 864000  # ~10 days
+    
+    def test_parse_flag_thresholds_variant(self):
+        """Test parsing flag-thresholds with different values."""
+        fetcher = CollectorFetcher()
+        result = fetcher._parse_flag_thresholds(SAMPLE_FLAG_THRESHOLDS_VARIANT)
+        
+        # Values should differ from SAMPLE_FLAG_THRESHOLDS
+        assert result['stable-uptime'] == 1209600  # 14 days
+        assert result['guard-bw-inc-exits'] == 35000000  # 35 MB/s
+    
+    def test_parse_flag_thresholds_percentage_conversion(self):
+        """Test that percentage values are correctly converted to decimals."""
+        fetcher = CollectorFetcher()
+        result = fetcher._parse_flag_thresholds(SAMPLE_FLAG_THRESHOLDS)
+        
+        # 98% should become 0.98
+        assert result['guard-wfu'] == 0.98
+        assert result['hsdir-wfu'] == 0.98
+        
+        # These should not be percentages
+        assert result['stable-uptime'] > 1  # Not a percentage
+
+
+class TestParseVoteFile:
+    """Tests for _parse_vote method.
+    
+    Tests parsing of complete vote file content including:
+    - relay entries (r lines)
+    - flags (s lines)
+    - IPv6 addresses (a lines)
+    - bandwidth (w lines)
+    - stats (stats lines)
+    - flag thresholds
+    - bandwidth-file-headers detection
+    """
+    
+    def test_parse_vote_with_relays(self):
+        """Test parsing vote content with multiple relays."""
+        fetcher = CollectorFetcher()
+        
+        vote_content = """@type network-status-vote-3 1.0
+dir-source moria1 F533C81CEF0BC0267857C99B2F471ADF249FA232 128.31.0.34 128.31.0.34 9131 9101
+flag-thresholds stable-uptime=1693440 stable-mtbf=1693440 fast-speed=22000 guard-wfu=98% guard-tk=691200
+bandwidth-file-headers timestamp=2025-12-28T02:45:10
+r TestRelay1 AAAErLudKby6FyVrs1ko3b/Iq6k YpRT 2025-12-27 11:01:03 192.168.1.1 9001 0
+s Fast Running Stable Valid
+w Bandwidth=50000 Measured=45000
+stats wfu=0.99 tk=1000000 mtbf=2000000
+a [2001:db8::1]:9001
+r TestRelay2 BBBErLudKby6FyVrs1ko3b/Iq6k ZpRT 2025-12-27 11:02:03 192.168.1.2 9002 0
+s Exit Fast Running Valid
+w Bandwidth=100000
+"""
+        result = fetcher._parse_vote(vote_content, 'F533C81CEF0BC0267857C99B2F471ADF249FA232')
+        
+        assert result['has_bandwidth_file_headers'] == True
+        assert 'flag_thresholds' in result
+        assert result['flag_thresholds']['guard-wfu'] == 0.98
+        assert len(result['relays']) == 2
+    
+    def test_parse_vote_detects_bw_authority(self):
+        """Test that bandwidth-file-headers is detected for BW authorities."""
+        fetcher = CollectorFetcher()
+        
+        vote_with_bw = """@type network-status-vote-3 1.0
+bandwidth-file-headers timestamp=2025-12-28T02:45:10
+r Relay AAAErLudKby6FyVrs1ko3b/Iq6k YpRT 2025-12-27 11:01:03 1.2.3.4 9001 0
+s Fast Running Valid
+w Bandwidth=50000 Measured=45000
+"""
+        result = fetcher._parse_vote(vote_with_bw, 'TEST123')
+        assert result['has_bandwidth_file_headers'] == True
+        
+        vote_without_bw = """@type network-status-vote-3 1.0
+r Relay AAAErLudKby6FyVrs1ko3b/Iq6k YpRT 2025-12-27 11:01:03 1.2.3.4 9001 0
+s Fast Running Valid
+w Bandwidth=50000
+"""
+        result = fetcher._parse_vote(vote_without_bw, 'TEST456')
+        assert result['has_bandwidth_file_headers'] == False
+    
+    def test_parse_vote_extracts_relay_flags(self):
+        """Test that relay flags are correctly extracted."""
+        fetcher = CollectorFetcher()
+        
+        vote_content = """@type network-status-vote-3 1.0
+r GuardRelay AAAErLudKby6FyVrs1ko3b/Iq6k YpRT 2025-12-27 11:01:03 1.2.3.4 9001 0
+s Fast Guard HSDir Running Stable V2Dir Valid
+w Bandwidth=50000 Measured=45000
+"""
+        result = fetcher._parse_vote(vote_content, 'TEST123')
+        
+        # Get first relay
+        relay = list(result['relays'].values())[0]
+        assert 'Fast' in relay['flags']
+        assert 'Guard' in relay['flags']
+        assert 'HSDir' in relay['flags']
+        assert 'Stable' in relay['flags']
+    
+    def test_parse_vote_extracts_ipv6(self):
+        """Test that IPv6 addresses are correctly extracted."""
+        fetcher = CollectorFetcher()
+        
+        vote_content = """@type network-status-vote-3 1.0
+r IPv6Relay AAAErLudKby6FyVrs1ko3b/Iq6k YpRT 2025-12-27 11:01:03 1.2.3.4 9001 0
+a [2001:db8::1]:9001
+s Fast Running Valid
+w Bandwidth=50000
+"""
+        result = fetcher._parse_vote(vote_content, 'TEST123')
+        
+        relay = list(result['relays'].values())[0]
+        assert relay['ipv6_reachable'] == True
+        assert '[2001:db8::1]:9001' in relay['ipv6_address']
+
+
+class TestBuildRelayIndex:
+    """Tests for _build_relay_index method.
+    
+    The relay index aggregates data from all authority votes
+    for O(1) lookup by fingerprint.
+    """
+    
+    def test_build_index_from_votes(self):
+        """Test building relay index from multiple authority votes."""
+        fetcher = CollectorFetcher()
+        
+        # Simulate votes from multiple authorities
+        fetcher.votes = {
+            'moria1': {
+                'relays': {
+                    'ABC123': {'nickname': 'TestRelay', 'flags': ['Fast'], 'wfu': 0.99},
+                }
+            },
+            'tor26': {
+                'relays': {
+                    'ABC123': {'nickname': 'TestRelay', 'flags': ['Fast', 'Guard'], 'wfu': 0.99},
+                }
+            },
+        }
+        fetcher.bandwidth_files = {}
+        
+        fetcher._build_relay_index()
+        
+        assert 'ABC123' in fetcher.relay_index
+        assert len(fetcher.relay_index['ABC123']['votes']) == 2
+        assert 'moria1' in fetcher.relay_index['ABC123']['votes']
+        assert 'tor26' in fetcher.relay_index['ABC123']['votes']
+    
+    def test_index_aggregates_vote_data(self):
+        """Test that index correctly aggregates per-authority vote data."""
+        fetcher = CollectorFetcher()
+        
+        fetcher.votes = {
+            'moria1': {
+                'relays': {
+                    'ABC123': {
+                        'nickname': 'TestRelay',
+                        'flags': ['Fast'],
+                        'wfu': 0.99,
+                        'tk': 1000000,
+                        'bandwidth': 50000,
+                        'measured': 45000,
+                    },
+                }
+            },
+        }
+        fetcher.bandwidth_files = {}
+        
+        fetcher._build_relay_index()
+        
+        vote = fetcher.relay_index['ABC123']['votes']['moria1']
+        assert vote['flags'] == ['Fast']
+        assert vote['wfu'] == 0.99
+        assert vote['tk'] == 1000000
+        assert vote['bandwidth'] == 50000
+        assert vote['measured'] == 45000
+
+
+class TestFormatAuthorityVotes:
+    """Tests for _format_authority_votes method.
+    
+    Tests the formatting of per-authority vote data for template display.
+    """
+    
+    def test_format_authority_votes_includes_fingerprint(self):
+        """Test that authority fingerprints are included in formatted votes."""
+        fetcher = CollectorFetcher()
+        
+        relay = {
+            'votes': {
+                'moria1': {'flags': ['Fast'], 'wfu': 0.99, 'tk': 1000000},
+            },
+        }
+        
+        result = fetcher._format_authority_votes(relay)
+        
+        # Find moria1 entry
+        moria1_vote = next((v for v in result if v['authority'] == 'moria1'), None)
+        assert moria1_vote is not None
+        assert 'fingerprint' in moria1_vote
+        assert len(moria1_vote['fingerprint']) == 40
+    
+    def test_format_authority_votes_all_authorities(self):
+        """Test that all 9 authorities are included in formatted votes."""
+        fetcher = CollectorFetcher()
+        
+        relay = {'votes': {}}
+        result = fetcher._format_authority_votes(relay)
+        
+        assert len(result) == 9
+        authority_names = {v['authority'] for v in result}
+        expected = {'moria1', 'tor26', 'gabelmoo', 'faravahar', 'dizum', 
+                   'bastet', 'dannenberg', 'maatuska', 'longclaw'}
+        assert authority_names == expected
