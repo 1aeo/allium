@@ -16,6 +16,223 @@ Add consensus troubleshooting features to Allium using CollecTor as the primary 
 
 ---
 
+## 📋 Common Relay Operator Questions & Where to Find Answers
+
+These are real questions from the **tor-relays mailing list** and **Tor Project forums**. This plan addresses each one.
+
+### Question 1: "Why is my relay not in consensus?"
+**Examples**: "Relay forest18 is still not on the consensus", "Exit relay not in consensus", "One of my relays does not get a consensus weight"
+
+| Where to Look | What You'll See |
+|---------------|-----------------|
+| **Relay Page → Consensus Status** | Shows "NOT IN CONSENSUS (X/9 authorities)" with tooltip explaining majority requirement |
+| **Relay Page → Per-Authority Table** | Shows which authorities CAN reach your relay (IPv4 ✅/❌) and which voted for it |
+| **Relay Page → Issues Summary** | Lists specific problems: "faravahar cannot reach relay" |
+
+**Root causes this identifies**:
+- Not enough authorities can reach your relay (need 5/9 majority)
+- IPv4 reachability issues with specific authorities
+- Relay too new (check Time Known column)
+
+---
+
+### Question 2: "Why did I lose my Guard flag?"
+**Examples**: "Loss of Guard and HS Dir flags", "Relay no longer acting as a guard node?", "Unexpected classification with my guard relay"
+
+| Where to Look | What You'll See |
+|---------------|-----------------|
+| **Relay Page → WFU Column** | Your WFU value vs threshold (≥98% required). Shows ❌ if below. |
+| **Relay Page → Time Known Column** | Your TK value vs threshold (≥8 days required). Shows ❌ if below. |
+| **Relay Page → Guard BW Column** | Per-authority: "≥30 MB/s ❌" or "≥10 MB/s ✅" - thresholds VARY |
+| **Relay Page → Values Summary** | "❌ BELOW - cannot get Guard from ANY authority" or "⚠️ PARTIAL - meets for 5/9" |
+| **Relay Page → Advice** | "Increase WFU to ≥98%. Current uptime pattern is too variable." |
+
+**Root causes this identifies**:
+- WFU dropped below 98% (uptime instability)
+- Time Known reset (key rotation, relay restart with new identity)
+- Bandwidth below some authorities' thresholds
+- Tooltip shows exact field: `Source: CollecTor | File: vote | Field: stats wfu=X`
+
+---
+
+### Question 3: "Why did I lose my Stable flag?"
+**Examples**: "Loss of Stable flag", "Relay MIGHTYWANG consensus issues and loss of STABLE flag"
+
+| Where to Look | What You'll See |
+|---------------|-----------------|
+| **Relay Page → Stable Column** | Per-authority threshold: "≥19.6d ✅" or "≥14.2d ❌" |
+| **Relay Page → Values Summary → Stable Uptime** | "varies: 14.2-19.8 days" with your value |
+| **Authority Health Page → Flag Thresholds Table** | All 9 authorities' `stable-uptime` thresholds side-by-side |
+
+**Root causes this identifies**:
+- Uptime below threshold (varies 14-20 days by authority)
+- Recent restart reset your stable uptime counter
+
+---
+
+### Question 4: "Consensus frequently reports relay down, despite relay passing traffic"
+**Examples**: "Metrics falsely showing my relay as offline", "tor relay shows offline @ tor relay search while running"
+
+| Where to Look | What You'll See |
+|---------------|-----------------|
+| **Relay Page → Per-Authority Table → IPv4/IPv6 columns** | Which specific authorities can/cannot reach you |
+| **Relay Page → Issues Summary** | "faravahar cannot reach relay" - identifies the specific authority |
+| **Authority Health Page → Latency Column** | Authority latency (if authority itself is slow/down) |
+| **Authority Health Page → Voted Column** | Whether authority submitted vote this hour |
+
+**Root causes this identifies**:
+- Specific authorities can't reach you (firewall, routing, geographic issues)
+- Authority itself having problems (check Authority Health page)
+- IPv6-only issues (some authorities don't test IPv6)
+
+---
+
+### Question 5: "Directory authorities not giving weight to a relay" / "Low consensus weight"
+**Examples**: "Low consensus weight votes from European authorities", "consensus weight tanking", "Tor relay back to 1 weight"
+
+| Where to Look | What You'll See |
+|---------------|-----------------|
+| **Relay Page → Meas. BW Column** | Measured bandwidth from each authority (N/A for non-BW authorities) |
+| **Relay Page → BW Authority detection** | Which authorities run bandwidth scanners (from `bandwidth-file-headers`) |
+| **Authority Health Page → BW Auth Column** | ✅/❌ for each authority's scanner status |
+
+**Root causes this identifies**:
+- Bandwidth scanner not measuring your relay yet
+- Different authorities measuring different values
+- Non-BW authorities (dizum, dannenberg, faravahar) don't contribute measurements
+
+---
+
+### Question 6: "Auto-discovered IPv6 address has not been found reachable"
+**Examples**: "IPv6 reachability issues", "Bridge Operation IPv6 only - possible?"
+
+| Where to Look | What You'll See |
+|---------------|-----------------|
+| **Relay Page → IPv6 Column** | Per-authority: ✅ (reachable), ❌ (unreachable), ⚪ (not tested) |
+| **Relay Page → Legend** | "⚪ = authority doesn't test IPv6" |
+
+**Root causes this identifies**:
+- Which authorities test IPv6 (not all do)
+- IPv6 specifically blocked by some authorities
+- Tooltip: `Source: CollecTor | File: vote | Field: 'a' line (IPv6 address)`
+
+---
+
+### Question 7: "What are the exact criteria for receiving [flag]?"
+**Examples**: "Exact criteria for receiving a BadExit flag", "Intentionally obtaining a MiddleOnly flag"
+
+| Where to Look | What You'll See |
+|---------------|-----------------|
+| **Authority Health Page → Flag Thresholds Table** | ALL thresholds for ALL flags from each authority |
+| **Column tooltips** | Exact field names: `flag-thresholds guard-wfu=98%`, `stable-uptime=1693440` |
+
+**Thresholds shown**:
+- Guard: `guard-bw-inc-exits`, `guard-tk`, `guard-wfu`
+- Stable: `stable-uptime`, `stable-mtbf`
+- Fast: `fast-speed`
+- HSDir: `hsdir-wfu`, `hsdir-tk`
+
+---
+
+### Question 8: "Relay's first seen date got reset"
+**Examples**: "First seen date got reset", "Time Known reset"
+
+| Where to Look | What You'll See |
+|---------------|-----------------|
+| **Relay Page → TK Column** | Time Known from each authority (in days) |
+| **Relay Page → Values Summary → Time Known** | Your TK value vs threshold |
+
+**Root causes this identifies**:
+- New relay identity (key regeneration)
+- TK resets when authorities lose track of relay
+- Tooltip shows: `Source: CollecTor | File: vote | Field: stats tk=X`
+
+---
+
+### Question 9: "Why is authority X not voting for my relay?"
+**Examples**: "Which authorities see my relay?"
+
+| Where to Look | What You'll See |
+|---------------|-----------------|
+| **Relay Page → Per-Authority Table** | Full row per authority showing all data |
+| **Relay Page → Voted status** | Which authorities included your relay in their vote |
+| **Authority Health Page → Voted Column** | Whether authority submitted ANY vote this hour |
+
+---
+
+### Question 10: "Is there something wrong with a specific directory authority?"
+**Examples**: Authority problems affecting multiple relays
+
+| Where to Look | What You'll See |
+|---------------|-----------------|
+| **Authority Health Page → Table 1** | Online status, vote status, BW scanner, latency for all 9 authorities |
+| **Authority Health Page → Alerts** | "⚠️ faravahar responding slowly (89ms)" |
+| **Authority Health Page → Flag Thresholds** | Per-authority thresholds (catch anomalies) |
+
+---
+
+### Question 11: "Flags gone after restart"
+**Examples**: "All my flags disappeared after restarting Tor"
+
+| Where to Look | What You'll See |
+|---------------|-----------------|
+| **Relay Page → Time Known Column** | TK value resets if identity key changed |
+| **Relay Page → WFU Column** | WFU may drop if restart caused downtime |
+| **Relay Page → Flags Assigned Column** | Current flags from each authority |
+
+**Root causes this identifies**:
+- Identity key regeneration resets TK to 0
+- Downtime during restart drops WFU below thresholds
+- Authorities take time to re-measure bandwidth
+
+---
+
+### Question 12: "How do I get the HSDir flag?"
+**Examples**: "Setting a relay as an HSDirectory?"
+
+| Where to Look | What You'll See |
+|---------------|-----------------|
+| **Authority Health Page → HSDir WFU Column** | Per-authority threshold (typically 98%) |
+| **Authority Health Page → HSDir TK Column** | Per-authority threshold (typically ~10 days) |
+| **Relay Page → Values Summary** | Your WFU and TK vs HSDir thresholds |
+
+**Requirements for HSDir** (from `flag-thresholds`):
+- `hsdir-wfu` ≥ 98% (Weighted Fractional Uptime)
+- `hsdir-tk` ≥ ~10 days (Time Known)
+- Must have Stable flag
+
+---
+
+### Question 13: "Why does my relay show different data on different metrics sites?"
+**Examples**: "Metrics falsely showing my relay as offline", discrepancies between sites
+
+| Where to Look | What You'll See |
+|---------------|-----------------|
+| **All column tooltips** | Exact data source: "Source: CollecTor \| File: vote \| Field: X" |
+| **Per-Authority Table** | Different authorities may see different things |
+
+**Root causes this identifies**:
+- Different authorities have different views of your relay
+- Metrics sites may use different data sources or caching
+- Our data shows EXACTLY where each value comes from
+
+---
+
+### Summary: Where Each Data Point Comes From
+
+| Question | Data Source | Specific Field |
+|----------|-------------|----------------|
+| In consensus? | CollecTor votes | Relay has `r` entry in ≥5 votes |
+| Guard flag? | CollecTor votes | `stats wfu=`, `stats tk=`, `flag-thresholds guard-*` |
+| Stable flag? | CollecTor votes | `flag-thresholds stable-uptime` |
+| Fast flag? | CollecTor votes | `flag-thresholds fast-speed` |
+| Measured bandwidth? | CollecTor votes | `w Measured=X` |
+| Authority reachability? | CollecTor votes | `r` line (IPv4), `a` line (IPv6) |
+| BW scanner status? | CollecTor votes | `bandwidth-file-headers` line present |
+| Authority health? | Direct HTTP + Onionoo | Latency, running status |
+
+---
+
 ## 🚀 Phase 1: Per-Relay Consensus Diagnostics
 
 **Location**: `relay-info.html` - New "Consensus Diagnostics" section
