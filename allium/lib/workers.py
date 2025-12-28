@@ -481,17 +481,25 @@ def fetch_aroi_validation(aroi_url="https://aroivalidator.1aeo.com/latest.json",
     return data
 
 
-def fetch_collector_data(progress_logger=None):
+def fetch_collector_consensus_data(authorities=None, progress_logger=None):
     """
-    Fetch CollecTor data (placeholder for future implementation)
+    Fetch CollecTor consensus data including authority votes and bandwidth files.
+    
+    This function uses the CollectorFetcher to fetch and parse:
+    - Authority votes from CollecTor
+    - Bandwidth measurement files
+    - Flag thresholds from each authority
     
     Args:
+        authorities: Optional list of authority dicts discovered from Onionoo
         progress_logger: Optional function to call for progress updates
     
     Returns:
-        dict: Processed CollecTor data
+        dict: Parsed CollecTor data with relay index, flag thresholds, etc.
     """
-    api_name = "collector"
+    from .consensus import is_enabled, CollectorFetcher
+    
+    api_name = "collector_consensus"
     
     def log_progress(message):
         if progress_logger:
@@ -499,26 +507,120 @@ def fetch_collector_data(progress_logger=None):
         else:
             print(message)
     
+    # Check feature flag
+    if not is_enabled():
+        log_progress("collector diagnostics feature is disabled")
+        return None
+    
+    # Check cache age first - only refresh if older than 1 hour
+    cache_age = _cache_manager.get_cache_age(api_name)
+    if cache_age is not None and cache_age < 3600:  # 1 hour
+        log_progress(f"using cached collector consensus data (less than 1 hour old)")
+        cached_data = _load_cache(api_name)
+        if cached_data and _validate_collector_cache(cached_data):
+            _mark_ready(api_name)
+            relay_count = len(cached_data.get('relay_index', {}))
+            log_progress(f"loaded {relay_count} relays from collector consensus cache")
+            return cached_data
+    
     try:
-        log_progress(f"Fetching {api_name} (placeholder implementation)")
+        log_progress("fetching fresh collector consensus data from CollecTor...")
         
-        # Placeholder implementation - will be completed in Phase 3
-        empty_data = {"authorities": [], "version": "placeholder"}
-        _save_cache(api_name, empty_data)
+        # Create fetcher with optional discovered authorities
+        fetcher = CollectorFetcher(timeout=30, authorities=authorities)
+        
+        # Fetch all data (votes, bandwidth files, build index)
+        data = fetcher.fetch_all()
+        
+        # Log any errors that occurred during fetch
+        if data.get('errors'):
+            for error in data['errors']:
+                log_progress(f"warning: {error}")
+        
+        # Validate data before caching
+        if not data.get('relay_index') and not data.get('votes'):
+            log_progress("warning: no relay data in collector response")
+            _mark_stale(api_name, "No relay data in response")
+            # Try to use cache as fallback
+            cached_data = _load_cache(api_name)
+            if cached_data:
+                log_progress("using stale cache as fallback")
+                return cached_data
+            return None
+        
+        # Cache the data
+        log_progress("caching collector consensus data...")
+        _save_cache(api_name, data)
         _mark_ready(api_name)
         
-        return empty_data
+        # Log success with timing info
+        relay_count = len(data.get('relay_index', {}))
+        vote_count = len(data.get('votes', {}))
+        timings = data.get('timings', {})
+        total_time = sum(timings.values()) if timings else 0
+        
+        log_progress(f"successfully fetched {relay_count} relays from {vote_count} authority votes ({total_time:.1f}s)")
+        
+        return data
         
     except Exception as e:
-        error_msg = f"Failed to fetch collector data: {str(e)}"
-        log_progress(f"Error: {error_msg}")
+        error_msg = f"Failed to fetch collector consensus data: {str(e)}"
+        log_progress(f"error: {error_msg}")
         _mark_stale(api_name, error_msg)
+        
+        # Try to use cache as fallback
+        cached_data = _load_cache(api_name)
+        if cached_data:
+            cache_age_hours = (cache_age / 3600) if cache_age else 0
+            log_progress(f"using cached data as fallback ({cache_age_hours:.1f} hours old)")
+            return cached_data
+        
         return None
+
+
+def _validate_collector_cache(data):
+    """
+    Validate collector cache data structure.
+    
+    Args:
+        data: Cached collector data
+        
+    Returns:
+        bool: True if cache is valid
+    """
+    if not isinstance(data, dict):
+        return False
+    
+    required_keys = ['votes', 'relay_index', 'fetched_at']
+    if not all(key in data for key in required_keys):
+        return False
+    
+    # Check fetched_at is not too old (max 3 hours)
+    fetched_at = data.get('fetched_at', '')
+    if fetched_at:
+        try:
+            from datetime import datetime
+            fetch_time = datetime.fromisoformat(fetched_at.replace('Z', '+00:00'))
+            age_hours = (datetime.utcnow() - fetch_time.replace(tzinfo=None)).total_seconds() / 3600
+            if age_hours > 3:
+                return False
+        except Exception:
+            pass
+    
+    return True
+
+
+def fetch_collector_data(progress_logger=None):
+    """
+    Legacy wrapper for fetch_collector_consensus_data.
+    Maintained for backward compatibility.
+    """
+    return fetch_collector_consensus_data(progress_logger=progress_logger)
 
 
 def fetch_consensus_health(progress_logger=None):
     """
-    Fetch consensus health data (placeholder for future implementation)
+    Fetch consensus health data using AuthorityMonitor.
     
     Args:
         progress_logger: Optional function to call for progress updates
@@ -526,6 +628,8 @@ def fetch_consensus_health(progress_logger=None):
     Returns:
         dict: Consensus health data
     """
+    from .consensus import is_enabled, AuthorityMonitor
+    
     api_name = "consensus_health"
     
     def log_progress(message):
@@ -534,19 +638,40 @@ def fetch_consensus_health(progress_logger=None):
         else:
             print(message)
     
+    # Check feature flag
+    if not is_enabled():
+        log_progress("collector diagnostics feature is disabled")
+        return None
+    
     try:
-        log_progress(f"Fetching {api_name} (placeholder implementation)")
+        log_progress("checking authority health status...")
         
-        # Placeholder implementation - will be completed in Phase 3
-        empty_data = {"health_status": {}, "version": "placeholder"}
-        _save_cache(api_name, empty_data)
+        # Create monitor and check all authorities
+        monitor = AuthorityMonitor(timeout=10)
+        status = monitor.check_all_authorities()
+        summary = monitor.get_summary(status)
+        alerts = monitor.get_alerts(status)
+        
+        data = {
+            'authority_status': status,
+            'summary': summary,
+            'alerts': alerts,
+            'fetched_at': summary.get('checked_at'),
+        }
+        
+        # Cache the data
+        _save_cache(api_name, data)
         _mark_ready(api_name)
         
-        return empty_data
+        online_count = summary.get('online_count', 0)
+        total = summary.get('total_authorities', 0)
+        log_progress(f"authority health check complete: {online_count}/{total} online")
+        
+        return data
         
     except Exception as e:
         error_msg = f"Failed to fetch consensus health: {str(e)}"
-        log_progress(f"Error: {error_msg}")
+        log_progress(f"error: {error_msg}")
         _mark_stale(api_name, error_msg)
         return None
 

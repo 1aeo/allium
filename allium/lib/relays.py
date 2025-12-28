@@ -798,6 +798,89 @@ class Relays:
             self._consolidated_bandwidth_results = None
             self.network_bandwidth_percentiles = None
 
+    def _reprocess_collector_data(self):
+        """
+        Process CollecTor consensus data for per-relay diagnostics.
+        Attaches consensus troubleshooting information to each relay including:
+        - Authority voting status
+        - Flag eligibility analysis
+        - Reachability information
+        - Bandwidth measurements from authorities
+        
+        This follows the same pattern as _reprocess_uptime_data and _reprocess_bandwidth_data.
+        """
+        collector_data = getattr(self, 'collector_consensus_data', None)
+        if not collector_data:
+            return
+        
+        # Check if relay set is properly initialized before processing
+        if not hasattr(self, 'json') or not self.json.get('relays'):
+            self._log_progress("Skipping collector processing: no relay data available")
+            return
+        
+        try:
+            from .consensus import CollectorFetcher, format_relay_diagnostics
+            from .consensus.collector_fetcher import calculate_consensus_requirement, discover_authorities
+            
+            self._log_progress("Processing CollecTor consensus data for relay diagnostics...")
+            
+            # Get relay index and flag thresholds from collector data
+            relay_index = collector_data.get('relay_index', {})
+            flag_thresholds = collector_data.get('flag_thresholds', {})
+            bw_authorities = collector_data.get('bw_authorities', [])
+            
+            if not relay_index:
+                self._log_progress("No relay index in collector data, skipping diagnostics")
+                return
+            
+            # Discover authorities from our relay list for accurate count
+            authorities = discover_authorities(self.json['relays'])
+            authority_count = len(authorities) if authorities else 9
+            
+            # Calculate consensus requirement
+            consensus_req = calculate_consensus_requirement(authority_count)
+            
+            # Store authority and threshold information for templates
+            self.collector_authorities = authorities
+            self.collector_flag_thresholds = flag_thresholds
+            self.collector_bw_authorities = bw_authorities
+            self.consensus_requirement = consensus_req
+            
+            # Create a CollectorFetcher instance with the pre-fetched data
+            # to use its get_relay_diagnostics method
+            fetcher = CollectorFetcher()
+            fetcher.relay_index = relay_index
+            fetcher.flag_thresholds = flag_thresholds
+            fetcher.bw_authorities = set(bw_authorities)
+            fetcher.ipv6_testing_authorities = set(collector_data.get('ipv6_testing_authorities', []))
+            
+            # Process diagnostics for each relay
+            diagnostics_count = 0
+            for relay in self.json["relays"]:
+                fingerprint = relay.get('fingerprint', '').upper()
+                if not fingerprint:
+                    continue
+                
+                # Get raw diagnostics from fetcher
+                raw_diagnostics = fetcher.get_relay_diagnostics(fingerprint, authority_count)
+                
+                # Format for template display
+                formatted_diagnostics = format_relay_diagnostics(raw_diagnostics, flag_thresholds)
+                
+                # Attach to relay
+                relay['collector_diagnostics'] = formatted_diagnostics
+                
+                if formatted_diagnostics.get('available'):
+                    diagnostics_count += 1
+            
+            self._log_progress(f"Processed collector diagnostics for {diagnostics_count} relays")
+            
+        except Exception as e:
+            # Fallback gracefully if collector processing fails
+            print(f"Warning: Collector data processing failed ({e}), continuing without diagnostics")
+            import traceback
+            traceback.print_exc()
+
     def _calculate_network_bandwidth_percentiles(self, bandwidth_data):
         """
         Calculate network-wide bandwidth percentiles for operator comparison.
