@@ -25,8 +25,8 @@ These are real questions from the **tor-relays mailing list** and **Tor Project 
 
 | Where to Look | What You'll See |
 |---------------|-----------------|
-| **Relay Page → Consensus Status** | Shows "NOT IN CONSENSUS (X/9 authorities)" with tooltip explaining majority requirement |
-| **Relay Page → Per-Authority Table** | Shows which authorities CAN reach your relay (IPv4 ✅/❌) and which voted for it |
+| **Relay Page → Summary Table** | Shows "NOT IN CONSENSUS (X/9 authorities)" in red text with tooltip explaining majority requirement |
+| **Relay Page → Detail Table** | Shows which authorities CAN reach your relay (IPv4 green/red text) and which voted for it |
 | **Relay Page → Issues Summary** | Lists specific problems: "faravahar cannot reach relay" |
 
 **Root causes this identifies**:
@@ -41,10 +41,10 @@ These are real questions from the **tor-relays mailing list** and **Tor Project 
 
 | Where to Look | What You'll See |
 |---------------|-----------------|
-| **Relay Page → WFU Column** | Your WFU value vs threshold (≥98% required). Shows ❌ if below. |
-| **Relay Page → Time Known Column** | Your TK value vs threshold (≥8 days required). Shows ❌ if below. |
-| **Relay Page → Guard BW Column** | Per-authority: "≥30 MB/s ❌" or "≥10 MB/s ✅" - thresholds VARY |
-| **Relay Page → Values Summary** | "❌ BELOW - cannot get Guard from ANY authority" or "⚠️ PARTIAL - meets for 5/9" |
+| **Relay Page → WFU Column** | Your WFU value vs threshold (≥98% required). Red text if below. |
+| **Relay Page → Time Known Column** | Your TK value vs threshold (≥8 days required). Red text if below. |
+| **Relay Page → Guard BW Column** | Per-authority: "≥30 MB/s" (red) or "≥10 MB/s" (green) - thresholds VARY |
+| **Relay Page → Values Summary** | "BELOW (red) - cannot get Guard from ANY authority" or "PARTIAL (yellow) - meets for 5/9" |
 | **Relay Page → Advice** | "Increase WFU to ≥98%. Current uptime pattern is too variable." |
 
 **Root causes this identifies**:
@@ -60,7 +60,7 @@ These are real questions from the **tor-relays mailing list** and **Tor Project 
 
 | Where to Look | What You'll See |
 |---------------|-----------------|
-| **Relay Page → Stable Column** | Per-authority threshold: "≥19.6d ✅" or "≥14.2d ❌" |
+| **Relay Page → Detail Table → Stable** | Per-authority threshold: "≥19.6d" (green) or "≥14.2d" (red) |
 | **Relay Page → Values Summary → Stable Uptime** | "varies: 14.2-19.8 days" with your value |
 | **Authority Health Page → Flag Thresholds Table** | All 9 authorities' `stable-uptime` thresholds side-by-side |
 
@@ -94,7 +94,7 @@ These are real questions from the **tor-relays mailing list** and **Tor Project 
 |---------------|-----------------|
 | **Relay Page → Meas. BW Column** | Measured bandwidth from each authority (N/A for non-BW authorities) |
 | **Relay Page → BW Authority detection** | Which authorities run bandwidth scanners (from `bandwidth-file-headers`) |
-| **Authority Health Page → BW Auth Column** | ✅/❌ for each authority's scanner status |
+| **Authority Health Page → BW Auth Column** | "Yes" (green) / "No" (red) for each authority's scanner status |
 
 **Root causes this identifies**:
 - Bandwidth scanner not measuring your relay yet
@@ -108,7 +108,7 @@ These are real questions from the **tor-relays mailing list** and **Tor Project 
 
 | Where to Look | What You'll See |
 |---------------|-----------------|
-| **Relay Page → IPv6 Column** | Per-authority: ✅ (reachable), ❌ (unreachable), ⚪ (not tested) |
+| **Relay Page → Detail Table → IPv6** | Per-authority: "Yes" (green), "No" (red), "N/T" (gray = not tested) |
 | **Relay Page → Legend** | "⚪ = authority doesn't test IPv6" |
 
 **Root causes this identifies**:
@@ -281,37 +281,82 @@ These are real questions from the **tor-relays mailing list** and **Tor Project 
 │                                                                                                                        │
 │ ══ Per-Authority Voting Details ════════════════════════════════════════════════════════════════════════════════════════│
 │                                                                                                                        │
-│ Single table with ALL authority data. ALL thresholds pulled dynamically from each authority's vote file.              │
-│ Each column has detailed tooltip showing: Source → File → Field                                                        │
+│ ┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐│
+│ │ TWO-TABLE DESIGN RATIONALE:                                                                                        ││
+│ │                                                                                                                    ││
+│ │ TABLE 1 (Summary): Quick answers. "Why don't I have X flag?" - See your value vs consensus threshold.             ││
+│ │                    Shows AGGREGATE data: your relay values vs majority consensus requirements.                     ││
+│ │                                                                                                                    ││
+│ │ TABLE 2 (Detail):  Diagnose specific issues. "Which authorities can't reach me?" - See per-authority breakdown.   ││
+│ │                    Shows PER-AUTHORITY data: what each authority sees, their thresholds, your status with them.   ││
+│ │                                                                                                                    ││
+│ │ COLOR CODING: green text = meets threshold, red text = below threshold, yellow text = partial, gray text = N/A    ││
+│ └────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘│
 │                                                                                                                        │
-│ ┌────────────┬──────┬──────┬──────────────────┬──────────┬──────────────┬──────────────┬──────────────┬─────────────┬───────────┐│
-│ │ Authority  │ IPv4 │ IPv6 │ Flags Assigned   │ Meas. BW │ WFU [ⓘ]     │ TK [ⓘ]      │ Guard BW [ⓘ]│ Stable [ⓘ] │ Fast [ⓘ] ││
-│ ├────────────┼──────┼──────┼──────────────────┼──────────┼──────────────┼──────────────┼──────────────┼─────────────┼───────────┤│
-│ │ moria1 ↗   │  ✅  │  ✅  │ Fast Guard Stable│ 46.2 MB/s│ 96.2% ≥98%❌ │ 45d ≥8d  ✅  │ ≥30 MB/s  ❌ │ ≥19.6d   ✅ │ ≥1.0 MB/s ✅││
-│ │ tor26 ↗    │  ✅  │  ❌  │ Fast Stable      │ 44.8 MB/s│ 96.2% ≥98%❌ │ 45d ≥8d  ✅  │ ≥34 MB/s  ❌ │ ≥19.8d   ✅ │ ≥0.1 MB/s ✅││
-│ │ dizum ↗    │  ✅  │  ⚪  │ Fast Guard Stable│ N/A      │ 96.2% ≥98%❌ │ 45d ≥8d  ✅  │ ≥10 MB/s  ✅ │ ≥14.2d   ✅ │ ≥0.1 MB/s ✅││
-│ │ ...        │  ... │  ... │ ...              │ ...      │ ...          │ ...          │ ...          │ ...         │ ...       ││
-│ └────────────┴──────┴──────┴──────────────────┴──────────┴──────────────┴──────────────┴──────────────┴─────────────┴───────────┘│
+│ ══ TABLE 1: SUMMARY (Your Relay vs Consensus) ══════════════════════════════════════════════════════════════════════════│
 │                                                                                                                        │
-│ Column tooltips (hover for data source details):                                                                       │
+│ Quick overview showing your relay's values vs what the MAJORITY of authorities require.                               │
+│                                                                                                                        │
+│ ┌─────────────────┬─────────────┬──────────────────────────┬───────────────────────────────────────────────────────────┐│
+│ │ Metric [ⓘ]     │ Your Value  │ Consensus Threshold [ⓘ] │ Status                                                    ││
+│ ├─────────────────┼─────────────┼──────────────────────────┼───────────────────────────────────────────────────────────┤│
+│ │ In Consensus    │ 8/9 auths   │ ≥5/9 (majority)          │ IN CONSENSUS                                  (green)    ││
+│ │ WFU             │ 96.2%       │ ≥98% (all auths)         │ BELOW - cannot get Guard                      (red)      ││
+│ │ Time Known      │ 45 days     │ ≥8 days (all auths)      │ MEETS                                         (green)    ││
+│ │ Guard BW        │ 25 MB/s     │ 10-35 MB/s (varies)      │ PARTIAL - meets 5/9 auths                     (yellow)   ││
+│ │ Stable Uptime   │ 45 days     │ 14.2-19.8 days (varies)  │ MEETS - all auths                             (green)    ││
+│ │ Fast Speed      │ 25 MB/s     │ 0.1-1.0 MB/s (varies)    │ MEETS - all auths                             (green)    ││
+│ │ IPv4 Reachable  │ 8/9 auths   │ ≥5/9 (majority)          │ REACHABLE                                     (green)    ││
+│ │ IPv6 Reachable  │ 5/7 tested  │ ≥majority of testers     │ PARTIAL - 2 auths can't reach                 (yellow)   ││
+│ └─────────────────┴─────────────┴──────────────────────────┴───────────────────────────────────────────────────────────┘│
+│                                                                                                                        │
+│ 💡 Advice: To get Guard flag, increase WFU to ≥98% (maintain better uptime).                                          │
+│                                                                                                                        │
+│ Summary tooltips:                                                                                                      │
+│   • Your Value [ⓘ]: "Source: CollecTor | File: vote | Field: stats wfu=X, stats tk=X, w Measured=X"                  │
+│   • Consensus Threshold [ⓘ]: "Source: CollecTor | File: vote | Field: flag-thresholds [field]=X | Range across auths"│
+│                                                                                                                        │
+│ ══ TABLE 2: PER-AUTHORITY DETAILS (Diagnosis) ══════════════════════════════════════════════════════════════════════════│
+│                                                                                                                        │
+│ Detailed breakdown showing what EACH authority sees. Use this to diagnose specific issues.                            │
+│ Text color: green = meets this authority's threshold, red = below threshold                                           │
+│                                                                                                                        │
+│ ┌────────────┬──────┬──────┬──────────────────┬──────────┬─────────┬─────────┬──────────┬──────────┬──────────┐        │
+│ │ Authority  │ IPv4 │ IPv6 │ Flags Assigned   │ Meas. BW │ WFU     │ TK      │ Guard BW │ Stable   │ Fast     │        │
+│ ├────────────┼──────┼──────┼──────────────────┼──────────┼─────────┼─────────┼──────────┼──────────┼──────────┤        │
+│ │ moria1 ↗   │ Yes  │ Yes  │ Fast Stable      │ 46.2 MB/s│ 96.2%*  │ 45d     │ ≥30 MB/s*│ ≥19.6d   │ ≥1.0 MB/s│        │
+│ │ tor26 ↗    │ Yes  │ No*  │ Fast Stable      │ 44.8 MB/s│ 96.2%*  │ 45d     │ ≥34 MB/s*│ ≥19.8d   │ ≥0.1 MB/s│        │
+│ │ dizum ↗    │ Yes  │ N/T  │ Fast Guard Stable│ N/A      │ 96.2%*  │ 45d     │ ≥10 MB/s │ ≥14.2d   │ ≥0.1 MB/s│        │
+│ │ gabelmoo ↗ │ Yes  │ Yes  │ Fast Stable      │ 44.1 MB/s│ 96.2%*  │ 45d     │ ≥35 MB/s*│ ≥19.6d   │ ≥0.1 MB/s│        │
+│ │ bastet ↗   │ Yes  │ Yes  │ Fast Guard Stable│ 43.9 MB/s│ 96.2%*  │ 45d     │ ≥10 MB/s │ ≥14.3d   │ ≥0.1 MB/s│        │
+│ │ dannenberg↗│ Yes  │ Yes  │ Fast Stable      │ N/A      │ 96.2%*  │ 45d     │ ≥35 MB/s*│ ≥19.2d   │ ≥0.1 MB/s│        │
+│ │ maatuska ↗ │ Yes  │ Yes  │ Fast Guard Stable│ 45.1 MB/s│ 96.2%*  │ 45d     │ ≥10 MB/s │ ≥19.3d   │ ≥0.1 MB/s│        │
+│ │ longclaw ↗ │ Yes  │ N/T  │ Fast Guard Stable│ 44.5 MB/s│ 96.2%*  │ 45d     │ ≥28 MB/s*│ ≥18.5d   │ ≥0.1 MB/s│        │
+│ │ faravahar↗ │ No*  │ No*  │ —                │ —        │ —       │ —       │ —        │ —        │ —        │        │
+│ └────────────┴──────┴──────┴──────────────────┴──────────┴─────────┴─────────┴──────────┴──────────┴──────────┘        │
+│                                                                                                                        │
+│ Color coding: green text = meets threshold, red text (marked with *) = below threshold                                │
+│ N/T = Not Tested (gray), N/A = No bandwidth scanner (gray), ↗ = link to authority relay page                          │
+│                                                                                                                        │
+│ Detail table tooltips (per column):                                                                                    │
 │ ┌──────────────────┬────────────────────────────────────────────────────────────────────────────────────────────────┐  │
 │ │ Column           │ Tooltip Content                                                                                │  │
 │ ├──────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────┤  │
 │ │ Authority        │ "Source: Onionoo API | File: details | Field: nickname, fingerprint"                          │  │
 │ │ IPv4             │ "Source: CollecTor | File: vote | Relay reachable via IPv4 (has 'r' entry)"                   │  │
-│ │ IPv6             │ "Source: CollecTor | File: vote | Field: 'a' line (IPv6 address) | ⚪=not tested"             │  │
+│ │ IPv6             │ "Source: CollecTor | File: vote | Field: 'a' line | N/T = authority doesn't test IPv6"        │  │
 │ │ Flags Assigned   │ "Source: CollecTor | File: vote | Field: 's' line (e.g., s Fast Guard Stable Valid)"         │  │
-│ │ Meas. BW         │ "Source: CollecTor | File: vote | Field: w Measured=X | N/A if no bandwidth-file-headers"    │  │
-│ │ WFU [ⓘ]         │ "Source: CollecTor | File: vote | Value: stats wfu=0.962 | Threshold: guard-wfu=98%"          │  │
-│ │ TK [ⓘ]          │ "Source: CollecTor | File: vote | Value: stats tk=3888000 | Threshold: guard-tk=691200"       │  │
-│ │ Guard BW [ⓘ]    │ "Source: CollecTor | File: vote | Threshold: flag-thresholds guard-bw-inc-exits=30000000"     │  │
-│ │ Stable [ⓘ]      │ "Source: CollecTor | File: vote | Threshold: flag-thresholds stable-uptime=1693440"           │  │
-│ │ Fast [ⓘ]        │ "Source: CollecTor | File: vote | Threshold: flag-thresholds fast-speed=1048000"              │  │
+│ │ Meas. BW         │ "Source: CollecTor | File: vote | Field: w Measured=X | N/A = no bandwidth-file-headers"      │  │
+│ │ WFU              │ "Source: CollecTor | File: vote | Your: stats wfu=X | Threshold: guard-wfu=X"                 │  │
+│ │ TK               │ "Source: CollecTor | File: vote | Your: stats tk=X | Threshold: guard-tk=X"                   │  │
+│ │ Guard BW         │ "Source: CollecTor | File: vote | Your: 25 MB/s | Threshold: guard-bw-inc-exits=X"            │  │
+│ │ Stable           │ "Source: CollecTor | File: vote | Your: 45d | Threshold: stable-uptime=X"                     │  │
+│ │ Fast             │ "Source: CollecTor | File: vote | Your: 25 MB/s | Threshold: fast-speed=X"                    │  │
 │ └──────────────────┴────────────────────────────────────────────────────────────────────────────────────────────────┘  │
 │                                                                                                                        │
 │ Legend:                                                                                                                │
 │   ↗ = link to authority relay page                                                                                     │
-│   ✅/❌ in threshold columns = meets/below threshold                                                                   │
+│   Green text = meets threshold, Red text = below threshold                                                             │
 │   ⚪ = authority doesn't test this (IPv6)                                                                              │
 │   N/A = authority does not run bandwidth scanner (detected from absence of bandwidth-file-headers in vote)             │
 │   All thresholds are DYNAMIC - pulled from each authority's flag-thresholds line in their vote file                   │
@@ -325,11 +370,11 @@ These are real questions from the **tor-relays mailing list** and **Tor Project 
 │ ┌───────────────────┬────────────┬─────────────────────────────┬───────────────────────────────────────────────────────┐│
 │ │ Metric [ⓘ]       │ Your Value │ Threshold [ⓘ]              │ Status                                                ││
 │ ├───────────────────┼────────────┼─────────────────────────────┼───────────────────────────────────────────────────────┤│
-│ │ WFU              │ 96.2%      │ ≥98% (from all auths)       │ ❌ BELOW - cannot get Guard from ANY authority        ││
-│ │ Time Known       │ 45 days    │ ≥8 days (from all auths)    │ ✅ MEETS - eligible for Guard (time requirement)      ││
-│ │ Guard BW         │ 25 MB/s    │ varies: 10-35 MB/s          │ ⚠️ PARTIAL - meets for 5/9 authorities                ││
-│ │ Stable Uptime    │ 45 days    │ varies: 14.2-19.8 days      │ ✅ MEETS - all authorities assigning Stable           ││
-│ │ Fast Speed       │ 25 MB/s    │ varies: 0.1-1.0 MB/s        │ ✅ MEETS - all authorities assigning Fast             ││
+│ │ WFU              │ 96.2%      │ ≥98% (from all auths)       │ BELOW - cannot get Guard (red)                        ││
+│ │ Time Known       │ 45 days    │ ≥8 days (from all auths)    │ MEETS - eligible for Guard (green)                    ││
+│ │ Guard BW         │ 25 MB/s    │ varies: 10-35 MB/s          │ PARTIAL - meets 5/9 authorities (yellow)              ││
+│ │ Stable Uptime    │ 45 days    │ varies: 14.2-19.8 days      │ MEETS - all authorities (green)                       ││
+│ │ Fast Speed       │ 25 MB/s    │ varies: 0.1-1.0 MB/s        │ MEETS - all authorities (green)                       ││
 │ └───────────────────┴────────────┴─────────────────────────────┴───────────────────────────────────────────────────────┘│
 │                                                                                                                        │
 │ Metric column tooltips:                                                                                                │
@@ -432,7 +477,7 @@ Authority BadExit Exit Fast Guard HSDir MiddleOnly Running Stable StaleDesc Sybi
 │ │ SUMMARY                                                                                     │ │
 │ ├─────────────────────────────────────────────────────────────────────────────────────────────┤ │
 │ │ • Directory Authorities: 9 discovered (dynamic from Onionoo)                               │ │
-│ │ • Consensus Status: ✅ FRESH │ 9/9 Voted │ Next: 15:00 UTC (23 min)       [NEW]           │ │
+│ │ • Consensus Status: FRESH (green) │ 9/9 Voted │ Next: 15:00 UTC (23 min)   [NEW]           │ │
 │ │ • Version Compliance: 8/9 on recommended version │ 1/9 non-compliant                       │ │
 │ │ • Uptime Status (1M): 7 above average │ 1 below average │ 1 problematic                    │ │
 │ │ • Latency Status: 8/9 OK │ 1/9 slow                                        [NEW]           │ │
@@ -447,9 +492,9 @@ Authority BadExit Exit Fast Guard HSDir MiddleOnly Running Stable StaleDesc Sybi
 │ ┌─────────┬────────┬───────┬────────┬───────┬────────┬─────────────────┬─────────┬───────┬──────┐│
 │ │Authority│ Online │Voted[ⓘ]│BW[ⓘ] │Lat[ⓘ]│ AS     │Uptime(1M/6M/1Y) │ Version │Rec.Ver│Ctry  ││
 │ ├─────────┼────────┼───────┼────────┼───────┼────────┼─────────────────┼─────────┼───────┼──────┤│
-│ │moria1 ↗ │ 🟢     │  ✅   │  ✅    │  12ms │AS3     │99.9/99.8/99.7   │ 0.4.8.9 │  ✅   │  US  ││
-│ │tor26 ↗  │ 🟢     │  ✅   │  ✅    │  45ms │AS680   │99.8/99.7/99.5   │ 0.4.8.9 │  ✅   │  AT  ││
-│ │dizum ↗  │ 🟢     │  ✅   │  ❌    │  38ms │AS51167 │99.7/99.5/99.3   │ 0.4.8.9 │  ✅   │  NL  ││
+│ │moria1 ↗ │ 🟢     │  Yes  │  Yes   │  12ms │AS3     │99.9/99.8/99.7   │ 0.4.8.9 │  Yes  │  US  ││
+│ │tor26 ↗  │ 🟢     │  Yes  │  Yes   │  45ms │AS680   │99.8/99.7/99.5   │ 0.4.8.9 │  Yes  │  AT  ││
+│ │dizum ↗  │ 🟢     │  Yes  │  No*   │  38ms │AS51167 │99.7/99.5/99.3   │ 0.4.8.9 │  Yes  │  NL  ││
 │ │...      │ ...    │  ...  │  ...   │  ...  │...     │...              │ ...     │  ...  │  ... ││
 │ └─────────┴────────┴───────┴────────┴───────┴────────┴─────────────────┴─────────┴───────┴──────┘│
 │                                                                                                  │
@@ -511,11 +556,11 @@ Authority BadExit Exit Fast Guard HSDir MiddleOnly Running Stable StaleDesc Sybi
 ├──────────────────────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                                  │
 │ • Online: 🟢 = Online, 🟡 = Slow (>100ms latency), 🔴 = Offline                                 │
-│ • Voted: ✅ = Submitted vote this consensus period                                              │
-│ • BW Auth: ✅/❌ = Runs bandwidth scanner (detected from bandwidth-file-headers in vote)       │
+│ • Voted: "Yes" (green) = Submitted vote | "No" (red) = No vote this period                      │
+│ • BW Auth: "Yes" (green) = Has scanner | "No" (red, marked *) = No bandwidth scanner            │
 │ • Latency: Response time to authority's directory port (checked hourly)              [NEW]      │
 │ • Uptime Z-Score: Statistical deviation from average (green >0.3, red ≤-2.0)                    │
-│ • Rec. Ver.: ✅ = On recommended Tor version, ❌ = Not recommended                              │
+│ • Rec. Ver.: "Yes" (green) = Recommended version | "No" (red) = Not recommended                 │
 │ • Flag Thresholds: ALL values pulled dynamically from each authority's vote file     [NEW]      │
 │   - Guard: BW (guard-bw-inc-exits), TK (guard-tk), WFU (guard-wfu)                              │
 │   - Stable: uptime (stable-uptime), MTBF (stable-mtbf)                                          │
@@ -547,8 +592,8 @@ Authority BadExit Exit Fast Guard HSDir MiddleOnly Running Stable StaleDesc Sybi
 
 | Column | Source | Description |
 |--------|--------|-------------|
-| `Voted` | CollecTor | ✅ if authority submitted vote this consensus period |
-| `BW Auth` | CollecTor (dynamic) | ✅ if vote contains `bandwidth-file-headers` (runs sbws scanner) |
+| `Voted` | CollecTor | "Yes" (green) if authority submitted vote this consensus period |
+| `BW Auth` | CollecTor (dynamic) | "Yes" (green) if vote contains `bandwidth-file-headers` (runs sbws scanner) |
 | `Latency` | Direct HTTP | Response time to dir port (ms) |
 
 **BW Authority Detection**: Dynamically determined from each authority's vote file by checking for the presence of the `bandwidth-file-headers` line. This is more reliable than a static list and automatically adapts if authorities start/stop running bandwidth scanners.
