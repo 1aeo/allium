@@ -443,6 +443,82 @@ These flags are determined by other criteria (not from `flag-thresholds`):
 └────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+### Advice Messages (All Scenarios)
+
+The relay page displays contextual advice based on detected issues. Here are all advice scenarios:
+
+#### Consensus Issues
+
+| Condition | Advice Message |
+|-----------|----------------|
+| Not in consensus (< majority votes) | "💡 Advice: Your relay is not in consensus. Check if authorities can reach you via IPv4. {X} authorities cannot reach your relay." |
+| IPv4 unreachable by some authorities | "💡 Advice: {X} authorities cannot reach your relay via IPv4. Check firewall settings, ensure ORPort is accessible, and verify your IP hasn't changed." |
+| IPv6 unreachable (if configured) | "💡 Advice: {X} authorities cannot reach your relay via IPv6. Verify IPv6 is properly configured or disable it if not needed." |
+
+#### Guard Flag Issues
+
+| Condition | Advice Message |
+|-----------|----------------|
+| WFU below 98% | "💡 Advice: To get Guard flag, increase WFU to ≥98% (currently {X}%). Maintain consistent uptime - avoid frequent restarts." |
+| Time Known below threshold | "💡 Advice: Your relay needs to be known for ≥8 days to get Guard flag. Current: {X} days. Just wait - this increases automatically." |
+| Guard BW below ALL authorities | "💡 Advice: Your bandwidth ({X} MB/s) is below all authorities' Guard thresholds ({min}-{max} MB/s). Increase relay bandwidth capacity." |
+| Guard BW below SOME authorities | "💡 Advice: Your bandwidth ({X} MB/s) meets {Y}/9 authorities' Guard thresholds. You may get Guard from some authorities but not all." |
+| Multiple Guard requirements missing | "💡 Advice: Guard flag requires: WFU ≥98%, TK ≥8 days, and sufficient bandwidth. You're missing: {list of issues}." |
+
+#### Stable Flag Issues
+
+| Condition | Advice Message |
+|-----------|----------------|
+| Stable uptime below threshold | "💡 Advice: To get Stable flag, maintain continuous uptime. Current uptime ({X} days) is below threshold ({min}-{max} days). Avoid restarts." |
+| Stable MTBF below threshold | "💡 Advice: Your Mean Time Between Failures is too low. Stable flag requires consistent long-term uptime without crashes or restarts." |
+
+#### Fast Flag Issues
+
+| Condition | Advice Message |
+|-----------|----------------|
+| Speed below threshold | "💡 Advice: Your bandwidth ({X} MB/s) is below the Fast flag threshold ({min}-{max} MB/s). Increase relay bandwidth capacity." |
+
+#### HSDir Flag Issues
+
+| Condition | Advice Message |
+|-----------|----------------|
+| HSDir WFU below 98% | "💡 Advice: To get HSDir flag, increase WFU to ≥98% (currently {X}%). HSDir requires consistent uptime like Guard." |
+| HSDir TK below threshold | "💡 Advice: Your relay needs to be known for ≥{X} days to get HSDir flag. Current: {Y} days. Just wait." |
+| Missing Stable flag (required for HSDir) | "💡 Advice: HSDir flag requires Stable flag first. Focus on maintaining consistent uptime to get Stable, then HSDir will follow." |
+
+#### Bandwidth Measurement Issues
+
+| Condition | Advice Message |
+|-----------|----------------|
+| Not yet measured | "💡 Advice: Your relay hasn't been measured by bandwidth scanners yet. New relays may take 1-2 weeks to be fully measured." |
+| Large variance between authorities | "💡 Advice: Bandwidth measurements vary significantly between authorities (±{X}%). This is normal during ramp-up or after restarts." |
+| No BW authorities can reach | "💡 Advice: No bandwidth authorities can measure your relay. This may indicate reachability issues." |
+
+#### General Issues
+
+| Condition | Advice Message |
+|-----------|----------------|
+| New relay (< 8 days) | "💡 Advice: Your relay is new ({X} days old). Guard, HSDir, and Stable flags require time. Keep your relay running consistently." |
+| Relay just restarted | "💡 Advice: Your relay recently restarted. Some flags (Guard, Stable) require sustained uptime. Avoid unnecessary restarts." |
+| Non-recommended Tor version | "💡 Advice: Your relay is running a non-recommended Tor version. Update to the latest stable version for best performance and security." |
+| Exit policy issues | "💡 Advice: Your exit policy affects Guard bandwidth thresholds. Exits use guard-bw-inc-exits, non-exits use guard-bw-exc-exits." |
+
+#### Multiple Issues Combined
+
+When multiple issues exist, advice is prioritized:
+1. **Consensus issues first** (if not in consensus, nothing else matters)
+2. **Reachability issues** (IPv4 > IPv6)
+3. **Flag eligibility** (Guard > Stable > Fast > HSDir)
+4. **Measurement issues** (if measured BW is low or inconsistent)
+
+Example combined advice:
+```
+💡 Advice: Multiple issues detected:
+  • WFU (96.2%) below 98% - cannot get Guard/HSDir from any authority
+  • Guard BW (25 MB/s) below threshold for 4/9 authorities (need ≥30-35 MB/s)
+  Priority: Focus on improving uptime consistency first (WFU), then bandwidth.
+```
+
 ### Data Available from CollecTor Votes
 
 **All values are pulled dynamically** - no hardcoded constants. Even thresholds that appear consistent (like WFU 98%) could change.

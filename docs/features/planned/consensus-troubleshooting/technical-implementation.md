@@ -1626,17 +1626,24 @@ def format_relay_diagnostics(
         'fast_meets_all': all(a['fast_meets'] for a in authority_votes if a['voted']),
     }
     
-    # Generate advice
-    advice = _generate_advice(relay_values, guard_wfu_threshold, guard_tk_threshold)
-    
+    # Calculate consensus status
     vote_count = sum(1 for v in authority_votes if v['voted'])
     majority_required = consensus_requirement['majority_required']
+    in_consensus = vote_count >= majority_required
+    
+    # Generate advice (pass all required context)
+    advice = _generate_advice(
+        relay_values=relay_values,
+        authority_votes=authority_votes,
+        consensus_requirement=consensus_requirement,
+    )
     
     return {
         'authority_votes': authority_votes,
         'relay_values': relay_values,
-        'in_consensus': vote_count >= majority_required,
+        'in_consensus': in_consensus,
         'vote_count': vote_count,
+        'majority_required': majority_required,
         'authority_count': len(authorities),
         'consensus_tooltip': consensus_requirement['tooltip'],
         'fetched_at': fetched_at,
@@ -1645,39 +1652,208 @@ def format_relay_diagnostics(
     }
 
 
-def _generate_advice(relay_values: Dict, wfu_threshold: float, tk_threshold: int) -> str:
-    """Generate actionable advice based on relay's values."""
-    issues = []
+def _generate_advice(
+    relay_values: Dict, 
+    authority_votes: List[Dict],
+    consensus_requirement: Dict,
+) -> str:
+    """
+    Generate actionable advice based on relay's values and issues.
     
-    if relay_values['wfu'] < wfu_threshold:
-        pct_below = (wfu_threshold - relay_values['wfu']) * 100
-        issues.append(f"Increase WFU to ≥98% (currently {relay_values['wfu']*100:.1f}%, {pct_below:.1f}% below)")
+    Advice is prioritized:
+    1. Consensus issues (if not in consensus, nothing else matters)
+    2. Reachability issues (IPv4 > IPv6)
+    3. Flag eligibility (Guard > Stable > Fast > HSDir)
+    4. Measurement issues
+    """
+    rv = relay_values
+    advice_parts = []
     
-    if relay_values['tk'] < tk_threshold:
-        days_needed = (tk_threshold - relay_values['tk']) / 86400
-        issues.append(f"Keep relay running for {days_needed:.1f} more days to meet Time Known requirement")
+    # --- CONSENSUS ISSUES (highest priority) ---
+    vote_count = sum(1 for a in authority_votes if a['voted'])
+    majority = consensus_requirement['majority_required']
+    total = consensus_requirement['authority_count']
     
-    if not relay_values['guard_bw_meets_all'] and relay_values['guard_bw_meets_some']:
-        issues.append(f"Increase bandwidth to meet highest authority threshold for Guard on all authorities")
+    if vote_count < majority:
+        unreachable = [a['authority'] for a in authority_votes if not a['voted']]
+        advice_parts.append(
+            f"Your relay is not in consensus ({vote_count}/{total} votes, need {majority}). "
+            f"Authorities that cannot reach you: {', '.join(unreachable)}. "
+            f"Check firewall settings and ensure ORPort is accessible."
+        )
+        return " ".join(advice_parts)  # Stop here if not in consensus
     
-    if not issues:
-        return "Relay meets all requirements for flag assignment."
+    # --- REACHABILITY ISSUES ---
+    ipv4_unreachable = [a['authority'] for a in authority_votes if a['voted'] and not a['ipv4_reachable']]
+    if ipv4_unreachable:
+        advice_parts.append(
+            f"{len(ipv4_unreachable)} authorities cannot reach your relay via IPv4 "
+            f"({', '.join(ipv4_unreachable)}). Verify ORPort accessibility."
+        )
     
-    return " ".join(issues)
+    ipv6_tested = [a for a in authority_votes if a['voted'] and a['ipv6_reachable'] is not None]
+    ipv6_unreachable = [a['authority'] for a in ipv6_tested if not a['ipv6_reachable']]
+    if ipv6_unreachable and len(ipv6_unreachable) > len(ipv6_tested) // 2:
+        advice_parts.append(
+            f"{len(ipv6_unreachable)}/{len(ipv6_tested)} IPv6-testing authorities cannot reach you. "
+            f"Verify IPv6 is properly configured or disable if not needed."
+        )
+    
+    # --- GUARD FLAG ISSUES ---
+    wfu_threshold = 0.98  # Standard guard-wfu threshold
+    tk_threshold = rv.get('guard_tk_threshold', 691200)  # ~8 days
+    guard_issues = []
+    
+    if rv['wfu'] < wfu_threshold:
+        guard_issues.append(
+            f"WFU ({rv['wfu']*100:.1f}%) below 98% - maintain consistent uptime, avoid frequent restarts"
+        )
+    
+    if rv['tk'] < tk_threshold:
+        days_current = rv['tk'] / 86400
+        days_needed = tk_threshold / 86400
+        guard_issues.append(
+            f"Time Known ({days_current:.1f} days) below {days_needed:.0f} days - just wait, this increases automatically"
+        )
+    
+    if not rv.get('guard_bw_meets_all', True):
+        if rv.get('guard_bw_meets_some', False):
+            advice_parts.append(
+                f"Guard BW ({rv.get('measured_bw_formatted', 'N/A')}) meets {rv.get('guard_bw_meets_count', 0)}/{total} "
+                f"authorities. Increase bandwidth to meet all thresholds ({rv.get('guard_bw_range', 'varies')})."
+            )
+        else:
+            advice_parts.append(
+                f"Guard BW ({rv.get('measured_bw_formatted', 'N/A')}) below ALL authority thresholds. "
+                f"Increase relay bandwidth capacity significantly."
+            )
+    
+    if guard_issues:
+        advice_parts.append(f"To get Guard flag: {'; '.join(guard_issues)}.")
+    
+    # --- STABLE FLAG ISSUES ---
+    if not rv.get('stable_meets_all', True):
+        stable_range = rv.get('stable_range', '14-20 days')
+        current_uptime = rv.get('uptime', 0) / 86400
+        advice_parts.append(
+            f"Stable flag requires uptime of {stable_range}. Current: {current_uptime:.1f} days. "
+            f"Avoid restarts and maintain continuous operation."
+        )
+    
+    # --- FAST FLAG ISSUES ---
+    if not rv.get('fast_meets_all', True):
+        fast_range = rv.get('fast_range', '0.1-1.0 MB/s')
+        advice_parts.append(
+            f"Fast flag requires bandwidth of {fast_range}. Increase relay bandwidth capacity."
+        )
+    
+    # --- HSDIR FLAG ISSUES ---
+    hsdir_wfu_threshold = rv.get('hsdir_wfu_threshold', 0.98)
+    hsdir_tk_threshold = rv.get('hsdir_tk_threshold', 864000)  # ~10 days
+    
+    if rv['wfu'] < hsdir_wfu_threshold:
+        # Already covered by Guard WFU advice (same threshold)
+        pass
+    
+    if rv['tk'] < hsdir_tk_threshold and rv['tk'] >= tk_threshold:
+        # Only if they meet Guard TK but not HSDir TK
+        days_needed = hsdir_tk_threshold / 86400
+        advice_parts.append(
+            f"HSDir flag requires TK ≥{days_needed:.0f} days. Just wait - this increases automatically."
+        )
+    
+    # Check if Stable is missing (required for HSDir)
+    has_stable = any('Stable' in a.get('flags', []) for a in authority_votes if a['voted'])
+    if not has_stable and rv['wfu'] >= hsdir_wfu_threshold and rv['tk'] >= hsdir_tk_threshold:
+        advice_parts.append(
+            "HSDir flag requires Stable flag first. Focus on maintaining consistent uptime."
+        )
+    
+    # --- BANDWIDTH MEASUREMENT ISSUES ---
+    bw_authorities = [a for a in authority_votes if a['is_bw_authority']]
+    measured_count = sum(1 for a in bw_authorities if a.get('bw_value'))
+    if measured_count == 0 and bw_authorities:
+        advice_parts.append(
+            "Your relay hasn't been measured by bandwidth scanners yet. "
+            "New relays may take 1-2 weeks to be fully measured."
+        )
+    elif measured_count < len(bw_authorities) // 2:
+        advice_parts.append(
+            f"Only {measured_count}/{len(bw_authorities)} bandwidth authorities have measured your relay. "
+            f"Measurements should stabilize within a few days."
+        )
+    
+    # --- NEW RELAY ADVICE ---
+    if rv['tk'] < 691200:  # Less than 8 days
+        days_old = rv['tk'] / 86400
+        advice_parts.append(
+            f"Your relay is new ({days_old:.1f} days old). "
+            f"Guard, HSDir, and Stable flags require time. Keep running consistently."
+        )
+    
+    # --- NO ISSUES ---
+    if not advice_parts:
+        return "Your relay meets all requirements for flag assignment. Keep it running consistently!"
+    
+    # Return combined advice with priority indicator if multiple issues
+    if len(advice_parts) > 1:
+        return "Multiple issues detected: " + " • ".join(advice_parts)
+    return advice_parts[0]
 
 
 def _identify_issues(authority_votes: List[Dict]) -> List[str]:
-    """Identify issues from authority votes."""
+    """
+    Identify issues from authority votes for display in Issues Summary.
+    Returns a list of short issue descriptions.
+    """
     issues = []
+    total = len(authority_votes)
+    voted = [a for a in authority_votes if a['voted']]
     
+    # Unreachable authorities
     unreachable = [a['authority'] for a in authority_votes if not a['voted']]
     if unreachable:
         issues.append(f"{', '.join(unreachable)} cannot reach relay")
     
-    not_assigning_guard = [a['authority'] for a in authority_votes 
-                          if a['voted'] and not a['guard_bw_meets'] and 'Guard' not in a.get('flags', [])]
-    if not_assigning_guard:
-        issues.append(f"{len(not_assigning_guard)}/{len(authority_votes)} authorities NOT assigning Guard (BW below threshold)")
+    # IPv6 reachability issues (for authorities that test IPv6)
+    ipv6_tested = [a for a in voted if a.get('ipv6_reachable') is not None]
+    ipv6_fail = [a['authority'] for a in ipv6_tested if not a['ipv6_reachable']]
+    if ipv6_fail:
+        issues.append(f"IPv6 unreachable from {', '.join(ipv6_fail)}")
+    
+    # WFU below threshold (affects Guard and HSDir)
+    wfu_below = [a for a in voted if not a.get('wfu_meets', True)]
+    if wfu_below:
+        issues.append(f"WFU below 98% - cannot get Guard/HSDir")
+    
+    # Guard BW issues
+    guard_bw_below = [a['authority'] for a in voted if not a.get('guard_bw_meets', True)]
+    if guard_bw_below:
+        issues.append(f"{len(guard_bw_below)}/{len(voted)} authorities NOT assigning Guard (BW below threshold)")
+    
+    # Stable issues
+    stable_below = [a['authority'] for a in voted if not a.get('stable_meets', True)]
+    if stable_below and len(stable_below) > len(voted) // 2:
+        issues.append(f"Stable threshold not met for {len(stable_below)}/{len(voted)} authorities")
+    
+    # Fast issues (rare, thresholds are usually low)
+    fast_below = [a['authority'] for a in voted if not a.get('fast_meets', True)]
+    if fast_below:
+        issues.append(f"Fast threshold not met for {len(fast_below)}/{len(voted)} authorities")
+    
+    # HSDir issues
+    hsdir_below = [a for a in voted if not a.get('hsdir_tk_meets', True)]
+    if hsdir_below and all(a.get('wfu_meets', True) for a in voted):
+        # Only show if WFU is fine but HSDir TK is the issue
+        issues.append(f"HSDir TK threshold not met")
+    
+    # Not measured by bandwidth authorities
+    bw_auths = [a for a in voted if a.get('is_bw_authority', False)]
+    not_measured = [a['authority'] for a in bw_auths if not a.get('bw_value')]
+    if not_measured and len(not_measured) == len(bw_auths):
+        issues.append("Not yet measured by any bandwidth authority")
+    elif not_measured:
+        issues.append(f"Not measured by {', '.join(not_measured)}")
     
     return issues
 ```
