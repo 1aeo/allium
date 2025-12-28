@@ -71,6 +71,10 @@ BANDWIDTH_PATH = '/recent/relay-descriptors/bandwidths/'
 # Maximum response size to prevent DoS
 MAX_RESPONSE_SIZE = 100 * 1024 * 1024  # 100MB limit
 
+# Pre-compiled regex patterns for bandwidth file parsing (compiled once, used many times)
+_BW_NODE_ID_PATTERN = re.compile(r'node_id=\$([A-F0-9]+)', re.IGNORECASE)
+_BW_VALUE_PATTERN = re.compile(r'bw=(\d+)')
+
 
 class CollectorFetcher:
     """
@@ -524,7 +528,7 @@ class CollectorFetcher:
         return bandwidth_files
     
     def _parse_bandwidth_file(self, content: str) -> Dict[str, dict]:
-        """Parse a bandwidth measurement file."""
+        """Parse a bandwidth measurement file using pre-compiled regex patterns."""
         measurements = {}
         
         for line in content.split('\n'):
@@ -535,9 +539,9 @@ class CollectorFetcher:
             # Format: bw=<value> node_id=$<fingerprint> ...
             if 'node_id=$' in line:
                 try:
-                    # Extract fingerprint
-                    fp_match = re.search(r'node_id=\$([A-F0-9]+)', line, re.IGNORECASE)
-                    bw_match = re.search(r'bw=(\d+)', line)
+                    # Use pre-compiled patterns for better performance
+                    fp_match = _BW_NODE_ID_PATTERN.search(line)
+                    bw_match = _BW_VALUE_PATTERN.search(line)
                     
                     if fp_match and bw_match:
                         fingerprint = fp_match.group(1).upper()
@@ -599,21 +603,6 @@ class CollectorFetcher:
                 self.relay_index[fingerprint]['bandwidth_measurements'] = bw_data
         
         logger.info(f"Indexed {len(self.relay_index)} relays from votes, {len(self.flag_thresholds)} authority thresholds")
-    
-    def _extract_flag_thresholds(self):
-        """
-        Extract flag thresholds from all authority votes.
-        NOTE: This is now handled in _build_relay_index for efficiency.
-        Kept for backwards compatibility but does nothing if already extracted.
-        """
-        if self.flag_thresholds:
-            return  # Already extracted in _build_relay_index
-        
-        for auth_name, vote_data in self.votes.items():
-            if vote_data and 'flag_thresholds' in vote_data:
-                self.flag_thresholds[auth_name] = vote_data['flag_thresholds']
-        
-        logger.info(f"Extracted flag thresholds from {len(self.flag_thresholds)} authorities")
     
     def _validate_fingerprint(self, fingerprint: str) -> bool:
         """Validate fingerprint is 40 hex characters."""
