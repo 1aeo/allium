@@ -76,6 +76,8 @@ class Coordinator:
             from .consensus import is_enabled as collector_enabled
             if collector_enabled():
                 self.api_workers.append(("collector_consensus", fetch_collector_consensus_data, [None, self._log_progress]))
+                # Authority health checks (Phase 2 feature) - real-time latency and availability monitoring
+                self.api_workers.append(("consensus_health", fetch_consensus_health, [self._log_progress]))
         
     def _log_progress(self, message):
         """Log progress message using shared progress utility"""

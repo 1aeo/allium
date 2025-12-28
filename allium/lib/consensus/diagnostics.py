@@ -19,7 +19,14 @@ def format_relay_diagnostics(diagnostics: dict, flag_thresholds: dict = None) ->
     Returns:
         dict: Formatted diagnostics ready for template rendering
     """
-    if not diagnostics or diagnostics.get('error'):
+    if not diagnostics:
+        return {
+            'available': False,
+            'error': 'No diagnostic data available',
+            'in_consensus': False,
+        }
+    
+    if diagnostics.get('error'):
         return {
             'available': False,
             'error': diagnostics.get('error', 'No diagnostic data available'),

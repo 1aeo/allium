@@ -51,6 +51,24 @@
     <small>Last updated: {{ relays.timestamp }}. Refreshed every 30 minutes from the Tor directory authorities via <a href="https://onionoo.torproject.org/">Tor Project's onionoo API</a>.</small>
     </p>
     
+    <!-- AUTHORITY HEALTH ALERTS - From real-time health checks -->
+    {% if relays.consensus_health_data and relays.consensus_health_data.alerts %}
+    {% set alerts = relays.consensus_health_data.alerts %}
+    {% if alerts %}
+    <div style="margin-bottom: 15px;">
+        {% for alert in alerts %}
+        <div style="background: {% if alert.severity == 'critical' %}#f8d7da{% elif alert.severity == 'error' %}#f8d7da{% else %}#fff3cd{% endif %}; 
+                    border: 1px solid {% if alert.severity == 'critical' %}#f5c6cb{% elif alert.severity == 'error' %}#f5c6cb{% else %}#ffeaa7{% endif %}; 
+                    color: {% if alert.severity == 'critical' %}#721c24{% elif alert.severity == 'error' %}#721c24{% else %}#856404{% endif %}; 
+                    padding: 10px; border-radius: 5px; margin-bottom: 10px;">
+            <strong>{% if alert.severity == 'critical' %}🚨{% elif alert.severity == 'error' %}⚠️{% else %}⏱️{% endif %} {{ alert.message }}</strong>
+            {% if alert.details %}<br><small>{{ alert.details }}</small>{% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endif %}
+
     <!-- UPTIME DATA STATUS NOTIFICATION -->
     {% if relays.uptime_metadata -%}
         {% if relays.uptime_metadata.status == 'not_modified' -%}
@@ -82,6 +100,8 @@
         <tr>
             <th>Authority Name</th>
             <th>Online Status</th>
+            <th title="Bandwidth Authority: Does this authority run a bandwidth scanner to measure relay speeds?">BW Auth</th>
+            <th title="Voted this hour: Did this authority submit a vote in the most recent consensus cycle?">Voted</th>
             <th>AS Number</th>
             <th>AS Name</th>
             <th>Country</th>
@@ -109,6 +129,22 @@
                     {% else -%}
                         <span style="color: red; font-weight: bold;">🔴 Offline (last seen: {{ authority.last_seen }})</span>
                     {%- endif %}
+                </td>
+                <td style="text-align: center;">
+                    {% if relays.collector_bw_authorities and authority.nickname in relays.collector_bw_authorities %}
+                        <span style="color: #28a745;" title="Runs bandwidth scanner">📊 Yes</span>
+                    {% else %}
+                        <span style="color: #6c757d;" title="Does not run bandwidth scanner">No</span>
+                    {% endif %}
+                </td>
+                <td style="text-align: center;">
+                    {% if relays.collector_flag_thresholds and authority.nickname in relays.collector_flag_thresholds %}
+                        <span style="color: #28a745;" title="Submitted vote this hour">✓</span>
+                    {% elif relays.collector_flag_thresholds %}
+                        <span style="color: #dc3545;" title="Did not submit vote this hour">✗</span>
+                    {% else %}
+                        <span style="color: #6c757d;" title="CollecTor data not available">—</span>
+                    {% endif %}
                 </td>
                 <td>
                     {% if authority.as -%}
@@ -207,6 +243,8 @@
     <div style="background: #f0f0f0; padding: 15px; border-radius: 6px;">
         <h4>Legend:</h4>
         <ul style="margin: 0; padding-left: 20px;">
+            <li><strong>BW Auth (Bandwidth Authority):</strong> <span style="color: #28a745;">📊 Yes</span> = Authority runs a bandwidth scanner to measure relay speeds. Only bandwidth authorities contribute to consensus weight calculations.</li>
+            <li><strong>Voted:</strong> <span style="color: #28a745;">✓</span> = Authority submitted a vote in the most recent consensus cycle. <span style="color: #dc3545;">✗</span> = Vote not received this hour.</li>
             <li><strong>Uptime (1M/6M/1Y/5Y):</strong> Percentage of time authority was online over 1 month, 6 months, 1 year, and 5 years periods</li>
             <li><strong>Uptime Z-Score:</strong> Statistical measure comparing this authority's 1-month uptime to other authorities. <span style="color: green; font-weight: bold;">Green (above average)</span>, <span style="color: #ff8c00; font-weight: bold;">Yellow (normal)</span>, <span style="color: red; font-weight: bold;">Red (significantly below average, ≤-2.0)</span></li>
             <li><strong>Version:</strong> Current Tor software version running on the authority</li>
