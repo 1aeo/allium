@@ -217,9 +217,221 @@
         </ul>
     </div>
 
+    {# Flag Thresholds Table - from CollecTor consensus data #}
+    {% if relays.collector_flag_thresholds %}
+    <br><br>
+    <h3 id="flag-thresholds">
+        <a href="#flag-thresholds" style="text-decoration: none; color: inherit;">Flag Thresholds by Authority</a>
+    </h3>
+    <p class="text-muted" style="font-size: 13px; margin-bottom: 15px;">
+        Each directory authority has different thresholds for assigning flags to relays. 
+        These values are extracted from authority votes via <a href="https://collector.torproject.org" target="_blank" rel="noopener">Tor CollecTor</a>.
+    </p>
+    
+    <div style="overflow-x: auto;">
+    <table class="table table-condensed table-striped" style="font-size: 12px;">
+        <thead>
+            <tr>
+                <th>Threshold</th>
+                {% for auth_name in relays.collector_flag_thresholds.keys()|sort %}
+                <th style="text-align: center;">{{ auth_name }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {# Guard Flag Thresholds #}
+            <tr style="background: #e8f4fd;">
+                <td colspan="{{ relays.collector_flag_thresholds|length + 1 }}"><strong>🛡️ Guard Flag Requirements</strong></td>
+            </tr>
+            <tr>
+                <td title="Weighted Fractional Uptime required for Guard flag">Guard WFU</td>
+                {% for auth_name in relays.collector_flag_thresholds.keys()|sort %}
+                {% set thresholds = relays.collector_flag_thresholds[auth_name] %}
+                <td style="text-align: center;">
+                    {% if thresholds.get('guard-wfu') is not none %}
+                        {% if thresholds['guard-wfu'] <= 1 %}
+                            {{ "%.1f%%"|format(thresholds['guard-wfu'] * 100) }}
+                        {% else %}
+                            {{ "%.1f%%"|format(thresholds['guard-wfu']) }}
+                        {% endif %}
+                    {% else %}
+                        <span style="color: #6c757d;">—</span>
+                    {% endif %}
+                </td>
+                {% endfor %}
+            </tr>
+            <tr>
+                <td title="Time Known required for Guard flag (how long authority has tracked the relay)">Guard Time Known</td>
+                {% for auth_name in relays.collector_flag_thresholds.keys()|sort %}
+                {% set thresholds = relays.collector_flag_thresholds[auth_name] %}
+                <td style="text-align: center;">
+                    {% if thresholds.get('guard-tk') is not none %}
+                        {% set days = thresholds['guard-tk'] / 86400 %}
+                        {{ "%.1f d"|format(days) }}
+                    {% else %}
+                        <span style="color: #6c757d;">—</span>
+                    {% endif %}
+                </td>
+                {% endfor %}
+            </tr>
+            <tr>
+                <td title="Minimum bandwidth required for Guard flag (including exits)">Guard BW (inc. exits)</td>
+                {% for auth_name in relays.collector_flag_thresholds.keys()|sort %}
+                {% set thresholds = relays.collector_flag_thresholds[auth_name] %}
+                <td style="text-align: center;">
+                    {% if thresholds.get('guard-bw-inc-exits') is not none %}
+                        {% set bw = thresholds['guard-bw-inc-exits'] %}
+                        {% if bw >= 1000000 %}
+                            {{ "%.1f MB/s"|format(bw / 1000000) }}
+                        {% elif bw >= 1000 %}
+                            {{ "%.1f KB/s"|format(bw / 1000) }}
+                        {% else %}
+                            {{ bw }} B/s
+                        {% endif %}
+                    {% else %}
+                        <span style="color: #6c757d;">—</span>
+                    {% endif %}
+                </td>
+                {% endfor %}
+            </tr>
+
+            {# Stable Flag Thresholds #}
+            <tr style="background: #e8f4fd;">
+                <td colspan="{{ relays.collector_flag_thresholds|length + 1 }}"><strong>⚓ Stable Flag Requirements</strong></td>
+            </tr>
+            <tr>
+                <td title="Minimum uptime required for Stable flag">Stable Uptime</td>
+                {% for auth_name in relays.collector_flag_thresholds.keys()|sort %}
+                {% set thresholds = relays.collector_flag_thresholds[auth_name] %}
+                <td style="text-align: center;">
+                    {% if thresholds.get('stable-uptime') is not none %}
+                        {% set days = thresholds['stable-uptime'] / 86400 %}
+                        {{ "%.1f d"|format(days) }}
+                    {% else %}
+                        <span style="color: #6c757d;">—</span>
+                    {% endif %}
+                </td>
+                {% endfor %}
+            </tr>
+            <tr>
+                <td title="Mean Time Between Failures required for Stable flag">Stable MTBF</td>
+                {% for auth_name in relays.collector_flag_thresholds.keys()|sort %}
+                {% set thresholds = relays.collector_flag_thresholds[auth_name] %}
+                <td style="text-align: center;">
+                    {% if thresholds.get('stable-mtbf') is not none %}
+                        {% set days = thresholds['stable-mtbf'] / 86400 %}
+                        {{ "%.1f d"|format(days) }}
+                    {% else %}
+                        <span style="color: #6c757d;">—</span>
+                    {% endif %}
+                </td>
+                {% endfor %}
+            </tr>
+
+            {# Fast Flag Thresholds #}
+            <tr style="background: #e8f4fd;">
+                <td colspan="{{ relays.collector_flag_thresholds|length + 1 }}"><strong>⚡ Fast Flag Requirements</strong></td>
+            </tr>
+            <tr>
+                <td title="Minimum bandwidth speed required for Fast flag">Fast Speed</td>
+                {% for auth_name in relays.collector_flag_thresholds.keys()|sort %}
+                {% set thresholds = relays.collector_flag_thresholds[auth_name] %}
+                <td style="text-align: center;">
+                    {% if thresholds.get('fast-speed') is not none %}
+                        {% set bw = thresholds['fast-speed'] %}
+                        {% if bw >= 1000000 %}
+                            {{ "%.1f MB/s"|format(bw / 1000000) }}
+                        {% elif bw >= 1000 %}
+                            {{ "%.1f KB/s"|format(bw / 1000) }}
+                        {% else %}
+                            {{ bw }} B/s
+                        {% endif %}
+                    {% else %}
+                        <span style="color: #6c757d;">—</span>
+                    {% endif %}
+                </td>
+                {% endfor %}
+            </tr>
+
+            {# HSDir Flag Thresholds #}
+            <tr style="background: #e8f4fd;">
+                <td colspan="{{ relays.collector_flag_thresholds|length + 1 }}"><strong>📁 HSDir Flag Requirements</strong></td>
+            </tr>
+            <tr>
+                <td title="Weighted Fractional Uptime required for HSDir flag">HSDir WFU</td>
+                {% for auth_name in relays.collector_flag_thresholds.keys()|sort %}
+                {% set thresholds = relays.collector_flag_thresholds[auth_name] %}
+                <td style="text-align: center;">
+                    {% if thresholds.get('hsdir-wfu') is not none %}
+                        {% if thresholds['hsdir-wfu'] <= 1 %}
+                            {{ "%.1f%%"|format(thresholds['hsdir-wfu'] * 100) }}
+                        {% else %}
+                            {{ "%.1f%%"|format(thresholds['hsdir-wfu']) }}
+                        {% endif %}
+                    {% else %}
+                        <span style="color: #6c757d;">—</span>
+                    {% endif %}
+                </td>
+                {% endfor %}
+            </tr>
+            <tr>
+                <td title="Time Known required for HSDir flag">HSDir Time Known</td>
+                {% for auth_name in relays.collector_flag_thresholds.keys()|sort %}
+                {% set thresholds = relays.collector_flag_thresholds[auth_name] %}
+                <td style="text-align: center;">
+                    {% if thresholds.get('hsdir-tk') is not none %}
+                        {% set days = thresholds['hsdir-tk'] / 86400 %}
+                        {{ "%.1f d"|format(days) }}
+                    {% else %}
+                        <span style="color: #6c757d;">—</span>
+                    {% endif %}
+                </td>
+                {% endfor %}
+            </tr>
+
+            {# Additional Thresholds #}
+            <tr style="background: #e8f4fd;">
+                <td colspan="{{ relays.collector_flag_thresholds|length + 1 }}"><strong>📊 Other Thresholds</strong></td>
+            </tr>
+            <tr>
+                <td title="Whether MTBF data is sufficient">Enough MTBF</td>
+                {% for auth_name in relays.collector_flag_thresholds.keys()|sort %}
+                {% set thresholds = relays.collector_flag_thresholds[auth_name] %}
+                <td style="text-align: center;">
+                    {% if thresholds.get('enough-mtbf') is not none %}
+                        {% if thresholds['enough-mtbf'] == 1 %}
+                            <span style="color: #28a745;">✓</span>
+                        {% else %}
+                            <span style="color: #dc3545;">✗</span>
+                        {% endif %}
+                    {% else %}
+                        <span style="color: #6c757d;">—</span>
+                    {% endif %}
+                </td>
+                {% endfor %}
+            </tr>
+        </tbody>
+    </table>
+    </div>
+
+    <div style="background: #f0f0f0; padding: 15px; border-radius: 6px; margin-top: 15px;">
+        <h4>Flag Threshold Legend:</h4>
+        <ul style="margin: 0; padding-left: 20px;">
+            <li><strong>Guard WFU:</strong> Weighted Fractional Uptime - percentage of time relay has been online. Typically ≥98% required.</li>
+            <li><strong>Guard Time Known:</strong> How long the authority has tracked this relay. Typically ≥8 days (691200 seconds) required.</li>
+            <li><strong>Guard BW:</strong> Minimum bandwidth capacity for Guard eligibility. Varies by authority based on network conditions.</li>
+            <li><strong>Stable Uptime:</strong> Continuous uptime required for Stable flag. Varies 14-20 days by authority.</li>
+            <li><strong>Stable MTBF:</strong> Mean Time Between Failures - average time between relay restarts/failures.</li>
+            <li><strong>Fast Speed:</strong> Minimum bandwidth for Fast flag. Based on network median bandwidth.</li>
+            <li><strong>HSDir WFU/TK:</strong> Requirements for Hidden Service Directory flag (serving .onion address lookups).</li>
+            <li><strong>—</strong> = Threshold not available or not set by this authority.</li>
+        </ul>
+    </div>
+    {% endif %}
+
     <!-- FOOTER -->
     <br><br>
-    <p><i>Data sources: Onionoo API</i></p>
-    <p><i>Last updated: {{ relays.timestamp }} (updates every 15 minutes)</i></p>
+    <p><i>Data sources: <a href="https://onionoo.torproject.org" target="_blank" rel="noopener">Onionoo API</a>{% if relays.collector_flag_thresholds %}, <a href="https://collector.torproject.org" target="_blank" rel="noopener">Tor CollecTor</a>{% endif %}</i></p>
+    <p><i>Last updated: {{ relays.timestamp }} (updates every 15-60 minutes depending on data source)</i></p>
 
 {% endblock -%} 

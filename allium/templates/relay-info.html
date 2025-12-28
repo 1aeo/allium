@@ -443,5 +443,260 @@ Version (Running | Recommended | Status)
 </dl>
 </div>
 </div>
+
+{# Consensus Diagnostics Section - Shows per-authority voting information #}
+{% if relay.collector_diagnostics and relay.collector_diagnostics.available %}
+{% set diag = relay.collector_diagnostics %}
+<div class="row" style="margin-top: 20px;">
+<div class="col-md-12">
+<h3 id="consensus-diagnostics">
+<div class="section-header">
+<a href="#consensus-diagnostics" class="anchor-link">Consensus Diagnostics</a>
+</div>
+</h3>
+<p class="text-muted" style="font-size: 13px; margin-bottom: 15px;">
+Real-time data from <a href="https://collector.torproject.org" target="_blank" rel="noopener">Tor CollecTor</a> showing how directory authorities view this relay.
+</p>
+
+{# Consensus Status Summary #}
+<div style="padding: 15px; border-radius: 6px; margin-bottom: 20px;
+            background: {% if diag.consensus_status.status_class == 'success' %}#d4edda{% else %}#f8d7da{% endif %};
+            border: 1px solid {% if diag.consensus_status.status_class == 'success' %}#c3e6cb{% else %}#f5c6cb{% endif %};">
+    <h4 style="margin-top: 0;">
+        {% if diag.in_consensus %}
+            <span style="color: #155724;">✓ {{ diag.consensus_status.display }}</span>
+        {% else %}
+            <span style="color: #721c24;">✗ {{ diag.consensus_status.display }}</span>
+        {% endif %}
+    </h4>
+    <small style="color: {% if diag.consensus_status.status_class == 'success' %}#155724{% else %}#721c24{% endif %};">
+        {{ diag.vote_count }}/{{ diag.total_authorities }} authorities voted for this relay 
+        (majority required: {{ diag.majority_required }})
+    </small>
+</div>
+
+{# Issues and Advice Section #}
+{% if diag.issues %}
+<div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 6px; padding: 15px; margin-bottom: 20px;">
+    <h5 style="margin-top: 0; color: #856404;">⚠️ Identified Issues</h5>
+    <ul style="margin-bottom: 0; padding-left: 20px;">
+    {% for issue in diag.issues %}
+        <li>
+            <strong>{{ issue.title }}</strong>: {{ issue.description }}
+            {% if issue.suggestion %}
+            <br><small style="color: #666;">💡 {{ issue.suggestion }}</small>
+            {% endif %}
+        </li>
+    {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+{# Per-Authority Voting Table #}
+<h4 id="authority-votes">
+<div class="section-header">
+<a href="#authority-votes" class="anchor-link">Per-Authority Voting Details</a>
+</div>
+</h4>
+<p class="text-muted" style="font-size: 12px; margin-bottom: 10px;">
+Shows how each directory authority sees this relay. Hover over column headers for explanations.
+</p>
+<div style="overflow-x: auto;">
+<table class="table table-condensed table-striped" style="font-size: 12px;">
+<thead>
+<tr>
+    <th>Authority</th>
+    <th title="Did this authority vote for this relay?">Voted</th>
+    <th title="IPv4 reachability: Can this authority reach the relay's ORPort?">IPv4</th>
+    <th title="IPv6 reachability: Can this authority reach the relay's IPv6 address? Some authorities don't test IPv6.">IPv6</th>
+    <th title="Flags assigned by this authority">Flags</th>
+    <th title="Bandwidth weight assigned by this authority (KB/s)">Bandwidth</th>
+    <th title="Measured bandwidth from bandwidth scanner (if this authority runs one)">Measured</th>
+    <th title="Weighted Fractional Uptime: Percentage of time relay has been online. ≥98% required for Guard/HSDir flags.">WFU</th>
+    <th title="Time Known: How long this authority has known about this relay. ≥8 days required for Guard flag.">Time Known</th>
+</tr>
+</thead>
+<tbody>
+{% for vote in diag.authority_table %}
+<tr>
+    <td><strong>{{ vote.authority }}</strong>{% if vote.is_bw_authority %} <span title="Runs bandwidth scanner">📊</span>{% endif %}</td>
+    <td>
+        {% if vote.voted %}
+            <span style="color: #28a745; font-weight: bold;">✓</span>
+        {% else %}
+            <span style="color: #dc3545; font-weight: bold;">✗</span>
+        {% endif %}
+    </td>
+    <td>
+        {% if vote.ipv4_reachable %}
+            <span style="color: #28a745;">Yes</span>
+        {% else %}
+            <span style="color: #dc3545;">No</span>
+        {% endif %}
+    </td>
+    <td>
+        {% if vote.ipv6_reachable == true %}
+            <span style="color: #28a745;">Yes</span>
+        {% elif vote.ipv6_reachable == false %}
+            <span style="color: #dc3545;">No</span>
+        {% else %}
+            <span style="color: #6c757d;" title="Authority doesn't test IPv6">N/T</span>
+        {% endif %}
+    </td>
+    <td style="max-width: 200px; word-wrap: break-word;">
+        {% if vote.flags %}
+            {{ vote.flags_display }}
+        {% else %}
+            <span style="color: #6c757d;">—</span>
+        {% endif %}
+    </td>
+    <td>
+        {% if vote.bandwidth is not none %}
+            {{ vote.bandwidth_display }}
+        {% else %}
+            <span style="color: #6c757d;">—</span>
+        {% endif %}
+    </td>
+    <td>
+        {% if vote.measured is not none %}
+            {{ vote.measured_display }}
+        {% elif not vote.is_bw_authority %}
+            <span style="color: #6c757d;" title="Not a bandwidth authority">N/A</span>
+        {% else %}
+            <span style="color: #6c757d;">—</span>
+        {% endif %}
+    </td>
+    <td>
+        {% if vote.wfu is not none %}
+            <span class="{% if vote.wfu_class == 'success' %}text-success{% elif vote.wfu_class == 'danger' %}text-danger{% elif vote.wfu_class == 'warning' %}text-warning{% endif %}">
+                {{ vote.wfu_display }}
+            </span>
+        {% else %}
+            <span style="color: #6c757d;">—</span>
+        {% endif %}
+    </td>
+    <td>
+        {% if vote.tk is not none %}
+            <span class="{% if vote.tk_class == 'success' %}text-success{% elif vote.tk_class == 'danger' %}text-danger{% elif vote.tk_class == 'warning' %}text-warning{% endif %}">
+                {{ vote.tk_display }}
+            </span>
+        {% else %}
+            <span style="color: #6c757d;">—</span>
+        {% endif %}
+    </td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+
+{# Flag Eligibility Summary #}
+<h4 id="flag-eligibility" style="margin-top: 20px;">
+<div class="section-header">
+<a href="#flag-eligibility" class="anchor-link">Flag Eligibility Summary</a>
+</div>
+</h4>
+<p class="text-muted" style="font-size: 12px; margin-bottom: 10px;">
+Shows eligibility for major flags based on each authority's thresholds. Need majority ({{ diag.majority_required }}/{{ diag.total_authorities }}) for flag assignment.
+</p>
+<div class="row">
+{% for flag_name, flag_data in diag.flag_summary.items() %}
+<div class="col-md-3 col-sm-6" style="margin-bottom: 15px;">
+    <div style="border: 1px solid #ddd; border-radius: 6px; padding: 10px; text-align: center;
+                background: {% if flag_data.status_class == 'success' %}#d4edda{% elif flag_data.status_class == 'danger' %}#f8d7da{% else %}#fff3cd{% endif %};">
+        <strong style="text-transform: capitalize;">{{ flag_name }}</strong><br>
+        <span style="font-size: 18px; font-weight: bold;
+                     color: {% if flag_data.status_class == 'success' %}#155724{% elif flag_data.status_class == 'danger' %}#721c24{% else %}#856404{% endif %};">
+            {{ flag_data.eligible_count }}/{{ flag_data.total_authorities }}
+        </span><br>
+        <small>{{ flag_data.display }}</small>
+    </div>
+</div>
+{% endfor %}
+</div>
+
+{# Reachability Summary #}
+{% if diag.reachability_summary %}
+<h4 id="reachability" style="margin-top: 20px;">
+<div class="section-header">
+<a href="#reachability" class="anchor-link">Reachability Summary</a>
+</div>
+</h4>
+<div class="row">
+<div class="col-md-6">
+    <div style="border: 1px solid #ddd; border-radius: 6px; padding: 15px;
+                background: {% if diag.reachability_summary.ipv4.status_class == 'success' %}#d4edda{% else %}#f8d7da{% endif %};">
+        <strong>IPv4 Reachability</strong><br>
+        <span style="font-size: 24px; font-weight: bold;">
+            {{ diag.reachability_summary.ipv4.reachable_count }}/{{ diag.reachability_summary.ipv4.total }}
+        </span><br>
+        <small>{{ diag.reachability_summary.ipv4.display }}</small>
+    </div>
+</div>
+<div class="col-md-6">
+    <div style="border: 1px solid #ddd; border-radius: 6px; padding: 15px;
+                background: {% if diag.reachability_summary.ipv6.status_class == 'success' %}#d4edda{% elif diag.reachability_summary.ipv6.status_class == 'muted' %}#f0f0f0{% else %}#f8d7da{% endif %};">
+        <strong>IPv6 Reachability</strong><br>
+        <span style="font-size: 24px; font-weight: bold;">
+            {{ diag.reachability_summary.ipv6.reachable_count }}/{{ diag.reachability_summary.ipv6.total }}
+        </span><br>
+        <small>{{ diag.reachability_summary.ipv6.display }}</small>
+        {% if diag.reachability_summary.ipv6.not_tested %}
+        <br><small style="color: #6c757d;">Not tested by: {{ diag.reachability_summary.ipv6.not_tested|join(', ') }}</small>
+        {% endif %}
+    </div>
+</div>
+</div>
+{% endif %}
+
+{# Bandwidth Summary #}
+{% if diag.bandwidth_summary and diag.bandwidth_summary.average is not none %}
+<h4 id="bandwidth-measurements" style="margin-top: 20px;">
+<div class="section-header">
+<a href="#bandwidth-measurements" class="anchor-link">Bandwidth Measurements</a>
+</div>
+</h4>
+<div style="border: 1px solid #ddd; border-radius: 6px; padding: 15px; background: #f8f9fa;">
+    <div class="row">
+        <div class="col-md-3 col-sm-6 text-center">
+            <small>Average</small><br>
+            <strong style="font-size: 18px;">{{ diag.bandwidth_summary.average_display }}</strong>
+        </div>
+        <div class="col-md-3 col-sm-6 text-center">
+            <small>Minimum</small><br>
+            <strong style="font-size: 18px;">{{ diag.bandwidth_summary.min_display }}</strong>
+        </div>
+        <div class="col-md-3 col-sm-6 text-center">
+            <small>Maximum</small><br>
+            <strong style="font-size: 18px;">{{ diag.bandwidth_summary.max_display }}</strong>
+        </div>
+        <div class="col-md-3 col-sm-6 text-center">
+            <small>Measurements</small><br>
+            <strong style="font-size: 18px;">{{ diag.bandwidth_summary.measurement_count }}</strong>
+        </div>
+    </div>
+    {% if diag.bandwidth_summary.deviation_class == 'warning' %}
+    <div style="margin-top: 10px; padding: 8px; background: #fff3cd; border-radius: 4px;">
+        <small>⚠️ High deviation between measurements ({{ diag.bandwidth_summary.deviation_display }}). Different authorities may see different bandwidth.</small>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+{# Legend #}
+<div style="margin-top: 20px; padding: 15px; background: #f0f0f0; border-radius: 6px; font-size: 12px;">
+    <strong>Legend:</strong>
+    <ul style="margin: 5px 0 0 0; padding-left: 20px;">
+        <li><strong>WFU (Weighted Fractional Uptime):</strong> Must be ≥98% for Guard and HSDir flags. <span style="color: #28a745;">Green</span> = meets threshold, <span style="color: #dc3545;">Red</span> = below threshold.</li>
+        <li><strong>Time Known (TK):</strong> How long the authority has tracked this relay. Must be ≥8 days for Guard flag.</li>
+        <li><strong>N/T:</strong> Not Tested - authority doesn't test this (e.g., some don't test IPv6).</li>
+        <li><strong>📊:</strong> Authority runs a bandwidth scanner and provides measured bandwidth values.</li>
+    </ul>
+</div>
+
+</div>
+</div>
+{% endif %}
+
 </div>
 {% endblock -%}

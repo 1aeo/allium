@@ -10,7 +10,7 @@ import threading
 import time
 from .workers import (
     fetch_onionoo_details, fetch_onionoo_uptime, fetch_onionoo_bandwidth,
-    fetch_aroi_validation,
+    fetch_aroi_validation, fetch_collector_consensus_data, fetch_consensus_health,
     get_worker_status, get_all_worker_status
 )
 from .relays import Relays
@@ -70,6 +70,12 @@ class Coordinator:
             self.api_workers.append(("onionoo_uptime", fetch_onionoo_uptime, [self.onionoo_uptime_url, self._log_progress]))
             self.api_workers.append(("onionoo_bandwidth", fetch_onionoo_bandwidth, [self.onionoo_bandwidth_url, self.bandwidth_cache_hours, self._log_progress]))
             self.api_workers.append(("aroi_validation", fetch_aroi_validation, [self.aroi_url, self._log_progress]))
+            
+            # CollecTor consensus diagnostics (Phase 1 feature)
+            # Note: authorities parameter will be None initially, set after Onionoo fetch completes
+            from .consensus import is_enabled as collector_enabled
+            if collector_enabled():
+                self.api_workers.append(("collector_consensus", fetch_collector_consensus_data, [None, self._log_progress]))
         
     def _log_progress(self, message):
         """Log progress message using shared progress utility"""
@@ -119,6 +125,10 @@ class Coordinator:
             return "Historical Bandwidth API"
         elif api_name == "aroi_validation":
             return "AROI Validation API"
+        elif api_name == "collector_consensus":
+            return "CollecTor Consensus API"
+        elif api_name == "consensus_health":
+            return "Authority Health API"
         else:
             return api_name.replace("_", " ").title()
 
@@ -219,15 +229,22 @@ class Coordinator:
 
     def get_consensus_health_data(self):
         """
-        Get consensus health data if available (Future API)
+        Get consensus health data if available.
         """
         return self.worker_data.get('consensus_health')
 
     def get_collector_data(self):
         """
-        Get collector data if available (Future API)
+        Get collector data if available (legacy)
         """
         return self.worker_data.get('collector')
+
+    def get_collector_consensus_data(self):
+        """
+        Get CollecTor consensus data if available.
+        Contains authority votes, relay index, flag thresholds.
+        """
+        return self.worker_data.get('collector_consensus')
 
     def create_relay_set(self, relay_data):
         """
@@ -261,12 +278,14 @@ class Coordinator:
         uptime_data = self.get_uptime_data()
         bandwidth_data = self.get_bandwidth_data()
         aroi_validation_data = self.get_aroi_validation_data()
+        collector_consensus_data = self.get_collector_consensus_data()
         
         setattr(relay_set, 'uptime_data', uptime_data)
         setattr(relay_set, 'bandwidth_data', bandwidth_data)
         setattr(relay_set, 'aroi_validation_data', aroi_validation_data)
         setattr(relay_set, 'consensus_health_data', self.get_consensus_health_data())
         setattr(relay_set, 'collector_data', self.get_collector_data())
+        setattr(relay_set, 'collector_consensus_data', collector_consensus_data)
         
         # CRITICAL FIX: Regenerate AROI leaderboards now that uptime data is available
         # The leaderboards were calculated during __init__ before uptime_data was attached
@@ -286,6 +305,15 @@ class Coordinator:
             except Exception as e:
                 print(f"Warning: Bandwidth processing failed ({e}), continuing without bandwidth metrics")
                 # Continue without bandwidth metrics rather than crashing
+        
+        # COLLECTOR CONSENSUS PROCESSING: Process CollecTor data for per-relay diagnostics
+        # Attaches consensus troubleshooting information to each relay
+        if collector_consensus_data and hasattr(relay_set, 'json') and relay_set.json.get('relays'):
+            try:
+                relay_set._reprocess_collector_data()
+            except Exception as e:
+                print(f"Warning: Collector consensus processing failed ({e}), continuing without diagnostics")
+                # Continue without diagnostics rather than crashing
         
         # PERF OPTIMIZATION: Pre-compute all contact page data AFTER all data processing
         # This must happen after uptime data, bandwidth data, and AROI leaderboards are processed
