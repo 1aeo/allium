@@ -2252,50 +2252,55 @@ class Relays:
             votes = collector_data.get('votes', {})
             bw_authorities = set(collector_data.get('bw_authorities', []))
             
+            # OPTIMIZATION: Build lookup maps ONCE instead of nested loops for each authority
+            # This reduces O(A*V) to O(A+V) where A=authorities, V=votes
+            votes_by_nickname = {}  # nickname.lower() -> (vote_data, relay_count)
+            votes_by_fingerprint = {}  # fingerprint.upper() -> (vote_data, relay_count)
+            votes_by_prefix = {}  # fingerprint[:8].upper() -> (vote_data, relay_count)
+            
+            for vote_key, vote_data in votes.items():
+                relay_count = len(vote_data.get('relays', {})) if isinstance(vote_data, dict) else 0
+                vote_tuple = (vote_data, relay_count)
+                
+                vote_key_upper = vote_key.upper()
+                vote_key_lower = vote_key.lower()
+                
+                # Store by all possible lookup keys
+                votes_by_nickname[vote_key_lower] = vote_tuple
+                if len(vote_key) == 40:  # Full fingerprint
+                    votes_by_fingerprint[vote_key_upper] = vote_tuple
+                    votes_by_prefix[vote_key_upper[:8]] = vote_tuple
+                elif len(vote_key) == 8:  # Prefix only
+                    votes_by_prefix[vote_key_upper] = vote_tuple
+            
+            # Same optimization for bw_authorities
+            bw_auth_nicknames = {a.lower() for a in bw_authorities}
+            bw_auth_fingerprints = {a.upper() for a in bw_authorities if len(a) == 40}
+            bw_auth_prefixes = {a.upper()[:8] for a in bw_authorities if len(a) >= 8}
+            
             for authority in authorities:
                 auth_nickname = authority.get('nickname', '').lower()
                 auth_fingerprint = authority.get('fingerprint', '').upper()
                 auth_fp_prefix = auth_fingerprint[:8] if auth_fingerprint else ''
                 
-                # Check if this authority voted (has a vote file)
-                # Priority: 1) Full fingerprint match, 2) Fingerprint prefix match, 3) Nickname match
+                # Check if this authority voted - O(1) lookups
                 voted = False
                 relay_count = 0
-                for vote_key, vote_data in votes.items():
-                    vote_key_upper = vote_key.upper()
-                    # Try full fingerprint match first
-                    if auth_fingerprint and vote_key_upper == auth_fingerprint:
-                        voted = True
-                        relay_count = len(vote_data.get('relays', {})) if isinstance(vote_data, dict) else 0
-                        break
-                    # Try fingerprint prefix match (8 chars)
-                    if auth_fp_prefix and vote_key_upper == auth_fp_prefix:
-                        voted = True
-                        relay_count = len(vote_data.get('relays', {})) if isinstance(vote_data, dict) else 0
-                        break
-                    # Fall back to nickname match
-                    if vote_key.lower() == auth_nickname:
-                        voted = True
-                        relay_count = len(vote_data.get('relays', {})) if isinstance(vote_data, dict) else 0
-                        break
+                vote_tuple = (
+                    votes_by_fingerprint.get(auth_fingerprint) or
+                    votes_by_prefix.get(auth_fp_prefix) or
+                    votes_by_nickname.get(auth_nickname)
+                )
+                if vote_tuple:
+                    voted = True
+                    relay_count = vote_tuple[1]
                 
-                # Check if this authority is a bandwidth authority
-                # Same priority: fingerprint first, then nickname
-                is_bw = False
-                for bw_auth in bw_authorities:
-                    bw_auth_upper = bw_auth.upper()
-                    # Try full fingerprint match first
-                    if auth_fingerprint and bw_auth_upper == auth_fingerprint:
-                        is_bw = True
-                        break
-                    # Try fingerprint prefix match (8 chars)
-                    if auth_fp_prefix and bw_auth_upper == auth_fp_prefix:
-                        is_bw = True
-                        break
-                    # Fall back to nickname match
-                    if bw_auth.lower() == auth_nickname:
-                        is_bw = True
-                        break
+                # Check if this authority is a bandwidth authority - O(1) lookups
+                is_bw = (
+                    auth_fingerprint in bw_auth_fingerprints or
+                    auth_fp_prefix in bw_auth_prefixes or
+                    auth_nickname in bw_auth_nicknames
+                )
                 
                 authority['collector_data'] = {
                     'voted': voted,

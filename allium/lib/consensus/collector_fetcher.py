@@ -37,6 +37,9 @@ AUTHORITIES = {
     'F533C81CEF0BC0267857C99B2F471ADF249FA232': 'moria1',
 }
 
+# Pre-computed reverse lookup: name -> fingerprint (O(1) lookup instead of recreating each call)
+AUTHORITIES_BY_NAME = {name: fp for fp, name in AUTHORITIES.items()}
+
 # Authority country codes (based on known hosting locations)
 AUTHORITY_COUNTRIES = {
     'dannenberg': 'DE',    # Germany
@@ -49,6 +52,17 @@ AUTHORITY_COUNTRIES = {
     'gabelmoo': 'DE',      # Germany
     'moria1': 'US',        # USA
 }
+
+# ============================================================================
+# SHARED CONSTANTS - Avoid magic numbers throughout the codebase
+# ============================================================================
+# Bandwidth thresholds (bytes/second)
+AUTH_DIR_GUARD_BW_GUARANTEE = 2_000_000  # AuthDirGuardBWGuarantee: 2 MB/s minimum for Guard
+
+# Time thresholds (seconds)  
+GUARD_TK_DEFAULT = 691200       # 8 days - default Guard time-known requirement
+HSDIR_TK_DEFAULT = 864000       # 10 days - default HSDir time-known requirement
+SECONDS_PER_DAY = 86400
 
 COLLECTOR_BASE = 'https://collector.torproject.org'
 VOTES_PATH = '/recent/relay-descriptors/votes/'
@@ -101,7 +115,7 @@ class CollectorFetcher:
             'flag_thresholds': {},
             'bw_authorities': [],
             'ipv6_testing_authorities': [],
-            'fetched_at': datetime.utcnow().isoformat(),
+            'fetched_at': datetime.utcnow().isoformat(),  # Note: uses UTC for consistency
             'errors': [],
             'timings': {},
         }
@@ -541,16 +555,28 @@ class CollectorFetcher:
     
     def _build_relay_index(self):
         """
-        Build index of relay data from all votes.
+        Build index of relay data from all votes and extract flag thresholds in single pass.
         Indexed by fingerprint for O(1) lookup.
+        
+        Optimization: Combined with _extract_flag_thresholds to avoid iterating self.votes twice.
         """
         self.relay_index = {}
+        self.flag_thresholds = {}  # Extract thresholds in same loop
         
         for auth_name, vote_data in self.votes.items():
-            if not vote_data or 'relays' not in vote_data:
+            if not vote_data:
                 continue
             
-            for fingerprint, relay_data in vote_data['relays'].items():
+            # Extract flag thresholds (previously in separate _extract_flag_thresholds method)
+            if 'flag_thresholds' in vote_data:
+                self.flag_thresholds[auth_name] = vote_data['flag_thresholds']
+            
+            # Build relay index
+            relays = vote_data.get('relays')
+            if not relays:
+                continue
+            
+            for fingerprint, relay_data in relays.items():
                 if fingerprint not in self.relay_index:
                     self.relay_index[fingerprint] = {
                         'fingerprint': fingerprint,
@@ -569,7 +595,7 @@ class CollectorFetcher:
                     'mtbf': relay_data.get('mtbf'),
                     'ipv6_reachable': relay_data.get('ipv6_reachable'),
                     'ipv6_address': relay_data.get('ipv6_address'),
-                    'descriptor_published': relay_data.get('descriptor_published'),  # Timestamp from r line
+                    'descriptor_published': relay_data.get('descriptor_published'),
                 }
         
         # Add bandwidth measurements from bandwidth files
@@ -577,13 +603,16 @@ class CollectorFetcher:
             if fingerprint in self.relay_index:
                 self.relay_index[fingerprint]['bandwidth_measurements'] = bw_data
         
-        logger.info(f"Indexed {len(self.relay_index)} relays from votes")
+        logger.info(f"Indexed {len(self.relay_index)} relays from votes, {len(self.flag_thresholds)} authority thresholds")
     
     def _extract_flag_thresholds(self):
         """
         Extract flag thresholds from all authority votes.
+        NOTE: This is now handled in _build_relay_index for efficiency.
+        Kept for backwards compatibility but does nothing if already extracted.
         """
-        self.flag_thresholds = {}
+        if self.flag_thresholds:
+            return  # Already extracted in _build_relay_index
         
         for auth_name, vote_data in self.votes.items():
             if vote_data and 'flag_thresholds' in vote_data:
@@ -608,19 +637,17 @@ class CollectorFetcher:
         Format per-authority vote information for display.
         """
         authority_votes = []
-        
-        # Create reverse lookup for fingerprint -> name
-        name_to_fingerprint = {v: k for k, v in AUTHORITIES.items()}
+        relay_votes = relay.get('votes', {})
         
         for auth_name in sorted(AUTHORITIES.values()):
-            vote_info = relay.get('votes', {}).get(auth_name, {})
+            vote_info = relay_votes.get(auth_name, {})
             
             voted = bool(vote_info)
             flags = vote_info.get('flags', []) if voted else []
             
             authority_votes.append({
                 'authority': auth_name,
-                'fingerprint': name_to_fingerprint.get(auth_name, ''),
+                'fingerprint': AUTHORITIES_BY_NAME.get(auth_name, ''),  # Use pre-computed lookup
                 'voted': voted,
                 'flags': flags,
                 'bandwidth': vote_info.get('bandwidth'),
@@ -644,7 +671,7 @@ class CollectorFetcher:
         if seconds is None:
             return 'N/A'
         
-        days = seconds / 86400
+        days = seconds / SECONDS_PER_DAY
         if days >= 1:
             return f"{days:.1f} days"
         
@@ -666,9 +693,6 @@ class CollectorFetcher:
         5. Bandwidth >= AuthDirGuardBWGuarantee (2 MB/s default) OR in top 25% (>= guard-bw-inc-exits)
         6. Must have V2Dir flag
         """
-        # AuthDirGuardBWGuarantee default: 2 MB/s (2,000,000 bytes/s)
-        AUTH_DIR_GUARD_BW_GUARANTEE = 2_000_000
-        
         eligibility = {
             'guard': {'eligible_count': 0, 'details': []},
             'stable': {'eligible_count': 0, 'details': []},
@@ -683,7 +707,7 @@ class CollectorFetcher:
             
             # Guard flag eligibility
             guard_wfu_threshold = thresholds.get('guard-wfu', 0.98)
-            guard_tk_threshold = thresholds.get('guard-tk', 691200)  # 8 days default
+            guard_tk_threshold = thresholds.get('guard-tk', GUARD_TK_DEFAULT)
             guard_bw_top25_threshold = thresholds.get('guard-bw-inc-exits', 0)  # Top 25% cutoff
             
             relay_wfu = vote_info.get('wfu', 0)
@@ -694,7 +718,7 @@ class CollectorFetcher:
             # Guard BW check: bandwidth >= 2 MB/s (guarantee) OR in top 25% (>= guard-bw-inc-exits)
             # Per Tor dir-spec: "bandwidth is at least AuthDirGuardBWGuarantee (2 MB by default), 
             # OR its bandwidth is among the 25% fastest relays"
-            guard_bw_meets_guarantee = relay_measured_bw >= AUTH_DIR_GUARD_BW_GUARANTEE
+            guard_bw_meets_guarantee = relay_measured_bw >= AUTH_DIR_GUARD_BW_GUARANTEE  # Use module constant
             guard_bw_in_top25 = relay_measured_bw >= guard_bw_top25_threshold
             guard_bw_eligible = guard_bw_meets_guarantee or guard_bw_in_top25
             
@@ -755,7 +779,7 @@ class CollectorFetcher:
             
             # HSDir flag eligibility
             hsdir_wfu = thresholds.get('hsdir-wfu', 0.98)
-            hsdir_tk = thresholds.get('hsdir-tk', 691200)
+            hsdir_tk = thresholds.get('hsdir-tk', GUARD_TK_DEFAULT)
             
             hsdir_eligible = relay_wfu >= hsdir_wfu and relay_tk >= hsdir_tk
             if hsdir_eligible:

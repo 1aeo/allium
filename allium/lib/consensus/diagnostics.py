@@ -14,6 +14,22 @@ except ImportError:
     AUTHORITY_COUNTRIES = {}
 
 
+# ============================================================================
+# SHARED CONSTANTS - Avoid magic numbers throughout the codebase
+# ============================================================================
+# Bandwidth thresholds (bytes/second)
+GUARD_BW_GUARANTEE = 2_000_000   # AuthDirGuardBWGuarantee: 2 MB/s minimum for Guard
+FAST_BW_MINIMUM = 100_000       # 100 KB/s minimum for Fast flag
+
+# Time thresholds (seconds)
+GUARD_TK_DEFAULT = 691200       # 8 days - default Guard time-known requirement
+HSDIR_TK_DEFAULT = 864000       # 10 days - default HSDir time-known requirement
+SECONDS_PER_DAY = 86400
+
+# WFU thresholds (fractions)
+DEFAULT_WFU_THRESHOLD = 0.98    # 98% uptime for Guard/HSDir
+
+
 # Canonical flag ordering for consistent display across all relay pages
 # Order: Authority-first, then alphabetical for common flags
 FLAG_ORDER = [
@@ -31,20 +47,27 @@ FLAG_ORDER = [
     'Valid',      # Verified, allowed in network
 ]
 
+# Pre-computed map for O(1) flag ordering lookup (instead of O(n) list.index())
+FLAG_ORDER_MAP = {flag: idx for idx, flag in enumerate(FLAG_ORDER)}
+
 
 def _sort_flags(flags: list) -> list:
-    """Sort flags in canonical order for consistent display."""
+    """Sort flags in canonical order for consistent display. O(n log n) with O(1) key lookup."""
     if not flags:
         return []
     
-    def flag_order_key(flag):
-        try:
-            return FLAG_ORDER.index(flag)
-        except ValueError:
-            # Unknown flags go to the end, alphabetically
-            return len(FLAG_ORDER) + ord(flag[0].lower()) if flag else 999
-    
-    return sorted(flags, key=flag_order_key)
+    # Use pre-computed map for O(1) lookup instead of FLAG_ORDER.index() which is O(n)
+    max_order = len(FLAG_ORDER)
+    return sorted(flags, key=lambda f: FLAG_ORDER_MAP.get(f, max_order + ord(f[0].lower()) if f else 999))
+
+
+def _parse_wfu_threshold(value) -> Optional[float]:
+    """Parse WFU threshold value (can be string like '98%' or float like 0.98)."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return float(value.replace('%', '')) / 100
+    return float(value)
 
 
 def format_relay_diagnostics(diagnostics: dict, flag_thresholds: dict = None, current_flags: list = None, observed_bandwidth: int = 0) -> dict:
@@ -128,11 +151,8 @@ def _format_relay_values(diagnostics: dict, flag_thresholds: dict = None, observ
     total_authorities = diagnostics.get('total_authorities', 9)
     majority_required = diagnostics.get('majority_required', 5)
     
-    # Extract relay's values from first available authority
-    relay_wfu = None
-    relay_tk = None
-    relay_bw = None
-    
+    # Extract relay's values from first available authority (single pass)
+    relay_wfu = relay_tk = relay_bw = None
     for vote in authority_votes:
         if relay_wfu is None and vote.get('wfu') is not None:
             relay_wfu = vote['wfu']
@@ -140,16 +160,19 @@ def _format_relay_values(diagnostics: dict, flag_thresholds: dict = None, observ
             relay_tk = vote['tk']
         if relay_bw is None:
             relay_bw = vote.get('measured') or vote.get('bandwidth')
+        # Early exit if all values found
+        if relay_wfu is not None and relay_tk is not None and relay_bw is not None:
+            break
     
     # For Guard BW eligibility, use observed_bandwidth (from Onionoo descriptor)
     # NOT the vote's measured value (which is scaled for path selection)
     guard_bw_value = observed_bandwidth if observed_bandwidth else (relay_bw or 0)
     
-    # Calculate threshold ranges from flag_thresholds
-    guard_wfu_threshold = 0.98  # Default
-    guard_tk_threshold = 691200  # 8 days default
-    hsdir_wfu_threshold = 0.98
-    hsdir_tk_threshold = 864000  # 10 days default
+    # Calculate threshold ranges from flag_thresholds (single pass)
+    guard_wfu_threshold = DEFAULT_WFU_THRESHOLD
+    guard_tk_threshold = GUARD_TK_DEFAULT
+    hsdir_wfu_threshold = DEFAULT_WFU_THRESHOLD
+    hsdir_tk_threshold = HSDIR_TK_DEFAULT
     
     guard_bw_values = []
     stable_uptime_values = []
@@ -157,33 +180,33 @@ def _format_relay_values(diagnostics: dict, flag_thresholds: dict = None, observ
     fast_speed_values = []
     
     if flag_thresholds:
-        for auth_name, thresholds in flag_thresholds.items():
+        for thresholds in flag_thresholds.values():
+            # Guard thresholds
             if 'guard-wfu' in thresholds:
-                val = thresholds['guard-wfu']
-                if isinstance(val, str):
-                    val = float(val.replace('%', '')) / 100
-                guard_wfu_threshold = max(guard_wfu_threshold, val) if val else guard_wfu_threshold
+                val = _parse_wfu_threshold(thresholds['guard-wfu'])
+                if val:
+                    guard_wfu_threshold = max(guard_wfu_threshold, val)
             if 'guard-tk' in thresholds:
                 guard_tk_threshold = max(guard_tk_threshold, thresholds['guard-tk'] or 0)
             if 'guard-bw-inc-exits' in thresholds:
                 guard_bw_values.append(thresholds['guard-bw-inc-exits'])
+            # Stable thresholds
             if 'stable-uptime' in thresholds:
                 stable_uptime_values.append(thresholds['stable-uptime'])
             if 'stable-mtbf' in thresholds:
                 stable_mtbf_values.append(thresholds['stable-mtbf'])
+            # Fast thresholds
             if 'fast-speed' in thresholds:
                 fast_speed_values.append(thresholds['fast-speed'])
+            # HSDir thresholds
             if 'hsdir-wfu' in thresholds:
-                val = thresholds['hsdir-wfu']
-                if isinstance(val, str):
-                    val = float(val.replace('%', '')) / 100
-                hsdir_wfu_threshold = max(hsdir_wfu_threshold, val) if val else hsdir_wfu_threshold
+                val = _parse_wfu_threshold(thresholds['hsdir-wfu'])
+                if val:
+                    hsdir_wfu_threshold = max(hsdir_wfu_threshold, val)
             if 'hsdir-tk' in thresholds:
                 hsdir_tk_threshold = max(hsdir_tk_threshold, thresholds['hsdir-tk'] or 0)
     
     # Calculate Guard BW analysis using observed_bandwidth (actual bandwidth, not scaled consensus value)
-    # Guard BW requirement: >= 2MB/s (AuthDirGuardBWGuarantee) OR in top 25% (>= guard-bw-inc-exits)
-    GUARD_BW_GUARANTEE = 2_000_000  # 2 MB/s default
     guard_bw_range = _format_range(guard_bw_values, _format_bandwidth_value) if guard_bw_values else 'N/A'
     
     # Check if relay's observed bandwidth meets Guard eligibility
@@ -199,18 +222,14 @@ def _format_relay_values(diagnostics: dict, flag_thresholds: dict = None, observ
     # Calculate Stable analysis
     stable_meets_count = flag_eligibility.get('stable', {}).get('eligible_count', 0)
     stable_meets_all = stable_meets_count == total_authorities
-    stable_range = _format_range(stable_uptime_values, lambda x: f"{x/86400:.1f}d") if stable_uptime_values else 'N/A'
-    stable_mtbf_range = _format_range(stable_mtbf_values, lambda x: f"{x/86400:.1f}d") if stable_mtbf_values else 'N/A'
+    stable_range = _format_range(stable_uptime_values, lambda x: f"{x/SECONDS_PER_DAY:.1f}d") if stable_uptime_values else 'N/A'
+    stable_mtbf_range = _format_range(stable_mtbf_values, lambda x: f"{x/SECONDS_PER_DAY:.1f}d") if stable_mtbf_values else 'N/A'
     
     # Calculate Fast analysis using observed_bandwidth
-    # Fast flag requires: bandwidth in top 7/8ths OR >= fast-speed (typically ~100 KB/s)
-    # Like Guard, Fast uses observed_bandwidth from descriptor, not scaled consensus value
-    FAST_MINIMUM = 100_000  # 100 KB/s minimum per spec
     fast_range = _format_range(fast_speed_values, _format_bandwidth_value) if fast_speed_values else 'N/A'
     
     # Check if observed_bandwidth meets Fast eligibility
-    # Either >= minimum (100 KB/s) OR >= fast-speed threshold (which represents 7/8ths percentile)
-    fast_meets_minimum = guard_bw_value >= FAST_MINIMUM  # Uses observed_bandwidth (guard_bw_value)
+    fast_meets_minimum = guard_bw_value >= FAST_BW_MINIMUM
     fast_meets_threshold_count = sum(1 for fs in fast_speed_values if guard_bw_value >= fs) if fast_speed_values else 0
     fast_meets = fast_meets_minimum or fast_meets_threshold_count > 0
     fast_meets_all = fast_meets_minimum or (fast_meets_threshold_count == len(fast_speed_values) if fast_speed_values else False)
@@ -257,13 +276,13 @@ def _format_relay_values(diagnostics: dict, flag_thresholds: dict = None, observ
         'stable_mtbf_range': stable_mtbf_range,
         'stable_mtbf_meets_all': stable_meets_all,  # Same count for simplicity
         'stable_mtbf_meets_count': stable_meets_count,
-        'mtbf_display': f"{relay_tk / 86400:.0f} days" if relay_tk else 'N/A',
+        'mtbf_display': f"{relay_tk / SECONDS_PER_DAY:.0f} days" if relay_tk else 'N/A',
         
         # Fast values - use observed_bandwidth like Guard
         'fast_speed': guard_bw_value,  # Use observed_bandwidth
         'fast_speed_display': _format_bandwidth_value(guard_bw_value),
-        'fast_minimum': FAST_MINIMUM,
-        'fast_minimum_display': _format_bandwidth_value(FAST_MINIMUM),
+        'fast_minimum': FAST_BW_MINIMUM,
+        'fast_minimum_display': _format_bandwidth_value(FAST_BW_MINIMUM),
         'fast_range': fast_range,
         'fast_meets_minimum': fast_meets_minimum,
         'fast_meets_all': fast_meets_all,
@@ -310,39 +329,25 @@ def _format_authority_table_enhanced(diagnostics: dict, flag_thresholds: dict = 
     """
     authority_votes = diagnostics.get('authority_votes', [])
     
-    # First pass: compute flag consensus across all authorities
-    flag_counts = {}  # flag_name -> count of authorities assigning it
-    for vote in authority_votes:
-        if vote.get('voted'):
-            for flag in vote.get('flags', []):
-                flag_counts[flag] = flag_counts.get(flag, 0) + 1
-    
-    total_voting = sum(1 for v in authority_votes if v.get('voted'))
-    
-    # Determine unanimous vs partial flags
-    unanimous_flags = {f for f, c in flag_counts.items() if c == total_voting}
-    partial_flags = {f for f, c in flag_counts.items() if 0 < c < total_voting}
+    # Compute flag consensus using shared function (avoid duplicate logic)
+    consensus = compute_flag_consensus(authority_votes)
+    unanimous_flags = consensus['unanimous_flags']
+    partial_flags = consensus['partial_flags']
     
     rows = []
     for vote in authority_votes:
         auth_name = vote.get('authority', 'Unknown')
         thresholds = flag_thresholds.get(auth_name, {}) if flag_thresholds else {}
         
-        # Get threshold values for this authority
-        guard_wfu_threshold = thresholds.get('guard-wfu', 0.98)
-        if isinstance(guard_wfu_threshold, str):
-            guard_wfu_threshold = float(guard_wfu_threshold.replace('%', '')) / 100
-        guard_tk_threshold = thresholds.get('guard-tk', 691200)
+        # Get threshold values for this authority using helper function
+        guard_wfu_threshold = _parse_wfu_threshold(thresholds.get('guard-wfu')) or DEFAULT_WFU_THRESHOLD
+        guard_tk_threshold = thresholds.get('guard-tk', GUARD_TK_DEFAULT)
         guard_bw_top25_threshold = thresholds.get('guard-bw-inc-exits', 0)  # Top 25% cutoff
-        # AuthDirGuardBWGuarantee: 2 MB/s default - relays above this can be Guard even if not in top 25%
-        GUARD_BW_GUARANTEE = 2_000_000
         stable_threshold = thresholds.get('stable-uptime', 0)
         stable_mtbf_threshold = thresholds.get('stable-mtbf', 0)
         fast_threshold = thresholds.get('fast-speed', 0)
-        hsdir_tk_threshold = thresholds.get('hsdir-tk', 864000)
-        hsdir_wfu_threshold = thresholds.get('hsdir-wfu', 0.98)
-        if isinstance(hsdir_wfu_threshold, str):
-            hsdir_wfu_threshold = float(hsdir_wfu_threshold.replace('%', '')) / 100
+        hsdir_tk_threshold = thresholds.get('hsdir-tk', HSDIR_TK_DEFAULT)
+        hsdir_wfu_threshold = _parse_wfu_threshold(thresholds.get('hsdir-wfu')) or DEFAULT_WFU_THRESHOLD
         
         # Relay's measured values from this authority
         relay_wfu = vote.get('wfu')
@@ -394,8 +399,8 @@ def _format_authority_table_enhanced(diagnostics: dict, flag_thresholds: dict = 
             
             # TK: measured value | threshold
             'tk': relay_tk,
-            'tk_display': f"{relay_tk / 86400:.1f}d" if relay_tk else 'N/A',
-            'tk_threshold_display': f"{guard_tk_threshold / 86400:.0f}d",
+            'tk_display': f"{relay_tk / SECONDS_PER_DAY:.1f}d" if relay_tk else 'N/A',
+            'tk_threshold_display': f"{guard_tk_threshold / SECONDS_PER_DAY:.0f}d",
             'tk_meets': relay_tk and relay_tk >= guard_tk_threshold,
             'guard_tk_threshold': guard_tk_threshold,
             
@@ -413,9 +418,9 @@ def _format_authority_table_enhanced(diagnostics: dict, flag_thresholds: dict = 
             
             # Stable: measured MTBF | threshold  
             'stable_mtbf': relay_mtbf,
-            'stable_mtbf_display': f"{relay_mtbf / 86400:.1f}d" if relay_mtbf else 'N/A',
+            'stable_mtbf_display': f"{relay_mtbf / SECONDS_PER_DAY:.1f}d" if relay_mtbf else 'N/A',
             'stable_threshold': stable_mtbf_threshold,
-            'stable_threshold_display': f"{stable_mtbf_threshold / 86400:.1f}d" if stable_mtbf_threshold else 'N/A',
+            'stable_threshold_display': f"{stable_mtbf_threshold / SECONDS_PER_DAY:.1f}d" if stable_mtbf_threshold else 'N/A',
             'stable_meets': relay_mtbf and relay_mtbf >= stable_mtbf_threshold if stable_mtbf_threshold else True,
             
             # Fast: uses observed_bandwidth (from descriptor), NOT scaled consensus value
@@ -424,12 +429,12 @@ def _format_authority_table_enhanced(diagnostics: dict, flag_thresholds: dict = 
             'fast_speed_display': _format_bandwidth_value(observed_bandwidth),
             'fast_threshold': fast_threshold,
             'fast_threshold_display': _format_bandwidth_value(fast_threshold),
-            'fast_meets': observed_bandwidth >= fast_threshold if fast_threshold else (observed_bandwidth >= 100_000),
+            'fast_meets': observed_bandwidth >= fast_threshold if fast_threshold else (observed_bandwidth >= FAST_BW_MINIMUM),
             
             # HSDir TK: measured | threshold
             'hsdir_tk_threshold': hsdir_tk_threshold,
-            'hsdir_tk_value_display': f"{relay_tk / 86400:.1f}d" if relay_tk else 'N/A',
-            'hsdir_tk_threshold_display': f"{hsdir_tk_threshold / 86400:.1f}d" if hsdir_tk_threshold else 'N/A',
+            'hsdir_tk_value_display': f"{relay_tk / SECONDS_PER_DAY:.1f}d" if relay_tk else 'N/A',
+            'hsdir_tk_threshold_display': f"{hsdir_tk_threshold / SECONDS_PER_DAY:.1f}d" if hsdir_tk_threshold else 'N/A',
             'hsdir_tk_meets': relay_tk and relay_tk >= hsdir_tk_threshold,
             'hsdir_wfu_threshold': hsdir_wfu_threshold,
             
@@ -543,53 +548,6 @@ def _format_consensus_status(diagnostics: dict) -> dict:
         }
 
 
-def _format_authority_table(diagnostics: dict) -> List[dict]:
-    """Format authority votes into table rows."""
-    authority_votes = diagnostics.get('authority_votes', [])
-    
-    rows = []
-    for vote in authority_votes:
-        row = {
-            'authority': vote.get('authority', 'Unknown'),
-            'voted': vote.get('voted', False),
-            'voted_display': 'Yes' if vote.get('voted') else 'No',
-            'voted_class': 'success' if vote.get('voted') else 'danger',
-            
-            # Flags
-            'flags': vote.get('flags', []),
-            'flags_display': ', '.join(vote.get('flags', [])) or 'None',
-            
-            # Bandwidth
-            'bandwidth': vote.get('bandwidth'),
-            'bandwidth_display': _format_bandwidth_value(vote.get('bandwidth')),
-            'measured': vote.get('measured'),
-            'measured_display': _format_bandwidth_value(vote.get('measured')),
-            'is_bw_authority': vote.get('is_bw_authority', False),
-            
-            # WFU (Weighted Fractional Uptime)
-            'wfu': vote.get('wfu'),
-            'wfu_display': vote.get('wfu_display', 'N/A'),
-            'wfu_class': _get_wfu_class(vote.get('wfu')),
-            
-            # TK (Time Known)
-            'tk': vote.get('tk'),
-            'tk_display': vote.get('tk_display', 'N/A'),
-            'tk_class': _get_tk_class(vote.get('tk')),
-            
-            # Reachability
-            'ipv4_reachable': vote.get('ipv4_reachable', False),
-            'ipv4_display': 'Yes' if vote.get('ipv4_reachable') else 'No',
-            'ipv4_class': 'success' if vote.get('ipv4_reachable') else 'danger',
-            
-            'ipv6_reachable': vote.get('ipv6_reachable'),
-            'ipv6_display': _format_ipv6_status(vote.get('ipv6_reachable'), vote.get('ipv6_address')),
-            'ipv6_class': _get_ipv6_class(vote.get('ipv6_reachable')),
-        }
-        rows.append(row)
-    
-    return rows
-
-
 def _format_flag_summary(diagnostics: dict, observed_bandwidth: int = 0) -> dict:
     """
     Format flag eligibility summary.
@@ -602,11 +560,9 @@ def _format_flag_summary(diagnostics: dict, observed_bandwidth: int = 0) -> dict
     total_authorities = diagnostics.get('total_authorities', 9)
     
     # Guard and Fast both use observed_bandwidth, not the scaled vote values
-    GUARD_BW_GUARANTEE = 2_000_000  # 2 MB/s
-    FAST_MINIMUM = 100_000  # 100 KB/s
     bw_value = observed_bandwidth if observed_bandwidth else 0
     guard_bw_eligible = bw_value >= GUARD_BW_GUARANTEE
-    fast_bw_eligible = bw_value >= FAST_MINIMUM  # Fast minimum is 100 KB/s
+    fast_bw_eligible = bw_value >= FAST_BW_MINIMUM
     
     summary = {}
     
@@ -752,7 +708,6 @@ def _identify_issues(diagnostics: dict, current_flags: list = None, observed_ban
     
     # Check Guard flag eligibility using observed_bandwidth
     # Guard BW requires >= 2MB/s (AuthDirGuardBWGuarantee) OR in top 25%
-    GUARD_BW_GUARANTEE = 2_000_000  # 2 MB/s
     has_guard = 'Guard' in current_flags
     guard_bw_eligible = observed_bandwidth >= GUARD_BW_GUARANTEE if observed_bandwidth else False
     
@@ -851,7 +806,7 @@ def _format_threshold_value(key: str, value: Any) -> str:
     
     # Format time values (in seconds)
     if 'uptime' in key or 'tk' in key or 'mtbf' in key:
-        days = value / 86400
+        days = value / SECONDS_PER_DAY
         if days >= 1:
             return f"{days:.1f} days"
         hours = value / 3600
@@ -911,8 +866,8 @@ def _get_tk_class(tk: Optional[int]) -> str:
     """Get CSS class for Time Known value."""
     if tk is None:
         return 'muted'
-    days = tk / 86400
-    if days >= 8:
+    days = tk / SECONDS_PER_DAY
+    if days >= 8:  # 8 days = Guard TK requirement
         return 'success'
     elif days >= 4:
         return 'warning'

@@ -310,7 +310,9 @@ class TestIdentifyIssues:
                 'guard': {'eligible_count': 9},
             },
         }
-        issues = _identify_issues(diagnostics)
+        # Pass current_flags with 'Guard' to avoid the "not eligible for Guard" warning
+        # Pass observed_bandwidth >= 2MB/s to meet Guard BW requirement
+        issues = _identify_issues(diagnostics, current_flags=['Guard'], observed_bandwidth=3_000_000)
         assert len(issues) == 0
     
     def test_not_in_consensus_issue(self):
@@ -493,7 +495,8 @@ class TestFormatAuthorityTableEnhanced:
         moria1_row = result[0]
         
         # Should have threshold comparisons
-        assert 'guard_bw_threshold' in moria1_row
+        # Note: guard_bw_threshold was renamed to guard_bw_guarantee and guard_bw_top25_threshold
+        assert 'guard_bw_guarantee' in moria1_row
         assert 'guard_bw_meets' in moria1_row
         assert 'stable_threshold' in moria1_row
         assert 'fast_threshold' in moria1_row
