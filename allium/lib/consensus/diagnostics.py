@@ -3,6 +3,10 @@ File: diagnostics.py
 
 Format diagnostic data for templates.
 Provides display-ready formatting of consensus troubleshooting data.
+
+OPTIMIZATION: Leverages existing utilities from the codebase:
+- BandwidthFormatter from bandwidth_formatter.py for bandwidth display
+- format_percentage_from_fraction from string_utils.py for WFU percentages
 """
 
 from typing import Dict, List, Optional, Any
@@ -22,6 +26,26 @@ except ImportError:
     HSDIR_TK_DEFAULT = 864000
     SECONDS_PER_DAY = 86400
 
+# Reuse existing bandwidth formatter instead of duplicating logic
+try:
+    from ..bandwidth_formatter import BandwidthFormatter
+    _bw_formatter = BandwidthFormatter(use_bits=False)
+except ImportError:
+    _bw_formatter = None
+
+# Reuse existing percentage formatter from string_utils
+try:
+    from ..string_utils import format_percentage_from_fraction
+except ImportError:
+    # Fallback if import fails
+    def format_percentage_from_fraction(value, decimals=1, fallback='N/A'):
+        if value is None:
+            return fallback
+        try:
+            return f"{float(value) * 100:.{decimals}f}%"
+        except (ValueError, TypeError):
+            return fallback
+
 
 # ============================================================================
 # MODULE-SPECIFIC CONSTANTS - Not shared with collector_fetcher
@@ -32,6 +56,24 @@ FAST_BW_MINIMUM = 100_000       # 100 KB/s minimum for Fast flag
 
 # WFU thresholds (fractions)
 DEFAULT_WFU_THRESHOLD = 0.98    # 98% uptime for Guard/HSDir
+
+
+# ============================================================================
+# LOCAL HELPER FUNCTIONS - Reduce code duplication within this module
+# ============================================================================
+def _format_days(seconds, decimals=1, suffix='d', fallback='N/A'):
+    """Format seconds as days. Consolidates repeated SECONDS_PER_DAY division."""
+    if seconds is None:
+        return fallback
+    days = seconds / SECONDS_PER_DAY
+    return f"{days:.{decimals}f}{suffix}"
+
+
+def _format_wfu_display(wfu, decimals=1, fallback='N/A'):
+    """Format WFU (weighted fractional uptime) as percentage using existing formatter."""
+    if wfu is None:
+        return fallback
+    return format_percentage_from_fraction(wfu, decimals, fallback)
 
 
 # Canonical flag ordering for consistent display across all relay pages
@@ -226,8 +268,8 @@ def _format_relay_values(diagnostics: dict, flag_thresholds: dict = None, observ
     # Calculate Stable analysis
     stable_meets_count = flag_eligibility.get('stable', {}).get('eligible_count', 0)
     stable_meets_all = stable_meets_count == total_authorities
-    stable_range = _format_range(stable_uptime_values, lambda x: f"{x/SECONDS_PER_DAY:.1f}d") if stable_uptime_values else 'N/A'
-    stable_mtbf_range = _format_range(stable_mtbf_values, lambda x: f"{x/SECONDS_PER_DAY:.1f}d") if stable_mtbf_values else 'N/A'
+    stable_range = _format_range(stable_uptime_values, _format_days) if stable_uptime_values else 'N/A'
+    stable_mtbf_range = _format_range(stable_mtbf_values, _format_days) if stable_mtbf_values else 'N/A'
     
     # Calculate Fast analysis using observed_bandwidth
     fast_range = _format_range(fast_speed_values, _format_bandwidth_value) if fast_speed_values else 'N/A'
@@ -248,16 +290,16 @@ def _format_relay_values(diagnostics: dict, flag_thresholds: dict = None, observ
     return {
         # WFU values
         'wfu': relay_wfu,
-        'wfu_display': f"{relay_wfu * 100:.1f}%" if relay_wfu else 'N/A',
+        'wfu_display': _format_wfu_display(relay_wfu),
         'wfu_meets': relay_wfu and relay_wfu >= guard_wfu_threshold,
         'guard_wfu_threshold': guard_wfu_threshold,
         
         # Time Known values
         'tk': relay_tk,
-        'tk_display': f"{relay_tk / 86400:.1f} days" if relay_tk else 'N/A',
+        'tk_display': _format_days(relay_tk, suffix=' days'),
         'tk_meets': relay_tk and relay_tk >= guard_tk_threshold,
         'guard_tk_threshold': guard_tk_threshold,
-        'tk_days_needed': (guard_tk_threshold - (relay_tk or 0)) / 86400 if relay_tk and relay_tk < guard_tk_threshold else 0,
+        'tk_days_needed': (guard_tk_threshold - (relay_tk or 0)) / SECONDS_PER_DAY if relay_tk and relay_tk < guard_tk_threshold else 0,
         
         # Guard BW values - use observed_bandwidth for eligibility (actual bandwidth, not scaled)
         # Note: relay_bw is the scaled consensus value, guard_bw_value is observed_bandwidth
@@ -280,7 +322,7 @@ def _format_relay_values(diagnostics: dict, flag_thresholds: dict = None, observ
         'stable_mtbf_range': stable_mtbf_range,
         'stable_mtbf_meets_all': stable_meets_all,  # Same count for simplicity
         'stable_mtbf_meets_count': stable_meets_count,
-        'mtbf_display': f"{relay_tk / SECONDS_PER_DAY:.0f} days" if relay_tk else 'N/A',
+        'mtbf_display': _format_days(relay_tk, decimals=0, suffix=' days'),
         
         # Fast values - use observed_bandwidth like Guard
         'fast_speed': guard_bw_value,  # Use observed_bandwidth
@@ -297,7 +339,7 @@ def _format_relay_values(diagnostics: dict, flag_thresholds: dict = None, observ
         'hsdir_tk_threshold': hsdir_tk_threshold,
         'hsdir_wfu_meets': relay_wfu and relay_wfu >= hsdir_wfu_threshold,
         'hsdir_tk_meets': relay_tk and relay_tk >= hsdir_tk_threshold,
-        'hsdir_tk_days_needed': (hsdir_tk_threshold - (relay_tk or 0)) / 86400 if relay_tk and relay_tk < hsdir_tk_threshold else 0,
+        'hsdir_tk_days_needed': (hsdir_tk_threshold - (relay_tk or 0)) / SECONDS_PER_DAY if relay_tk and relay_tk < hsdir_tk_threshold else 0,
         
         # Reachability values
         'ipv4_reachable_count': ipv4_reachable_count,
@@ -396,15 +438,15 @@ def _format_authority_table_enhanced(diagnostics: dict, flag_thresholds: dict = 
             
             # WFU: measured value | threshold
             'wfu': relay_wfu,
-            'wfu_display': f"{relay_wfu * 100:.1f}%" if relay_wfu else 'N/A',
-            'wfu_threshold_display': f"{guard_wfu_threshold * 100:.0f}%",
+            'wfu_display': _format_wfu_display(relay_wfu),
+            'wfu_threshold_display': _format_wfu_display(guard_wfu_threshold, decimals=0),
             'wfu_meets': relay_wfu and relay_wfu >= guard_wfu_threshold,
             'guard_wfu_threshold': guard_wfu_threshold,
             
             # TK: measured value | threshold
             'tk': relay_tk,
-            'tk_display': f"{relay_tk / SECONDS_PER_DAY:.1f}d" if relay_tk else 'N/A',
-            'tk_threshold_display': f"{guard_tk_threshold / SECONDS_PER_DAY:.0f}d",
+            'tk_display': _format_days(relay_tk),
+            'tk_threshold_display': _format_days(guard_tk_threshold, decimals=0),
             'tk_meets': relay_tk and relay_tk >= guard_tk_threshold,
             'guard_tk_threshold': guard_tk_threshold,
             
@@ -422,9 +464,9 @@ def _format_authority_table_enhanced(diagnostics: dict, flag_thresholds: dict = 
             
             # Stable: measured MTBF | threshold  
             'stable_mtbf': relay_mtbf,
-            'stable_mtbf_display': f"{relay_mtbf / SECONDS_PER_DAY:.1f}d" if relay_mtbf else 'N/A',
+            'stable_mtbf_display': _format_days(relay_mtbf),
             'stable_threshold': stable_mtbf_threshold,
-            'stable_threshold_display': f"{stable_mtbf_threshold / SECONDS_PER_DAY:.1f}d" if stable_mtbf_threshold else 'N/A',
+            'stable_threshold_display': _format_days(stable_mtbf_threshold),
             'stable_meets': relay_mtbf and relay_mtbf >= stable_mtbf_threshold if stable_mtbf_threshold else True,
             
             # Fast: uses observed_bandwidth (from descriptor), NOT scaled consensus value
@@ -437,8 +479,8 @@ def _format_authority_table_enhanced(diagnostics: dict, flag_thresholds: dict = 
             
             # HSDir TK: measured | threshold
             'hsdir_tk_threshold': hsdir_tk_threshold,
-            'hsdir_tk_value_display': f"{relay_tk / SECONDS_PER_DAY:.1f}d" if relay_tk else 'N/A',
-            'hsdir_tk_threshold_display': f"{hsdir_tk_threshold / SECONDS_PER_DAY:.1f}d" if hsdir_tk_threshold else 'N/A',
+            'hsdir_tk_value_display': _format_days(relay_tk),
+            'hsdir_tk_threshold_display': _format_days(hsdir_tk_threshold),
             'hsdir_tk_meets': relay_tk and relay_tk >= hsdir_tk_threshold,
             'hsdir_wfu_threshold': hsdir_wfu_threshold,
             
@@ -804,25 +846,25 @@ def _format_threshold_name(key: str) -> str:
 
 
 def _format_threshold_value(key: str, value: Any) -> str:
-    """Format threshold value for display."""
+    """Format threshold value for display. Uses shared helper functions."""
     if value is None:
         return 'N/A'
     
-    # Format time values (in seconds)
+    # Format time values (in seconds) using _format_days helper
     if 'uptime' in key or 'tk' in key or 'mtbf' in key:
         days = value / SECONDS_PER_DAY
         if days >= 1:
-            return f"{days:.1f} days"
+            return _format_days(value, suffix=' days')
         hours = value / 3600
         return f"{hours:.1f} hours"
     
-    # Format WFU (fraction to percentage)
+    # Format WFU (fraction to percentage) using shared formatter
     if 'wfu' in key:
         if isinstance(value, float) and value <= 1:
-            return f"{value * 100:.1f}%"
+            return _format_wfu_display(value)
         return f"{value}%"
     
-    # Format bandwidth values
+    # Format bandwidth values using shared formatter
     if 'bw' in key or 'speed' in key:
         return _format_bandwidth_value(value)
     
@@ -830,18 +872,32 @@ def _format_threshold_value(key: str, value: Any) -> str:
 
 
 def _format_bandwidth_value(value: Any) -> str:
-    """Format bandwidth value for display."""
+    """
+    Format bandwidth value for display.
+    Leverages existing BandwidthFormatter for KB/s and above.
+    Handles sub-KB values directly (BandwidthFormatter doesn't support B/s).
+    """
     if value is None:
         return 'N/A'
     
+    # Handle sub-KB values directly (BandwidthFormatter starts at KB/s)
+    if value < 1000:
+        return f"{value} B/s"
+    
+    # Use existing BandwidthFormatter for KB/s and above (avoids code duplication)
+    if _bw_formatter is not None:
+        try:
+            return _bw_formatter.format_bandwidth_with_suffix(value, decimal_places=1)
+        except (ValueError, TypeError):
+            pass
+    
+    # Manual fallback if BandwidthFormatter not available
     if value >= 1000000000:
         return f"{value / 1000000000:.1f} GB/s"
     elif value >= 1000000:
         return f"{value / 1000000:.1f} MB/s"
-    elif value >= 1000:
-        return f"{value / 1000:.1f} KB/s"
     else:
-        return f"{value} B/s"
+        return f"{value / 1000:.1f} KB/s"
 
 
 def _format_ipv6_status(reachable: Optional[bool], address: Optional[str]) -> str:
