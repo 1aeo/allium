@@ -16,8 +16,10 @@ from typing import Dict, List, Optional, Any
 try:
     from .collector_fetcher import (
         AUTHORITY_COUNTRIES,
-        get_authority_names,       # Dynamic function - prefers Onionoo data
-        get_authority_count,       # Dynamic function - prefers Onionoo data
+        get_authority_names,           # All authorities (10) - for display
+        get_authority_count,           # All authorities count (10)
+        get_voting_authority_names,    # Voting authorities (9) - for consensus
+        get_voting_authority_count,    # Voting authorities count (9)
         GUARD_TK_DEFAULT,
         HSDIR_TK_DEFAULT, 
         SECONDS_PER_DAY,
@@ -27,16 +29,21 @@ except ImportError:
     # Fallback functions when import fails
     def get_authority_names():
         return ['bastet', 'dannenberg', 'dizum', 'faravahar', 'gabelmoo', 
-                'longclaw', 'maatuska', 'moria1', 'tor26']
+                'longclaw', 'maatuska', 'moria1', 'Serge', 'tor26']
     def get_authority_count():
+        return 10
+    def get_voting_authority_names():
+        return ['bastet', 'dannenberg', 'dizum', 'faravahar', 'gabelmoo', 
+                'longclaw', 'maatuska', 'moria1', 'tor26']
+    def get_voting_authority_count():
         return 9
     GUARD_TK_DEFAULT = 691200
     HSDIR_TK_DEFAULT = 864000
     SECONDS_PER_DAY = 86400
 
-# Note: DEFAULT_AUTHORITY_COUNT and AUTHORITY_NAMES are no longer used as module-level
-# variables. Use get_authority_count() and get_authority_names() functions instead,
-# which prefer Onionoo data over hardcoded fallback values.
+# Note: For consensus-related calculations (majority, reachability), use get_voting_authority_count() (9).
+# For display of all authorities, use get_authority_count() (10).
+# Serge has Authority flag but doesn't vote.
 
 # Reuse existing bandwidth formatter instead of duplicating logic
 try:
@@ -163,7 +170,7 @@ def format_relay_diagnostics(diagnostics: dict, flag_thresholds: dict = None, cu
         'fingerprint': diagnostics.get('fingerprint', ''),
         'in_consensus': diagnostics.get('in_consensus', False),
         'vote_count': diagnostics.get('vote_count', 0),
-        'total_authorities': diagnostics.get('total_authorities', get_authority_count()),
+        'total_authorities': diagnostics.get('total_authorities', get_voting_authority_count()),
         'majority_required': diagnostics.get('majority_required', 5),
         
         # Consensus status display
@@ -206,7 +213,7 @@ def _format_relay_values(diagnostics: dict, flag_thresholds: dict = None, observ
     authority_votes = diagnostics.get('authority_votes', [])
     flag_eligibility = diagnostics.get('flag_eligibility', {})
     reachability = diagnostics.get('reachability', {})
-    total_authorities = diagnostics.get('total_authorities', get_authority_count())
+    total_authorities = diagnostics.get('total_authorities', get_voting_authority_count())
     majority_required = diagnostics.get('majority_required', 5)
     
     # Extract relay's values from first available authority (single pass)
@@ -587,7 +594,7 @@ def _format_consensus_status(diagnostics: dict) -> dict:
     """Format consensus status display."""
     in_consensus = diagnostics.get('in_consensus', False)
     vote_count = diagnostics.get('vote_count', 0)
-    total = diagnostics.get('total_authorities', get_authority_count())
+    total = diagnostics.get('total_authorities', get_voting_authority_count())
     majority = diagnostics.get('majority_required', 5)
     
     if in_consensus:
@@ -615,7 +622,7 @@ def _format_flag_summary(diagnostics: dict, observed_bandwidth: int = 0) -> dict
         observed_bandwidth: Relay's actual observed bandwidth (for Guard BW eligibility)
     """
     flag_eligibility = diagnostics.get('flag_eligibility', {})
-    total_authorities = diagnostics.get('total_authorities', get_authority_count())
+    total_authorities = diagnostics.get('total_authorities', get_voting_authority_count())
     
     # Guard and Fast both use observed_bandwidth, not the scaled vote values
     bw_value = observed_bandwidth if observed_bandwidth else 0
@@ -674,7 +681,7 @@ def _format_reachability_summary(diagnostics: dict) -> dict:
     
     ipv4_count = reachability.get('ipv4_reachable_count', 0)
     ipv6_count = reachability.get('ipv6_reachable_count', 0)
-    total = reachability.get('total_authorities', get_authority_count())
+    total = reachability.get('total_authorities', get_voting_authority_count())
     ipv6_not_tested = reachability.get('ipv6_not_tested_authorities', [])
     ipv6_tested_total = total - len(ipv6_not_tested)  # Only count authorities that test IPv6
     
@@ -738,7 +745,7 @@ def _identify_issues(diagnostics: dict, current_flags: list = None, observed_ban
     # Check consensus status
     if not diagnostics.get('in_consensus'):
         vote_count = diagnostics.get('vote_count', 0)
-        total = diagnostics.get('total_authorities', get_authority_count())
+        total = diagnostics.get('total_authorities', get_voting_authority_count())
         issues.append({
             'severity': 'error',
             'category': 'consensus',
@@ -750,7 +757,7 @@ def _identify_issues(diagnostics: dict, current_flags: list = None, observed_ban
     # Check reachability
     reachability = diagnostics.get('reachability', {})
     ipv4_count = reachability.get('ipv4_reachable_count', 0)
-    auth_count = get_authority_count()  # Dynamic from Onionoo when available
+    auth_count = get_voting_authority_count()  # Use voting authorities (9) for consensus
     majority_threshold = (auth_count // 2) + 1  # Need majority for consensus
     if ipv4_count < majority_threshold:
         # Use get_authority_names() - prefers Onionoo data over hardcoded fallback

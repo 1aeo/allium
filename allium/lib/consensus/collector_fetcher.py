@@ -25,9 +25,10 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 # FALLBACK AUTHORITY DATA - Only used when Onionoo data is unavailable
 # ============================================================================
-# These are V3 identity key fingerprints (signing keys) used in CollecTor vote filenames.
-# NOTE: These are DIFFERENT from Onionoo relay fingerprints - we need this mapping
-# to parse CollecTor vote filenames regardless of Onionoo availability.
+
+# V3 identity key fingerprints (signing keys) used in CollecTor vote filenames.
+# NOTE: These are DIFFERENT from Onionoo relay fingerprints.
+# Only includes the 9 VOTING authorities (Serge has Authority flag but doesn't vote).
 _FALLBACK_SIGNING_KEY_TO_NAME = {
     '0232AF901C31A04EE9848595AF9BB7620D4C5B2E': 'dannenberg',
     '23D15D965BC35114467363C165C4F724B64B4F66': 'longclaw',
@@ -40,9 +41,18 @@ _FALLBACK_SIGNING_KEY_TO_NAME = {
     'F533C81CEF0BC0267857C99B2F471ADF249FA232': 'moria1',
 }
 
-# Fallback authority names (used only when Onionoo is unavailable)
-_FALLBACK_AUTHORITY_NAMES = sorted(_FALLBACK_SIGNING_KEY_TO_NAME.values())
-_FALLBACK_AUTHORITY_COUNT = len(_FALLBACK_SIGNING_KEY_TO_NAME)
+# All 10 directory authorities (includes Serge who has Authority flag but doesn't vote)
+# Used as fallback when Onionoo is unavailable
+# NOTE: Sorted case-insensitively for consistent display
+_FALLBACK_ALL_AUTHORITY_NAMES = sorted([
+    'bastet', 'dannenberg', 'dizum', 'faravahar', 'gabelmoo',
+    'longclaw', 'maatuska', 'moria1', 'Serge', 'tor26'
+], key=str.lower)
+_FALLBACK_AUTHORITY_COUNT = len(_FALLBACK_ALL_AUTHORITY_NAMES)  # 10
+
+# Only voting authorities (9) - for consensus-related calculations
+_FALLBACK_VOTING_AUTHORITY_NAMES = sorted(_FALLBACK_SIGNING_KEY_TO_NAME.values())
+_FALLBACK_VOTING_AUTHORITY_COUNT = len(_FALLBACK_SIGNING_KEY_TO_NAME)  # 9
 
 # Authority country codes (based on known hosting locations)
 AUTHORITY_COUNTRIES = {
@@ -55,6 +65,7 @@ AUTHORITY_COUNTRIES = {
     'dizum': 'NL',         # Netherlands
     'gabelmoo': 'DE',      # Germany
     'moria1': 'US',        # USA
+    'Serge': 'US',         # USA (non-voting authority)
 }
 
 
@@ -109,10 +120,10 @@ class AuthorityRegistry:
         return len(authorities)
     
     def get_authority_names(self) -> List[str]:
-        """Get sorted list of authority names (Onionoo first, fallback if unavailable)."""
+        """Get sorted list of all authority names (Onionoo first, fallback if unavailable)."""
         if self._authority_names:
             return self._authority_names
-        return _FALLBACK_AUTHORITY_NAMES
+        return _FALLBACK_ALL_AUTHORITY_NAMES
     
     def get_authority_count(self) -> int:
         """Get number of authorities (Onionoo first, fallback if unavailable)."""
@@ -128,11 +139,25 @@ class AuthorityRegistry:
         """Check if using fallback data (Onionoo not available)."""
         return self._using_fallback
     
+    def get_voting_authority_names(self) -> List[str]:
+        """
+        Get sorted list of VOTING authority names (9 authorities).
+        NOTE: Serge has Authority flag but doesn't vote.
+        """
+        # If we have Onionoo data, filter out non-voting authorities
+        # For now, we use the signing key mapping as source of truth for voters
+        return _FALLBACK_VOTING_AUTHORITY_NAMES
+    
+    def get_voting_authority_count(self) -> int:
+        """Get number of voting authorities (9)."""
+        return _FALLBACK_VOTING_AUTHORITY_COUNT
+    
     def get_signing_key_to_name(self) -> Dict[str, str]:
         """
         Get signing key fingerprint to name mapping.
         NOTE: This always uses the hardcoded mapping because signing key fingerprints
         are different from Onionoo relay fingerprints - we can't discover this dynamically.
+        Only includes the 9 voting authorities.
         """
         return _FALLBACK_SIGNING_KEY_TO_NAME
 
@@ -151,13 +176,23 @@ def get_authority_registry() -> AuthorityRegistry:
 # ============================================================================
 # These use the registry which prefers Onionoo data over fallback
 def get_authority_names() -> List[str]:
-    """Get sorted list of authority names (dynamic from Onionoo when available)."""
+    """Get sorted list of ALL authority names (dynamic from Onionoo when available)."""
     return _authority_registry.get_authority_names()
 
 
 def get_authority_count() -> int:
-    """Get authority count (dynamic from Onionoo when available)."""
+    """Get total authority count (dynamic from Onionoo when available)."""
     return _authority_registry.get_authority_count()
+
+
+def get_voting_authority_names() -> List[str]:
+    """Get sorted list of VOTING authority names (9 authorities that produce votes)."""
+    return _authority_registry.get_voting_authority_names()
+
+
+def get_voting_authority_count() -> int:
+    """Get voting authority count (9 - excludes non-voting authorities like Serge)."""
+    return _authority_registry.get_voting_authority_count()
 
 
 # Signing key mapping - always hardcoded (different from relay fingerprints)
@@ -165,8 +200,8 @@ AUTHORITIES = _FALLBACK_SIGNING_KEY_TO_NAME  # For backward compatibility
 AUTHORITIES_BY_NAME = {name: fp for fp, name in _FALLBACK_SIGNING_KEY_TO_NAME.items()}
 
 # Default values - use functions for dynamic behavior, these are fallback values
-DEFAULT_AUTHORITY_COUNT = _FALLBACK_AUTHORITY_COUNT
-AUTHORITY_NAMES = _FALLBACK_AUTHORITY_NAMES  # Backward compat, prefer get_authority_names()
+DEFAULT_AUTHORITY_COUNT = _FALLBACK_VOTING_AUTHORITY_COUNT  # 9 voting authorities
+AUTHORITY_NAMES = _FALLBACK_VOTING_AUTHORITY_NAMES  # Backward compat for voting authorities
 
 # Bandwidth thresholds (bytes/second)
 AUTH_DIR_GUARD_BW_GUARANTEE = 2_000_000  # AuthDirGuardBWGuarantee: 2 MB/s minimum for Guard
@@ -954,7 +989,7 @@ class CollectorFetcher:
             'ipv6_reachable_count': len(ipv6_reachable),
             'ipv6_reachable_authorities': ipv6_reachable,
             'ipv6_not_tested_authorities': ipv6_not_tested,
-            'total_authorities': get_authority_count(),  # Dynamic from Onionoo when available
+            'total_authorities': get_voting_authority_count(),  # Use voting authorities (9) for consensus
         }
 
 
