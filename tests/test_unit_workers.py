@@ -317,6 +317,7 @@ class TestOnionooUptimeCaching:
     def test_timeout_with_fresh_cache_fallback(self):
         """Test that with fresh cache (<12h), timeout uses cache fallback"""
         import socket
+        from allium.lib.workers import UPTIME_TIMEOUT_FRESH_CACHE
         
         mock_cached_data = {
             "relays": [{"fingerprint": "ABC123", "uptime": {"1_month": 95.5}}],
@@ -335,10 +336,11 @@ class TestOnionooUptimeCaching:
                     
                     # Should return cached data on timeout
                     assert result == mock_cached_data
-                    # Should have called urlopen with 30 second timeout (fresh cache)
+                    # Should have called urlopen with 30 second timeout (fresh cache for uptime)
                     mock_urlopen.assert_called_once()
                     call_args = mock_urlopen.call_args
-                    assert call_args[1]['timeout'] == 30
+                    assert call_args[1]['timeout'] == UPTIME_TIMEOUT_FRESH_CACHE
+                    assert UPTIME_TIMEOUT_FRESH_CACHE == 30  # Uptime stays at 30 seconds
     
     def test_timeout_with_stale_cache_waits_longer(self):
         """Test that with stale cache (>12h), timeout waits 20 minutes"""
@@ -518,10 +520,11 @@ class TestOnionooDetailsCaching:
                     
                     # Should return cached data on timeout
                     assert result == mock_cached_data
-                    # Should have called urlopen with fresh cache timeout
+                    # Should have called urlopen with fresh cache timeout (90s for details)
                     mock_urlopen.assert_called_once()
                     call_args = mock_urlopen.call_args
                     assert call_args[1]['timeout'] == DETAILS_TIMEOUT_FRESH_CACHE
+                    assert DETAILS_TIMEOUT_FRESH_CACHE == 90  # Verify it's 90 seconds
     
     def test_no_cache_uses_long_timeout(self):
         """Test that with no cache, function uses long timeout"""

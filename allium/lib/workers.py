@@ -52,23 +52,23 @@ _worker_status = {}
 # DETAILS API - Critical for operation, has most relay data
 # Details API typically responds quickly but can be slow during high load
 DETAILS_CACHE_MAX_AGE_HOURS = 6       # Cache older than this is considered stale
-DETAILS_TIMEOUT_FRESH_CACHE = 30      # 30 seconds for fresh cache
+DETAILS_TIMEOUT_FRESH_CACHE = 90      # 90 seconds for fresh cache
 DETAILS_TIMEOUT_STALE_CACHE = 300     # 5 minutes for stale/missing cache
 
 # UPTIME API - Often slow, especially around 30 minutes past the hour
 # Uptime API often can take up to 10 minutes around 30 minutes past the hour
 UPTIME_CACHE_MAX_AGE_HOURS = 12       # Cache older than this is considered stale
-UPTIME_TIMEOUT_FRESH_CACHE = 30       # 30 seconds for fresh cache
+UPTIME_TIMEOUT_FRESH_CACHE = 30       # 30 seconds for fresh cache (shorter due to frequent slowness)
 UPTIME_TIMEOUT_STALE_CACHE = 1200     # 20 minutes for stale/missing cache
 
 # BANDWIDTH API - Large data, can be slow
 BANDWIDTH_CACHE_MAX_AGE_HOURS = 12    # Cache older than this is considered stale
-BANDWIDTH_TIMEOUT_FRESH_CACHE = 30    # 30 seconds for fresh cache
+BANDWIDTH_TIMEOUT_FRESH_CACHE = 90    # 90 seconds for fresh cache
 BANDWIDTH_TIMEOUT_STALE_CACHE = 600   # 10 minutes for stale/missing cache
 
 # AROI VALIDATION API - External API, may be less reliable
 AROI_CACHE_MAX_AGE_HOURS = 1          # Cache older than this is considered stale (1 hour)
-AROI_TIMEOUT_FRESH_CACHE = 30         # 30 seconds for fresh cache
+AROI_TIMEOUT_FRESH_CACHE = 90         # 90 seconds for fresh cache
 AROI_TIMEOUT_STALE_CACHE = 120        # 2 minutes for stale/missing cache
 # ============================================================================
 
