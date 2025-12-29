@@ -162,7 +162,7 @@ def _parse_wfu_threshold(value) -> Optional[float]:
     return float(value)
 
 
-def format_relay_consensus_evaluation(evaluation: dict, flag_thresholds: dict = None, current_flags: list = None, observed_bandwidth: int = 0, use_bits: bool = False) -> dict:
+def format_relay_consensus_evaluation(evaluation: dict, flag_thresholds: dict = None, current_flags: list = None, observed_bandwidth: int = 0, use_bits: bool = False, relay_uptime: float = None) -> dict:
     """
     Format relay consensus evaluation for template display.
     
@@ -175,6 +175,9 @@ def format_relay_consensus_evaluation(evaluation: dict, flag_thresholds: dict = 
                            NOT the scaled consensus weight or vote Measured value.
         use_bits: If True, format bandwidth in bits (Mbit/s), otherwise bytes (MB/s).
                   Should match the allium runtime --bits flag.
+        relay_uptime: Relay's current uptime in seconds (from Onionoo last_restarted).
+                      This is the relay's self-reported uptime, same for all authorities.
+                      Used for Stable flag comparison against each authority's stable-uptime threshold.
         
     Returns:
         dict: Formatted evaluation ready for template rendering
@@ -205,11 +208,11 @@ def format_relay_consensus_evaluation(evaluation: dict, flag_thresholds: dict = 
         # Consensus status display
         'consensus_status': _format_consensus_status(evaluation),
         
-        # Relay values summary (for Summary table) - pass observed_bandwidth and use_bits
-        'relay_values': _format_relay_values(evaluation, flag_thresholds, observed_bandwidth, use_bits),
+        # Relay values summary (for Summary table) - pass observed_bandwidth, use_bits, relay_uptime
+        'relay_values': _format_relay_values(evaluation, flag_thresholds, observed_bandwidth, use_bits, relay_uptime),
         
-        # Per-authority voting details - pass observed_bandwidth and use_bits
-        'authority_table': _format_authority_table_enhanced(evaluation, flag_thresholds, observed_bandwidth, use_bits),
+        # Per-authority voting details - pass observed_bandwidth, use_bits, relay_uptime
+        'authority_table': _format_authority_table_enhanced(evaluation, flag_thresholds, observed_bandwidth, use_bits, relay_uptime),
         
         # Flag eligibility summary - recalculate using observed_bandwidth
         'flag_summary': _format_flag_summary(evaluation, observed_bandwidth),
@@ -228,7 +231,7 @@ def format_relay_consensus_evaluation(evaluation: dict, flag_thresholds: dict = 
     return formatted
 
 
-def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, observed_bandwidth: int = 0, use_bits: bool = False) -> dict:
+def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, observed_bandwidth: int = 0, use_bits: bool = False, relay_uptime: float = None) -> dict:
     """
     Format relay values summary for the Summary table.
     Shows your relay's values vs consensus thresholds.
@@ -239,6 +242,8 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
         observed_bandwidth: Relay's actual observed bandwidth in bytes/s (from Onionoo)
                            This is the bandwidth used for Guard eligibility (>= 2MB/s)
         use_bits: If True, format bandwidth in bits (Mbit/s), otherwise bytes (MB/s)
+        relay_uptime: Relay's current uptime in seconds (from Onionoo last_restarted).
+                      Used for Stable uptime comparison.
     """
     authority_votes = consensus_data.get('authority_votes', [])
     flag_eligibility = consensus_data.get('flag_eligibility', {})
@@ -281,6 +286,7 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
     hsdir_tk_default_count = 0  # Count of authorities using dir-spec default
     fast_speed_by_auth = {}  # auth_name -> value
     stable_mtbf_by_auth = {}  # auth_name -> value for MTBF outlier detection
+    stable_uptime_by_auth = {}  # auth_name -> value for uptime threshold tracking
     
     if flag_thresholds:
         for auth_name, thresholds in flag_thresholds.items():
@@ -296,6 +302,7 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
             # Stable thresholds
             if 'stable-uptime' in thresholds:
                 stable_uptime_values.append(thresholds['stable-uptime'])
+                stable_uptime_by_auth[auth_name] = thresholds['stable-uptime']
             if 'stable-mtbf' in thresholds:
                 stable_mtbf_values.append(thresholds['stable-mtbf'])
                 stable_mtbf_by_auth[auth_name] = thresholds['stable-mtbf']
@@ -337,6 +344,21 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
     stable_mtbf_typical = sorted(stable_mtbf_values)[len(stable_mtbf_values)//2] if stable_mtbf_values else 0
     # Find authorities with significantly stricter MTBF requirements (>5x typical = outlier)
     stable_mtbf_strict_auths = [name for name, val in stable_mtbf_by_auth.items() if stable_mtbf_typical > 0 and val > stable_mtbf_typical * 5]
+    
+    # Calculate Stable Uptime statistics
+    # stable-uptime threshold is compared against relay's self-reported uptime (from descriptor)
+    stable_uptime_min = min(stable_uptime_values) if stable_uptime_values else 0
+    stable_uptime_max = max(stable_uptime_values) if stable_uptime_values else 0
+    stable_uptime_typical = sorted(stable_uptime_values)[len(stable_uptime_values)//2] if stable_uptime_values else 0
+    # Find authorities with significantly stricter uptime requirements (>2x typical = outlier)
+    stable_uptime_strict_auths = [name for name, val in stable_uptime_by_auth.items() if stable_uptime_typical > 0 and val > stable_uptime_typical * 2]
+    
+    # Check relay uptime against each authority's stable-uptime threshold
+    # relay_uptime comes from Onionoo (relay's self-reported uptime from last_restarted)
+    stable_uptime_meets_count = 0
+    if relay_uptime is not None and stable_uptime_values:
+        stable_uptime_meets_count = sum(1 for ut in stable_uptime_values if relay_uptime >= ut)
+    stable_uptime_meets_all = stable_uptime_meets_count == len(stable_uptime_values) if stable_uptime_values else False
     
     # Calculate Guard BW analysis using observed_bandwidth (actual bandwidth, not scaled consensus value)
     bw_formatter = lambda v: _format_bandwidth_value(v, use_bits)
@@ -459,6 +481,21 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
         'stable_mtbf_typical_display': _format_days(stable_mtbf_typical),
         'stable_mtbf_strict_auths': stable_mtbf_strict_auths,  # authorities with stricter requirements (outliers)
         
+        # Stable Uptime values (relay uptime from Onionoo vs per-authority threshold from CollecTor)
+        # Note: relay_uptime is the SAME for all authorities (relay's self-reported uptime)
+        # Only the threshold varies per authority
+        'stable_uptime': relay_uptime,  # From Onionoo (relay's descriptor via last_restarted)
+        'stable_uptime_display': _format_days(relay_uptime) if relay_uptime else 'N/A',
+        'stable_uptime_min': stable_uptime_min,
+        'stable_uptime_max': stable_uptime_max,
+        'stable_uptime_typical': stable_uptime_typical,
+        'stable_uptime_min_display': _format_days(stable_uptime_min),
+        'stable_uptime_max_display': _format_days(stable_uptime_max),
+        'stable_uptime_typical_display': _format_days(stable_uptime_typical),
+        'stable_uptime_strict_auths': stable_uptime_strict_auths,
+        'stable_uptime_meets_count': stable_uptime_meets_count,
+        'stable_uptime_meets_all': stable_uptime_meets_all,
+        
         # Reachability values
         'ipv4_reachable_count': ipv4_reachable_count,
         'ipv6_reachable_count': ipv6_reachable_count,
@@ -482,7 +519,7 @@ def _format_range(values: list, formatter) -> str:
     return f"{formatter(min_val)}-{formatter(max_val)}"
 
 
-def _format_authority_table_enhanced(consensus_data: dict, flag_thresholds: dict = None, observed_bandwidth: int = 0, use_bits: bool = False) -> List[dict]:
+def _format_authority_table_enhanced(consensus_data: dict, flag_thresholds: dict = None, observed_bandwidth: int = 0, use_bits: bool = False, relay_uptime: float = None) -> List[dict]:
     """
     Format authority votes into table rows with threshold comparison.
     
@@ -490,6 +527,9 @@ def _format_authority_table_enhanced(consensus_data: dict, flag_thresholds: dict
         consensus_data: Raw consensus evaluation data
         flag_thresholds: Dict of per-authority flag thresholds
         observed_bandwidth: Relay's actual observed bandwidth (for Guard BW and Fast eligibility)
+        use_bits: If True, format bandwidth in bits (Mbit/s), otherwise bytes (MB/s)
+        relay_uptime: Relay's current uptime in seconds (from Onionoo last_restarted).
+                      Same value for all authorities (relay's self-reported uptime).
     """
     authority_votes = consensus_data.get('authority_votes', [])
     
@@ -580,12 +620,21 @@ def _format_authority_table_enhanced(consensus_data: dict, flag_thresholds: dict
             'guard_bw_in_top25': observed_bandwidth >= guard_bw_top25_threshold if guard_bw_top25_threshold else False,
             'guard_bw_meets': observed_bandwidth >= GUARD_BW_GUARANTEE or (guard_bw_top25_threshold and observed_bandwidth >= guard_bw_top25_threshold),
             
-            # Stable: measured MTBF | threshold  
+            # Stable MTBF: measured MTBF | threshold  
             'stable_mtbf': relay_mtbf,
             'stable_mtbf_display': _format_days(relay_mtbf),
             'stable_threshold': stable_mtbf_threshold,
             'stable_threshold_display': _format_days(stable_mtbf_threshold),
             'stable_meets': relay_mtbf and relay_mtbf >= stable_mtbf_threshold if stable_mtbf_threshold else True,
+            
+            # Stable Uptime: relay uptime (from Onionoo) | threshold (from CollecTor)
+            # Note: relay_uptime is the SAME for all authorities (relay's self-reported uptime from descriptor)
+            # Only the stable-uptime threshold varies per authority
+            'stable_uptime': relay_uptime,  # From Onionoo (relay descriptor via last_restarted)
+            'stable_uptime_display': _format_days(relay_uptime) if relay_uptime else 'N/A',
+            'stable_uptime_threshold': stable_threshold,  # From CollecTor (per-authority)
+            'stable_uptime_threshold_display': _format_days(stable_threshold) if stable_threshold else 'N/A',
+            'stable_uptime_meets': relay_uptime and relay_uptime >= stable_threshold if stable_threshold and relay_uptime else None,
             
             # Fast: uses observed_bandwidth (from descriptor), NOT scaled consensus value
             # Fast requires: bandwidth in top 7/8ths (fast_threshold) OR >= 100 KB/s

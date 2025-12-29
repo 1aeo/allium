@@ -868,14 +868,34 @@ class Relays:
                 # Get raw consensus evaluation from fetcher
                 raw_consensus_evaluation = fetcher.get_relay_consensus_evaluation(fingerprint, authority_count)
                 
-                # Format for template display, passing current flags and observed_bandwidth
+                # Calculate relay uptime from last_restarted (Onionoo data)
+                # This is the relay's self-reported uptime from its descriptor
+                relay_uptime = None
+                last_restarted = relay.get('last_restarted')
+                if last_restarted:
+                    try:
+                        from datetime import datetime, timezone
+                        # Handle ISO format with optional timezone
+                        if last_restarted.endswith('Z'):
+                            restart_time = datetime.fromisoformat(last_restarted.replace('Z', '+00:00'))
+                        elif '+' in last_restarted or last_restarted.count('-') > 2:
+                            restart_time = datetime.fromisoformat(last_restarted)
+                        else:
+                            # Assume UTC if no timezone
+                            restart_time = datetime.fromisoformat(last_restarted).replace(tzinfo=timezone.utc)
+                        relay_uptime = (datetime.now(timezone.utc) - restart_time).total_seconds()
+                    except (ValueError, TypeError):
+                        pass
+                
+                # Format for template display, passing current flags, observed_bandwidth, and relay_uptime
                 # Note: observed_bandwidth (from descriptor) is the actual bandwidth for Guard eligibility
                 # NOT the scaled consensus weight or vote Measured value
                 current_flags = relay.get('flags', [])
                 observed_bandwidth = relay.get('observed_bandwidth', 0)
                 formatted_consensus_evaluation = format_relay_consensus_evaluation(
                     raw_consensus_evaluation, flag_thresholds, current_flags, observed_bandwidth,
-                    use_bits=self.use_bits  # Pass use_bits for consistent bandwidth formatting
+                    use_bits=self.use_bits,  # Pass use_bits for consistent bandwidth formatting
+                    relay_uptime=relay_uptime  # Pass relay uptime from Onionoo for Stable comparison
                 )
                 
                 # Attach to relay

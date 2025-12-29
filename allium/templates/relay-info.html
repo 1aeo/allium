@@ -610,10 +610,15 @@ Data from <a href="https://collector.torproject.org/recent/relay-descriptors/vot
         <td>{% if rv.guard_bw_meets_guarantee %}<span style="color: #28a745; font-weight: bold;">MEETS - ≥2 MB/s guarantee</span>{% elif rv.guard_bw_meets_some %}<span style="color: #ffc107; font-weight: bold;">PARTIAL - in top 25% for {{ rv.guard_bw_meets_count }} auth(s)</span>{% else %}<span style="color: #dc3545; font-weight: bold;">BELOW - need ≥2 MB/s</span>{% endif %}</td>
     </tr>
     <tr>
-        <td title="Source: CollecTor | File: vote | Field: flag-thresholds stable-uptime=X | Continuous uptime required for Stable flag">Stable Uptime</td>
-        <td title="Source: CollecTor | File: vote | Field: stats tk=X (used as uptime proxy)">{{ rv.tk_display }}</td>
-        <td title="Source: CollecTor | File: vote | Field: flag-thresholds stable-uptime=X | Range varies by authority's network view">≥{{ rv.stable_range }}</td>
-        <td>{% if rv.stable_meets_all %}<span style="color: #28a745; font-weight: bold;">MEETS - all authorities</span>{% elif rv.stable_meets_count >= diag.majority_required %}<span style="color: #ffc107; font-weight: bold;">PARTIAL - {{ rv.stable_meets_count }}/{{ rv.total_authorities }}</span>{% else %}<span style="color: #dc3545; font-weight: bold;">BELOW - {{ rv.stable_meets_count }}/{{ rv.total_authorities }}</span>{% endif %}</td>
+        <td title="Source: Onionoo (relay value) + CollecTor (threshold) | Relay uptime from Onionoo last_restarted | Authority threshold from CollecTor flag-thresholds stable-uptime">Stable Uptime <span style="color: #6c757d; font-size: 10px;">(Relay→Onionoo, Thresh→CollecTor)</span></td>
+        <td title="Source: Onionoo | File: details | Field: last_restarted | Relay's self-reported uptime from descriptor">{{ rv.stable_uptime_display }}</td>
+        <td title="Source: CollecTor | File: vote | Field: flag-thresholds stable-uptime=X | Range varies by authority">
+            ≥{{ rv.stable_uptime_min_display }} - {{ rv.stable_uptime_typical_display }} <span style="color: #666; font-size: 11px;">(typical)</span>
+            {% if rv.stable_uptime_strict_auths %}
+            <br><span style="color: #856404; font-size: 10px;" title="These authorities have stricter requirements">⚠️ {{ rv.stable_uptime_strict_auths|join(', ') }}: ≥{{ rv.stable_uptime_max_display }}</span>
+            {% endif %}
+        </td>
+        <td>{% if rv.stable_uptime_meets_all %}<span style="color: #28a745; font-weight: bold;">MEETS - all authorities</span>{% elif rv.stable_uptime_meets_count >= diag.majority_required %}<span style="color: #ffc107; font-weight: bold;">PARTIAL - {{ rv.stable_uptime_meets_count }}/{{ rv.total_authorities }}</span>{% elif rv.stable_uptime is none %}<span style="color: #6c757d;">N/A - uptime not available</span>{% else %}<span style="color: #dc3545; font-weight: bold;">BELOW - {{ rv.stable_uptime_meets_count }}/{{ rv.total_authorities }}</span>{% endif %}</td>
     </tr>
     <tr>
         <td title="Source: CollecTor | File: vote | Field: flag-thresholds stable-mtbf=X | Mean Time Between Failures">Stable MTBF</td>
@@ -694,7 +699,8 @@ Flags: <span style="color: #28a745; font-weight: bold;">green</span> = all autho
     <th title="Source: Onionoo observed_bandwidth (Relay Reported) | CollecTor flag-thresholds guard-bw-inc-exits (Authority Threshold) | Guard BW: ≥2 MB/s OR top 25%">Guard BW (Relay|Threshold)</th>
     <th title="Source: CollecTor | File: vote | Field: stats wfu=X, flag-thresholds guard-wfu=X | Guard WFU: Measured | Threshold">Guard WFU (M|T)</th>
     <th title="Source: CollecTor | File: vote | Field: stats tk=X, flag-thresholds guard-tk=X | Guard TK: Measured | Threshold">Guard TK (M|T)</th>
-    <th title="Source: CollecTor | File: vote | Field: stats mtbf=X, flag-thresholds stable-mtbf=X | Stable MTBF: Measured | Threshold. Note: stable-uptime threshold exists but per-relay uptime not in vote stats line.">Stable MTBF (M|T)</th>
+    <th title="Source: CollecTor | File: vote | Field: stats mtbf=X, flag-thresholds stable-mtbf=X | Stable MTBF: Authority-measured MTBF | Authority's threshold">Stable MTBF (M|T)</th>
+    <th title="Source: Onionoo last_restarted (Relay Reported) | CollecTor flag-thresholds stable-uptime (Authority Threshold) | Stable Uptime: Relay's uptime from descriptor | Authority's threshold. Two different data sources.">Stable Uptime (Relay|Auth)</th>
     <th title="Source: CollecTor | File: vote | Field: stats wfu=X, flag-thresholds hsdir-wfu=X | HSDir WFU: Measured | Threshold">HSDir WFU (M|T)</th>
     <th title="Source: CollecTor | File: vote | Field: stats tk=X, flag-thresholds hsdir-tk=X | HSDir TK: Measured | Threshold">HSDir TK (M|T)</th>
     <th title="Source: CollecTor | File: vote | Field: 'r' line timestamp | Descriptor Published timestamp">Desc Published</th>
@@ -833,6 +839,29 @@ Flags: <span style="color: #28a745; font-weight: bold;">green</span> = all autho
             <span style="color: #6c757d;">—</span>
         {% endif %}
     </td>
+    {# Stable Uptime: relay uptime (Onionoo) | authority threshold (CollecTor) #}
+    {# Note: Relay uptime is the SAME for all authorities (self-reported from descriptor) #}
+    {# Only the threshold varies per authority #}
+    <td>
+        {% if vote.voted and vote.stable_uptime_threshold %}
+            {% if vote.stable_uptime_meets is not none %}
+                <span style="color: {% if vote.stable_uptime_meets %}#28a745{% else %}#dc3545{% endif %};"
+                      title="Relay Uptime (Onionoo): {{ vote.stable_uptime_display }} | Authority Threshold (CollecTor): {{ vote.stable_uptime_threshold_display }} | Note: Data from two sources">
+                    {{ vote.stable_uptime_display }} | {{ vote.stable_uptime_threshold_display }}
+                </span>
+            {% else %}
+                <span style="color: #6c757d;" title="Relay uptime not available from Onionoo">
+                    N/A | {{ vote.stable_uptime_threshold_display }}
+                </span>
+            {% endif %}
+        {% elif vote.voted and vote.stable_uptime is not none %}
+            <span title="Relay Uptime (Onionoo): {{ vote.stable_uptime_display }} | Authority threshold not set">
+                {{ vote.stable_uptime_display }} | <span style="color: #6c757d;">—</span>
+            </span>
+        {% else %}
+            <span style="color: #6c757d;">—</span>
+        {% endif %}
+    </td>
     {# HSDir WFU: measured | threshold (same as guard WFU, 98%) #}
     <td>
         {% if vote.voted and vote.wfu is not none %}
@@ -900,6 +929,13 @@ Flags: <span style="color: #28a745; font-weight: bold;">green</span> = all autho
 <strong>Relay Reported</strong> = Your relay's self-reported bandwidth from its descriptor (observed_bandwidth). Used for <em>flag eligibility</em> (Guard, Fast).<br>
 <strong>Authority Measured</strong> = Bandwidth measured by authority's sbws scanner. Used for <em>consensus weight</em> (path selection probability).<br>
 <em>Why different?</em> Authorities verify your reported bandwidth independently. 6 of 9 authorities run bandwidth scanners; 3 use relay-reported values directly.
+</div>
+
+<div style="font-size: 11px; color: #555; margin-top: 10px; padding: 8px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #17a2b8;">
+<strong>⏱️ Stable Uptime (Two Data Sources):</strong><br>
+<strong>Relay Uptime</strong> = From <em>Onionoo API</em> (last_restarted field). This is your relay's self-reported uptime from its descriptor. Same value for all authorities.<br>
+<strong>Authority Threshold</strong> = From <em>CollecTor vote files</em> (flag-thresholds stable-uptime). Each authority may have different thresholds.<br>
+<em>Why two sources?</em> Vote files contain authority thresholds but not per-relay uptime values. Onionoo aggregates relay descriptors which include uptime.
 </div>
 
 </div>

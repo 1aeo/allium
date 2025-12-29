@@ -1121,6 +1121,178 @@ class TestAdviceDocRefs:
         assert any('spec.torproject.org' in ref for ref in doc_refs)
 
 
+class TestStableUptimeFeature:
+    """Tests for Stable Uptime feature (relay uptime from Onionoo + per-authority thresholds)."""
+    
+    def test_stable_uptime_in_relay_values(self):
+        """Test that stable uptime values are included in relay_values."""
+        diagnostics = {
+            'fingerprint': 'ABC123' * 6 + 'ABCD',
+            'in_consensus': True,
+            'vote_count': 9,
+            'total_authorities': 9,
+            'majority_required': 5,
+            'authority_votes': [
+                {'authority': 'moria1', 'wfu': 0.99, 'tk': 1000000, 'voted': True},
+            ],
+            'flag_eligibility': {'stable': {'eligible_count': 9}},
+            'reachability': {'ipv4_reachable_count': 9},
+        }
+        flag_thresholds = {
+            'moria1': {'stable-uptime': 1209600},  # 14 days
+            'tor26': {'stable-uptime': 1296000},   # 15 days
+        }
+        
+        # Pass relay_uptime of 20 days
+        relay_uptime = 20 * SECONDS_PER_DAY
+        result = format_relay_consensus_evaluation(
+            diagnostics, flag_thresholds, 
+            current_flags=['Guard'], 
+            observed_bandwidth=3_000_000,
+            relay_uptime=relay_uptime
+        )
+        
+        rv = result.get('relay_values', {})
+        
+        # Should have stable uptime fields
+        assert 'stable_uptime' in rv
+        assert rv['stable_uptime'] == relay_uptime
+        assert 'stable_uptime_display' in rv
+        assert 'stable_uptime_min' in rv
+        assert 'stable_uptime_max' in rv
+        assert 'stable_uptime_meets_count' in rv
+        assert 'stable_uptime_meets_all' in rv
+    
+    def test_stable_uptime_in_authority_table(self):
+        """Test that stable uptime is included in per-authority table."""
+        diagnostics = {
+            'fingerprint': 'ABC123' * 6 + 'ABCD',
+            'in_consensus': True,
+            'vote_count': 9,
+            'total_authorities': 9,
+            'majority_required': 5,
+            'authority_votes': [
+                {'authority': 'moria1', 'wfu': 0.99, 'tk': 1000000, 'voted': True, 'mtbf': 500000},
+            ],
+            'flag_eligibility': {'stable': {'eligible_count': 9}},
+            'reachability': {'ipv4_reachable_count': 9},
+        }
+        flag_thresholds = {
+            'moria1': {'stable-uptime': 1209600, 'stable-mtbf': 1000000},
+        }
+        
+        relay_uptime = 15 * SECONDS_PER_DAY  # 15 days
+        result = format_relay_consensus_evaluation(
+            diagnostics, flag_thresholds,
+            current_flags=['Guard'],
+            observed_bandwidth=3_000_000,
+            relay_uptime=relay_uptime
+        )
+        
+        # Check authority table
+        auth_table = result.get('authority_table', [])
+        assert len(auth_table) >= 1
+        
+        moria1_row = auth_table[0]
+        assert 'stable_uptime' in moria1_row
+        assert moria1_row['stable_uptime'] == relay_uptime  # Same for all authorities
+        assert 'stable_uptime_threshold' in moria1_row
+        assert moria1_row['stable_uptime_threshold'] == 1209600
+        assert 'stable_uptime_meets' in moria1_row
+        assert moria1_row['stable_uptime_meets'] == True  # 15d > 14d threshold
+    
+    def test_stable_uptime_none_when_not_provided(self):
+        """Test that stable_uptime is None when not provided."""
+        diagnostics = {
+            'fingerprint': 'ABC123' * 6 + 'ABCD',
+            'in_consensus': True,
+            'vote_count': 9,
+            'total_authorities': 9,
+            'majority_required': 5,
+            'authority_votes': [{'authority': 'moria1', 'voted': True}],
+            'flag_eligibility': {},
+            'reachability': {'ipv4_reachable_count': 9},
+        }
+        
+        # Don't pass relay_uptime
+        result = format_relay_consensus_evaluation(
+            diagnostics, {}, current_flags=[], observed_bandwidth=0
+        )
+        
+        rv = result.get('relay_values', {})
+        assert rv.get('stable_uptime') is None
+        assert rv.get('stable_uptime_display') == 'N/A'
+    
+    def test_stable_uptime_meets_calculation(self):
+        """Test that stable_uptime_meets is calculated correctly."""
+        diagnostics = {
+            'fingerprint': 'ABC123' * 6 + 'ABCD',
+            'in_consensus': True,
+            'vote_count': 9,
+            'total_authorities': 9,
+            'majority_required': 5,
+            'authority_votes': [
+                {'authority': 'moria1', 'voted': True},
+                {'authority': 'tor26', 'voted': True},
+            ],
+            'flag_eligibility': {},
+            'reachability': {'ipv4_reachable_count': 9},
+        }
+        flag_thresholds = {
+            'moria1': {'stable-uptime': 1209600},  # 14 days
+            'tor26': {'stable-uptime': 1728000},   # 20 days
+        }
+        
+        # 15 days uptime - meets moria1's threshold but not tor26's
+        relay_uptime = 15 * SECONDS_PER_DAY
+        result = format_relay_consensus_evaluation(
+            diagnostics, flag_thresholds,
+            current_flags=[],
+            observed_bandwidth=0,
+            relay_uptime=relay_uptime
+        )
+        
+        rv = result.get('relay_values', {})
+        assert rv['stable_uptime_meets_count'] == 1  # Only meets moria1's threshold
+        assert rv['stable_uptime_meets_all'] == False
+    
+    def test_stable_uptime_same_for_all_authorities(self):
+        """Test that relay uptime is the same value for all authorities."""
+        diagnostics = {
+            'fingerprint': 'ABC123' * 6 + 'ABCD',
+            'in_consensus': True,
+            'vote_count': 9,
+            'total_authorities': 9,
+            'majority_required': 5,
+            'authority_votes': [
+                {'authority': 'moria1', 'voted': True},
+                {'authority': 'tor26', 'voted': True},
+                {'authority': 'gabelmoo', 'voted': True},
+            ],
+            'flag_eligibility': {},
+            'reachability': {'ipv4_reachable_count': 9},
+        }
+        flag_thresholds = {
+            'moria1': {'stable-uptime': 1000000},
+            'tor26': {'stable-uptime': 1200000},
+            'gabelmoo': {'stable-uptime': 1400000},
+        }
+        
+        relay_uptime = 10 * SECONDS_PER_DAY
+        result = format_relay_consensus_evaluation(
+            diagnostics, flag_thresholds,
+            current_flags=[],
+            observed_bandwidth=0,
+            relay_uptime=relay_uptime
+        )
+        
+        auth_table = result.get('authority_table', [])
+        
+        # All rows should have the same relay uptime value
+        for row in auth_table:
+            assert row['stable_uptime'] == relay_uptime
+
+
 class TestBandwidthFormatting:
     """Tests for bandwidth value formatting."""
     
