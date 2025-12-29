@@ -493,6 +493,202 @@ class TestOnionooUptimeCaching:
                     assert call_args[1]['timeout'] == 1200
 
 
+class TestOnionooDetailsCaching:
+    """Test details API caching and timeout behavior"""
+    
+    def test_timeout_with_fresh_cache_fallback(self):
+        """Test that with fresh cache, timeout uses cache fallback"""
+        import socket
+        from allium.lib.workers import DETAILS_TIMEOUT_FRESH_CACHE
+        
+        mock_cached_data = {
+            "relays": [{"fingerprint": "ABC123", "nickname": "TestRelay"}],
+            "version": "cached_details"
+        }
+        
+        # Mock cache age as 1 hour (fresh, < 6 hours default)
+        with patch('allium.lib.workers._cache_manager') as mock_cache_mgr:
+            with patch('urllib.request.urlopen') as mock_urlopen:
+                with patch('allium.lib.workers._load_cache') as mock_load_cache:
+                    mock_cache_mgr.get_cache_age.return_value = 3600  # 1 hour
+                    mock_urlopen.side_effect = socket.timeout("Timeout")
+                    mock_load_cache.return_value = mock_cached_data
+                    
+                    result = fetch_onionoo_details("http://test.url", progress_logger=None)
+                    
+                    # Should return cached data on timeout
+                    assert result == mock_cached_data
+                    # Should have called urlopen with fresh cache timeout
+                    mock_urlopen.assert_called_once()
+                    call_args = mock_urlopen.call_args
+                    assert call_args[1]['timeout'] == DETAILS_TIMEOUT_FRESH_CACHE
+    
+    def test_no_cache_uses_long_timeout(self):
+        """Test that with no cache, function uses long timeout"""
+        from allium.lib.workers import DETAILS_TIMEOUT_STALE_CACHE
+        
+        mock_data = {
+            "relays": [{"fingerprint": "GHI789", "nickname": "FreshRelay"}],
+            "version": "fresh_details"
+        }
+        
+        # Mock no cache
+        with patch('allium.lib.workers._cache_manager') as mock_cache_mgr:
+            with patch('urllib.request.urlopen') as mock_urlopen:
+                with patch('allium.lib.workers._load_cache') as mock_load_cache:
+                    mock_cache_mgr.get_cache_age.return_value = None  # No cache
+                    mock_load_cache.return_value = None
+                    mock_response = MagicMock()
+                    mock_response.read.return_value = json.dumps(mock_data).encode('utf-8')
+                    mock_urlopen.return_value = mock_response
+                    
+                    result = fetch_onionoo_details("http://test.url", progress_logger=None)
+                    
+                    # Should return fresh data
+                    assert result is not None
+                    # Should have called urlopen with stale cache timeout
+                    mock_urlopen.assert_called_once()
+                    call_args = mock_urlopen.call_args
+                    assert call_args[1]['timeout'] == DETAILS_TIMEOUT_STALE_CACHE
+
+
+class TestOnionooBandwidthCaching:
+    """Test bandwidth API caching and timeout behavior"""
+    
+    def test_fresh_cache_returns_immediately(self):
+        """Test that fresh cache is returned without making a request"""
+        mock_cached_data = {
+            "relays": [{"fingerprint": "ABC123", "write_history": {}}],
+            "version": "cached_bandwidth"
+        }
+        
+        # Mock fresh cache (1 hour old, < 12 hours default)
+        with patch('allium.lib.workers._cache_manager') as mock_cache_mgr:
+            with patch('urllib.request.urlopen') as mock_urlopen:
+                with patch('allium.lib.workers._load_cache') as mock_load_cache:
+                    mock_cache_mgr.get_cache_age.return_value = 3600  # 1 hour
+                    mock_load_cache.return_value = mock_cached_data
+                    
+                    from allium.lib.workers import fetch_onionoo_bandwidth
+                    result = fetch_onionoo_bandwidth("http://test.url", cache_hours=12, progress_logger=None)
+                    
+                    # Should return cached data without making a request
+                    assert result == mock_cached_data
+                    # Should NOT have called urlopen
+                    mock_urlopen.assert_not_called()
+    
+    def test_timeout_with_stale_cache_fallback(self):
+        """Test that timeout with stale cache falls back to cache"""
+        import socket
+        from allium.lib.workers import BANDWIDTH_TIMEOUT_STALE_CACHE
+        
+        mock_cached_data = {
+            "relays": [{"fingerprint": "ABC123", "write_history": {}}],
+            "version": "stale_cached_bandwidth"
+        }
+        
+        # Mock stale cache (15 hours old, > 12 hours default)
+        with patch('allium.lib.workers._cache_manager') as mock_cache_mgr:
+            with patch('urllib.request.urlopen') as mock_urlopen:
+                with patch('allium.lib.workers._load_cache') as mock_load_cache:
+                    mock_cache_mgr.get_cache_age.return_value = 15 * 3600  # 15 hours
+                    mock_urlopen.side_effect = socket.timeout("Timeout")
+                    mock_load_cache.return_value = mock_cached_data
+                    
+                    from allium.lib.workers import fetch_onionoo_bandwidth
+                    result = fetch_onionoo_bandwidth("http://test.url", cache_hours=12, progress_logger=None)
+                    
+                    # Should return cached data on timeout
+                    assert result == mock_cached_data
+                    # Should have used stale cache timeout
+                    mock_urlopen.assert_called_once()
+                    call_args = mock_urlopen.call_args
+                    assert call_args[1]['timeout'] == BANDWIDTH_TIMEOUT_STALE_CACHE
+
+
+class TestAROIValidationCaching:
+    """Test AROI validation API caching and timeout behavior"""
+    
+    def test_fresh_cache_returns_immediately(self):
+        """Test that fresh cache is returned without making a request"""
+        mock_cached_data = {
+            "metadata": {"version": "1.0"},
+            "statistics": {},
+            "results": [{"fingerprint": "ABC123", "status": "valid"}]
+        }
+        
+        # Mock fresh cache (30 minutes old, < 1 hour default)
+        with patch('allium.lib.workers._cache_manager') as mock_cache_mgr:
+            with patch('urllib.request.urlopen') as mock_urlopen:
+                with patch('allium.lib.workers._load_cache') as mock_load_cache:
+                    mock_cache_mgr.get_cache_age.return_value = 1800  # 30 minutes
+                    mock_load_cache.return_value = mock_cached_data
+                    
+                    from allium.lib.workers import fetch_aroi_validation
+                    result = fetch_aroi_validation("http://test.url", progress_logger=None)
+                    
+                    # Should return cached data without making a request
+                    assert result == mock_cached_data
+                    # Should NOT have called urlopen
+                    mock_urlopen.assert_not_called()
+    
+    def test_timeout_with_cache_fallback(self):
+        """Test that timeout uses cache fallback"""
+        import socket
+        from allium.lib.workers import AROI_TIMEOUT_STALE_CACHE
+        
+        mock_cached_data = {
+            "metadata": {"version": "1.0"},
+            "statistics": {},
+            "results": [{"fingerprint": "DEF456", "status": "valid"}]
+        }
+        
+        # Mock stale cache (2 hours old, > 1 hour default)
+        with patch('allium.lib.workers._cache_manager') as mock_cache_mgr:
+            with patch('urllib.request.urlopen') as mock_urlopen:
+                with patch('allium.lib.workers._load_cache') as mock_load_cache:
+                    mock_cache_mgr.get_cache_age.return_value = 2 * 3600  # 2 hours
+                    mock_urlopen.side_effect = socket.timeout("Timeout")
+                    mock_load_cache.return_value = mock_cached_data
+                    
+                    from allium.lib.workers import fetch_aroi_validation
+                    result = fetch_aroi_validation("http://test.url", progress_logger=None)
+                    
+                    # Should return cached data on timeout
+                    assert result == mock_cached_data
+                    # Should have used stale cache timeout
+                    mock_urlopen.assert_called_once()
+                    call_args = mock_urlopen.call_args
+                    assert call_args[1]['timeout'] == AROI_TIMEOUT_STALE_CACHE
+    
+    def test_invalid_response_falls_back_to_cache(self):
+        """Test that invalid API response falls back to cache"""
+        mock_cached_data = {
+            "metadata": {"version": "1.0"},
+            "statistics": {},
+            "results": [{"fingerprint": "GHI789", "status": "valid"}]
+        }
+        
+        # Invalid response (missing required keys)
+        mock_invalid_data = {"invalid": "data"}
+        
+        # Mock stale cache
+        with patch('allium.lib.workers._cache_manager') as mock_cache_mgr:
+            with patch('urllib.request.urlopen') as mock_urlopen:
+                with patch('allium.lib.workers._load_cache') as mock_load_cache:
+                    mock_cache_mgr.get_cache_age.return_value = 2 * 3600  # 2 hours (stale)
+                    mock_load_cache.return_value = mock_cached_data
+                    mock_response = MagicMock()
+                    mock_response.read.return_value = json.dumps(mock_invalid_data).encode('utf-8')
+                    mock_urlopen.return_value = mock_response
+                    
+                    from allium.lib.workers import fetch_aroi_validation
+                    result = fetch_aroi_validation("http://test.url", progress_logger=None)
+                    
+                    # Should fall back to cached data when response is invalid
+                    assert result == mock_cached_data
+
+
 class TestPlaceholderWorkers:
     """Test placeholder worker functions"""
     
