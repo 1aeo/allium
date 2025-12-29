@@ -34,24 +34,100 @@ _state_lock = threading.Lock()
 _worker_status = {}
 
 # ============================================================================
-# UPTIME API CACHE CONFIGURATION
+# API CACHE CONFIGURATION
 # ============================================================================
-# These values control the timeout and caching behavior for the uptime API.
+# These values control the timeout and caching behavior for each API.
 # Adjust these values to tune the balance between responsiveness and data freshness.
-# Uptime API often can take up to 10 minutes around 30 minutes past the hour in Nov and Dec 2025
 #
-# UPTIME_CACHE_MAX_AGE_HOURS: Age (in hours) after which cache is considered stale
-# UPTIME_TIMEOUT_FRESH_CACHE: Timeout (in seconds) when cache is fresh
-# UPTIME_TIMEOUT_STALE_CACHE: Timeout (in seconds) when cache is stale or missing
+# For each API:
+#   - *_CACHE_MAX_AGE_HOURS: Age (in hours) after which cache is considered stale
+#   - *_TIMEOUT_FRESH_CACHE: Timeout (in seconds) when cache is fresh (use cache on timeout)
+#   - *_TIMEOUT_STALE_CACHE: Timeout (in seconds) when cache is stale or missing
 #
 # Example adjustments:
-#   - For faster responses with older data: increase UPTIME_CACHE_MAX_AGE_HOURS
-#   - For more patient fetching: increase UPTIME_TIMEOUT_STALE_CACHE
-#   - For quicker timeouts: decrease UPTIME_TIMEOUT_FRESH_CACHE
+#   - For faster responses with older data: increase *_CACHE_MAX_AGE_HOURS
+#   - For more patient fetching: increase *_TIMEOUT_STALE_CACHE
+#   - For quicker timeouts: decrease *_TIMEOUT_FRESH_CACHE
 # ============================================================================
-UPTIME_CACHE_MAX_AGE_HOURS = 12      # Cache older than this is considered stale
-UPTIME_TIMEOUT_FRESH_CACHE = 30      # 30 seconds for fresh cache
-UPTIME_TIMEOUT_STALE_CACHE = 1200    # 20 minutes for stale/missing cache
+
+# DETAILS API - Critical for operation, has most relay data
+# Details API typically responds quickly but can be slow during high load
+DETAILS_CACHE_MAX_AGE_HOURS = 6       # Cache older than this is considered stale
+DETAILS_TIMEOUT_FRESH_CACHE = 90      # 90 seconds for fresh cache
+DETAILS_TIMEOUT_STALE_CACHE = 300     # 5 minutes for stale/missing cache
+
+# UPTIME API - Often slow, especially around 30 minutes past the hour
+# Uptime API often can take up to 10 minutes around 30 minutes past the hour
+UPTIME_CACHE_MAX_AGE_HOURS = 12       # Cache older than this is considered stale
+UPTIME_TIMEOUT_FRESH_CACHE = 30       # 30 seconds for fresh cache (shorter due to frequent slowness)
+UPTIME_TIMEOUT_STALE_CACHE = 1200     # 20 minutes for stale/missing cache
+
+# BANDWIDTH API - Large data, can be slow
+BANDWIDTH_CACHE_MAX_AGE_HOURS = 12    # Cache older than this is considered stale
+BANDWIDTH_TIMEOUT_FRESH_CACHE = 90    # 90 seconds for fresh cache
+BANDWIDTH_TIMEOUT_STALE_CACHE = 600   # 10 minutes for stale/missing cache
+
+# AROI VALIDATION API - External API, may be less reliable
+AROI_CACHE_MAX_AGE_HOURS = 1          # Cache older than this is considered stale (1 hour)
+AROI_TIMEOUT_FRESH_CACHE = 90         # 90 seconds for fresh cache
+AROI_TIMEOUT_STALE_CACHE = 120        # 2 minutes for stale/missing cache
+# ============================================================================
+
+
+# ============================================================================
+# API CONFIGURATION DATACLASS
+# ============================================================================
+from dataclasses import dataclass
+from typing import Optional, Dict, Any, Callable
+
+@dataclass
+class APIConfig:
+    """Configuration for an API worker with cache and timeout settings."""
+    api_name: str                    # Internal name for caching (e.g., 'onionoo_details')
+    display_name: str                # Human-readable name for logging
+    cache_max_age_hours: float       # Hours after which cache is considered stale
+    timeout_fresh_cache: int         # Timeout (seconds) when cache is fresh
+    timeout_stale_cache: int         # Timeout (seconds) when cache is stale/missing
+    use_conditional_requests: bool = True   # Whether to use If-Modified-Since header
+    custom_headers: Optional[Dict[str, str]] = None  # Additional request headers
+    count_field: str = 'relays'      # Field name to count items in response
+
+
+# Pre-configured API settings
+DETAILS_CONFIG = APIConfig(
+    api_name='onionoo_details',
+    display_name='onionoo details',
+    cache_max_age_hours=DETAILS_CACHE_MAX_AGE_HOURS,
+    timeout_fresh_cache=DETAILS_TIMEOUT_FRESH_CACHE,
+    timeout_stale_cache=DETAILS_TIMEOUT_STALE_CACHE,
+)
+
+UPTIME_CONFIG = APIConfig(
+    api_name='onionoo_uptime',
+    display_name='onionoo uptime',
+    cache_max_age_hours=UPTIME_CACHE_MAX_AGE_HOURS,
+    timeout_fresh_cache=UPTIME_TIMEOUT_FRESH_CACHE,
+    timeout_stale_cache=UPTIME_TIMEOUT_STALE_CACHE,
+)
+
+BANDWIDTH_CONFIG = APIConfig(
+    api_name='onionoo_bandwidth',
+    display_name='onionoo historical bandwidth',
+    cache_max_age_hours=BANDWIDTH_CACHE_MAX_AGE_HOURS,
+    timeout_fresh_cache=BANDWIDTH_TIMEOUT_FRESH_CACHE,
+    timeout_stale_cache=BANDWIDTH_TIMEOUT_STALE_CACHE,
+)
+
+AROI_CONFIG = APIConfig(
+    api_name='aroi_validation',
+    display_name='AROI validation',
+    cache_max_age_hours=AROI_CACHE_MAX_AGE_HOURS,
+    timeout_fresh_cache=AROI_TIMEOUT_FRESH_CACHE,
+    timeout_stale_cache=AROI_TIMEOUT_STALE_CACHE,
+    use_conditional_requests=False,
+    custom_headers={'User-Agent': 'Allium/1.0'},
+    count_field='results',
+)
 # ============================================================================
 
 
@@ -194,11 +270,159 @@ def _read_timestamp(api_name):
     return _timestamp_manager.read_timestamp(api_name)
 
 
+# ============================================================================
+# GENERIC API FETCH WITH CACHE FALLBACK
+# ============================================================================
+
+def _fetch_with_cache_fallback(
+    url: str,
+    config: APIConfig,
+    progress_logger: Optional[Callable] = None,
+    cache_hours_override: Optional[float] = None,
+    return_fresh_cache: bool = False,
+    validator: Optional[Callable[[dict], bool]] = None,
+) -> Optional[dict]:
+    """
+    Generic function to fetch API data with smart caching and timeout fallback.
+    
+    This function implements the common pattern used by all API workers:
+    1. Check cache age and validate cache can be loaded
+    2. Determine timeout based on cache freshness
+    3. Make HTTP request with appropriate timeout
+    4. Fall back to cached data on timeout
+    5. Save new data to cache on success
+    
+    Args:
+        url: URL to fetch data from
+        config: APIConfig with timeout and cache settings
+        progress_logger: Optional function for progress messages
+        cache_hours_override: Override config's cache_max_age_hours (e.g., for bandwidth API)
+        return_fresh_cache: If True, return fresh cache immediately without fetching
+        validator: Optional function to validate response data structure
+        
+    Returns:
+        dict: Parsed JSON response or cached data, None if unavailable
+    """
+    api_name = config.api_name
+    display_name = config.display_name
+    cache_max_age_hours = cache_hours_override or config.cache_max_age_hours
+    cache_max_age_seconds = cache_max_age_hours * 3600
+    
+    def log_progress(message):
+        if progress_logger:
+            progress_logger(message)
+    
+    # Check cache age AND validate cache can be loaded
+    cache_age = _cache_manager.get_cache_age(api_name)
+    
+    # Pre-load cache to verify it's valid (will be reused on timeout fallback)
+    cached_data = None
+    if cache_age is not None:
+        cached_data = _load_cache(api_name)
+        if cached_data is None:
+            cache_age = None
+            log_progress("cache file exists but is invalid, treating as no cache...")
+    
+    # If cache is fresh and valid, optionally return immediately
+    if return_fresh_cache and cache_age is not None and cache_age < cache_max_age_seconds and cached_data:
+        cache_age_display = cache_age / 3600 if cache_age >= 3600 else cache_age / 60
+        cache_unit = "hours" if cache_age >= 3600 else "minutes"
+        log_progress(f"using cached {display_name} data (less than {cache_max_age_hours} hour(s) old)")
+        _mark_ready(api_name)
+        item_count = len(cached_data.get(config.count_field, []))
+        log_progress(f"loaded {item_count} items from {display_name} cache")
+        return cached_data
+    
+    # Determine timeout based on cache state
+    if cache_age is None:
+        timeout_seconds = config.timeout_stale_cache
+        timeout_display = timeout_seconds / 60
+        log_progress(f"no valid cache exists, using {timeout_display:.0f} minute timeout for initial fetch...")
+    elif cache_age >= cache_max_age_seconds:
+        cache_hours_actual = cache_age / 3600
+        timeout_seconds = config.timeout_stale_cache
+        timeout_display = timeout_seconds / 60
+        log_progress(f"cache is {cache_hours_actual:.1f} hours old (>={cache_max_age_hours}h), using {timeout_display:.0f} minute timeout to refresh...")
+    else:
+        cache_minutes = cache_age / 60
+        timeout_seconds = config.timeout_fresh_cache
+        log_progress(f"cache is {cache_minutes:.1f} minutes old (<{cache_max_age_hours}h), using {timeout_seconds} second timeout...")
+    
+    # Build request with optional conditional headers
+    headers = dict(config.custom_headers) if config.custom_headers else {}
+    if config.use_conditional_requests:
+        prev_timestamp = _read_timestamp(api_name)
+        if prev_timestamp:
+            headers["If-Modified-Since"] = prev_timestamp
+    
+    if headers:
+        conn = urllib.request.Request(url, headers=headers)
+    else:
+        conn = urllib.request.Request(url)
+    
+    # Try to fetch with timeout, fallback to cache on timeout
+    try:
+        api_response = urllib.request.urlopen(conn, timeout=timeout_seconds).read()
+    except (socket.timeout, TimeoutError, urllib.error.URLError) as e:
+        is_timeout = (
+            isinstance(e, (socket.timeout, TimeoutError)) or 
+            (isinstance(e, urllib.error.URLError) and isinstance(e.reason, (socket.timeout, TimeoutError)))
+        )
+        
+        if is_timeout:
+            log_progress(f"request timed out after {timeout_seconds} seconds...")
+            if cached_data:
+                log_progress(f"using cached {display_name} data due to timeout")
+                _mark_ready(api_name)
+                return cached_data
+            else:
+                log_progress("no cached data available after timeout")
+                _mark_stale(api_name, f"Timeout after {timeout_seconds}s with no cache")
+                return None
+        else:
+            raise
+    
+    # Parse JSON response
+    log_progress("parsing JSON response...")
+    data = json.loads(api_response.decode("utf-8"))
+    
+    # Validate response if validator provided
+    if validator and not validator(data):
+        log_progress(f"warning: invalid {display_name} data structure")
+        if cached_data:
+            log_progress("using cached data due to invalid response structure")
+            _mark_ready(api_name)
+            return cached_data
+        return None
+    
+    # Cache the data
+    log_progress(f"caching {display_name} data...")
+    _save_cache(api_name, data)
+    
+    # Write timestamp for future conditional requests
+    if config.use_conditional_requests:
+        timestamp_str = time.strftime("%a, %d %b %Y %H:%M:%S GMT", time.gmtime(time.time()))
+        _write_timestamp(api_name, timestamp_str)
+    
+    # Mark as ready
+    _mark_ready(api_name)
+    
+    # Log success
+    item_count = len(data.get(config.count_field, []))
+    log_progress(f"successfully fetched {item_count} items from {display_name} API")
+    
+    return data
+
+# ============================================================================
+
+
 @handle_http_errors("onionoo details", _load_cache, _save_cache, _mark_ready, _mark_stale, 
                    allow_exit_on_304=True, critical=True)
 def fetch_onionoo_details(onionoo_url="https://onionoo.torproject.org/details", progress_logger=None):
     """
-    Fetch onionoo details data (extracted from original Relays._fetch_onionoo_details)
+    Fetch onionoo details data with smart caching and timeout fallback.
+    
+    Uses the generic _fetch_with_cache_fallback helper with DETAILS_CONFIG settings.
     
     Args:
         onionoo_url: URL to fetch data from
@@ -207,60 +431,27 @@ def fetch_onionoo_details(onionoo_url="https://onionoo.torproject.org/details", 
     Returns:
         dict: JSON response from onionoo API
     """
-    api_name = "onionoo_details"
-    
-    def log_progress(message):
+    # Create a wrapper logger that prints if no logger provided (for backwards compatibility)
+    def log_wrapper(message):
         if progress_logger:
             progress_logger(message)
         else:
             print(message)
     
-    # Check for conditional request timestamp
-    prev_timestamp = _read_timestamp(api_name)
-    
-    if prev_timestamp:
-        headers = {"If-Modified-Since": prev_timestamp}
-        conn = urllib.request.Request(onionoo_url, headers=headers)
-    else:
-        conn = urllib.request.Request(onionoo_url)
-
-    # Add timeout to prevent hanging in CI environments
-    api_response = urllib.request.urlopen(conn, timeout=30).read()
-
-    # Parse JSON response
-    log_progress("parsing JSON response...")
-    data = json.loads(api_response.decode("utf-8"))
-    
-    # Cache the data
-    log_progress("caching data...")
-    _save_cache(api_name, data)
-    
-    # Write timestamp for future conditional requests
-    timestamp_str = time.strftime(
-        "%a, %d %b %Y %H:%M:%S GMT", time.gmtime(time.time())
+    return _fetch_with_cache_fallback(
+        url=onionoo_url,
+        config=DETAILS_CONFIG,
+        progress_logger=log_wrapper,
     )
-    _write_timestamp(api_name, timestamp_str)
-    
-    # Mark as ready
-    _mark_ready(api_name)
-    
-    # Use consistent progress format for success message
-    relay_count = len(data.get('relays', []))
-    log_progress(f"successfully fetched {relay_count} relays from onionoo details API")
-    
-    return data
 
 
 @handle_http_errors("onionoo uptime", _load_cache, _save_cache, _mark_ready, _mark_stale, 
                    allow_exit_on_304=False, critical=False)
 def fetch_onionoo_uptime(onionoo_url="https://onionoo.torproject.org/uptime", progress_logger=None):
     """
-    Fetch onionoo uptime data from the Tor Project's Onionoo API with smart caching.
+    Fetch onionoo uptime data with smart caching and timeout fallback.
     
-    Caching strategy (configurable via constants at top of this file):
-    - If cache is older than UPTIME_CACHE_MAX_AGE_HOURS: wait up to UPTIME_TIMEOUT_STALE_CACHE for fresh data
-    - If cache is newer: use UPTIME_TIMEOUT_FRESH_CACHE, fallback to cache on timeout
-    - This prevents excessive waiting while ensuring cache freshness over time
+    Uses the generic _fetch_with_cache_fallback helper with UPTIME_CONFIG settings.
     
     Args:
         onionoo_url: URL to fetch uptime data from
@@ -269,92 +460,21 @@ def fetch_onionoo_uptime(onionoo_url="https://onionoo.torproject.org/uptime", pr
     Returns:
         dict: JSON response from onionoo uptime API
     """
-    api_name = "onionoo_uptime"
-    
-    def log_progress(message):
-        if progress_logger:
-            progress_logger(message)
-    
-    # Check cache age to determine timeout strategy
-    cache_age = _cache_manager.get_cache_age(api_name)
-    cache_max_age_seconds = UPTIME_CACHE_MAX_AGE_HOURS * 3600
-    
-    if cache_age is None:
-        # No cache exists, use longer timeout to establish initial cache
-        timeout_seconds = UPTIME_TIMEOUT_STALE_CACHE
-        timeout_minutes = timeout_seconds / 60
-        log_progress(f"no cache exists, using {timeout_minutes:.0f} minute timeout for initial fetch...")
-    elif cache_age > cache_max_age_seconds:
-        # Cache is stale, wait longer to refresh
-        cache_hours = cache_age / 3600
-        timeout_seconds = UPTIME_TIMEOUT_STALE_CACHE
-        timeout_minutes = timeout_seconds / 60
-        log_progress(f"cache is {cache_hours:.1f} hours old (>{UPTIME_CACHE_MAX_AGE_HOURS}h), using {timeout_minutes:.0f} minute timeout to refresh...")
-    else:
-        # Cache is relatively fresh, use short timeout and fallback to cache if needed
-        cache_minutes = cache_age / 60
-        timeout_seconds = UPTIME_TIMEOUT_FRESH_CACHE
-        log_progress(f"cache is {cache_minutes:.1f} minutes old (<{UPTIME_CACHE_MAX_AGE_HOURS}h), using {timeout_seconds} second timeout...")
-    
-    # Check for conditional request timestamp
-    prev_timestamp = _read_timestamp(api_name)
-    
-    if prev_timestamp:
-        headers = {"If-Modified-Since": prev_timestamp}
-        conn = urllib.request.Request(onionoo_url, headers=headers)
-    else:
-        conn = urllib.request.Request(onionoo_url)
-
-    # Try to fetch with timeout, fallback to cache on timeout
-    try:
-        api_response = urllib.request.urlopen(conn, timeout=timeout_seconds).read()
-    except (socket.timeout, urllib.error.URLError) as e:
-        # Timeout occurred - check if we have cached data to use
-        if isinstance(e, socket.timeout) or (isinstance(e, urllib.error.URLError) and isinstance(e.reason, socket.timeout)):
-            log_progress(f"request timed out after {timeout_seconds} seconds...")
-            cached_data = _load_cache(api_name)
-            if cached_data:
-                log_progress("using cached uptime data due to timeout")
-                _mark_ready(api_name)
-                return cached_data
-            else:
-                log_progress("no cached data available after timeout")
-                _mark_stale(api_name, f"Timeout after {timeout_seconds}s with no cache")
-                return None
-        else:
-            # Re-raise if it's a different URLError
-            raise
-
-    log_progress("parsing JSON response...")
-
-    # Parse JSON response
-    data = json.loads(api_response.decode("utf-8"))
-    
-    # Cache the data
-    log_progress("caching data...")
-    _save_cache(api_name, data)
-    
-    # Write timestamp for future conditional requests
-    timestamp_str = time.strftime(
-        "%a, %d %b %Y %H:%M:%S GMT", time.gmtime(time.time())
+    return _fetch_with_cache_fallback(
+        url=onionoo_url,
+        config=UPTIME_CONFIG,
+        progress_logger=progress_logger,
     )
-    _write_timestamp(api_name, timestamp_str)
-    
-    # Mark as ready
-    _mark_ready(api_name)
-    
-    # Use consistent progress format for success message
-    relay_count = len(data.get('relays', []))
-    log_progress(f"successfully fetched {relay_count} relays from onionoo uptime API")
-    return data
 
 
 @handle_http_errors("onionoo historical bandwidth", _load_cache, _save_cache, _mark_ready, _mark_stale, 
                    allow_exit_on_304=False, critical=False)
 def fetch_onionoo_bandwidth(onionoo_url="https://onionoo.torproject.org/bandwidth", cache_hours=12, progress_logger=None):
     """
-    Fetch onionoo historical bandwidth data from the Tor Project's Onionoo API.
-    Implements configurable cache refresh logic - only fetches if cache is older than specified hours.
+    Fetch onionoo historical bandwidth data with smart caching and timeout fallback.
+    
+    Uses the generic _fetch_with_cache_fallback helper with BANDWIDTH_CONFIG settings.
+    Returns fresh cache immediately if available (no fetch needed for fresh data).
     
     Args:
         onionoo_url: URL to fetch historical bandwidth data from
@@ -364,70 +484,30 @@ def fetch_onionoo_bandwidth(onionoo_url="https://onionoo.torproject.org/bandwidt
     Returns:
         dict: JSON response from onionoo historical bandwidth API or cached data
     """
-    api_name = "onionoo_bandwidth"
-    
-    def log_progress(message):
-        if progress_logger:
-            progress_logger(message)
-    
-    # Convert hours to seconds for cache age comparison
-    cache_seconds = cache_hours * 3600
-    
-    # Check cache age first - only refresh if older than specified hours
-    cache_age = _cache_manager.get_cache_age(api_name)
-    if cache_age is not None and cache_age < cache_seconds:
-        log_progress(f"using cached historical bandwidth data (less than {cache_hours} hours old)")
-        cached_data = _load_cache(api_name)
-        if cached_data:
-            _mark_ready(api_name)
-            relay_count = len(cached_data.get('relays', []))
-            log_progress(f"loaded {relay_count} relays from historical bandwidth cache")
-            return cached_data
-    
-    # Cache is stale or doesn't exist, fetch new data
-    log_progress(f"fetching fresh historical bandwidth data (cache older than {cache_hours} hours)")
-    
-    # Check for conditional request timestamp
-    prev_timestamp = _read_timestamp(api_name)
-    
-    if prev_timestamp:
-        headers = {"If-Modified-Since": prev_timestamp}
-        conn = urllib.request.Request(onionoo_url, headers=headers)
-    else:
-        conn = urllib.request.Request(onionoo_url)
-
-    # Add timeout to prevent hanging in CI environments
-    api_response = urllib.request.urlopen(conn, timeout=30).read()
-
-    log_progress("parsing JSON response...")
-
-    # Parse JSON response
-    data = json.loads(api_response.decode("utf-8"))
-    
-    # Cache the data
-    log_progress("caching historical bandwidth data...")
-    _save_cache(api_name, data)
-    
-    # Write timestamp for future conditional requests
-    timestamp_str = time.strftime(
-        "%a, %d %b %Y %H:%M:%S GMT", time.gmtime(time.time())
+    return _fetch_with_cache_fallback(
+        url=onionoo_url,
+        config=BANDWIDTH_CONFIG,
+        progress_logger=progress_logger,
+        cache_hours_override=cache_hours,
+        return_fresh_cache=True,  # Return fresh cache immediately without fetching
     )
-    _write_timestamp(api_name, timestamp_str)
-    
-    # Mark as ready
-    _mark_ready(api_name)
-    
-    # Use consistent progress format for success message
-    relay_count = len(data.get('relays', []))
-    log_progress(f"successfully fetched {relay_count} relays from onionoo historical bandwidth API")
-    return data
+
+
+def _validate_aroi_response(data: dict) -> bool:
+    """Validator for AROI API response structure."""
+    required_keys = ['metadata', 'statistics', 'results']
+    return all(key in data for key in required_keys)
 
 
 @handle_http_errors("AROI validation", _load_cache, _save_cache, _mark_ready, _mark_stale,
                    allow_exit_on_304=False, critical=False)
 def fetch_aroi_validation(aroi_url="https://aroivalidator.1aeo.com/latest.json", progress_logger=None):
     """
-    Fetch AROI validation data from aroivalidator.1aeo.com API.
+    Fetch AROI validation data with smart caching and timeout fallback.
+    
+    Uses the generic _fetch_with_cache_fallback helper with AROI_CONFIG settings.
+    Returns fresh cache immediately if available (no fetch needed for fresh data).
+    Validates response structure and falls back to cache if invalid.
     
     Args:
         aroi_url: URL to fetch AROI validation data from
@@ -436,50 +516,20 @@ def fetch_aroi_validation(aroi_url="https://aroivalidator.1aeo.com/latest.json",
     Returns:
         dict: JSON response with AROI validation data
     """
-    api_name = "aroi_validation"
-    
-    def log_progress(message):
+    # Create a wrapper logger that prints if no logger provided (for backwards compatibility)
+    def log_wrapper(message):
         if progress_logger:
             progress_logger(message)
         else:
             print(message)
     
-    # Check if we have cached data less than 1 hour old
-    cache_path = os.path.join(CACHE_DIR, "aroi_validation_cache.json")
-    if os.path.exists(cache_path):
-        cache_age = time.time() - os.path.getmtime(cache_path)
-        if cache_age < 3600:  # 1 hour in seconds
-            log_progress(f"using cached AROI validation data (less than 1 hour old)")
-            cached_data = _load_cache(api_name)
-            if cached_data:
-                validation_count = len(cached_data.get('results', []))
-                log_progress(f"loaded {validation_count} relay validations from cache")
-                _mark_ready(api_name)
-                return cached_data
-    
-    # Fetch fresh data
-    log_progress(f"fetching fresh AROI validation data")
-    req = urllib.request.Request(aroi_url, headers={'User-Agent': 'Allium/1.0'})
-    api_response = urllib.request.urlopen(req, timeout=30).read()
-    
-    log_progress("parsing JSON response...")
-    data = json.loads(api_response.decode('utf-8'))
-    
-    # Validate structure
-    required_keys = ['metadata', 'statistics', 'results']
-    if not all(key in data for key in required_keys):
-        log_progress("warning: invalid AROI validation data structure")
-        return None
-    
-    # Cache the data
-    log_progress("caching AROI validation data...")
-    _save_cache(api_name, data)
-    _mark_ready(api_name)
-    
-    validation_count = len(data.get('results', []))
-    log_progress(f"successfully fetched {validation_count} relay validations from AROI validator API")
-    
-    return data
+    return _fetch_with_cache_fallback(
+        url=aroi_url,
+        config=AROI_CONFIG,
+        progress_logger=log_wrapper,
+        return_fresh_cache=True,  # Return fresh cache immediately without fetching
+        validator=_validate_aroi_response,
+    )
 
 
 def fetch_collector_consensus_data(authorities=None, progress_logger=None):
