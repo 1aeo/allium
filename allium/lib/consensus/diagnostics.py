@@ -258,6 +258,7 @@ def _format_relay_values(diagnostics: dict, flag_thresholds: dict = None, observ
     guard_bw_value = observed_bandwidth if observed_bandwidth else (relay_bw or 0)
     
     # Calculate threshold ranges from flag_thresholds (single pass)
+    # Track both actual values set AND defaults for authorities that don't set values
     guard_wfu_threshold = DEFAULT_WFU_THRESHOLD
     guard_tk_threshold = GUARD_TK_DEFAULT
     hsdir_wfu_threshold = DEFAULT_WFU_THRESHOLD
@@ -268,8 +269,14 @@ def _format_relay_values(diagnostics: dict, flag_thresholds: dict = None, observ
     stable_mtbf_values = []
     fast_speed_values = []
     
+    # Track per-threshold statistics for showing min/max and authority counts
+    # This helps distinguish dir-spec defaults from actual authority values
+    hsdir_tk_values = []  # (auth_name, value) tuples for authorities that SET this
+    hsdir_tk_default_count = 0  # Count of authorities using dir-spec default
+    fast_speed_by_auth = {}  # auth_name -> value
+    
     if flag_thresholds:
-        for thresholds in flag_thresholds.values():
+        for auth_name, thresholds in flag_thresholds.items():
             # Guard thresholds
             if 'guard-wfu' in thresholds:
                 val = _parse_wfu_threshold(thresholds['guard-wfu'])
@@ -284,16 +291,36 @@ def _format_relay_values(diagnostics: dict, flag_thresholds: dict = None, observ
                 stable_uptime_values.append(thresholds['stable-uptime'])
             if 'stable-mtbf' in thresholds:
                 stable_mtbf_values.append(thresholds['stable-mtbf'])
-            # Fast thresholds
+            # Fast thresholds - track per authority
             if 'fast-speed' in thresholds:
                 fast_speed_values.append(thresholds['fast-speed'])
-            # HSDir thresholds
+                fast_speed_by_auth[auth_name] = thresholds['fast-speed']
+            # HSDir thresholds - track which authorities set vs use default
             if 'hsdir-wfu' in thresholds:
                 val = _parse_wfu_threshold(thresholds['hsdir-wfu'])
                 if val:
                     hsdir_wfu_threshold = max(hsdir_wfu_threshold, val)
-            if 'hsdir-tk' in thresholds:
-                hsdir_tk_threshold = max(hsdir_tk_threshold, thresholds['hsdir-tk'] or 0)
+            if 'hsdir-tk' in thresholds and thresholds['hsdir-tk']:
+                hsdir_tk_values.append((auth_name, thresholds['hsdir-tk']))
+                hsdir_tk_threshold = max(hsdir_tk_threshold, thresholds['hsdir-tk'])
+            else:
+                hsdir_tk_default_count += 1
+    
+    # Calculate HSDir TK statistics for display
+    # dir-spec default: 25 hours (HSDIR_TK_DEFAULT)
+    # Consensus needs majority (5/9), so if 8 authorities use 25h and 1 uses 10d,
+    # relay only needs 25h to get HSDir from majority
+    hsdir_tk_min = HSDIR_TK_DEFAULT  # dir-spec default (25 hours)
+    hsdir_tk_max = hsdir_tk_threshold  # strictest (currently moria1's ~10 days)
+    hsdir_tk_consensus = HSDIR_TK_DEFAULT  # what majority requires (dir-spec default)
+    hsdir_tk_strict_auths = [name for name, val in hsdir_tk_values if val > HSDIR_TK_DEFAULT * 2]  # significantly stricter
+    
+    # Calculate Fast speed statistics
+    # Most authorities use ~102 KB/s, moria1 uses ~1 MB/s
+    fast_speed_min = min(fast_speed_values) if fast_speed_values else FAST_BW_GUARANTEE
+    fast_speed_max = max(fast_speed_values) if fast_speed_values else FAST_BW_GUARANTEE
+    fast_speed_typical = sorted(fast_speed_values)[len(fast_speed_values)//2] if fast_speed_values else FAST_BW_GUARANTEE
+    fast_speed_strict_auths = [name for name, val in fast_speed_by_auth.items() if val > fast_speed_typical * 2]
     
     # Calculate Guard BW analysis using observed_bandwidth (actual bandwidth, not scaled consensus value)
     guard_bw_range = _format_range(guard_bw_values, _format_bandwidth_value) if guard_bw_values else 'N/A'
@@ -383,6 +410,27 @@ def _format_relay_values(diagnostics: dict, flag_thresholds: dict = None, observ
         'hsdir_wfu_meets': relay_wfu and relay_wfu >= hsdir_wfu_threshold,
         'hsdir_tk_meets': relay_tk and relay_tk >= hsdir_tk_threshold,
         'hsdir_tk_days_needed': (hsdir_tk_threshold - (relay_tk or 0)) / SECONDS_PER_DAY if relay_tk and relay_tk < hsdir_tk_threshold else 0,
+        
+        # HSDir TK threshold statistics (showing dir-spec vs actual)
+        # dir-spec default: 25 hours; moria1 uses ~10 days; others use default
+        'hsdir_tk_min': hsdir_tk_min,  # dir-spec default (25 hours)
+        'hsdir_tk_max': hsdir_tk_max,  # strictest authority (moria1's ~10 days)
+        'hsdir_tk_consensus': hsdir_tk_consensus,  # what majority requires
+        'hsdir_tk_min_display': _format_days(hsdir_tk_min),
+        'hsdir_tk_max_display': _format_days(hsdir_tk_max),
+        'hsdir_tk_consensus_display': _format_days(hsdir_tk_consensus),
+        'hsdir_tk_strict_auths': hsdir_tk_strict_auths,  # authorities with stricter requirements
+        'hsdir_tk_default_count': hsdir_tk_default_count,  # count using dir-spec default
+        
+        # Fast speed threshold statistics
+        # Most authorities use ~102 KB/s, moria1 uses ~1 MB/s
+        'fast_speed_min': fast_speed_min,
+        'fast_speed_max': fast_speed_max,
+        'fast_speed_typical': fast_speed_typical,
+        'fast_speed_min_display': _format_bandwidth_value(fast_speed_min),
+        'fast_speed_max_display': _format_bandwidth_value(fast_speed_max),
+        'fast_speed_typical_display': _format_bandwidth_value(fast_speed_typical),
+        'fast_speed_strict_auths': fast_speed_strict_auths,  # authorities with stricter requirements
         
         # Reachability values
         'ipv4_reachable_count': ipv4_reachable_count,

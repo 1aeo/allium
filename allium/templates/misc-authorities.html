@@ -611,7 +611,7 @@
             <li><strong>Stable Uptime:</strong> Continuous uptime threshold for Stable flag.</li>
             <li><strong>Stable MTBF:</strong> Mean Time Between Failures threshold. Published value is median; actual minimum ~5-7 days.</li>
             <li><strong>Fast Speed (7/8ths):</strong> Bandwidth threshold for Fast flag (top 7/8ths of network OR ≥100 KB/s).</li>
-            <li><strong>HSDir WFU/TK:</strong> Requirements for Hidden Service Directory flag (WFU ≥98%, TK ≥10 days).</li>
+            <li><strong>HSDir WFU/TK:</strong> Requirements for Hidden Service Directory flag. WFU ≥98% (all authorities). TK per dir-spec: ≥25 hours (most authorities use default); moria1 uses ≥10 days.</li>
             <li><strong>Enough MTBF:</strong> Boolean flag from <code>flag-thresholds</code> line (0 or 1). 
                 <span style="color: #28a745;">✓ (=1)</span> = Authority has collected <strong>sufficient MTBF stability data</strong> to accurately compute stability-related thresholds. 
                 <span style="color: #dc3545;">✗ (=0)</span> = Authority recently restarted or lacks historical uptime data. 

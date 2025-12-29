@@ -617,10 +617,15 @@ Data from <a href="https://collector.torproject.org/recent/relay-descriptors/vot
         <td>{% if rv.stable_mtbf_meets_all|default(false) %}<span style="color: #28a745; font-weight: bold;">MEETS - all authorities</span>{% elif rv.stable_mtbf_meets_count|default(0) >= diag.majority_required %}<span style="color: #ffc107; font-weight: bold;">PARTIAL - {{ rv.stable_mtbf_meets_count|default(0) }}/{{ rv.total_authorities }}</span>{% else %}<span style="color: #dc3545; font-weight: bold;">BELOW - {{ rv.stable_mtbf_meets_count|default(0) }}/{{ rv.total_authorities }}</span>{% endif %}</td>
     </tr>
     <tr>
-        <td>Fast Speed</td>
+        <td title="Fast flag requires bandwidth in top 7/8ths of network OR ≥100 KB/s guarantee">Fast Speed</td>
         <td title="Observed bandwidth from relay's server descriptor (self-reported by relay). Used for Fast flag eligibility.">{{ rv.fast_speed_display }}</td>
-        <td title="Fast requires: bandwidth in top 7/8ths ({{ rv.fast_range }}) OR ≥100 KB/s minimum">≥{{ rv.fast_minimum_display }} OR ≥{{ rv.fast_range }}</td>
-        <td>{% if rv.fast_meets_minimum %}<span style="color: #28a745; font-weight: bold;">MEETS - ≥100 KB/s minimum</span>{% elif rv.fast_meets_all %}<span style="color: #28a745; font-weight: bold;">MEETS - in top 7/8ths</span>{% elif rv.fast_meets_count > 0 %}<span style="color: #ffc107; font-weight: bold;">PARTIAL - {{ rv.fast_meets_count }}/{{ rv.total_authorities }}</span>{% else %}<span style="color: #dc3545; font-weight: bold;">BELOW - need ≥100 KB/s</span>{% endif %}</td>
+        <td title="Most authorities: ≥{{ rv.fast_speed_typical_display }}{% if rv.fast_speed_strict_auths %}; Stricter: {{ rv.fast_speed_strict_auths|join(', ') }} uses ≥{{ rv.fast_speed_max_display }}{% endif %}">
+            ≥{{ rv.fast_minimum_display }} <span style="color: #666; font-size: 11px;">(guarantee)</span> OR ≥{{ rv.fast_speed_typical_display }} <span style="color: #666; font-size: 11px;">(typical)</span>
+            {% if rv.fast_speed_strict_auths %}
+            <br><span style="color: #856404; font-size: 10px;" title="These authorities have stricter requirements">⚠️ {{ rv.fast_speed_strict_auths|join(', ') }}: ≥{{ rv.fast_speed_max_display }}</span>
+            {% endif %}
+        </td>
+        <td>{% if rv.fast_meets_minimum %}<span style="color: #28a745; font-weight: bold;">MEETS - ≥100 KB/s guarantee</span>{% elif rv.fast_meets_all %}<span style="color: #28a745; font-weight: bold;">MEETS - all {{ rv.total_authorities }} auths</span>{% elif rv.fast_meets_count > 0 %}<span style="color: #ffc107; font-weight: bold;">PARTIAL - {{ rv.fast_meets_count }}/{{ rv.total_authorities }}</span>{% else %}<span style="color: #dc3545; font-weight: bold;">BELOW - need ≥100 KB/s</span>{% endif %}</td>
     </tr>
     <tr>
         <td>HSDir WFU</td>
@@ -629,9 +634,14 @@ Data from <a href="https://collector.torproject.org/recent/relay-descriptors/vot
         <td>{% if diag.flag_summary.hsdir.eligible_count == diag.total_authorities %}<span style="color: #28a745; font-weight: bold;">MEETS - all {{ diag.total_authorities }} auths</span>{% elif diag.flag_summary.hsdir.eligible_count >= diag.majority_required %}<span style="color: #ffc107; font-weight: bold;">PARTIAL - {{ diag.flag_summary.hsdir.eligible_count }}/{{ diag.total_authorities }}</span>{% else %}<span style="color: #dc3545; font-weight: bold;">BELOW - {{ diag.flag_summary.hsdir.eligible_count }}/{{ diag.total_authorities }}</span>{% endif %}</td>
     </tr>
     <tr>
-        <td>HSDir TK</td>
+        <td title="HSDir Time Known - how long relay has been tracked by authorities">HSDir TK</td>
         <td>{{ rv.tk_display }}</td>
-        <td>≥{{ "%.1f"|format(rv.hsdir_tk_threshold / 86400) }} days (from all auths)</td>
+        <td title="dir-spec default: 25 hours ({{ rv.hsdir_tk_default_count }} auths){% if rv.hsdir_tk_strict_auths %}; Stricter: {{ rv.hsdir_tk_strict_auths|join(', ') }} uses {{ rv.hsdir_tk_max_display }}{% endif %}">
+            ≥{{ rv.hsdir_tk_consensus_display }} <span style="color: #666; font-size: 11px;">({{ rv.hsdir_tk_default_count }}/{{ diag.total_authorities }} auths)</span>
+            {% if rv.hsdir_tk_strict_auths %}
+            <br><span style="color: #856404; font-size: 10px;" title="These authorities have stricter requirements">⚠️ {{ rv.hsdir_tk_strict_auths|join(', ') }}: ≥{{ rv.hsdir_tk_max_display }}</span>
+            {% endif %}
+        </td>
         <td>{% if diag.flag_summary.hsdir.eligible_count == diag.total_authorities %}<span style="color: #28a745; font-weight: bold;">MEETS - all {{ diag.total_authorities }} auths</span>{% elif diag.flag_summary.hsdir.eligible_count >= diag.majority_required %}<span style="color: #ffc107; font-weight: bold;">PARTIAL - {{ diag.flag_summary.hsdir.eligible_count }}/{{ diag.total_authorities }}</span>{% else %}<span style="color: #dc3545; font-weight: bold;">BELOW - {{ diag.flag_summary.hsdir.eligible_count }}/{{ diag.total_authorities }}</span>{% endif %}</td>
     </tr>
     <tr>
@@ -682,7 +692,7 @@ Flags: <span style="color: #28a745; font-weight: bold;">green</span> = all autho
     <th title="Guard TK: Measured | Threshold. ≥8 days required for Guard flag.">Guard TK (M|T)</th>
     <th title="Stable MTBF: Measured | Threshold. Note: Actual flag assignment may differ from threshold.">Stable MTBF (M|T)</th>
     <th title="HSDir WFU: Measured | Threshold. ≥98% required for HSDir flag.">HSDir WFU (M|T)</th>
-    <th title="HSDir TK: Measured | Threshold. ≥10 days required for HSDir flag.">HSDir TK (M|T)</th>
+    <th title="HSDir TK: Measured | Threshold. dir-spec: ≥25 hours (most auths); moria1: ≥10 days">HSDir TK (M|T)</th>
     <th title="Descriptor Published: Timestamp of relay's descriptor. StaleDesc flag assigned if >18 hours old (bad). Red = StaleDesc, Green = Fresh.">Desc Published</th>
     <th title="Scaled consensus weight for path selection. From authority's 'w Bandwidth' line. 10 KB/s = default when authority uses relay's advertised BW instead of measured.">Cons Wt</th>
 </tr>
@@ -830,7 +840,7 @@ Flags: <span style="color: #28a745; font-weight: bold;">green</span> = all autho
             <span style="color: #6c757d;">—</span>
         {% endif %}
     </td>
-    {# HSDir TK: measured | threshold (10 days) #}
+    {# HSDir TK: measured | threshold (25h dir-spec default; moria1 uses ~10 days) #}
     <td>
         {% if vote.voted and vote.hsdir_tk_threshold %}
             <span style="color: {% if vote.hsdir_tk_meets %}#28a745{% else %}#dc3545{% endif %};"
