@@ -274,23 +274,34 @@ def fetch_onionoo_uptime(onionoo_url="https://onionoo.torproject.org/uptime", pr
         if progress_logger:
             progress_logger(message)
     
-    # Check cache age to determine timeout strategy
+    # Check cache age AND validate cache can be loaded to determine timeout strategy
+    # This prevents using short timeout when cache exists but is corrupted/unreadable
     cache_age = _cache_manager.get_cache_age(api_name)
     cache_max_age_seconds = UPTIME_CACHE_MAX_AGE_HOURS * 3600
     
+    # Pre-load cache to verify it's valid (will be reused on timeout fallback)
+    cached_data = None
+    if cache_age is not None:
+        cached_data = _load_cache(api_name)
+        if cached_data is None:
+            # Cache file exists but couldn't be loaded (corrupted/empty)
+            # Treat as if no cache exists
+            cache_age = None
+            log_progress("cache file exists but is invalid, treating as no cache...")
+    
     if cache_age is None:
-        # No cache exists, use longer timeout to establish initial cache
+        # No cache exists or cache is invalid, use longer timeout to establish initial cache
         timeout_seconds = UPTIME_TIMEOUT_STALE_CACHE
         timeout_minutes = timeout_seconds / 60
-        log_progress(f"no cache exists, using {timeout_minutes:.0f} minute timeout for initial fetch...")
-    elif cache_age > cache_max_age_seconds:
-        # Cache is stale, wait longer to refresh
+        log_progress(f"no valid cache exists, using {timeout_minutes:.0f} minute timeout for initial fetch...")
+    elif cache_age >= cache_max_age_seconds:
+        # Cache is stale (>= threshold), wait longer to refresh
         cache_hours = cache_age / 3600
         timeout_seconds = UPTIME_TIMEOUT_STALE_CACHE
         timeout_minutes = timeout_seconds / 60
-        log_progress(f"cache is {cache_hours:.1f} hours old (>{UPTIME_CACHE_MAX_AGE_HOURS}h), using {timeout_minutes:.0f} minute timeout to refresh...")
+        log_progress(f"cache is {cache_hours:.1f} hours old (>={UPTIME_CACHE_MAX_AGE_HOURS}h), using {timeout_minutes:.0f} minute timeout to refresh...")
     else:
-        # Cache is relatively fresh, use short timeout and fallback to cache if needed
+        # Cache is relatively fresh (< threshold), use short timeout and fallback to cache if needed
         cache_minutes = cache_age / 60
         timeout_seconds = UPTIME_TIMEOUT_FRESH_CACHE
         log_progress(f"cache is {cache_minutes:.1f} minutes old (<{UPTIME_CACHE_MAX_AGE_HOURS}h), using {timeout_seconds} second timeout...")
@@ -307,11 +318,16 @@ def fetch_onionoo_uptime(onionoo_url="https://onionoo.torproject.org/uptime", pr
     # Try to fetch with timeout, fallback to cache on timeout
     try:
         api_response = urllib.request.urlopen(conn, timeout=timeout_seconds).read()
-    except (socket.timeout, urllib.error.URLError) as e:
-        # Timeout occurred - check if we have cached data to use
-        if isinstance(e, socket.timeout) or (isinstance(e, urllib.error.URLError) and isinstance(e.reason, socket.timeout)):
+    except (socket.timeout, TimeoutError, urllib.error.URLError) as e:
+        # Check if this is a timeout-related exception
+        is_timeout = (
+            isinstance(e, (socket.timeout, TimeoutError)) or 
+            (isinstance(e, urllib.error.URLError) and isinstance(e.reason, (socket.timeout, TimeoutError)))
+        )
+        
+        if is_timeout:
             log_progress(f"request timed out after {timeout_seconds} seconds...")
-            cached_data = _load_cache(api_name)
+            # Use pre-loaded cached_data if available (validated earlier)
             if cached_data:
                 log_progress("using cached uptime data due to timeout")
                 _mark_ready(api_name)
@@ -321,7 +337,7 @@ def fetch_onionoo_uptime(onionoo_url="https://onionoo.torproject.org/uptime", pr
                 _mark_stale(api_name, f"Timeout after {timeout_seconds}s with no cache")
                 return None
         else:
-            # Re-raise if it's a different URLError
+            # Re-raise if it's a different URLError (not a timeout)
             raise
 
     log_progress("parsing JSON response...")
