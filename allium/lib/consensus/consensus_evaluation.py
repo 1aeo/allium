@@ -1084,9 +1084,9 @@ def _identify_issues(consensus_data: dict, current_flags: list = None, observed_
             issues.append({
                 'severity': 'warning',
                 'category': 'bandwidth',
-                'title': 'High bandwidth measurement deviation',
-                'description': f"Large variation in bandwidth measurements across authorities",
-                'suggestion': 'Bandwidth measurements vary significantly. This can affect consensus weight. Ensure stable network connection and consistent bandwidth availability.',
+                'title': 'High consensus weight deviation',
+                'description': f"Large variation in Consensus Weight values across authorities (see 'Cons Wt' column in Per-Authority Details below)",
+                'suggestion': 'Consensus weight measurements vary significantly between authorities. This can affect traffic distribution. Ensure stable network connection and consistent bandwidth availability.',
             })
     
     # =========================================================================
@@ -1112,8 +1112,8 @@ def _identify_issues(consensus_data: dict, current_flags: list = None, observed_
             'severity': 'error',
             'category': 'flags',
             'title': 'BadExit flag assigned',
-            'description': 'This relay has been flagged as a bad exit by directory authorities',
-            'suggestion': 'BadExit means authorities detected malicious behavior (traffic modification, SSL stripping, etc.). If you believe this is in error, contact the Tor Project via tor-relays mailing list.',
+            'description': 'This relay has been flagged as a bad exit by directory authorities. BadExit means authorities detected malicious behavior (traffic modification, SSL stripping, etc.).',
+            'suggestion': 'Contact <a href="mailto:bad-relays@lists.torproject.org">bad-relays@lists.torproject.org</a> to understand and resolve this issue.',
             'doc_ref': 'https://community.torproject.org/relay/',
         })
     
