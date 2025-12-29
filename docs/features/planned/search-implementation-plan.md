@@ -41,39 +41,67 @@ Implement server-side search functionality for Tor relay metrics without client-
 ### Architecture
 
 ```
-┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│  HTML Form  │────▶│  /search?q=...   │────▶│  Pages Function │
-│  (any page) │     │  (GET request)   │     │  (search.js)    │
-└─────────────┘     └──────────────────┘     └────────┬────────┘
-                                                      │
-                    ┌──────────────────┐              │
-                    │ search-index.json│◀─────────────┘
-                    │ (static file)    │   fetch + cache
-                    └──────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        BUILD TIME (allium repo)                         │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  ┌─────────────┐     ┌──────────────────┐     ┌─────────────────────┐  │
+│  │ Onionoo API │────▶│    allium.py     │────▶│ search-index.json   │  │
+│  │   (data)    │     │  (generator)     │     │ + HTML pages        │  │
+│  └─────────────┘     └──────────────────┘     └─────────────────────┘  │
+│                              │                                          │
+│                              ▼                                          │
+│                    ┌──────────────────┐                                 │
+│                    │  skeleton.html   │                                 │
+│                    │  (search form)   │                                 │
+│                    └──────────────────┘                                 │
+└─────────────────────────────────────────────────────────────────────────┘
                               │
+                              │ deploy
                               ▼
-                    ┌──────────────────┐
-                    │  302 Redirect    │
-                    │  /relay/[fp]/    │
-                    └──────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                     RUNTIME (allium-deploy repo)                        │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  ┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐      │
+│  │  HTML Form  │────▶│  /search?q=...   │────▶│  Pages Function │      │
+│  │  (any page) │     │  (GET request)   │     │  (search.js)    │      │
+│  └─────────────┘     └──────────────────┘     └────────┬────────┘      │
+│                                                        │               │
+│                      ┌──────────────────┐              │               │
+│                      │ search-index.json│◀─────────────┘               │
+│                      │ (static file)    │   fetch + cache              │
+│                      └──────────────────┘                              │
+│                                │                                        │
+│                                ▼                                        │
+│                      ┌──────────────────┐                              │
+│                      │  302 Redirect    │                              │
+│                      │  /relay/[fp]/    │                              │
+│                      └──────────────────┘                              │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Deliverables
 
-1. **Search Index Generator** (`allium/lib/search_index.py`) - Python module for Allium
-2. **Search Function** (`functions/search.js`) - Cloudflare Pages Function for allium-deploy
-3. **Search Form** - HTML addition to `skeleton.html` template
-4. **Disambiguation Page** - HTML template for multiple results
+#### This Repository (`1aeo/allium`)
+1. **Search Index Generator** (`allium/lib/search_index.py`) - Python module
+2. **Search Form** - HTML addition to `templates/skeleton.html`
+3. **Integration** - Update `allium.py` to generate index on build
+4. **Output** - `search-index.json` generated into output directory
+
+#### Deploy Repository (`1aeo/allium-deploy`)
+5. **Search Function** (`functions/search.js`) - Cloudflare Pages Function
+6. **Disambiguation/Not-Found Pages** - Rendered by the function
 
 ### Timeline
 
-| Phase | Effort | Description |
-|-------|--------|-------------|
-| Index Generator | 1 day | Python module + integration |
-| Search Function | 1 day | Cloudflare function + tests |
-| UI Integration | 0.5 day | Form + disambiguation template |
-| Testing | 0.5 day | End-to-end validation |
-| **Total** | **3 days** | |
+| Phase | Repository | Effort | Description |
+|-------|------------|--------|-------------|
+| Index Generator | `allium` | 1 day | Python module + integration with allium.py |
+| Search Form | `allium` | 0.5 day | HTML template update |
+| Search Function | `allium-deploy` | 1 day | Cloudflare Pages Function + security |
+| Testing | Both | 0.5 day | End-to-end validation |
+| **Total** | | **3 days** | |
 
 ### Resource Requirements
 
@@ -366,7 +394,15 @@ For families without AROI domain or matching contacts:
 
 ## Technical Implementation
 
-### 1. Search Index Generator
+---
+
+## Part A: Allium Repository (`1aeo/allium`)
+
+This section covers all changes to the main Allium static site generator.
+
+---
+
+### A1. Search Index Generator
 
 #### File: `allium/lib/search_index.py`
 
@@ -635,7 +671,9 @@ def generate_search_index(relays_data: Dict[str, Any], output_path: str) -> Dict
     }
 ```
 
-#### Integration with `allium.py`
+---
+
+### A2. Integration with `allium.py`
 
 Add after page generation, before completion message:
 
@@ -654,9 +692,46 @@ progress_logger.log(
 
 ---
 
-### 2. Cloudflare Pages Function
+### A3. HTML Search Form
 
-#### File: `functions/search.js` (for allium-deploy repository)
+Add to `allium/templates/skeleton.html` in the navigation area:
+
+```html
+<form action="{{ page_ctx.path_prefix }}search" method="GET" 
+      style="display: inline-block; margin-left: 15px;">
+  <input type="text" 
+         name="q" 
+         placeholder="Search relays, families, AS..." 
+         title="Search by fingerprint, nickname, AROI, AS number, country, or IP"
+         style="padding: 4px 8px; width: 200px; border: 1px solid #ccc; border-radius: 3px;"
+         maxlength="100"
+         pattern="[A-Za-z0-9\s\-_.@:]+"
+         autocomplete="off"
+         autocapitalize="off"
+         spellcheck="false">
+  <button type="submit" 
+          style="padding: 4px 12px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer;">
+    Search
+  </button>
+</form>
+```
+
+**Security attributes:**
+- `maxlength="100"` - Client-side limit matching server-side validation
+- `pattern="[A-Za-z0-9\s\-_.@:]+"` - Client-side character validation (defense-in-depth)
+- `autocomplete="off"` - Prevent sensitive data leakage from form history
+
+---
+
+## Part B: Allium-Deploy Repository (`1aeo/allium-deploy`)
+
+This section covers all changes to the Cloudflare Pages deployment repository.
+
+---
+
+### B1. Cloudflare Pages Function
+
+#### File: `functions/search.js`
 
 ```javascript
 /**
@@ -1272,56 +1347,34 @@ export async function onRequestGet(context) {
 
 ---
 
-### 3. HTML Search Form
-
-Add to `allium/templates/skeleton.html` in the navigation area:
-
-```html
-<form action="{{ page_ctx.path_prefix }}search" method="GET" 
-      style="display: inline-block; margin-left: 15px;">
-  <input type="text" 
-         name="q" 
-         placeholder="Search relays, families, AS..." 
-         title="Search by fingerprint, nickname, AROI, AS number, country, or IP"
-         style="padding: 4px 8px; width: 200px; border: 1px solid #ccc; border-radius: 3px;"
-         maxlength="100"
-         pattern="[A-Za-z0-9\s\-_.@:]+"
-         autocomplete="off"
-         autocapitalize="off"
-         spellcheck="false">
-  <button type="submit" 
-          style="padding: 4px 12px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer;">
-    Search
-  </button>
-</form>
-```
-
-**Security attributes:**
-- `maxlength="100"` - Client-side limit matching server-side validation
-- `pattern="[A-Za-z0-9\s\-_.@:]+"` - Client-side character validation (defense-in-depth)
-- `autocomplete="off"` - Prevent sensitive data leakage from form history
-
----
-
 ## Deployment Checklist
 
-### Allium Repository
+### Part A: Allium Repository (`1aeo/allium`)
 
 ```bash
 # 1. Add search index generator
-# Copy search_index.py to allium/lib/
+cp search_index.py allium/lib/
 
-# 2. Update allium.py to generate index
-# Add integration code after page generation
+# 2. Update templates/skeleton.html with search form
+# Add the HTML form from section A3
 
-# 3. Test locally
+# 3. Update allium.py to generate index
+# Add integration code from section A2
+
+# 4. Test locally
 python3 allium/allium.py --out ./www --progress
 
-# 4. Verify index created
+# 5. Verify outputs
 ls -la www/search-index.json
+# Check form appears in generated HTML
+
+# 6. Commit and push
+git add allium/lib/search_index.py allium/templates/skeleton.html allium/allium.py
+git commit -m "Add search index generator and search form"
+git push
 ```
 
-### Allium-Deploy Repository
+### Part B: Allium-Deploy Repository (`1aeo/allium-deploy`)
 
 ```bash
 # 1. Add search function
