@@ -581,7 +581,7 @@ Data from <a href="https://collector.torproject.org/recent/relay-descriptors/vot
         <td>{% if diag.vote_count >= diag.majority_required %}<span style="color: #28a745; font-weight: bold;">VALID</span>{% else %}<span style="color: #dc3545; font-weight: bold;">NOT VALID</span>{% endif %}</td>
     </tr>
     <tr>
-        <td title="Source: CollecTor | File: vote | Field: 'w Bandwidth=X' | Consensus weight for path selection (Tor uses median of all measurements)">Consensus Weight</td>
+        <td title="Source: CollecTor | File: vote | Field: 'w Bandwidth=X' | Authority-measured bandwidth (scaled) for path selection. Tor uses median of all authority measurements.">Consensus Weight (Authority)</td>
         <td title="Source: CollecTor | File: vote | Field: 'w Bandwidth=X' | Median of all authority measurements">{% if diag.bandwidth_summary and diag.bandwidth_summary.median_display %}{{ diag.bandwidth_summary.median_display }}{% else %}{{ rv.measured_bw_display }}{% endif %} (median)</td>
         <td>N/A (no threshold, used for path selection)</td>
         <td><span style="color: #6c757d;">—</span></td>
@@ -599,7 +599,7 @@ Data from <a href="https://collector.torproject.org/recent/relay-descriptors/vot
         <td>{% if rv.tk_meets %}<span style="color: #28a745; font-weight: bold;">MEETS</span>{% else %}<span style="color: #dc3545; font-weight: bold;">BELOW - need {{ "%.1f"|format(rv.tk_days_needed) }} more days</span>{% endif %}</td>
     </tr>
     <tr>
-        <td title="Source: Onionoo | File: details | Field: observed_bandwidth | Relay's self-reported bandwidth from descriptor">Guard BW</td>
+        <td title="Source: Onionoo | File: details | Field: observed_bandwidth | Relay's self-reported bandwidth from its descriptor. Used for Guard flag eligibility (≥2 MB/s OR top 25%).">Guard BW (Relay Reported)</td>
         <td title="Source: Onionoo | File: details | Field: observed_bandwidth | Relay's descriptor bandwidth (actual for Guard eligibility)">{{ rv.observed_bw_display }}</td>
         <td title="Source: CollecTor | File: vote | Field: flag-thresholds guard-bw-inc-exits=X | Guard requires: ≥2 MB/s (dir-spec guarantee) OR in top 25%">≥{{ rv.guard_bw_guarantee_display }} OR ≥{{ rv.guard_bw_range }}</td>
         <td>{% if rv.guard_bw_meets_guarantee %}<span style="color: #28a745; font-weight: bold;">MEETS - ≥2 MB/s guarantee</span>{% elif rv.guard_bw_meets_some %}<span style="color: #ffc107; font-weight: bold;">PARTIAL - in top 25% for {{ rv.guard_bw_meets_count }} auth(s)</span>{% else %}<span style="color: #dc3545; font-weight: bold;">BELOW - need ≥2 MB/s</span>{% endif %}</td>
@@ -617,7 +617,7 @@ Data from <a href="https://collector.torproject.org/recent/relay-descriptors/vot
         <td>{% if rv.stable_mtbf_meets_all|default(false) %}<span style="color: #28a745; font-weight: bold;">MEETS - all authorities</span>{% elif rv.stable_mtbf_meets_count|default(0) >= diag.majority_required %}<span style="color: #ffc107; font-weight: bold;">PARTIAL - {{ rv.stable_mtbf_meets_count|default(0) }}/{{ rv.total_authorities }}</span>{% else %}<span style="color: #dc3545; font-weight: bold;">BELOW - {{ rv.stable_mtbf_meets_count|default(0) }}/{{ rv.total_authorities }}</span>{% endif %}</td>
     </tr>
     <tr>
-        <td title="Source: CollecTor | File: vote | Field: flag-thresholds fast-speed=X | Fast flag requires bandwidth in top 7/8ths OR ≥100 KB/s">Fast Speed</td>
+        <td title="Source: Onionoo | File: details | Field: observed_bandwidth | Relay's self-reported bandwidth. Used for Fast flag eligibility (top 7/8ths OR ≥100 KB/s).">Fast Speed (Relay Reported)</td>
         <td title="Source: Onionoo | File: details | Field: observed_bandwidth | Relay's descriptor bandwidth">{{ rv.fast_speed_display }}</td>
         <td title="Most authorities: ≥{{ rv.fast_speed_typical_display }}{% if rv.fast_speed_strict_auths %}; Stricter: {{ rv.fast_speed_strict_auths|join(', ') }} uses ≥{{ rv.fast_speed_max_display }}{% endif %}">
             ≥{{ rv.fast_minimum_display }} <span style="color: #666; font-size: 11px;">(guarantee)</span> OR ≥{{ rv.fast_speed_typical_display }} <span style="color: #666; font-size: 11px;">(typical)</span>
@@ -682,19 +682,19 @@ Flags: <span style="color: #28a745; font-weight: bold;">green</span> = all autho
     <th title="Source: Onionoo | Authority nickname (relay with Authority flag) with country code">Authority</th>
     <th title="Source: CollecTor | File: vote | Field: 's' line contains 'Running' | Authority voted for this relay (could reach it via OR port)">Running</th>
     <th title="Source: CollecTor | File: vote | Field: 's' line contains 'Valid' | Relay is not blacklisted and has valid descriptor">Valid</th>
-    <th title="Source: CollecTor | File: vote | Field: bandwidth-file-headers present = runs sbws scanner">BW Scan</th>
+    <th title="Source: CollecTor | File: vote | Field: bandwidth-file-headers | Does this authority run sbws bandwidth scanner? 6 of 9 authorities measure bandwidth; 3 use relay-reported values.">BW Scan (Authority)</th>
     <th title="Source: CollecTor | File: vote | Presence of 'r' line = IPv4 reachable">v4</th>
     {% if has_ipv6 %}<th title="Source: CollecTor | File: vote | Field: 'a' line | IPv6 reachable | N/T = not tested by this authority">v6</th>{% endif %}
     <th title="Source: CollecTor | File: vote | Field: 's' line | Flags assigned by this authority">Flags</th>
-    <th title="Source: CollecTor | File: vote | Field: flag-thresholds fast-speed=X | Fast Speed: Observed BW | Threshold (7/8ths)">Fast Speed (M|T)</th>
-    <th title="Source: CollecTor | File: vote | Field: flag-thresholds guard-bw-inc-exits=X | Guard BW: Observed BW | Top 25% threshold">Guard BW (M|T)</th>
+    <th title="Source: Onionoo observed_bandwidth (Relay Reported) | CollecTor flag-thresholds fast-speed (Authority Threshold) | Fast flag: top 7/8ths OR ≥100 KB/s">Fast (Relay|Threshold)</th>
+    <th title="Source: Onionoo observed_bandwidth (Relay Reported) | CollecTor flag-thresholds guard-bw-inc-exits (Authority Threshold) | Guard BW: ≥2 MB/s OR top 25%">Guard BW (Relay|Threshold)</th>
     <th title="Source: CollecTor | File: vote | Field: stats wfu=X, flag-thresholds guard-wfu=X | Guard WFU: Measured | Threshold">Guard WFU (M|T)</th>
     <th title="Source: CollecTor | File: vote | Field: stats tk=X, flag-thresholds guard-tk=X | Guard TK: Measured | Threshold">Guard TK (M|T)</th>
     <th title="Source: CollecTor | File: vote | Field: stats mtbf=X, flag-thresholds stable-mtbf=X | Stable MTBF: Measured | Threshold">Stable MTBF (M|T)</th>
     <th title="Source: CollecTor | File: vote | Field: stats wfu=X, flag-thresholds hsdir-wfu=X | HSDir WFU: Measured | Threshold">HSDir WFU (M|T)</th>
     <th title="Source: CollecTor | File: vote | Field: stats tk=X, flag-thresholds hsdir-tk=X | HSDir TK: Measured | Threshold">HSDir TK (M|T)</th>
     <th title="Source: CollecTor | File: vote | Field: 'r' line timestamp | Descriptor Published timestamp">Desc Published</th>
-    <th title="Source: CollecTor | File: vote | Field: 'w Bandwidth=X' | Scaled consensus weight for path selection">Cons Wt</th>
+    <th title="Source: CollecTor | File: vote | Field: 'w Bandwidth=X' | Authority-measured consensus weight (scaled) used for path selection. Authorities measure actual throughput; 10 KB/s = default when relay-reported bandwidth is used instead.">Cons Wt (Authority)</th>
 </tr>
 </thead>
 <tbody>
@@ -888,8 +888,15 @@ Flags: <span style="color: #28a745; font-weight: bold;">green</span> = all autho
 </div>
 
 <p style="font-size: 10px; color: #666; margin-top: 5px;">
-— = not tested/available • Format: your measured value | authority's threshold • WFU = Weighted Fractional Uptime • TK = Time Known
+— = not tested/available • Format: relay value | authority threshold • WFU = Weighted Fractional Uptime • TK = Time Known
 </p>
+
+<div style="font-size: 11px; color: #555; margin-top: 10px; padding: 8px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #007bff;">
+<strong>📊 Bandwidth Values Explained:</strong><br>
+<strong>Relay Reported</strong> = Your relay's self-reported bandwidth from its descriptor (observed_bandwidth). Used for <em>flag eligibility</em> (Guard, Fast).<br>
+<strong>Authority Measured</strong> = Bandwidth measured by authority's sbws scanner. Used for <em>consensus weight</em> (path selection probability).<br>
+<em>Why different?</em> Authorities verify your reported bandwidth independently. 6 of 9 authorities run bandwidth scanners; 3 use relay-reported values directly.
+</div>
 
 </div>
 </div>

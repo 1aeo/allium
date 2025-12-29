@@ -367,6 +367,7 @@ Default: `true` (enabled)
 
 ## References
 
+- [Understanding Bandwidth Values](./bandwidth-explained.md) - Explains relay-reported vs authority-measured bandwidth
 - [Tor Directory Specification](https://spec.torproject.org/dir-spec/)
 - [CollecTor Documentation](https://collector.torproject.org/)
 - [Onionoo API Documentation](https://metrics.torproject.org/onionoo.html)
