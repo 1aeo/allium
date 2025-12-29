@@ -806,6 +806,9 @@ def _identify_issues(consensus_data: dict, current_flags: list = None, observed_
     """
     Identify issues that may affect relay status.
     
+    Based on Tor dir-spec (https://spec.torproject.org/dir-spec/) and
+    common issues from tor-relays mailing list.
+    
     Args:
         consensus_data: Raw consensus evaluation data
         current_flags: Relay's current flags (from Onionoo)
@@ -814,27 +817,45 @@ def _identify_issues(consensus_data: dict, current_flags: list = None, observed_
     issues = []
     current_flags = current_flags or []
     
-    # Check consensus status
+    # Extract data for analysis
+    authority_votes = consensus_data.get('authority_votes', [])
+    reachability = consensus_data.get('reachability', {})
+    flag_eligibility = consensus_data.get('flag_eligibility', {})
+    auth_count = get_voting_authority_count()
+    majority_threshold = (auth_count // 2) + 1
+    
+    # Get relay metrics from first available vote
+    relay_wfu = relay_tk = None
+    for vote in authority_votes:
+        if relay_wfu is None and vote.get('wfu') is not None:
+            relay_wfu = vote['wfu']
+        if relay_tk is None and vote.get('tk') is not None:
+            relay_tk = vote['tk']
+        if relay_wfu is not None and relay_tk is not None:
+            break
+    
+    # =========================================================================
+    # CONSENSUS STATUS ISSUES
+    # =========================================================================
     if not consensus_data.get('in_consensus'):
         vote_count = consensus_data.get('vote_count', 0)
-        total = consensus_data.get('total_authorities', get_voting_authority_count())
+        total = consensus_data.get('total_authorities', auth_count)
         issues.append({
             'severity': 'error',
             'category': 'consensus',
             'title': 'Not in consensus',
-            'description': f"Only {vote_count}/{total} authorities voted for this relay",
-            'suggestion': 'Check reachability from all authority locations',
+            'description': f"Only {vote_count}/{total} authorities voted for this relay (need {majority_threshold})",
+            'suggestion': 'Verify your relay is reachable from multiple geographic locations. Check firewall rules allow incoming connections on your ORPort from all directory authority IP addresses.',
+            'doc_ref': 'https://community.torproject.org/relay/setup/guard/',
         })
     
-    # Check reachability
-    reachability = consensus_data.get('reachability', {})
+    # =========================================================================
+    # REACHABILITY ISSUES (per Tor dir-spec: relay must be reachable)
+    # =========================================================================
     ipv4_count = reachability.get('ipv4_reachable_count', 0)
-    auth_count = get_voting_authority_count()  # Use voting authorities (9) for consensus
-    majority_threshold = (auth_count // 2) + 1  # Need majority for consensus
     if ipv4_count < majority_threshold:
-        # Use get_authority_names() - prefers Onionoo data over hardcoded fallback
         unreachable = [
-            name for name in get_authority_names()
+            name for name in get_voting_authority_names()
             if name not in reachability.get('ipv4_reachable_authorities', [])
         ]
         issues.append({
@@ -842,47 +863,282 @@ def _identify_issues(consensus_data: dict, current_flags: list = None, observed_
             'category': 'reachability',
             'title': 'IPv4 reachability issues',
             'description': f"Only {ipv4_count}/{auth_count} authorities can reach this relay",
-            'suggestion': f"Check firewall rules for: {', '.join(unreachable)}",
+            'suggestion': f"Authorities that cannot reach you: {', '.join(unreachable)}. Check: 1) Firewall allows incoming TCP on ORPort, 2) No ISP-level blocking, 3) Tor is running and listening. Use 'nc -zv your-ip your-orport' from external hosts to test.",
+            'doc_ref': 'https://community.torproject.org/relay/setup/',
         })
+    elif ipv4_count < auth_count:
+        # Partial reachability - informational
+        unreachable = [
+            name for name in get_voting_authority_names()
+            if name not in reachability.get('ipv4_reachable_authorities', [])
+        ]
+        if unreachable:
+            issues.append({
+                'severity': 'info',
+                'category': 'reachability',
+                'title': 'Partial IPv4 reachability',
+                'description': f"{ipv4_count}/{auth_count} authorities can reach this relay",
+                'suggestion': f"Some authorities cannot reach you: {', '.join(unreachable)}. This may be temporary or due to geographic routing issues.",
+            })
     
-    # Check Guard flag eligibility using observed_bandwidth
-    # Guard BW requires >= 2MB/s (AuthDirGuardBWGuarantee) OR in top 25%
-    has_guard = 'Guard' in current_flags
-    guard_bw_eligible = observed_bandwidth >= GUARD_BW_GUARANTEE if observed_bandwidth else False
-    
-    # If relay doesn't have Guard and doesn't meet BW requirement, show warning
-    if not has_guard and not guard_bw_eligible:
-        bw_display = f"{observed_bandwidth / 1_000_000:.1f} MB/s" if observed_bandwidth else "unknown"
+    # IPv6 reachability issues
+    ipv6_count = reachability.get('ipv6_reachable_count', 0)
+    ipv6_tested = auth_count - len(reachability.get('ipv6_not_tested_authorities', []))
+    if ipv6_tested > 0 and ipv6_count == 0:
         issues.append({
             'severity': 'warning',
+            'category': 'reachability',
+            'title': 'IPv6 not reachable',
+            'description': f"0/{ipv6_tested} authorities that test IPv6 can reach your IPv6 address",
+            'suggestion': 'Verify IPv6 is correctly configured: 1) Check ORPort binding includes IPv6 address, 2) Firewall allows IPv6 traffic, 3) IPv6 address is publicly routable. Test with: curl -6 http://ipv6.icanhazip.com/',
+            'doc_ref': 'https://community.torproject.org/relay/setup/',
+        })
+    
+    # =========================================================================
+    # GUARD FLAG ELIGIBILITY (per Tor dir-spec section on Guard assignment)
+    # =========================================================================
+    has_guard = 'Guard' in current_flags
+    has_stable = 'Stable' in current_flags
+    has_fast = 'Fast' in current_flags
+    guard_bw_eligible = observed_bandwidth >= GUARD_BW_GUARANTEE if observed_bandwidth else False
+    wfu_eligible = relay_wfu and relay_wfu >= GUARD_WFU_DEFAULT
+    tk_eligible = relay_tk and relay_tk >= GUARD_TK_DEFAULT
+    
+    if not has_guard:
+        # Check each Guard requirement and provide specific advice
+        if not guard_bw_eligible and observed_bandwidth:
+            bw_display = f"{observed_bandwidth / 1_000_000:.1f} MB/s"
+            issues.append({
+                'severity': 'warning',
+                'category': 'guard',
+                'title': 'Guard: bandwidth below threshold',
+                'description': f"Observed bandwidth {bw_display} is below 2 MB/s minimum (AuthDirGuardBWGuarantee)",
+                'suggestion': 'Guard requires ≥2 MB/s bandwidth OR being in top 25% of network. To increase bandwidth: 1) Ensure adequate upstream capacity, 2) Check RelayBandwidthRate/RelayBandwidthBurst in torrc, 3) Monitor with Nyx or ARM.',
+                'doc_ref': 'https://community.torproject.org/relay/setup/guard/',
+            })
+        
+        if not wfu_eligible and relay_wfu is not None:
+            wfu_pct = relay_wfu * 100
+            issues.append({
+                'severity': 'warning',
+                'category': 'guard',
+                'title': 'Guard: WFU below threshold',
+                'description': f"Weighted Fractional Uptime {wfu_pct:.1f}% is below 98% requirement",
+                'suggestion': 'WFU measures recent uptime (recent downtime weighs more heavily). To improve: 1) Minimize restarts, 2) Use systemd with Restart=always, 3) Monitor for OOM kills, 4) Schedule updates during low-traffic periods.',
+                'doc_ref': 'https://spec.torproject.org/dir-spec/assigning-flags-vote.html',
+            })
+        
+        if not tk_eligible and relay_tk is not None:
+            tk_days = relay_tk / SECONDS_PER_DAY
+            days_needed = (GUARD_TK_DEFAULT - relay_tk) / SECONDS_PER_DAY
+            issues.append({
+                'severity': 'info',
+                'category': 'guard',
+                'title': 'Guard: Time Known below threshold',
+                'description': f"Time Known {tk_days:.1f} days is below 8 days requirement ({days_needed:.1f} more days needed)",
+                'suggestion': 'Time Known tracks how long authorities have observed your relay. This resets if: 1) Identity key changes, 2) Long downtime makes authorities forget you. Just keep running stably.',
+                'doc_ref': 'https://spec.torproject.org/dir-spec/assigning-flags-vote.html',
+            })
+        
+        if not has_stable:
+            issues.append({
+                'severity': 'info',
+                'category': 'guard',
+                'title': 'Guard: requires Stable flag',
+                'description': 'Guard flag requires having the Stable flag first',
+                'suggestion': 'Get Stable flag by maintaining consistent uptime. Stable requires uptime and MTBF at or above network median (typically 2-3 weeks of stable running).',
+            })
+        
+        if not has_fast:
+            issues.append({
+                'severity': 'info',
+                'category': 'guard',
+                'title': 'Guard: requires Fast flag',
+                'description': 'Guard flag requires having the Fast flag first',
+                'suggestion': 'Get Fast flag by having bandwidth ≥100 KB/s OR in top 7/8ths of network. Most relays get this easily.',
+            })
+    
+    # =========================================================================
+    # STABLE FLAG ISSUES
+    # =========================================================================
+    if not has_stable and relay_tk is not None:
+        stable_eligibility = flag_eligibility.get('stable', {})
+        if stable_eligibility.get('eligible_count', 0) < majority_threshold:
+            issues.append({
+                'severity': 'info',
+                'category': 'stable',
+                'title': 'Not eligible for Stable flag',
+                'description': 'Uptime or MTBF below network median for most authorities',
+                'suggestion': 'Stable flag requires uptime/MTBF at or above network median. Keep your relay running continuously for 2-3 weeks. Avoid restarts. Use reliable hardware and network connection.',
+                'doc_ref': 'https://spec.torproject.org/dir-spec/assigning-flags-vote.html',
+            })
+    
+    # =========================================================================
+    # HSDIR FLAG ISSUES
+    # =========================================================================
+    has_hsdir = 'HSDir' in current_flags
+    if not has_hsdir:
+        hsdir_eligibility = flag_eligibility.get('hsdir', {})
+        if relay_wfu is not None and relay_wfu < HSDIR_WFU_DEFAULT:
+            issues.append({
+                'severity': 'info',
+                'category': 'hsdir',
+                'title': 'HSDir: WFU below threshold',
+                'description': f"WFU {relay_wfu*100:.1f}% below 98% required for HSDir",
+                'suggestion': 'HSDir requires ≥98% WFU, Stable flag, and Time Known ≥25 hours (or ~10 days for moria1). Improve uptime consistency.',
+            })
+        if relay_tk is not None and relay_tk < HSDIR_TK_DEFAULT:
+            tk_hours = relay_tk / 3600
+            issues.append({
+                'severity': 'info',
+                'category': 'hsdir',
+                'title': 'HSDir: Time Known below threshold',
+                'description': f"Time Known {tk_hours:.1f} hours below 25 hours (dir-spec default)",
+                'suggestion': 'Most authorities use 25 hours for HSDir TK. moria1 uses ~10 days. Keep running stably.',
+            })
+    
+    # =========================================================================
+    # BANDWIDTH/MEASUREMENT ISSUES
+    # =========================================================================
+    bandwidth_data = consensus_data.get('bandwidth', {})
+    if bandwidth_data:
+        deviation = bandwidth_data.get('deviation')
+        median = bandwidth_data.get('median')
+        if deviation and median and deviation > median * 0.5:
+            issues.append({
+                'severity': 'warning',
+                'category': 'bandwidth',
+                'title': 'High bandwidth measurement deviation',
+                'description': f"Large variation in bandwidth measurements across authorities",
+                'suggestion': 'Bandwidth measurements vary significantly. This can affect consensus weight. Ensure stable network connection and consistent bandwidth availability.',
+            })
+    
+    # =========================================================================
+    # STALEDESC FLAG (descriptor too old)
+    # =========================================================================
+    for vote in authority_votes:
+        if vote.get('voted') and 'StaleDesc' in vote.get('flags', []):
+            issues.append({
+                'severity': 'warning',
+                'category': 'descriptor',
+                'title': 'StaleDesc flag assigned',
+                'description': 'Relay descriptor is older than 18 hours',
+                'suggestion': 'Your relay is not publishing fresh descriptors. Check: 1) Tor process is running, 2) Network connectivity, 3) Clock is synchronized (NTP). Restart Tor if needed.',
+                'doc_ref': 'https://spec.torproject.org/dir-spec/assigning-flags-vote.html',
+            })
+            break  # Only report once
+    
+    # =========================================================================
+    # BADEXIT FLAG
+    # =========================================================================
+    if 'BadExit' in current_flags:
+        issues.append({
+            'severity': 'error',
             'category': 'flags',
-            'title': 'Not eligible for Guard flag',
-            'description': f"Bandwidth {bw_display} is below 2 MB/s minimum for Guard",
-            'suggestion': 'Need: BW ≥2 MB/s, WFU ≥98%, TK ≥8 days, and Fast+Stable flags',
+            'title': 'BadExit flag assigned',
+            'description': 'This relay has been flagged as a bad exit by directory authorities',
+            'suggestion': 'BadExit means authorities detected malicious behavior (traffic modification, SSL stripping, etc.). If you believe this is in error, contact the Tor Project via tor-relays mailing list.',
+            'doc_ref': 'https://community.torproject.org/relay/',
         })
     
     return issues
 
 
-def _generate_advice(consensus_data: dict) -> List[str]:
-    """Generate actionable advice based on consensus evaluation."""
-    advice = []
+def _generate_advice(consensus_data: dict, current_flags: list = None, observed_bandwidth: int = 0) -> List[dict]:
+    """
+    Generate detailed actionable advice based on consensus evaluation.
     
-    issues = _identify_issues(consensus_data)
+    Returns list of advice dicts with 'category', 'priority', 'title', 'advice', and optional 'doc_ref'.
+    Based on Tor Project official guidance and common operator issues.
+    
+    Args:
+        consensus_data: Raw consensus evaluation data
+        current_flags: Relay's current flags
+        observed_bandwidth: Relay's observed bandwidth
+    """
+    advice_list = []
+    current_flags = current_flags or []
+    
+    # Get all issues first
+    issues = _identify_issues(consensus_data, current_flags, observed_bandwidth)
+    
+    # Convert issues to advice with priorities
+    priority_map = {'error': 1, 'warning': 2, 'info': 3}
     
     for issue in issues:
-        if issue.get('suggestion'):
-            advice.append(issue['suggestion'])
+        advice_list.append({
+            'category': issue.get('category', 'general'),
+            'priority': priority_map.get(issue.get('severity', 'info'), 3),
+            'title': issue.get('title', ''),
+            'advice': issue.get('suggestion', ''),
+            'doc_ref': issue.get('doc_ref'),
+        })
     
-    # General advice based on metrics
+    # =========================================================================
+    # ADDITIONAL PROACTIVE ADVICE (not tied to specific issues)
+    # =========================================================================
+    
+    # Extract metrics
     authority_votes = consensus_data.get('authority_votes', [])
+    relay_wfu = relay_tk = None
     for vote in authority_votes:
-        wfu = vote.get('wfu')
-        if wfu and wfu < 0.98:
-            advice.append(f"Increase WFU to ≥98% for Guard/HSDir eligibility (current: {wfu*100:.1f}%)")
+        if relay_wfu is None and vote.get('wfu') is not None:
+            relay_wfu = vote['wfu']
+        if relay_tk is None and vote.get('tk') is not None:
+            relay_tk = vote['tk']
+        if relay_wfu is not None and relay_tk is not None:
             break
     
-    return list(set(advice))  # Remove duplicates
+    has_guard = 'Guard' in current_flags
+    has_stable = 'Stable' in current_flags
+    has_exit = 'Exit' in current_flags
+    
+    # Advice for relays close to Guard eligibility
+    if not has_guard and has_stable and relay_wfu and relay_wfu >= 0.95:
+        if relay_wfu < 0.98:
+            advice_list.append({
+                'category': 'guard',
+                'priority': 2,
+                'title': 'Almost Guard eligible (WFU)',
+                'advice': f"Your WFU is {relay_wfu*100:.1f}%, close to the 98% threshold. Minimize restarts and downtime to reach Guard eligibility.",
+            })
+    
+    # Advice for new relays
+    if relay_tk and relay_tk < GUARD_TK_DEFAULT:
+        days_remaining = (GUARD_TK_DEFAULT - relay_tk) / SECONDS_PER_DAY
+        if days_remaining > 0 and days_remaining < 3:
+            advice_list.append({
+                'category': 'guard',
+                'priority': 3,
+                'title': 'Guard eligibility approaching',
+                'advice': f"Your relay will reach 8 days Time Known in {days_remaining:.1f} days. Keep running stably to get Guard flag.",
+            })
+    
+    # General best practices for all relays
+    if consensus_data.get('in_consensus'):
+        # Relay is in consensus, provide optimization advice
+        if not has_exit and observed_bandwidth and observed_bandwidth > 10_000_000:
+            advice_list.append({
+                'category': 'general',
+                'priority': 3,
+                'title': 'Consider becoming an exit relay',
+                'advice': 'Your relay has good bandwidth. Consider configuring an exit policy to help the network. Exits are in high demand. See: https://community.torproject.org/relay/setup/exit/',
+                'doc_ref': 'https://community.torproject.org/relay/setup/exit/',
+            })
+    
+    # Sort by priority (lower = higher priority)
+    advice_list.sort(key=lambda x: x.get('priority', 3))
+    
+    return advice_list
+
+
+def _generate_advice_simple(consensus_data: dict) -> List[str]:
+    """
+    Generate simple string advice for backward compatibility.
+    Returns list of advice strings.
+    """
+    detailed_advice = _generate_advice(consensus_data)
+    return [item.get('advice', '') for item in detailed_advice if item.get('advice')]
 
 
 def _format_thresholds_table(flag_thresholds: Dict[str, dict]) -> dict:

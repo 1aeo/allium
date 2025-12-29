@@ -29,8 +29,19 @@ from lib.consensus.consensus_evaluation import (
     _format_bandwidth_summary,
     _identify_issues,
     _generate_advice,
+    _generate_advice_simple,
     _format_thresholds_table,
     _format_bandwidth_value,
+)
+
+# Import flag threshold constants for test validation
+from lib.consensus.flag_thresholds import (
+    GUARD_WFU_DEFAULT,
+    GUARD_TK_DEFAULT,
+    GUARD_BW_GUARANTEE,
+    HSDIR_TK_DEFAULT,
+    HSDIR_WFU_DEFAULT,
+    SECONDS_PER_DAY,
 )
 
 
@@ -305,6 +316,10 @@ class TestIdentifyIssues:
             'total_authorities': 9,
             'reachability': {
                 'ipv4_reachable_count': 9,
+                'ipv6_reachable_count': 0,
+                # All authorities don't test IPv6, so no IPv6 issue should be raised
+                'ipv6_not_tested_authorities': ['moria1', 'tor26', 'dizum', 'gabelmoo', 
+                                                 'bastet', 'dannenberg', 'longclaw', 'maatuska', 'faravahar'],
             },
             'flag_eligibility': {
                 'guard': {'eligible_count': 9},
@@ -366,8 +381,62 @@ class TestGenerateAdvice:
         advice = _generate_advice(diagnostics)
         
         assert len(advice) >= 1
-        wfu_advice = [a for a in advice if 'WFU' in a or 'uptime' in a.lower()]
+        # New format returns list of dicts with 'advice' key
+        advice_texts = [a.get('advice', '') for a in advice]
+        wfu_advice = [a for a in advice_texts if 'WFU' in a or 'uptime' in a.lower()]
         assert len(wfu_advice) >= 1
+    
+    def test_advice_returns_dict_format(self):
+        """Test that advice returns list of properly formatted dicts."""
+        diagnostics = {
+            'in_consensus': False,
+            'vote_count': 3,
+            'total_authorities': 9,
+            'reachability': {'ipv4_reachable_count': 3, 'ipv4_reachable_authorities': []},
+            'flag_eligibility': {},
+            'authority_votes': [],
+        }
+        advice = _generate_advice(diagnostics)
+        
+        assert len(advice) >= 1
+        for item in advice:
+            assert isinstance(item, dict)
+            assert 'category' in item
+            assert 'priority' in item
+            assert 'title' in item
+            assert 'advice' in item
+    
+    def test_advice_priority_ordering(self):
+        """Test that advice is sorted by priority (errors first)."""
+        diagnostics = {
+            'in_consensus': False,  # Error severity
+            'vote_count': 2,
+            'total_authorities': 9,
+            'reachability': {'ipv4_reachable_count': 9},
+            'flag_eligibility': {},
+            'authority_votes': [{'wfu': 0.85}],  # Warning severity
+        }
+        advice = _generate_advice(diagnostics)
+        
+        # Should be sorted by priority (1=error, 2=warning, 3=info)
+        priorities = [a.get('priority', 999) for a in advice]
+        assert priorities == sorted(priorities)
+    
+    def test_advice_includes_doc_refs(self):
+        """Test that advice includes documentation references where appropriate."""
+        diagnostics = {
+            'in_consensus': False,
+            'vote_count': 2,
+            'total_authorities': 9,
+            'reachability': {'ipv4_reachable_count': 2, 'ipv4_reachable_authorities': ['moria1', 'tor26']},
+            'flag_eligibility': {},
+            'authority_votes': [],
+        }
+        advice = _generate_advice(diagnostics)
+        
+        # At least some advice should have doc_ref
+        has_doc_ref = any(a.get('doc_ref') for a in advice)
+        assert has_doc_ref, "Expected at least some advice to include documentation reference"
 
 
 class TestFormatThresholdsTable:
@@ -618,10 +687,11 @@ class TestIssueIdentification:
             },
         }
         
-        issues = _identify_issues(diagnostics)
+        issues = _identify_issues(diagnostics, current_flags=[], observed_bandwidth=1_000_000)
         
-        # Should identify Guard eligibility as an issue
-        guard_issues = [i for i in issues if 'guard' in i.get('type', '').lower() 
+        # Should identify Guard eligibility as an issue (category='guard' or mentions 'Guard')
+        guard_issues = [i for i in issues if i.get('category') == 'guard' 
+                       or 'Guard' in i.get('title', '')
                        or 'Guard' in i.get('description', '')]
         assert len(guard_issues) >= 1
 
@@ -662,9 +732,393 @@ class TestAdviceGeneration:
         
         advice = _generate_advice(diagnostics)
         
-        # Should mention the 98% threshold
-        advice_text = ' '.join(advice)
+        # Should mention the 98% threshold in advice text
+        advice_texts = [a.get('advice', '') for a in advice]
+        advice_text = ' '.join(advice_texts)
         assert '98%' in advice_text or 'WFU' in advice_text
+    
+    def test_advice_simple_returns_strings(self):
+        """Test that _generate_advice_simple returns list of strings."""
+        diagnostics = {
+            'in_consensus': True,
+            'vote_count': 9,
+            'total_authorities': 9,
+            'reachability': {'ipv4_reachable_count': 9},
+            'flag_eligibility': {},
+            'authority_votes': [{'wfu': 0.90}],
+        }
+        
+        advice = _generate_advice_simple(diagnostics)
+        
+        assert isinstance(advice, list)
+        for item in advice:
+            assert isinstance(item, str)
+
+
+class TestIdentifyIssuesComprehensive:
+    """Comprehensive tests for _identify_issues() function."""
+    
+    def test_not_in_consensus_shows_majority_required(self):
+        """Test that not-in-consensus issue shows majority needed."""
+        diagnostics = {
+            'in_consensus': False,
+            'vote_count': 3,
+            'total_authorities': 9,
+            'reachability': {'ipv4_reachable_count': 9},
+            'flag_eligibility': {},
+            'authority_votes': [],
+        }
+        
+        issues = _identify_issues(diagnostics)
+        
+        consensus_issues = [i for i in issues if i['category'] == 'consensus']
+        assert len(consensus_issues) >= 1
+        # Should mention need for 5 votes
+        assert '5' in consensus_issues[0]['description']
+    
+    def test_ipv6_not_reachable_issue(self):
+        """Test detection of IPv6 reachability issues."""
+        diagnostics = {
+            'in_consensus': True,
+            'vote_count': 9,
+            'total_authorities': 9,
+            'reachability': {
+                'ipv4_reachable_count': 9,
+                'ipv6_reachable_count': 0,
+                'ipv6_not_tested_authorities': [],  # All tested but none reached
+            },
+            'flag_eligibility': {},
+            'authority_votes': [],
+        }
+        
+        issues = _identify_issues(diagnostics, current_flags=['Guard'], observed_bandwidth=3_000_000)
+        
+        ipv6_issues = [i for i in issues if 'IPv6' in i.get('title', '')]
+        assert len(ipv6_issues) >= 1
+    
+    def test_guard_low_bandwidth_issue(self):
+        """Test detection of Guard bandwidth below threshold."""
+        diagnostics = {
+            'in_consensus': True,
+            'vote_count': 9,
+            'total_authorities': 9,
+            'reachability': {'ipv4_reachable_count': 9},
+            'flag_eligibility': {'guard': {'eligible_count': 0}},
+            'authority_votes': [{'wfu': 0.99, 'tk': 10 * SECONDS_PER_DAY}],
+        }
+        
+        # Low bandwidth (1 MB/s, below 2 MB/s threshold)
+        issues = _identify_issues(diagnostics, current_flags=[], observed_bandwidth=1_000_000)
+        
+        bw_issues = [i for i in issues if i['category'] == 'guard' and 'bandwidth' in i.get('title', '').lower()]
+        assert len(bw_issues) >= 1
+        # Should mention AuthDirGuardBWGuarantee
+        assert 'MB/s' in bw_issues[0]['description'] or '2 MB' in bw_issues[0]['advice']
+    
+    def test_guard_low_wfu_issue(self):
+        """Test detection of Guard WFU below threshold."""
+        diagnostics = {
+            'in_consensus': True,
+            'vote_count': 9,
+            'total_authorities': 9,
+            'reachability': {'ipv4_reachable_count': 9},
+            'flag_eligibility': {},
+            'authority_votes': [{'wfu': 0.90, 'tk': 10 * SECONDS_PER_DAY}],  # WFU below 98%
+        }
+        
+        issues = _identify_issues(diagnostics, current_flags=[], observed_bandwidth=3_000_000)
+        
+        wfu_issues = [i for i in issues if i['category'] == 'guard' and 'WFU' in i.get('title', '')]
+        assert len(wfu_issues) >= 1
+        assert '98%' in wfu_issues[0]['description']
+    
+    def test_guard_low_tk_issue(self):
+        """Test detection of Guard Time Known below threshold."""
+        diagnostics = {
+            'in_consensus': True,
+            'vote_count': 9,
+            'total_authorities': 9,
+            'reachability': {'ipv4_reachable_count': 9},
+            'flag_eligibility': {},
+            'authority_votes': [{'wfu': 0.99, 'tk': 3 * SECONDS_PER_DAY}],  # TK below 8 days
+        }
+        
+        issues = _identify_issues(diagnostics, current_flags=[], observed_bandwidth=3_000_000)
+        
+        tk_issues = [i for i in issues if i['category'] == 'guard' and 'Time Known' in i.get('title', '')]
+        assert len(tk_issues) >= 1
+        assert '8 days' in tk_issues[0]['description']
+    
+    def test_guard_requires_stable_flag(self):
+        """Test that missing Stable flag is identified for Guard."""
+        diagnostics = {
+            'in_consensus': True,
+            'vote_count': 9,
+            'total_authorities': 9,
+            'reachability': {'ipv4_reachable_count': 9},
+            'flag_eligibility': {},
+            'authority_votes': [{'wfu': 0.99, 'tk': 10 * SECONDS_PER_DAY}],
+        }
+        
+        # Has Fast but not Stable
+        issues = _identify_issues(diagnostics, current_flags=['Fast'], observed_bandwidth=3_000_000)
+        
+        stable_issues = [i for i in issues if 'Stable' in i.get('title', '')]
+        assert len(stable_issues) >= 1
+    
+    def test_guard_requires_fast_flag(self):
+        """Test that missing Fast flag is identified for Guard."""
+        diagnostics = {
+            'in_consensus': True,
+            'vote_count': 9,
+            'total_authorities': 9,
+            'reachability': {'ipv4_reachable_count': 9},
+            'flag_eligibility': {},
+            'authority_votes': [{'wfu': 0.99, 'tk': 10 * SECONDS_PER_DAY}],
+        }
+        
+        # Has Stable but not Fast
+        issues = _identify_issues(diagnostics, current_flags=['Stable'], observed_bandwidth=3_000_000)
+        
+        fast_issues = [i for i in issues if 'Fast' in i.get('title', '')]
+        assert len(fast_issues) >= 1
+    
+    def test_hsdir_low_wfu_issue(self):
+        """Test detection of HSDir WFU below threshold."""
+        diagnostics = {
+            'in_consensus': True,
+            'vote_count': 9,
+            'total_authorities': 9,
+            'reachability': {'ipv4_reachable_count': 9},
+            'flag_eligibility': {'hsdir': {'eligible_count': 0}},
+            'authority_votes': [{'wfu': 0.90, 'tk': 10 * SECONDS_PER_DAY}],
+        }
+        
+        issues = _identify_issues(diagnostics, current_flags=['Guard', 'Fast', 'Stable'], observed_bandwidth=3_000_000)
+        
+        hsdir_issues = [i for i in issues if i['category'] == 'hsdir']
+        # Should identify WFU as issue for HSDir
+        wfu_hsdir = [i for i in hsdir_issues if 'WFU' in i.get('title', '')]
+        assert len(wfu_hsdir) >= 1
+    
+    def test_hsdir_low_tk_issue(self):
+        """Test detection of HSDir Time Known below threshold (25 hours default)."""
+        diagnostics = {
+            'in_consensus': True,
+            'vote_count': 9,
+            'total_authorities': 9,
+            'reachability': {'ipv4_reachable_count': 9},
+            'flag_eligibility': {},
+            'authority_votes': [{'wfu': 0.99, 'tk': 20 * 3600}],  # 20 hours, below 25 hour default
+        }
+        
+        issues = _identify_issues(diagnostics, current_flags=['Guard', 'Fast', 'Stable'], observed_bandwidth=3_000_000)
+        
+        hsdir_tk_issues = [i for i in issues if i['category'] == 'hsdir' and 'Time Known' in i.get('title', '')]
+        assert len(hsdir_tk_issues) >= 1
+        assert '25' in hsdir_tk_issues[0]['description']  # Mentions 25 hours
+    
+    def test_bandwidth_deviation_warning(self):
+        """Test detection of high bandwidth measurement deviation."""
+        diagnostics = {
+            'in_consensus': True,
+            'vote_count': 9,
+            'total_authorities': 9,
+            'reachability': {'ipv4_reachable_count': 9},
+            'flag_eligibility': {},
+            'authority_votes': [{'wfu': 0.99, 'tk': 10 * SECONDS_PER_DAY}],
+            'bandwidth': {
+                'deviation': 10_000_000,  # High deviation
+                'median': 5_000_000,  # deviation > median * 0.5
+            },
+        }
+        
+        issues = _identify_issues(diagnostics, current_flags=['Guard'], observed_bandwidth=3_000_000)
+        
+        bw_issues = [i for i in issues if i['category'] == 'bandwidth']
+        assert len(bw_issues) >= 1
+    
+    def test_staledesc_flag_detection(self):
+        """Test detection of StaleDesc flag in votes."""
+        diagnostics = {
+            'in_consensus': True,
+            'vote_count': 9,
+            'total_authorities': 9,
+            'reachability': {'ipv4_reachable_count': 9},
+            'flag_eligibility': {},
+            'authority_votes': [
+                {'voted': True, 'flags': ['Running', 'Valid', 'StaleDesc']},
+            ],
+        }
+        
+        issues = _identify_issues(diagnostics, current_flags=['Guard'], observed_bandwidth=3_000_000)
+        
+        staledesc_issues = [i for i in issues if 'StaleDesc' in i.get('title', '')]
+        assert len(staledesc_issues) >= 1
+        assert 'descriptor' in staledesc_issues[0]['suggestion'].lower()
+    
+    def test_badexit_flag_detection(self):
+        """Test detection of BadExit flag."""
+        diagnostics = {
+            'in_consensus': True,
+            'vote_count': 9,
+            'total_authorities': 9,
+            'reachability': {
+                'ipv4_reachable_count': 9,
+                'ipv6_reachable_count': 0,
+                'ipv6_not_tested_authorities': ['moria1', 'tor26', 'dizum', 'gabelmoo', 
+                                                 'bastet', 'dannenberg', 'longclaw', 'maatuska', 'faravahar'],
+            },
+            'flag_eligibility': {},
+            'authority_votes': [],
+        }
+        
+        issues = _identify_issues(diagnostics, current_flags=['BadExit', 'Running', 'Guard'], observed_bandwidth=3_000_000)
+        
+        badexit_issues = [i for i in issues if 'BadExit' in i.get('title', '')]
+        assert len(badexit_issues) >= 1
+        # BadExit should be error severity
+        assert badexit_issues[0]['severity'] == 'error'
+    
+    def test_partial_ipv4_reachability(self):
+        """Test informational note for partial IPv4 reachability."""
+        diagnostics = {
+            'in_consensus': True,
+            'vote_count': 7,
+            'total_authorities': 9,
+            'reachability': {
+                'ipv4_reachable_count': 7,  # Above majority but not all
+                'ipv4_reachable_authorities': ['moria1', 'tor26', 'dizum', 'gabelmoo', 'bastet', 'dannenberg', 'longclaw'],
+            },
+            'flag_eligibility': {},
+            'authority_votes': [],
+        }
+        
+        issues = _identify_issues(diagnostics, current_flags=['Guard'], observed_bandwidth=3_000_000)
+        
+        partial_issues = [i for i in issues if 'Partial' in i.get('title', '')]
+        assert len(partial_issues) >= 1
+        assert partial_issues[0]['severity'] == 'info'
+    
+    def test_no_issues_for_healthy_guard(self):
+        """Test that healthy Guard relay has no issues."""
+        diagnostics = {
+            'in_consensus': True,
+            'vote_count': 9,
+            'total_authorities': 9,
+            'reachability': {
+                'ipv4_reachable_count': 9,
+                'ipv6_reachable_count': 7,
+                'ipv6_not_tested_authorities': ['dizum', 'faravahar'],
+            },
+            'flag_eligibility': {'guard': {'eligible_count': 9}},
+            'authority_votes': [{'wfu': 0.99, 'tk': 10 * SECONDS_PER_DAY}],
+            'bandwidth': {'deviation': 1000, 'median': 50000},
+        }
+        
+        issues = _identify_issues(
+            diagnostics, 
+            current_flags=['Guard', 'Fast', 'Stable', 'Running', 'Valid', 'HSDir'],
+            observed_bandwidth=3_000_000
+        )
+        
+        # Should have no issues (or only informational)
+        errors = [i for i in issues if i['severity'] in ['error', 'warning']]
+        assert len(errors) == 0
+
+
+class TestAdviceCategories:
+    """Tests for advice categorization."""
+    
+    def test_consensus_category(self):
+        """Test advice has consensus category for not-in-consensus."""
+        diagnostics = {
+            'in_consensus': False,
+            'vote_count': 2,
+            'total_authorities': 9,
+            'reachability': {'ipv4_reachable_count': 9},
+            'flag_eligibility': {},
+            'authority_votes': [],
+        }
+        
+        advice = _generate_advice(diagnostics)
+        
+        categories = [a.get('category') for a in advice]
+        assert 'consensus' in categories
+    
+    def test_reachability_category(self):
+        """Test advice has reachability category for unreachable relay."""
+        diagnostics = {
+            'in_consensus': True,
+            'vote_count': 5,
+            'total_authorities': 9,
+            'reachability': {
+                'ipv4_reachable_count': 3,
+                'ipv4_reachable_authorities': ['moria1', 'tor26', 'dizum'],
+            },
+            'flag_eligibility': {},
+            'authority_votes': [],
+        }
+        
+        advice = _generate_advice(diagnostics)
+        
+        categories = [a.get('category') for a in advice]
+        assert 'reachability' in categories
+    
+    def test_guard_category(self):
+        """Test advice has guard category for Guard-related issues."""
+        diagnostics = {
+            'in_consensus': True,
+            'vote_count': 9,
+            'total_authorities': 9,
+            'reachability': {'ipv4_reachable_count': 9},
+            'flag_eligibility': {},
+            'authority_votes': [{'wfu': 0.90}],  # Low WFU
+        }
+        
+        advice = _generate_advice(diagnostics, current_flags=[], observed_bandwidth=3_000_000)
+        
+        categories = [a.get('category') for a in advice]
+        assert 'guard' in categories
+
+
+class TestAdviceDocRefs:
+    """Tests for documentation references in advice."""
+    
+    def test_torproject_doc_refs(self):
+        """Test that advice references torproject.org documentation."""
+        diagnostics = {
+            'in_consensus': False,
+            'vote_count': 2,
+            'total_authorities': 9,
+            'reachability': {'ipv4_reachable_count': 2, 'ipv4_reachable_authorities': []},
+            'flag_eligibility': {},
+            'authority_votes': [],
+        }
+        
+        advice = _generate_advice(diagnostics)
+        
+        doc_refs = [a.get('doc_ref') for a in advice if a.get('doc_ref')]
+        assert len(doc_refs) >= 1
+        # Should reference torproject.org
+        assert any('torproject.org' in ref for ref in doc_refs)
+    
+    def test_spec_doc_refs_for_flags(self):
+        """Test that flag-related advice references dir-spec."""
+        diagnostics = {
+            'in_consensus': True,
+            'vote_count': 9,
+            'total_authorities': 9,
+            'reachability': {'ipv4_reachable_count': 9},
+            'flag_eligibility': {},
+            'authority_votes': [{'wfu': 0.85, 'tk': 3 * SECONDS_PER_DAY}],  # Below thresholds
+        }
+        
+        advice = _generate_advice(diagnostics, current_flags=[], observed_bandwidth=3_000_000)
+        
+        doc_refs = [a.get('doc_ref') for a in advice if a.get('doc_ref')]
+        # Should reference spec.torproject.org for flag requirements
+        assert any('spec.torproject.org' in ref for ref in doc_refs)
 
 
 class TestBandwidthFormatting:

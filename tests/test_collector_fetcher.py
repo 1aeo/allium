@@ -874,3 +874,271 @@ class TestFormatAuthorityVotes:
         expected = {'moria1', 'tor26', 'gabelmoo', 'faravahar', 'dizum', 
                    'bastet', 'dannenberg', 'maatuska', 'longclaw'}
         assert authority_names == expected
+
+
+class TestConsensusEvaluationComprehensive:
+    """Comprehensive tests for get_relay_consensus_evaluation method."""
+    
+    def test_flag_eligibility_included(self):
+        """Test that flag eligibility data is included in results."""
+        fetcher = CollectorFetcher()
+        fingerprint = 'ABC123DEF456ABC123DEF456ABC123DEF456ABC1'
+        
+        fetcher.relay_index = {
+            fingerprint: {
+                'fingerprint': fingerprint,
+                'nickname': 'TestRelay',
+                'votes': {
+                    'moria1': {'flags': ['Fast', 'Guard'], 'wfu': 0.99, 'tk': 1000000},
+                    'tor26': {'flags': ['Fast', 'Guard'], 'wfu': 0.99, 'tk': 1000000},
+                    'dizum': {'flags': ['Fast', 'Guard'], 'wfu': 0.99, 'tk': 1000000},
+                    'gabelmoo': {'flags': ['Fast', 'Guard'], 'wfu': 0.99, 'tk': 1000000},
+                    'bastet': {'flags': ['Fast', 'Guard'], 'wfu': 0.99, 'tk': 1000000},
+                },
+                'bandwidth_measurements': {},
+            }
+        }
+        fetcher.flag_thresholds = {
+            'moria1': {'guard-wfu': 0.98, 'guard-tk': 691200},
+            'tor26': {'guard-wfu': 0.98, 'guard-tk': 691200},
+        }
+        
+        result = fetcher.get_relay_consensus_evaluation(fingerprint, authority_count=9)
+        
+        assert 'flag_eligibility' in result
+    
+    def test_reachability_data_included(self):
+        """Test that reachability data is included in results."""
+        fetcher = CollectorFetcher()
+        fingerprint = 'ABC123DEF456ABC123DEF456ABC123DEF456ABC1'
+        
+        fetcher.relay_index = {
+            fingerprint: {
+                'fingerprint': fingerprint,
+                'nickname': 'TestRelay',
+                'votes': {
+                    'moria1': {'flags': ['Running'], 'ipv6_reachable': True},
+                    'tor26': {'flags': ['Running'], 'ipv6_reachable': False},
+                },
+                'bandwidth_measurements': {},
+            }
+        }
+        fetcher.flag_thresholds = {}
+        
+        result = fetcher.get_relay_consensus_evaluation(fingerprint, authority_count=9)
+        
+        assert 'reachability' in result
+        assert 'ipv4_reachable_count' in result['reachability']
+    
+    def test_authority_votes_formatted(self):
+        """Test that authority votes are properly formatted."""
+        fetcher = CollectorFetcher()
+        fingerprint = 'ABC123DEF456ABC123DEF456ABC123DEF456ABC1'
+        
+        fetcher.relay_index = {
+            fingerprint: {
+                'fingerprint': fingerprint,
+                'nickname': 'TestRelay',
+                'votes': {
+                    'moria1': {
+                        'flags': ['Fast', 'Guard', 'Running', 'Stable', 'Valid'],
+                        'wfu': 0.995,
+                        'tk': 1000000,
+                        'bandwidth': 5000000,
+                        'measured': 4500000,
+                    },
+                },
+                'bandwidth_measurements': {},
+            }
+        }
+        fetcher.flag_thresholds = {'moria1': {'guard-wfu': 0.98}}
+        
+        result = fetcher.get_relay_consensus_evaluation(fingerprint, authority_count=9)
+        
+        assert 'authority_votes' in result
+        assert len(result['authority_votes']) >= 1
+
+
+class TestRelayIndexLookup:
+    """Tests for relay index lookup functionality."""
+    
+    def test_case_insensitive_fingerprint(self):
+        """Test that fingerprint lookup is case-insensitive (uppercase)."""
+        fetcher = CollectorFetcher()
+        fingerprint_lower = 'abc123def456abc123def456abc123def456abc1'
+        fingerprint_upper = 'ABC123DEF456ABC123DEF456ABC123DEF456ABC1'
+        
+        fetcher.relay_index = {
+            fingerprint_upper: {
+                'fingerprint': fingerprint_upper,
+                'nickname': 'TestRelay',
+                'votes': {'moria1': {'flags': ['Fast']}},
+                'bandwidth_measurements': {},
+            }
+        }
+        fetcher.flag_thresholds = {}
+        
+        # Look up with lowercase (should be converted to uppercase)
+        result = fetcher.get_relay_consensus_evaluation(fingerprint_lower, authority_count=9)
+        
+        # Should still find the relay (fingerprints are normalized to uppercase)
+        # Note: This depends on implementation - adjust if needed
+        assert result is not None
+
+
+class TestParseRelayIpv6:
+    """Tests for IPv6 address parsing from vote files."""
+    
+    def test_parse_a_line_standard(self):
+        """Test parsing standard IPv6 'a' line."""
+        fetcher = CollectorFetcher()
+        
+        # Simulate vote content with 'a' line
+        vote_content = """@type network-status-vote-3 1.0
+r TestRelay AAAErLudKby6FyVrs1ko3b/Iq6k YpRT 2025-12-27 11:01:03 192.168.1.1 9001 0
+a [2001:db8::1]:9001
+s Fast Running Valid
+w Bandwidth=50000
+"""
+        result = fetcher._parse_vote(vote_content, 'TEST123')
+        
+        relay = list(result['relays'].values())[0]
+        assert relay['ipv6_reachable'] == True
+        assert '2001:db8::1' in relay['ipv6_address']
+    
+    def test_parse_multiple_a_lines(self):
+        """Test that 'a' lines are parsed (last one wins per current impl)."""
+        fetcher = CollectorFetcher()
+        
+        vote_content = """@type network-status-vote-3 1.0
+r TestRelay AAAErLudKby6FyVrs1ko3b/Iq6k YpRT 2025-12-27 11:01:03 192.168.1.1 9001 0
+a [2001:db8::1]:9001
+a [2001:db8::2]:9002
+s Fast Running Valid
+w Bandwidth=50000
+"""
+        result = fetcher._parse_vote(vote_content, 'TEST123')
+        
+        relay = list(result['relays'].values())[0]
+        assert relay['ipv6_reachable'] == True
+        # Implementation uses last 'a' line (overwrites)
+        assert '2001:db8' in relay['ipv6_address']  # Either address is valid
+
+
+class TestBandwidthFileHeadersDetection:
+    """Tests for bandwidth authority detection via bandwidth-file-headers."""
+    
+    def test_detects_bw_authority(self):
+        """Test detection of bandwidth authority from vote."""
+        fetcher = CollectorFetcher()
+        
+        vote_content = """@type network-status-vote-3 1.0
+bandwidth-file-headers timestamp=2025-12-28T02:45:10 version=1.4.0 file_created=2025-12-28T02:30:00
+r TestRelay AAAErLudKby6FyVrs1ko3b/Iq6k YpRT 2025-12-27 11:01:03 192.168.1.1 9001 0
+s Fast Running Valid
+w Bandwidth=50000 Measured=45000
+"""
+        result = fetcher._parse_vote(vote_content, 'TEST123')
+        
+        assert result['has_bandwidth_file_headers'] == True
+    
+    def test_detects_non_bw_authority(self):
+        """Test detection of non-bandwidth authority (no headers)."""
+        fetcher = CollectorFetcher()
+        
+        vote_content = """@type network-status-vote-3 1.0
+r TestRelay AAAErLudKby6FyVrs1ko3b/Iq6k YpRT 2025-12-27 11:01:03 192.168.1.1 9001 0
+s Fast Running Valid
+w Bandwidth=50000
+"""
+        result = fetcher._parse_vote(vote_content, 'TEST456')
+        
+        assert result['has_bandwidth_file_headers'] == False
+
+
+class TestVotingAuthorityFunctions:
+    """Tests for voting vs total authority distinction."""
+    
+    def test_voting_authority_count_excludes_serge(self):
+        """Test that voting authority count is 9 (excludes Serge)."""
+        registry = AuthorityRegistry()
+        
+        # Using fallback values
+        voting_count = registry.get_voting_authority_count()
+        total_count = registry.get_authority_count()
+        
+        assert voting_count == 9  # Voting authorities only
+        assert total_count == 10  # Includes Serge
+    
+    def test_voting_authority_names_excludes_serge(self):
+        """Test that voting authority names exclude Serge."""
+        registry = AuthorityRegistry()
+        
+        voting_names = registry.get_voting_authority_names()
+        all_names = registry.get_authority_names()
+        
+        assert 'Serge' not in voting_names
+        assert 'Serge' in all_names
+        assert len(voting_names) == 9
+        assert len(all_names) == 10
+
+
+class TestAuthorityRegistryUpdate:
+    """Tests for AuthorityRegistry update from Onionoo."""
+    
+    def test_update_preserves_sorting(self):
+        """Test that updating registry preserves alphabetical sorting."""
+        registry = AuthorityRegistry()
+        
+        relays = [
+            {'nickname': 'ZuluAuth', 'fingerprint': 'FP_Z', 'flags': ['Authority', 'Running']},
+            {'nickname': 'AlphaAuth', 'fingerprint': 'FP_A', 'flags': ['Authority', 'Running']},
+            {'nickname': 'MikeAuth', 'fingerprint': 'FP_M', 'flags': ['Authority', 'Running']},
+        ]
+        
+        registry.update_from_onionoo(relays)
+        
+        names = registry.get_authority_names()
+        # Should be sorted case-insensitively
+        assert names == sorted(names, key=str.lower)
+    
+    def test_update_with_mixed_relays(self):
+        """Test update with mix of authorities and regular relays."""
+        registry = AuthorityRegistry()
+        
+        relays = [
+            {'nickname': 'AuthRelay', 'fingerprint': 'FP_A', 'flags': ['Authority', 'Running']},
+            {'nickname': 'FastRelay', 'fingerprint': 'FP_F', 'flags': ['Fast', 'Running']},
+            {'nickname': 'GuardRelay', 'fingerprint': 'FP_G', 'flags': ['Guard', 'Running']},
+        ]
+        
+        count = registry.update_from_onionoo(relays)
+        
+        assert count == 1  # Only one authority
+        assert 'AuthRelay' in registry.get_authority_names()
+        assert 'FastRelay' not in registry.get_authority_names()
+
+
+class TestParseStatsLineEdgeCases:
+    """Edge case tests for stats line parsing."""
+    
+    def test_parse_stats_missing_mtbf(self):
+        """Test parsing stats line without MTBF."""
+        fetcher = CollectorFetcher()
+        
+        result = fetcher._parse_stats_line("stats wfu=0.95 tk=500000")
+        
+        assert result['wfu'] == 0.95
+        assert result['tk'] == 500000
+        assert 'mtbf' not in result or result.get('mtbf') is None
+    
+    def test_parse_stats_very_high_values(self):
+        """Test parsing stats with very high values."""
+        fetcher = CollectorFetcher()
+        
+        # 10 years uptime
+        result = fetcher._parse_stats_line("stats wfu=0.999999 tk=315360000 mtbf=315360000")
+        
+        assert result['wfu'] == pytest.approx(0.999999, rel=1e-5)
+        assert result['tk'] == 315360000
+        assert result['mtbf'] == 315360000

@@ -417,3 +417,349 @@ class TestFlagOrderMap:
         expected = list(range(len(FLAG_ORDER)))
         actual = [FLAG_ORDER_MAP[f] for f in FLAG_ORDER]
         assert actual == expected
+
+
+class TestGuardEligibilityEdgeCases:
+    """Edge case tests for Guard eligibility checking."""
+    
+    def test_exactly_at_wfu_threshold(self):
+        """Test relay exactly at 98% WFU threshold."""
+        result = check_guard_eligibility(
+            wfu=0.98,  # Exactly at threshold
+            tk=10 * SECONDS_PER_DAY,
+            bandwidth=3_000_000,
+        )
+        
+        assert result['wfu_met'] == True
+        assert result['eligible'] == True
+    
+    def test_exactly_at_tk_threshold(self):
+        """Test relay exactly at 8 days TK threshold."""
+        result = check_guard_eligibility(
+            wfu=0.99,
+            tk=8 * SECONDS_PER_DAY,  # Exactly at threshold
+            bandwidth=3_000_000,
+        )
+        
+        assert result['tk_met'] == True
+        assert result['eligible'] == True
+    
+    def test_exactly_at_bw_guarantee(self):
+        """Test relay exactly at 2 MB/s BW threshold."""
+        result = check_guard_eligibility(
+            wfu=0.99,
+            tk=10 * SECONDS_PER_DAY,
+            bandwidth=2_000_000,  # Exactly at threshold
+        )
+        
+        assert result['bw_meets_guarantee'] == True
+        assert result['eligible'] == True
+    
+    def test_just_below_wfu_threshold(self):
+        """Test relay just below 98% WFU threshold."""
+        result = check_guard_eligibility(
+            wfu=0.9799,  # Just below
+            tk=10 * SECONDS_PER_DAY,
+            bandwidth=3_000_000,
+        )
+        
+        assert result['wfu_met'] == False
+        assert result['eligible'] == False
+    
+    def test_just_below_tk_threshold(self):
+        """Test relay just below 8 days TK threshold."""
+        result = check_guard_eligibility(
+            wfu=0.99,
+            tk=8 * SECONDS_PER_DAY - 1,  # 1 second below
+            bandwidth=3_000_000,
+        )
+        
+        assert result['tk_met'] == False
+        assert result['eligible'] == False
+    
+    def test_just_below_bw_guarantee(self):
+        """Test relay just below 2 MB/s BW threshold."""
+        result = check_guard_eligibility(
+            wfu=0.99,
+            tk=10 * SECONDS_PER_DAY,
+            bandwidth=1_999_999,  # Just below
+        )
+        
+        assert result['bw_meets_guarantee'] == False
+    
+    def test_zero_values(self):
+        """Test with all zero values."""
+        result = check_guard_eligibility(
+            wfu=0,
+            tk=0,
+            bandwidth=0,
+        )
+        
+        assert result['eligible'] == False
+        assert result['wfu_met'] == False
+        assert result['tk_met'] == False
+        assert result['bw_eligible'] == False
+    
+    def test_none_values_treated_as_zero(self):
+        """Test that None values are handled as zero."""
+        result = check_guard_eligibility(
+            wfu=None,
+            tk=None,
+            bandwidth=None,
+        )
+        
+        assert result['eligible'] == False
+        assert result['wfu_value'] == 0
+        assert result['tk_value'] == 0
+        assert result['bw_value'] == 0
+    
+    def test_custom_thresholds(self):
+        """Test with custom authority thresholds."""
+        result = check_guard_eligibility(
+            wfu=0.95,
+            tk=5 * SECONDS_PER_DAY,
+            bandwidth=1_500_000,
+            wfu_threshold=0.95,  # Lower threshold
+            tk_threshold=5 * SECONDS_PER_DAY,  # Lower threshold
+            bw_top25_threshold=1_000_000,  # Low top25 threshold
+        )
+        
+        assert result['wfu_met'] == True
+        assert result['tk_met'] == True
+        assert result['bw_in_top25'] == True
+        assert result['eligible'] == True
+
+
+class TestHsdirEligibilityEdgeCases:
+    """Edge case tests for HSDir eligibility checking."""
+    
+    def test_exactly_at_hsdir_tk_default(self):
+        """Test relay exactly at 25 hour HSDir TK threshold."""
+        result = check_hsdir_eligibility(
+            wfu=0.99,
+            tk=25 * 3600,  # Exactly 25 hours (dir-spec default)
+        )
+        
+        assert result['tk_met'] == True
+        assert result['eligible'] == True
+    
+    def test_just_below_hsdir_tk_default(self):
+        """Test relay just below 25 hour HSDir TK threshold."""
+        result = check_hsdir_eligibility(
+            wfu=0.99,
+            tk=25 * 3600 - 1,  # 1 second below
+        )
+        
+        assert result['tk_met'] == False
+        assert result['eligible'] == False
+    
+    def test_moria1_hsdir_tk_threshold(self):
+        """Test relay meeting moria1's stricter ~10 day HSDir TK threshold."""
+        # moria1 uses approximately 10 days (848498 seconds)
+        moria1_tk = 848498
+        result = check_hsdir_eligibility(
+            wfu=0.99,
+            tk=moria1_tk,
+            tk_threshold=moria1_tk,  # Use moria1's threshold
+        )
+        
+        assert result['tk_met'] == True
+        assert result['eligible'] == True
+    
+    def test_between_default_and_moria1(self):
+        """Test relay between 25 hours and 10 days."""
+        result = check_hsdir_eligibility(
+            wfu=0.99,
+            tk=5 * SECONDS_PER_DAY,  # 5 days
+        )
+        
+        # Should meet default 25 hour threshold
+        assert result['tk_met'] == True
+        assert result['eligible'] == True
+
+
+class TestFastEligibilityEdgeCases:
+    """Edge case tests for Fast eligibility checking."""
+    
+    def test_exactly_at_fast_guarantee(self):
+        """Test relay exactly at 100 KB/s Fast threshold."""
+        result = check_fast_eligibility(
+            bandwidth=100_000,  # Exactly 100 KB/s
+        )
+        
+        assert result['meets_guarantee'] == True
+        assert result['eligible'] == True
+    
+    def test_just_below_fast_guarantee(self):
+        """Test relay just below 100 KB/s Fast threshold."""
+        result = check_fast_eligibility(
+            bandwidth=99_999,  # Just below
+            fast_threshold=0,  # No dynamic threshold
+        )
+        
+        assert result['meets_guarantee'] == False
+        assert result['eligible'] == False
+    
+    def test_zero_bandwidth(self):
+        """Test relay with zero bandwidth."""
+        result = check_fast_eligibility(bandwidth=0)
+        
+        assert result['meets_guarantee'] == False
+        assert result['eligible'] == False
+
+
+class TestStableEligibilityEdgeCases:
+    """Edge case tests for Stable eligibility checking."""
+    
+    def test_both_thresholds_met(self):
+        """Test relay meeting both uptime and MTBF thresholds."""
+        result = check_stable_eligibility(
+            uptime=100_000,
+            mtbf=100_000,
+            uptime_threshold=50_000,
+            mtbf_threshold=50_000,
+        )
+        
+        assert result['uptime_met'] == True
+        assert result['mtbf_met'] == True
+        assert result['eligible'] == True
+    
+    def test_neither_threshold_met(self):
+        """Test relay meeting neither threshold."""
+        result = check_stable_eligibility(
+            uptime=10_000,
+            mtbf=10_000,
+            uptime_threshold=50_000,
+            mtbf_threshold=50_000,
+        )
+        
+        assert result['uptime_met'] == False
+        assert result['mtbf_met'] == False
+        assert result['eligible'] == False
+    
+    def test_zero_thresholds(self):
+        """Test with zero thresholds (none required)."""
+        result = check_stable_eligibility(
+            uptime=0,
+            mtbf=0,
+            uptime_threshold=0,
+            mtbf_threshold=0,
+        )
+        
+        # With zero thresholds, nothing is "met"
+        assert result['uptime_met'] == False
+        assert result['mtbf_met'] == False
+        assert result['eligible'] == False
+
+
+class TestParseWfuEdgeCases:
+    """Edge case tests for WFU parsing."""
+    
+    def test_parse_zero_percent(self):
+        """Test parsing 0%."""
+        assert parse_wfu_threshold('0%') == 0.0
+    
+    def test_parse_100_percent(self):
+        """Test parsing 100%."""
+        assert parse_wfu_threshold('100%') == 1.0
+    
+    def test_parse_fractional_percent(self):
+        """Test parsing fractional percentage."""
+        assert parse_wfu_threshold('98.5%') == 0.985
+    
+    def test_parse_string_with_whitespace(self):
+        """Test parsing string with whitespace."""
+        assert parse_wfu_threshold('  0.98  ') == 0.98
+        assert parse_wfu_threshold('  98%  ') == 0.98
+    
+    def test_parse_empty_string(self):
+        """Test parsing empty string."""
+        assert parse_wfu_threshold('') is None
+    
+    def test_parse_negative_value(self):
+        """Test parsing negative value (invalid but shouldn't crash)."""
+        result = parse_wfu_threshold(-0.5)
+        assert result == -0.5  # Returns the value even if invalid
+
+
+class TestFormatFunctions:
+    """Tests for formatting functions."""
+    
+    def test_format_time_as_days_zero(self):
+        """Test formatting zero seconds."""
+        assert format_time_as_days(0) == '0.0d'
+    
+    def test_format_time_as_days_hours(self):
+        """Test formatting 25 hours."""
+        assert format_time_as_days(25 * 3600) == '1.0d'  # 25h rounds to 1.0d
+    
+    def test_format_time_as_days_very_large(self):
+        """Test formatting very large time (1 year)."""
+        result = format_time_as_days(365 * SECONDS_PER_DAY)
+        assert result == '365.0d'
+    
+    def test_format_wfu_as_percent_zero(self):
+        """Test formatting zero WFU."""
+        assert format_wfu_as_percent(0) == '0.0%'
+    
+    def test_format_wfu_as_percent_edge_values(self):
+        """Test formatting edge WFU values."""
+        assert format_wfu_as_percent(0.001) == '0.1%'
+        assert format_wfu_as_percent(0.999) == '99.9%'
+
+
+class TestGetFlagThresholdsSummaryComprehensive:
+    """Comprehensive tests for get_flag_thresholds_summary."""
+    
+    def test_all_fields_present(self):
+        """Test that all expected fields are present."""
+        result = get_flag_thresholds_summary({})
+        
+        expected_fields = [
+            'guard_wfu', 'guard_tk', 'guard_bw_inc_exits',
+            'hsdir_wfu', 'hsdir_tk',
+            'stable_uptime', 'stable_mtbf',
+            'fast_speed',
+            'enough_mtbf', 'min_bw_fr',
+        ]
+        
+        for field in expected_fields:
+            assert field in result, f"Missing field: {field}"
+    
+    def test_wfu_percentage_conversion(self):
+        """Test that percentage WFU values are converted."""
+        thresholds = {'guard-wfu': '95%', 'hsdir-wfu': '96%'}
+        result = get_flag_thresholds_summary(thresholds)
+        
+        assert result['guard_wfu'] == 0.95
+        assert result['hsdir_wfu'] == 0.96
+    
+    def test_default_fallback_for_missing(self):
+        """Test that missing values use defaults."""
+        result = get_flag_thresholds_summary({})
+        
+        assert result['guard_wfu'] == GUARD_WFU_DEFAULT
+        assert result['guard_tk'] == GUARD_TK_DEFAULT
+        assert result['hsdir_wfu'] == HSDIR_WFU_DEFAULT
+        assert result['hsdir_tk'] == HSDIR_TK_DEFAULT
+
+
+class TestTimeConstants:
+    """Tests for time constants accuracy."""
+    
+    def test_seconds_per_week(self):
+        """Test SECONDS_PER_WEEK is correct."""
+        from consensus.flag_thresholds import SECONDS_PER_WEEK
+        assert SECONDS_PER_WEEK == 7 * 24 * 60 * 60
+        assert SECONDS_PER_WEEK == 604800
+    
+    def test_seconds_per_hour(self):
+        """Test SECONDS_PER_HOUR is correct."""
+        from consensus.flag_thresholds import SECONDS_PER_HOUR
+        assert SECONDS_PER_HOUR == 60 * 60
+        assert SECONDS_PER_HOUR == 3600
+    
+    def test_seconds_per_minute(self):
+        """Test SECONDS_PER_MINUTE is correct."""
+        from consensus.flag_thresholds import SECONDS_PER_MINUTE
+        assert SECONDS_PER_MINUTE == 60
