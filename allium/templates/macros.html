@@ -90,9 +90,53 @@
                         <a href="{{ page_ctx.path_prefix }}misc/all.html">All Relays</a>
                     </li>
                 </ul>
+                
+                <!-- Desktop: Search in navbar (hidden on mobile via CSS) -->
+                <form action="{{ page_ctx.path_prefix }}search" method="GET" 
+                      class="navbar-form navbar-right hidden-xs hidden-sm"
+                      style="margin-right: 0;">
+                    <div class="input-group" style="width: 220px;">
+                        <input type="text" 
+                               name="q" 
+                               class="form-control input-sm" 
+                               placeholder="Search relays..."
+                               title="Search by fingerprint, nickname, AROI, AS, country, or IP"
+                               maxlength="100"
+                               pattern="[A-Za-z0-9\s\-_.@:]+"
+                               autocomplete="off"
+                               autocapitalize="off"
+                               spellcheck="false">
+                        <span class="input-group-btn">
+                            <button type="submit" class="btn btn-sm btn-default">
+                                <span class="glyphicon glyphicon-search" aria-hidden="true"></span>
+                            </button>
+                        </span>
+                    </div>
+                </form>
             </div>
         </div>
     </nav>
+    
+    <!-- Mobile: Search bar below navbar (hidden on desktop via CSS) -->
+    <div class="allium-mobile-search visible-xs visible-sm">
+        <form action="{{ page_ctx.path_prefix }}search" method="GET">
+            <div class="input-group">
+                <input type="text" 
+                       name="q" 
+                       class="form-control" 
+                       placeholder="Search by fingerprint, nickname, AROI, AS, country..."
+                       title="Search by fingerprint, nickname, AROI, AS number, country, or IP"
+                       maxlength="100"
+                       pattern="[A-Za-z0-9\s\-_.@:]+"
+                       autocomplete="off"
+                       autocapitalize="off"
+                       spellcheck="false">
+                <span class="input-group-btn">
+                    <button type="submit" class="btn btn-primary">Search</button>
+                </span>
+            </div>
+        </form>
+    </div>
 {%- endmacro %}
 
 {% macro detail_summary(bandwidth, bandwidth_unit, guard_bandwidth, middle_bandwidth, exit_bandwidth, consensus_weight_fraction, guard_consensus_weight_fraction, middle_consensus_weight_fraction, exit_consensus_weight_fraction, guard_count, middle_count, exit_count, total_relays, network_position, aroi_domain=none, contact=none, contact_md5=none, page_ctx=none, unique_aroi_list=none, unique_contact_list=none, unique_aroi_count=none, unique_contact_count=none, unique_aroi_contact_html=none, aroi_to_contact_map=none) -%}
