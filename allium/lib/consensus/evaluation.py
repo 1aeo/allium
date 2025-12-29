@@ -1,8 +1,8 @@
 """
-File: diagnostics.py
+File: evaluation.py
 
-Format diagnostic data for templates.
-Provides display-ready formatting of consensus troubleshooting data.
+Format consensus evaluation data for templates.
+Provides display-ready formatting of directory authority consensus evaluation data.
 
 OPTIMIZATION: Leverages existing utilities from the codebase:
 - BandwidthFormatter from bandwidth_formatter.py for bandwidth display
@@ -159,12 +159,12 @@ def _parse_wfu_threshold(value) -> Optional[float]:
     return float(value)
 
 
-def format_relay_diagnostics(diagnostics: dict, flag_thresholds: dict = None, current_flags: list = None, observed_bandwidth: int = 0) -> dict:
+def format_relay_evaluation(evaluation: dict, flag_thresholds: dict = None, current_flags: list = None, observed_bandwidth: int = 0) -> dict:
     """
-    Format relay diagnostics for template display.
+    Format relay consensus evaluation for template display.
     
     Args:
-        diagnostics: Raw diagnostics from CollectorFetcher.get_relay_diagnostics()
+        evaluation: Raw evaluation from CollectorFetcher.get_relay_evaluation()
         flag_thresholds: Optional flag threshold data
         current_flags: List of flags the relay currently has (from Onionoo)
         observed_bandwidth: Relay's observed bandwidth in bytes/s (from Onionoo)
@@ -172,18 +172,18 @@ def format_relay_diagnostics(diagnostics: dict, flag_thresholds: dict = None, cu
                            NOT the scaled consensus weight or vote Measured value.
         
     Returns:
-        dict: Formatted diagnostics ready for template rendering
+        dict: Formatted evaluation ready for template rendering
     """
-    if not diagnostics:
+    if not evaluation:
         return {
             'available': False,
-            'error': 'No diagnostic data available',
+            'error': 'No evaluation data available',
             'in_consensus': False,
         }
-    if diagnostics.get('error'):
+    if evaluation.get('error'):
         return {
             'available': False,
-            'error': diagnostics.get('error', 'No diagnostic data available'),
+            'error': evaluation.get('error', 'No evaluation data available'),
             'in_consensus': False,
         }
     
