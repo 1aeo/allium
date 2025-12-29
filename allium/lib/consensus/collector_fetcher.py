@@ -203,13 +203,22 @@ AUTHORITIES_BY_NAME = {name: fp for fp, name in _FALLBACK_SIGNING_KEY_TO_NAME.it
 DEFAULT_AUTHORITY_COUNT = _FALLBACK_VOTING_AUTHORITY_COUNT  # 9 voting authorities
 AUTHORITY_NAMES = _FALLBACK_VOTING_AUTHORITY_NAMES  # Backward compat for voting authorities
 
-# Bandwidth thresholds (bytes/second)
-AUTH_DIR_GUARD_BW_GUARANTEE = 2_000_000  # AuthDirGuardBWGuarantee: 2 MB/s minimum for Guard
-
-# Time thresholds (seconds)  
-GUARD_TK_DEFAULT = 691200       # 8 days - default Guard time-known requirement
-HSDIR_TK_DEFAULT = 864000       # 10 days - default HSDir time-known requirement
-SECONDS_PER_DAY = 86400
+# Import flag threshold constants from centralized module (DRY)
+from .flag_thresholds import (
+    SECONDS_PER_DAY,
+    GUARD_BW_GUARANTEE as AUTH_DIR_GUARD_BW_GUARANTEE,  # Backward compat alias
+    GUARD_TK_DEFAULT,
+    GUARD_WFU_DEFAULT,
+    HSDIR_TK_DEFAULT,
+    HSDIR_WFU_DEFAULT,
+    FAST_BW_GUARANTEE,
+    parse_wfu_threshold,
+    format_time_as_days,
+    check_guard_eligibility,
+    check_hsdir_eligibility,
+    check_fast_eligibility,
+    check_stable_eligibility,
+)
 
 COLLECTOR_BASE = 'https://collector.torproject.org'
 VOTES_PATH = '/recent/relay-descriptors/votes/'
@@ -766,11 +775,12 @@ class CollectorFetcher:
     def _format_authority_votes(self, relay: dict) -> List[dict]:
         """
         Format per-authority vote information for display.
+        Only includes voting authorities (9) - excludes non-voting authorities like Serge.
         """
         authority_votes = []
         relay_votes = relay.get('votes', {})
         
-        for auth_name in get_authority_names():  # Dynamic from Onionoo when available
+        for auth_name in get_voting_authority_names():  # Only voting authorities (9)
             vote_info = relay_votes.get(auth_name, {})
             
             voted = bool(vote_info)
@@ -966,6 +976,7 @@ class CollectorFetcher:
     def _format_reachability(self, relay: dict) -> dict:
         """
         Format reachability information across authorities.
+        Only includes voting authorities (9) - reachability is only tested by voters.
         """
         votes = relay.get('votes', {})
         
@@ -973,7 +984,7 @@ class CollectorFetcher:
         ipv6_reachable = []
         ipv6_not_tested = []
         
-        for auth_name in get_authority_names():  # Dynamic from Onionoo when available
+        for auth_name in get_voting_authority_names():  # Only voting authorities (9)
             vote = votes.get(auth_name, {})
             
             if vote:

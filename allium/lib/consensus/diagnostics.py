@@ -11,8 +11,38 @@ OPTIMIZATION: Leverages existing utilities from the codebase:
 
 from typing import Dict, List, Optional, Any
 
-# Import authority data and shared constants from collector_fetcher
-# Uses dynamic Onionoo discovery when available, falls back to hardcoded values
+# Import flag thresholds from centralized module (DRY - single source of truth)
+try:
+    from .flag_thresholds import (
+        SECONDS_PER_DAY,
+        GUARD_TK_DEFAULT,
+        GUARD_WFU_DEFAULT,
+        GUARD_BW_GUARANTEE,
+        HSDIR_TK_DEFAULT,
+        HSDIR_WFU_DEFAULT,
+        FAST_BW_GUARANTEE,
+        parse_wfu_threshold as _parse_wfu_threshold_impl,
+        format_time_as_days,
+        format_wfu_as_percent,
+        sort_flags as _sort_flags_impl,
+        FLAG_ORDER_MAP,
+    )
+except ImportError:
+    # Fallback values if import fails
+    SECONDS_PER_DAY = 86400
+    GUARD_TK_DEFAULT = 691200
+    GUARD_WFU_DEFAULT = 0.98
+    GUARD_BW_GUARANTEE = 2_000_000
+    HSDIR_TK_DEFAULT = 864000
+    HSDIR_WFU_DEFAULT = 0.98
+    FAST_BW_GUARANTEE = 100_000
+    _parse_wfu_threshold_impl = None
+    format_time_as_days = None
+    format_wfu_as_percent = None
+    _sort_flags_impl = None
+    FLAG_ORDER_MAP = {}
+
+# Import authority data from collector_fetcher
 try:
     from .collector_fetcher import (
         AUTHORITY_COUNTRIES,
@@ -20,13 +50,9 @@ try:
         get_authority_count,           # All authorities count (10)
         get_voting_authority_names,    # Voting authorities (9) - for consensus
         get_voting_authority_count,    # Voting authorities count (9)
-        GUARD_TK_DEFAULT,
-        HSDIR_TK_DEFAULT, 
-        SECONDS_PER_DAY,
     )
 except ImportError:
     AUTHORITY_COUNTRIES = {}
-    # Fallback functions when import fails
     def get_authority_names():
         return ['bastet', 'dannenberg', 'dizum', 'faravahar', 'gabelmoo', 
                 'longclaw', 'maatuska', 'moria1', 'Serge', 'tor26']
@@ -37,9 +63,6 @@ except ImportError:
                 'longclaw', 'maatuska', 'moria1', 'tor26']
     def get_voting_authority_count():
         return 9
-    GUARD_TK_DEFAULT = 691200
-    HSDIR_TK_DEFAULT = 864000
-    SECONDS_PER_DAY = 86400
 
 # Note: For consensus-related calculations (majority, reachability), use get_voting_authority_count() (9).
 # For display of all authorities, use get_authority_count() (10).
@@ -67,14 +90,11 @@ except ImportError:
 
 
 # ============================================================================
-# MODULE-SPECIFIC CONSTANTS - Not shared with collector_fetcher
+# BACKWARD COMPATIBILITY ALIASES - Constants now imported from flag_thresholds.py
 # ============================================================================
-# Bandwidth thresholds (bytes/second)
-GUARD_BW_GUARANTEE = 2_000_000   # AuthDirGuardBWGuarantee: 2 MB/s minimum for Guard
-FAST_BW_MINIMUM = 100_000       # 100 KB/s minimum for Fast flag
-
-# WFU thresholds (fractions)
-DEFAULT_WFU_THRESHOLD = 0.98    # 98% uptime for Guard/HSDir
+# These are aliases for the imported constants to maintain backward compatibility
+FAST_BW_MINIMUM = FAST_BW_GUARANTEE  # 100 KB/s minimum for Fast flag
+DEFAULT_WFU_THRESHOLD = GUARD_WFU_DEFAULT  # 98% uptime for Guard/HSDir
 
 
 # ============================================================================
@@ -128,6 +148,10 @@ def _sort_flags(flags: list) -> list:
 
 def _parse_wfu_threshold(value) -> Optional[float]:
     """Parse WFU threshold value (can be string like '98%' or float like 0.98)."""
+    # Use centralized implementation from flag_thresholds if available
+    if _parse_wfu_threshold_impl is not None:
+        return _parse_wfu_threshold_impl(value)
+    # Fallback implementation
     if value is None:
         return None
     if isinstance(value, str):

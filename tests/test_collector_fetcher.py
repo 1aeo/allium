@@ -304,9 +304,13 @@ class TestAuthorityRegistry:
         registry = AuthorityRegistry()
         
         assert registry.is_using_fallback() == True
-        assert registry.get_authority_count() == 9  # Fallback count
+        # Fallback count is 10 (includes Serge who has Authority flag but doesn't vote)
+        assert registry.get_authority_count() == 10
         assert 'moria1' in registry.get_authority_names()
         assert 'tor26' in registry.get_authority_names()
+        assert 'Serge' in registry.get_authority_names()
+        # Voting authorities (9) - excludes Serge
+        assert registry.get_voting_authority_count() == 9
     
     def test_registry_update_from_onionoo(self):
         """Test updating registry with Onionoo data."""
@@ -334,7 +338,8 @@ class TestAuthorityRegistry:
         
         assert count == 0
         assert registry.is_using_fallback() == True  # Still using fallback
-        assert registry.get_authority_count() == 9
+        # Total authorities (10) including non-voting Serge
+        assert registry.get_authority_count() == 10
     
     def test_registry_no_authorities_keeps_fallback(self):
         """Test that Onionoo data without authorities keeps fallback."""
@@ -356,8 +361,10 @@ class TestAuthorityRegistry:
         signing_keys = registry.get_signing_key_to_name()
         
         # Signing key mapping should always be available (hardcoded)
+        # Only 9 voting authorities have signing keys (Serge doesn't vote)
         assert len(signing_keys) == 9
         assert 'moria1' in signing_keys.values()
+        assert 'Serge' not in signing_keys.values()  # Serge doesn't vote
         
         # Even after Onionoo update, signing keys remain unchanged
         relays = [{'nickname': 'NewAuth', 'fingerprint': 'NEW', 'flags': ['Authority']}]
@@ -376,7 +383,8 @@ class TestDynamicAuthorityFunctions:
         
         assert isinstance(names, list)
         assert len(names) >= 1  # At least one authority
-        assert names == sorted(names)  # Sorted
+        # Uses case-insensitive sorting (Serge sorts between other names)
+        assert names == sorted(names, key=str.lower)
     
     def test_get_authority_count_returns_int(self):
         """Test get_authority_count returns integer."""
