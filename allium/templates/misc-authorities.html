@@ -567,15 +567,56 @@
             <strong>⚓ Stable Flag Calculation Logic</strong>
             <p style="margin: 10px 0 5px 0;">Per <a href="https://spec.torproject.org/dir-spec/assigning-flags-vote.html" target="_blank" rel="noopener">Tor Directory Specification</a>, a relay qualifies for Stable if:</p>
             <ul style="margin: 5px 0; padding-left: 20px;">
-                <li>Weighted MTBF ≥ <code>stable-mtbf</code> threshold (median MTBF, varies by authority)</li>
+                <li>Weighted MTBF ≥ <code>stable-mtbf</code> threshold (median MTBF of all active relays)</li>
                 <li><strong>OR</strong> Weighted MTBF ≥ <strong>7 days</strong> (604800 seconds, absolute minimum)</li>
             </ul>
+            
+            <p style="margin: 10px 0 5px 0;"><strong>How Directory Authorities Measure MTBF:</strong></p>
+            <ul style="margin: 5px 0; padding-left: 20px; font-size: 13px;">
+                <li><strong>Tracks reachability</strong> — Each authority independently tests if it can connect to relay's OR port</li>
+                <li><strong>Records "up" intervals</strong> — Tracks periods when the relay was successfully reachable</li>
+                <li><strong>Calculates Weighted MTBF</strong> — Weighted mean of all intervals when relay was "observed to be up"</li>
+                <li><strong>Weights recent data more</strong> — Uses discount factor of 0.95 every 12 hours (<a href="https://research.torproject.org/techreports/relay-stability-2011-06-30.pdf" target="_blank" rel="noopener">research paper</a>)</li>
+                <li><strong>Requires sufficient data</strong> — At least 4 days of MTBF data needed for valid assessment</li>
+            </ul>
+            
+            <p style="margin: 10px 0 5px 0;"><strong>MTBF vs Uptime — Key Distinction:</strong></p>
+            <table style="font-size: 12px; margin: 5px 0; border-collapse: collapse; width: 100%;">
+                <tr style="background: #d4c4e8;">
+                    <th style="padding: 4px 8px; text-align: left; border: 1px solid #b8a8d0;">Metric</th>
+                    <th style="padding: 4px 8px; text-align: left; border: 1px solid #b8a8d0;">Source</th>
+                    <th style="padding: 4px 8px; text-align: left; border: 1px solid #b8a8d0;">Meaning</th>
+                </tr>
+                <tr>
+                    <td style="padding: 4px 8px; border: 1px solid #b8a8d0;"><strong>MTBF</strong> (stats mtbf=X)</td>
+                    <td style="padding: 4px 8px; border: 1px solid #b8a8d0;">Authority-measured</td>
+                    <td style="padding: 4px 8px; border: 1px solid #b8a8d0;">Mean Time Between Failures — authority's observation of relay's reachability history</td>
+                </tr>
+                <tr>
+                    <td style="padding: 4px 8px; border: 1px solid #b8a8d0;"><strong>Uptime</strong> (last_restarted)</td>
+                    <td style="padding: 4px 8px; border: 1px solid #b8a8d0;">Relay self-reported</td>
+                    <td style="padding: 4px 8px; border: 1px solid #b8a8d0;">Time since last restart — from relay's own descriptor</td>
+                </tr>
+            </table>
             <p style="margin: 5px 0; font-size: 12px; color: #666;">
-                MTBF = Mean Time Between Failures. "Weighted" means recent activity is weighted more heavily.
-                <strong>⚠️ Important:</strong> Our analysis of 10k+ relays shows authorities assigning Stable to relays with MTBF as low as ~5 days, 
-                below both the published threshold and 7-day minimum. Flag assignment may use different internal calculations.
+                <strong>Key Point:</strong> Authority does NOT use relay's self-reported uptime for MTBF. It independently measures reachability.
+                The Stable flag is based on <em>uptime history</em>, not current uptime — a relay with good history that recently restarted may keep Stable.
+            </p>
+            
+            <p style="margin: 10px 0 5px 0; font-size: 12px;"><strong>From <a href="https://spec.torproject.org/dir-spec/assigning-flags-vote.html" target="_blank" rel="noopener">dir-spec § Assigning Flags</a>:</strong></p>
+            <blockquote style="margin: 5px 0 5px 15px; padding: 8px; background: #f5f0fa; border-left: 3px solid #6f42c1; font-size: 12px; font-style: italic;">
+                "To calculate weighted MTBF, compute the weighted mean of the lengths of all intervals when the router was observed to be up, 
+                weighting intervals by α^n, where n is the amount of time that has passed since the interval ended, and α is chosen so that 
+                measurements over approximately one month old no longer influence the weighted MTBF much."
+            </blockquote>
+            
+            <p style="margin: 5px 0; font-size: 12px; color: #666;">
+                <strong>⚠️ Study Finding:</strong> Our analysis of 10k+ relays shows authorities assigning Stable to relays with MTBF as low as ~5 days, 
+                below both the published threshold and 7-day minimum. The <code>stable-mtbf</code> in flag-thresholds is the <em>median</em> MTBF value, not the minimum threshold.
                 See <a href="../docs/studies/stable-flag-threshold-study.md">Stable Flag Threshold Study</a>.
-                <br><strong>Source:</strong> <a href="https://spec.torproject.org/dir-spec/assigning-flags-vote.html" target="_blank" rel="noopener">dir-spec: Assigning Flags in a Vote</a>
+                <br><strong>Sources:</strong> 
+                <a href="https://spec.torproject.org/dir-spec/assigning-flags-vote.html" target="_blank" rel="noopener">dir-spec</a> |
+                <a href="https://research.torproject.org/techreports/relay-stability-2011-06-30.pdf" target="_blank" rel="noopener">Relay Stability Research (2011)</a>
             </p>
         </div>
         
