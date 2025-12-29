@@ -798,6 +798,120 @@ class Relays:
             self._consolidated_bandwidth_results = None
             self.network_bandwidth_percentiles = None
 
+    def _reprocess_collector_data(self):
+        """
+        Process CollecTor consensus data for per-relay consensus evaluation.
+        Attaches consensus troubleshooting information to each relay including:
+        - Authority voting status
+        - Flag eligibility analysis
+        - Reachability information
+        - Bandwidth measurements from authorities
+        
+        This follows the same pattern as _reprocess_uptime_data and _reprocess_bandwidth_data.
+        """
+        collector_data = getattr(self, 'collector_consensus_data', None)
+        if not collector_data:
+            return
+        
+        # Check if relay set is properly initialized before processing
+        if not hasattr(self, 'json') or not self.json.get('relays'):
+            self._log_progress("Skipping collector processing: no relay data available")
+            return
+        
+        try:
+            from .consensus import CollectorFetcher, format_relay_consensus_evaluation
+            from .consensus.collector_fetcher import calculate_consensus_requirement, discover_authorities
+            
+            self._log_progress("Processing CollecTor consensus data for relay consensus evaluation...")
+            
+            # Get relay index and flag thresholds from collector data
+            relay_index = collector_data.get('relay_index', {})
+            flag_thresholds = collector_data.get('flag_thresholds', {})
+            bw_authorities = collector_data.get('bw_authorities', [])
+            
+            if not relay_index:
+                self._log_progress("No relay index in collector data, skipping consensus evaluation")
+                return
+            
+            # Use the number of voting authorities from flag_thresholds (actual voters)
+            # This is more accurate than counting Authority flags in relays
+            # (some authorities like Serge may have the flag but not vote)
+            authority_count = len(flag_thresholds) if flag_thresholds else 9
+            
+            # Also discover authorities from relay list for reference
+            authorities = discover_authorities(self.json['relays'])
+            
+            # Calculate consensus requirement
+            consensus_req = calculate_consensus_requirement(authority_count)
+            
+            # Store authority and threshold information for templates
+            self.collector_authorities = authorities
+            self.collector_flag_thresholds = flag_thresholds
+            self.collector_bw_authorities = bw_authorities
+            self.consensus_requirement = consensus_req
+            
+            # Create a CollectorFetcher instance with the pre-fetched data
+            # to use its get_relay_consensus_evaluation method
+            fetcher = CollectorFetcher()
+            fetcher.relay_index = relay_index
+            fetcher.flag_thresholds = flag_thresholds
+            fetcher.bw_authorities = set(bw_authorities)
+            fetcher.ipv6_testing_authorities = set(collector_data.get('ipv6_testing_authorities', []))
+            
+            # Process consensus evaluation for each relay
+            evaluation_count = 0
+            for relay in self.json["relays"]:
+                fingerprint = relay.get('fingerprint', '').upper()
+                if not fingerprint:
+                    continue
+                
+                # Get raw consensus evaluation from fetcher
+                raw_consensus_evaluation = fetcher.get_relay_consensus_evaluation(fingerprint, authority_count)
+                
+                # Calculate relay uptime from last_restarted (Onionoo data)
+                # This is the relay's self-reported uptime from its descriptor
+                relay_uptime = None
+                last_restarted = relay.get('last_restarted')
+                if last_restarted:
+                    try:
+                        from datetime import datetime, timezone
+                        # Handle ISO format with optional timezone
+                        if last_restarted.endswith('Z'):
+                            restart_time = datetime.fromisoformat(last_restarted.replace('Z', '+00:00'))
+                        elif '+' in last_restarted or last_restarted.count('-') > 2:
+                            restart_time = datetime.fromisoformat(last_restarted)
+                        else:
+                            # Assume UTC if no timezone
+                            restart_time = datetime.fromisoformat(last_restarted).replace(tzinfo=timezone.utc)
+                        relay_uptime = (datetime.now(timezone.utc) - restart_time).total_seconds()
+                    except (ValueError, TypeError):
+                        pass
+                
+                # Format for template display, passing current flags, observed_bandwidth, and relay_uptime
+                # Note: observed_bandwidth (from descriptor) is the actual bandwidth for Guard eligibility
+                # NOT the scaled consensus weight or vote Measured value
+                current_flags = relay.get('flags', [])
+                observed_bandwidth = relay.get('observed_bandwidth', 0)
+                formatted_consensus_evaluation = format_relay_consensus_evaluation(
+                    raw_consensus_evaluation, flag_thresholds, current_flags, observed_bandwidth,
+                    use_bits=self.use_bits,  # Pass use_bits for consistent bandwidth formatting
+                    relay_uptime=relay_uptime  # Pass relay uptime from Onionoo for Stable comparison
+                )
+                
+                # Attach to relay
+                relay['consensus_evaluation'] = formatted_consensus_evaluation
+                
+                if formatted_consensus_evaluation.get('available'):
+                    evaluation_count += 1
+            
+            self._log_progress(f"Processed consensus evaluation for {evaluation_count} relays")
+            
+        except Exception as e:
+            # Fallback gracefully if collector processing fails
+            print(f"Warning: Collector data processing failed ({e}), continuing without consensus evaluation")
+            import traceback
+            traceback.print_exc()
+
     def _calculate_network_bandwidth_percentiles(self, bandwidth_data):
         """
         Calculate network-wide bandwidth percentiles for operator comparison.
@@ -2121,9 +2235,14 @@ class Relays:
         elif template.name == "misc-authorities.html":
             # Reuse existing authority uptime data from consolidated processing
             authorities_data = self._get_directory_authorities_data()
-            # Set attributes as expected by template
+            # Set attributes as expected by template (template uses relays.X)
             self.authorities_data = authorities_data['authorities_data']
             self.authorities_summary = authorities_data['authorities_summary']
+            self.consensus_status = authorities_data.get('consensus_status')
+            self.latency_summary = authorities_data.get('latency_summary')
+            self.authority_alerts = authorities_data.get('authority_alerts')
+            self.collector_flag_thresholds = authorities_data.get('collector_flag_thresholds')
+            self.collector_fetched_at = authorities_data.get('collector_fetched_at')
             template_vars.update(authorities_data)
         
         template_render = template.render(**template_vars)
@@ -2138,8 +2257,148 @@ class Relays:
         Prepare directory authorities data for template rendering.
         Reuses existing authority uptime calculations and z-score infrastructure.
         """
+        from datetime import datetime, timezone
+        
         # Filter authorities from existing relay data (no new processing)
         authorities = [relay for relay in self.json["relays"] if 'Authority' in relay.get('flags', [])]
+        
+        # Sort authorities alphabetically by nickname (A at top, Z at bottom)
+        authorities = sorted(authorities, key=lambda x: x.get('nickname', '').lower())
+        
+        # Get collector data for votes/bw authorities
+        collector_data = getattr(self, 'collector_consensus_data', None)
+        collector_fetched_at = None
+        if collector_data:
+            collector_fetched_at = collector_data.get('fetched_at', '')
+            votes = collector_data.get('votes', {})
+            bw_authorities = set(collector_data.get('bw_authorities', []))
+            
+            # OPTIMIZATION: Build lookup maps ONCE instead of nested loops for each authority
+            # This reduces O(A*V) to O(A+V) where A=authorities, V=votes
+            votes_by_nickname = {}  # nickname.lower() -> (vote_data, relay_count)
+            votes_by_fingerprint = {}  # fingerprint.upper() -> (vote_data, relay_count)
+            votes_by_prefix = {}  # fingerprint[:8].upper() -> (vote_data, relay_count)
+            
+            for vote_key, vote_data in votes.items():
+                relay_count = len(vote_data.get('relays', {})) if isinstance(vote_data, dict) else 0
+                vote_tuple = (vote_data, relay_count)
+                
+                vote_key_upper = vote_key.upper()
+                vote_key_lower = vote_key.lower()
+                
+                # Store by all possible lookup keys
+                votes_by_nickname[vote_key_lower] = vote_tuple
+                if len(vote_key) == 40:  # Full fingerprint
+                    votes_by_fingerprint[vote_key_upper] = vote_tuple
+                    votes_by_prefix[vote_key_upper[:8]] = vote_tuple
+                elif len(vote_key) == 8:  # Prefix only
+                    votes_by_prefix[vote_key_upper] = vote_tuple
+            
+            # Same optimization for bw_authorities
+            bw_auth_nicknames = {a.lower() for a in bw_authorities}
+            bw_auth_fingerprints = {a.upper() for a in bw_authorities if len(a) == 40}
+            bw_auth_prefixes = {a.upper()[:8] for a in bw_authorities if len(a) >= 8}
+            
+            for authority in authorities:
+                auth_nickname = authority.get('nickname', '').lower()
+                auth_fingerprint = authority.get('fingerprint', '').upper()
+                auth_fp_prefix = auth_fingerprint[:8] if auth_fingerprint else ''
+                
+                # Check if this authority voted - O(1) lookups
+                voted = False
+                relay_count = 0
+                vote_tuple = (
+                    votes_by_fingerprint.get(auth_fingerprint) or
+                    votes_by_prefix.get(auth_fp_prefix) or
+                    votes_by_nickname.get(auth_nickname)
+                )
+                if vote_tuple:
+                    voted = True
+                    relay_count = vote_tuple[1]
+                
+                # Check if this authority is a bandwidth authority - O(1) lookups
+                is_bw = (
+                    auth_fingerprint in bw_auth_fingerprints or
+                    auth_fp_prefix in bw_auth_prefixes or
+                    auth_nickname in bw_auth_nicknames
+                )
+                
+                authority['collector_data'] = {
+                    'voted': voted,
+                    'is_bw_authority': is_bw,
+                    'relay_count': relay_count,
+                }
+        
+        # Perform latency checks on authorities
+        latency_ok_count = 0
+        latency_slow_count = 0
+        latency_down_count = 0
+        authority_alerts = []
+        
+        try:
+            from .consensus import AuthorityMonitor
+            
+            # Build authority endpoint data from VOTING authorities only (those that voted in collector)
+            # This ensures latency counts match voting authority counts
+            authority_endpoints = []
+            for auth in authorities:
+                # Only include voting authorities in latency check
+                if not auth.get('collector_data', {}).get('voted', False):
+                    continue
+                    
+                # Extract address from or_addresses (Onionoo format)
+                or_addresses = auth.get('or_addresses', [])
+                address = or_addresses[0].split(':')[0] if or_addresses else ''
+                
+                # Extract dir_port from dir_address if available, otherwise default to 80
+                dir_address = auth.get('dir_address', '')
+                dir_port = dir_address.split(':')[-1] if ':' in dir_address else '80'
+                
+                if auth.get('nickname') and address:
+                    authority_endpoints.append({
+                        'nickname': auth.get('nickname'),
+                        'address': address,
+                        'dir_port': dir_port,
+                    })
+            
+            # Pass discovered authorities to monitor (falls back to hardcoded if empty)
+            monitor = AuthorityMonitor(timeout=2, authorities=authority_endpoints)
+            latency_status = monitor.check_all_authorities()
+            
+            # Attach latency data to each authority
+            for authority in authorities:
+                auth_nickname = authority.get('nickname', '').lower()
+                # Find matching latency data
+                for name, status in latency_status.items():
+                    if name.lower() == auth_nickname:
+                        authority['latency_ms'] = status.get('latency_ms')
+                        authority['latency_online'] = status.get('online', False)
+                        authority['latency_error'] = status.get('error')
+                        authority['latency_checked_at'] = status.get('checked_at')
+                        
+                        # Count for summary
+                        if status.get('online'):
+                            if status.get('latency_ms') and status['latency_ms'] > 500:
+                                latency_slow_count += 1
+                            else:
+                                latency_ok_count += 1
+                        else:
+                            latency_down_count += 1
+                            authority_alerts.append(f"{authority.get('nickname', 'Unknown')} is not responding (latency check failed)")
+                        break
+        except Exception as e:
+            # Latency check failed - continue without it
+            pass
+        
+        # Calculate first_seen relative time for each authority
+        for authority in authorities:
+            first_seen = authority.get('first_seen', '')
+            if first_seen:
+                authority['first_seen_timestamp'] = first_seen
+                authority['first_seen_relative'] = format_time_ago(first_seen)
+            else:
+                authority['first_seen_timestamp'] = 'Unknown'
+                authority['first_seen_relative'] = 'Unknown'
         
         # Reuse existing consolidated uptime results (already computed)
         authority_network_stats = {}
@@ -2165,6 +2424,7 @@ class Relays:
                         above_average_uptime.append(authority)
                     elif authority['uptime_zscore'] <= -2.0:
                         problem_uptime.append(authority)
+                        authority_alerts.append(f"{authority.get('nickname', 'Unknown')} has significantly below average uptime (Z-score: {authority['uptime_zscore']:.1f})")
                     else:
                         below_average_uptime.append(authority)
                     
@@ -2184,16 +2444,46 @@ class Relays:
                 authority['uptime_zscore'] = None
                 authority['uptime_outlier_status'] = 'insufficient_data'
         
+        # Build consensus status
+        voted_count = sum(1 for a in authorities if a.get('collector_data', {}).get('voted', False))
+        consensus_status = {
+            'freshness': 'fresh' if voted_count >= 5 else ('stale' if voted_count >= 3 else 'unknown'),
+            'voted_count': voted_count,
+            'fetched_at': collector_fetched_at,
+        }
+        
+        # Build latency summary
+        latency_summary = {
+            'ok_count': latency_ok_count,
+            'slow_count': latency_slow_count,
+            'down_count': latency_down_count,
+        }
+        
+        # Get flag thresholds from collector data
+        collector_flag_thresholds = getattr(self, 'collector_flag_thresholds', None)
+        if collector_flag_thresholds is None and collector_data:
+            collector_flag_thresholds = collector_data.get('flag_thresholds', {})
+        
+        # Use voting authority count from collector (actual voters) rather than Onionoo authority flag count
+        # This is more accurate since some authorities (like Serge) may have Authority flag but don't vote
+        voting_authority_count = len(collector_flag_thresholds) if collector_flag_thresholds else len(authorities)
+        
         return {
             'authorities_data': authorities,
             'authorities_summary': {
-                'total_authorities': len(authorities),
+                'total_authorities': voting_authority_count,
+                'total_with_authority_flag': len(authorities),  # Keep for reference
                 'above_average_uptime': above_average_uptime,
                 'below_average_uptime': below_average_uptime,
                 'problem_uptime': problem_uptime
             },
-            'authority_network_stats': authority_network_stats,  # Include for template access
-            'uptime_metadata': (getattr(self, 'uptime_data', {}) or {}).get('relays_published', 'Unknown')
+            'authority_network_stats': authority_network_stats,
+            'uptime_metadata': (getattr(self, 'uptime_data', {}) or {}).get('relays_published', 'Unknown'),
+            'consensus_status': consensus_status,
+            'latency_summary': latency_summary,
+            'authority_alerts': authority_alerts if authority_alerts else None,
+            'collector_flag_thresholds': collector_flag_thresholds,
+            'collector_fetched_at': collector_fetched_at,
         }
 
 

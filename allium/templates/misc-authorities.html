@@ -15,7 +15,25 @@
     </p>
 
     <ul style="margin-bottom: 15px;">
-        <li><strong>Directory Authorities:</strong> {{ relays.authorities_summary.total_authorities }} authorities currently active</li>
+        <li><strong>Directory Authorities:</strong> {{ relays.authorities_summary.total_authorities }} authorities discovered (dynamic from Onionoo)</li>
+        
+        {# Consensus status from CollecTor #}
+        {% if relays.consensus_status %}
+        <li><strong>Consensus Status:</strong> 
+            {% if relays.consensus_status.freshness == 'fresh' %}
+                <span style="color: green; font-weight: bold;">FRESH</span>
+            {% elif relays.consensus_status.freshness == 'stale' %}
+                <span style="color: #ff8c00; font-weight: bold;">STALE</span>
+            {% else %}
+                <span style="color: red; font-weight: bold;">{{ relays.consensus_status.freshness|upper }}</span>
+            {% endif %}
+            | {{ relays.consensus_status.voted_count|default(0) }}/{{ relays.authorities_summary.total_authorities }} Voted at {{ relays.collector_fetched_at.replace('T', ' ').split('.')[0] if relays.collector_fetched_at else relays.timestamp }} (fetch time, votes from same consensus period)
+            {% if relays.consensus_status.next_consensus_time %}
+            | Next: {{ relays.consensus_status.next_consensus_time }}
+            {% endif %}
+        </li>
+        {% endif %}
+        
         <li><strong>Version Compliance:</strong> 
             {% set compliant_authorities = relays.authorities_data | selectattr('recommended_version', 'equalto', true) | list %}
             {% set non_compliant_authorities = relays.authorities_data | selectattr('recommended_version', 'equalto', false) | list %}
@@ -38,7 +56,21 @@
                 <span style="color: red; font-weight: bold;">0 problematic</span>
             {%- endif %}
         </li>
-                    <li><strong>Key:</strong> BW = Observed Bandwidth Capacity, CW = Consensus Weight, Z = Z-score (statistical uptime deviation)</li>
+        
+        {# Latency status (voting authorities only) #}
+        {% if relays.latency_summary %}
+        <li><strong>Latency Status</strong> <span style="font-size: 0.85em; color: #666;">(voting authorities)</span><strong>:</strong> 
+            <span style="color: green;">{{ relays.latency_summary.ok_count|default(0) }}/{{ relays.authorities_summary.total_authorities }} OK</span>
+            {% if relays.latency_summary.slow_count > 0 %}
+            | <span style="color: #ff8c00;">{{ relays.latency_summary.slow_count }} slow</span>
+            {% endif %}
+            {% if relays.latency_summary.down_count > 0 %}
+            | <span style="color: red;">{{ relays.latency_summary.down_count }} down</span>
+            {% endif %}
+        </li>
+        {% endif %}
+        
+        <li><strong>Key:</strong> BW = Observed Bandwidth Capacity, CW = Consensus Weight, Z = Z-score (statistical uptime deviation)</li>
     </ul>
 
     <br>
@@ -48,7 +80,7 @@
     <br>
     
     <p class="text-muted" style="margin-bottom: 15px;">
-    <small>Last updated: {{ relays.timestamp }}. Refreshed every 30 minutes from the Tor directory authorities via <a href="https://onionoo.torproject.org/">Tor Project's onionoo API</a>.</small>
+    <small>Last updated: {{ relays.timestamp }}. Data from <a href="https://onionoo.torproject.org/">Onionoo API</a> + <a href="https://collector.torproject.org" target="_blank" rel="noopener">CollecTor</a> (votes, thresholds).</small>
     </p>
     
     <!-- UPTIME DATA STATUS NOTIFICATION -->
@@ -78,19 +110,24 @@
         {%- endif %}
     {%- endif %}
     
+    {# Main table: EXISTING columns + 3 NEW columns (Voted, BW Auth, Latency) #}
     <table class="table table-condensed" style="font-size: 13px;">
         <tr>
-            <th>Authority Name</th>
-            <th>Online Status</th>
-            <th>AS Number</th>
-            <th>AS Name</th>
-            <th>Country</th>
-            <th title="Percentage of time authority was online over 1 month, 6 months, 1 year, and 5 years periods">Uptime (1M/6M/1Y/5Y)</th>
-            <th>Version</th>
-            <th>Platform</th>
-            <th title="Version compliance: ✅ = On recommended version, ❌ = Not on recommended version">Rec. Ver.</th>
-            <th>First Seen</th>
-            <th>Last Restarted</th>
+            <th title="Source: Onionoo | File: details | Field: nickname (has Authority flag)">Authority Name</th>
+            <th title="Source: Onionoo | File: details | Field: running">Online Status</th>
+            {# NEW columns with detailed tooltips #}
+            <th title="Source: CollecTor | Vote file exists for this consensus period{% if relays.collector_fetched_at %} | Checked: {{ relays.collector_fetched_at.replace('T', ' ').split('.')[0] }}{% endif %}">Voted</th>
+            <th title="Source: CollecTor | Has 'bandwidth-file-headers' line = runs sbws scanner">BW Auth</th>
+            <th title="TCP connection test to authority's directory port | Response time in milliseconds">Latency (ms)</th>
+            {# Existing columns #}
+            <th title="Source: Onionoo | File: details | Field: as">AS Number</th>
+            <th title="Source: Onionoo | File: details | Field: as_name">AS Name</th>
+            <th title="Source: Onionoo | File: details | Field: country">Country</th>
+            <th title="Source: Onionoo | File: uptime | 1M/6M/1Y/5Y uptime percentages">Uptime (1M/6M/1Y/5Y)</th>
+            <th title="Source: Onionoo | File: details | Field: version">Version</th>
+            <th title="Source: Onionoo | File: details | Field: recommended_version">Rec. Ver.</th>
+            <th title="Source: Onionoo | File: details | Field: first_seen | Time since first observed on network">Age</th>
+            <th title="Source: Onionoo | File: details | Field: last_restarted">Last Restarted</th>
         </tr>
         <tbody>
         {% for authority in relays.authorities_data -%}
@@ -107,9 +144,50 @@
                     {% if authority.running -%}
                         <span style="color: green; font-weight: bold;">🟢 Online</span>
                     {% else -%}
-                        <span style="color: red; font-weight: bold;">🔴 Offline (last seen: {{ authority.last_seen }})</span>
+                        <span style="color: red; font-weight: bold;">🔴 Offline</span>
                     {%- endif %}
                 </td>
+                
+                {# NEW: Voted status - show relay count if voted, colored text #}
+                <td>
+                    {% if authority.collector_data and authority.collector_data.voted %}
+                        {% set relay_count = authority.collector_data.relay_count|default(0) %}
+                        <span style="color: {% if relay_count > 1 %}#28a745{% else %}#dc3545{% endif %}; font-weight: bold;" title="Vote received with {{ relay_count }} relays{% if relays.collector_fetched_at %} | Checked: {{ relays.collector_fetched_at.replace('T', ' ').split('.')[0] }}{% endif %}">{{ relay_count }}</span>
+                    {% elif authority.collector_data is defined %}
+                        <span style="color: #dc3545; font-weight: bold;" title="No vote file found at https://collector.torproject.org/recent/relay-descriptors/votes/{% if relays.collector_fetched_at %} | Checked: {{ relays.collector_fetched_at.replace('T', ' ').split('.')[0] }}{% endif %}">0</span>
+                    {% else %}
+                        <span style="color: #6c757d;" title="CollecTor data not available">—</span>
+                    {% endif %}
+                </td>
+                
+                {# NEW: BW Authority status #}
+                <td>
+                    {% if authority.collector_data and authority.collector_data.is_bw_authority %}
+                        <span style="color: #28a745; font-weight: bold;" title="Runs bandwidth scanner (sbws)">Yes</span>
+                    {% else %}
+                        <span style="color: #6c757d;" title="Does not run bandwidth scanner">No</span>
+                    {% endif %}
+                </td>
+                
+                {# NEW: Latency #}
+                <td>
+                    {% if authority.latency_ms is defined and authority.latency_ms is not none %}
+                        {% if authority.latency_ms >= 2000 %}
+                            <span style="color: #dc3545; font-weight: bold;" title="Connection timed out after 2 seconds{% if authority.latency_checked_at %} | Checked: {{ authority.latency_checked_at.replace('T', ' ').split('.')[0] }}{% endif %}">Timeout</span>
+                        {% elif authority.latency_ms > 500 %}
+                            <span style="color: #dc3545; font-weight: bold;" title="Response time: {{ authority.latency_ms|round|int }} ms (slow, >500ms){% if authority.latency_checked_at %} | Checked: {{ authority.latency_checked_at.replace('T', ' ').split('.')[0] }}{% endif %}">{{ authority.latency_ms|round|int }}</span>
+                        {% elif authority.latency_ms > 200 %}
+                            <span style="color: #ff8c00;" title="Response time: {{ authority.latency_ms|round|int }} ms (moderate, >200ms){% if authority.latency_checked_at %} | Checked: {{ authority.latency_checked_at.replace('T', ' ').split('.')[0] }}{% endif %}">{{ authority.latency_ms|round|int }}</span>
+                        {% else %}
+                            <span title="Response time: {{ authority.latency_ms|round|int }} ms (good, ≤200ms){% if authority.latency_checked_at %} | Checked: {{ authority.latency_checked_at.replace('T', ' ').split('.')[0] }}{% endif %}">{{ authority.latency_ms|round|int }}</span>
+                        {% endif %}
+                    {% elif authority.latency_error is defined and authority.latency_error %}
+                        <span style="color: #dc3545; font-weight: bold;" title="Error: {{ authority.latency_error }}{% if authority.latency_checked_at %} | Checked: {{ authority.latency_checked_at.replace('T', ' ').split('.')[0] }}{% endif %}">✗</span>
+                    {% else %}
+                        <span style="color: #6c757d;" title="Latency check not performed">—</span>
+                    {% endif %}
+                </td>
+                
                 <td>
                     {% if authority.as -%}
                         <a href="{{ page_ctx.path_prefix }}as/{{ authority.as }}/">{{ authority.as }}</a>
@@ -171,25 +249,20 @@
                 </td>
                 <td>{{ authority.version if authority.version else "Unknown" }}</td>
                 <td>
-                    {% if authority.platform -%}
-                        <a href="{{ page_ctx.path_prefix }}platform/{{ authority.platform|escape }}/">{{ authority.platform|escape }}</a>
-                    {% else -%}
-                        Unknown
-                    {%- endif %}
-                </td>
-                <td>
                     {% if authority.recommended_version is not none -%}
                         {% if authority.recommended_version -%}
-                            <span style="color: green; font-weight: bold;" title="Running recommended version">✅</span>
+                            <span style="color: #28a745; font-weight: bold;" title="Running recommended version">Yes</span>
                         {% else -%}
-                            <span style="color: red; font-weight: bold;" title="Not running recommended version">❌</span>
+                            <span style="color: #dc3545; font-weight: bold;" title="Not running recommended version">No</span>
                         {%- endif %}
                     {% else -%}
                         Unknown
                     {%- endif %}
                 </td>
                 <td>
-                    {% if authority.first_seen -%}
+                    {% if authority.first_seen_relative -%}
+                        <a href="{{ page_ctx.path_prefix }}first_seen/{{ authority.first_seen.split(' ')[0].replace('-', '') }}/" title="{{ authority.first_seen_timestamp }}">{{ authority.first_seen_relative }}</a>
+                    {% elif authority.first_seen -%}
                         <a href="{{ page_ctx.path_prefix }}first_seen/{{ authority.first_seen.split(' ')[0].replace('-', '') }}/" title="{{ authority.first_seen }}">{{ authority.first_seen.split(' ')[0] }}</a>
                     {% else -%}
                         Unknown
@@ -201,25 +274,357 @@
         </tbody>
     </table>
 
+    {# ALERTS SECTION #}
+    {% if relays.authority_alerts %}
+    <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 10px 15px; border-radius: 6px; margin-top: 10px;">
+        <strong>⚠️ Alerts:</strong>
+        <ul style="margin: 5px 0; padding-left: 20px;">
+        {% for alert in relays.authority_alerts %}
+            <li>{{ alert }}</li>
+        {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
     <br><br>
 
     <!-- LEGEND/NOTES -->
-    <div style="background: #f0f0f0; padding: 15px; border-radius: 6px;">
+    <div style="background: #f0f0f0; padding: 15px; border-radius: 6px; margin-top: 15px;">
         <h4>Legend:</h4>
         <ul style="margin: 0; padding-left: 20px;">
+            <li><strong>Online:</strong> 🟢 = Online, 🔴 = Offline</li>
+            <li><strong>Voted:</strong> Shows number of relays in authority's vote. <span style="color: #28a745; font-weight: bold;">Green (&gt;1)</span> = Vote received with relays, <span style="color: #dc3545; font-weight: bold;">Red (0)</span> = No vote or empty. Hover for details and check timestamp.</li>
+            <li><strong>BW Auth:</strong> <span style="color: #28a745; font-weight: bold;">Yes</span> = Runs bandwidth scanner (sbws), <span style="color: #6c757d;">No</span> = Does not run scanner</li>
+            <li><strong>Latency (ms):</strong> TCP connection time to authority's directory port. <span style="color: #ff8c00;">Orange = &gt;200ms</span>, <span style="color: #dc3545; font-weight: bold;">Red = &gt;500ms</span>, <span style="color: #dc3545; font-weight: bold;">Timeout</span> = &gt;2s, <span style="color: #dc3545; font-weight: bold;">✗</span> = Connection failed. Hover for exact time and check timestamp.</li>
             <li><strong>Uptime (1M/6M/1Y/5Y):</strong> Percentage of time authority was online over 1 month, 6 months, 1 year, and 5 years periods</li>
             <li><strong>Uptime Z-Score:</strong> Statistical measure comparing this authority's 1-month uptime to other authorities. <span style="color: green; font-weight: bold;">Green (above average)</span>, <span style="color: #ff8c00; font-weight: bold;">Yellow (normal)</span>, <span style="color: red; font-weight: bold;">Red (significantly below average, ≤-2.0)</span></li>
-            <li><strong>Version:</strong> Current Tor software version running on the authority</li>
-            <li><strong>Platform:</strong> Full platform description including Tor version and operating system</li>
-            <li><strong>Rec. Ver.:</strong> Recommended version compliance. <span style="color: green; font-weight: bold;">✅ = On recommended version</span>, <span style="color: red; font-weight: bold;">❌ = Not on recommended version</span></li>
-            <li><strong>First Seen:</strong> When this authority first appeared in the directory consensus</li>
-            <li><strong>Last Restarted:</strong> When the authority software was last restarted</li>
+            <li><strong>Rec. Ver.:</strong> <span style="color: green; font-weight: bold;">Yes</span> = On recommended version, <span style="color: red; font-weight: bold;">No</span> = Not recommended</li>
+            <li><strong>Age:</strong> Time since authority was first observed on the network (hover for exact timestamp)</li>
         </ul>
     </div>
 
+    {# Flag Thresholds Table - from CollecTor consensus data #}
+    {% if relays.collector_flag_thresholds %}
+    <br><br>
+    <h3 id="flag-thresholds">
+        <a href="#flag-thresholds" style="text-decoration: none; color: inherit;">Flag Thresholds by Authority</a>
+    </h3>
+    <p class="text-muted" style="font-size: 13px; margin-bottom: 15px;">
+        Each directory authority has different thresholds for assigning flags to relays. 
+        Values extracted from authority votes via <a href="https://collector.torproject.org/recent/relay-descriptors/votes/" target="_blank" rel="noopener">Tor CollecTor</a>{% if relays.collector_fetched_at %} (fetched: {{ relays.collector_fetched_at }}){% endif %}.
+    </p>
+    
+    <div style="overflow-x: auto; overflow-y: visible; position: relative;">
+    <table class="table table-condensed table-striped" style="font-size: 12px;">
+        <thead>
+            <tr>
+                <th>Threshold</th>
+                {% for auth_name in relays.collector_flag_thresholds.keys()|sort %}
+                <th style="text-align: center;">{{ auth_name }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {# Guard Flag Thresholds #}
+            <tr style="background: #e8f4fd;">
+                <td colspan="{{ relays.collector_flag_thresholds|length + 1 }}"><strong>🛡️ Guard Flag Requirements</strong></td>
+            </tr>
+            <tr>
+                <td title="Weighted Fractional Uptime required for Guard flag">Guard WFU</td>
+                {% for auth_name in relays.collector_flag_thresholds.keys()|sort %}
+                {% set thresholds = relays.collector_flag_thresholds[auth_name] %}
+                <td style="text-align: center;">
+                    {% if thresholds.get('guard-wfu') is not none %}
+                        {% if thresholds['guard-wfu'] <= 1 %}
+                            ≥{{ "%.1f%%"|format(thresholds['guard-wfu'] * 100) }}
+                        {% else %}
+                            ≥{{ "%.1f%%"|format(thresholds['guard-wfu']) }}
+                        {% endif %}
+                    {% else %}
+                        <span style="color: #6c757d;">—</span>
+                    {% endif %}
+                </td>
+                {% endfor %}
+            </tr>
+            <tr>
+                <td title="Time Known required for Guard flag (how long authority has tracked the relay)">Guard Time Known</td>
+                {% for auth_name in relays.collector_flag_thresholds.keys()|sort %}
+                {% set thresholds = relays.collector_flag_thresholds[auth_name] %}
+                <td style="text-align: center;">
+                    {% if thresholds.get('guard-tk') is not none %}
+                        {% set days = thresholds['guard-tk'] / 86400 %}
+                        ≥{{ "%.1f d"|format(days) }}
+                    {% else %}
+                        <span style="color: #6c757d;">—</span>
+                    {% endif %}
+                </td>
+                {% endfor %}
+            </tr>
+            <tr>
+                <td title="Top 25% bandwidth threshold (guard-bw-inc-exits). Relays with observed_bandwidth above this OR ≥2 MB/s qualify for Guard.">Guard BW (top 25%)</td>
+                {% for auth_name in relays.collector_flag_thresholds.keys()|sort %}
+                {% set thresholds = relays.collector_flag_thresholds[auth_name] %}
+                <td style="text-align: center;">
+                    {% if thresholds.get('guard-bw-inc-exits') is not none %}
+                        {% set bw = thresholds['guard-bw-inc-exits'] %}
+                        {% set bw_unit = bw|determine_unit(relays.use_bits) %}
+                        {% set bw_formatted = bw|format_bandwidth_with_unit(bw_unit) %}
+                        ≥{{ bw_formatted }} {{ bw_unit }}
+                    {% else %}
+                        <span style="color: #6c757d;">—</span>
+                    {% endif %}
+                </td>
+                {% endfor %}
+            </tr>
+            <tr>
+                <td title="V2Dir flag - relay supports directory protocol v2+. Required for Guard. Based on relay capability (DirPort or tunneled-dir-server), not a threshold.">V2Dir Flag</td>
+                {% for auth_name in relays.collector_flag_thresholds.keys()|sort %}
+                {% set thresholds = relays.collector_flag_thresholds[auth_name] %}
+                <td style="text-align: center;">
+                    {# V2Dir is a capability flag, not threshold-based. All authorities require it for Guard. #}
+                    {% if thresholds.get('known_flags') and 'V2Dir' in thresholds.get('known_flags', []) %}
+                        <span style="color: #28a745;">✓ Required</span>
+                    {% else %}
+                        <span style="color: #28a745;">✓ Required</span>
+                    {% endif %}
+                </td>
+                {% endfor %}
+            </tr>
+
+            {# Stable Flag Thresholds #}
+            <tr style="background: #e8f4fd;">
+                <td colspan="{{ relays.collector_flag_thresholds|length + 1 }}"><strong>⚓ Stable Flag Requirements</strong></td>
+            </tr>
+            <tr>
+                <td title="Minimum uptime required for Stable flag">Stable Uptime</td>
+                {% for auth_name in relays.collector_flag_thresholds.keys()|sort %}
+                {% set thresholds = relays.collector_flag_thresholds[auth_name] %}
+                <td style="text-align: center;">
+                    {% if thresholds.get('stable-uptime') is not none %}
+                        {% set days = thresholds['stable-uptime'] / 86400 %}
+                        ≥{{ "%.1f d"|format(days) }}
+                    {% else %}
+                        <span style="color: #6c757d;">—</span>
+                    {% endif %}
+                </td>
+                {% endfor %}
+            </tr>
+            <tr>
+                <td title="Mean Time Between Failures required for Stable flag">Stable MTBF</td>
+                {% for auth_name in relays.collector_flag_thresholds.keys()|sort %}
+                {% set thresholds = relays.collector_flag_thresholds[auth_name] %}
+                <td style="text-align: center;">
+                    {% if thresholds.get('stable-mtbf') is not none %}
+                        {% set days = thresholds['stable-mtbf'] / 86400 %}
+                        ≥{{ "%.1f d"|format(days) }}
+                    {% else %}
+                        <span style="color: #6c757d;">—</span>
+                    {% endif %}
+                </td>
+                {% endfor %}
+            </tr>
+            <tr>
+                <td title="Whether authority has collected sufficient MTBF data to calculate Stable flag thresholds">Enough MTBF</td>
+                {% for auth_name in relays.collector_flag_thresholds.keys()|sort %}
+                {% set thresholds = relays.collector_flag_thresholds[auth_name] %}
+                <td style="text-align: center;">
+                    {% if thresholds.get('enough-mtbf') is not none %}
+                        {% if thresholds['enough-mtbf'] == 1 %}
+                            <span style="color: #28a745;">✓</span>
+                        {% else %}
+                            <span style="color: #dc3545;">✗</span>
+                        {% endif %}
+                    {% else %}
+                        <span style="color: #6c757d;">—</span>
+                    {% endif %}
+                </td>
+                {% endfor %}
+            </tr>
+
+            {# Fast Flag Thresholds #}
+            <tr style="background: #e8f4fd;">
+                <td colspan="{{ relays.collector_flag_thresholds|length + 1 }}"><strong>⚡ Fast Flag Requirements</strong></td>
+            </tr>
+            <tr>
+                <td title="Minimum bandwidth speed required for Fast flag (dynamically calculated from network, represents top 7/8ths percentile)">Fast Speed (7/8ths)</td>
+                {% for auth_name in relays.collector_flag_thresholds.keys()|sort %}
+                {% set thresholds = relays.collector_flag_thresholds[auth_name] %}
+                <td style="text-align: center;">
+                    {% if thresholds.get('fast-speed') is not none %}
+                        {% set bw = thresholds['fast-speed'] %}
+                        {% set bw_unit = bw|determine_unit(relays.use_bits) %}
+                        {% set bw_formatted = bw|format_bandwidth_with_unit(bw_unit) %}
+                        ≥{{ bw_formatted }} {{ bw_unit }}
+                    {% else %}
+                        <span style="color: #6c757d;">—</span>
+                    {% endif %}
+                </td>
+                {% endfor %}
+            </tr>
+
+            {# HSDir Flag Thresholds #}
+            <tr style="background: #e8f4fd;">
+                <td colspan="{{ relays.collector_flag_thresholds|length + 1 }}"><strong>📁 HSDir Flag Requirements</strong></td>
+            </tr>
+            <tr>
+                <td title="Weighted Fractional Uptime required for HSDir flag">HSDir WFU</td>
+                {% for auth_name in relays.collector_flag_thresholds.keys()|sort %}
+                {% set thresholds = relays.collector_flag_thresholds[auth_name] %}
+                <td style="text-align: center;">
+                    {% if thresholds.get('hsdir-wfu') is not none %}
+                        {% if thresholds['hsdir-wfu'] <= 1 %}
+                            ≥{{ "%.1f%%"|format(thresholds['hsdir-wfu'] * 100) }}
+                        {% else %}
+                            ≥{{ "%.1f%%"|format(thresholds['hsdir-wfu']) }}
+                        {% endif %}
+                    {% else %}
+                        <span style="color: #6c757d;">—</span>
+                    {% endif %}
+                </td>
+                {% endfor %}
+            </tr>
+            <tr>
+                <td title="Time Known required for HSDir flag">HSDir Time Known</td>
+                {% for auth_name in relays.collector_flag_thresholds.keys()|sort %}
+                {% set thresholds = relays.collector_flag_thresholds[auth_name] %}
+                <td style="text-align: center;">
+                    {% if thresholds.get('hsdir-tk') is not none %}
+                        {% set days = thresholds['hsdir-tk'] / 86400 %}
+                        ≥{{ "%.1f d"|format(days) }}
+                    {% else %}
+                        <span style="color: #6c757d;">—</span>
+                    {% endif %}
+                </td>
+                {% endfor %}
+            </tr>
+        </tbody>
+    </table>
+    </div>
+
+    <div style="background: #f0f0f0; padding: 15px; border-radius: 6px; margin-top: 15px;">
+        <h4>Flag Threshold Legend:</h4>
+        
+        <div style="background: #fff3cd; padding: 10px; border-radius: 4px; margin-bottom: 15px; border-left: 4px solid #ffc107;">
+            <strong>🛡️ Guard Flag Calculation Logic</strong>
+            <p style="margin: 10px 0 5px 0;">Per <a href="https://spec.torproject.org/dir-spec/assigning-flags-vote.html" target="_blank" rel="noopener">Tor Directory Specification</a>, a relay qualifies for Guard if ALL of the following are true:</p>
+            <ol style="margin: 5px 0; padding-left: 25px;">
+                <li><strong>Fast flag:</strong> Relay has the Fast flag (bandwidth ≥100 KB/s OR in top 7/8ths)</li>
+                <li><strong>Stable flag:</strong> Relay has the Stable flag (sufficient uptime/MTBF)</li>
+                <li><strong>WFU ≥ guard-wfu threshold:</strong> Weighted Fractional Uptime at or above the median for "familiar" relays (typically 98%)</li>
+                <li><strong>Time Known ≥ guard-tk threshold:</strong> Relay is "familiar" - authority has tracked it for sufficient time (typically 8 days)</li>
+                <li><strong>Bandwidth requirement (one of):</strong>
+                    <ul style="margin: 3px 0; padding-left: 20px;">
+                        <li><strong>Option A:</strong> Observed bandwidth ≥ <code>AuthDirGuardBWGuarantee</code> (default <strong>2 MB/s</strong>)</li>
+                        <li><strong>Option B:</strong> Observed bandwidth in top 25% of relays (≥ <code>guard-bw-inc-exits</code> shown in table)</li>
+                    </ul>
+                </li>
+                <li><strong>V2Dir flag:</strong> Relay supports directory protocol v2+</li>
+            </ol>
+            <p style="margin: 5px 0; font-size: 12px; color: #666;">
+                <strong>Important:</strong> The bandwidth check uses <code>observed_bandwidth</code> from the relay's server descriptor (actual capacity in bytes/s), 
+                NOT the scaled consensus weight shown in votes. The 2 MB/s guarantee means any relay with ≥2 MB/s observed bandwidth can be a Guard, 
+                regardless of network size.<br>
+                <strong>⚙️ AuthDirGuardBWGuarantee:</strong> This is a <strong>hardcoded Tor configuration parameter</strong> (default: 2 MB/s = 2,097,152 bytes/s). 
+                It is NOT present in vote files - authorities use their compiled-in default. This value rarely changes and provides a stable minimum 
+                bandwidth guarantee for Guard eligibility independent of network size fluctuations.
+                <a href="https://gitlab.torproject.org/tpo/core/tor/-/blob/release-0.4.8/src/feature/dirauth/dirauth_options.inc#L21" target="_blank" rel="noopener">[View in Tor source - Line 21]</a><br>
+                <strong>Sources:</strong> 
+                <a href="https://spec.torproject.org/dir-spec/assigning-flags-vote.html" target="_blank" rel="noopener">dir-spec: Assigning Flags</a> |
+                <a href="https://spec.torproject.org/dir-spec/computing-bw-weights.html" target="_blank" rel="noopener">dir-spec: Computing BW Weights</a> |
+                <a href="https://blog.torproject.org/how-bandwidth-scanners-monitor-tor-network/" target="_blank" rel="noopener">Bandwidth Scanners Blog</a>
+            </p>
+        </div>
+        
+        <div style="background: #d4edda; padding: 10px; border-radius: 4px; margin-bottom: 15px; border-left: 4px solid #28a745;">
+            <strong>⚡ Fast Flag Calculation Logic</strong>
+            <p style="margin: 10px 0 5px 0;">Per <a href="https://spec.torproject.org/dir-spec/assigning-flags-vote.html" target="_blank" rel="noopener">Tor Directory Specification</a>, a relay qualifies for Fast if its observed bandwidth is:</p>
+            <ul style="margin: 5px 0; padding-left: 20px;">
+                <li>In the <strong>top 7/8ths</strong> (87.5%) for known active routers (≥ <code>fast-speed</code> threshold shown above)</li>
+                <li><strong>OR</strong> at least <strong>100 KB/s</strong> (absolute minimum fallback)</li>
+            </ul>
+            <p style="margin: 5px 0; font-size: 12px; color: #666;">
+                The <code>fast-speed</code> threshold in the table is <strong>dynamically calculated</strong> by each authority based on the bandwidth distribution of all relays. 
+                It typically equals or exceeds 100 KB/s. The 100 KB/s fallback ensures relays on low-bandwidth networks can still qualify.
+                <br><strong>Source:</strong> <a href="https://spec.torproject.org/dir-spec/assigning-flags-vote.html" target="_blank" rel="noopener">dir-spec: Assigning Flags in a Vote</a>
+            </p>
+        </div>
+        
+        <div style="background: #cce5ff; padding: 10px; border-radius: 4px; margin-bottom: 15px; border-left: 4px solid #007bff;">
+            <strong>🏃 Running Flag Calculation Logic</strong>
+            <p style="margin: 10px 0 5px 0;">Per <a href="https://spec.torproject.org/dir-spec/assigning-flags-vote.html" target="_blank" rel="noopener">Tor Directory Specification</a>:</p>
+            <ul style="margin: 5px 0; padding-left: 20px;">
+                <li>A directory authority considers a relay <strong>"Running"</strong> when the relay is reachable/active by connecting to the relay's OR port</li>
+            </ul>
+            <p style="margin: 5px 0; font-size: 12px; color: #666;">
+                When an authority <strong>votes</strong> for a relay, that means the authority considers it Running (reachable).
+                If an authority cannot reach a relay, it will not include the relay in its vote.
+                A relay must be Running from a majority of authorities (≥5/9) to be included in the final consensus.
+                <br><strong>Source:</strong> <a href="https://spec.torproject.org/dir-spec/assigning-flags-vote.html" target="_blank" rel="noopener">dir-spec: Assigning Flags in a Vote</a>
+            </p>
+        </div>
+        
+        <div style="background: #e2d5f0; padding: 10px; border-radius: 4px; margin-bottom: 15px; border-left: 4px solid #6f42c1;">
+            <strong>⚓ Stable Flag Calculation Logic</strong>
+            <p style="margin: 10px 0 5px 0;">Per <a href="https://spec.torproject.org/dir-spec/assigning-flags-vote.html" target="_blank" rel="noopener">Tor Directory Specification</a>, a relay qualifies for Stable if:</p>
+            <ul style="margin: 5px 0; padding-left: 20px;">
+                <li>Weighted MTBF ≥ <code>stable-mtbf</code> threshold (median MTBF, varies by authority)</li>
+                <li><strong>OR</strong> Weighted MTBF ≥ <strong>7 days</strong> (604800 seconds, absolute minimum)</li>
+            </ul>
+            <p style="margin: 5px 0; font-size: 12px; color: #666;">
+                MTBF = Mean Time Between Failures. "Weighted" means recent activity is weighted more heavily.
+                <strong>⚠️ Important:</strong> Our analysis of 10k+ relays shows authorities assigning Stable to relays with MTBF as low as ~5 days, 
+                below both the published threshold and 7-day minimum. Flag assignment may use different internal calculations.
+                See <a href="../docs/studies/stable-flag-threshold-study.md">Stable Flag Threshold Study</a>.
+                <br><strong>Source:</strong> <a href="https://spec.torproject.org/dir-spec/assigning-flags-vote.html" target="_blank" rel="noopener">dir-spec: Assigning Flags in a Vote</a>
+            </p>
+        </div>
+        
+        <div style="background: #d1ecf1; padding: 10px; border-radius: 4px; margin-bottom: 15px; border-left: 4px solid #17a2b8;">
+            <strong>✅ Valid Flag Calculation Logic</strong>
+            <p style="margin: 10px 0 5px 0;">Per <a href="https://spec.torproject.org/dir-spec/assigning-flags-vote.html" target="_blank" rel="noopener">Tor Directory Specification</a>, a relay qualifies for Valid if:</p>
+            <ul style="margin: 5px 0; padding-left: 20px;">
+                <li>The relay is <strong>Running</strong> (reachable by the authority)</li>
+                <li>The relay's identity key is <strong>not blacklisted</strong></li>
+                <li>The relay has a <strong>valid descriptor</strong></li>
+            </ul>
+            <p style="margin: 5px 0; font-size: 12px; color: #666;">
+                Unlike Running (which just means reachable), Valid confirms the relay is verified and allowed to participate.
+                Almost all Running relays also have Valid unless they've been manually blacklisted.
+                <br><strong>Source:</strong> <a href="https://spec.torproject.org/dir-spec/assigning-flags-vote.html" target="_blank" rel="noopener">dir-spec: Assigning Flags in a Vote</a>
+            </p>
+        </div>
+
+        <ul style="margin: 0; padding-left: 20px;">
+            <li><strong>Running:</strong> Relay is reachable from the authority (authority could connect to its OR port).</li>
+            <li><strong>Valid:</strong> Relay is verified and allowed to participate in the network (not blacklisted).</li>
+            <li><strong>Guard WFU:</strong> Weighted Fractional Uptime - relay's uptime weighted so recent downtime counts more.</li>
+            <li><strong>Guard Time Known:</strong> How long the authority has tracked this relay (familiarity requirement).</li>
+            <li><strong>Guard BW (top 25%):</strong> Top 25% bandwidth threshold (guard-bw-inc-exits). Relays above this OR ≥2 MB/s qualify for Guard.</li>
+            <li><strong>Stable Uptime:</strong> Continuous uptime threshold for Stable flag.</li>
+            <li><strong>Stable MTBF:</strong> Mean Time Between Failures threshold. Published value is median; actual minimum ~5-7 days.</li>
+            <li><strong>Fast Speed (7/8ths):</strong> Bandwidth threshold for Fast flag (top 7/8ths of network OR ≥100 KB/s).</li>
+            <li><strong>HSDir WFU/TK:</strong> Requirements for Hidden Service Directory flag. WFU ≥98% (all authorities). TK per dir-spec: ≥25 hours (most authorities use default); moria1 uses ≥10 days.</li>
+            <li><strong>Enough MTBF:</strong> Boolean flag from <code>flag-thresholds</code> line (0 or 1). 
+                <span style="color: #28a745;">✓ (=1)</span> = Authority has collected <strong>sufficient MTBF stability data</strong> to accurately compute stability-related thresholds. 
+                <span style="color: #dc3545;">✗ (=0)</span> = Authority recently restarted or lacks historical uptime data. 
+                When =0, the authority may use conservative fallback thresholds instead of computed medians.</li>
+            <li><strong>V2Dir:</strong> Relay supports directory protocol v2+ (required for Guard flag).</li>
+            <li><strong>—</strong> = Threshold not available from this authority.</li>
+        </ul>
+        
+        <h5 style="margin-top: 15px;">Special/Restrictive Flags:</h5>
+        <ul style="margin: 0; padding-left: 20px;">
+            <li><strong>MiddleOnly:</strong> Relay is restricted to middle position only. Assigned by authorities to relays that should not be used as Guard or Exit due to operator restrictions, concerns, or lack of qualification. No specific thresholds - assigned based on authority discretion.</li>
+            <li><strong>BadExit:</strong> Relay has been flagged as misbehaving when used as an exit node. Traffic will not be routed through it for exit positions. Operators should contact <a href="mailto:bad-relays@lists.torproject.org">bad-relays@lists.torproject.org</a>.</li>
+            <li><strong>NoEdConsensus:</strong> Authority is not including Ed25519 identity key in this relay's vote. Usually temporary.</li>
+            <li><strong>StaleDesc:</strong> Relay's descriptor is older than 18 hours. Relay may be experiencing issues.</li>
+        </ul>
+    </div>
+    {% endif %}
+
     <!-- FOOTER -->
     <br><br>
-    <p><i>Data sources: Onionoo API</i></p>
-    <p><i>Last updated: {{ relays.timestamp }} (updates every 15 minutes)</i></p>
+    <p><i>Data sources: <a href="https://onionoo.torproject.org" target="_blank" rel="noopener">Onionoo API</a>{% if relays.collector_flag_thresholds %}, <a href="https://collector.torproject.org" target="_blank" rel="noopener">Tor CollecTor</a>{% endif %}</i></p>
+    <p><i>Last updated: {{ relays.timestamp }} (updates every 15-60 minutes depending on data source)</i></p>
 
 {% endblock -%} 
