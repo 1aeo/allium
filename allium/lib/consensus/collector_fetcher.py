@@ -56,6 +56,12 @@ AUTHORITY_COUNTRIES = {
 # ============================================================================
 # SHARED CONSTANTS - Avoid magic numbers throughout the codebase
 # ============================================================================
+# Authority count (derived from AUTHORITIES dict - single source of truth)
+DEFAULT_AUTHORITY_COUNT = len(AUTHORITIES)  # Currently 9
+
+# Pre-computed list of authority names (avoid recomputing from AUTHORITIES.values())
+AUTHORITY_NAMES = sorted(AUTHORITIES.values())
+
 # Bandwidth thresholds (bytes/second)
 AUTH_DIR_GUARD_BW_GUARANTEE = 2_000_000  # AuthDirGuardBWGuarantee: 2 MB/s minimum for Guard
 
@@ -179,7 +185,7 @@ class CollectorFetcher:
         
         return result
     
-    def get_relay_diagnostics(self, fingerprint: str, authority_count: int = 9) -> dict:
+    def get_relay_diagnostics(self, fingerprint: str, authority_count: int = DEFAULT_AUTHORITY_COUNT) -> dict:
         """
         Get diagnostics for a single relay.
         O(1) lookup after index is built.
@@ -623,7 +629,7 @@ class CollectorFetcher:
         authority_votes = []
         relay_votes = relay.get('votes', {})
         
-        for auth_name in sorted(AUTHORITIES.values()):
+        for auth_name in AUTHORITY_NAMES:  # Pre-sorted, avoids sorting on each call
             vote_info = relay_votes.get(auth_name, {})
             
             voted = bool(vote_info)
@@ -826,7 +832,7 @@ class CollectorFetcher:
         ipv6_reachable = []
         ipv6_not_tested = []
         
-        for auth_name in sorted(AUTHORITIES.values()):
+        for auth_name in AUTHORITY_NAMES:  # Pre-sorted, avoids sorting on each call
             vote = votes.get(auth_name, {})
             
             if vote:

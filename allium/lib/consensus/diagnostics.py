@@ -12,16 +12,21 @@ OPTIMIZATION: Leverages existing utilities from the codebase:
 from typing import Dict, List, Optional, Any
 
 # Import authority country codes and shared constants from collector_fetcher
-# Centralizes constants to avoid duplication and ensure consistency
+# Centralizes constants to avoid duplication and ensure consistency (DRY principle)
 try:
     from .collector_fetcher import (
         AUTHORITY_COUNTRIES,
+        AUTHORITY_NAMES,           # Pre-computed list of authority names
+        DEFAULT_AUTHORITY_COUNT,   # Derived from AUTHORITIES dict (currently 9)
         GUARD_TK_DEFAULT,
         HSDIR_TK_DEFAULT, 
         SECONDS_PER_DAY,
     )
 except ImportError:
     AUTHORITY_COUNTRIES = {}
+    AUTHORITY_NAMES = ['bastet', 'dannenberg', 'dizum', 'faravahar', 'gabelmoo', 
+                       'longclaw', 'maatuska', 'moria1', 'tor26']
+    DEFAULT_AUTHORITY_COUNT = 9
     GUARD_TK_DEFAULT = 691200
     HSDIR_TK_DEFAULT = 864000
     SECONDS_PER_DAY = 86400
@@ -151,7 +156,7 @@ def format_relay_diagnostics(diagnostics: dict, flag_thresholds: dict = None, cu
         'fingerprint': diagnostics.get('fingerprint', ''),
         'in_consensus': diagnostics.get('in_consensus', False),
         'vote_count': diagnostics.get('vote_count', 0),
-        'total_authorities': diagnostics.get('total_authorities', 9),
+        'total_authorities': diagnostics.get('total_authorities', DEFAULT_AUTHORITY_COUNT),
         'majority_required': diagnostics.get('majority_required', 5),
         
         # Consensus status display
@@ -194,7 +199,7 @@ def _format_relay_values(diagnostics: dict, flag_thresholds: dict = None, observ
     authority_votes = diagnostics.get('authority_votes', [])
     flag_eligibility = diagnostics.get('flag_eligibility', {})
     reachability = diagnostics.get('reachability', {})
-    total_authorities = diagnostics.get('total_authorities', 9)
+    total_authorities = diagnostics.get('total_authorities', DEFAULT_AUTHORITY_COUNT)
     majority_required = diagnostics.get('majority_required', 5)
     
     # Extract relay's values from first available authority (single pass)
@@ -575,7 +580,7 @@ def _format_consensus_status(diagnostics: dict) -> dict:
     """Format consensus status display."""
     in_consensus = diagnostics.get('in_consensus', False)
     vote_count = diagnostics.get('vote_count', 0)
-    total = diagnostics.get('total_authorities', 9)
+    total = diagnostics.get('total_authorities', DEFAULT_AUTHORITY_COUNT)
     majority = diagnostics.get('majority_required', 5)
     
     if in_consensus:
@@ -603,7 +608,7 @@ def _format_flag_summary(diagnostics: dict, observed_bandwidth: int = 0) -> dict
         observed_bandwidth: Relay's actual observed bandwidth (for Guard BW eligibility)
     """
     flag_eligibility = diagnostics.get('flag_eligibility', {})
-    total_authorities = diagnostics.get('total_authorities', 9)
+    total_authorities = diagnostics.get('total_authorities', DEFAULT_AUTHORITY_COUNT)
     
     # Guard and Fast both use observed_bandwidth, not the scaled vote values
     bw_value = observed_bandwidth if observed_bandwidth else 0
@@ -662,7 +667,7 @@ def _format_reachability_summary(diagnostics: dict) -> dict:
     
     ipv4_count = reachability.get('ipv4_reachable_count', 0)
     ipv6_count = reachability.get('ipv6_reachable_count', 0)
-    total = reachability.get('total_authorities', 9)
+    total = reachability.get('total_authorities', DEFAULT_AUTHORITY_COUNT)
     ipv6_not_tested = reachability.get('ipv6_not_tested_authorities', [])
     ipv6_tested_total = total - len(ipv6_not_tested)  # Only count authorities that test IPv6
     
@@ -726,7 +731,7 @@ def _identify_issues(diagnostics: dict, current_flags: list = None, observed_ban
     # Check consensus status
     if not diagnostics.get('in_consensus'):
         vote_count = diagnostics.get('vote_count', 0)
-        total = diagnostics.get('total_authorities', 9)
+        total = diagnostics.get('total_authorities', DEFAULT_AUTHORITY_COUNT)
         issues.append({
             'severity': 'error',
             'category': 'consensus',
@@ -738,17 +743,18 @@ def _identify_issues(diagnostics: dict, current_flags: list = None, observed_ban
     # Check reachability
     reachability = diagnostics.get('reachability', {})
     ipv4_count = reachability.get('ipv4_reachable_count', 0)
-    if ipv4_count < 5:
+    majority_threshold = (DEFAULT_AUTHORITY_COUNT // 2) + 1  # Need majority for consensus
+    if ipv4_count < majority_threshold:
+        # Use AUTHORITY_NAMES from collector_fetcher (DRY - single source of truth)
         unreachable = [
-            name for name in ['moria1', 'tor26', 'dizum', 'gabelmoo', 'bastet', 
-                             'dannenberg', 'maatuska', 'longclaw', 'faravahar']
+            name for name in AUTHORITY_NAMES
             if name not in reachability.get('ipv4_reachable_authorities', [])
         ]
         issues.append({
             'severity': 'error',
             'category': 'reachability',
             'title': 'IPv4 reachability issues',
-            'description': f"Only {ipv4_count}/9 authorities can reach this relay",
+            'description': f"Only {ipv4_count}/{DEFAULT_AUTHORITY_COUNT} authorities can reach this relay",
             'suggestion': f"Check firewall rules for: {', '.join(unreachable)}",
         })
     
