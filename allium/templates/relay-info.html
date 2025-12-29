@@ -469,36 +469,41 @@ Data from <a href="https://collector.torproject.org/recent/relay-descriptors/vot
 {# Condensed Status, Flag Eligibility, Reachability, and Issues - all as bullets #}
 <ul style="margin-bottom: 15px; padding-left: 20px; font-size: 13px;">
     {# 1. Consensus Status #}
-    <li><strong>Consensus Status:</strong> 
+    <li><strong>Consensus Status</strong> <span style="color: #6c757d; font-size: 10px;">(need ≥{{ diag.majority_required }}/{{ diag.total_authorities }})</span><strong>:</strong> 
         {% if diag.in_consensus %}
             <span style="color: #28a745; font-weight: bold;">In Consensus</span>
         {% else %}
             <span style="color: #dc3545; font-weight: bold;">Not In Consensus</span>
         {% endif %}
-        — {{ diag.vote_count }}/{{ diag.total_authorities }} authorities voted. Majority required: {{ diag.majority_required }}.
+        — {{ diag.vote_count }}/{{ diag.total_authorities }} authorities voted.
     </li>
     
     {# 2. Flag Eligibility (majority required: {{ diag.majority_required }}/{{ diag.total_authorities }}) #}
     <li><strong>Flag Eligibility</strong> <span style="color: #6c757d; font-size: 10px;">(need ≥{{ diag.majority_required }}/{{ diag.total_authorities }} for flag)</span>:
         {% for flag_name, flag_data in diag.flag_summary.items() %}
-        <span style="color: {% if flag_data.status_class == 'success' %}#28a745{% elif flag_data.status_class == 'danger' %}#dc3545{% else %}#856404{% endif %}; font-weight: bold;">{{ flag_name|capitalize }}: {{ flag_data.eligible_count }}/{{ flag_data.total_authorities }}</span>{% if not loop.last %} | {% endif %}
+        {% set display_name = 'HSDir' if flag_name.lower() == 'hsdir' else flag_name|capitalize %}
+        <span style="color: {% if flag_data.status_class == 'success' %}#28a745{% elif flag_data.status_class == 'danger' %}#dc3545{% else %}#856404{% endif %}; font-weight: bold;">{{ display_name }}: {{ flag_data.eligible_count }}/{{ flag_data.total_authorities }}</span>{% if not loop.last %} | {% endif %}
         {% endfor %}
         | <span style="color: #28a745; font-weight: bold;">Running: {{ diag.vote_count }}/{{ diag.total_authorities }}</span>
         | <span style="color: #28a745; font-weight: bold;">Valid: {{ diag.vote_count }}/{{ diag.total_authorities }}</span>
         | <span style="color: #28a745; font-weight: bold;">V2Dir: {{ diag.vote_count }}/{{ diag.total_authorities }}</span>
     </li>
     
-    {# 3. Reachability + Bandwidth #}
+    {# 3. Reachability #}
     {% if diag.reachability_summary %}
     <li><strong>Reachability:</strong>
         IPv4: <span style="color: {% if diag.reachability_summary.ipv4.status_class == 'success' %}#28a745{% else %}#dc3545{% endif %}; font-weight: bold;">{{ diag.reachability_summary.ipv4.reachable_count }}/{{ diag.reachability_summary.ipv4.total }}</span>
         {% if has_ipv6 %}
         | IPv6: <span style="color: {% if diag.reachability_summary.ipv6.status_class == 'success' %}#28a745{% elif diag.reachability_summary.ipv6.status_class == 'muted' %}#6c757d{% else %}#dc3545{% endif %}; font-weight: bold;">{{ diag.reachability_summary.ipv6.reachable_count }}/{{ diag.reachability_summary.ipv6.total }}</span>{% if diag.reachability_summary.ipv6.not_tested %} <span style="color: #6c757d;">({{ diag.reachability_summary.ipv6.not_tested|length }} don't test)</span>{% endif %}
         {% endif %}
-        {% if diag.bandwidth_summary and diag.bandwidth_summary.median is not none %}
-        | <strong>Cons. Weights:</strong> <span title="Tor consensus uses median of authority measurements for path selection. Min/Max show range of variation.">Median: {{ diag.bandwidth_summary.median_display }} | Min: {{ diag.bandwidth_summary.min_display }} | Max: {{ diag.bandwidth_summary.max_display }}</span>
+    </li>
+    {% endif %}
+    
+    {# 4. Consensus Weight (Authority Measured) #}
+    {% if diag.bandwidth_summary and diag.bandwidth_summary.median is not none %}
+    <li><strong>Consensus Weight</strong> <span style="color: #6c757d; font-size: 10px;">(Authority Measured)</span><strong>:</strong>
+        <span title="Tor consensus uses median of authority measurements for path selection. This is a scaled value used for traffic distribution.">Median: {{ diag.bandwidth_summary.median_display }} | Min: {{ diag.bandwidth_summary.min_display }} | Max: {{ diag.bandwidth_summary.max_display }}</span>
         {% if diag.bandwidth_summary.deviation_class == 'warning' %}<span style="color: #856404;"> ⚠️ High deviation</span>{% endif %}
-        {% endif %}
     </li>
     {% endif %}
     
@@ -613,7 +618,12 @@ Data from <a href="https://collector.torproject.org/recent/relay-descriptors/vot
     <tr>
         <td title="Source: CollecTor | File: vote | Field: flag-thresholds stable-mtbf=X | Mean Time Between Failures">Stable MTBF</td>
         <td title="Source: CollecTor | File: vote | Field: stats mtbf=X">{{ rv.mtbf_display|default('N/A') }}</td>
-        <td title="Source: CollecTor | File: vote | Field: flag-thresholds stable-mtbf=X | Range varies by authority">≥{{ rv.stable_mtbf_range }}</td>
+        <td title="Most authorities: ≥{{ rv.stable_mtbf_typical_display }}{% if rv.stable_mtbf_strict_auths %}; Stricter: {{ rv.stable_mtbf_strict_auths|join(', ') }} uses ≥{{ rv.stable_mtbf_max_display }}{% endif %}">
+            ≥{{ rv.stable_mtbf_min_display }} - {{ rv.stable_mtbf_typical_display }} <span style="color: #666; font-size: 11px;">(typical)</span>
+            {% if rv.stable_mtbf_strict_auths %}
+            <br><span style="color: #856404; font-size: 10px;" title="These authorities have stricter requirements">⚠️ {{ rv.stable_mtbf_strict_auths|join(', ') }}: ≥{{ rv.stable_mtbf_max_display }}</span>
+            {% endif %}
+        </td>
         <td>{% if rv.stable_mtbf_meets_all|default(false) %}<span style="color: #28a745; font-weight: bold;">MEETS - all authorities</span>{% elif rv.stable_mtbf_meets_count|default(0) >= diag.majority_required %}<span style="color: #ffc107; font-weight: bold;">PARTIAL - {{ rv.stable_mtbf_meets_count|default(0) }}/{{ rv.total_authorities }}</span>{% else %}<span style="color: #dc3545; font-weight: bold;">BELOW - {{ rv.stable_mtbf_meets_count|default(0) }}/{{ rv.total_authorities }}</span>{% endif %}</td>
     </tr>
     <tr>
@@ -643,12 +653,6 @@ Data from <a href="https://collector.torproject.org/recent/relay-descriptors/vot
             {% endif %}
         </td>
         <td>{% if diag.flag_summary.hsdir.eligible_count == diag.total_authorities %}<span style="color: #28a745; font-weight: bold;">MEETS - all {{ diag.total_authorities }} auths</span>{% elif diag.flag_summary.hsdir.eligible_count >= diag.majority_required %}<span style="color: #ffc107; font-weight: bold;">PARTIAL - {{ diag.flag_summary.hsdir.eligible_count }}/{{ diag.total_authorities }}</span>{% else %}<span style="color: #dc3545; font-weight: bold;">BELOW - {{ diag.flag_summary.hsdir.eligible_count }}/{{ diag.total_authorities }}</span>{% endif %}</td>
-    </tr>
-    <tr>
-        <td title="Source: CollecTor | File: vote | Presence of 'r' line for relay = authority can reach it via IPv4">IPv4 Reachable</td>
-        <td title="Source: CollecTor | File: vote | Count of authorities with 'r' line for this relay">{{ rv.ipv4_reachable_count }}/{{ rv.total_authorities }} authorities</td>
-        <td title="Tor consensus requires majority of authorities to vote for relay">≥{{ diag.majority_required }}/{{ diag.total_authorities }} (majority)</td>
-        <td>{% if rv.ipv4_reachable_count >= diag.majority_required %}<span style="color: #28a745; font-weight: bold;">REACHABLE</span>{% else %}<span style="color: #dc3545; font-weight: bold;">NOT REACHABLE</span>{% endif %}</td>
     </tr>
     {% if has_ipv6 %}
     <tr>
@@ -690,7 +694,7 @@ Flags: <span style="color: #28a745; font-weight: bold;">green</span> = all autho
     <th title="Source: Onionoo observed_bandwidth (Relay Reported) | CollecTor flag-thresholds guard-bw-inc-exits (Authority Threshold) | Guard BW: ≥2 MB/s OR top 25%">Guard BW (Relay|Threshold)</th>
     <th title="Source: CollecTor | File: vote | Field: stats wfu=X, flag-thresholds guard-wfu=X | Guard WFU: Measured | Threshold">Guard WFU (M|T)</th>
     <th title="Source: CollecTor | File: vote | Field: stats tk=X, flag-thresholds guard-tk=X | Guard TK: Measured | Threshold">Guard TK (M|T)</th>
-    <th title="Source: CollecTor | File: vote | Field: stats mtbf=X, flag-thresholds stable-mtbf=X | Stable MTBF: Measured | Threshold">Stable MTBF (M|T)</th>
+    <th title="Source: CollecTor | File: vote | Field: stats mtbf=X, flag-thresholds stable-mtbf=X | Stable MTBF: Measured | Threshold. Note: stable-uptime threshold exists but per-relay uptime not in vote stats line.">Stable MTBF (M|T)</th>
     <th title="Source: CollecTor | File: vote | Field: stats wfu=X, flag-thresholds hsdir-wfu=X | HSDir WFU: Measured | Threshold">HSDir WFU (M|T)</th>
     <th title="Source: CollecTor | File: vote | Field: stats tk=X, flag-thresholds hsdir-tk=X | HSDir TK: Measured | Threshold">HSDir TK (M|T)</th>
     <th title="Source: CollecTor | File: vote | Field: 'r' line timestamp | Descriptor Published timestamp">Desc Published</th>

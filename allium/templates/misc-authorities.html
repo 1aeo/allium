@@ -57,9 +57,9 @@
             {%- endif %}
         </li>
         
-        {# Latency status #}
+        {# Latency status (voting authorities only) #}
         {% if relays.latency_summary %}
-        <li><strong>Latency Status:</strong> 
+        <li><strong>Latency Status</strong> <span style="font-size: 0.85em; color: #666;">(voting authorities)</span><strong>:</strong> 
             <span style="color: green;">{{ relays.latency_summary.ok_count|default(0) }}/{{ relays.authorities_summary.total_authorities }} OK</span>
             {% if relays.latency_summary.slow_count > 0 %}
             | <span style="color: #ff8c00;">{{ relays.latency_summary.slow_count }} slow</span>
@@ -618,6 +618,14 @@
                 When =0, the authority may use conservative fallback thresholds instead of computed medians.</li>
             <li><strong>V2Dir:</strong> Relay supports directory protocol v2+ (required for Guard flag).</li>
             <li><strong>—</strong> = Threshold not available from this authority.</li>
+        </ul>
+        
+        <h5 style="margin-top: 15px;">Special/Restrictive Flags:</h5>
+        <ul style="margin: 0; padding-left: 20px;">
+            <li><strong>MiddleOnly:</strong> Relay is restricted to middle position only. Assigned by authorities to relays that should not be used as Guard or Exit due to operator restrictions, concerns, or lack of qualification. No specific thresholds - assigned based on authority discretion.</li>
+            <li><strong>BadExit:</strong> Relay has been flagged as misbehaving when used as an exit node. Traffic will not be routed through it for exit positions. Operators should contact <a href="mailto:bad-relays@lists.torproject.org">bad-relays@lists.torproject.org</a>.</li>
+            <li><strong>NoEdConsensus:</strong> Authority is not including Ed25519 identity key in this relay's vote. Usually temporary.</li>
+            <li><strong>StaleDesc:</strong> Relay's descriptor is older than 18 hours. Relay may be experiencing issues.</li>
         </ul>
     </div>
     {% endif %}

@@ -874,7 +874,8 @@ class Relays:
                 current_flags = relay.get('flags', [])
                 observed_bandwidth = relay.get('observed_bandwidth', 0)
                 formatted_consensus_evaluation = format_relay_consensus_evaluation(
-                    raw_consensus_evaluation, flag_thresholds, current_flags, observed_bandwidth
+                    raw_consensus_evaluation, flag_thresholds, current_flags, observed_bandwidth,
+                    use_bits=self.use_bits  # Pass use_bits for consistent bandwidth formatting
                 )
                 
                 # Attach to relay
@@ -2317,10 +2318,14 @@ class Relays:
         try:
             from .consensus import AuthorityMonitor
             
-            # Build authority endpoint data from discovered authorities (Onionoo data first)
-            # This ensures we use dynamic discovery instead of hardcoded fallbacks
+            # Build authority endpoint data from VOTING authorities only (those that voted in collector)
+            # This ensures latency counts match voting authority counts
             authority_endpoints = []
             for auth in authorities:
+                # Only include voting authorities in latency check
+                if not auth.get('collector_data', {}).get('voted', False):
+                    continue
+                    
                 # Extract address from or_addresses (Onionoo format)
                 or_addresses = auth.get('or_addresses', [])
                 address = or_addresses[0].split(':')[0] if or_addresses else ''

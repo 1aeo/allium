@@ -71,9 +71,12 @@ except ImportError:
 # Reuse existing bandwidth formatter instead of duplicating logic
 try:
     from ..bandwidth_formatter import BandwidthFormatter
-    _bw_formatter = BandwidthFormatter(use_bits=False)
+    _BandwidthFormatterClass = BandwidthFormatter
 except ImportError:
-    _bw_formatter = None
+    _BandwidthFormatterClass = None
+
+# Cache formatters to avoid recreating them repeatedly
+_bw_formatter_cache = {}
 
 # Reuse existing percentage formatter from string_utils
 try:
@@ -159,7 +162,7 @@ def _parse_wfu_threshold(value) -> Optional[float]:
     return float(value)
 
 
-def format_relay_consensus_evaluation(evaluation: dict, flag_thresholds: dict = None, current_flags: list = None, observed_bandwidth: int = 0) -> dict:
+def format_relay_consensus_evaluation(evaluation: dict, flag_thresholds: dict = None, current_flags: list = None, observed_bandwidth: int = 0, use_bits: bool = False) -> dict:
     """
     Format relay consensus evaluation for template display.
     
@@ -170,6 +173,8 @@ def format_relay_consensus_evaluation(evaluation: dict, flag_thresholds: dict = 
         observed_bandwidth: Relay's observed bandwidth in bytes/s (from Onionoo)
                            This is the ACTUAL bandwidth used for Guard eligibility,
                            NOT the scaled consensus weight or vote Measured value.
+        use_bits: If True, format bandwidth in bits (Mbit/s), otherwise bytes (MB/s).
+                  Should match the allium runtime --bits flag.
         
     Returns:
         dict: Formatted evaluation ready for template rendering
@@ -200,11 +205,11 @@ def format_relay_consensus_evaluation(evaluation: dict, flag_thresholds: dict = 
         # Consensus status display
         'consensus_status': _format_consensus_status(evaluation),
         
-        # Relay values summary (for Summary table) - pass observed_bandwidth for Guard BW check
-        'relay_values': _format_relay_values(evaluation, flag_thresholds, observed_bandwidth),
+        # Relay values summary (for Summary table) - pass observed_bandwidth and use_bits
+        'relay_values': _format_relay_values(evaluation, flag_thresholds, observed_bandwidth, use_bits),
         
-        # Per-authority voting details - pass observed_bandwidth for Guard BW and Fast checks
-        'authority_table': _format_authority_table_enhanced(evaluation, flag_thresholds, observed_bandwidth),
+        # Per-authority voting details - pass observed_bandwidth and use_bits
+        'authority_table': _format_authority_table_enhanced(evaluation, flag_thresholds, observed_bandwidth, use_bits),
         
         # Flag eligibility summary - recalculate using observed_bandwidth
         'flag_summary': _format_flag_summary(evaluation, observed_bandwidth),
@@ -212,8 +217,8 @@ def format_relay_consensus_evaluation(evaluation: dict, flag_thresholds: dict = 
         # Reachability summary
         'reachability_summary': _format_reachability_summary(evaluation),
         
-        # Bandwidth summary
-        'bandwidth_summary': _format_bandwidth_summary(evaluation),
+        # Bandwidth summary - pass use_bits
+        'bandwidth_summary': _format_bandwidth_summary(evaluation, use_bits),
         
         # Issues and advice
         'issues': _identify_issues(evaluation, current_flags, observed_bandwidth),
@@ -223,7 +228,7 @@ def format_relay_consensus_evaluation(evaluation: dict, flag_thresholds: dict = 
     return formatted
 
 
-def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, observed_bandwidth: int = 0) -> dict:
+def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, observed_bandwidth: int = 0, use_bits: bool = False) -> dict:
     """
     Format relay values summary for the Summary table.
     Shows your relay's values vs consensus thresholds.
@@ -233,6 +238,7 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
         flag_thresholds: Flag threshold data  
         observed_bandwidth: Relay's actual observed bandwidth in bytes/s (from Onionoo)
                            This is the bandwidth used for Guard eligibility (>= 2MB/s)
+        use_bits: If True, format bandwidth in bits (Mbit/s), otherwise bytes (MB/s)
     """
     authority_votes = consensus_data.get('authority_votes', [])
     flag_eligibility = consensus_data.get('flag_eligibility', {})
@@ -274,6 +280,7 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
     hsdir_tk_values = []  # (auth_name, value) tuples for authorities that SET this
     hsdir_tk_default_count = 0  # Count of authorities using dir-spec default
     fast_speed_by_auth = {}  # auth_name -> value
+    stable_mtbf_by_auth = {}  # auth_name -> value for MTBF outlier detection
     
     if flag_thresholds:
         for auth_name, thresholds in flag_thresholds.items():
@@ -291,6 +298,7 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
                 stable_uptime_values.append(thresholds['stable-uptime'])
             if 'stable-mtbf' in thresholds:
                 stable_mtbf_values.append(thresholds['stable-mtbf'])
+                stable_mtbf_by_auth[auth_name] = thresholds['stable-mtbf']
             # Fast thresholds - track per authority
             if 'fast-speed' in thresholds:
                 fast_speed_values.append(thresholds['fast-speed'])
@@ -322,8 +330,17 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
     fast_speed_typical = sorted(fast_speed_values)[len(fast_speed_values)//2] if fast_speed_values else FAST_BW_GUARANTEE
     fast_speed_strict_auths = [name for name, val in fast_speed_by_auth.items() if val > fast_speed_typical * 2]
     
+    # Calculate Stable MTBF statistics for outlier detection
+    # Most authorities have similar thresholds, but moria1 may differ significantly
+    stable_mtbf_min = min(stable_mtbf_values) if stable_mtbf_values else 0
+    stable_mtbf_max = max(stable_mtbf_values) if stable_mtbf_values else 0
+    stable_mtbf_typical = sorted(stable_mtbf_values)[len(stable_mtbf_values)//2] if stable_mtbf_values else 0
+    # Find authorities with significantly stricter MTBF requirements (>5x typical = outlier)
+    stable_mtbf_strict_auths = [name for name, val in stable_mtbf_by_auth.items() if stable_mtbf_typical > 0 and val > stable_mtbf_typical * 5]
+    
     # Calculate Guard BW analysis using observed_bandwidth (actual bandwidth, not scaled consensus value)
-    guard_bw_range = _format_range(guard_bw_values, _format_bandwidth_value) if guard_bw_values else 'N/A'
+    bw_formatter = lambda v: _format_bandwidth_value(v, use_bits)
+    guard_bw_range = _format_range(guard_bw_values, bw_formatter) if guard_bw_values else 'N/A'
     
     # Check if relay's observed bandwidth meets Guard eligibility
     guard_bw_meets_guarantee = guard_bw_value >= GUARD_BW_GUARANTEE
@@ -342,7 +359,7 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
     stable_mtbf_range = _format_range(stable_mtbf_values, _format_days) if stable_mtbf_values else 'N/A'
     
     # Calculate Fast analysis using observed_bandwidth
-    fast_range = _format_range(fast_speed_values, _format_bandwidth_value) if fast_speed_values else 'N/A'
+    fast_range = _format_range(fast_speed_values, bw_formatter) if fast_speed_values else 'N/A'
     
     # Check if observed_bandwidth meets Fast eligibility
     fast_meets_minimum = guard_bw_value >= FAST_BW_MINIMUM
@@ -374,11 +391,11 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
         # Guard BW values - use observed_bandwidth for eligibility (actual bandwidth, not scaled)
         # Note: relay_bw is the scaled consensus value, guard_bw_value is observed_bandwidth
         'measured_bw': relay_bw,  # Scaled consensus value (for reference)
-        'measured_bw_display': _format_bandwidth_value(relay_bw),  # Scaled consensus value
+        'measured_bw_display': _format_bandwidth_value(relay_bw, use_bits),  # Scaled consensus value
         'observed_bw': guard_bw_value,  # Actual observed bandwidth (for Guard eligibility)
-        'observed_bw_display': _format_bandwidth_value(guard_bw_value),  # Actual bandwidth
+        'observed_bw_display': _format_bandwidth_value(guard_bw_value, use_bits),  # Actual bandwidth
         'guard_bw_guarantee': GUARD_BW_GUARANTEE,
-        'guard_bw_guarantee_display': _format_bandwidth_value(GUARD_BW_GUARANTEE),
+        'guard_bw_guarantee_display': _format_bandwidth_value(GUARD_BW_GUARANTEE, use_bits),
         'guard_bw_range': guard_bw_range,
         'guard_bw_meets_guarantee': guard_bw_meets_guarantee,
         'guard_bw_meets_all': guard_bw_meets_all,
@@ -396,9 +413,9 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
         
         # Fast values - use observed_bandwidth like Guard
         'fast_speed': guard_bw_value,  # Use observed_bandwidth
-        'fast_speed_display': _format_bandwidth_value(guard_bw_value),
+        'fast_speed_display': _format_bandwidth_value(guard_bw_value, use_bits),
         'fast_minimum': FAST_BW_MINIMUM,
-        'fast_minimum_display': _format_bandwidth_value(FAST_BW_MINIMUM),
+        'fast_minimum_display': _format_bandwidth_value(FAST_BW_MINIMUM, use_bits),
         'fast_range': fast_range,
         'fast_meets_minimum': fast_meets_minimum,
         'fast_meets_all': fast_meets_all,
@@ -427,10 +444,20 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
         'fast_speed_min': fast_speed_min,
         'fast_speed_max': fast_speed_max,
         'fast_speed_typical': fast_speed_typical,
-        'fast_speed_min_display': _format_bandwidth_value(fast_speed_min),
-        'fast_speed_max_display': _format_bandwidth_value(fast_speed_max),
-        'fast_speed_typical_display': _format_bandwidth_value(fast_speed_typical),
+        'fast_speed_min_display': _format_bandwidth_value(fast_speed_min, use_bits),
+        'fast_speed_max_display': _format_bandwidth_value(fast_speed_max, use_bits),
+        'fast_speed_typical_display': _format_bandwidth_value(fast_speed_typical, use_bits),
         'fast_speed_strict_auths': fast_speed_strict_auths,  # authorities with stricter requirements
+        
+        # Stable MTBF threshold statistics
+        # Most authorities have similar thresholds, outliers shown separately
+        'stable_mtbf_min': stable_mtbf_min,
+        'stable_mtbf_max': stable_mtbf_max,
+        'stable_mtbf_typical': stable_mtbf_typical,
+        'stable_mtbf_min_display': _format_days(stable_mtbf_min),
+        'stable_mtbf_max_display': _format_days(stable_mtbf_max),
+        'stable_mtbf_typical_display': _format_days(stable_mtbf_typical),
+        'stable_mtbf_strict_auths': stable_mtbf_strict_auths,  # authorities with stricter requirements (outliers)
         
         # Reachability values
         'ipv4_reachable_count': ipv4_reachable_count,
@@ -455,7 +482,7 @@ def _format_range(values: list, formatter) -> str:
     return f"{formatter(min_val)}-{formatter(max_val)}"
 
 
-def _format_authority_table_enhanced(consensus_data: dict, flag_thresholds: dict = None, observed_bandwidth: int = 0) -> List[dict]:
+def _format_authority_table_enhanced(consensus_data: dict, flag_thresholds: dict = None, observed_bandwidth: int = 0, use_bits: bool = False) -> List[dict]:
     """
     Format authority votes into table rows with threshold comparison.
     
@@ -525,7 +552,7 @@ def _format_authority_table_enhanced(consensus_data: dict, flag_thresholds: dict
             
             # Measured BW value and display
             'measured': relay_bw,
-            'measured_display': _format_bandwidth_value(relay_bw),
+            'measured_display': _format_bandwidth_value(relay_bw, use_bits),
             
             # WFU: measured value | threshold
             'wfu': relay_wfu,
@@ -546,9 +573,9 @@ def _format_authority_table_enhanced(consensus_data: dict, flag_thresholds: dict
             'guard_bw_guarantee': GUARD_BW_GUARANTEE,
             'guard_bw_top25_threshold': guard_bw_top25_threshold,
             'guard_bw_value': observed_bandwidth,
-            'guard_bw_value_display': _format_bandwidth_value(observed_bandwidth),
-            'guard_bw_guarantee_display': _format_bandwidth_value(GUARD_BW_GUARANTEE),
-            'guard_bw_top25_display': _format_bandwidth_value(guard_bw_top25_threshold),
+            'guard_bw_value_display': _format_bandwidth_value(observed_bandwidth, use_bits),
+            'guard_bw_guarantee_display': _format_bandwidth_value(GUARD_BW_GUARANTEE, use_bits),
+            'guard_bw_top25_display': _format_bandwidth_value(guard_bw_top25_threshold, use_bits),
             'guard_bw_meets_guarantee': observed_bandwidth >= GUARD_BW_GUARANTEE,
             'guard_bw_in_top25': observed_bandwidth >= guard_bw_top25_threshold if guard_bw_top25_threshold else False,
             'guard_bw_meets': observed_bandwidth >= GUARD_BW_GUARANTEE or (guard_bw_top25_threshold and observed_bandwidth >= guard_bw_top25_threshold),
@@ -563,9 +590,9 @@ def _format_authority_table_enhanced(consensus_data: dict, flag_thresholds: dict
             # Fast: uses observed_bandwidth (from descriptor), NOT scaled consensus value
             # Fast requires: bandwidth in top 7/8ths (fast_threshold) OR >= 100 KB/s
             'fast_speed': observed_bandwidth,
-            'fast_speed_display': _format_bandwidth_value(observed_bandwidth),
+            'fast_speed_display': _format_bandwidth_value(observed_bandwidth, use_bits),
             'fast_threshold': fast_threshold,
-            'fast_threshold_display': _format_bandwidth_value(fast_threshold),
+            'fast_threshold_display': _format_bandwidth_value(fast_threshold, use_bits),
             'fast_meets': observed_bandwidth >= fast_threshold if fast_threshold else (observed_bandwidth >= FAST_BW_MINIMUM),
             
             # HSDir TK: measured | threshold
@@ -776,7 +803,7 @@ def _format_reachability_summary(consensus_data: dict) -> dict:
     }
 
 
-def _format_bandwidth_summary(consensus_data: dict) -> dict:
+def _format_bandwidth_summary(consensus_data: dict, use_bits: bool = False) -> dict:
     """Format bandwidth summary."""
     bandwidth = consensus_data.get('bandwidth', {})
     
@@ -788,15 +815,15 @@ def _format_bandwidth_summary(consensus_data: dict) -> dict:
     
     return {
         'median': median,
-        'median_display': _format_bandwidth_value(median),
+        'median_display': _format_bandwidth_value(median, use_bits),
         'average': avg,
-        'average_display': _format_bandwidth_value(avg),
+        'average_display': _format_bandwidth_value(avg, use_bits),
         'min': min_bw,
-        'min_display': _format_bandwidth_value(min_bw),
+        'min_display': _format_bandwidth_value(min_bw, use_bits),
         'max': max_bw,
-        'max_display': _format_bandwidth_value(max_bw),
+        'max_display': _format_bandwidth_value(max_bw, use_bits),
         'deviation': deviation,
-        'deviation_display': _format_bandwidth_value(deviation),
+        'deviation_display': _format_bandwidth_value(deviation, use_bits),
         'measurement_count': bandwidth.get('measurement_count', 0),
         'deviation_class': 'warning' if deviation and median and deviation > median * 0.5 else 'normal',
     }
@@ -1220,33 +1247,51 @@ def _format_threshold_value(key: str, value: Any) -> str:
     return str(value)
 
 
-def _format_bandwidth_value(value: Any) -> str:
+def _format_bandwidth_value(value: Any, use_bits: bool = False) -> str:
     """
     Format bandwidth value for display.
     Leverages existing BandwidthFormatter for KB/s and above.
     Handles sub-KB values directly (BandwidthFormatter doesn't support B/s).
+    
+    Args:
+        value: Bandwidth in bytes/second
+        use_bits: If True, display in bits (Mbit/s), otherwise bytes (MB/s)
     """
     if value is None:
         return 'N/A'
     
     # Handle sub-KB values directly (BandwidthFormatter starts at KB/s)
     if value < 1000:
+        if use_bits:
+            return f"{value * 8} bit/s"
         return f"{value} B/s"
     
-    # Use existing BandwidthFormatter for KB/s and above (avoids code duplication)
-    if _bw_formatter is not None:
+    # Get or create cached formatter for this use_bits setting
+    if _BandwidthFormatterClass is not None:
+        if use_bits not in _bw_formatter_cache:
+            _bw_formatter_cache[use_bits] = _BandwidthFormatterClass(use_bits=use_bits)
+        formatter = _bw_formatter_cache[use_bits]
         try:
-            return _bw_formatter.format_bandwidth_with_suffix(value, decimal_places=1)
+            return formatter.format_bandwidth_with_suffix(value, decimal_places=1)
         except (ValueError, TypeError):
             pass
     
     # Manual fallback if BandwidthFormatter not available
-    if value >= 1000000000:
-        return f"{value / 1000000000:.1f} GB/s"
-    elif value >= 1000000:
-        return f"{value / 1000000:.1f} MB/s"
+    if use_bits:
+        value_bits = value * 8
+        if value_bits >= 1000000000:
+            return f"{value_bits / 1000000000:.1f} Gbit/s"
+        elif value_bits >= 1000000:
+            return f"{value_bits / 1000000:.1f} Mbit/s"
+        else:
+            return f"{value_bits / 1000:.1f} Kbit/s"
     else:
-        return f"{value / 1000:.1f} KB/s"
+        if value >= 1000000000:
+            return f"{value / 1000000000:.1f} GB/s"
+        elif value >= 1000000:
+            return f"{value / 1000000:.1f} MB/s"
+        else:
+            return f"{value / 1000:.1f} KB/s"
 
 
 def _format_ipv6_status(reachable: Optional[bool], address: Optional[str]) -> str:
