@@ -694,32 +694,139 @@ progress_logger.log(
 
 ### A3. HTML Search Form
 
-Add to `allium/templates/skeleton.html` in the navigation area:
+The search form uses a **responsive design**:
+- **Desktop (≥768px):** Compact search in the Allium navbar (right side)
+- **Mobile (<768px):** Dedicated search bar below navbar for better usability
+
+#### File: `allium/templates/macros.html`
+
+Update the `navigation` macro to include search. Add before the closing `</div>` of `.navbar-collapse`:
 
 ```html
+{# Inside the navigation macro, after the <ul class="nav navbar-nav"> closing tag #}
+
+<!-- Desktop: Search in navbar (hidden on mobile) -->
 <form action="{{ page_ctx.path_prefix }}search" method="GET" 
-      style="display: inline-block; margin-left: 15px;">
-  <input type="text" 
-         name="q" 
-         placeholder="Search relays, families, AS..." 
-         title="Search by fingerprint, nickname, AROI, AS number, country, or IP"
-         style="padding: 4px 8px; width: 200px; border: 1px solid #ccc; border-radius: 3px;"
-         maxlength="100"
-         pattern="[A-Za-z0-9\s\-_.@:]+"
-         autocomplete="off"
-         autocapitalize="off"
-         spellcheck="false">
-  <button type="submit" 
-          style="padding: 4px 12px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer;">
-    Search
-  </button>
+      class="navbar-form navbar-right hidden-xs hidden-sm"
+      style="margin-right: 0;">
+    <div class="input-group" style="width: 220px;">
+        <input type="text" 
+               name="q" 
+               class="form-control input-sm" 
+               placeholder="Search relays..."
+               title="Search by fingerprint, nickname, AROI, AS, country, or IP"
+               maxlength="100"
+               pattern="[A-Za-z0-9\s\-_.@:]+"
+               autocomplete="off"
+               autocapitalize="off"
+               spellcheck="false">
+        <span class="input-group-btn">
+            <button type="submit" class="btn btn-sm btn-default">
+                <span class="glyphicon glyphicon-search" aria-hidden="true"></span>
+            </button>
+        </span>
+    </div>
 </form>
+```
+
+Add after the closing `</nav>` tag of the navigation macro:
+
+```html
+<!-- Mobile: Search bar below navbar (hidden on desktop) -->
+<div class="allium-mobile-search visible-xs visible-sm" 
+     style="background: #f8f9fa; padding: 10px 15px; margin-bottom: 15px; border-radius: 4px; border: 1px solid #e7e7e7;">
+    <form action="{{ page_ctx.path_prefix }}search" method="GET">
+        <div class="input-group">
+            <input type="text" 
+                   name="q" 
+                   class="form-control" 
+                   placeholder="Search by fingerprint, nickname, AROI, AS, country..."
+                   title="Search by fingerprint, nickname, AROI, AS number, country, or IP"
+                   maxlength="100"
+                   pattern="[A-Za-z0-9\s\-_.@:]+"
+                   autocomplete="off"
+                   autocapitalize="off"
+                   spellcheck="false">
+            <span class="input-group-btn">
+                <button type="submit" class="btn btn-primary">Search</button>
+            </span>
+        </div>
+    </form>
+</div>
+```
+
+#### Responsive Behavior
+
+| Viewport | Search Location | Appearance |
+|----------|-----------------|------------|
+| Desktop (≥992px) | Navbar right side | Compact input + icon button |
+| Tablet (768-991px) | Navbar right side | Compact input + icon button |
+| Mobile (<768px) | Below navbar | Full-width bar with "Search" button |
+
+#### Visual Layout
+
+**Desktop:**
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Network Health │ Operators │ Contact │ Family │ ... │ All │ [Search__] 🔍 │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Mobile:**
+```
+┌─────────────────────────────────────┐
+│ ☰ Browse Categories                 │
+├─────────────────────────────────────┤
+│ 🔍 Search by fingerprint, nick...   │
+│ [═══════════════════════] Search    │
+└─────────────────────────────────────┘
+```
+
+#### CSS Addition (in skeleton.html `<style>`)
+
+```css
+/* Allium Search Styles */
+.navbar-form.navbar-right {
+    margin-left: 15px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+}
+
+.navbar-form .input-group {
+    display: inline-table;
+    vertical-align: middle;
+}
+
+.navbar-form .form-control {
+    border-radius: 3px 0 0 3px;
+}
+
+.navbar-form .btn {
+    border-radius: 0 3px 3px 0;
+}
+
+.allium-mobile-search .form-control {
+    font-size: 16px; /* Prevents iOS zoom on focus */
+}
+
+@media (min-width: 768px) {
+    .allium-mobile-search {
+        display: none !important;
+    }
+}
+
+@media (max-width: 767px) {
+    .navbar-form.navbar-right {
+        display: none !important;
+    }
+}
 ```
 
 **Security attributes:**
 - `maxlength="100"` - Client-side limit matching server-side validation
 - `pattern="[A-Za-z0-9\s\-_.@:]+"` - Client-side character validation (defense-in-depth)
 - `autocomplete="off"` - Prevent sensitive data leakage from form history
+- `font-size: 16px` on mobile - Prevents iOS Safari auto-zoom on input focus
 
 ---
 
