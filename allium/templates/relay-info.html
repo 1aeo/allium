@@ -569,56 +569,56 @@ Data from <a href="https://collector.torproject.org/recent/relay-descriptors/vot
         <td>{% if diag.in_consensus %}<span style="color: #28a745; font-weight: bold;">IN CONSENSUS</span>{% else %}<span style="color: #dc3545; font-weight: bold;">NOT IN CONSENSUS</span>{% endif %}</td>
     </tr>
     <tr>
-        <td title="Running: Authority can connect to relay's OR port. When an authority votes for a relay, that relay is 'Running' from that authority's perspective.">Running (IPv4 Reachable)</td>
-        <td>{{ diag.vote_count }}/{{ diag.total_authorities }} authorities reached this relay</td>
-        <td>≥{{ diag.majority_required }}/{{ diag.total_authorities }} (majority)</td>
+        <td title="Source: CollecTor | File: vote | Field: 's' line contains 'Running' | Authority can connect to relay's OR port">Running (IPv4 Reachable)</td>
+        <td title="Source: CollecTor | Count of votes with 'r' line for this relay">{{ diag.vote_count }}/{{ diag.total_authorities }} authorities reached this relay</td>
+        <td title="Tor dir-spec: Relay in consensus if majority (floor(n/2)+1) of authorities vote">≥{{ diag.majority_required }}/{{ diag.total_authorities }} (majority)</td>
         <td>{% if diag.vote_count >= diag.majority_required %}<span style="color: #28a745; font-weight: bold;">RUNNING</span>{% else %}<span style="color: #dc3545; font-weight: bold;">NOT RUNNING</span>{% endif %}</td>
     </tr>
     <tr>
-        <td title="Valid = Running + Not Blacklisted + Valid Descriptor. A relay is Valid when: 1) Authority can reach it (Running), 2) Identity key not on blacklist, 3) Descriptor is properly formatted and signed.">Valid</td>
-        <td title="Valid = Running + Not Blacklisted + Valid Descriptor">{{ diag.vote_count }}/{{ diag.total_authorities }} (Running + Valid Descriptor)</td>
-        <td>≥{{ diag.majority_required }}/{{ diag.total_authorities }} (majority)</td>
+        <td title="Source: CollecTor | File: vote | Field: 's' line contains 'Valid' | Valid = Running + Not Blacklisted + Valid Descriptor">Valid</td>
+        <td title="Source: CollecTor | Count of votes with 'Valid' flag for this relay">{{ diag.vote_count }}/{{ diag.total_authorities }} (Running + Valid Descriptor)</td>
+        <td title="Tor dir-spec: Relay in consensus if majority (floor(n/2)+1) of authorities vote">≥{{ diag.majority_required }}/{{ diag.total_authorities }} (majority)</td>
         <td>{% if diag.vote_count >= diag.majority_required %}<span style="color: #28a745; font-weight: bold;">VALID</span>{% else %}<span style="color: #dc3545; font-weight: bold;">NOT VALID</span>{% endif %}</td>
     </tr>
     <tr>
-        <td title="Consensus weight is scaled for traffic distribution, not flag eligibility. Tor consensus uses median of all authority measurements.">Consensus Weight</td>
-        <td title="Median of consensus weights from all authority votes. Tor uses median for path selection.">{% if diag.bandwidth_summary and diag.bandwidth_summary.median_display %}{{ diag.bandwidth_summary.median_display }}{% else %}{{ rv.measured_bw_display }}{% endif %} (median)</td>
+        <td title="Source: CollecTor | File: vote | Field: 'w Bandwidth=X' | Consensus weight for path selection (Tor uses median of all measurements)">Consensus Weight</td>
+        <td title="Source: CollecTor | File: vote | Field: 'w Bandwidth=X' | Median of all authority measurements">{% if diag.bandwidth_summary and diag.bandwidth_summary.median_display %}{{ diag.bandwidth_summary.median_display }}{% else %}{{ rv.measured_bw_display }}{% endif %} (median)</td>
         <td>N/A (no threshold, used for path selection)</td>
         <td><span style="color: #6c757d;">—</span></td>
     </tr>
     <tr>
-        <td title="Weighted Fractional Uptime for Guard flag eligibility">Guard WFU (guard-wfu)</td>
-        <td>{{ rv.wfu_display }}</td>
-        <td>≥98% (all authorities)</td>
+        <td title="Source: CollecTor | File: vote | Field: stats wfu=X | Weighted Fractional Uptime - relay's uptime weighted so recent downtime counts more">Guard WFU (guard-wfu)</td>
+        <td title="Source: CollecTor | File: vote | Field: stats wfu=X">{{ rv.wfu_display }}</td>
+        <td title="Source: CollecTor | File: vote | Field: flag-thresholds guard-wfu=X">≥98% (all authorities)</td>
         <td>{% if rv.wfu_meets %}<span style="color: #28a745; font-weight: bold;">MEETS</span>{% else %}<span style="color: #dc3545; font-weight: bold;">BELOW - cannot get Guard</span>{% endif %}</td>
     </tr>
     <tr>
-        <td title="Time Known for Guard flag eligibility - how long authority has tracked this relay">Guard TK (tk)</td>
-        <td>{{ rv.tk_display }}</td>
-        <td>≥8 days (all authorities)</td>
+        <td title="Source: CollecTor | File: vote | Field: stats tk=X | Time Known - how long authority has tracked this relay (familiarity requirement)">Guard TK (tk)</td>
+        <td title="Source: CollecTor | File: vote | Field: stats tk=X">{{ rv.tk_display }}</td>
+        <td title="Source: CollecTor | File: vote | Field: flag-thresholds guard-tk=X">≥8 days (all authorities)</td>
         <td>{% if rv.tk_meets %}<span style="color: #28a745; font-weight: bold;">MEETS</span>{% else %}<span style="color: #dc3545; font-weight: bold;">BELOW - need {{ "%.1f"|format(rv.tk_days_needed) }} more days</span>{% endif %}</td>
     </tr>
     <tr>
-        <td>Guard BW</td>
-        <td title="Observed bandwidth from relay's server descriptor (self-reported by relay). Bandwidth authorities measure actual throughput separately for consensus weight.">{{ rv.observed_bw_display }}</td>
-        <td title="Guard requires: ≥2 MB/s (guarantee) OR in top 25% ({{ rv.guard_bw_range }})">≥{{ rv.guard_bw_guarantee_display }} OR ≥{{ rv.guard_bw_range }}</td>
+        <td title="Source: Onionoo | File: details | Field: observed_bandwidth | Relay's self-reported bandwidth from descriptor">Guard BW</td>
+        <td title="Source: Onionoo | File: details | Field: observed_bandwidth | Relay's descriptor bandwidth (actual for Guard eligibility)">{{ rv.observed_bw_display }}</td>
+        <td title="Source: CollecTor | File: vote | Field: flag-thresholds guard-bw-inc-exits=X | Guard requires: ≥2 MB/s (dir-spec guarantee) OR in top 25%">≥{{ rv.guard_bw_guarantee_display }} OR ≥{{ rv.guard_bw_range }}</td>
         <td>{% if rv.guard_bw_meets_guarantee %}<span style="color: #28a745; font-weight: bold;">MEETS - ≥2 MB/s guarantee</span>{% elif rv.guard_bw_meets_some %}<span style="color: #ffc107; font-weight: bold;">PARTIAL - in top 25% for {{ rv.guard_bw_meets_count }} auth(s)</span>{% else %}<span style="color: #dc3545; font-weight: bold;">BELOW - need ≥2 MB/s</span>{% endif %}</td>
     </tr>
     <tr>
-        <td>Stable Uptime</td>
-        <td>{{ rv.tk_display }}</td>
-        <td title="Range varies by authority">≥{{ rv.stable_range }}</td>
+        <td title="Source: CollecTor | File: vote | Field: flag-thresholds stable-uptime=X | Continuous uptime required for Stable flag">Stable Uptime</td>
+        <td title="Source: CollecTor | File: vote | Field: stats tk=X (used as uptime proxy)">{{ rv.tk_display }}</td>
+        <td title="Source: CollecTor | File: vote | Field: flag-thresholds stable-uptime=X | Range varies by authority's network view">≥{{ rv.stable_range }}</td>
         <td>{% if rv.stable_meets_all %}<span style="color: #28a745; font-weight: bold;">MEETS - all authorities</span>{% elif rv.stable_meets_count >= diag.majority_required %}<span style="color: #ffc107; font-weight: bold;">PARTIAL - {{ rv.stable_meets_count }}/{{ rv.total_authorities }}</span>{% else %}<span style="color: #dc3545; font-weight: bold;">BELOW - {{ rv.stable_meets_count }}/{{ rv.total_authorities }}</span>{% endif %}</td>
     </tr>
     <tr>
-        <td>Stable MTBF</td>
-        <td>{{ rv.mtbf_display|default('N/A') }}</td>
-        <td title="Range varies by authority">≥{{ rv.stable_mtbf_range }}</td>
+        <td title="Source: CollecTor | File: vote | Field: flag-thresholds stable-mtbf=X | Mean Time Between Failures">Stable MTBF</td>
+        <td title="Source: CollecTor | File: vote | Field: stats mtbf=X">{{ rv.mtbf_display|default('N/A') }}</td>
+        <td title="Source: CollecTor | File: vote | Field: flag-thresholds stable-mtbf=X | Range varies by authority">≥{{ rv.stable_mtbf_range }}</td>
         <td>{% if rv.stable_mtbf_meets_all|default(false) %}<span style="color: #28a745; font-weight: bold;">MEETS - all authorities</span>{% elif rv.stable_mtbf_meets_count|default(0) >= diag.majority_required %}<span style="color: #ffc107; font-weight: bold;">PARTIAL - {{ rv.stable_mtbf_meets_count|default(0) }}/{{ rv.total_authorities }}</span>{% else %}<span style="color: #dc3545; font-weight: bold;">BELOW - {{ rv.stable_mtbf_meets_count|default(0) }}/{{ rv.total_authorities }}</span>{% endif %}</td>
     </tr>
     <tr>
-        <td title="Fast flag requires bandwidth in top 7/8ths of network OR ≥100 KB/s guarantee">Fast Speed</td>
-        <td title="Observed bandwidth from relay's server descriptor (self-reported by relay). Used for Fast flag eligibility.">{{ rv.fast_speed_display }}</td>
+        <td title="Source: CollecTor | File: vote | Field: flag-thresholds fast-speed=X | Fast flag requires bandwidth in top 7/8ths OR ≥100 KB/s">Fast Speed</td>
+        <td title="Source: Onionoo | File: details | Field: observed_bandwidth | Relay's descriptor bandwidth">{{ rv.fast_speed_display }}</td>
         <td title="Most authorities: ≥{{ rv.fast_speed_typical_display }}{% if rv.fast_speed_strict_auths %}; Stricter: {{ rv.fast_speed_strict_auths|join(', ') }} uses ≥{{ rv.fast_speed_max_display }}{% endif %}">
             ≥{{ rv.fast_minimum_display }} <span style="color: #666; font-size: 11px;">(guarantee)</span> OR ≥{{ rv.fast_speed_typical_display }} <span style="color: #666; font-size: 11px;">(typical)</span>
             {% if rv.fast_speed_strict_auths %}
@@ -628,14 +628,14 @@ Data from <a href="https://collector.torproject.org/recent/relay-descriptors/vot
         <td>{% if rv.fast_meets_minimum %}<span style="color: #28a745; font-weight: bold;">MEETS - ≥100 KB/s guarantee</span>{% elif rv.fast_meets_all %}<span style="color: #28a745; font-weight: bold;">MEETS - all {{ rv.total_authorities }} auths</span>{% elif rv.fast_meets_count > 0 %}<span style="color: #ffc107; font-weight: bold;">PARTIAL - {{ rv.fast_meets_count }}/{{ rv.total_authorities }}</span>{% else %}<span style="color: #dc3545; font-weight: bold;">BELOW - need ≥100 KB/s</span>{% endif %}</td>
     </tr>
     <tr>
-        <td>HSDir WFU</td>
-        <td>{{ rv.wfu_display }}</td>
-        <td>≥{{ "%.1f"|format(rv.hsdir_wfu_threshold * 100) }}% (from all auths)</td>
+        <td title="Source: CollecTor | File: vote | Field: flag-thresholds hsdir-wfu=X | Weighted Fractional Uptime for HSDir flag">HSDir WFU</td>
+        <td title="Source: CollecTor | File: vote | Field: stats wfu=X">{{ rv.wfu_display }}</td>
+        <td title="Source: CollecTor | File: vote | Field: flag-thresholds hsdir-wfu=X">≥{{ "%.1f"|format(rv.hsdir_wfu_threshold * 100) }}% (from all auths)</td>
         <td>{% if diag.flag_summary.hsdir.eligible_count == diag.total_authorities %}<span style="color: #28a745; font-weight: bold;">MEETS - all {{ diag.total_authorities }} auths</span>{% elif diag.flag_summary.hsdir.eligible_count >= diag.majority_required %}<span style="color: #ffc107; font-weight: bold;">PARTIAL - {{ diag.flag_summary.hsdir.eligible_count }}/{{ diag.total_authorities }}</span>{% else %}<span style="color: #dc3545; font-weight: bold;">BELOW - {{ diag.flag_summary.hsdir.eligible_count }}/{{ diag.total_authorities }}</span>{% endif %}</td>
     </tr>
     <tr>
-        <td title="HSDir Time Known - how long relay has been tracked by authorities">HSDir TK</td>
-        <td>{{ rv.tk_display }}</td>
+        <td title="Source: CollecTor | File: vote | Field: flag-thresholds hsdir-tk=X | Time Known required for HSDir flag">HSDir TK</td>
+        <td title="Source: CollecTor | File: vote | Field: stats tk=X">{{ rv.tk_display }}</td>
         <td title="dir-spec default: 25 hours ({{ rv.hsdir_tk_default_count }} auths){% if rv.hsdir_tk_strict_auths %}; Stricter: {{ rv.hsdir_tk_strict_auths|join(', ') }} uses {{ rv.hsdir_tk_max_display }}{% endif %}">
             ≥{{ rv.hsdir_tk_consensus_display }} <span style="color: #666; font-size: 11px;">({{ rv.hsdir_tk_default_count }}/{{ diag.total_authorities }} auths)</span>
             {% if rv.hsdir_tk_strict_auths %}
@@ -645,16 +645,16 @@ Data from <a href="https://collector.torproject.org/recent/relay-descriptors/vot
         <td>{% if diag.flag_summary.hsdir.eligible_count == diag.total_authorities %}<span style="color: #28a745; font-weight: bold;">MEETS - all {{ diag.total_authorities }} auths</span>{% elif diag.flag_summary.hsdir.eligible_count >= diag.majority_required %}<span style="color: #ffc107; font-weight: bold;">PARTIAL - {{ diag.flag_summary.hsdir.eligible_count }}/{{ diag.total_authorities }}</span>{% else %}<span style="color: #dc3545; font-weight: bold;">BELOW - {{ diag.flag_summary.hsdir.eligible_count }}/{{ diag.total_authorities }}</span>{% endif %}</td>
     </tr>
     <tr>
-        <td>IPv4 Reachable</td>
-        <td>{{ rv.ipv4_reachable_count }}/{{ rv.total_authorities }} authorities</td>
-        <td>≥{{ diag.majority_required }}/{{ diag.total_authorities }} (majority)</td>
+        <td title="Source: CollecTor | File: vote | Presence of 'r' line for relay = authority can reach it via IPv4">IPv4 Reachable</td>
+        <td title="Source: CollecTor | File: vote | Count of authorities with 'r' line for this relay">{{ rv.ipv4_reachable_count }}/{{ rv.total_authorities }} authorities</td>
+        <td title="Tor consensus requires majority of authorities to vote for relay">≥{{ diag.majority_required }}/{{ diag.total_authorities }} (majority)</td>
         <td>{% if rv.ipv4_reachable_count >= diag.majority_required %}<span style="color: #28a745; font-weight: bold;">REACHABLE</span>{% else %}<span style="color: #dc3545; font-weight: bold;">NOT REACHABLE</span>{% endif %}</td>
     </tr>
     {% if has_ipv6 %}
     <tr>
-        <td>IPv6 Reachable</td>
-        <td>{{ rv.ipv6_reachable_count }}/{{ rv.ipv6_tested_count }} tested</td>
-        <td>≥majority of testers</td>
+        <td title="Source: CollecTor | File: vote | Field: 'a' line (IPv6 address) | Not all authorities test IPv6">IPv6 Reachable</td>
+        <td title="Source: CollecTor | File: vote | Field: 'a' line presence">{{ rv.ipv6_reachable_count }}/{{ rv.ipv6_tested_count }} tested</td>
+        <td title="Some authorities don't test IPv6 reachability">≥majority of testers</td>
         <td>{% if rv.ipv6_tested_count == 0 %}<span style="color: #6c757d; font-weight: bold;">NOT TESTED</span>{% elif rv.ipv6_reachable_count >= (rv.ipv6_tested_count // 2 + 1) %}<span style="color: #28a745; font-weight: bold;">REACHABLE</span>{% elif rv.ipv6_reachable_count > 0 %}<span style="color: #ffc107; font-weight: bold;">PARTIAL</span>{% else %}<span style="color: #dc3545; font-weight: bold;">NOT REACHABLE</span>{% endif %}</td>
     </tr>
     {% endif %}
@@ -679,22 +679,22 @@ Flags: <span style="color: #28a745; font-weight: bold;">green</span> = all autho
 <table class="table table-condensed table-striped" style="font-size: 11px;">
 <thead>
 <tr>
-    <th title="Authority nickname with country code">Authority</th>
-    <th title="Running: Authority voted for this relay (could reach it via OR port). Voted = Running.">Running</th>
-    <th title="Valid: Relay is not blacklisted and has valid descriptor. All Running relays get Valid unless blacklisted.">Valid</th>
-    <th title="Runs sbws bandwidth scanner">BW Scan</th>
-    <th title="IPv4 reachable (same as Running for this relay)">v4</th>
-    {% if has_ipv6 %}<th title="IPv6 reachable | N/T = not tested by this authority">v6</th>{% endif %}
-    <th title="Flags assigned by this authority. Order: Exit, Fast, Guard, HSDir, Running, Stable, V2Dir, Valid">Flags</th>
-    <th title="Fast Speed: Observed BW | Threshold (7/8ths). Green if ≥ threshold OR ≥100 KB/s">Fast Speed (M|T)</th>
-    <th title="Guard BW: Observed BW | Top 25% threshold | 2 MB/s min. Green if meets either.">Guard BW (M|T)</th>
-    <th title="Guard WFU: Measured | Threshold. ≥98% required for Guard flag.">Guard WFU (M|T)</th>
-    <th title="Guard TK: Measured | Threshold. ≥8 days required for Guard flag.">Guard TK (M|T)</th>
-    <th title="Stable MTBF: Measured | Threshold. Note: Actual flag assignment may differ from threshold.">Stable MTBF (M|T)</th>
-    <th title="HSDir WFU: Measured | Threshold. ≥98% required for HSDir flag.">HSDir WFU (M|T)</th>
-    <th title="HSDir TK: Measured | Threshold. dir-spec: ≥25 hours (most auths); moria1: ≥10 days">HSDir TK (M|T)</th>
-    <th title="Descriptor Published: Timestamp of relay's descriptor. StaleDesc flag assigned if >18 hours old (bad). Red = StaleDesc, Green = Fresh.">Desc Published</th>
-    <th title="Scaled consensus weight for path selection. From authority's 'w Bandwidth' line. 10 KB/s = default when authority uses relay's advertised BW instead of measured.">Cons Wt</th>
+    <th title="Source: Onionoo | Authority nickname (relay with Authority flag) with country code">Authority</th>
+    <th title="Source: CollecTor | File: vote | Field: 's' line contains 'Running' | Authority voted for this relay (could reach it via OR port)">Running</th>
+    <th title="Source: CollecTor | File: vote | Field: 's' line contains 'Valid' | Relay is not blacklisted and has valid descriptor">Valid</th>
+    <th title="Source: CollecTor | File: vote | Field: bandwidth-file-headers present = runs sbws scanner">BW Scan</th>
+    <th title="Source: CollecTor | File: vote | Presence of 'r' line = IPv4 reachable">v4</th>
+    {% if has_ipv6 %}<th title="Source: CollecTor | File: vote | Field: 'a' line | IPv6 reachable | N/T = not tested by this authority">v6</th>{% endif %}
+    <th title="Source: CollecTor | File: vote | Field: 's' line | Flags assigned by this authority">Flags</th>
+    <th title="Source: CollecTor | File: vote | Field: flag-thresholds fast-speed=X | Fast Speed: Observed BW | Threshold (7/8ths)">Fast Speed (M|T)</th>
+    <th title="Source: CollecTor | File: vote | Field: flag-thresholds guard-bw-inc-exits=X | Guard BW: Observed BW | Top 25% threshold">Guard BW (M|T)</th>
+    <th title="Source: CollecTor | File: vote | Field: stats wfu=X, flag-thresholds guard-wfu=X | Guard WFU: Measured | Threshold">Guard WFU (M|T)</th>
+    <th title="Source: CollecTor | File: vote | Field: stats tk=X, flag-thresholds guard-tk=X | Guard TK: Measured | Threshold">Guard TK (M|T)</th>
+    <th title="Source: CollecTor | File: vote | Field: stats mtbf=X, flag-thresholds stable-mtbf=X | Stable MTBF: Measured | Threshold">Stable MTBF (M|T)</th>
+    <th title="Source: CollecTor | File: vote | Field: stats wfu=X, flag-thresholds hsdir-wfu=X | HSDir WFU: Measured | Threshold">HSDir WFU (M|T)</th>
+    <th title="Source: CollecTor | File: vote | Field: stats tk=X, flag-thresholds hsdir-tk=X | HSDir TK: Measured | Threshold">HSDir TK (M|T)</th>
+    <th title="Source: CollecTor | File: vote | Field: 'r' line timestamp | Descriptor Published timestamp">Desc Published</th>
+    <th title="Source: CollecTor | File: vote | Field: 'w Bandwidth=X' | Scaled consensus weight for path selection">Cons Wt</th>
 </tr>
 </thead>
 <tbody>
