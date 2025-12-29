@@ -58,9 +58,10 @@ class TestConstants:
         assert GUARD_WFU_DEFAULT == 0.98
     
     def test_hsdir_tk_default(self):
-        """Test HSDir TK default is 10 days."""
-        assert HSDIR_TK_DEFAULT == 10 * SECONDS_PER_DAY
-        assert HSDIR_TK_DEFAULT == 864000
+        """Test HSDir TK default is 25 hours per dir-spec."""
+        # Per dir-spec Section 3.4.2, default hsdir-tk is 25 hours
+        assert HSDIR_TK_DEFAULT == 25 * 3600  # 25 hours
+        assert HSDIR_TK_DEFAULT == 90000
     
     def test_hsdir_wfu_default(self):
         """Test HSDir WFU default is 98%."""
@@ -223,10 +224,10 @@ class TestCheckHsdirEligibility:
     """Tests for check_hsdir_eligibility function."""
     
     def test_eligible_relay(self):
-        """Test a relay that meets HSDir requirements."""
+        """Test a relay that meets HSDir requirements (above 25 hour default)."""
         result = check_hsdir_eligibility(
             wfu=0.99,
-            tk=12 * SECONDS_PER_DAY,  # Above 10 days
+            tk=30 * 3600,  # 30 hours, above 25 hour default
         )
         
         assert result['eligible'] == True
@@ -244,10 +245,10 @@ class TestCheckHsdirEligibility:
         assert result['wfu_met'] == False
     
     def test_ineligible_low_tk(self):
-        """Test a relay with low time-known."""
+        """Test a relay with low time-known (below 25 hour default)."""
         result = check_hsdir_eligibility(
             wfu=0.99,
-            tk=8 * SECONDS_PER_DAY,  # Below 10 days
+            tk=20 * 3600,  # 20 hours, below 25 hour default
         )
         
         assert result['eligible'] == False

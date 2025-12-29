@@ -5,28 +5,50 @@ Centralized module for Tor relay flag threshold constants and eligibility logic.
 This module consolidates all flag-related thresholds and classification functions
 for easy auditing and consistent behavior across the codebase.
 
-Reference: https://spec.torproject.org/dir-spec/
+Authoritative Reference: https://spec.torproject.org/dir-spec/
+Section 3.4.2 - "Assigning flags to relays"
 
-Flag Requirements Summary:
--------------------------
-Guard:
-  - Must be Fast
-  - Must be Stable  
-  - WFU >= guard-wfu threshold (typically 98%)
-  - TK >= guard-tk threshold (typically 8 days)
-  - Bandwidth >= 2 MB/s (AuthDirGuardBWGuarantee) OR in top 25%
-  - Must have V2Dir flag
+Flag Requirements per dir-spec Section 3.4.2:
+=============================================
+
+Guard (all must be true):
+  - Relay is "Fast" (has bandwidth in top 7/8ths or >= AuthDirFastGuarantee)
+  - Relay is "Stable" (uptime/MTBF meets threshold)
+  - Relay is "Valid" (not blacklisted)
+  - WFU >= guard-wfu threshold
+    * Default: 0.98 (98%) per dir-spec "WFU" parameter
+  - TK (Time Known) >= guard-tk threshold  
+    * Default: 8 days (691200 seconds) per dir-spec "TK" parameter
+  - Bandwidth >= AuthDirGuardBWGuarantee OR in fastest 25% of network
+    * AuthDirGuardBWGuarantee default: 2 MB/s (2,000,000 bytes/s)
+  - Has "V2Dir" flag
 
 Stable:
-  - Uptime >= stable-uptime threshold OR
-  - MTBF >= stable-mtbf threshold
+  - Weighted MTBF >= median network MTBF, OR
+  - Uptime >= stable-uptime threshold (dynamically computed per authority)
 
 Fast:
-  - Bandwidth in top 7/8ths of relays OR >= 100 KB/s (AuthDirFastGuarantee)
+  - Bandwidth in top 7/8ths of network, OR
+  - Bandwidth >= AuthDirFastGuarantee
+    * Default: 100 KB/s (100,000 bytes/s)
 
 HSDir:
-  - WFU >= hsdir-wfu threshold (typically 98%)
-  - TK >= hsdir-tk threshold (typically 25+ hours in practice)
+  - Has "Stable" flag
+  - Has "Running" flag  
+  - WFU >= hsdir-wfu threshold (dir-spec default: same as guard-wfu, 0.98)
+  - TK >= hsdir-tk threshold
+    * dir-spec default: 25 hours (90,000 seconds)
+    * NOTE: In practice, moria1 uses ~10 days; most authorities don't set explicitly
+
+Running:
+  - Authority could establish OR connection to relay within last 45 minutes
+
+Valid:
+  - Relay is not on the blacklist AND
+  - Has valid descriptor with acceptable address
+
+BadExit:
+  - Relay is on the "bad exit" list (misbehaving exit node)
 """
 
 from typing import Dict, Optional, Any
@@ -41,38 +63,53 @@ SECONDS_PER_WEEK = 604800
 
 # ============================================================================
 # GUARD FLAG THRESHOLDS
+# Per dir-spec Section 3.4.2 and Tor source (src/app/config/config.c)
 # ============================================================================
 
-# AuthDirGuardBWGuarantee: Minimum bandwidth for Guard flag (2 MB/s)
+# AuthDirGuardBWGuarantee: Minimum bandwidth for Guard flag
+# Per dir-spec: "AuthDirGuardBWGuarantee" default is 2 MB/s (2,000,000 bytes/s)
 # If a relay has at least this bandwidth, it meets the BW requirement for Guard
-# regardless of network percentile ranking
+# regardless of whether it's in the top 25% by bandwidth.
+# Verified: All 9 voting authorities use this value.
 GUARD_BW_GUARANTEE = 2_000_000  # bytes/second (2 MB/s)
 
-# Default Guard time-known (TK) threshold: 8 days
+# Guard time-known (TK) threshold per dir-spec: 8 days
+# Per dir-spec: "TK" parameter default is 8 days (691200 seconds)
 # Relay must have been known to the authority for at least this long
+# to be considered "familiar" and eligible for Guard flag.
+# Verified: All 9 voting authorities use 691200 seconds (8 days).
 GUARD_TK_DEFAULT = 8 * SECONDS_PER_DAY  # 691200 seconds
 
-# Default Guard weighted fractional uptime (WFU) threshold: 98%
-# Relay must have been running at least this fraction of the time
+# Guard weighted fractional uptime (WFU) threshold per dir-spec: 98%
+# Per dir-spec: "WFU" parameter default is 0.98 (98%)
+# Relay must have been running at least this fraction of the time.
+# Verified: All 9 voting authorities use 0.98 (98%).
 GUARD_WFU_DEFAULT = 0.98
 
 # ============================================================================
 # HSDIR FLAG THRESHOLDS
+# Per dir-spec Section 3.4.2
 # ============================================================================
 
-# Default HSDir time-known (TK) threshold: 10 days
-# More strict than Guard to ensure HSDir relays are well-established
-HSDIR_TK_DEFAULT = 10 * SECONDS_PER_DAY  # 864000 seconds
+# Default HSDir time-known (TK) threshold per dir-spec: 25 hours
+# NOTE: In practice, moria1 authority uses ~10 days (848498 seconds).
+# Other authorities don't set hsdir-tk explicitly, relying on the dir-spec default.
+# We use 25 hours as per the dir-spec specification.
+HSDIR_TK_DEFAULT = 25 * SECONDS_PER_HOUR  # 90000 seconds (25 hours)
 
 # Default HSDir weighted fractional uptime (WFU) threshold: 98%
+# Same as Guard WFU per dir-spec
 HSDIR_WFU_DEFAULT = 0.98
 
 # ============================================================================
 # FAST FLAG THRESHOLDS
+# Per dir-spec Section 3.4.2
 # ============================================================================
 
-# AuthDirFastGuarantee: Minimum bandwidth for Fast flag (100 KB/s)
-# Relays with at least this bandwidth get Fast even if not in top 7/8ths
+# AuthDirFastGuarantee: Minimum bandwidth for Fast flag
+# Per dir-spec: "AuthDirFastGuarantee" default is 100 KB/s (100,000 bytes/s)
+# Relays with at least this bandwidth get Fast flag even if not in top 7/8ths.
+# The Fast flag indicates the relay has sufficient bandwidth for general use.
 FAST_BW_GUARANTEE = 100_000  # bytes/second (100 KB/s)
 
 # ============================================================================
