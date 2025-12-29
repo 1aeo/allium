@@ -367,13 +367,9 @@
                 <td style="text-align: center;">
                     {% if thresholds.get('guard-bw-inc-exits') is not none %}
                         {% set bw = thresholds['guard-bw-inc-exits'] %}
-                        {% if bw >= 1000000 %}
-                            ≥{{ "%.1f MB/s"|format(bw / 1000000) }}
-                        {% elif bw >= 1000 %}
-                            ≥{{ "%.1f KB/s"|format(bw / 1000) }}
-                        {% else %}
-                            ≥{{ bw }} B/s
-                        {% endif %}
+                        {% set bw_unit = bw|determine_unit(relays.use_bits) %}
+                        {% set bw_formatted = bw|format_bandwidth_with_unit(bw_unit) %}
+                        ≥{{ bw_formatted }} {{ bw_unit }}
                     {% else %}
                         <span style="color: #6c757d;">—</span>
                     {% endif %}
@@ -456,13 +452,9 @@
                 <td style="text-align: center;">
                     {% if thresholds.get('fast-speed') is not none %}
                         {% set bw = thresholds['fast-speed'] %}
-                        {% if bw >= 1000000 %}
-                            ≥{{ "%.1f MB/s"|format(bw / 1000000) }}
-                        {% elif bw >= 1000 %}
-                            ≥{{ "%.1f KB/s"|format(bw / 1000) }}
-                        {% else %}
-                            ≥{{ bw }} B/s
-                        {% endif %}
+                        {% set bw_unit = bw|determine_unit(relays.use_bits) %}
+                        {% set bw_formatted = bw|format_bandwidth_with_unit(bw_unit) %}
+                        ≥{{ bw_formatted }} {{ bw_unit }}
                     {% else %}
                         <span style="color: #6c757d;">—</span>
                     {% endif %}
