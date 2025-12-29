@@ -19,24 +19,24 @@ class TestConsensusModule:
         from lib.consensus import (
             CollectorFetcher,
             AuthorityMonitor,
-            format_relay_diagnostics,
-            format_authority_diagnostics,
+            format_relay_consensus_evaluation,
+            format_authority_consensus_evaluation,
         )
         assert CollectorFetcher is not None
         assert AuthorityMonitor is not None
-        assert format_relay_diagnostics is not None
-        assert format_authority_diagnostics is not None
+        assert format_relay_consensus_evaluation is not None
+        assert format_authority_consensus_evaluation is not None
     
-    def test_is_enabled_function(self):
-        """Test that the is_enabled() function exists and returns a boolean."""
-        from lib.consensus import is_enabled
-        result = is_enabled()
+    def test_is_consensus_evaluation_enabled_function(self):
+        """Test that the is_consensus_evaluation_enabled() function exists and returns a boolean."""
+        from lib.consensus import is_consensus_evaluation_enabled
+        result = is_consensus_evaluation_enabled()
         assert isinstance(result, bool)
     
-    def test_collector_diagnostics_enabled_export(self):
-        """Test that COLLECTOR_DIAGNOSTICS_ENABLED is exported."""
-        from lib.consensus import COLLECTOR_DIAGNOSTICS_ENABLED
-        assert isinstance(COLLECTOR_DIAGNOSTICS_ENABLED, bool)
+    def test_consensus_evaluation_enabled_export(self):
+        """Test that CONSENSUS_EVALUATION_ENABLED is exported."""
+        from lib.consensus import CONSENSUS_EVALUATION_ENABLED
+        assert isinstance(CONSENSUS_EVALUATION_ENABLED, bool)
     
     def test_all_exports(self):
         """Test that __all__ contains expected exports."""
@@ -44,17 +44,17 @@ class TestConsensusModule:
         expected_exports = [
             'CollectorFetcher',
             'AuthorityMonitor', 
-            'format_relay_diagnostics',
-            'format_authority_diagnostics',
-            'is_enabled',
-            'COLLECTOR_DIAGNOSTICS_ENABLED',
+            'format_relay_consensus_evaluation',
+            'format_authority_consensus_evaluation',
+            'is_consensus_evaluation_enabled',
+            'CONSENSUS_EVALUATION_ENABLED',
         ]
         for export in expected_exports:
             assert export in consensus.__all__, f"{export} missing from __all__"
 
 
 class TestFeatureFlag:
-    """Tests for the ALLIUM_COLLECTOR_DIAGNOSTICS feature flag."""
+    """Tests for the ALLIUM_CONSENSUS_EVALUATION feature flag."""
     
     def test_feature_flag_default_enabled(self):
         """Test that feature is enabled by default."""
@@ -65,17 +65,17 @@ class TestFeatureFlag:
             # Default should be 'true' when env var not set
             # Note: This tests the module as currently loaded
             # The actual default behavior depends on implementation
-            assert hasattr(consensus, 'COLLECTOR_DIAGNOSTICS_ENABLED')
+            assert hasattr(consensus, 'CONSENSUS_EVALUATION_ENABLED')
     
     def test_feature_flag_env_var_name(self):
         """Test that the correct environment variable name is used."""
-        # The env var should be ALLIUM_COLLECTOR_DIAGNOSTICS
-        from lib.consensus import COLLECTOR_DIAGNOSTICS_ENABLED
-        env_var = os.environ.get('ALLIUM_COLLECTOR_DIAGNOSTICS')
+        # The env var should be ALLIUM_CONSENSUS_EVALUATION
+        from lib.consensus import CONSENSUS_EVALUATION_ENABLED
+        env_var = os.environ.get('ALLIUM_CONSENSUS_EVALUATION')
         # If env var is set, the flag should reflect it
         if env_var is not None:
             expected = env_var.lower() == 'true'
-            assert COLLECTOR_DIAGNOSTICS_ENABLED == expected
+            assert CONSENSUS_EVALUATION_ENABLED == expected
 
 
 class TestModuleDocstring:
@@ -102,11 +102,11 @@ class TestSubmoduleImports:
         from lib.consensus.authority_monitor import AuthorityMonitor
         assert AuthorityMonitor is not None
     
-    def test_diagnostics_import(self):
-        """Test importing from diagnostics directly."""
-        from lib.consensus.diagnostics import (
-            format_relay_diagnostics,
-            format_authority_diagnostics,
+    def test_consensus_evaluation_import(self):
+        """Test importing from consensus_evaluation directly."""
+        from lib.consensus.consensus_evaluation import (
+            format_relay_consensus_evaluation,
+            format_authority_consensus_evaluation,
         )
-        assert format_relay_diagnostics is not None
-        assert format_authority_diagnostics is not None
+        assert format_relay_consensus_evaluation is not None
+        assert format_authority_consensus_evaluation is not None

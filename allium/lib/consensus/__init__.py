@@ -1,28 +1,28 @@
 """
-Consensus troubleshooting module.
-Feature flag: ALLIUM_COLLECTOR_DIAGNOSTICS (default: true)
+Consensus evaluation module.
+Feature flag: ALLIUM_CONSENSUS_EVALUATION (default: true)
 
-This module provides per-relay diagnostics from CollecTor data,
+This module provides per-relay consensus evaluation from CollecTor data,
 including authority voting information and flag threshold analysis.
 """
 
 import os
 
 # Feature flag for gradual rollout
-COLLECTOR_DIAGNOSTICS_ENABLED = os.environ.get(
-    'ALLIUM_COLLECTOR_DIAGNOSTICS', 'true'
+CONSENSUS_EVALUATION_ENABLED = os.environ.get(
+    'ALLIUM_CONSENSUS_EVALUATION', 'true'
 ).lower() == 'true'
 
 
-def is_enabled() -> bool:
-    """Check if collector diagnostics feature is enabled."""
-    return COLLECTOR_DIAGNOSTICS_ENABLED
+def is_consensus_evaluation_enabled() -> bool:
+    """Check if consensus evaluation feature is enabled."""
+    return CONSENSUS_EVALUATION_ENABLED
 
 
 # Export main classes
 from .collector_fetcher import CollectorFetcher
 from .authority_monitor import AuthorityMonitor
-from .diagnostics import format_relay_diagnostics, format_authority_diagnostics
+from .consensus_evaluation import format_relay_consensus_evaluation, format_authority_consensus_evaluation
 
 # Export flag threshold constants and helpers for easy auditing
 from .flag_thresholds import (
@@ -48,10 +48,10 @@ __all__ = [
     # Main classes
     'CollectorFetcher',
     'AuthorityMonitor', 
-    'format_relay_diagnostics',
-    'format_authority_diagnostics',
-    'is_enabled',
-    'COLLECTOR_DIAGNOSTICS_ENABLED',
+    'format_relay_consensus_evaluation',
+    'format_authority_consensus_evaluation',
+    'is_consensus_evaluation_enabled',
+    'CONSENSUS_EVALUATION_ENABLED',
     # Flag threshold constants
     'SECONDS_PER_DAY',
     'GUARD_BW_GUARANTEE',

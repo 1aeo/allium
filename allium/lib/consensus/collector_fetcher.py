@@ -1,7 +1,7 @@
 """
 File: collector_fetcher.py
 
-Fetch and index CollecTor data for per-relay diagnostics.
+Fetch and index CollecTor data for per-relay consensus evaluation.
 Fetched ONCE per hour, indexed by fingerprint for O(1) lookup.
 
 Data sources:
@@ -239,7 +239,7 @@ class CollectorFetcher:
     Usage:
         fetcher = CollectorFetcher()
         data = fetcher.fetch_all()
-        diagnostics = fetcher.get_relay_diagnostics('FINGERPRINT')
+        consensus_evaluation = fetcher.get_relay_consensus_evaluation('FINGERPRINT')
     """
     
     def __init__(self, timeout: int = 30, authorities: Optional[List[Dict]] = None):
@@ -335,9 +335,9 @@ class CollectorFetcher:
         
         return result
     
-    def get_relay_diagnostics(self, fingerprint: str, authority_count: int = DEFAULT_AUTHORITY_COUNT) -> dict:
+    def get_relay_consensus_evaluation(self, fingerprint: str, authority_count: int = DEFAULT_AUTHORITY_COUNT) -> dict:
         """
-        Get diagnostics for a single relay.
+        Get consensus evaluation for a single relay.
         O(1) lookup after index is built.
         
         Args:
@@ -345,7 +345,7 @@ class CollectorFetcher:
             authority_count: Total number of authorities (for consensus calculation)
         
         Returns:
-            dict: Diagnostic information for the relay
+            dict: Consensus evaluation information for the relay
         """
         fingerprint = fingerprint.upper()
         if not self._validate_fingerprint(fingerprint):

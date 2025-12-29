@@ -498,7 +498,7 @@ def fetch_collector_consensus_data(authorities=None, progress_logger=None):
     Returns:
         dict: Parsed CollecTor data with relay index, flag thresholds, etc.
     """
-    from .consensus import is_enabled, CollectorFetcher
+    from .consensus import is_consensus_evaluation_enabled, CollectorFetcher
     
     api_name = "collector_consensus"
     
@@ -509,8 +509,8 @@ def fetch_collector_consensus_data(authorities=None, progress_logger=None):
             print(message)
     
     # Check feature flag
-    if not is_enabled():
-        log_progress("collector diagnostics feature is disabled")
+    if not is_consensus_evaluation_enabled():
+        log_progress("consensus evaluation feature is disabled")
         return None
     
     # Check cache age first - only refresh if older than 1 hour
@@ -628,7 +628,7 @@ def fetch_consensus_health(progress_logger=None):
     Returns:
         dict: Consensus health data
     """
-    from .consensus import is_enabled, AuthorityMonitor
+    from .consensus import is_consensus_evaluation_enabled, AuthorityMonitor
     
     api_name = "consensus_health"
     
@@ -639,8 +639,8 @@ def fetch_consensus_health(progress_logger=None):
             print(message)
     
     # Check feature flag
-    if not is_enabled():
-        log_progress("collector diagnostics feature is disabled")
+    if not is_consensus_evaluation_enabled():
+        log_progress("consensus evaluation feature is disabled")
         return None
     
     try:

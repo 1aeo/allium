@@ -800,7 +800,7 @@ class Relays:
 
     def _reprocess_collector_data(self):
         """
-        Process CollecTor consensus data for per-relay diagnostics.
+        Process CollecTor consensus data for per-relay consensus evaluation.
         Attaches consensus troubleshooting information to each relay including:
         - Authority voting status
         - Flag eligibility analysis
@@ -819,10 +819,10 @@ class Relays:
             return
         
         try:
-            from .consensus import CollectorFetcher, format_relay_diagnostics
+            from .consensus import CollectorFetcher, format_relay_consensus_evaluation
             from .consensus.collector_fetcher import calculate_consensus_requirement, discover_authorities
             
-            self._log_progress("Processing CollecTor consensus data for relay diagnostics...")
+            self._log_progress("Processing CollecTor consensus data for relay consensus evaluation...")
             
             # Get relay index and flag thresholds from collector data
             relay_index = collector_data.get('relay_index', {})
@@ -830,7 +830,7 @@ class Relays:
             bw_authorities = collector_data.get('bw_authorities', [])
             
             if not relay_index:
-                self._log_progress("No relay index in collector data, skipping diagnostics")
+                self._log_progress("No relay index in collector data, skipping consensus evaluation")
                 return
             
             # Use the number of voting authorities from flag_thresholds (actual voters)
@@ -851,43 +851,43 @@ class Relays:
             self.consensus_requirement = consensus_req
             
             # Create a CollectorFetcher instance with the pre-fetched data
-            # to use its get_relay_diagnostics method
+            # to use its get_relay_consensus_evaluation method
             fetcher = CollectorFetcher()
             fetcher.relay_index = relay_index
             fetcher.flag_thresholds = flag_thresholds
             fetcher.bw_authorities = set(bw_authorities)
             fetcher.ipv6_testing_authorities = set(collector_data.get('ipv6_testing_authorities', []))
             
-            # Process diagnostics for each relay
-            diagnostics_count = 0
+            # Process consensus evaluation for each relay
+            evaluation_count = 0
             for relay in self.json["relays"]:
                 fingerprint = relay.get('fingerprint', '').upper()
                 if not fingerprint:
                     continue
                 
-                # Get raw diagnostics from fetcher
-                raw_diagnostics = fetcher.get_relay_diagnostics(fingerprint, authority_count)
+                # Get raw consensus evaluation from fetcher
+                raw_consensus_evaluation = fetcher.get_relay_consensus_evaluation(fingerprint, authority_count)
                 
                 # Format for template display, passing current flags and observed_bandwidth
                 # Note: observed_bandwidth (from descriptor) is the actual bandwidth for Guard eligibility
                 # NOT the scaled consensus weight or vote Measured value
                 current_flags = relay.get('flags', [])
                 observed_bandwidth = relay.get('observed_bandwidth', 0)
-                formatted_diagnostics = format_relay_diagnostics(
-                    raw_diagnostics, flag_thresholds, current_flags, observed_bandwidth
+                formatted_consensus_evaluation = format_relay_consensus_evaluation(
+                    raw_consensus_evaluation, flag_thresholds, current_flags, observed_bandwidth
                 )
                 
                 # Attach to relay
-                relay['collector_diagnostics'] = formatted_diagnostics
+                relay['consensus_evaluation'] = formatted_consensus_evaluation
                 
-                if formatted_diagnostics.get('available'):
-                    diagnostics_count += 1
+                if formatted_consensus_evaluation.get('available'):
+                    evaluation_count += 1
             
-            self._log_progress(f"Processed collector diagnostics for {diagnostics_count} relays")
+            self._log_progress(f"Processed consensus evaluation for {evaluation_count} relays")
             
         except Exception as e:
             # Fallback gracefully if collector processing fails
-            print(f"Warning: Collector data processing failed ({e}), continuing without diagnostics")
+            print(f"Warning: Collector data processing failed ({e}), continuing without consensus evaluation")
             import traceback
             traceback.print_exc()
 

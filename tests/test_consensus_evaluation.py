@@ -1,7 +1,7 @@
 """
-Tests for lib/consensus/diagnostics.py formatting functions.
+Tests for lib/consensus/consensus_evaluation.py formatting functions.
 
-These tests verify the formatting logic for relay diagnostics displayed
+These tests verify the formatting logic for relay consensus evaluation displayed
 in templates. If the template requirements change, update these tests.
 
 Key thresholds tested:
@@ -18,9 +18,9 @@ import pytest
 # Add the allium package to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'allium'))
 
-from lib.consensus.diagnostics import (
-    format_relay_diagnostics,
-    format_authority_diagnostics,
+from lib.consensus.consensus_evaluation import (
+    format_relay_consensus_evaluation,
+    format_authority_consensus_evaluation,
     _format_consensus_status,
     _format_relay_values,
     _format_authority_table_enhanced,
@@ -136,27 +136,27 @@ SAMPLE_FLAG_THRESHOLDS = {
 }
 
 
-class TestFormatRelayDiagnostics:
-    """Tests for format_relay_diagnostics() function."""
+class TestFormatRelayConsensusEvaluation:
+    """Tests for format_relay_consensus_evaluation() function."""
     
-    def test_empty_diagnostics(self):
+    def test_empty_consensus_evaluation(self):
         """Test with empty diagnostics."""
-        result = format_relay_diagnostics({})
+        result = format_relay_consensus_evaluation({})
         assert result['available'] == False
         assert result['in_consensus'] == False
     
-    def test_none_diagnostics(self):
+    def test_none_consensus_evaluation(self):
         """Test with None diagnostics."""
-        result = format_relay_diagnostics(None)
+        result = format_relay_consensus_evaluation(None)
         assert result['available'] == False
     
-    def test_error_diagnostics(self):
+    def test_error_consensus_evaluation(self):
         """Test with error in diagnostics."""
-        result = format_relay_diagnostics({'error': 'Test error'})
+        result = format_relay_consensus_evaluation({'error': 'Test error'})
         assert result['available'] == False
         assert 'Test error' in result['error']
     
-    def test_basic_diagnostics(self):
+    def test_basic_consensus_evaluation(self):
         """Test with basic valid diagnostics."""
         diagnostics = {
             'fingerprint': 'ABC123' * 6 + 'ABCD',
@@ -185,7 +185,7 @@ class TestFormatRelayDiagnostics:
                 'total_authorities': 9,
             },
         }
-        result = format_relay_diagnostics(diagnostics)
+        result = format_relay_consensus_evaluation(diagnostics)
         
         assert result['available'] == True
         assert result['in_consensus'] == True
@@ -400,10 +400,10 @@ class TestFormatThresholdsTable:
         assert len(result['rows']) >= 1
 
 
-class TestFormatAuthorityDiagnostics:
-    """Tests for format_authority_diagnostics() function."""
+class TestFormatAuthorityConsensusEvaluation:
+    """Tests for format_authority_consensus_evaluation() function."""
     
-    def test_basic_authority_diagnostics(self):
+    def test_basic_authority_consensus_evaluation(self):
         """Test basic authority diagnostics formatting."""
         authority_status = {
             'moria1': {'online': True, 'latency_ms': 50},
@@ -415,7 +415,7 @@ class TestFormatAuthorityDiagnostics:
         }
         bw_authorities = ['moria1']
         
-        result = format_authority_diagnostics(authority_status, flag_thresholds, bw_authorities)
+        result = format_authority_consensus_evaluation(authority_status, flag_thresholds, bw_authorities)
         
         assert result['summary']['total'] == 2
         assert result['summary']['online'] == 2
@@ -430,7 +430,7 @@ class TestFormatAuthorityDiagnostics:
         flag_thresholds = {}
         bw_authorities = []
         
-        result = format_authority_diagnostics(authority_status, flag_thresholds, bw_authorities)
+        result = format_authority_consensus_evaluation(authority_status, flag_thresholds, bw_authorities)
         
         assert result['summary']['online'] == 0
         auth = result['authorities'][0]
@@ -438,12 +438,12 @@ class TestFormatAuthorityDiagnostics:
         assert auth['error'] == 'Connection timeout'
 
 
-class TestFormatRelayDiagnosticsGuardEligibility:
+class TestFormatRelayConsensusEvaluationGuardEligibility:
     """Tests for Guard flag eligibility formatting."""
     
     def test_guard_eligible_relay(self):
         """Test formatting for relay that meets Guard requirements."""
-        result = format_relay_diagnostics(GUARD_ELIGIBLE_RELAY, SAMPLE_FLAG_THRESHOLDS)
+        result = format_relay_consensus_evaluation(GUARD_ELIGIBLE_RELAY, SAMPLE_FLAG_THRESHOLDS)
         
         assert result['available'] == True
         assert result['in_consensus'] == True
@@ -455,14 +455,14 @@ class TestFormatRelayDiagnosticsGuardEligibility:
     
     def test_non_guard_relay_wfu_issue(self):
         """Test that low WFU is correctly identified."""
-        result = format_relay_diagnostics(NON_GUARD_RELAY, SAMPLE_FLAG_THRESHOLDS)
+        result = format_relay_consensus_evaluation(NON_GUARD_RELAY, SAMPLE_FLAG_THRESHOLDS)
         
         rv = result.get('relay_values', {})
         assert rv.get('wfu_meets') == False  # WFU < 98%
     
     def test_non_guard_relay_tk_issue(self):
         """Test that low Time Known is correctly identified."""
-        result = format_relay_diagnostics(NON_GUARD_RELAY, SAMPLE_FLAG_THRESHOLDS)
+        result = format_relay_consensus_evaluation(NON_GUARD_RELAY, SAMPLE_FLAG_THRESHOLDS)
         
         rv = result.get('relay_values', {})
         assert rv.get('tk_meets') == False  # TK < 8 days

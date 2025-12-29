@@ -71,9 +71,9 @@ class Coordinator:
             self.api_workers.append(("onionoo_bandwidth", fetch_onionoo_bandwidth, [self.onionoo_bandwidth_url, self.bandwidth_cache_hours, self._log_progress]))
             self.api_workers.append(("aroi_validation", fetch_aroi_validation, [self.aroi_url, self._log_progress]))
             
-            # CollecTor consensus diagnostics (Phase 1 feature)
+            # CollecTor consensus evaluation (Phase 1 feature)
             # Note: authorities parameter will be None initially, set after Onionoo fetch completes
-            from .consensus import is_enabled as collector_enabled
+            from .consensus import is_consensus_evaluation_enabled as collector_enabled
             if collector_enabled():
                 self.api_workers.append(("collector_consensus", fetch_collector_consensus_data, [None, self._log_progress]))
         
@@ -306,14 +306,14 @@ class Coordinator:
                 print(f"Warning: Bandwidth processing failed ({e}), continuing without bandwidth metrics")
                 # Continue without bandwidth metrics rather than crashing
         
-        # COLLECTOR CONSENSUS PROCESSING: Process CollecTor data for per-relay diagnostics
+        # COLLECTOR CONSENSUS PROCESSING: Process CollecTor data for per-relay consensus evaluation
         # Attaches consensus troubleshooting information to each relay
         if collector_consensus_data and hasattr(relay_set, 'json') and relay_set.json.get('relays'):
             try:
                 relay_set._reprocess_collector_data()
             except Exception as e:
-                print(f"Warning: Collector consensus processing failed ({e}), continuing without diagnostics")
-                # Continue without diagnostics rather than crashing
+                print(f"Warning: Collector consensus processing failed ({e}), continuing without consensus evaluation")
+                # Continue without consensus evaluation rather than crashing
         
         # PERF OPTIMIZATION: Pre-compute all contact page data AFTER all data processing
         # This must happen after uptime data, bandwidth data, and AROI leaderboards are processed

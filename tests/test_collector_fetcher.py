@@ -2,7 +2,7 @@
 Tests for collector_fetcher.py
 
 Tests the CollectorFetcher class that fetches and indexes CollecTor data
-for per-relay diagnostics.
+for per-relay consensus evaluation.
 
 IMPORTANT: These tests are designed to catch changes in CollecTor vote file
 format. If these tests fail after a Tor update, it likely means the vote
@@ -145,28 +145,28 @@ class TestCollectorFetcher:
         # None
         assert fetcher._format_time_known(None) == 'N/A'
     
-    def test_get_relay_diagnostics_not_found(self):
-        """Test diagnostics for relay not in index."""
+    def test_get_relay_consensus_evaluation_not_found(self):
+        """Test consensus evaluation for relay not in index."""
         fetcher = CollectorFetcher()
         fetcher.relay_index = {}
         
-        result = fetcher.get_relay_diagnostics('0232AF901C31A04EE9848595AF9BB7620D4C5B2E')
+        result = fetcher.get_relay_consensus_evaluation('0232AF901C31A04EE9848595AF9BB7620D4C5B2E')
         
         assert result['error'] == 'Relay not found in votes'
         assert result['in_consensus'] == False
         assert result['vote_count'] == 0
     
-    def test_get_relay_diagnostics_invalid_fingerprint(self):
-        """Test diagnostics with invalid fingerprint."""
+    def test_get_relay_consensus_evaluation_invalid_fingerprint(self):
+        """Test consensus evaluation with invalid fingerprint."""
         fetcher = CollectorFetcher()
         
-        result = fetcher.get_relay_diagnostics('invalid')
+        result = fetcher.get_relay_consensus_evaluation('invalid')
         
         assert result['error'] == 'Invalid fingerprint'
         assert result['in_consensus'] == False
     
-    def test_get_relay_diagnostics_in_consensus(self):
-        """Test diagnostics for relay in consensus."""
+    def test_get_relay_consensus_evaluation_in_consensus(self):
+        """Test consensus evaluation for relay in consensus."""
         fetcher = CollectorFetcher()
         fingerprint = '0232AF901C31A04EE9848595AF9BB7620D4C5B2E'
         
@@ -187,14 +187,14 @@ class TestCollectorFetcher:
         }
         fetcher.flag_thresholds = {}
         
-        result = fetcher.get_relay_diagnostics(fingerprint, authority_count=9)
+        result = fetcher.get_relay_consensus_evaluation(fingerprint, authority_count=9)
         
         assert result['in_consensus'] == True
         assert result['vote_count'] == 5
         assert result['majority_required'] == 5
     
-    def test_get_relay_diagnostics_not_in_consensus(self):
-        """Test diagnostics for relay not in consensus (too few votes)."""
+    def test_get_relay_consensus_evaluation_not_in_consensus(self):
+        """Test consensus evaluation for relay not in consensus (too few votes)."""
         fetcher = CollectorFetcher()
         fingerprint = '0232AF901C31A04EE9848595AF9BB7620D4C5B2E'
         
@@ -213,7 +213,7 @@ class TestCollectorFetcher:
         }
         fetcher.flag_thresholds = {}
         
-        result = fetcher.get_relay_diagnostics(fingerprint, authority_count=9)
+        result = fetcher.get_relay_consensus_evaluation(fingerprint, authority_count=9)
         
         assert result['in_consensus'] == False
         assert result['vote_count'] == 3

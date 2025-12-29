@@ -1,5 +1,5 @@
 """
-File: evaluation.py
+File: consensus_evaluation.py
 
 Format consensus evaluation data for templates.
 Provides display-ready formatting of directory authority consensus evaluation data.
@@ -159,12 +159,12 @@ def _parse_wfu_threshold(value) -> Optional[float]:
     return float(value)
 
 
-def format_relay_evaluation(evaluation: dict, flag_thresholds: dict = None, current_flags: list = None, observed_bandwidth: int = 0) -> dict:
+def format_relay_consensus_evaluation(evaluation: dict, flag_thresholds: dict = None, current_flags: list = None, observed_bandwidth: int = 0) -> dict:
     """
     Format relay consensus evaluation for template display.
     
     Args:
-        evaluation: Raw evaluation from CollectorFetcher.get_relay_evaluation()
+        evaluation: Raw evaluation from CollectorFetcher.get_relay_consensus_evaluation()
         flag_thresholds: Optional flag threshold data
         current_flags: List of flags the relay currently has (from Onionoo)
         observed_bandwidth: Relay's observed bandwidth in bytes/s (from Onionoo)
@@ -191,54 +191,54 @@ def format_relay_evaluation(evaluation: dict, flag_thresholds: dict = None, curr
     
     formatted = {
         'available': True,
-        'fingerprint': diagnostics.get('fingerprint', ''),
-        'in_consensus': diagnostics.get('in_consensus', False),
-        'vote_count': diagnostics.get('vote_count', 0),
-        'total_authorities': diagnostics.get('total_authorities', get_voting_authority_count()),
-        'majority_required': diagnostics.get('majority_required', 5),
+        'fingerprint': evaluation.get('fingerprint', ''),
+        'in_consensus': evaluation.get('in_consensus', False),
+        'vote_count': evaluation.get('vote_count', 0),
+        'total_authorities': evaluation.get('total_authorities', get_voting_authority_count()),
+        'majority_required': evaluation.get('majority_required', 5),
         
         # Consensus status display
-        'consensus_status': _format_consensus_status(diagnostics),
+        'consensus_status': _format_consensus_status(evaluation),
         
         # Relay values summary (for Summary table) - pass observed_bandwidth for Guard BW check
-        'relay_values': _format_relay_values(diagnostics, flag_thresholds, observed_bandwidth),
+        'relay_values': _format_relay_values(evaluation, flag_thresholds, observed_bandwidth),
         
         # Per-authority voting details - pass observed_bandwidth for Guard BW and Fast checks
-        'authority_table': _format_authority_table_enhanced(diagnostics, flag_thresholds, observed_bandwidth),
+        'authority_table': _format_authority_table_enhanced(evaluation, flag_thresholds, observed_bandwidth),
         
         # Flag eligibility summary - recalculate using observed_bandwidth
-        'flag_summary': _format_flag_summary(diagnostics, observed_bandwidth),
+        'flag_summary': _format_flag_summary(evaluation, observed_bandwidth),
         
         # Reachability summary
-        'reachability_summary': _format_reachability_summary(diagnostics),
+        'reachability_summary': _format_reachability_summary(evaluation),
         
         # Bandwidth summary
-        'bandwidth_summary': _format_bandwidth_summary(diagnostics),
+        'bandwidth_summary': _format_bandwidth_summary(evaluation),
         
         # Issues and advice
-        'issues': _identify_issues(diagnostics, current_flags, observed_bandwidth),
-        'advice': _generate_advice(diagnostics),
+        'issues': _identify_issues(evaluation, current_flags, observed_bandwidth),
+        'advice': _generate_advice(evaluation),
     }
     
     return formatted
 
 
-def _format_relay_values(diagnostics: dict, flag_thresholds: dict = None, observed_bandwidth: int = 0) -> dict:
+def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, observed_bandwidth: int = 0) -> dict:
     """
     Format relay values summary for the Summary table.
     Shows your relay's values vs consensus thresholds.
     
     Args:
-        diagnostics: Raw diagnostics
+        consensus_data: Raw consensus evaluation data
         flag_thresholds: Flag threshold data  
         observed_bandwidth: Relay's actual observed bandwidth in bytes/s (from Onionoo)
                            This is the bandwidth used for Guard eligibility (>= 2MB/s)
     """
-    authority_votes = diagnostics.get('authority_votes', [])
-    flag_eligibility = diagnostics.get('flag_eligibility', {})
-    reachability = diagnostics.get('reachability', {})
-    total_authorities = diagnostics.get('total_authorities', get_voting_authority_count())
-    majority_required = diagnostics.get('majority_required', 5)
+    authority_votes = consensus_data.get('authority_votes', [])
+    flag_eligibility = consensus_data.get('flag_eligibility', {})
+    reachability = consensus_data.get('reachability', {})
+    total_authorities = consensus_data.get('total_authorities', get_voting_authority_count())
+    majority_required = consensus_data.get('majority_required', 5)
     
     # Extract relay's values from first available authority (single pass)
     relay_wfu = relay_tk = relay_bw = None
@@ -455,16 +455,16 @@ def _format_range(values: list, formatter) -> str:
     return f"{formatter(min_val)}-{formatter(max_val)}"
 
 
-def _format_authority_table_enhanced(diagnostics: dict, flag_thresholds: dict = None, observed_bandwidth: int = 0) -> List[dict]:
+def _format_authority_table_enhanced(consensus_data: dict, flag_thresholds: dict = None, observed_bandwidth: int = 0) -> List[dict]:
     """
     Format authority votes into table rows with threshold comparison.
     
     Args:
-        diagnostics: Raw diagnostics dict
+        consensus_data: Raw consensus evaluation data
         flag_thresholds: Dict of per-authority flag thresholds
         observed_bandwidth: Relay's actual observed bandwidth (for Guard BW and Fast eligibility)
     """
-    authority_votes = diagnostics.get('authority_votes', [])
+    authority_votes = consensus_data.get('authority_votes', [])
     
     # Compute flag consensus using shared function (avoid duplicate logic)
     consensus = compute_flag_consensus(authority_votes)
@@ -621,13 +621,13 @@ def compute_flag_consensus(authority_votes: List[dict]) -> dict:
     }
 
 
-def format_authority_diagnostics(
+def format_authority_consensus_evaluation(
     authority_status: Dict[str, dict],
     flag_thresholds: Dict[str, dict],
     bw_authorities: List[str]
 ) -> dict:
     """
-    Format authority diagnostics for misc-authorities.html dashboard.
+    Format authority consensus evaluation for misc-authorities.html dashboard.
     
     Args:
         authority_status: Health status from AuthorityMonitor
@@ -662,12 +662,12 @@ def format_authority_diagnostics(
     return formatted
 
 
-def _format_consensus_status(diagnostics: dict) -> dict:
+def _format_consensus_status(consensus_data: dict) -> dict:
     """Format consensus status display."""
-    in_consensus = diagnostics.get('in_consensus', False)
-    vote_count = diagnostics.get('vote_count', 0)
-    total = diagnostics.get('total_authorities', get_voting_authority_count())
-    majority = diagnostics.get('majority_required', 5)
+    in_consensus = consensus_data.get('in_consensus', False)
+    vote_count = consensus_data.get('vote_count', 0)
+    total = consensus_data.get('total_authorities', get_voting_authority_count())
+    majority = consensus_data.get('majority_required', 5)
     
     if in_consensus:
         return {
@@ -685,16 +685,16 @@ def _format_consensus_status(diagnostics: dict) -> dict:
         }
 
 
-def _format_flag_summary(diagnostics: dict, observed_bandwidth: int = 0) -> dict:
+def _format_flag_summary(consensus_data: dict, observed_bandwidth: int = 0) -> dict:
     """
     Format flag eligibility summary.
     
     Args:
-        diagnostics: Raw diagnostics
+        consensus_data: Raw consensus evaluation data
         observed_bandwidth: Relay's actual observed bandwidth (for Guard BW eligibility)
     """
-    flag_eligibility = diagnostics.get('flag_eligibility', {})
-    total_authorities = diagnostics.get('total_authorities', get_voting_authority_count())
+    flag_eligibility = consensus_data.get('flag_eligibility', {})
+    total_authorities = consensus_data.get('total_authorities', get_voting_authority_count())
     
     # Guard and Fast both use observed_bandwidth, not the scaled vote values
     bw_value = observed_bandwidth if observed_bandwidth else 0
@@ -747,9 +747,9 @@ def _format_flag_summary(diagnostics: dict, observed_bandwidth: int = 0) -> dict
     return summary
 
 
-def _format_reachability_summary(diagnostics: dict) -> dict:
+def _format_reachability_summary(consensus_data: dict) -> dict:
     """Format reachability summary."""
-    reachability = diagnostics.get('reachability', {})
+    reachability = consensus_data.get('reachability', {})
     
     ipv4_count = reachability.get('ipv4_reachable_count', 0)
     ipv6_count = reachability.get('ipv6_reachable_count', 0)
@@ -776,9 +776,9 @@ def _format_reachability_summary(diagnostics: dict) -> dict:
     }
 
 
-def _format_bandwidth_summary(diagnostics: dict) -> dict:
+def _format_bandwidth_summary(consensus_data: dict) -> dict:
     """Format bandwidth summary."""
-    bandwidth = diagnostics.get('bandwidth', {})
+    bandwidth = consensus_data.get('bandwidth', {})
     
     median = bandwidth.get('median')  # Tor consensus uses median
     avg = bandwidth.get('average')
@@ -802,12 +802,12 @@ def _format_bandwidth_summary(diagnostics: dict) -> dict:
     }
 
 
-def _identify_issues(diagnostics: dict, current_flags: list = None, observed_bandwidth: int = 0) -> List[dict]:
+def _identify_issues(consensus_data: dict, current_flags: list = None, observed_bandwidth: int = 0) -> List[dict]:
     """
     Identify issues that may affect relay status.
     
     Args:
-        diagnostics: Raw diagnostics
+        consensus_data: Raw consensus evaluation data
         current_flags: Relay's current flags (from Onionoo)
         observed_bandwidth: Relay's observed bandwidth for Guard eligibility
     """
@@ -815,9 +815,9 @@ def _identify_issues(diagnostics: dict, current_flags: list = None, observed_ban
     current_flags = current_flags or []
     
     # Check consensus status
-    if not diagnostics.get('in_consensus'):
-        vote_count = diagnostics.get('vote_count', 0)
-        total = diagnostics.get('total_authorities', get_voting_authority_count())
+    if not consensus_data.get('in_consensus'):
+        vote_count = consensus_data.get('vote_count', 0)
+        total = consensus_data.get('total_authorities', get_voting_authority_count())
         issues.append({
             'severity': 'error',
             'category': 'consensus',
@@ -827,7 +827,7 @@ def _identify_issues(diagnostics: dict, current_flags: list = None, observed_ban
         })
     
     # Check reachability
-    reachability = diagnostics.get('reachability', {})
+    reachability = consensus_data.get('reachability', {})
     ipv4_count = reachability.get('ipv4_reachable_count', 0)
     auth_count = get_voting_authority_count()  # Use voting authorities (9) for consensus
     majority_threshold = (auth_count // 2) + 1  # Need majority for consensus
@@ -864,18 +864,18 @@ def _identify_issues(diagnostics: dict, current_flags: list = None, observed_ban
     return issues
 
 
-def _generate_advice(diagnostics: dict) -> List[str]:
-    """Generate actionable advice based on diagnostics."""
+def _generate_advice(consensus_data: dict) -> List[str]:
+    """Generate actionable advice based on consensus evaluation."""
     advice = []
     
-    issues = _identify_issues(diagnostics)
+    issues = _identify_issues(consensus_data)
     
     for issue in issues:
         if issue.get('suggestion'):
             advice.append(issue['suggestion'])
     
     # General advice based on metrics
-    authority_votes = diagnostics.get('authority_votes', [])
+    authority_votes = consensus_data.get('authority_votes', [])
     for vote in authority_votes:
         wfu = vote.get('wfu')
         if wfu and wfu < 0.98:

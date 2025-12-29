@@ -444,15 +444,15 @@ Version (Running | Recommended | Status)
 </div>
 </div>
 
-{# Consensus Diagnostics Section - Shows per-authority voting information #}
-{% if relay.collector_diagnostics and relay.collector_diagnostics.available %}
-{% set diag = relay.collector_diagnostics %}
+{# Consensus Evaluation Section - Shows per-authority voting information #}
+{% if relay.consensus_evaluation and relay.consensus_evaluation.available %}
+{% set diag = relay.consensus_evaluation %}
 {% set rv = diag.relay_values %}
 <div class="row" style="margin-top: 20px;">
 <div class="col-md-12">
-<h3 id="consensus-diagnostics">
+<h3 id="consensus-evaluation">
 <div class="section-header">
-<a href="#consensus-diagnostics" class="anchor-link">🔍 Consensus Diagnostics</a>
+<a href="#consensus-evaluation" class="anchor-link">🔍 Consensus Evaluation</a>
 </div>
 </h3>
 <p class="text-muted" style="font-size: 12px; margin-bottom: 10px;">
