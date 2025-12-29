@@ -2316,7 +2316,28 @@ class Relays:
         
         try:
             from .consensus import AuthorityMonitor
-            monitor = AuthorityMonitor(timeout=2)  # Short timeout - we're just checking latency
+            
+            # Build authority endpoint data from discovered authorities (Onionoo data first)
+            # This ensures we use dynamic discovery instead of hardcoded fallbacks
+            authority_endpoints = []
+            for auth in authorities:
+                # Extract address from or_addresses (Onionoo format)
+                or_addresses = auth.get('or_addresses', [])
+                address = or_addresses[0].split(':')[0] if or_addresses else ''
+                
+                # Extract dir_port from dir_address if available, otherwise default to 80
+                dir_address = auth.get('dir_address', '')
+                dir_port = dir_address.split(':')[-1] if ':' in dir_address else '80'
+                
+                if auth.get('nickname') and address:
+                    authority_endpoints.append({
+                        'nickname': auth.get('nickname'),
+                        'address': address,
+                        'dir_port': dir_port,
+                    })
+            
+            # Pass discovered authorities to monitor (falls back to hardcoded if empty)
+            monitor = AuthorityMonitor(timeout=2, authorities=authority_endpoints)
             latency_status = monitor.check_all_authorities()
             
             # Attach latency data to each authority

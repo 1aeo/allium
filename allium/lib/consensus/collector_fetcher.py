@@ -22,10 +22,13 @@ import time
 
 logger = logging.getLogger(__name__)
 
-# Directory Authority fingerprint → name mapping (fallback - should be discovered dynamically)
-# Directory Authority V3 identity key fingerprints -> nicknames
-# These are the signing key fingerprints used in CollecTor vote filenames
-AUTHORITIES = {
+# ============================================================================
+# FALLBACK AUTHORITY DATA - Only used when Onionoo data is unavailable
+# ============================================================================
+# These are V3 identity key fingerprints (signing keys) used in CollecTor vote filenames.
+# NOTE: These are DIFFERENT from Onionoo relay fingerprints - we need this mapping
+# to parse CollecTor vote filenames regardless of Onionoo availability.
+_FALLBACK_SIGNING_KEY_TO_NAME = {
     '0232AF901C31A04EE9848595AF9BB7620D4C5B2E': 'dannenberg',
     '23D15D965BC35114467363C165C4F724B64B4F66': 'longclaw',
     '27102BC123E7AF1D4741AE047E160C91ADC76B21': 'bastet',
@@ -37,8 +40,9 @@ AUTHORITIES = {
     'F533C81CEF0BC0267857C99B2F471ADF249FA232': 'moria1',
 }
 
-# Pre-computed reverse lookup: name -> fingerprint (O(1) lookup instead of recreating each call)
-AUTHORITIES_BY_NAME = {name: fp for fp, name in AUTHORITIES.items()}
+# Fallback authority names (used only when Onionoo is unavailable)
+_FALLBACK_AUTHORITY_NAMES = sorted(_FALLBACK_SIGNING_KEY_TO_NAME.values())
+_FALLBACK_AUTHORITY_COUNT = len(_FALLBACK_SIGNING_KEY_TO_NAME)
 
 # Authority country codes (based on known hosting locations)
 AUTHORITY_COUNTRIES = {
@@ -53,14 +57,116 @@ AUTHORITY_COUNTRIES = {
     'moria1': 'US',        # USA
 }
 
-# ============================================================================
-# SHARED CONSTANTS - Avoid magic numbers throughout the codebase
-# ============================================================================
-# Authority count (derived from AUTHORITIES dict - single source of truth)
-DEFAULT_AUTHORITY_COUNT = len(AUTHORITIES)  # Currently 9
 
-# Pre-computed list of authority names (avoid recomputing from AUTHORITIES.values())
-AUTHORITY_NAMES = sorted(AUTHORITIES.values())
+# ============================================================================
+# DYNAMIC AUTHORITY REGISTRY - Prefers Onionoo data, falls back to hardcoded
+# ============================================================================
+class AuthorityRegistry:
+    """
+    Dynamic authority registry that prefers Onionoo-discovered authorities
+    over hardcoded fallback data.
+    
+    Usage:
+        registry = AuthorityRegistry()
+        registry.update_from_onionoo(relay_list)  # Call when Onionoo data available
+        names = registry.get_authority_names()
+        count = registry.get_authority_count()
+    """
+    
+    def __init__(self):
+        self._discovered_authorities = []  # From Onionoo
+        self._authority_names = None  # Cached sorted names
+        self._using_fallback = True
+    
+    def update_from_onionoo(self, relays: list) -> int:
+        """
+        Update authority data from Onionoo relay list.
+        
+        Args:
+            relays: List of relay dicts from Onionoo details API
+            
+        Returns:
+            Number of authorities discovered
+        """
+        if not relays:
+            return 0
+        
+        authorities = []
+        for r in relays:
+            if 'Authority' in r.get('flags', []):
+                authorities.append({
+                    'fingerprint': r.get('fingerprint', ''),
+                    'nickname': r.get('nickname', ''),
+                    'address': r.get('or_addresses', [''])[0].split(':')[0] if r.get('or_addresses') else '',
+                })
+        
+        if authorities:
+            self._discovered_authorities = authorities
+            self._authority_names = sorted([a['nickname'] for a in authorities])
+            self._using_fallback = False
+            logger.info(f"AuthorityRegistry: Discovered {len(authorities)} authorities from Onionoo")
+        
+        return len(authorities)
+    
+    def get_authority_names(self) -> List[str]:
+        """Get sorted list of authority names (Onionoo first, fallback if unavailable)."""
+        if self._authority_names:
+            return self._authority_names
+        return _FALLBACK_AUTHORITY_NAMES
+    
+    def get_authority_count(self) -> int:
+        """Get number of authorities (Onionoo first, fallback if unavailable)."""
+        if self._discovered_authorities:
+            return len(self._discovered_authorities)
+        return _FALLBACK_AUTHORITY_COUNT
+    
+    def get_discovered_authorities(self) -> List[dict]:
+        """Get list of discovered authority dicts from Onionoo."""
+        return self._discovered_authorities
+    
+    def is_using_fallback(self) -> bool:
+        """Check if using fallback data (Onionoo not available)."""
+        return self._using_fallback
+    
+    def get_signing_key_to_name(self) -> Dict[str, str]:
+        """
+        Get signing key fingerprint to name mapping.
+        NOTE: This always uses the hardcoded mapping because signing key fingerprints
+        are different from Onionoo relay fingerprints - we can't discover this dynamically.
+        """
+        return _FALLBACK_SIGNING_KEY_TO_NAME
+
+
+# Global registry instance - can be updated when Onionoo data is loaded
+_authority_registry = AuthorityRegistry()
+
+
+def get_authority_registry() -> AuthorityRegistry:
+    """Get the global authority registry instance."""
+    return _authority_registry
+
+
+# ============================================================================
+# BACKWARD COMPATIBILITY - Expose commonly used values
+# ============================================================================
+# These use the registry which prefers Onionoo data over fallback
+def get_authority_names() -> List[str]:
+    """Get sorted list of authority names (dynamic from Onionoo when available)."""
+    return _authority_registry.get_authority_names()
+
+
+def get_authority_count() -> int:
+    """Get authority count (dynamic from Onionoo when available)."""
+    return _authority_registry.get_authority_count()
+
+
+# Signing key mapping - always hardcoded (different from relay fingerprints)
+AUTHORITIES = _FALLBACK_SIGNING_KEY_TO_NAME  # For backward compatibility
+AUTHORITIES_BY_NAME = {name: fp for fp, name in _FALLBACK_SIGNING_KEY_TO_NAME.items()}
+
+# Default values - use functions for dynamic behavior, these are fallback values
+DEFAULT_AUTHORITY_COUNT = _FALLBACK_AUTHORITY_COUNT
+AUTHORITY_NAMES = _FALLBACK_AUTHORITY_NAMES  # Backward compat, prefer get_authority_names()
 
 # Bandwidth thresholds (bytes/second)
 AUTH_DIR_GUARD_BW_GUARANTEE = 2_000_000  # AuthDirGuardBWGuarantee: 2 MB/s minimum for Guard
@@ -629,7 +735,7 @@ class CollectorFetcher:
         authority_votes = []
         relay_votes = relay.get('votes', {})
         
-        for auth_name in AUTHORITY_NAMES:  # Pre-sorted, avoids sorting on each call
+        for auth_name in get_authority_names():  # Dynamic from Onionoo when available
             vote_info = relay_votes.get(auth_name, {})
             
             voted = bool(vote_info)
@@ -832,7 +938,7 @@ class CollectorFetcher:
         ipv6_reachable = []
         ipv6_not_tested = []
         
-        for auth_name in AUTHORITY_NAMES:  # Pre-sorted, avoids sorting on each call
+        for auth_name in get_authority_names():  # Dynamic from Onionoo when available
             vote = votes.get(auth_name, {})
             
             if vote:
@@ -848,17 +954,22 @@ class CollectorFetcher:
             'ipv6_reachable_count': len(ipv6_reachable),
             'ipv6_reachable_authorities': ipv6_reachable,
             'ipv6_not_tested_authorities': ipv6_not_tested,
-            'total_authorities': len(AUTHORITIES),
+            'total_authorities': get_authority_count(),  # Dynamic from Onionoo when available
         }
 
 
-def discover_authorities(relays: list) -> list:
+def discover_authorities(relays: list, update_registry: bool = True) -> list:
     """
-    Discover directory authorities from relay list.
+    Discover directory authorities from relay list (Onionoo details API).
     Returns list of authority relay dicts with fingerprints, nicknames, IPs.
+    
+    This function prefers dynamic discovery from Onionoo over hardcoded fallback.
+    When authorities are discovered, it updates the global registry so other
+    functions automatically use the discovered values.
     
     Args:
         relays: List of relay dicts from Onionoo
+        update_registry: If True, updates global AuthorityRegistry with discovered data
         
     Returns:
         List of authority dicts
@@ -874,6 +985,11 @@ def discover_authorities(relays: list) -> list:
                 'dir_port': r.get('dir_address', '').split(':')[-1] or '80',
                 'contact': r.get('contact', ''),
             })
+    
+    # Update global registry with discovered authorities
+    if update_registry and authorities:
+        _authority_registry.update_from_onionoo(relays)
+        logger.info(f"discover_authorities: Found {len(authorities)} authorities from Onionoo")
     
     return authorities
 

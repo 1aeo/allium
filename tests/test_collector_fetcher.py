@@ -24,6 +24,10 @@ from consensus.collector_fetcher import (
     discover_authorities,
     calculate_consensus_requirement,
     AUTHORITIES,
+    AuthorityRegistry,
+    get_authority_names,
+    get_authority_count,
+    get_authority_registry,
 )
 
 
@@ -269,7 +273,8 @@ class TestDiscoverAuthorities:
             {'nickname': 'RegularRelay', 'fingerprint': 'GHI789', 'flags': ['Running', 'Fast']},
         ]
         
-        authorities = discover_authorities(relays)
+        # Use update_registry=False to avoid polluting global state between tests
+        authorities = discover_authorities(relays, update_registry=False)
         
         assert len(authorities) == 2
         assert authorities[0]['nickname'] == 'moria1'
@@ -277,7 +282,7 @@ class TestDiscoverAuthorities:
     
     def test_discover_empty_list(self):
         """Test discovering from empty list."""
-        authorities = discover_authorities([])
+        authorities = discover_authorities([], update_registry=False)
         assert authorities == []
     
     def test_discover_no_authorities(self):
@@ -287,8 +292,105 @@ class TestDiscoverAuthorities:
             {'nickname': 'Relay2', 'fingerprint': 'DEF456', 'flags': ['Running', 'Guard']},
         ]
         
-        authorities = discover_authorities(relays)
+        authorities = discover_authorities(relays, update_registry=False)
         assert authorities == []
+
+
+class TestAuthorityRegistry:
+    """Tests for AuthorityRegistry class - dynamic authority discovery."""
+    
+    def test_registry_initial_fallback(self):
+        """Test that a new registry uses fallback values initially."""
+        registry = AuthorityRegistry()
+        
+        assert registry.is_using_fallback() == True
+        assert registry.get_authority_count() == 9  # Fallback count
+        assert 'moria1' in registry.get_authority_names()
+        assert 'tor26' in registry.get_authority_names()
+    
+    def test_registry_update_from_onionoo(self):
+        """Test updating registry with Onionoo data."""
+        registry = AuthorityRegistry()
+        
+        # Simulate Onionoo data with authorities
+        relays = [
+            {'nickname': 'AuthA', 'fingerprint': 'FP_A', 'flags': ['Authority', 'Running'], 'or_addresses': ['1.2.3.4:9001']},
+            {'nickname': 'AuthB', 'fingerprint': 'FP_B', 'flags': ['Authority', 'Running'], 'or_addresses': ['2.3.4.5:9001']},
+            {'nickname': 'Regular', 'fingerprint': 'FP_R', 'flags': ['Running', 'Fast']},
+        ]
+        
+        count = registry.update_from_onionoo(relays)
+        
+        assert count == 2  # Only authorities counted
+        assert registry.is_using_fallback() == False
+        assert registry.get_authority_count() == 2
+        assert registry.get_authority_names() == ['AuthA', 'AuthB']  # Sorted
+    
+    def test_registry_empty_onionoo_keeps_fallback(self):
+        """Test that empty Onionoo data doesn't update registry."""
+        registry = AuthorityRegistry()
+        
+        count = registry.update_from_onionoo([])
+        
+        assert count == 0
+        assert registry.is_using_fallback() == True  # Still using fallback
+        assert registry.get_authority_count() == 9
+    
+    def test_registry_no_authorities_keeps_fallback(self):
+        """Test that Onionoo data without authorities keeps fallback."""
+        registry = AuthorityRegistry()
+        
+        relays = [
+            {'nickname': 'Relay1', 'fingerprint': 'FP1', 'flags': ['Running', 'Fast']},
+            {'nickname': 'Relay2', 'fingerprint': 'FP2', 'flags': ['Running', 'Guard']},
+        ]
+        
+        count = registry.update_from_onionoo(relays)
+        
+        assert count == 0
+        assert registry.is_using_fallback() == True
+    
+    def test_signing_key_mapping_always_hardcoded(self):
+        """Test that signing key to name mapping is always available."""
+        registry = AuthorityRegistry()
+        signing_keys = registry.get_signing_key_to_name()
+        
+        # Signing key mapping should always be available (hardcoded)
+        assert len(signing_keys) == 9
+        assert 'moria1' in signing_keys.values()
+        
+        # Even after Onionoo update, signing keys remain unchanged
+        relays = [{'nickname': 'NewAuth', 'fingerprint': 'NEW', 'flags': ['Authority']}]
+        registry.update_from_onionoo(relays)
+        
+        signing_keys_after = registry.get_signing_key_to_name()
+        assert signing_keys_after == signing_keys  # Unchanged
+
+
+class TestDynamicAuthorityFunctions:
+    """Tests for module-level dynamic authority functions."""
+    
+    def test_get_authority_names_returns_list(self):
+        """Test get_authority_names returns sorted list."""
+        names = get_authority_names()
+        
+        assert isinstance(names, list)
+        assert len(names) >= 1  # At least one authority
+        assert names == sorted(names)  # Sorted
+    
+    def test_get_authority_count_returns_int(self):
+        """Test get_authority_count returns integer."""
+        count = get_authority_count()
+        
+        assert isinstance(count, int)
+        assert count >= 1
+    
+    def test_global_registry_is_singleton(self):
+        """Test that get_authority_registry returns the same instance."""
+        registry1 = get_authority_registry()
+        registry2 = get_authority_registry()
+        
+        assert registry1 is registry2
 
 
 class TestCalculateConsensusRequirement:
