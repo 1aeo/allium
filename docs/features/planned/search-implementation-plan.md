@@ -23,6 +23,7 @@ Implement server-side search functionality for Tor relay metrics without client-
 | **Free** | Well within Cloudflare's 100K requests/day free tier |
 | **Simple** | Single static JSON file + one function; deploys with site |
 | **Smart** | Auto-detects families, suggests related results |
+| **Secure** | Input validation, XSS prevention, safe redirects, CSP headers |
 
 ### Search Capabilities
 
@@ -82,6 +83,17 @@ Implement server-side search functionality for Tor relay metrics without client-
 | Function memory | <10 MB |
 | Latency | <50ms (cached) |
 | Cost | $0 (free tier) |
+
+### Security Summary
+
+| Protection | Implementation |
+|------------|----------------|
+| **Input Validation** | Query length limit (100 chars), character allowlist |
+| **XSS Prevention** | All output HTML-escaped, CSP blocks inline scripts |
+| **Open Redirect** | Path allowlist validation before redirect |
+| **DoS Mitigation** | Query limits, Cloudflare rate limiting |
+| **Error Handling** | Generic messages to users, detailed server logs |
+| **Security Headers** | X-Frame-Options, CSP, X-Content-Type-Options |
 
 ---
 
@@ -656,10 +668,56 @@ progress_logger.log(
  * - Compute-efficient: Precompiled regex, early returns
  * - DRY: Reusable search helpers
  * - Cache-optimized: In-memory index caching per worker instance
+ * - Security-first: Input validation, XSS prevention, safe redirects
  */
 
 // =============================================================================
-// PRECOMPILED PATTERNS
+// SECURITY CONSTANTS
+// =============================================================================
+
+const SECURITY = {
+  // Maximum query length to prevent DoS
+  MAX_QUERY_LENGTH: 100,
+  
+  // Allowed characters in search queries (alphanumeric, common punctuation)
+  ALLOWED_QUERY_PATTERN: /^[A-Za-z0-9\s\-_.@:]+$/,
+  
+  // Valid path segments (alphanumeric, hyphen, underscore)
+  SAFE_PATH_PATTERN: /^[A-Za-z0-9\-_]+$/,
+};
+
+// Valid redirect path prefixes (allowlist)
+const SAFE_REDIRECT_PREFIXES = [
+  '/relay/',
+  '/family/',
+  '/contact/',
+  '/as/',
+  '/country/',
+  '/platform/',
+  '/flag/',
+  '/first_seen/',
+  '/'  // Homepage only (exact match)
+];
+
+// Security headers for HTML responses
+const SECURITY_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'X-XSS-Protection': '1; mode=block',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'Content-Security-Policy': [
+    "default-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data:",
+    "script-src 'none'",
+    "frame-ancestors 'none'",
+    "form-action 'self'",
+    "base-uri 'self'"
+  ].join('; ')
+};
+
+// =============================================================================
+// PRECOMPILED PATTERNS (ReDoS-safe: simple, non-backtracking)
 // =============================================================================
 
 const PATTERNS = {
@@ -678,6 +736,136 @@ let cacheTimestamp = 0;
 const CACHE_TTL_MS = 300000; // 5 minutes
 
 // =============================================================================
+// SECURITY HELPERS
+// =============================================================================
+
+/**
+ * Sanitize and validate user query input.
+ */
+function sanitizeQuery(query) {
+  if (!query) {
+    return { valid: false, sanitized: '', error: 'Empty query' };
+  }
+  
+  const str = String(query);
+  
+  if (str.length > SECURITY.MAX_QUERY_LENGTH) {
+    return { 
+      valid: false, 
+      sanitized: '', 
+      error: `Query too long (max ${SECURITY.MAX_QUERY_LENGTH} characters)` 
+    };
+  }
+  
+  const trimmed = str.trim();
+  
+  if (!trimmed) {
+    return { valid: false, sanitized: '', error: 'Empty query' };
+  }
+  
+  if (!SECURITY.ALLOWED_QUERY_PATTERN.test(trimmed)) {
+    return { 
+      valid: false, 
+      sanitized: '', 
+      error: 'Query contains invalid characters' 
+    };
+  }
+  
+  return { valid: true, sanitized: trimmed, error: null };
+}
+
+/**
+ * Validate a value is safe for use in URL paths.
+ */
+function isSafePathSegment(value) {
+  if (!value || typeof value !== 'string') return false;
+  if (value.includes('..')) return false;
+  if (value.includes('/')) return false;
+  if (value.includes('\\')) return false;
+  return SECURITY.SAFE_PATH_PATTERN.test(value);
+}
+
+/**
+ * Escape HTML special characters to prevent XSS.
+ */
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/`/g, '&#96;')
+    .replace(/\//g, '&#x2F;');
+}
+
+/**
+ * Create a safe redirect response with path validation.
+ */
+function safeRedirect(origin, path) {
+  const isAllowed = SAFE_REDIRECT_PREFIXES.some(prefix => {
+    if (prefix === '/') return path === '/';
+    return path.startsWith(prefix);
+  });
+  
+  if (!isAllowed) {
+    console.error(`Blocked unsafe redirect: ${path}`);
+    return secureResponse('Invalid redirect target', 400);
+  }
+  
+  if (path.includes('://') || path.startsWith('//')) {
+    console.error(`Blocked protocol in redirect: ${path}`);
+    return secureResponse('Invalid redirect target', 400);
+  }
+  
+  const fullUrl = new URL(path, origin).toString();
+  return Response.redirect(fullUrl, 302);
+}
+
+/**
+ * Create a response with security headers.
+ */
+function secureResponse(body, status = 200, additionalHeaders = {}) {
+  return new Response(body, {
+    status,
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      ...SECURITY_HEADERS,
+      ...additionalHeaders
+    }
+  });
+}
+
+/**
+ * Handle errors securely without exposing internal details.
+ */
+function handleError(error, query) {
+  console.error('Search error:', {
+    message: error.message,
+    stack: error.stack,
+    query: query?.substring(0, 50)
+  });
+  
+  return secureResponse(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>Search Error</title>
+      <link rel="stylesheet" href="/static/css/bootstrap.min.css">
+    </head>
+    <body style="padding: 40px; text-align: center;">
+      <h2>Search Temporarily Unavailable</h2>
+      <p>Please try again in a few moments.</p>
+      <p><a href="/">← Back to home</a></p>
+    </body>
+    </html>
+  `, 503);
+}
+
+// =============================================================================
 // INDEX LOADER
 // =============================================================================
 
@@ -693,7 +881,7 @@ async function loadIndex(originUrl) {
   });
   
   if (!response.ok) {
-    throw new Error(`Failed to load search index: ${response.status}`);
+    throw new Error(`Index load failed: ${response.status}`);
   }
   
   cachedIndex = await response.json();
@@ -737,10 +925,6 @@ function getSharedFamily(relays) {
   }
   
   return familyIds.size === 1 ? [...familyIds][0] : null;
-}
-
-function redirect(path) {
-  return Response.redirect(path, 302);
 }
 
 const Result = {
@@ -874,18 +1058,8 @@ function search(query, index) {
 }
 
 // =============================================================================
-// RESPONSE HANDLERS
+// RESPONSE RENDERERS
 // =============================================================================
-
-function escapeHtml(str) {
-  if (!str) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
 
 function renderDisambiguationPage(matches, query, hint) {
   const relays = matches.relays || [];
@@ -910,11 +1084,11 @@ function renderDisambiguationPage(matches, query, hint) {
 <body>
   <h2>Search Results for "${escapeHtml(query)}"</h2>`;
 
-  if (suggestedFamily) {
+  if (suggestedFamily && isSafePathSegment(suggestedFamily)) {
     html += `
   <div class="suggestion">
     <strong>💡 These relays appear to be in the same family:</strong><br>
-    <a href="/family/${suggestedFamily}/">View Family</a>
+    <a href="/family/${escapeHtml(suggestedFamily)}/">View Family</a>
   </div>`;
   }
 
@@ -924,12 +1098,15 @@ function renderDisambiguationPage(matches, query, hint) {
   <table>
     <tr><th>Nickname</th><th>Fingerprint</th><th>Country</th><th>Family</th></tr>`;
     for (const r of relays) {
-      const familyLink = r.fam ? `<a href="/family/${r.fam}/">View</a>` : '-';
+      if (!isSafePathSegment(r.f)) continue; // Skip invalid fingerprints
+      const familyLink = (r.fam && isSafePathSegment(r.fam)) 
+        ? `<a href="/family/${escapeHtml(r.fam)}/">View</a>` 
+        : '-';
       html += `
     <tr>
-      <td><a href="/relay/${r.f}/">${escapeHtml(r.n)}</a></td>
-      <td><code>${r.f.substring(0, 8)}...</code></td>
-      <td>${r.cc ? r.cc.toUpperCase() : '?'}</td>
+      <td><a href="/relay/${escapeHtml(r.f)}/">${escapeHtml(r.n)}</a></td>
+      <td><code>${escapeHtml(r.f.substring(0, 8))}...</code></td>
+      <td>${r.cc ? escapeHtml(r.cc.toUpperCase()) : '?'}</td>
       <td>${familyLink}</td>
     </tr>`;
     }
@@ -942,12 +1119,13 @@ function renderDisambiguationPage(matches, query, hint) {
   <table>
     <tr><th>Family</th><th>Size</th><th>AROI</th></tr>`;
     for (const f of families) {
+      if (!isSafePathSegment(f.id)) continue; // Skip invalid family IDs
       const label = f.a || f.px || f.id.substring(0, 8);
       html += `
     <tr>
-      <td><a href="/family/${f.id}/">${escapeHtml(label)}</a></td>
-      <td>${f.sz} relays</td>
-      <td>${f.a || '-'}</td>
+      <td><a href="/family/${escapeHtml(f.id)}/">${escapeHtml(label)}</a></td>
+      <td>${parseInt(f.sz, 10) || 0} relays</td>
+      <td>${escapeHtml(f.a) || '-'}</td>
     </tr>`;
     }
     html += '</table>';
@@ -958,17 +1136,15 @@ function renderDisambiguationPage(matches, query, hint) {
 </body>
 </html>`;
 
-  return new Response(html, {
-    headers: { 'Content-Type': 'text/html; charset=utf-8' }
-  });
+  return secureResponse(html, 200);
 }
 
 function renderNotFoundPage(query) {
-  return new Response(`<!DOCTYPE html>
+  return secureResponse(`<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Not Found - ${escapeHtml(query)}</title>
+  <title>Not Found</title>
   <link rel="stylesheet" href="/static/css/bootstrap.min.css">
   <style>
     body { padding: 40px; font-family: sans-serif; text-align: center; }
@@ -988,16 +1164,31 @@ function renderNotFoundPage(query) {
   </ul>
   <div class="search-box">
     <form action="/search" method="GET">
-      <input type="text" name="q" placeholder="Search again..." value="${escapeHtml(query)}">
+      <input type="text" name="q" placeholder="Search again..." 
+             value="${escapeHtml(query)}" maxlength="100"
+             autocomplete="off" autocapitalize="off" spellcheck="false">
       <br><button type="submit">Search</button>
     </form>
   </div>
   <p><a href="/">← Back to home</a></p>
 </body>
-</html>`, {
-    status: 404,
-    headers: { 'Content-Type': 'text/html; charset=utf-8' }
-  });
+</html>`, 404);
+}
+
+function renderInvalidQueryPage(error) {
+  return secureResponse(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Invalid Search</title>
+  <link rel="stylesheet" href="/static/css/bootstrap.min.css">
+</head>
+<body style="padding: 40px; text-align: center;">
+  <h2>Invalid Search Query</h2>
+  <p>${escapeHtml(error)}</p>
+  <p><a href="/">← Back to home</a></p>
+</body>
+</html>`, 400);
 }
 
 // =============================================================================
@@ -1007,40 +1198,74 @@ function renderNotFoundPage(query) {
 export async function onRequestGet(context) {
   const { request } = context;
   const url = new URL(request.url);
-  const query = url.searchParams.get('q');
+  const rawQuery = url.searchParams.get('q');
   
-  if (!query || !query.trim()) {
-    return redirect(url.origin + '/');
+  // Input validation
+  const { valid, sanitized, error } = sanitizeQuery(rawQuery);
+  
+  if (!valid) {
+    if (!rawQuery || !rawQuery.trim()) {
+      return safeRedirect(url.origin, '/');
+    }
+    return renderInvalidQueryPage(error);
   }
   
   try {
     const index = await loadIndex(url.origin);
-    const result = search(query, index);
+    const result = search(sanitized, index);
     
     switch (result.type) {
       case 'relay':
-        return redirect(`${url.origin}/relay/${result.fingerprint}/`);
+        if (!isSafePathSegment(result.fingerprint)) {
+          return handleError(new Error('Invalid fingerprint format'), sanitized);
+        }
+        return safeRedirect(url.origin, `/relay/${result.fingerprint}/`);
+      
       case 'family':
-        return redirect(`${url.origin}/family/${result.familyId}/`);
+        if (!isSafePathSegment(result.familyId)) {
+          return handleError(new Error('Invalid family ID format'), sanitized);
+        }
+        return safeRedirect(url.origin, `/family/${result.familyId}/`);
+      
       case 'contact':
-        return redirect(`${url.origin}/contact/${result.contactMd5}/`);
+        if (!isSafePathSegment(result.contactMd5)) {
+          return handleError(new Error('Invalid contact hash format'), sanitized);
+        }
+        return safeRedirect(url.origin, `/contact/${result.contactMd5}/`);
+      
       case 'as':
-        return redirect(`${url.origin}/as/${result.asNumber}/`);
+        if (!isSafePathSegment(result.asNumber)) {
+          return handleError(new Error('Invalid AS number format'), sanitized);
+        }
+        return safeRedirect(url.origin, `/as/${result.asNumber}/`);
+      
       case 'country':
-        return redirect(`${url.origin}/country/${result.countryCode}/`);
+        if (!isSafePathSegment(result.countryCode)) {
+          return handleError(new Error('Invalid country code format'), sanitized);
+        }
+        return safeRedirect(url.origin, `/country/${result.countryCode}/`);
+      
       case 'platform':
-        return redirect(`${url.origin}/platform/${result.platform}/`);
+        if (!isSafePathSegment(result.platform)) {
+          return handleError(new Error('Invalid platform format'), sanitized);
+        }
+        return safeRedirect(url.origin, `/platform/${result.platform}/`);
+      
       case 'flag':
-        return redirect(`${url.origin}/flag/${result.flag}/`);
+        if (!isSafePathSegment(result.flag)) {
+          return handleError(new Error('Invalid flag format'), sanitized);
+        }
+        return safeRedirect(url.origin, `/flag/${result.flag}/`);
+      
       case 'multiple':
-        return renderDisambiguationPage(result.matches, query, result.hint);
+        return renderDisambiguationPage(result.matches, sanitized, result.hint);
+      
       case 'not_found':
       default:
-        return renderNotFoundPage(query);
+        return renderNotFoundPage(sanitized);
     }
   } catch (error) {
-    console.error('Search error:', error);
-    return new Response(`Search error: ${error.message}`, { status: 500 });
+    return handleError(error, sanitized);
   }
 }
 ```
@@ -1059,6 +1284,8 @@ Add to `allium/templates/skeleton.html` in the navigation area:
          placeholder="Search relays, families, AS..." 
          title="Search by fingerprint, nickname, AROI, AS number, country, or IP"
          style="padding: 4px 8px; width: 200px; border: 1px solid #ccc; border-radius: 3px;"
+         maxlength="100"
+         pattern="[A-Za-z0-9\s\-_.@:]+"
          autocomplete="off"
          autocapitalize="off"
          spellcheck="false">
@@ -1068,6 +1295,11 @@ Add to `allium/templates/skeleton.html` in the navigation area:
   </button>
 </form>
 ```
+
+**Security attributes:**
+- `maxlength="100"` - Client-side limit matching server-side validation
+- `pattern="[A-Za-z0-9\s\-_.@:]+"` - Client-side character validation (defense-in-depth)
+- `autocomplete="off"` - Prevent sensitive data leakage from form history
 
 ---
 
@@ -1099,14 +1331,47 @@ mkdir -p functions
 # 2. Test locally with Wrangler
 npx wrangler pages dev ./public --local
 
-# 3. Test search
+# 3. Test search functionality
 curl "http://localhost:8788/search?q=torworld"
 curl "http://localhost:8788/search?q=ABCD1234"
 
-# 4. Deploy
+# 4. Security tests (run before deployment)
+# Test input validation
+curl "http://localhost:8788/search?q="                                    # Empty - should redirect
+curl "http://localhost:8788/search?q=$(python3 -c 'print("a"*200)')"      # Too long - should reject
+curl "http://localhost:8788/search?q=<script>alert(1)</script>"           # XSS - should sanitize/reject
+curl "http://localhost:8788/search?q=../../../etc/passwd"                 # Path traversal - should reject
+curl -I "http://localhost:8788/search?q=test"                             # Check security headers
+
+# 5. Verify security headers in response
+# Expected headers:
+# - X-Content-Type-Options: nosniff
+# - X-Frame-Options: DENY
+# - X-XSS-Protection: 1; mode=block
+# - Content-Security-Policy: script-src 'none'
+
+# 6. Deploy
 git add functions/search.js
-git commit -m "Add server-side search function"
+git commit -m "Add server-side search function with security hardening"
 git push
+```
+
+### Post-Deployment Security Verification
+
+```bash
+# 1. Configure Cloudflare Rate Limiting (Dashboard > Security > WAF)
+# Rule: URI path equals "/search"
+# Threshold: 60 requests per minute per IP
+# Action: Challenge
+
+# 2. Verify CSP is working (browser dev tools)
+# - Open search results page
+# - Check Console for CSP violations
+# - Should block any inline scripts
+
+# 3. Test from external tool
+curl -H "User-Agent: SecurityTest" "https://your-site.com/search?q=test"
+# Verify response includes all security headers
 ```
 
 ---
@@ -1144,6 +1409,479 @@ git push
 
 ---
 
+## Security Best Practices
+
+### Security Threat Model
+
+| Threat | Risk Level | Mitigation |
+|--------|------------|------------|
+| **XSS (Cross-Site Scripting)** | High | HTML escaping all user input |
+| **Open Redirect** | Medium | Validate redirect targets against allowlist |
+| **DoS via Long Queries** | Medium | Query length limits |
+| **ReDoS (Regex DoS)** | Low | Simple, non-backtracking regex patterns |
+| **Path Traversal** | Low | Validate fingerprints/IDs are alphanumeric |
+| **Information Disclosure** | Low | Generic error messages |
+| **Cache Poisoning** | Low | Validate cache keys |
+
+### Input Validation
+
+All user input is validated before processing:
+
+```javascript
+// =============================================================================
+// SECURITY CONSTANTS
+// =============================================================================
+
+const SECURITY = {
+  // Maximum query length to prevent DoS
+  MAX_QUERY_LENGTH: 100,
+  
+  // Allowed characters in search queries (alphanumeric, common punctuation)
+  ALLOWED_QUERY_PATTERN: /^[A-Za-z0-9\s\-_.@:]+$/,
+  
+  // Valid fingerprint pattern (strict hex)
+  FINGERPRINT_PATTERN: /^[A-Fa-f0-9]+$/,
+  
+  // Valid path segments (alphanumeric, hyphen, underscore)
+  SAFE_PATH_PATTERN: /^[A-Za-z0-9\-_]+$/,
+};
+
+// =============================================================================
+// INPUT SANITIZATION
+// =============================================================================
+
+/**
+ * Sanitize and validate user query input.
+ * 
+ * @param {string} query - Raw user input
+ * @returns {object} { valid: boolean, sanitized: string, error: string }
+ */
+function sanitizeQuery(query) {
+  // Null/undefined check
+  if (!query) {
+    return { valid: false, sanitized: '', error: 'Empty query' };
+  }
+  
+  // Type coercion safety
+  const str = String(query);
+  
+  // Length check (prevent DoS)
+  if (str.length > SECURITY.MAX_QUERY_LENGTH) {
+    return { 
+      valid: false, 
+      sanitized: '', 
+      error: `Query too long (max ${SECURITY.MAX_QUERY_LENGTH} chars)` 
+    };
+  }
+  
+  // Trim whitespace
+  const trimmed = str.trim();
+  
+  if (!trimmed) {
+    return { valid: false, sanitized: '', error: 'Empty query after trim' };
+  }
+  
+  // Character allowlist validation
+  if (!SECURITY.ALLOWED_QUERY_PATTERN.test(trimmed)) {
+    return { 
+      valid: false, 
+      sanitized: '', 
+      error: 'Invalid characters in query' 
+    };
+  }
+  
+  return { valid: true, sanitized: trimmed, error: null };
+}
+
+/**
+ * Validate a value is safe for use in URL paths.
+ * Prevents path traversal attacks.
+ * 
+ * @param {string} value - Value to validate
+ * @returns {boolean} True if safe for path use
+ */
+function isSafePathSegment(value) {
+  if (!value || typeof value !== 'string') return false;
+  if (value.includes('..')) return false;  // Path traversal
+  if (value.includes('/')) return false;   // Path separator
+  if (value.includes('\\')) return false;  // Windows path separator
+  return SECURITY.SAFE_PATH_PATTERN.test(value);
+}
+```
+
+### XSS Prevention
+
+All output is escaped before rendering:
+
+```javascript
+/**
+ * Escape HTML special characters to prevent XSS.
+ * Uses a comprehensive character map for security.
+ * 
+ * @param {string} str - String to escape
+ * @returns {string} HTML-safe string
+ */
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  
+  return String(str)
+    .replace(/&/g, '&amp;')   // Must be first
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/`/g, '&#96;')   // Template literal protection
+    .replace(/\//g, '&#x2F;'); // Forward slash for extra safety
+}
+
+/**
+ * Escape string for use in HTML attributes.
+ * More restrictive than general HTML escaping.
+ * 
+ * @param {string} str - String to escape
+ * @returns {string} Attribute-safe string
+ */
+function escapeAttr(str) {
+  if (str === null || str === undefined) return '';
+  
+  // First apply HTML escaping
+  let escaped = escapeHtml(str);
+  
+  // Additional attribute-specific escaping
+  escaped = escaped
+    .replace(/=/g, '&#x3D;')
+    .replace(/\(/g, '&#x28;')
+    .replace(/\)/g, '&#x29;');
+  
+  return escaped;
+}
+```
+
+### Open Redirect Prevention
+
+Redirect targets are validated against known-safe paths:
+
+```javascript
+// =============================================================================
+// REDIRECT SAFETY
+// =============================================================================
+
+/**
+ * Valid redirect path prefixes (allowlist).
+ */
+const SAFE_REDIRECT_PREFIXES = [
+  '/relay/',
+  '/family/',
+  '/contact/',
+  '/as/',
+  '/country/',
+  '/platform/',
+  '/flag/',
+  '/first_seen/',
+  '/'  // Homepage only (exact match)
+];
+
+/**
+ * Create a safe redirect response.
+ * Validates the path against an allowlist to prevent open redirects.
+ * 
+ * @param {string} origin - Request origin URL
+ * @param {string} path - Redirect path
+ * @returns {Response} Redirect response or error
+ */
+function safeRedirect(origin, path) {
+  // Validate path starts with allowed prefix
+  const isAllowed = SAFE_REDIRECT_PREFIXES.some(prefix => {
+    if (prefix === '/') {
+      return path === '/';
+    }
+    return path.startsWith(prefix);
+  });
+  
+  if (!isAllowed) {
+    console.error(`Blocked unsafe redirect: ${path}`);
+    return new Response('Invalid redirect', { status: 400 });
+  }
+  
+  // Ensure path doesn't contain protocol (prevent //evil.com)
+  if (path.includes('://') || path.startsWith('//')) {
+    console.error(`Blocked protocol in redirect: ${path}`);
+    return new Response('Invalid redirect', { status: 400 });
+  }
+  
+  // Construct full URL with validated origin
+  const fullUrl = new URL(path, origin).toString();
+  
+  return Response.redirect(fullUrl, 302);
+}
+```
+
+### Security Headers
+
+Response headers for defense-in-depth:
+
+```javascript
+/**
+ * Security headers for HTML responses.
+ */
+const SECURITY_HEADERS = {
+  // Prevent MIME type sniffing
+  'X-Content-Type-Options': 'nosniff',
+  
+  // Prevent clickjacking
+  'X-Frame-Options': 'DENY',
+  
+  // XSS protection (legacy browsers)
+  'X-XSS-Protection': '1; mode=block',
+  
+  // Referrer policy
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  
+  // Content Security Policy
+  'Content-Security-Policy': [
+    "default-src 'self'",
+    "style-src 'self' 'unsafe-inline'",  // For inline styles
+    "img-src 'self' data:",
+    "script-src 'none'",                  // No JavaScript
+    "frame-ancestors 'none'",
+    "form-action 'self'",
+    "base-uri 'self'"
+  ].join('; ')
+};
+
+/**
+ * Create a response with security headers.
+ * 
+ * @param {string} body - Response body
+ * @param {number} status - HTTP status code
+ * @param {object} additionalHeaders - Additional headers to merge
+ * @returns {Response} Response with security headers
+ */
+function secureResponse(body, status = 200, additionalHeaders = {}) {
+  return new Response(body, {
+    status,
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      ...SECURITY_HEADERS,
+      ...additionalHeaders
+    }
+  });
+}
+```
+
+### Error Handling
+
+Errors are logged server-side but not exposed to users:
+
+```javascript
+/**
+ * Handle errors securely without exposing internal details.
+ * 
+ * @param {Error} error - The caught error
+ * @param {string} query - The user's query (for logging)
+ * @returns {Response} User-safe error response
+ */
+function handleError(error, query) {
+  // Log full error server-side for debugging
+  console.error('Search error:', {
+    message: error.message,
+    stack: error.stack,
+    query: query?.substring(0, 50)  // Truncate for log safety
+  });
+  
+  // Return generic message to user (no internal details)
+  return secureResponse(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>Search Error</title>
+      <link rel="stylesheet" href="/static/css/bootstrap.min.css">
+    </head>
+    <body style="padding: 40px; text-align: center;">
+      <h2>Search Temporarily Unavailable</h2>
+      <p>Please try again in a few moments.</p>
+      <p><a href="/">← Back to home</a></p>
+    </body>
+    </html>
+  `, 503);
+}
+```
+
+### Rate Limiting
+
+Cloudflare provides built-in DDoS protection, but additional application-level considerations:
+
+```javascript
+/**
+ * Rate limiting is handled by Cloudflare's infrastructure:
+ * 
+ * 1. **Cloudflare DDoS Protection** (automatic)
+ *    - Layer 7 attack mitigation
+ *    - Bot detection
+ *    - Challenge pages for suspicious traffic
+ * 
+ * 2. **Cloudflare Rate Limiting** (configurable in dashboard)
+ *    - Set rules like: 100 requests per minute per IP to /search
+ *    - Action: Challenge or Block
+ * 
+ * 3. **Workers Limits** (platform enforced)
+ *    - 100,000 requests/day on free tier
+ *    - 10ms CPU time per request (free tier)
+ *    - Automatic rejection when limits exceeded
+ * 
+ * Application-level rate limiting is NOT implemented in the function
+ * because Cloudflare handles this more efficiently at the edge.
+ * 
+ * To configure Cloudflare Rate Limiting:
+ * 1. Go to Cloudflare Dashboard > Security > WAF > Rate limiting rules
+ * 2. Create rule: If URI path equals "/search" 
+ * 3. Set threshold: 60 requests per minute
+ * 4. Action: Challenge
+ */
+```
+
+### ReDoS Prevention
+
+All regex patterns are designed to be safe:
+
+```javascript
+/**
+ * PATTERNS object uses only simple, non-backtracking patterns.
+ * 
+ * Safe patterns avoid:
+ * - Nested quantifiers: (a+)+
+ * - Overlapping alternations: (a|a)+
+ * - Unbounded repetition with ambiguity
+ * 
+ * All patterns below are O(n) where n = input length.
+ */
+const PATTERNS = {
+  // Simple character class with fixed length - O(n)
+  FULL_FINGERPRINT: /^[A-Fa-f0-9]{40}$/,
+  
+  // Simple character class with bounded length - O(n)
+  PARTIAL_FINGERPRINT: /^[A-Fa-f0-9]{6,39}$/,
+  
+  // Simple character class - O(n)
+  IP_ADDRESS: /^[\d.:a-fA-F]+$/,
+  
+  // Simple optional prefix with capture - O(n)
+  AS_NUMBER: /^(?:AS)?(\d+)$/i,
+};
+
+// These patterns are verified safe using tools like:
+// - https://devina.io/redos-checker
+// - npm package 'safe-regex'
+```
+
+### Security Checklist
+
+Before deployment, verify:
+
+- [ ] All user input is sanitized via `sanitizeQuery()`
+- [ ] All HTML output uses `escapeHtml()` or `escapeAttr()`
+- [ ] All redirects use `safeRedirect()` with path validation
+- [ ] Security headers are included in all HTML responses
+- [ ] Error messages don't expose internal details
+- [ ] Regex patterns are ReDoS-safe
+- [ ] Query length is limited (100 chars max)
+- [ ] Fingerprints/IDs are validated as alphanumeric
+- [ ] Cloudflare rate limiting rules are configured
+- [ ] CSP header blocks inline scripts
+
+### Updated Request Handler with Security
+
+```javascript
+export async function onRequestGet(context) {
+  const { request } = context;
+  const url = new URL(request.url);
+  const rawQuery = url.searchParams.get('q');
+  
+  // Input validation
+  const { valid, sanitized, error } = sanitizeQuery(rawQuery);
+  
+  if (!valid) {
+    if (!rawQuery || !rawQuery.trim()) {
+      // Empty query - redirect home
+      return safeRedirect(url.origin, '/');
+    }
+    // Invalid query - show error
+    return secureResponse(`
+      <!DOCTYPE html>
+      <html>
+      <head><meta charset="utf-8"><title>Invalid Search</title></head>
+      <body style="padding: 40px; text-align: center;">
+        <h2>Invalid Search Query</h2>
+        <p>${escapeHtml(error)}</p>
+        <p><a href="/">← Back to home</a></p>
+      </body>
+      </html>
+    `, 400);
+  }
+  
+  try {
+    const index = await loadIndex(url.origin);
+    const result = search(sanitized, index);
+    
+    switch (result.type) {
+      case 'relay':
+        if (!isSafePathSegment(result.fingerprint)) {
+          return handleError(new Error('Invalid fingerprint'), sanitized);
+        }
+        return safeRedirect(url.origin, `/relay/${result.fingerprint}/`);
+      
+      case 'family':
+        if (!isSafePathSegment(result.familyId)) {
+          return handleError(new Error('Invalid family ID'), sanitized);
+        }
+        return safeRedirect(url.origin, `/family/${result.familyId}/`);
+      
+      case 'contact':
+        if (!isSafePathSegment(result.contactMd5)) {
+          return handleError(new Error('Invalid contact hash'), sanitized);
+        }
+        return safeRedirect(url.origin, `/contact/${result.contactMd5}/`);
+      
+      case 'as':
+        if (!isSafePathSegment(result.asNumber)) {
+          return handleError(new Error('Invalid AS number'), sanitized);
+        }
+        return safeRedirect(url.origin, `/as/${result.asNumber}/`);
+      
+      case 'country':
+        if (!isSafePathSegment(result.countryCode)) {
+          return handleError(new Error('Invalid country code'), sanitized);
+        }
+        return safeRedirect(url.origin, `/country/${result.countryCode}/`);
+      
+      case 'platform':
+        if (!isSafePathSegment(result.platform)) {
+          return handleError(new Error('Invalid platform'), sanitized);
+        }
+        return safeRedirect(url.origin, `/platform/${result.platform}/`);
+      
+      case 'flag':
+        if (!isSafePathSegment(result.flag)) {
+          return handleError(new Error('Invalid flag'), sanitized);
+        }
+        return safeRedirect(url.origin, `/flag/${result.flag}/`);
+      
+      case 'multiple':
+        return renderDisambiguationPage(result.matches, sanitized, result.hint);
+      
+      case 'not_found':
+      default:
+        return renderNotFoundPage(sanitized);
+    }
+  } catch (error) {
+    return handleError(error, sanitized);
+  }
+}
+```
+
+---
+
 ## Future Enhancements
 
 1. **Search analytics** - Track popular queries for insights
@@ -1163,4 +1901,5 @@ git push
 ---
 
 **Last Updated**: December 2024  
-**Document Status**: Implementation Ready
+**Document Status**: Implementation Ready  
+**Security Review**: Included (see Security Best Practices section)
