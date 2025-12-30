@@ -1295,93 +1295,178 @@ Country: unknown
 
 **File:** `allium/templates/relay-info.html`
 
-**Insert After Navigation (after line 38):**
+**Design Principle:** Show both data sources side-by-side for transparency:
+- **Onionoo (API)**: Aggregated consensus data, what "the network" currently sees
+- **CollecTor (Dir. Auth.)**: Per-authority voting details, for troubleshooting discrepancies
+
+**Data Source Comparison:**
+
+| Metric | Onionoo Source | CollecTor Source |
+|--------|----------------|------------------|
+| Running Status | `relay['uptime_display']` - "UP for X days" or "DOWN for X hours" | `diag.vote_count`/`diag.total_authorities` - How many authorities voted (Running = reachable) |
+| Bandwidth Measured | `relay['measured']` - bool (≥3 bandwidth authorities measured) | `diag.bandwidth_summary.measurement_count` - Count of authority measurements |
+| Flags | `relay['flags']` - Current consensus flags | `diag.flag_summary` - Per-flag eligibility (e.g., "Guard: 7/9") |
+
+**Insert After Header (after line 67, after the `</h4>` closing tag):**
 
 ```jinja2
-{# ============== SECTION 1: HEALTH STATUS SUMMARY ============== #}
-<section id="status" class="relay-section">
-<h3>
+{# ============== HEALTH STATUS SUMMARY ============== #}
+{# Shows dual-source data: Onionoo (aggregated) and CollecTor (per-authority) #}
+{% set diag = relay.consensus_evaluation if relay.consensus_evaluation and relay.consensus_evaluation.available else none %}
+
+<div id="status" style="margin: 15px 0; padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid {% if diag and diag.in_consensus %}#28a745{% else %}#dc3545{% endif %};">
+<h4 style="margin-top: 0; margin-bottom: 12px;">
 <div class="section-header">
-<a href="#status" class="anchor-link">Health Status</a>
+<a href="#status" class="anchor-link">Health Status Summary</a>
 </div>
-</h3>
+</h4>
 
 <div class="row">
+{# Left Column: Running Status and Bandwidth #}
 <div class="col-md-6">
-<dl class="dl-horizontal-compact">
-    <dt>Consensus Status</dt>
-    <dd>
-        {% if relay.consensus_evaluation and relay.consensus_evaluation.available -%}
-            {% if relay.consensus_evaluation.in_consensus -%}
-                <span style="color: #28a745; font-weight: bold;">IN CONSENSUS</span>
-                ({{ relay.consensus_evaluation.vote_count }}/{{ relay.consensus_evaluation.total_authorities }} authorities)
+<table class="table table-condensed" style="margin-bottom: 10px; font-size: 13px;">
+<thead>
+    <tr>
+        <th style="width: 35%;">Metric</th>
+        <th style="width: 32%;">Onionoo (API)</th>
+        <th style="width: 33%;">Dir. Authorities</th>
+    </tr>
+</thead>
+<tbody>
+    {# Running Status Row #}
+    <tr>
+        <td><strong>Running Status</strong></td>
+        <td>
+            {% if relay.get('uptime_display') -%}
+                {% if relay['uptime_display'].startswith('DOWN') -%}
+                    <span style="color: #dc3545; font-weight: bold;">{{ relay['uptime_display']|escape }}</span>
+                {% else -%}
+                    <span style="color: #28a745;">{{ relay['uptime_display']|escape }}</span>
+                {% endif -%}
             {% else -%}
-                <span style="color: #dc3545; font-weight: bold;">NOT IN CONSENSUS</span>
-                ({{ relay.consensus_evaluation.vote_count }}/{{ relay.consensus_evaluation.total_authorities }} authorities, need {{ relay.consensus_evaluation.majority_required }})
+                <span style="color: #6c757d;">Unknown</span>
             {% endif -%}
-        {% else -%}
-            <span style="color: #6c757d;">Data unavailable</span>
-        {% endif -%}
-    </dd>
+        </td>
+        <td>
+            {% if diag -%}
+                <span style="color: {% if diag.vote_count >= diag.majority_required %}#28a745{% else %}#dc3545{% endif %}; font-weight: bold;">
+                    {{ diag.vote_count }}/{{ diag.total_authorities }} voted
+                </span>
+                <span style="color: #6c757d; font-size: 11px;">(need {{ diag.majority_required }})</span>
+            {% else -%}
+                <span style="color: #6c757d;">No data</span>
+            {% endif -%}
+        </td>
+    </tr>
     
-    <dt>Running Status</dt>
-    <dd>
-        {% if relay.get('uptime_display') -%}
-            {% if relay['uptime_display'].startswith('DOWN') -%}
-                <span style="color: #dc3545; font-weight: bold;">{{ relay['uptime_display']|escape }}</span>
+    {# Bandwidth Measured Row #}
+    <tr>
+        <td><strong>Bandwidth Measured</strong></td>
+        <td>
+            {% if relay['measured'] is not none -%}
+                {% if relay['measured'] -%}
+                    <span style="color: #28a745; font-weight: bold;">Yes</span>
+                {% else -%}
+                    <span style="color: #dc3545;">No</span>
+                {% endif -%}
             {% else -%}
-                <span style="color: #28a745;">{{ relay['uptime_display']|escape }}</span>
+                <span style="color: #6c757d;">Unknown</span>
             {% endif -%}
-        {% else -%}
-            <span style="color: #6c757d;">Unknown</span>
-        {% endif -%}
-    </dd>
+        </td>
+        <td>
+            {% if diag and diag.bandwidth_summary -%}
+                {% if diag.bandwidth_summary.measurement_count > 0 -%}
+                    <span style="color: #28a745;">{{ diag.bandwidth_summary.measurement_count }} measurements</span>
+                {% else -%}
+                    <span style="color: #6c757d;">0 measurements</span>
+                {% endif -%}
+            {% else -%}
+                <span style="color: #6c757d;">No data</span>
+            {% endif -%}
+        </td>
+    </tr>
     
-    <dt>Bandwidth Measured</dt>
-    <dd>
-        {% if relay['measured'] is not none -%}
-            {% if relay['measured'] -%}
-                <span style="color: #28a745;">Yes</span> (by bandwidth authorities)
+    {# Consensus Status Row #}
+    <tr>
+        <td><strong>In Consensus</strong></td>
+        <td>
+            {% if 'Running' in relay['flags'] -%}
+                <span style="color: #28a745; font-weight: bold;">Yes</span>
             {% else -%}
-                <span style="color: #dc3545;">No</span> (using relay-reported values)
+                <span style="color: #dc3545; font-weight: bold;">No</span>
             {% endif -%}
-        {% else -%}
-            <span style="color: #6c757d;">Unknown</span>
-        {% endif -%}
-    </dd>
-</dl>
+        </td>
+        <td>
+            {% if diag -%}
+                {% if diag.in_consensus -%}
+                    <span style="color: #28a745; font-weight: bold;">Yes</span>
+                {% else -%}
+                    <span style="color: #dc3545; font-weight: bold;">No</span>
+                {% endif -%}
+            {% else -%}
+                <span style="color: #6c757d;">No data</span>
+            {% endif -%}
+        </td>
+    </tr>
+</tbody>
+</table>
 </div>
 
+{# Right Column: Flags #}
 <div class="col-md-6">
-<dl class="dl-horizontal-compact">
-    <dt>Current Flags</dt>
-    <dd>
-        {% for flag in relay['flags'] -%}
-            {% if flag != 'StaleDesc' -%}
-                <a href="{{ page_ctx.path_prefix }}flag/{{ flag.lower()|escape }}/">{{ flag|escape }}</a>{% if not loop.last %}, {% endif %}
+<table class="table table-condensed" style="margin-bottom: 10px; font-size: 13px;">
+<thead>
+    <tr>
+        <th style="width: 35%;">Flags</th>
+        <th style="width: 32%;">Onionoo (Current)</th>
+        <th style="width: 33%;">Dir. Auth. (Eligibility)</th>
+    </tr>
+</thead>
+<tbody>
+    {# Flags Row - Show current flags and eligibility side by side #}
+    <tr>
+        <td><strong>Consensus Flags</strong></td>
+        <td>
+            {% for flag in relay['flags'] -%}
+                {% if flag != 'StaleDesc' -%}
+                    <a href="{{ page_ctx.path_prefix }}flag/{{ flag.lower()|escape }}/" style="font-size: 12px;">{{ flag|escape }}</a>{% if not loop.last %}, {% endif %}
+                {% endif -%}
+            {% endfor -%}
+            {% if 'StaleDesc' in relay['flags'] -%}
+                <br><span style="color: #dc3545; font-size: 11px;">[Warning] StaleDesc</span>
             {% endif -%}
-        {% endfor -%}
-        {% if 'StaleDesc' in relay['flags'] -%}
-            <br><span style="color: #dc3545;">[Warning] StaleDesc - descriptor is stale</span>
-        {% endif -%}
-    </dd>
-</dl>
+        </td>
+        <td>
+            {% if diag and diag.flag_summary -%}
+                {% for flag_name, flag_data in diag.flag_summary.items() %}
+                    {% set display_name = 'HSDir' if flag_name.lower() == 'hsdir' else flag_name|capitalize %}
+                    <span style="color: {% if flag_data.status_class == 'success' %}#28a745{% elif flag_data.status_class == 'danger' %}#dc3545{% else %}#856404{% endif %}; font-size: 12px;">
+                        {{ display_name }}: {{ flag_data.eligible_count }}/{{ flag_data.total_authorities }}
+                    </span>{% if not loop.last %}<br>{% endif %}
+                {% endfor %}
+            {% else -%}
+                <span style="color: #6c757d;">No data</span>
+            {% endif -%}
+        </td>
+    </tr>
+</tbody>
+</table>
 </div>
 </div>
 
-{# Issues and Warnings #}
-{% if relay.consensus_evaluation and relay.consensus_evaluation.available and relay.consensus_evaluation.issues %}
-{% set real_issues = relay.consensus_evaluation.issues | selectattr('severity', 'ne', 'info') | list %}
-{% set info_notes = relay.consensus_evaluation.issues | selectattr('severity', 'equalto', 'info') | list %}
+{# Issues and Warnings - Prominent display #}
+{% if diag and diag.issues %}
+{% set real_issues = diag.issues | selectattr('severity', 'ne', 'info') | list %}
+{% set info_notes = diag.issues | selectattr('severity', 'equalto', 'info') | list %}
 
 {% if real_issues %}
-<div class="alert alert-warning" style="margin-top: 10px;">
-    <strong>Issues Detected:</strong>
-    <ul style="margin-bottom: 0; padding-left: 20px;">
+<div style="margin-top: 10px; padding: 10px; background: #fff3cd; border-radius: 4px; border-left: 3px solid #ffc107;">
+    <strong style="color: #856404;">Issues Detected:</strong>
+    <ul style="margin: 5px 0 0 0; padding-left: 20px;">
     {% for issue in real_issues %}
-        <li>
+        <li style="margin-bottom: 5px;">
             <span style="color: {% if issue.severity == 'error' %}#dc3545{% else %}#856404{% endif %}; font-weight: bold;">
-                [{{ issue.severity|capitalize }}] {{ issue.title }}
+                {{ issue.title }}
             </span>: {{ issue.description|safe }}
             {% if issue.suggestion %}
             <br><span style="color: #666; font-size: 12px;"><strong>Suggestion:</strong> {{ issue.suggestion|safe }}</span>
@@ -1393,34 +1478,46 @@ Country: unknown
 {% endif %}
 
 {% if info_notes %}
-<div class="alert alert-info" style="margin-top: 10px;">
-    <strong>Notes:</strong>
-    <ul style="margin-bottom: 0; padding-left: 20px;">
+<div style="margin-top: 10px; padding: 10px; background: #d1ecf1; border-radius: 4px; border-left: 3px solid #17a2b8;">
+    <strong style="color: #0c5460;">Notes:</strong>
+    <ul style="margin: 5px 0 0 0; padding-left: 20px;">
     {% for note in info_notes %}
-        <li>{{ note.title }}: {{ note.description }}</li>
+        <li style="font-size: 12px;">{{ note.title }}: {{ note.description }}</li>
     {% endfor %}
     </ul>
 </div>
 {% endif %}
-{% else %}
-<div class="alert alert-success" style="margin-top: 10px;">
-    <strong>No issues detected.</strong> Relay appears to be operating normally.
+{% endif %}
+
+{# No issues message - only show if diag available and no issues #}
+{% if diag and (not diag.issues or diag.issues|length == 0) %}
+<div style="margin-top: 10px; padding: 10px; background: #d4edda; border-radius: 4px; border-left: 3px solid #28a745;">
+    <span style="color: #155724;"><strong>No issues detected.</strong> Relay appears to be operating normally.</span>
 </div>
 {% endif %}
 
-</section>
+</div>
 ```
 
 **Variables Used:**
-- `relay.consensus_evaluation.available` (bool) - Whether consensus data is available
-- `relay.consensus_evaluation.in_consensus` (bool) - In consensus or not
-- `relay.consensus_evaluation.vote_count` (int) - Number of authorities voting for relay
-- `relay.consensus_evaluation.total_authorities` (int) - Total voting authorities (9)
-- `relay.consensus_evaluation.majority_required` (int) - Votes needed (5)
-- `relay.consensus_evaluation.issues` (list) - List of issue dicts with `severity`, `title`, `description`, `suggestion`
+
+*From Onionoo (relay dict):*
 - `relay['uptime_display']` (str) - "UP for X days" or "DOWN for X hours"
-- `relay['measured']` (bool/None) - Whether bandwidth is authority-measured
-- `relay['flags']` (list) - Current flag list
+- `relay['measured']` (bool/None) - Whether bandwidth is measured by ≥3 bandwidth authorities
+- `relay['flags']` (list) - Current consensus flags
+
+*From CollecTor (relay.consensus_evaluation / diag):*
+- `diag.available` (bool) - Whether consensus evaluation data is available
+- `diag.in_consensus` (bool) - Whether relay is in consensus
+- `diag.vote_count` (int) - Number of authorities that voted for this relay
+- `diag.total_authorities` (int) - Total voting authorities (9)
+- `diag.majority_required` (int) - Votes needed for consensus (5)
+- `diag.bandwidth_summary.measurement_count` (int) - Number of bandwidth measurements from authorities
+- `diag.flag_summary` (dict) - Per-flag eligibility with keys like 'guard', 'stable', 'hsdir', each containing:
+  - `eligible_count` (int) - How many authorities would assign this flag
+  - `total_authorities` (int) - Total authorities
+  - `status_class` (str) - 'success', 'warning', or 'danger'
+- `diag.issues` (list) - List of issue dicts with `severity`, `title`, `description`, `suggestion`
 
 ---
 
