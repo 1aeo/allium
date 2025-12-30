@@ -1091,8 +1091,8 @@ This section provides complete technical details for implementing each phase, in
 
 | Line(s) | Current | Replace With |
 |---------|---------|--------------|
-| ~224 | `✓` (checkmark for measured bandwidth) | `Yes` |
-| ~226 | `✗` (X for unmeasured bandwidth) | `No` |
+| ~224 | `✓` (checkmark for measured bandwidth) | `Measured` |
+| ~226 | `✗` (X for unmeasured bandwidth) | `Not Measured` |
 | ~229 | `?` (question mark for unknown) | `Unknown` |
 | ~242 | `⚠️ Underutilized` | `[Warning] Underutilized` |
 | ~323 | `🗺️ View on Interactive Map` | `View on Interactive Map` |
@@ -1109,7 +1109,7 @@ This section provides complete technical details for implementing each phase, in
 <span style="color: #28a745; font-weight: bold;" title="Bandwidth capacity measured...">✓</span>
 
 {# AFTER: #}
-<span style="color: #28a745; font-weight: bold;" title="Bandwidth capacity measured...">Yes</span>
+<span style="color: #28a745; font-weight: bold;" title="Bandwidth capacity measured...">Measured</span>
 ```
 
 ```jinja2
@@ -1117,7 +1117,7 @@ This section provides complete technical details for implementing each phase, in
 <span style="color: #dc3545; font-weight: bold;" title="Bandwidth capacity not measured...">✗</span>
 
 {# AFTER: #}
-<span style="color: #dc3545; font-weight: bold;" title="Bandwidth capacity not measured...">No</span>
+<span style="color: #dc3545; font-weight: bold;" title="Bandwidth capacity not measured...">Not Measured</span>
 ```
 
 ```jinja2
@@ -1164,23 +1164,25 @@ Replace all instances of:
 
 | New Anchor ID | Current Element | Line Approx |
 |---------------|-----------------|-------------|
-| `#bandwidth-capacity` | `<dt>Bandwidth Capacity...` | ~212 |
-| `#network-participation` | `<dt>Network Participation...` | ~233 |
-| `#or-address` | `<dt>OR Address</dt>` | ~246 |
-| `#exit-address` | `<dt>Exit Address</dt>` | ~263 |
-| `#dir-address` | `<dt>Dir Address</dt>` | ~275 |
-| `#location` | `<dt>City | Region | Country</dt>` | ~288 |
-| `#coordinates` | `<dt>Latitude, Longitude</dt>` | ~311 |
-| `#as` | `<dt>Autonomous System...` | ~325 |
-| `#flags` | `<dt>Flags: ...</dt>` | ~340 |
-| `#flag-uptime` | `<dt>Flag Uptime...</dt>` | ~355 |
-| `#uptime` | `<dt>Uptime (1M/6M/1Y/5Y)</dt>` | ~369 |
-| `#uptime-downtime` | `<dt>Uptime / Downtime</dt>` | ~379 |
-| `#seen` | `<dt>Seen (First | Last)</dt>` | ~393 |
-| `#last-restarted` | `<dt>Last Restarted</dt>` | ~399 |
-| `#hibernating` | `<dt>Hibernating</dt>` | ~419 |
-| `#platform` | `<dt>Platform (Short | Long)</dt>` | ~429 |
-| `#version` | `<dt>Version (Running...)</dt>` | ~435 |
+| `#bandwidth-capacity` | `<dt>Bandwidth Capacity...` | ~231 |
+| `#network-participation` | `<dt>Network Participation...` | ~254 |
+| `#or-address` | `<dt>OR Address</dt>` | ~269 |
+| `#exit-address` | `<dt>Exit Address</dt>` | ~287 |
+| `#dir-address` | `<dt>Dir Address</dt>` | ~301 |
+| `#location` | `<dt>City | Region | Country</dt>` | ~317 |
+| `#coordinates` | `<dt>Latitude, Longitude</dt>` | ~342 |
+| `#interactive-map` | `<dt>Interactive Map</dt>` | ~352 |
+| `#autonomous-system` | `<dt>Autonomous System...` | ~360 |
+| `#flags` | `<dt>Flags: ...</dt>` | ~377 |
+| `#flag-uptime` | `<dt>Flag Uptime...</dt>` | ~394 |
+| `#uptime-history` | `<dt>Uptime (1M/6M/1Y/5Y)</dt>` | ~410 |
+| `#uptime-downtime` | `<dt>Uptime / Downtime</dt>` | ~422 |
+| `#first-last-seen` | `<dt>Seen (First | Last)</dt>` | ~438 |
+| `#last-restarted` | `<dt>Last Restarted</dt>` | ~446 |
+| `#last-changed-address` | `<dt>Last Changed Address or Port</dt>` | ~458 |
+| `#hibernating` | `<dt>Hibernating</dt>` | ~470 |
+| `#platform` | `<dt>Platform (Short | Long)</dt>` | ~482 |
+| `#version` | `<dt>Version (Running...)</dt>` | ~490 |
 
 **Template Pattern for Adding Anchors:**
 
