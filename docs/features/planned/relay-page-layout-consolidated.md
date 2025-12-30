@@ -70,46 +70,175 @@ Move critical "is my relay working?" information to the very top of the page, im
 
 **New Section Order (top to bottom):**
 
-| Order | Section | Anchor | Why This Position |
-|-------|---------|--------|-------------------|
-| 1 | Health Status Summary | `#status` | Answers "is it working?" |
-| 2 | Connectivity and Addresses | `#connectivity` | Check network reachability |
-| 3 | Flags and Eligibility | `#flags` | Second most common issue |
-| 4 | Bandwidth Metrics | `#bandwidth` | Consensus weight concerns |
-| 5 | Consensus Evaluation Summary | `#consensus-summary` | Quick diagnostic overview |
-| 6 | Uptime and Stability | `#uptime` | Why flags might be missing |
-| 7 | Family Configuration | `#family` | Common misconfiguration |
-| 8 | Software and Version | `#software` | Version-related issues |
-| 9 | Exit Policy | `#exit-policy` | Reference data |
-| 10 | Location and Network | `#location` | Reference data |
-| 11 | Per-Authority Vote Details | `#authority-votes` | Advanced diagnostics |
-| 12 | Operator Information | `#operator` | Contact/AROI |
+| Order | Section | Anchor |
+|-------|---------|--------|
+| 1 | Health Status Summary | `#status` |
+| 2 | Connectivity and Addresses | `#connectivity` |
+| 3 | Flags and Eligibility | `#flags` |
+| 4 | Bandwidth Metrics | `#bandwidth` |
+| 5 | Consensus Evaluation Summary | `#consensus-summary` |
+| 6 | Uptime and Stability | `#uptime` |
+| 7 | Family Configuration | `#family` |
+| 8 | Software and Version | `#software` |
+| 9 | Exit Policy | `#exit-policy` |
+| 10 | Location and Network | `#location` |
+| 11 | Per-Authority Vote Details | `#authority-votes` |
+| 12 | Operator Information | `#operator` |
 
-**Current vs Proposed Flow:**
+#### Detailed Ordering Rationale
+
+The ordering follows a **troubleshooting decision tree** - each section answers questions that logically lead to the next:
+
+**1. Health Status Summary** - "Is my relay working at all?"
+- This is the first question every operator asks
+- If the answer is "yes, everything fine" - operator can stop here
+- If "no" or "partially" - they continue down the page to diagnose
+- Mailing list evidence: Nearly every troubleshooting thread starts with "my relay is/isn't in consensus"
+
+**2. Connectivity and Addresses** - "Can the network reach my relay?"
+- If relay is NOT in consensus, the first thing to check is reachability
+- Shows OR port, Dir port, IPv4/IPv6 reachability status
+- Most common cause of "not in consensus": firewall/NAT blocking ports
+- Mailing list evidence: "Check your firewall" is the #1 response to "relay not working" posts
+- Troubleshooting dependency: Must be reachable before flags can be assigned
+
+**3. Flags and Eligibility** - "Why don't I have [Guard/Stable/Fast] flag?"
+- Once connectivity is confirmed, operators ask about missing flags
+- Second most common mailing list question after consensus issues
+- Shows clear threshold requirements vs current values
+- Troubleshooting dependency: Connectivity must work before flags matter
+
+**4. Bandwidth Metrics** - "Why is my consensus weight so low?"
+- After flags, operators want to know why they're not getting traffic
+- Shows observed vs advertised vs authority-measured bandwidth
+- Explains discrepancy between relay's capacity and actual usage
+- Mailing list evidence: "I have 1 Gbit/s but only getting 10 Mbit/s traffic"
+- Troubleshooting dependency: Flags affect bandwidth allocation (Guard/Fast)
+
+**5. Consensus Evaluation Summary** - "What do the authorities think of my relay?"
+- Condensed view of authority voting and measurements
+- Bridges the gap between "what I configured" and "what authorities see"
+- Quick diagnostic without scrolling to detailed tables
+- Troubleshooting dependency: Summarizes results of connectivity + flags + bandwidth checks
+
+**6. Uptime and Stability** - "Why did I lose my Stable/Guard flag?"
+- Stable and Guard flags require sustained uptime
+- Shows historical uptime percentages (1M/6M/1Y)
+- Explains flag loss after restarts or outages
+- Mailing list evidence: "I restarted my relay and lost Guard flag"
+- Troubleshooting dependency: Explains flag eligibility failures from section 3
+
+**7. Family Configuration** - "Why are my family members showing as 'alleged'?"
+- Common misconfiguration: asymmetric family declarations
+- Shows effective vs alleged vs indirect family members
+- Mailing list evidence: Frequent questions about family setup errors
+- Position rationale: Not critical for basic operation, but important for operators running multiple relays
+
+**8. Software and Version** - "Is my Tor version OK?"
+- Version issues are less urgent but can affect flags
+- Shows recommended/obsolete status
+- Position rationale: Usually not the cause of immediate problems, but good to verify
+- Mailing list evidence: Occasional "upgrade your Tor" responses
+
+**9. Exit Policy** - "What traffic does my relay allow?"
+- Reference information, rarely the cause of troubleshooting issues
+- Mostly static configuration data
+- Position rationale: Operators know their exit policy; this is for verification
+
+**10. Location and Network** - "Where is my relay located?"
+- Geographic and AS information
+- Rarely relevant to troubleshooting
+- Position rationale: Reference data, not diagnostic
+
+**11. Per-Authority Vote Details** - "Which specific authority is not voting for me?"
+- Advanced diagnostics for edge cases
+- Detailed per-authority breakdown
+- Position rationale: Only needed when summary (section 5) shows problems
+- Used by experienced operators or when guided by support
+
+**12. Operator Information** - "How do I contact the operator?"
+- Contact info and AROI
+- Position rationale: Reference data, not needed for self-troubleshooting
+
+#### The Troubleshooting Flow Visualized
 
 ```
-CURRENT (scattered):              PROPOSED (troubleshooting flow):
-                                  
-Left Column:                      Top-to-Bottom:
-  - Nickname/Fingerprint            1. Health Status [NEW]
-  - AROI/Contact                    2. Connectivity (OR/Exit/Dir addresses)
-  - Exit Policies                   3. Flags + Eligibility Table
-  - Family                          4. Bandwidth (observed/advertised/measured)
-                                    5. Consensus Evaluation Summary
-Right Column:                       6. Uptime/Stability metrics
-  - Bandwidth                       7. Family configuration
-  - Network Participation           8. Software/Version
-  - OR/Exit/Dir Addresses           9. Exit Policy
-  - Location                        10. Location/AS
-  - Flags                           11. Per-Authority Details (collapsed)
-  - Uptime                          12. Operator info
-  - Platform/Version                
-                                  
-Bottom:                           
-  - Consensus Evaluation          
+START: "My relay isn't working"
+         │
+         ▼
+    ┌─────────────────┐
+    │ 1. HEALTH STATUS │ ──── "In consensus? Running? Any issues?"
+    └────────┬────────┘
+             │ If NOT in consensus or has issues...
+             ▼
+    ┌─────────────────┐
+    │ 2. CONNECTIVITY │ ──── "Can authorities reach my ports?"
+    └────────┬────────┘
+             │ If reachable but missing flags...
+             ▼
+    ┌─────────────────┐
+    │ 3. FLAGS        │ ──── "What flags am I missing? What thresholds?"
+    └────────┬────────┘
+             │ If flags OK but low traffic...
+             ▼
+    ┌─────────────────┐
+    │ 4. BANDWIDTH    │ ──── "Why is my measured BW different from capacity?"
+    └────────┬────────┘
+             │ Need more detail on authority measurements...
+             ▼
+    ┌─────────────────┐
+    │ 5. CONSENSUS    │ ──── "Summary of what authorities see"
+    │    SUMMARY      │
+    └────────┬────────┘
+             │ If flag was lost recently...
+             ▼
+    ┌─────────────────┐
+    │ 6. UPTIME       │ ──── "Did downtime cause flag loss?"
+    └────────┬────────┘
+             │ Running multiple relays...
+             ▼
+    ┌─────────────────┐
+    │ 7. FAMILY       │ ──── "Is family configured correctly?"
+    └────────┬────────┘
+             │ Check software version...
+             ▼
+    ┌─────────────────┐
+    │ 8. SOFTWARE     │ ──── "Is my Tor version recommended?"
+    └────────┬────────┘
+             │
+             ▼
+    ┌─────────────────────────────────────────┐
+    │ 9-12. REFERENCE DATA                    │
+    │ Exit Policy, Location, Authority Detail,│
+    │ Operator Info                           │
+    └─────────────────────────────────────────┘
 ```
 
-**Rationale:** Linear troubleshooting flow from "basic connectivity" to "advanced diagnostics."
+#### Current vs Proposed Layout
+
+```
+CURRENT (two-column, scattered):        PROPOSED (single-column, flow):
+                                  
+Left Column:                            Top-to-Bottom:
+  - Nickname/Fingerprint                  1. Health Status [NEW]
+  - AROI/Contact          ─┐              2. Connectivity
+  - Exit Policies          │              3. Flags + Eligibility
+  - Family                 │              4. Bandwidth
+                           │              5. Consensus Summary
+Right Column:              │              6. Uptime/Stability
+  - Bandwidth              │              7. Family
+  - Network Participation  │              8. Software/Version
+  - OR/Exit/Dir Addresses  ├─ scattered   9. Exit Policy
+  - Location               │              10. Location/AS
+  - Flags                  │              11. Per-Authority Details
+  - Uptime                 │              12. Operator info
+  - Platform/Version      ─┘
+                                  
+Bottom (separate section):
+  - Consensus Evaluation (detailed)
+```
+
+**Why single-column?** Two-column layouts force users to scan horizontally and make mental connections between scattered data. A linear flow matches how troubleshooting actually works: check one thing, then the next logical thing.
 
 ---
 
