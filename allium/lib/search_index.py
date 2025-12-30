@@ -7,7 +7,7 @@ Generates a compact JSON index of relays and families for server-side search.
 Design principles:
 - Compute-efficient: Precomputed lookups, minimal iterations, parallel processing
 - Compact output: Short keys, minimal redundancy
-- DRY: Reusable helper functions
+- DRY: Reusable helper functions, imports existing utilities
 - Security: Input validation, safe file handling
 """
 
@@ -15,6 +15,9 @@ import json
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional, Set, Tuple
+
+# Import existing utility for IP parsing (DRY - avoid reimplementing)
+from .aroileaders import _safe_parse_ip_address
 
 
 # =============================================================================
@@ -38,7 +41,12 @@ MAX_WORKERS = 4
 # =============================================================================
 
 def is_valid_aroi(aroi: Optional[str]) -> bool:
-    """Check if AROI domain is valid (not None, empty, or 'none')."""
+    """
+    Check if AROI domain is valid (not None, empty, or 'none').
+    
+    Note: This pattern is used 30+ times across the codebase.
+    Consider moving to a shared utility module in future refactoring.
+    """
     return bool(aroi) and aroi != 'none'
 
 
@@ -47,23 +55,11 @@ def extract_ip_from_or_address(or_address: str) -> Optional[str]:
     Extract IP address from OR address string.
     Handles IPv4 "1.2.3.4:9001" and IPv6 "[2001:db8::1]:9001".
     
-    Security: Only processes string input, returns None for invalid formats.
+    Uses _safe_parse_ip_address from aroileaders.py for robust parsing
+    with ipaddress module validation.
     """
-    if not or_address or not isinstance(or_address, str):
-        return None
-
-    if or_address.startswith('['):
-        # IPv6 format: [2001:db8::1]:9001
-        bracket_end = or_address.find(']')
-        if bracket_end > 1:
-            return or_address[1:bracket_end]
-        return None
-    else:
-        # IPv4 format: 1.2.3.4:9001
-        colon_pos = or_address.rfind(':')
-        if colon_pos > 0:
-            return or_address[:colon_pos]
-        return or_address
+    ip, _ = _safe_parse_ip_address(or_address)
+    return ip
 
 
 def extract_common_prefix(nicknames: List[str]) -> Optional[str]:
