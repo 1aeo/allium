@@ -38,6 +38,42 @@
 </nav>
 {%- endmacro %}
 
+{# =============================================================================
+   SEARCH FORM MACRO (DRY - reusable search input with security attributes)
+   ============================================================================= #}
+{% macro search_input(path_prefix, variant='desktop') -%}
+{#
+    Renders a search input field with proper security attributes.
+    
+    Args:
+        path_prefix: URL path prefix for the search action
+        variant: 'desktop' (compact) or 'mobile' (full-width)
+    
+    Security attributes applied:
+        - maxlength: Prevents DoS via extremely long queries
+        - pattern: Client-side validation (defense-in-depth)
+        - autocomplete=off: Prevents sensitive data leakage
+        - spellcheck=false: Prevents data being sent to spell-check services
+#}
+{% set placeholder = "Search relays..." if variant == 'desktop' else "Search by fingerprint, nickname, AROI, AS, country..." %}
+{% set input_class = "form-control input-sm" if variant == 'desktop' else "form-control" %}
+{% set btn_class = "btn btn-sm btn-default" if variant == 'desktop' else "btn btn-primary" %}
+{% set btn_content = '<span class="glyphicon glyphicon-search" aria-hidden="true"></span>' if variant == 'desktop' else 'Search' %}
+<input type="text" 
+       name="q" 
+       class="{{ input_class }}" 
+       placeholder="{{ placeholder }}"
+       title="Search by fingerprint, nickname, AROI, AS, country, or IP"
+       maxlength="100"
+       pattern="[A-Za-z0-9\s\-_.@:]+"
+       autocomplete="off"
+       autocapitalize="off"
+       spellcheck="false">
+<span class="input-group-btn">
+    <button type="submit" class="{{ btn_class }}">{{ btn_content | safe }}</button>
+</span>
+{%- endmacro %}
+
 {% macro navigation(active_section, page_ctx={'path_prefix': ''}, show_breadcrumbs=true) -%}
     {% if show_breadcrumbs and page_ctx.breadcrumb_type and page_ctx.breadcrumb_data %}
         {{ breadcrumbs(page_ctx.breadcrumb_type, page_ctx.breadcrumb_data, page_ctx.path_prefix) }}
@@ -96,21 +132,7 @@
                       class="navbar-form navbar-right hidden-xs hidden-sm"
                       style="margin-right: 0;">
                     <div class="input-group" style="width: 220px;">
-                        <input type="text" 
-                               name="q" 
-                               class="form-control input-sm" 
-                               placeholder="Search relays..."
-                               title="Search by fingerprint, nickname, AROI, AS, country, or IP"
-                               maxlength="100"
-                               pattern="[A-Za-z0-9\s\-_.@:]+"
-                               autocomplete="off"
-                               autocapitalize="off"
-                               spellcheck="false">
-                        <span class="input-group-btn">
-                            <button type="submit" class="btn btn-sm btn-default">
-                                <span class="glyphicon glyphicon-search" aria-hidden="true"></span>
-                            </button>
-                        </span>
+                        {{ search_input(page_ctx.path_prefix, 'desktop') }}
                     </div>
                 </form>
             </div>
@@ -121,19 +143,7 @@
     <div class="allium-mobile-search visible-xs visible-sm">
         <form action="{{ page_ctx.path_prefix }}search" method="GET">
             <div class="input-group">
-                <input type="text" 
-                       name="q" 
-                       class="form-control" 
-                       placeholder="Search by fingerprint, nickname, AROI, AS, country..."
-                       title="Search by fingerprint, nickname, AROI, AS number, country, or IP"
-                       maxlength="100"
-                       pattern="[A-Za-z0-9\s\-_.@:]+"
-                       autocomplete="off"
-                       autocapitalize="off"
-                       spellcheck="false">
-                <span class="input-group-btn">
-                    <button type="submit" class="btn btn-primary">Search</button>
-                </span>
+                {{ search_input(page_ctx.path_prefix, 'mobile') }}
             </div>
         </form>
     </div>
