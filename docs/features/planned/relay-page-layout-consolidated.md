@@ -121,21 +121,30 @@ This means "Operator Information" is **removed as a section** - it's in the head
 
 The **Per-Authority Details** table remains as the deep-dive section for advanced troubleshooting.
 
-#### Revised Section List (11 sections, not 12)
+#### Revised Section List (10 sections, not 12)
+
+After removing duplicates and merging related sections:
 
 | Order | Section | Anchor |
 |-------|---------|--------|
 | - | Page Header (Identity, Contact, Quick Links) | - |
 | 1 | Health Status Summary | `#status` |
-| 2 | Connectivity and Addresses | `#connectivity` |
+| 2 | Network and Location | `#network` |
 | 3 | Flags and Eligibility | `#flags` |
 | 4 | Bandwidth Metrics | `#bandwidth` |
 | 5 | Uptime and Stability | `#uptime` |
 | 6 | Family Configuration | `#family` |
 | 7 | Software and Version | `#software` |
 | 8 | Exit Policy | `#exit-policy` |
-| 9 | Location and Network | `#location` |
-| 10 | Per-Authority Vote Details | `#authority-votes` |
+| 9 | Per-Authority Vote Details | `#authority-votes` |
+
+**Changes from previous version:**
+- **Merged:** "Connectivity and Addresses" + "Location and Network" → **"Network and Location"** (`#network`)
+  - Rationale: IP addresses, reachability, AS info, and geographic location are all network-related
+  - AS number is troubleshooting-relevant (ISP issues), shouldn't be buried at bottom
+- **Removed:** "Summary: Your Relay vs Consensus" table from Per-Authority section
+  - Rationale: 90% duplicate of data already shown in Health Status, Flags, and Bandwidth sections
+  - Per-Authority Details table (the detailed one) is kept - it's unique and needed for advanced troubleshooting
 
 ---
 
@@ -185,17 +194,19 @@ Move critical "is my relay working?" information to the very top of the page, im
 |-------|---------|--------|
 | - | Page Header (Identity, Contact) | n/a |
 | 1 | Health Status Summary | `#status` |
-| 2 | Connectivity and Addresses | `#connectivity` |
+| 2 | Network and Location | `#network` |
 | 3 | Flags and Eligibility | `#flags` |
 | 4 | Bandwidth Metrics | `#bandwidth` |
 | 5 | Uptime and Stability | `#uptime` |
 | 6 | Family Configuration | `#family` |
 | 7 | Software and Version | `#software` |
 | 8 | Exit Policy | `#exit-policy` |
-| 9 | Location and Network | `#location` |
-| 10 | Per-Authority Vote Details | `#authority-votes` |
+| 9 | Per-Authority Vote Details | `#authority-votes` |
 
-Note: "Operator Information" moved to Page Header. "Consensus Summary" removed (redundant - data distributed to sections 1-4).
+**Changes:**
+- "Connectivity" + "Location" merged into **"Network and Location"** - all network-related info together
+- "Summary Table" removed from Per-Authority section (data already in sections 1, 3, 4)
+- "Operator Information" in Page Header (not a section)
 
 #### Detailed Ordering Rationale
 
@@ -207,12 +218,15 @@ The ordering follows a **troubleshooting decision tree** - each section answers 
 - If "no" or "partially" - they continue down the page to diagnose
 - Mailing list evidence: Nearly every troubleshooting thread starts with "my relay is/isn't in consensus"
 
-**2. Connectivity and Addresses** - "Can the network reach my relay?"
+**2. Network and Location** - "Can the network reach my relay? Where is it?"
+- **Merged section** combining connectivity + location + AS info
 - If relay is NOT in consensus, the first thing to check is reachability
 - Shows OR port, Dir port, IPv4/IPv6 reachability status
+- Also shows AS number (relevant for ISP/network troubleshooting) and geographic location
 - Most common cause of "not in consensus": firewall/NAT blocking ports
 - Mailing list evidence: "Check your firewall" is the #1 response to "relay not working" posts
 - Troubleshooting dependency: Must be reachable before flags can be assigned
+- **Why merged:** AS info is troubleshooting-relevant (ISP blocks), and addresses without network context is incomplete
 
 **3. Flags and Eligibility** - "Why don't I have [Guard/Stable/Fast] flag?"
 - Once connectivity is confirmed, operators ask about missing flags
@@ -251,14 +265,10 @@ The ordering follows a **troubleshooting decision tree** - each section answers 
 - Mostly static configuration data
 - Position rationale: Operators know their exit policy; this is for verification
 
-**9. Location and Network** - "Where is my relay located?"
-- Geographic and AS information
-- Rarely relevant to troubleshooting
-- Position rationale: Reference data, not diagnostic
-
-**10. Per-Authority Vote Details** - "Which specific authority is not voting for me?"
+**9. Per-Authority Vote Details** - "Which specific authority is not voting for me?"
 - Advanced diagnostics for edge cases
-- Detailed per-authority breakdown
+- Detailed per-authority breakdown (the table with all 9 authorities)
+- **Note:** "Summary: Your Relay vs Consensus" table REMOVED - it duplicates data from sections 1, 3, and 4
 - Position rationale: Only needed when Health Status or Flags sections show problems
 - Used by experienced operators or when guided by support
 
@@ -284,7 +294,8 @@ START: "My relay isn't working"
              │ If NOT in consensus or has issues...
              ▼
     ┌─────────────────┐
-    │ 2. CONNECTIVITY │ ──── "Can authorities reach my ports?"
+    │ 2. NETWORK &    │ ──── "Can authorities reach my ports? What AS/location?"
+    │    LOCATION     │      (addresses, reachability, AS, country)
     └────────┬────────┘
              │ If reachable but missing flags...
              ▼
@@ -314,9 +325,9 @@ START: "My relay isn't working"
              │
              ▼
     ┌─────────────────────────────────────────┐
-    │ 8-10. REFERENCE & ADVANCED              │
-    │ Exit Policy, Location, Per-Authority    │
-    │ Vote Details (deep diagnostics)         │
+    │ 8-9. REFERENCE & ADVANCED               │
+    │ Exit Policy, Per-Authority Vote Details │
+    │ (deep diagnostics - no duplicate tables)│
     └─────────────────────────────────────────┘
 ```
 
@@ -333,23 +344,29 @@ Left Column:                              - Contact / AROI
   - AROI/Contact          ─┐            
   - Exit Policies          │            Sections (full-width, top-to-bottom):
   - Family                 │              1. Health Status [NEW]
-                           │              2. Connectivity + Reachability
-Right Column:              │              3. Flags + Eligibility Table
-  - Bandwidth              │              4. Bandwidth + Consensus Weight
-  - Network Participation  │              5. Uptime/Stability
-  - OR/Exit/Dir Addresses  ├─ scattered   6. Family (detailed)
-  - Location               │              7. Software/Version
-  - Flags                  │              8. Exit Policy
-  - Uptime                 │              9. Location/AS
-  - Platform/Version      ─┘              10. Per-Authority Details
-                                  
+                           │              2. Network & Location [MERGED]
+Right Column:              │                 (addresses + reachability + AS + geo)
+  - Bandwidth              │              3. Flags + Eligibility Table
+  - Network Participation  │              4. Bandwidth + Consensus Weight
+  - OR/Exit/Dir Addresses  ├─ scattered   5. Uptime/Stability
+  - Location               │              6. Family (detailed)
+  - Flags                  │              7. Software/Version
+  - Uptime                 │              8. Exit Policy
+  - Platform/Version      ─┘              9. Per-Authority Details
+                                             (summary table REMOVED - duplicate)
 Bottom (separate section):
   - Consensus Evaluation (detailed)
+    - Summary Table ──────────────────> REMOVED (duplicate of 1, 3, 4)
+    - Per-Authority Table ────────────> KEPT in section 9
 ```
 
 **Why single-column?** Two-column layouts force users to scan horizontally and make mental connections between scattered data. A linear flow matches how troubleshooting actually works: check one thing, then the next logical thing.
 
 **Why identity in header?** Operators need to confirm they're viewing the correct relay before doing anything else. The header is always visible at the top, and on most screens remains visible while scrolling (or can be quickly scrolled back to).
+
+**Why merge Connectivity + Location?** AS number is troubleshooting-relevant (ISP blocks, network issues). IP addresses without their network/geographic context is incomplete. All "where is this relay on the network" info belongs together.
+
+**Why remove Summary Table?** 90% of its data is already shown in Health Status (consensus status), Flags (eligibility thresholds), and Bandwidth (consensus weight). The Per-Authority Details table is kept because it provides unique per-authority breakdown not shown elsewhere.
 
 ---
 
@@ -440,7 +457,7 @@ BELOW            (red text)
 | Anchor ID | Section | Priority |
 |-----------|---------|----------|
 | `#status` | Health Status Summary | Critical |
-| `#connectivity` | OR/Exit/Dir Addresses, Reachability | High |
+| `#network` | Network and Location (merged section) | High |
 | `#flags` | Flags and Eligibility | High |
 | `#bandwidth` | Bandwidth Metrics | High |
 | `#uptime` | Uptime and Stability | High |
@@ -453,11 +470,14 @@ BELOW            (red text)
 | `#exit-policy` | Exit Policy (existing) | Low |
 | `#ipv4-exit-policy-summary` | IPv4 Exit Policy Summary (existing) | Low |
 | `#ipv6-exit-policy-summary` | IPv6 Exit Policy Summary (existing) | Low |
-| `#location` | Geographic Location | Low |
-| `#relay-summary` | Summary Table (existing) | Low |
-| `#consensus-evaluation` | Full Consensus Evaluation (existing, alias for authority-votes) | Low |
 
-Note: Operator/contact info is in the page header, not a separate section. The `#consensus-summary` anchor was removed as that section was merged into Health Status.
+**Removed/Changed Anchors:**
+- `#connectivity` → replaced by `#network` (merged with location)
+- `#location` → merged into `#network`
+- `#relay-summary` → **REMOVED** (duplicate table removed)
+- `#consensus-evaluation` → alias for `#authority-votes` (for backward compatibility)
+
+Note: Operator/contact info is in the page header, not a separate section.
 
 **Implementation:**
 Each section header should be clickable and link to itself:
@@ -485,16 +505,18 @@ Each section header should be clickable and link to itself:
 
 ### Phase 2: Layout Restructure
 1. Add Health Status Summary section at top (new section)
-2. Reorder sections by troubleshooting priority (see Section 2)
-3. Consolidate two-column layout into single-column flow
-4. Add CSS for fluid-width single column (max-width: 1400px)
-5. Move Fingerprint to header, make full and copyable
+2. Merge Connectivity + Location into "Network and Location" section
+3. Reorder sections by troubleshooting priority (9 sections total)
+4. Consolidate two-column layout into single-column flow (with 2-col inside sections on desktop)
+5. Add CSS for fluid-width single column (max-width: 1400px)
+6. Move Fingerprint to header, make full and copyable
 
 ### Phase 3: Content Enhancement
 1. Add Flag Eligibility table to Flags section (data already available from consensus_evaluation)
 2. Improve Issues/Warnings display with actionable advice
-3. Move reachability counts from Consensus Evaluation to Connectivity section
-4. Ensure Per-Authority Details table is at bottom for advanced users
+3. **Remove** "Summary: Your Relay vs Consensus" table (duplicate of sections 1, 3, 4)
+4. Keep Per-Authority Details table for advanced troubleshooting
+5. Add backward-compatible anchor aliases (`#connectivity` → `#network`, `#location` → `#network`)
 
 ---
 
@@ -528,7 +550,7 @@ Every item from the current relay page mapped to the proposed structure:
 | Consensus Eval | Identified Issues | Error/Warning list |
 | Consensus Eval | Notes | Info items |
 
-### Section 2: Connectivity (`#connectivity`)
+### Section 2: Network and Location (`#network`) - MERGED SECTION
 
 | Current Location | Item | Notes |
 |------------------|------|-------|
@@ -537,6 +559,16 @@ Every item from the current relay page mapped to the proposed structure:
 | Right column | Dir Address | Link to directory |
 | Consensus Eval | IPv4 Reachability | X/9 authorities |
 | Consensus Eval | IPv6 Reachability | X/Y testers (if has IPv6) |
+| Right column | City | If available |
+| Right column | Region | If available |
+| Right column | Country | With flag icon and link |
+| Right column | Latitude | Coordinates |
+| Right column | Longitude | Coordinates |
+| Right column | Interactive Map link | External link |
+| Right column | AS Number | With link to AS page |
+| Right column | AS Name | With BGP.tools link |
+
+**Why merged:** Addresses, reachability, AS info, and location are all network-related. AS number is troubleshooting-relevant (ISP issues).
 
 ### Section 3: Flags and Eligibility (`#flags`)
 
@@ -613,29 +645,24 @@ Every item from the current relay page mapped to the proposed structure:
 | Left column | IPv6 Exit Policy Summary | accept/reject summary |
 | Left column | Exit Policy (full) | Complete policy list |
 
-### Section 9: Location and Network (`#location`)
+### Section 9: Per-Authority Vote Details (`#authority-votes`)
 
-| Current Location | Item | Notes |
-|------------------|------|-------|
-| Right column | City | If available |
-| Right column | Region | If available |
-| Right column | Country | With flag icon and link |
-| Right column | Latitude | Coordinates |
-| Right column | Longitude | Coordinates |
-| Right column | Interactive Map link | External link |
-| Right column | AS Number | With link to AS page |
-| Right column | AS Name | With BGP.tools link |
+| Current Location | Item | Keep/Remove | Notes |
+|------------------|------|-------------|-------|
+| Consensus Eval | Summary Table header | **REMOVE** | Duplicate - data in sections 1, 3, 4 |
+| Consensus Eval | Summary Table (full) | **REMOVE** | Duplicate - data in sections 1, 3, 4 |
+| Consensus Eval | Per-Authority Details table | **KEEP** | Unique - per-authority breakdown |
+| Consensus Eval | Bandwidth Values Explained | **KEEP** | Helpful context for the table |
+| Consensus Eval | Stable Uptime Explained | **KEEP** | Helpful context for the table |
+| Consensus Eval | Data source attribution | **KEEP** | CollecTor link |
 
-### Section 10: Per-Authority Vote Details (`#authority-votes`)
+**Why remove Summary Table?** Its 14 rows duplicate data already shown:
+- In Consensus, Running, Valid → Health Status section
+- Guard WFU/TK/BW, Stable MTBF/Uptime, Fast Speed, HSDir WFU/TK → Flags section
+- Consensus Weight → Bandwidth section
+- IPv6 Reachability → Network section
 
-| Current Location | Item | Notes |
-|------------------|------|-------|
-| Consensus Eval | Summary Table header | "Your Relay vs Consensus" |
-| Consensus Eval | Summary Table (full) | All metrics with thresholds |
-| Consensus Eval | Per-Authority Details table | Full voting breakdown |
-| Consensus Eval | Bandwidth Values Explained | Info box |
-| Consensus Eval | Stable Uptime Explained | Info box |
-| Consensus Eval | Data source attribution | CollecTor link |
+The Per-Authority table is kept because it shows which SPECIFIC authority is/isn't voting - not shown elsewhere.
 
 ---
 
@@ -672,18 +699,21 @@ Two columns inside each section to maximize information density on wide screens.
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ CONNECTIVITY                                                                                        [#connectivity] ┃
+┃ NETWORK AND LOCATION                                                                                    [#network] ┃
 ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
-┃ OR Address                                          ┃ Reachability (per Directory Authorities)                        ┃
-┃   relay.example.com (verified)                      ┃                                                                  ┃
-┃   192.0.2.1:9001                                    ┃   IPv4: 9/9 authorities                                          ┃
-┃   [2001:db8::1]:9001                                ┃   IPv6: 3/5 testers (4 authorities don't test IPv6)             ┃
+┃ Addresses                                           ┃ Location                                                        ┃
 ┃                                                     ┃                                                                  ┃
-┃ Exit Address                                        ┃                                                                  ┃
-┃   none                                              ┃                                                                  ┃
-┃                                                     ┃                                                                  ┃
-┃ Dir Address                                         ┃                                                                  ┃
-┃   192.0.2.1:9030                                    ┃                                                                  ┃
+┃   OR Address:                                       ┃   Country: Germany (DE)                                          ┃
+┃     relay.example.com (verified)                    ┃   Region: Bavaria                                                ┃
+┃     192.0.2.1:9001                                  ┃   City: Munich                                                   ┃
+┃     [2001:db8::1]:9001                              ┃   Coordinates: 48.13, 11.58                                      ┃
+┃   Exit Address: none                                ┃   View on Interactive Map                                        ┃
+┃   Dir Address: 192.0.2.1:9030                       ┃                                                                  ┃
+┃                                                     ┃ Autonomous System                                                ┃
+┃ Reachability (per Directory Authorities)            ┃                                                                  ┃
+┃                                                     ┃   AS Number: AS24940                                             ┃
+┃   IPv4: 9/9 authorities                             ┃   AS Name: Hetzner Online GmbH                                   ┃
+┃   IPv6: 3/5 testers (4 don't test IPv6)             ┃   BGP.tools                                                      ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
@@ -782,38 +812,13 @@ Two columns inside each section to maximize information density on wide screens.
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ LOCATION AND NETWORK                                                                                    [#location] ┃
-┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
-┃ Geographic Location                                 ┃ Autonomous System                                               ┃
-┃                                                     ┃                                                                  ┃
-┃   Country: Germany (DE)                             ┃   AS Number: AS24940                                             ┃
-┃   Region: Bavaria                                   ┃   AS Name: Hetzner Online GmbH                                   ┃
-┃   City: Munich                                      ┃   BGP.tools                                                      ┃
-┃                                                     ┃                                                                  ┃
-┃   Coordinates: 48.13, 11.58                         ┃                                                                  ┃
-┃   View on Interactive Map                           ┃                                                                  ┃
-┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
-
-┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃ PER-AUTHORITY VOTE DETAILS                                                                        [#authority-votes] ┃
 ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
 ┃ Data from Tor CollecTor (authority votes, fetched 2024-12-29 14:00 UTC)                                              ┃
+┃                                                                                                                      ┃
+┃ Note: "Summary: Your Relay vs Consensus" table removed - data shown in Health Status, Flags, and Bandwidth sections ┃
 ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
-┃ Summary: Your Relay vs Consensus Thresholds                                                           [#relay-summary]┃
-┃ ┌────────────────────┬─────────────────────┬──────────────────────────────┬──────────────────────────────────────┐    ┃
-┃ │ Metric             │ Your Value          │ Threshold                    │ Status                               │    ┃
-┃ ├────────────────────┼─────────────────────┼──────────────────────────────┼──────────────────────────────────────┤    ┃
-┃ │ In Consensus       │ 9/9 authorities     │ >=5/9 (majority)             │ IN CONSENSUS                         │    ┃
-┃ │ Running            │ 9/9 authorities     │ >=5/9 (majority)             │ RUNNING                              │    ┃
-┃ │ Valid              │ 9/9 authorities     │ >=5/9 (majority)             │ VALID                                │    ┃
-┃ │ Consensus Weight   │ 98 KB/s (median)    │ N/A                          │ -                                    │    ┃
-┃ │ Guard WFU          │ 99.2%               │ >=98%                        │ MEETS                                │    ┃
-┃ │ Guard TK           │ 45 days             │ >=8 days                     │ MEETS                                │    ┃
-┃ │ Guard BW           │ 125 Mbit/s          │ >=2 MB/s OR top 25%          │ MEETS                                │    ┃
-┃ │ ... (more rows)    │                     │                              │                                      │    ┃
-┃ └────────────────────┴─────────────────────┴──────────────────────────────┴──────────────────────────────────────┘    ┃
-┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
-┃ Per-Authority Voting Details (for advanced troubleshooting)                                                          ┃
+┃ Per-Authority Voting Details (for advanced troubleshooting - which specific authority is/isn't voting?)              ┃
 ┃ ┌───────────┬────────┬───────┬────────┬────┬────┬─────────────────────┬───────────┬────────────┬─────────┬─────────┐ ┃
 ┃ │ Authority │ Running│ Valid │ BW Scan│ v4 │ v6 │ Flags               │ Fast      │ Guard BW   │ Guard   │ Cons Wt │ ┃
 ┃ │           │        │       │        │    │    │                     │ (R|T)     │ (R|T)      │ WFU/TK  │         │ ┃
@@ -875,23 +880,31 @@ Single column layout for narrow screens. All content stacks vertically.
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ CONNECTIVITY           [#connectivity]    ┃
+┃ NETWORK AND LOCATION        [#network]    ┃
 ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
-┃ OR Address                                ┃
-┃   relay.example.com (verified)            ┃
-┃   192.0.2.1:9001                          ┃
-┃   [2001:db8::1]:9001                      ┃
-┃                                           ┃
-┃ Exit Address                              ┃
-┃   none                                    ┃
-┃                                           ┃
-┃ Dir Address                               ┃
-┃   192.0.2.1:9030                          ┃
+┃ Addresses                                 ┃
+┃   OR: relay.example.com (verified)        ┃
+┃       192.0.2.1:9001                      ┃
+┃       [2001:db8::1]:9001                  ┃
+┃   Exit: none                              ┃
+┃   Dir: 192.0.2.1:9030                     ┃
 ┃                                           ┃
 ┃ Reachability                              ┃
 ┃   IPv4: 9/9 authorities                   ┃
 ┃   IPv6: 3/5 testers                       ┃
 ┃         (4 don't test IPv6)               ┃
+┃                                           ┃
+┃ Location                                  ┃
+┃   Country: Germany (DE)                   ┃
+┃   Region: Bavaria                         ┃
+┃   City: Munich                            ┃
+┃   Coordinates: 48.13, 11.58               ┃
+┃   View on Interactive Map                 ┃
+┃                                           ┃
+┃ Autonomous System                         ┃
+┃   AS Number: AS24940                      ┃
+┃   AS Name: Hetzner Online GmbH            ┃
+┃   BGP.tools                               ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
@@ -1018,35 +1031,13 @@ Single column layout for narrow screens. All content stacks vertically.
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ LOCATION AND NETWORK        [#location]   ┃
-┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
-┃ Geographic Location                       ┃
-┃   Country: Germany (DE)                   ┃
-┃   Region: Bavaria                         ┃
-┃   City: Munich                            ┃
-┃   Coordinates: 48.13, 11.58               ┃
-┃   View on Interactive Map                 ┃
-┃                                           ┃
-┃ Autonomous System                         ┃
-┃   AS Number: AS24940                      ┃
-┃   AS Name: Hetzner Online GmbH            ┃
-┃   BGP.tools                               ┃
-┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
-
-┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃ PER-AUTHORITY DETAILS  [#authority-votes] ┃
 ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
 ┃ Data from Tor CollecTor                   ┃
 ┃ (fetched 2024-12-29 14:00 UTC)            ┃
 ┃                                           ┃
-┃ Summary Table [Tap to expand]             ┃
-┃   In Consensus: 9/9 - IN CONSENSUS        ┃
-┃   Running: 9/9 - RUNNING                  ┃
-┃   Valid: 9/9 - VALID                      ┃
-┃   Consensus Weight: 98 KB/s               ┃
-┃   Guard WFU: 99.2% >= 98% - MEETS         ┃
-┃   Guard TK: 45d >= 8d - MEETS             ┃
-┃   ... (more metrics)                      ┃
+┃ Note: Summary table removed (data shown   ┃
+┃ in Health Status, Flags, Bandwidth)       ┃
 ┃                                           ┃
 ┃ Per-Authority Table                       ┃
 ┃   [Horizontal scroll on mobile]           ┃
