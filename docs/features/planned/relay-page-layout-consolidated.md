@@ -498,120 +498,574 @@ Each section header should be clickable and link to itself:
 
 ---
 
-## Proposed Page Structure (ASCII Wireframe)
+## Complete Item Mapping: Current → Proposed
+
+Every item from the current relay page mapped to the proposed structure:
+
+### Page Header (Identity - Not a Section)
+
+| Current Location | Item | Notes |
+|------------------|------|-------|
+| Title | Nickname | Large, prominent |
+| Left column | Fingerprint | Full, copyable |
+| Left column | Contact | Link to contact page |
+| Left column | AROI | Link to operator page |
+| Header h4 | Family link (count) | Quick link |
+| Header h4 | AS link | Quick link |
+| Header h4 | Country link | Quick link |
+| Header h4 | Platform link | Quick link |
+| Header | Last fetch timestamp | Data freshness indicator |
+
+### Section 1: Health Status (`#status`)
+
+| Current Location | Item | Notes |
+|------------------|------|-------|
+| Consensus Eval | Consensus Status | IN/NOT IN CONSENSUS |
+| Consensus Eval | Vote count | X/9 authorities |
+| Right column | Flags list | Current active flags |
+| Right column | Measured indicator | ✓/✗ → Yes/No text |
+| Right column | Uptime/Downtime | UP/DOWN + duration |
+| Consensus Eval | Identified Issues | Error/Warning list |
+| Consensus Eval | Notes | Info items |
+
+### Section 2: Connectivity (`#connectivity`)
+
+| Current Location | Item | Notes |
+|------------------|------|-------|
+| Right column | OR Address | With verified/unverified hostnames |
+| Right column | Exit Address | If applicable |
+| Right column | Dir Address | Link to directory |
+| Consensus Eval | IPv4 Reachability | X/9 authorities |
+| Consensus Eval | IPv6 Reachability | X/Y testers (if has IPv6) |
+
+### Section 3: Flags and Eligibility (`#flags`)
+
+| Current Location | Item | Notes |
+|------------------|------|-------|
+| Right column | Flags count + list | With flag icons → text only |
+| Consensus Eval | Flag Eligibility summary | Guard/Stable/Fast/HSDir: X/9 |
+| Consensus Eval | Running/Valid/V2Dir counts | X/9 each |
+| Summary Table | Guard WFU (value vs threshold) | From consensus eval |
+| Summary Table | Guard TK (value vs threshold) | From consensus eval |
+| Summary Table | Guard BW (value vs threshold) | From consensus eval |
+| Summary Table | Stable Uptime (value vs threshold) | From consensus eval |
+| Summary Table | Stable MTBF (value vs threshold) | From consensus eval |
+| Summary Table | Fast Speed (value vs threshold) | From consensus eval |
+| Summary Table | HSDir WFU (value vs threshold) | From consensus eval |
+| Summary Table | HSDir TK (value vs threshold) | From consensus eval |
+
+### Section 4: Bandwidth (`#bandwidth`)
+
+| Current Location | Item | Notes |
+|------------------|------|-------|
+| Right column | Observed Bandwidth | Self-reported |
+| Right column | Advertised Bandwidth | Min of rate/burst/observed |
+| Right column | Rate Limit | Configured limit |
+| Right column | Burst Limit | Configured burst |
+| Right column | Measured indicator | By bandwidth authorities |
+| Right column | Consensus Weight % | Network participation |
+| Right column | Guard Probability % | Position probability |
+| Right column | Middle Probability % | Position probability |
+| Right column | Exit Probability % | Position probability |
+| Right column | Underutilized warning | If applicable |
+| Consensus Eval | Authority Measured BW | Median/Min/Max |
+| Summary Table | Consensus Weight row | From consensus eval |
+
+### Section 5: Uptime and Stability (`#uptime`)
+
+| Current Location | Item | Notes |
+|------------------|------|-------|
+| Right column | Flag Uptime (1M/6M/1Y/5Y) | Role-specific uptime |
+| Right column | Uptime (1M/6M/1Y/5Y) | Overall uptime |
+| Right column | Uptime/Downtime | Current UP/DOWN + duration |
+| Right column | First Seen | With link to date page |
+| Right column | Last Seen | Timestamp |
+| Right column | Last Restarted | Timestamp |
+| Right column | Hibernating | Yes/No |
+
+### Section 6: Family Configuration (`#family`)
+
+| Current Location | Item | Notes |
+|------------------|------|-------|
+| Left column | Effective Family count | With "View" link |
+| Left column | Effective Family list | Fingerprint links |
+| Left column | Alleged Family count | They don't list you back |
+| Left column | Alleged Family list | Fingerprint links |
+| Left column | Indirect Family count | They list you, you don't list them |
+| Left column | Indirect Family list | Fingerprint links |
+
+### Section 7: Software and Version (`#software`)
+
+| Current Location | Item | Notes |
+|------------------|------|-------|
+| Right column | Platform (Short) | Link to platform page |
+| Right column | Platform (Long/Raw) | Full platform string |
+| Right column | Version | Running version |
+| Right column | Recommended | Yes/No |
+| Right column | Version Status | recommended/obsolete/etc |
+| Right column | Last Changed Address or Port | Timestamp |
+
+### Section 8: Exit Policy (`#exit-policy`)
+
+| Current Location | Item | Notes |
+|------------------|------|-------|
+| Left column | IPv4 Exit Policy Summary | accept/reject summary |
+| Left column | IPv6 Exit Policy Summary | accept/reject summary |
+| Left column | Exit Policy (full) | Complete policy list |
+
+### Section 9: Location and Network (`#location`)
+
+| Current Location | Item | Notes |
+|------------------|------|-------|
+| Right column | City | If available |
+| Right column | Region | If available |
+| Right column | Country | With flag icon and link |
+| Right column | Latitude | Coordinates |
+| Right column | Longitude | Coordinates |
+| Right column | Interactive Map link | External link |
+| Right column | AS Number | With link to AS page |
+| Right column | AS Name | With BGP.tools link |
+
+### Section 10: Per-Authority Vote Details (`#authority-votes`)
+
+| Current Location | Item | Notes |
+|------------------|------|-------|
+| Consensus Eval | Summary Table header | "Your Relay vs Consensus" |
+| Consensus Eval | Summary Table (full) | All metrics with thresholds |
+| Consensus Eval | Per-Authority Details table | Full voting breakdown |
+| Consensus Eval | Bandwidth Values Explained | Info box |
+| Consensus Eval | Stable Uptime Explained | Info box |
+| Consensus Eval | Data source attribution | CollecTor link |
+
+---
+
+## Proposed Page Structure: Desktop Wireframe (max-width: 1400px)
+
+Two columns inside each section to maximize information density on wide screens.
 
 ```
-+==================================================================+
-|                        PAGE HEADER                               |
-|  View Relay "MyRelay"                                            |
-|  Fingerprint: ABCD1234EFGH5678IJKL9012MNOP3456QRST7890           |
-|  Contact: admin@example.com | AROI: example.com                  |
-|  Family: 5 relays | AS12345 | Germany | Linux                    |
-+==================================================================+
-      ↑ Identity always visible at top - confirms correct relay
+╔══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+║                                              PAGE HEADER                                                             ║
+║  View Relay "MyRelay"                                                                                                ║
+║  Fingerprint: ABCD1234EFGH5678IJKL9012MNOP3456QRST7890UVWX                                            [Copy Button]  ║
+║  Contact: admin@example.com                              AROI: example.com [View Operator Page]                      ║
+║  ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────── ║
+║  Family: 5 relays | AS24940 | Germany | Linux                                     Last updated: 2024-12-29 14:30 UTC ║
+╚══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
 
-+------------------------------------------------------------------+
-| HEALTH STATUS                                          [#status] |
-+------------------------------------------------------------------+
-| Consensus: IN CONSENSUS (9/9)  |  Running: UP 47 days            |
-| Measured: Yes (6 auths)        |  Flags: Guard Stable Fast ...   |
-| Issues: None                                                     |
-+------------------------------------------------------------------+
-      ↑ Quick pass/fail - if all green, operator can stop here
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ HEALTH STATUS                                                                                              [#status] ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Consensus Status                                    ┃ Current Flags                                                   ┃
+┃   IN CONSENSUS (9/9 authorities)                    ┃   Guard, Stable, Fast, Valid, Running, V2Dir, HSDir             ┃
+┃                                                     ┃                                                                  ┃
+┃ Running Status                                      ┃ Bandwidth Measured                                              ┃
+┃   UP for 47 days (since 2024-11-12)                 ┃   Yes (by 6 bandwidth authorities)                              ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Issues: None detected                                                                                                ┃
+┃   -or-                                                                                                               ┃
+┃ Issues:                                                                                                              ┃
+┃   [Warning] IPv6 reachability partial - 3/5 authorities can reach IPv6                                               ┃
+┃             Suggestion: Check IPv6 firewall rules, ensure port 9001 is open for IPv6                                 ┃
+┃   [Error] Version is obsolete - upgrade recommended                                                                  ┃
+┃             Suggestion: Upgrade to latest stable Tor version                                                         ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
-+------------------------------------------------------------------+
-| CONNECTIVITY                                      [#connectivity] |
-+------------------------------------------------------------------+
-| OR Address: 192.0.2.1:9001, [2001:db8::1]:9001                   |
-| Exit Address: none                                               |
-| Dir Address: 192.0.2.1:9030                                      |
-| IPv4 Reachable: 9/9 authorities                                  |
-| IPv6 Reachable: 3/5 testers (2 don't test IPv6)                  |
-+------------------------------------------------------------------+
-      ↑ If not in consensus, check ports/firewall first
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ CONNECTIVITY                                                                                        [#connectivity] ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ OR Address                                          ┃ Reachability (per Directory Authorities)                        ┃
+┃   relay.example.com (verified)                      ┃                                                                  ┃
+┃   192.0.2.1:9001                                    ┃   IPv4: 9/9 authorities                                          ┃
+┃   [2001:db8::1]:9001                                ┃   IPv6: 3/5 testers (4 authorities don't test IPv6)             ┃
+┃                                                     ┃                                                                  ┃
+┃ Exit Address                                        ┃                                                                  ┃
+┃   none                                              ┃                                                                  ┃
+┃                                                     ┃                                                                  ┃
+┃ Dir Address                                         ┃                                                                  ┃
+┃   192.0.2.1:9030                                    ┃                                                                  ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
-+------------------------------------------------------------------+
-| FLAGS AND ELIGIBILITY                                   [#flags] |
-+------------------------------------------------------------------+
-| Current: Guard, Stable, Fast, Valid, Running, V2Dir, HSDir       |
-|                                                                  |
-| +----------+-------------+-------------+--------+                |
-| | Flag     | Your Value  | Threshold   | Status |                |
-| +----------+-------------+-------------+--------+                |
-| | Guard    | WFU 99.2%   | >=98%       | Meets  |                |
-| | Guard    | TK 45d      | >=8d        | Meets  |                |
-| | Stable   | MTBF 30d    | >=7d        | Meets  |                |
-| | Fast     | 125 Mbit/s  | >=100 KB/s  | Meets  |                |
-| +----------+-------------+-------------+--------+                |
-+------------------------------------------------------------------+
-      ↑ Answers "why don't I have X flag?"
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ FLAGS AND ELIGIBILITY                                                                                      [#flags] ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Current Flags: Guard, Stable, Fast, Valid, Running, V2Dir, HSDir                                                     ┃
+┃ Eligibility:   Guard 9/9 | Stable 9/9 | Fast 9/9 | HSDir 9/9 | Running 9/9 | Valid 9/9 | V2Dir 9/9                   ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Flag Requirements (Your Value vs Threshold)                                                                          ┃
+┃ ┌──────────────┬─────────────────────┬─────────────────────────────────────────┬─────────────────────────────────┐   ┃
+┃ │ Flag         │ Your Value          │ Threshold Required                      │ Status                          │   ┃
+┃ ├──────────────┼─────────────────────┼─────────────────────────────────────────┼─────────────────────────────────┤   ┃
+┃ │ Guard        │ WFU: 99.2%          │ >=98% (all authorities)                 │ Meets                           │   ┃
+┃ │              │ TK: 45 days         │ >=8 days (all authorities)              │ Meets                           │   ┃
+┃ │              │ BW: 125 Mbit/s      │ >=2 MB/s OR top 25%                     │ Meets (>=2 MB/s guarantee)      │   ┃
+┃ ├──────────────┼─────────────────────┼─────────────────────────────────────────┼─────────────────────────────────┤   ┃
+┃ │ Stable       │ MTBF: 30 days       │ >=5-7 days (varies by authority)        │ Meets - all authorities         │   ┃
+┃ │              │ Uptime: 47 days     │ >=5-7 days (varies by authority)        │ Meets - all authorities         │   ┃
+┃ ├──────────────┼─────────────────────┼─────────────────────────────────────────┼─────────────────────────────────┤   ┃
+┃ │ Fast         │ Speed: 125 Mbit/s   │ >=100 KB/s (guarantee) OR top 7/8       │ Meets (>=100 KB/s guarantee)    │   ┃
+┃ ├──────────────┼─────────────────────┼─────────────────────────────────────────┼─────────────────────────────────┤   ┃
+┃ │ HSDir        │ WFU: 99.2%          │ >=98% (all authorities)                 │ Meets                           │   ┃
+┃ │              │ TK: 45 days         │ >=25 hours (most) / 10 days (moria1)    │ Meets                           │   ┃
+┃ └──────────────┴─────────────────────┴─────────────────────────────────────────┴─────────────────────────────────┘   ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
-+------------------------------------------------------------------+
-| BANDWIDTH                                           [#bandwidth] |
-+------------------------------------------------------------------+
-| Observed: 125 Mbit/s | Advertised: 100 Mbit/s                    |
-| Rate Limit: 150 Mbit/s | Burst Limit: 200 Mbit/s                 |
-| Authority Measured: Yes (median 98 Mbit/s)                       |
-|                                                                  |
-| Network Participation:                                           |
-| Consensus Weight: 0.15% | Guard: 0.12% | Middle: 0.18% | Exit: 0%|
-+------------------------------------------------------------------+
-      ↑ Answers "why is my traffic so low?"
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ BANDWIDTH                                                                                              [#bandwidth] ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Relay-Reported Bandwidth                            ┃ Network Participation                                           ┃
+┃                                                     ┃                                                                  ┃
+┃   Observed:    125 Mbit/s                           ┃   Consensus Weight:  0.15%                                       ┃
+┃   Advertised:  100 Mbit/s                           ┃   Guard Probability: 0.12%                                       ┃
+┃   Rate Limit:  150 Mbit/s                           ┃   Middle Probability: 0.18%                                      ┃
+┃   Burst Limit: 200 Mbit/s                           ┃   Exit Probability:  0.00%                                       ┃
+┃                                                     ┃                                                                  ┃
+┃ Authority-Measured Bandwidth                        ┃                                                                  ┃
+┃                                                     ┃                                                                  ┃
+┃   Measured: Yes (by 6 authorities)                  ┃                                                                  ┃
+┃   Median: 98 Mbit/s                                 ┃                                                                  ┃
+┃   Min: 95 Mbit/s | Max: 102 Mbit/s                  ┃                                                                  ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
-+------------------------------------------------------------------+
-| UPTIME AND STABILITY                                   [#uptime] |
-+------------------------------------------------------------------+
-| Current: UP for 47 days                                          |
-| Flag Uptime (1M/6M/1Y/5Y): 99.2% / 98.5% / 97.1% / N/A           |
-| Overall Uptime (1M/6M/1Y/5Y): 99.1% / 98.2% / 96.8% / N/A        |
-| First Seen: 2023-06-01 | Last Seen: now                          |
-| Last Restarted: 2024-11-12                                       |
-| Hibernating: No                                                  |
-+------------------------------------------------------------------+
-      ↑ Explains flag loss after restarts
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ UPTIME AND STABILITY                                                                                      [#uptime] ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Current Status                                      ┃ Historical Uptime                                               ┃
+┃                                                     ┃                                                                  ┃
+┃   Status: UP for 47 days                            ┃   Flag Uptime (1M/6M/1Y/5Y):                                     ┃
+┃   Last Restarted: 2024-11-12 (47 days ago)          ┃     99.2% / 98.5% / 97.1% / N/A                                  ┃
+┃   Hibernating: No                                   ┃                                                                  ┃
+┃                                                     ┃   Overall Uptime (1M/6M/1Y/5Y):                                  ┃
+┃ First/Last Seen                                     ┃     99.1% / 98.2% / 96.8% / N/A                                  ┃
+┃                                                     ┃                                                                  ┃
+┃   First Seen: 2023-06-01 (1.5 years ago)            ┃                                                                  ┃
+┃   Last Seen: 2024-12-29 14:30 (now)                 ┃                                                                  ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
-+------------------------------------------------------------------+
-| FAMILY CONFIGURATION                                   [#family] |
-+------------------------------------------------------------------+
-| Effective Family: 5 relays [View Family Page]                    |
-| Alleged Family: 2 relays (they don't list you back)              |
-| Indirect Family: 0 relays                                        |
-| [Expandable: list of fingerprints]                               |
-+------------------------------------------------------------------+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ FAMILY CONFIGURATION                                                                                      [#family] ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Effective Family: 5 relays [View Family Page]       ┃ Alleged Family: 2 relays                                        ┃
+┃                                                     ┃   (They don't list you back - check their MyFamily config)      ┃
+┃   ABCD1234EFGH5678... (this relay)                  ┃                                                                  ┃
+┃   WXYZ9876LMNO5432...                               ┃   QRST1111UVWX2222...                                            ┃
+┃   HIJK4567DEFG8901...                               ┃   MNOP3333STUV4444...                                            ┃
+┃   STUV2345WXYZ6789...                               ┃                                                                  ┃
+┃   EFGH8901IJKL2345...                               ┃ Indirect Family: 0 relays                                       ┃
+┃                                                     ┃   (They list you, but you don't list them)                      ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
-+------------------------------------------------------------------+
-| SOFTWARE AND VERSION                                 [#software] |
-+------------------------------------------------------------------+
-| Platform: Linux (tor 0.4.8.12)                                   |
-| Version Status: Recommended                                      |
-| Last Changed Address: 2024-01-15                                 |
-+------------------------------------------------------------------+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ SOFTWARE AND VERSION                                                                                    [#software] ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Platform                                            ┃ Version                                                         ┃
+┃                                                     ┃                                                                  ┃
+┃   Short: Linux                                      ┃   Running: 0.4.8.12                                              ┃
+┃   Full: Tor 0.4.8.12 on Linux                       ┃   Recommended: Yes                                               ┃
+┃                                                     ┃   Status: recommended                                            ┃
+┃ Address Changes                                     ┃                                                                  ┃
+┃                                                     ┃                                                                  ┃
+┃   Last Changed: 2024-01-15                          ┃                                                                  ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
-+------------------------------------------------------------------+
-| EXIT POLICY                                        [#exit-policy] |
-+------------------------------------------------------------------+
-| IPv4 Summary: reject *:*                                         |
-| IPv6 Summary: reject *:*                                         |
-| [Expandable: Full policy details]                                |
-+------------------------------------------------------------------+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ EXIT POLICY                                                                                          [#exit-policy] ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ IPv4 Exit Policy Summary                            ┃ IPv6 Exit Policy Summary                                        ┃
+┃                                                     ┃                                                                  ┃
+┃   reject: *:*                                       ┃   reject: *:*                                                    ┃
+┃   (This is a non-exit relay)                        ┃   (This is a non-exit relay)                                     ┃
+┃                                                     ┃                                                                  ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Full Exit Policy [Expandable]                                                                                        ┃
+┃   reject *:*                                                                                                         ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
-+------------------------------------------------------------------+
-| LOCATION AND NETWORK                                 [#location] |
-+------------------------------------------------------------------+
-| Country: Germany (DE) | Region: Bavaria | City: Munich           |
-| Coordinates: 48.13, 11.58                                        |
-| AS: AS24940 (Hetzner Online GmbH)                                |
-| View on Interactive Map                                          |
-+------------------------------------------------------------------+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ LOCATION AND NETWORK                                                                                    [#location] ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Geographic Location                                 ┃ Autonomous System                                               ┃
+┃                                                     ┃                                                                  ┃
+┃   Country: Germany (DE)                             ┃   AS Number: AS24940                                             ┃
+┃   Region: Bavaria                                   ┃   AS Name: Hetzner Online GmbH                                   ┃
+┃   City: Munich                                      ┃   BGP.tools                                                      ┃
+┃                                                     ┃                                                                  ┃
+┃   Coordinates: 48.13, 11.58                         ┃                                                                  ┃
+┃   View on Interactive Map                           ┃                                                                  ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
-+------------------------------------------------------------------+
-| PER-AUTHORITY VOTE DETAILS                     [#authority-votes] |
-+------------------------------------------------------------------+
-| [Detailed table showing per-authority voting information...]     |
-| [Full existing consensus evaluation tables]                      |
-| [Used for advanced troubleshooting when sections above show      |
-|  problems - e.g., which specific authority isn't voting]         |
-+------------------------------------------------------------------+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ PER-AUTHORITY VOTE DETAILS                                                                        [#authority-votes] ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Data from Tor CollecTor (authority votes, fetched 2024-12-29 14:00 UTC)                                              ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Summary: Your Relay vs Consensus Thresholds                                                           [#relay-summary]┃
+┃ ┌────────────────────┬─────────────────────┬──────────────────────────────┬──────────────────────────────────────┐    ┃
+┃ │ Metric             │ Your Value          │ Threshold                    │ Status                               │    ┃
+┃ ├────────────────────┼─────────────────────┼──────────────────────────────┼──────────────────────────────────────┤    ┃
+┃ │ In Consensus       │ 9/9 authorities     │ >=5/9 (majority)             │ IN CONSENSUS                         │    ┃
+┃ │ Running            │ 9/9 authorities     │ >=5/9 (majority)             │ RUNNING                              │    ┃
+┃ │ Valid              │ 9/9 authorities     │ >=5/9 (majority)             │ VALID                                │    ┃
+┃ │ Consensus Weight   │ 98 KB/s (median)    │ N/A                          │ -                                    │    ┃
+┃ │ Guard WFU          │ 99.2%               │ >=98%                        │ MEETS                                │    ┃
+┃ │ Guard TK           │ 45 days             │ >=8 days                     │ MEETS                                │    ┃
+┃ │ Guard BW           │ 125 Mbit/s          │ >=2 MB/s OR top 25%          │ MEETS                                │    ┃
+┃ │ ... (more rows)    │                     │                              │                                      │    ┃
+┃ └────────────────────┴─────────────────────┴──────────────────────────────┴──────────────────────────────────────┘    ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Per-Authority Voting Details (for advanced troubleshooting)                                                          ┃
+┃ ┌───────────┬────────┬───────┬────────┬────┬────┬─────────────────────┬───────────┬────────────┬─────────┬─────────┐ ┃
+┃ │ Authority │ Running│ Valid │ BW Scan│ v4 │ v6 │ Flags               │ Fast      │ Guard BW   │ Guard   │ Cons Wt │ ┃
+┃ │           │        │       │        │    │    │                     │ (R|T)     │ (R|T)      │ WFU/TK  │         │ ┃
+┃ ├───────────┼────────┼───────┼────────┼────┼────┼─────────────────────┼───────────┼────────────┼─────────┼─────────┤ ┃
+┃ │ moria1    │ Yes    │ Yes   │ Y      │ Yes│ Yes│ Guard Stable Fast...│ 125M|100K │ 125M|2M    │ 99%|98% │ 98 KB/s │ ┃
+┃ │ tor26     │ Yes    │ Yes   │ Y      │ Yes│ -  │ Guard Stable Fast...│ 125M|100K │ 125M|2M    │ 99%|98% │ 97 KB/s │ ┃
+┃ │ ... (7 more authorities)                                                                                           │ ┃
+┃ └───────────┴────────┴───────┴────────┴────┴────┴─────────────────────┴───────────┴────────────┴─────────┴─────────┘ ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ [Info Box] Bandwidth Values Explained:                                                                               ┃
+┃   Relay Reported = Self-reported from descriptor (for flag eligibility)                                              ┃
+┃   Authority Measured = Measured by sbws scanner (for consensus weight/path selection)                                ┃
+┃                                                                                                                      ┃
+┃ [Info Box] Stable Uptime (Two Data Sources):                                                                         ┃
+┃   Relay Uptime = From Onionoo API (last_restarted)                                                                   ┃
+┃   Authority Threshold = From CollecTor vote files (flag-thresholds)                                                  ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+```
+
+---
+
+## Proposed Page Structure: Mobile Wireframe (single column, <768px)
+
+Single column layout for narrow screens. All content stacks vertically.
+
+```
+╔═══════════════════════════════════════════╗
+║            PAGE HEADER                    ║
+║  View Relay "MyRelay"                     ║
+║                                           ║
+║  Fingerprint:                             ║
+║  ABCD1234EFGH5678IJKL9012MN...   [Copy]   ║
+║                                           ║
+║  Contact: admin@example.com               ║
+║  AROI: example.com                        ║
+║                                           ║
+║  Family: 5 | AS24940 | DE | Linux         ║
+║  Updated: 2024-12-29 14:30 UTC            ║
+╚═══════════════════════════════════════════╝
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ HEALTH STATUS                   [#status] ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Consensus Status                          ┃
+┃   IN CONSENSUS (9/9 authorities)          ┃
+┃                                           ┃
+┃ Running Status                            ┃
+┃   UP for 47 days (since 2024-11-12)       ┃
+┃                                           ┃
+┃ Current Flags                             ┃
+┃   Guard, Stable, Fast, Valid,             ┃
+┃   Running, V2Dir, HSDir                   ┃
+┃                                           ┃
+┃ Bandwidth Measured                        ┃
+┃   Yes (by 6 bandwidth authorities)        ┃
+┃                                           ┃
+┃ Issues                                    ┃
+┃   None detected                           ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ CONNECTIVITY           [#connectivity]    ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ OR Address                                ┃
+┃   relay.example.com (verified)            ┃
+┃   192.0.2.1:9001                          ┃
+┃   [2001:db8::1]:9001                      ┃
+┃                                           ┃
+┃ Exit Address                              ┃
+┃   none                                    ┃
+┃                                           ┃
+┃ Dir Address                               ┃
+┃   192.0.2.1:9030                          ┃
+┃                                           ┃
+┃ Reachability                              ┃
+┃   IPv4: 9/9 authorities                   ┃
+┃   IPv6: 3/5 testers                       ┃
+┃         (4 don't test IPv6)               ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ FLAGS AND ELIGIBILITY          [#flags]   ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Current Flags                             ┃
+┃   Guard, Stable, Fast, Valid,             ┃
+┃   Running, V2Dir, HSDir                   ┃
+┃                                           ┃
+┃ Eligibility                               ┃
+┃   Guard: 9/9  | Stable: 9/9               ┃
+┃   Fast: 9/9   | HSDir: 9/9                ┃
+┃   Running: 9/9 | Valid: 9/9               ┃
+┃                                           ┃
+┃ Flag Requirements                         ┃
+┃ ┌─────────┬──────────┬─────────┐          ┃
+┃ │ Flag    │ You│Req  │ Status  │          ┃
+┃ ├─────────┼──────────┼─────────┤          ┃
+┃ │ Guard   │          │         │          ┃
+┃ │  WFU    │99%│>=98% │ Meets   │          ┃
+┃ │  TK     │45d│>=8d  │ Meets   │          ┃
+┃ │  BW     │125M│>=2M │ Meets   │          ┃
+┃ ├─────────┼──────────┼─────────┤          ┃
+┃ │ Stable  │          │         │          ┃
+┃ │  MTBF   │30d│>=5d  │ Meets   │          ┃
+┃ │  Uptime │47d│>=5d  │ Meets   │          ┃
+┃ ├─────────┼──────────┼─────────┤          ┃
+┃ │ Fast    │125M│>=100K│ Meets  │          ┃
+┃ ├─────────┼──────────┼─────────┤          ┃
+┃ │ HSDir   │          │         │          ┃
+┃ │  WFU    │99%│>=98% │ Meets   │          ┃
+┃ │  TK     │45d│>=25h │ Meets   │          ┃
+┃ └─────────┴──────────┴─────────┘          ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ BANDWIDTH                  [#bandwidth]   ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Relay-Reported                            ┃
+┃   Observed:   125 Mbit/s                  ┃
+┃   Advertised: 100 Mbit/s                  ┃
+┃   Rate Limit: 150 Mbit/s                  ┃
+┃   Burst:      200 Mbit/s                  ┃
+┃                                           ┃
+┃ Authority-Measured                        ┃
+┃   Measured: Yes (6 authorities)           ┃
+┃   Median: 98 Mbit/s                       ┃
+┃   Min: 95 | Max: 102 Mbit/s               ┃
+┃                                           ┃
+┃ Network Participation                     ┃
+┃   Consensus Weight: 0.15%                 ┃
+┃   Guard Prob:       0.12%                 ┃
+┃   Middle Prob:      0.18%                 ┃
+┃   Exit Prob:        0.00%                 ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ UPTIME AND STABILITY         [#uptime]    ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Current Status                            ┃
+┃   Status: UP for 47 days                  ┃
+┃   Last Restarted: 2024-11-12              ┃
+┃   Hibernating: No                         ┃
+┃                                           ┃
+┃ Historical Uptime                         ┃
+┃   Flag Uptime (1M/6M/1Y/5Y):              ┃
+┃     99.2% / 98.5% / 97.1% / N/A           ┃
+┃                                           ┃
+┃   Overall Uptime (1M/6M/1Y/5Y):           ┃
+┃     99.1% / 98.2% / 96.8% / N/A           ┃
+┃                                           ┃
+┃ First/Last Seen                           ┃
+┃   First: 2023-06-01 (1.5y ago)            ┃
+┃   Last:  2024-12-29 14:30 (now)           ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ FAMILY CONFIGURATION          [#family]   ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Effective Family: 5 relays                ┃
+┃   [View Family Page]                      ┃
+┃   ABCD1234... (this relay)                ┃
+┃   WXYZ9876...                             ┃
+┃   HIJK4567...                             ┃
+┃   STUV2345...                             ┃
+┃   EFGH8901...                             ┃
+┃                                           ┃
+┃ Alleged Family: 2 relays                  ┃
+┃   (They don't list you back)              ┃
+┃   QRST1111...                             ┃
+┃   MNOP3333...                             ┃
+┃                                           ┃
+┃ Indirect Family: 0 relays                 ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ SOFTWARE AND VERSION        [#software]   ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Platform                                  ┃
+┃   Short: Linux                            ┃
+┃   Full: Tor 0.4.8.12 on Linux             ┃
+┃                                           ┃
+┃ Version                                   ┃
+┃   Running: 0.4.8.12                       ┃
+┃   Recommended: Yes                        ┃
+┃   Status: recommended                     ┃
+┃                                           ┃
+┃ Address Changes                           ┃
+┃   Last Changed: 2024-01-15                ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ EXIT POLICY               [#exit-policy]  ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ IPv4 Exit Policy Summary                  ┃
+┃   reject: *:*                             ┃
+┃   (This is a non-exit relay)              ┃
+┃                                           ┃
+┃ IPv6 Exit Policy Summary                  ┃
+┃   reject: *:*                             ┃
+┃                                           ┃
+┃ Full Exit Policy [Tap to expand]          ┃
+┃   reject *:*                              ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ LOCATION AND NETWORK        [#location]   ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Geographic Location                       ┃
+┃   Country: Germany (DE)                   ┃
+┃   Region: Bavaria                         ┃
+┃   City: Munich                            ┃
+┃   Coordinates: 48.13, 11.58               ┃
+┃   View on Interactive Map                 ┃
+┃                                           ┃
+┃ Autonomous System                         ┃
+┃   AS Number: AS24940                      ┃
+┃   AS Name: Hetzner Online GmbH            ┃
+┃   BGP.tools                               ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ PER-AUTHORITY DETAILS  [#authority-votes] ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Data from Tor CollecTor                   ┃
+┃ (fetched 2024-12-29 14:00 UTC)            ┃
+┃                                           ┃
+┃ Summary Table [Tap to expand]             ┃
+┃   In Consensus: 9/9 - IN CONSENSUS        ┃
+┃   Running: 9/9 - RUNNING                  ┃
+┃   Valid: 9/9 - VALID                      ┃
+┃   Consensus Weight: 98 KB/s               ┃
+┃   Guard WFU: 99.2% >= 98% - MEETS         ┃
+┃   Guard TK: 45d >= 8d - MEETS             ┃
+┃   ... (more metrics)                      ┃
+┃                                           ┃
+┃ Per-Authority Table                       ┃
+┃   [Horizontal scroll on mobile]           ┃
+┃ ┌────────┬─────┬─────┬────┬────┬────────┐ ┃
+┃ │Auth    │Run  │Valid│v4  │v6  │Flags   │ ┃
+┃ ├────────┼─────┼─────┼────┼────┼────────┤ ┃
+┃ │moria1  │Yes  │Yes  │Yes │Yes │Guard...│ ┃
+┃ │tor26   │Yes  │Yes  │Yes │-   │Guard...│ ┃
+┃ │dizum   │Yes  │Yes  │Yes │Yes │Guard...│ ┃
+┃ │...     │     │     │    │    │        │ ┃
+┃ └────────┴─────┴─────┴────┴────┴────────┘ ┃
+┃   [Scroll right for more columns →]       ┃
+┃                                           ┃
+┃ Info: Bandwidth Values Explained          ┃
+┃   [Tap to expand]                         ┃
+┃                                           ┃
+┃ Info: Stable Uptime Sources               ┃
+┃   [Tap to expand]                         ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 ```
 
 ---
