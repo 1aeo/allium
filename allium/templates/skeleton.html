@@ -1281,6 +1281,72 @@
                         font-size: 1.2rem;
                     }
                 }
+
+                /* Allium Search Form Styles */
+                .navbar-form.navbar-right {
+                    margin-left: 15px;
+                    padding-top: 8px;
+                    padding-bottom: 8px;
+                }
+
+                .navbar-form .input-group {
+                    display: inline-table;
+                    vertical-align: middle;
+                }
+
+                .navbar-form .form-control {
+                    border-radius: 3px 0 0 3px;
+                }
+
+                .navbar-form .btn {
+                    border-radius: 0 3px 3px 0;
+                }
+
+                .allium-mobile-search {
+                    background: #f8f9fa;
+                    padding: 8px 15px;
+                    margin-top: -20px; /* Pull up to sit flush with navbar */
+                    margin-bottom: 15px;
+                    border-radius: 0 0 4px 4px; /* Only round bottom corners */
+                    border: 1px solid #e7e7e7;
+                    border-top: none;
+                }
+
+                .allium-mobile-search .form-control {
+                    font-size: 15px; /* Smaller than nav (18px) but larger than body (14px) */
+                    padding: 6px 10px;
+                    height: auto;
+                }
+
+                .allium-mobile-search .btn {
+                    font-size: 14px;
+                    padding: 6px 12px;
+                }
+
+                /* 
+                 * Search bar responsive behavior:
+                 * - Below 1600px: Always show full-width search bar below navbar
+                 * - At 1600px+: Show compact search in navbar (enough room for all nav items + search)
+                 */
+                
+                /* Default: show full-width search, hide navbar search */
+                .allium-mobile-search {
+                    display: block !important;
+                }
+                
+                .navbar-form.navbar-right {
+                    display: none !important;
+                }
+
+                /* Extra large desktop (≥1600px): enough room for inline search */
+                @media (min-width: 1600px) {
+                    .allium-mobile-search {
+                        display: none !important;
+                    }
+                    .navbar-form.navbar-right {
+                        display: block !important;
+                    }
+                }
             </style>
         </head>
     {% endblock %}

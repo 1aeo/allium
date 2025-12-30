@@ -8,6 +8,8 @@ DEPRECATED: Use html_escape_utils.py for HTML escaping operations.
 This module is maintained for backward compatibility.
 """
 
+from typing import Optional
+
 # Import from centralized HTML escaping utilities
 from .html_escape_utils import (
     safe_html_escape,
@@ -16,6 +18,34 @@ from .html_escape_utils import (
     NONE_ESCAPED,
     NA_FALLBACK
 )
+
+
+def is_valid_aroi(aroi: Optional[str]) -> bool:
+    """
+    Check if AROI domain is valid (not None, empty, or 'none').
+    
+    This pattern was used 20+ times across the codebase as:
+        `aroi_domain and aroi_domain != 'none'`
+    
+    Centralizing here for DRY compliance and consistency.
+    
+    Args:
+        aroi: AROI domain string to validate
+        
+    Returns:
+        bool: True if AROI is a valid non-empty string that isn't 'none'
+        
+    Example:
+        >>> is_valid_aroi(None)
+        False
+        >>> is_valid_aroi('')
+        False
+        >>> is_valid_aroi('none')
+        False
+        >>> is_valid_aroi('example.com')
+        True
+    """
+    return bool(aroi) and aroi != 'none'
 
 def format_percentage(value, decimals=1, fallback=NA_FALLBACK):
     """
