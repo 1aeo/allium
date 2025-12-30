@@ -137,22 +137,26 @@ After removing duplicates and merging related sections:
 |-------|---------|--------|
 | - | Page Header (Identity, Contact, Quick Links) | - |
 | 1 | Health Status Summary | `#status` |
-| 2 | Network and Location | `#network` |
+| 2 | Connectivity and Location | `#connectivity` |
 | 3 | Flags and Eligibility | `#flags` |
 | 4 | Bandwidth Metrics | `#bandwidth` |
 | 5 | Uptime and Stability | `#uptime` |
-| 6 | Family Configuration | `#family` |
+| 6 | Operator and Family | `#operator` |
 | 7 | Software and Version | `#software` |
 | 8 | Exit Policy | `#exit-policy` |
 | 9 | Per-Authority Vote Details | `#authority-votes` |
 
 **Changes from previous version:**
-- **Merged:** "Connectivity and Addresses" + "Location and Network" → **"Network and Location"** (`#network`)
-  - Rationale: IP addresses, reachability, AS info, and geographic location are all network-related
-  - AS number is troubleshooting-relevant (ISP issues), shouldn't be buried at bottom
+- **Renamed:** "Network and Location" → **"Connectivity and Location"** (`#connectivity`)
+  - Includes: addresses, reachability, AS info, geographic location
+  - "Connectivity" better describes the troubleshooting purpose (can authorities reach this relay?)
+- **Merged:** "Family Configuration" + AROI info → **"Operator and Family"** (`#operator`)
+  - Rationale: Both answer "who runs this relay and what other relays do they operate?"
+  - AROI = verified operator identity (when present)
+  - Family = fingerprint-based grouping (always present)
+  - Showing both together lets users see the relationship
 - **Removed:** "Summary: Your Relay vs Consensus" table from Per-Authority section
   - Rationale: 90% duplicate of data already shown in Health Status, Flags, and Bandwidth sections
-  - Per-Authority Details table (the detailed one) is kept - it's unique and needed for advanced troubleshooting
 
 ---
 
@@ -202,19 +206,19 @@ Move critical "is my relay working?" information to the very top of the page, im
 |-------|---------|--------|
 | - | Page Header (Identity, Contact) | n/a |
 | 1 | Health Status Summary | `#status` |
-| 2 | Network and Location | `#network` |
+| 2 | Connectivity and Location | `#connectivity` |
 | 3 | Flags and Eligibility | `#flags` |
 | 4 | Bandwidth Metrics | `#bandwidth` |
 | 5 | Uptime and Stability | `#uptime` |
-| 6 | Family Configuration | `#family` |
+| 6 | Operator and Family | `#operator` |
 | 7 | Software and Version | `#software` |
 | 8 | Exit Policy | `#exit-policy` |
 | 9 | Per-Authority Vote Details | `#authority-votes` |
 
 **Changes:**
-- "Connectivity" + "Location" merged into **"Network and Location"** - all network-related info together
+- "Connectivity" + "Location" merged into **"Connectivity and Location"** - addresses, reachability, AS, geo
+- "Family" + AROI merged into **"Operator and Family"** - all "who runs this relay" info together
 - "Summary Table" removed from Per-Authority section (data already in sections 1, 3, 4)
-- "Operator Information" in Page Header (not a section)
 
 #### Detailed Ordering Rationale
 
@@ -226,8 +230,8 @@ The ordering follows a **troubleshooting decision tree** - each section answers 
 - If "no" or "partially" - they continue down the page to diagnose
 - Mailing list evidence: Nearly every troubleshooting thread starts with "my relay is/isn't in consensus"
 
-**2. Network and Location** - "Can the network reach my relay? Where is it?"
-- **Merged section** combining connectivity + location + AS info
+**2. Connectivity and Location** - "Can the network reach my relay? Where is it?"
+- **Merged section** combining addresses + reachability + AS info + geographic location
 - If relay is NOT in consensus, the first thing to check is reachability
 - Shows OR port, Dir port, IPv4/IPv6 reachability status
 - Also shows AS number (relevant for ISP/network troubleshooting) and geographic location
@@ -235,6 +239,7 @@ The ordering follows a **troubleshooting decision tree** - each section answers 
 - Mailing list evidence: "Check your firewall" is the #1 response to "relay not working" posts
 - Troubleshooting dependency: Must be reachable before flags can be assigned
 - **Why merged:** AS info is troubleshooting-relevant (ISP blocks), and addresses without network context is incomplete
+- **Why "Connectivity":** Better describes the troubleshooting purpose - "can authorities connect to this relay?"
 
 **3. Flags and Eligibility** - "Why don't I have [Guard/Stable/Fast] flag?"
 - Once connectivity is confirmed, operators ask about missing flags
@@ -256,11 +261,14 @@ The ordering follows a **troubleshooting decision tree** - each section answers 
 - Mailing list evidence: "I restarted my relay and lost Guard flag"
 - Troubleshooting dependency: Explains flag eligibility failures from section 3
 
-**6. Family Configuration** - "Why are my family members showing as 'alleged'?"
-- Common misconfiguration: asymmetric family declarations
-- Shows effective vs alleged vs indirect family members
+**6. Operator and Family** - "Who runs this relay? What other relays do they operate?"
+- **Merged section** combining AROI operator info + Family configuration
+- Shows AROI domain and relay count (when present) - verified operator identity
+- Shows Family breakdown: effective vs alleged vs indirect members
+- Common misconfiguration: asymmetric family declarations ("alleged" members)
 - Mailing list evidence: Frequent questions about family setup errors
 - Position rationale: Not critical for basic operation, but important for operators running multiple relays
+- **Why merged:** Both AROI and Family answer "who operates this relay" - AROI is verified, Family is fingerprint-based
 
 **7. Software and Version** - "Is my Tor version OK?"
 - Version issues are less urgent but can affect flags
@@ -302,8 +310,8 @@ START: "My relay isn't working"
              │ If NOT in consensus or has issues...
              ▼
     ┌─────────────────┐
-    │ 2. NETWORK &    │ ──── "Can authorities reach my ports? What AS/location?"
-    │    LOCATION     │      (addresses, reachability, AS, country)
+    │ 2. CONNECTIVITY │ ──── "Can authorities reach my ports? What AS/location?"
+    │    & LOCATION   │      (addresses, reachability, AS, country)
     └────────┬────────┘
              │ If reachable but missing flags...
              ▼
@@ -323,7 +331,8 @@ START: "My relay isn't working"
              │ Running multiple relays...
              ▼
     ┌─────────────────┐
-    │ 6. FAMILY       │ ──── "Is family configured correctly?"
+    │ 6. OPERATOR &   │ ──── "Who runs this? Is family configured correctly?"
+    │    FAMILY       │      (AROI verified identity + fingerprint-based family)
     └────────┬────────┘
              │ Check software version...
              ▼
@@ -347,22 +356,22 @@ CURRENT (two-column, scattered):        PROPOSED (single-column, flow):
 Header:                                 Header (Identity - always visible):
   - Nickname                              - Nickname (large)
                                           - Fingerprint (full, copyable)
-Left Column:                              - Contact / AROI
-  - Nickname/Fingerprint                  - Quick links (Family, AS, Country)
+Left Column:                              - Contact
+  - Nickname/Fingerprint                  - Operator (AROI) or Family link
   - AROI/Contact          ─┐            
   - Exit Policies          │            Sections (full-width, top-to-bottom):
   - Family                 │              1. Health Status [NEW]
-                           │              2. Network & Location [MERGED]
+                           │              2. Connectivity & Location [MERGED]
 Right Column:              │                 (addresses + reachability + AS + geo)
   - Bandwidth              │              3. Flags + Eligibility Table
   - Network Participation  │              4. Bandwidth + Consensus Weight
   - OR/Exit/Dir Addresses  ├─ scattered   5. Uptime/Stability
-  - Location               │              6. Family (detailed)
-  - Flags                  │              7. Software/Version
-  - Uptime                 │              8. Exit Policy
-  - Platform/Version      ─┘              9. Per-Authority Details
-                                             (summary table REMOVED - duplicate)
-Bottom (separate section):
+  - Location               │              6. Operator & Family [MERGED]
+  - Flags                  │                 (AROI info + Family breakdown)
+  - Uptime                 │              7. Software/Version
+  - Platform/Version      ─┘              8. Exit Policy
+                                          9. Per-Authority Details
+Bottom (separate section):                   (summary table REMOVED - duplicate)
   - Consensus Evaluation (detailed)
     - Summary Table ──────────────────> REMOVED (duplicate of 1, 3, 4)
     - Per-Authority Table ────────────> KEPT in section 9
@@ -373,6 +382,8 @@ Bottom (separate section):
 **Why identity in header?** Operators need to confirm they're viewing the correct relay before doing anything else. The header is always visible at the top, and on most screens remains visible while scrolling (or can be quickly scrolled back to).
 
 **Why merge Connectivity + Location?** AS number is troubleshooting-relevant (ISP blocks, network issues). IP addresses without their network/geographic context is incomplete. All "where is this relay on the network" info belongs together.
+
+**Why merge Operator + Family?** Both answer "who runs this relay and what other relays do they operate?" AROI provides verified operator identity; Family provides fingerprint-based grouping. Showing both together reveals the relationship and any discrepancies.
 
 **Why remove Summary Table?** 90% of its data is already shown in Health Status (consensus status), Flags (eligibility thresholds), and Bandwidth (consensus weight). The Per-Authority Details table is kept because it provides unique per-authority breakdown not shown elsewhere.
 
@@ -465,27 +476,26 @@ BELOW            (red text)
 | Anchor ID | Section | Priority |
 |-----------|---------|----------|
 | `#status` | Health Status Summary | Critical |
-| `#network` | Network and Location (merged section) | High |
+| `#connectivity` | Connectivity and Location (merged section) | High |
 | `#flags` | Flags and Eligibility | High |
 | `#bandwidth` | Bandwidth Metrics | High |
 | `#uptime` | Uptime and Stability | High |
+| `#operator` | Operator and Family (merged section) | Medium |
 | `#authority-votes` | Per-Authority Vote Table | High |
-| `#family` | Family Configuration | Medium |
-| `#effective-family` | Effective Family Members (existing) | Medium |
-| `#alleged-family` | Alleged Family Members (existing) | Medium |
-| `#indirect-family` | Indirect Family Members (existing) | Medium |
+| `#effective-family` | Effective Family Members (within #operator) | Medium |
+| `#alleged-family` | Alleged Family Members (within #operator) | Medium |
+| `#indirect-family` | Indirect Family Members (within #operator) | Medium |
 | `#software` | Platform and Version | Medium |
 | `#exit-policy` | Exit Policy (existing) | Low |
 | `#ipv4-exit-policy-summary` | IPv4 Exit Policy Summary (existing) | Low |
 | `#ipv6-exit-policy-summary` | IPv6 Exit Policy Summary (existing) | Low |
 
 **Removed/Changed Anchors:**
-- `#connectivity` → replaced by `#network` (merged with location)
-- `#location` → merged into `#network`
+- `#network` → now `#connectivity` (renamed for clarity)
+- `#location` → merged into `#connectivity`
+- `#family` → merged into `#operator` (alias kept for backward compatibility)
 - `#relay-summary` → **REMOVED** (duplicate table removed)
 - `#consensus-evaluation` → alias for `#authority-votes` (for backward compatibility)
-
-Note: Operator/contact info is in the page header, not a separate section.
 
 **Implementation:**
 Each section header should be clickable and link to itself:
@@ -509,22 +519,23 @@ Each section header should be clickable and link to itself:
 1. Remove all emoji icons, replace with text labels
 2. Add missing anchor links to all sections
 3. Ensure existing anchor links work correctly
-4. Move Contact/AROI to be more prominent in page header
+4. Move Contact to page header, make AROI primary link when present
 
 ### Phase 2: Layout Restructure
 1. Add Health Status Summary section at top (new section)
-2. Merge Connectivity + Location into "Network and Location" section
-3. Reorder sections by troubleshooting priority (9 sections total)
-4. Consolidate two-column layout into single-column flow (with 2-col inside sections on desktop)
-5. Add CSS for fluid-width single column (max-width: 1400px)
-6. Move Fingerprint to header, make full and copyable
+2. Merge addresses + reachability + AS + geo into **"Connectivity and Location"** section (`#connectivity`)
+3. Merge AROI + Family into **"Operator and Family"** section (`#operator`)
+4. Reorder sections by troubleshooting priority (9 sections total)
+5. Consolidate two-column layout into single-column flow (with 2-col inside sections on desktop)
+6. Add CSS for fluid-width single column (max-width: 1400px)
+7. Move Fingerprint to header, make full and copyable
 
 ### Phase 3: Content Enhancement
 1. Add Flag Eligibility table to Flags section (data already available from consensus_evaluation)
 2. Improve Issues/Warnings display with actionable advice
 3. **Remove** "Summary: Your Relay vs Consensus" table (duplicate of sections 1, 3, 4)
 4. Keep Per-Authority Details table for advanced troubleshooting
-5. Add backward-compatible anchor aliases (`#connectivity` → `#network`, `#location` → `#network`)
+5. Add backward-compatible anchor aliases (`#network` → `#connectivity`, `#family` → `#operator`, `#location` → `#connectivity`)
 
 ---
 
@@ -568,7 +579,7 @@ Every item from the current relay page mapped to the proposed structure:
 | Consensus Eval | Identified Issues | Error/Warning list |
 | Consensus Eval | Notes | Info items |
 
-### Section 2: Network and Location (`#network`) - MERGED SECTION
+### Section 2: Connectivity and Location (`#connectivity`) - MERGED SECTION
 
 | Current Location | Item | Notes |
 |------------------|------|-------|
@@ -586,7 +597,8 @@ Every item from the current relay page mapped to the proposed structure:
 | Right column | AS Number | With link to AS page |
 | Right column | AS Name | With BGP.tools link |
 
-**Why merged:** Addresses, reachability, AS info, and location are all network-related. AS number is troubleshooting-relevant (ISP issues).
+**Why merged:** Addresses, reachability, AS info, and location are all related to "where is this relay and can it be reached?"
+**Why "Connectivity":** Better describes the troubleshooting purpose - can authorities connect to this relay?
 
 ### Section 3: Flags and Eligibility (`#flags`)
 
@@ -633,16 +645,24 @@ Every item from the current relay page mapped to the proposed structure:
 | Right column | Last Restarted | Timestamp |
 | Right column | Hibernating | Yes/No |
 
-### Section 6: Family Configuration (`#family`)
+### Section 6: Operator and Family (`#operator`) - MERGED SECTION
 
 | Current Location | Item | Notes |
 |------------------|------|-------|
+| Left column | AROI domain | Verified operator identifier (when present) |
+| Left column | AROI relay count | All relays by this operator |
+| Left column | AROI validation status | Validated vs unvalidated |
 | Left column | Effective Family count | With "View" link |
 | Left column | Effective Family list | Fingerprint links |
 | Left column | Alleged Family count | They don't list you back |
 | Left column | Alleged Family list | Fingerprint links |
 | Left column | Indirect Family count | They list you, you don't list them |
 | Left column | Indirect Family list | Fingerprint links |
+
+**Why merged:** Both AROI and Family answer "who operates this relay and what other relays do they run?"
+- AROI = verified operator identity (ContactInfo spec), more accurate relay count
+- Family = fingerprint-based grouping, may have alleged/indirect mismatches
+- Showing both reveals relationship and discrepancies between the two grouping methods
 
 ### Section 7: Software and Version (`#software`)
 
@@ -725,7 +745,7 @@ Two columns inside each section to maximize information density on wide screens.
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ NETWORK AND LOCATION                                                                                    [#network] ┃
+┃ CONNECTIVITY AND LOCATION                                                                            [#connectivity] ┃
 ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
 ┃ Addresses                                           ┃ Location                                                        ┃
 ┃                                                     ┃                                                                  ┃
@@ -799,15 +819,23 @@ Two columns inside each section to maximize information density on wide screens.
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ FAMILY CONFIGURATION                                                                                      [#family] ┃
+┃ OPERATOR AND FAMILY                                                                                     [#operator] ┃
 ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
-┃ Effective Family: 5 relays [View Family Page]       ┃ Alleged Family: 2 relays                                        ┃
-┃                                                     ┃   (They don't list you back - check their MyFamily config)      ┃
-┃   ABCD1234EFGH5678... (this relay)                  ┃                                                                  ┃
-┃   WXYZ9876LMNO5432...                               ┃   QRST1111UVWX2222...                                            ┃
-┃   HIJK4567DEFG8901...                               ┃   MNOP3333STUV4444...                                            ┃
-┃   STUV2345WXYZ6789...                               ┃                                                                  ┃
-┃   EFGH8901IJKL2345...                               ┃ Indirect Family: 0 relays                                       ┃
+┃ Operator (AROI) - when present                      ┃ Family (fingerprint-based)                      [#effective-family]┃
+┃                                                     ┃                                                                  ┃
+┃   Domain: example.com (validated)                   ┃ Effective Family: 5 relays [View Family Page]                   ┃
+┃   Relays by this operator: 12                       ┃   ABCD1234EFGH5678... (this relay)                               ┃
+┃   [View All Operator Relays]                        ┃   WXYZ9876LMNO5432...                                            ┃
+┃                                                     ┃   HIJK4567DEFG8901...                                            ┃
+┃   Note: AROI provides verified operator identity    ┃   STUV2345WXYZ6789...                                            ┃
+┃   with more accurate relay count than Family.       ┃   EFGH8901IJKL2345...                                            ┃
+┃                                                     ┃                                                        [#alleged-family]┃
+┃ When NO AROI:                                       ┃ Alleged Family: 2 relays                                        ┃
+┃   Operator: Not specified                           ┃   (They don't list you back - check their MyFamily config)      ┃
+┃   Contact: admin@example.com                        ┃   QRST1111UVWX2222...                                            ┃
+┃   Use Family for relay grouping →                   ┃   MNOP3333STUV4444...                                            ┃
+┃                                                     ┃                                                       [#indirect-family]┃
+┃                                                     ┃ Indirect Family: 0 relays                                       ┃
 ┃                                                     ┃   (They list you, but you don't list them)                      ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
@@ -912,7 +940,7 @@ Single column layout for narrow screens. All content stacks vertically.
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ NETWORK AND LOCATION        [#network]    ┃
+┃ CONNECTIVITY & LOCATION  [#connectivity]  ┃
 ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
 ┃ Addresses                                 ┃
 ┃   OR: relay.example.com (verified)        ┃
@@ -1014,22 +1042,32 @@ Single column layout for narrow screens. All content stacks vertically.
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ FAMILY CONFIGURATION          [#family]   ┃
+┃ OPERATOR AND FAMILY        [#operator]    ┃
 ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
-┃ Effective Family: 5 relays                ┃
-┃   [View Family Page]                      ┃
+┃ Operator (AROI) - when present            ┃
+┃   Domain: example.com (validated)         ┃
+┃   Relays: 12 [View All]                   ┃
+┃   (Verified operator identity)            ┃
+┃                                           ┃
+┃ When NO AROI:                             ┃
+┃   Operator: Not specified                 ┃
+┃   Contact: admin@example.com              ┃
+┃                                           ┃
+┃ Family (fingerprint-based)                ┃
+┃                                           ┃
+┃ Effective: 5 relays [View Family]         ┃
 ┃   ABCD1234... (this relay)                ┃
 ┃   WXYZ9876...                             ┃
 ┃   HIJK4567...                             ┃
 ┃   STUV2345...                             ┃
 ┃   EFGH8901...                             ┃
 ┃                                           ┃
-┃ Alleged Family: 2 relays                  ┃
+┃ Alleged: 2 relays                         ┃
 ┃   (They don't list you back)              ┃
 ┃   QRST1111...                             ┃
 ┃   MNOP3333...                             ┃
 ┃                                           ┃
-┃ Indirect Family: 0 relays                 ┃
+┃ Indirect: 0 relays                        ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
