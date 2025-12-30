@@ -827,8 +827,8 @@ Two columns inside each section to maximize information density on wide screens.
 ┃   Relays by this operator: 12                       ┃   ABCD1234EFGH5678... (this relay)                               ┃
 ┃   [View All Operator Relays]                        ┃   WXYZ9876LMNO5432...                                            ┃
 ┃                                                     ┃   HIJK4567DEFG8901...                                            ┃
-┃   Note: AROI provides verified operator identity    ┃   STUV2345WXYZ6789...                                            ┃
-┃   with more accurate relay count than Family.       ┃   EFGH8901IJKL2345...                                            ┃
+┃                                                     ┃   STUV2345WXYZ6789...                                            ┃
+┃                                                     ┃   EFGH8901IJKL2345...                                            ┃
 ┃                                                     ┃                                                        [#alleged-family]┃
 ┃ When NO AROI:                                       ┃ Alleged Family: 2 relays                                        ┃
 ┃   Operator: Not specified                           ┃   (They don't list you back - check their MyFamily config)      ┃
@@ -1045,7 +1045,6 @@ Single column layout for narrow screens. All content stacks vertically.
 ┃ Operator (AROI) - when present            ┃
 ┃   Domain: example.com (validated)         ┃
 ┃   Relays: 12 [View All]                   ┃
-┃   (Verified operator identity)            ┃
 ┃                                           ┃
 ┃ When NO AROI:                             ┃
 ┃   Operator: Not specified                 ┃
