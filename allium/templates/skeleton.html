@@ -1304,27 +1304,47 @@
 
                 .allium-mobile-search {
                     background: #f8f9fa;
-                    padding: 10px 15px;
+                    padding: 8px 15px;
+                    margin-top: -20px; /* Pull up to sit flush with navbar */
                     margin-bottom: 15px;
-                    border-radius: 4px;
+                    border-radius: 0 0 4px 4px; /* Only round bottom corners */
                     border: 1px solid #e7e7e7;
+                    border-top: none;
                 }
 
                 .allium-mobile-search .form-control {
-                    font-size: 16px; /* Prevents iOS zoom on focus */
+                    font-size: 15px; /* Smaller than nav (18px) but larger than body (14px) */
+                    padding: 6px 10px;
+                    height: auto;
                 }
 
-                /* Desktop: show navbar search, hide mobile search */
-                @media (min-width: 768px) {
+                .allium-mobile-search .btn {
+                    font-size: 14px;
+                    padding: 6px 12px;
+                }
+
+                /* 
+                 * Search bar responsive behavior:
+                 * - Below 1600px: Always show full-width search bar below navbar
+                 * - At 1600px+: Show compact search in navbar (enough room for all nav items + search)
+                 */
+                
+                /* Default: show full-width search, hide navbar search */
+                .allium-mobile-search {
+                    display: block !important;
+                }
+                
+                .navbar-form.navbar-right {
+                    display: none !important;
+                }
+
+                /* Extra large desktop (≥1600px): enough room for inline search */
+                @media (min-width: 1600px) {
                     .allium-mobile-search {
                         display: none !important;
                     }
-                }
-
-                /* Mobile: hide navbar search, show mobile search */
-                @media (max-width: 767px) {
                     .navbar-form.navbar-right {
-                        display: none !important;
+                        display: block !important;
                     }
                 }
             </style>

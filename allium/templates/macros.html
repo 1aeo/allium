@@ -55,7 +55,7 @@
         - autocomplete=off: Prevents sensitive data leakage
         - spellcheck=false: Prevents data being sent to spell-check services
 #}
-{% set placeholder = "Search relays..." if variant == 'desktop' else "Search by fingerprint, nickname, AROI, AS, country..." %}
+{% set placeholder = "Search relays..." if variant == 'desktop' else "Search: fingerprint, nickname, AROI, IP, AS number, family, country..." %}
 {% set input_class = "form-control input-sm" if variant == 'desktop' else "form-control" %}
 {% set btn_class = "btn btn-sm btn-default" if variant == 'desktop' else "btn btn-primary" %}
 {% set btn_content = '<span class="glyphicon glyphicon-search" aria-hidden="true"></span>' if variant == 'desktop' else 'Search' %}
@@ -63,7 +63,7 @@
        name="q" 
        class="{{ input_class }}" 
        placeholder="{{ placeholder }}"
-       title="Search by fingerprint, nickname, AROI, AS, country, or IP"
+       title="Search by fingerprint, nickname, AROI, IP, AS number, family, or country"
        maxlength="100"
        pattern="[A-Za-z0-9\s\-_.@:]+"
        autocomplete="off"
