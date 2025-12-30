@@ -1468,10 +1468,6 @@ No dual-column comparison here - that goes in the Consensus Evaluation section f
 | `relay['measured']` | bool | Onionoo | Fallback if CollecTor unavailable |
 | `relay['flags']` | list | Onionoo | Current consensus flags |
 
-**Side-by-Side Comparison Location:**
-
-The detailed Onionoo vs CollecTor comparison table should be added to the **Consensus Evaluation** section (`#consensus-evaluation`) further down the page, before the Per-Authority Details table. This is where users go for troubleshooting, making it the appropriate place for data source comparison.
-
 ---
 
 #### 2.2 Merge Addresses + Reachability + AS + Geo into "Connectivity and Location"
@@ -2234,11 +2230,114 @@ Remove the entire "Summary: Your Relay vs Consensus" section:
 
 ---
 
-#### 3.4 Keep Per-Authority Details Table
+#### 3.4 Add Data Source Comparison Table and Keep Per-Authority Details
 
 **File:** `allium/templates/relay-info.html`
 
-The Per-Authority Details table (lines ~671-920) should be **kept** as Section 9 (`#authority-votes`).
+The Consensus Evaluation section (`#consensus-evaluation`) should include:
+1. **NEW:** Data Source Comparison table (Onionoo vs CollecTor side-by-side)
+2. **KEEP:** Per-Authority Details table for advanced troubleshooting
+
+This is the appropriate location for the side-by-side comparison because users who reach this section are in "troubleshooting mode" and want to understand data discrepancies.
+
+**Add Data Source Comparison Table (insert before Per-Authority Details):**
+
+```jinja2
+{# ============== DATA SOURCE COMPARISON ============== #}
+{# For troubleshooting: Compare Onionoo (aggregated) vs CollecTor (per-authority) data #}
+{% if diag %}
+<div style="margin-bottom: 20px;">
+<h4 style="margin-bottom: 10px;">
+<div class="section-header">
+<a href="#data-sources" class="anchor-link">Data Source Comparison</a>
+</div>
+</h4>
+<p class="text-muted" style="font-size: 12px; margin-bottom: 10px;">
+Compare aggregated Onionoo API data with per-authority CollecTor data. Discrepancies may indicate data freshness differences or authority-specific issues.
+</p>
+
+<table class="table table-condensed table-striped" style="font-size: 13px; max-width: 800px;">
+<thead>
+    <tr>
+        <th style="width: 25%;">Metric</th>
+        <th style="width: 37%;">Onionoo (API)</th>
+        <th style="width: 38%;">Dir. Authorities (CollecTor)</th>
+    </tr>
+</thead>
+<tbody>
+    <tr>
+        <td><strong>Consensus Status</strong></td>
+        <td>
+            {% if 'Running' in relay['flags'] -%}
+                <span style="color: #28a745;">In consensus</span> (has Running flag)
+            {% else -%}
+                <span style="color: #dc3545;">Not in consensus</span>
+            {% endif -%}
+        </td>
+        <td>
+            {% if diag.in_consensus -%}
+                <span style="color: #28a745;">In consensus</span>
+            {% else -%}
+                <span style="color: #dc3545;">Not in consensus</span>
+            {% endif -%}
+            — {{ diag.vote_count }}/{{ diag.total_authorities }} voted (need {{ diag.majority_required }})
+        </td>
+    </tr>
+    <tr>
+        <td><strong>Bandwidth Measured</strong></td>
+        <td>
+            {% if relay['measured'] is not none -%}
+                {% if relay['measured'] -%}
+                    <span style="color: #28a745;">Yes</span> (≥3 authorities)
+                {% else -%}
+                    <span style="color: #dc3545;">No</span>
+                {% endif -%}
+            {% else -%}
+                <span style="color: #6c757d;">Unknown</span>
+            {% endif -%}
+        </td>
+        <td>
+            {% if diag.bandwidth_summary and diag.bandwidth_summary.measurement_count -%}
+                <span style="color: #28a745;">{{ diag.bandwidth_summary.measurement_count }} measurements</span>
+                {% if diag.bandwidth_summary.median_display -%}
+                    (median: {{ diag.bandwidth_summary.median_display }})
+                {% endif -%}
+            {% else -%}
+                <span style="color: #6c757d;">0 measurements</span>
+            {% endif -%}
+        </td>
+    </tr>
+    <tr>
+        <td><strong>Flags</strong></td>
+        <td>
+            {% for flag in relay['flags'] -%}
+                {% if flag != 'StaleDesc' -%}
+                    {{ flag|escape }}{% if not loop.last %}, {% endif %}
+                {% endif -%}
+            {% endfor -%}
+        </td>
+        <td>
+            {% if diag.flag_summary -%}
+                {% for flag_name, flag_data in diag.flag_summary.items() %}
+                    {% set display_name = 'HSDir' if flag_name.lower() == 'hsdir' else flag_name|capitalize %}
+                    <span style="color: {% if flag_data.status_class == 'success' %}#28a745{% elif flag_data.status_class == 'danger' %}#dc3545{% else %}#856404{% endif %};">
+                        {{ display_name }}: {{ flag_data.eligible_count }}/{{ flag_data.total_authorities }}
+                    </span>{% if not loop.last %}, {% endif %}
+                {% endfor %}
+            {% else -%}
+                <span style="color: #6c757d;">No data</span>
+            {% endif -%}
+        </td>
+    </tr>
+</tbody>
+</table>
+</div>
+{% endif %}
+```
+
+**Keep Per-Authority Details Table:**
+
+The existing Per-Authority Details table (currently lines ~671-920) should be **kept** as Section 9 (`#authority-votes`).
 
 **Enhancements:**
 1. Update section header to use new anchor pattern
@@ -2246,13 +2345,13 @@ The Per-Authority Details table (lines ~671-920) should be **kept** as Section 9
 3. Keep the explanatory info boxes at the bottom
 
 ```jinja2
-{# ============== SECTION 9: PER-AUTHORITY VOTE DETAILS ============== #}
+{# ============== PER-AUTHORITY VOTE DETAILS ============== #}
 <section id="authority-votes" class="relay-section">
-<h3>
+<h4>
 <div class="section-header">
 <a href="#authority-votes" class="anchor-link">Per-Authority Vote Details</a>
 </div>
-</h3>
+</h4>
 
 <p class="text-muted" style="font-size: 12px; margin-bottom: 10px;">
 Advanced troubleshooting: Shows which specific directory authority is or isn't voting for your relay.
@@ -2263,6 +2362,20 @@ Data from <a href="https://collector.torproject.org/recent/relay-descriptors/vot
 {# Existing per-authority table content #}
 ...
 ```
+
+**Variables Used for Data Source Comparison:**
+
+| Variable | Type | Source | Purpose |
+|----------|------|--------|---------|
+| `relay['flags']` | list | Onionoo | Current consensus flags |
+| `relay['measured']` | bool | Onionoo | Bandwidth measured status |
+| `diag.in_consensus` | bool | CollecTor | Consensus status from votes |
+| `diag.vote_count` | int | CollecTor | Number of authorities voting |
+| `diag.total_authorities` | int | CollecTor | Total authorities (9) |
+| `diag.majority_required` | int | CollecTor | Votes needed (5) |
+| `diag.bandwidth_summary.measurement_count` | int | CollecTor | Bandwidth measurements |
+| `diag.bandwidth_summary.median_display` | str | CollecTor | Median bandwidth value |
+| `diag.flag_summary` | dict | CollecTor | Per-flag eligibility counts |
 
 ---
 
