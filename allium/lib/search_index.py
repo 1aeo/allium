@@ -110,12 +110,8 @@ def is_generic_prefix(prefix: str) -> bool:
 
 def extract_ips_from_relay(relay: Dict[str, Any]) -> List[str]:
     """Extract all valid IP addresses from relay OR addresses."""
-    ips = []
-    for addr in relay.get('or_addresses', []):
-        ip = extract_ip_from_or_address(addr)
-        if ip:
-            ips.append(ip)
-    return ips
+    return [ip for addr in relay.get('or_addresses', [])
+            if (ip := extract_ip_from_or_address(addr))]
 
 
 # =============================================================================
@@ -171,112 +167,118 @@ def compact_family_entry(
     """
     Create a compact family entry for the search index.
     
-    Aggregates data from all family members in a single pass where possible.
+    Aggregates data from all family members using set comprehensions.
     """
-    # Collect data in single iteration over members
-    nicknames = []
-    as_numbers_set: Set[str] = set()
-    countries_set: Set[str] = set()
-    contact_hashes_set: Set[str] = set()
+    # Extract member data using comprehensions (more Pythonic)
+    nicknames = [m['nickname'] for m in members if m.get('nickname')]
+    as_numbers = {m['as'] for m in members if m.get('as')}
+    countries = {m['country'].lower() for m in members if m.get('country')}
+    contacts = {m['contact_md5'] for m in members if m.get('contact_md5')}
 
-    for member in members:
-        nickname = member.get('nickname')
-        if nickname:
-            nicknames.append(nickname)
-        
-        as_num = member.get('as')
-        if as_num:
-            as_numbers_set.add(as_num)
-        
-        country = member.get('country')
-        if country:
-            countries_set.add(country.lower())
-        
-        contact_md5 = member.get('contact_md5')
-        if contact_md5:
-            contact_hashes_set.add(contact_md5)
-
-    # Build entry
-    entry = {
+    # Build base entry
+    entry: Dict[str, Any] = {
         'id': family_id,
         'sz': len(members),
         'nn': nicknames,
     }
 
-    # Add prefix if detected
+    # Add prefix if detected (non-generic preferred for search relevance)
     prefix = extract_common_prefix(nicknames)
     if prefix:
         entry['px'] = prefix
         entry['pxg'] = is_generic_prefix(prefix)
 
-    # Optional fields
+    # Optional fields - only include if present
     aroi = family_data.get('aroi_domain')
     if is_valid_aroi(aroi):
         entry['a'] = aroi
 
-    if contact_hashes_set:
-        entry['c'] = sorted(contact_hashes_set)
+    if contacts:
+        entry['c'] = sorted(contacts)
 
-    if as_numbers_set:
-        entry['as'] = sorted(as_numbers_set)
+    if as_numbers:
+        entry['as'] = sorted(as_numbers)
 
-    if countries_set:
-        entry['cc'] = sorted(countries_set)
+    if countries:
+        entry['cc'] = sorted(countries)
 
     first_seen = family_data.get('first_seen', '')
     if first_seen:
-        entry['fs'] = first_seen.split(' ')[0]
+        entry['fs'] = first_seen.split(' ')[0]  # Date only, no time
 
     return entry
 
 
 # =============================================================================
-# PARALLEL PROCESSING HELPERS
+# RELAY PROCESSING (DRY - shared between sequential and parallel paths)
 # =============================================================================
+
+def _get_valid_family_id(
+    fingerprint: str,
+    family_membership: Dict[str, str],
+    valid_family_ids: Set[str]
+) -> Optional[str]:
+    """Get family ID for a relay, or None if not in a valid family (2+ members)."""
+    family_id = family_membership.get(fingerprint)
+    return family_id if family_id and family_id in valid_family_ids else None
+
+
+def _collect_lookup_data(
+    relay: Dict[str, Any],
+    as_names: Dict[str, str],
+    country_names: Dict[str, str],
+    platforms: Set[str],
+    flags: Set[str]
+) -> None:
+    """
+    Collect lookup data from a relay into provided collectors (mutates in place).
+    
+    This is the single source of truth for what lookup data we extract from relays.
+    """
+    # AS name mapping
+    as_num, as_name = relay.get('as'), relay.get('as_name')
+    if as_num and as_name:
+        as_names[as_num] = as_name
+
+    # Country name mapping
+    country, country_name = relay.get('country'), relay.get('country_name')
+    if country and country_name:
+        country_names[country.lower()] = country_name
+
+    # Platform
+    platform = relay.get('platform')
+    if platform:
+        platforms.add(platform.lower())
+
+    # Flags
+    flags.update(flag.lower() for flag in relay.get('flags', []))
+
 
 def _process_relay_batch(
     batch: List[Tuple[int, Dict[str, Any]]],
     family_membership: Dict[str, str],
     valid_family_ids: Set[str]
-) -> Tuple[List[Dict[str, Any]], Dict[str, str], Dict[str, str], Set[str], Set[str]]:
+) -> Tuple[List[Tuple[int, Dict[str, Any]]], Dict[str, str], Dict[str, str], Set[str], Set[str]]:
     """
-    Process a batch of relays in parallel.
+    Process a batch of relays for parallel execution.
     
     Returns:
-        Tuple of (relay_entries, as_names, country_names, platforms, flags)
+        Tuple of (indexed_entries, as_names, country_names, platforms, flags)
+        where indexed_entries is List[(original_index, entry)]
     """
-    relay_entries = []
+    indexed_entries: List[Tuple[int, Dict[str, Any]]] = []
     as_names: Dict[str, str] = {}
     country_names: Dict[str, str] = {}
     platforms: Set[str] = set()
     flags: Set[str] = set()
 
     for idx, relay in batch:
-        fp = relay['fingerprint']
-        family_id = family_membership.get(fp)
-        
-        # Only include family_id if family is valid (2+ members)
-        if family_id and family_id not in valid_family_ids:
-            family_id = None
-
+        family_id = _get_valid_family_id(relay['fingerprint'], family_membership, valid_family_ids)
         entry = compact_relay_entry(relay, family_id)
-        relay_entries.append((idx, entry))
+        indexed_entries.append((idx, entry))
+        _collect_lookup_data(relay, as_names, country_names, platforms, flags)
 
-        # Collect lookup data
-        if relay.get('as') and relay.get('as_name'):
-            as_names[relay['as']] = relay['as_name']
-
-        if relay.get('country') and relay.get('country_name'):
-            country_names[relay['country'].lower()] = relay['country_name']
-
-        platform = relay.get('platform')
-        if platform:
-            platforms.add(platform.lower())
-
-        for flag in relay.get('flags', []):
-            flags.add(flag.lower())
-
-    return relay_entries, as_names, country_names, platforms, flags
+    return indexed_entries, as_names, country_names, platforms, flags
 
 
 # =============================================================================
@@ -366,31 +368,12 @@ def generate_search_index(
         indexed_entries.sort(key=lambda x: x[0])
         relay_entries = [entry for _, entry in indexed_entries]
     else:
-        # Sequential processing for small datasets
+        # Sequential processing for small datasets (uses same helpers as parallel)
         for relay in relays:
-            fp = relay['fingerprint']
-            family_id = family_membership.get(fp)
-            
-            # Only include family_id if family is valid (2+ members)
-            if family_id and family_id not in valid_family_ids:
-                family_id = None
-
+            family_id = _get_valid_family_id(relay['fingerprint'], family_membership, valid_family_ids)
             entry = compact_relay_entry(relay, family_id)
             relay_entries.append(entry)
-
-            # Collect lookup data
-            if relay.get('as') and relay.get('as_name'):
-                as_names[relay['as']] = relay['as_name']
-
-            if relay.get('country') and relay.get('country_name'):
-                country_names[relay['country'].lower()] = relay['country_name']
-
-            platform = relay.get('platform')
-            if platform:
-                platforms.add(platform.lower())
-
-            for flag in relay.get('flags', []):
-                flags.add(flag.lower())
+            _collect_lookup_data(relay, as_names, country_names, platforms, flags)
 
     # ==========================================================================
     # PHASE 3: Process families (O(f) where f = valid families)
