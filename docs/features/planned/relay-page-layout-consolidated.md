@@ -98,40 +98,25 @@ Before the 5 improvements, these design decisions address layout and structure:
 - Detailed family member lists → `#family` section
 - Detailed contact parsing → stays in header, no separate section needed
 
-This means "Operator Information" is **removed as a section** - it's in the header where it belongs.
+This means operator identity info is in the header where it belongs, not buried in a separate section.
 
-#### Consensus Summary: Removed (Redundant)
+#### Why No Separate "Consensus Summary" Section?
 
-**Problem:** The proposed "Consensus Summary" section overlaps significantly with:
-- Health Status (consensus status, flags, issues)
-- Connectivity (reachability counts)
-- Flags (eligibility counts)
-- Bandwidth (measured values)
+Consensus summary data is distributed across the relevant sections rather than duplicated in a separate summary:
 
-**Analysis of overlap:**
+| Data Point | Shown In Section |
+|------------|------------------|
+| In consensus (Y/N) | Health Status |
+| Authority vote count | Health Status |
+| Reachability IPv4/v6 | Connectivity and Location |
+| Current flags | Health Status, Flags |
+| Flag eligibility counts | Flags |
+| Measured bandwidth | Bandwidth |
+| Issues/warnings | Health Status |
 
-| Data Point | Health Status | Connectivity | Flags | Bandwidth | Consensus Summary |
-|------------|---------------|--------------|-------|-----------|-------------------|
-| In consensus (Y/N) | Yes | - | - | - | Yes (redundant) |
-| Authority vote count | Yes | - | - | - | Yes (redundant) |
-| Reachability IPv4/v6 | - | Yes | - | - | Yes (redundant) |
-| Current flags | Yes | - | Yes | - | Yes (redundant) |
-| Flag eligibility counts | - | - | Yes | - | Yes (redundant) |
-| Measured bandwidth | - | - | - | Yes | Yes (redundant) |
-| Issues/warnings | Yes | - | - | - | Yes (redundant) |
+The **Per-Authority Details** table (section 9) provides the detailed per-authority breakdown for advanced troubleshooting.
 
-**Solution:** Remove "Consensus Summary" as a separate section. Its content is distributed to the appropriate sections:
-
-- Consensus status, vote count, issues → **Health Status**
-- Reachability counts → **Connectivity**
-- Flag eligibility → **Flags**
-- Bandwidth measurements → **Bandwidth**
-
-The **Per-Authority Details** table remains as the deep-dive section for advanced troubleshooting.
-
-#### Revised Section List (10 sections, not 12)
-
-After removing duplicates and merging related sections:
+#### Section List
 
 | Order | Section | Anchor |
 |-------|---------|--------|
@@ -146,17 +131,6 @@ After removing duplicates and merging related sections:
 | 8 | Exit Policy | `#exit-policy` |
 | 9 | Per-Authority Vote Details | `#authority-votes` |
 
-**Changes from previous version:**
-- **Renamed:** "Network and Location" → **"Connectivity and Location"** (`#connectivity`)
-  - Includes: addresses, reachability, AS info, geographic location
-  - "Connectivity" better describes the troubleshooting purpose (can authorities reach this relay?)
-- **Merged:** "Family Configuration" + AROI info → **"Operator and Family"** (`#operator`)
-  - Rationale: Both answer "who runs this relay and what other relays do they operate?"
-  - AROI = verified operator identity (when present)
-  - Family = fingerprint-based grouping (always present)
-  - Showing both together lets users see the relationship
-- **Removed:** "Summary: Your Relay vs Consensus" table from Per-Authority section
-  - Rationale: 90% duplicate of data already shown in Health Status, Flags, and Bandwidth sections
 
 ---
 
@@ -215,10 +189,6 @@ Move critical "is my relay working?" information to the very top of the page, im
 | 8 | Exit Policy | `#exit-policy` |
 | 9 | Per-Authority Vote Details | `#authority-votes` |
 
-**Changes:**
-- "Connectivity" + "Location" merged into **"Connectivity and Location"** - addresses, reachability, AS, geo
-- "Family" + AROI merged into **"Operator and Family"** - all "who runs this relay" info together
-- "Summary Table" removed from Per-Authority section (data already in sections 1, 3, 4)
 
 #### Detailed Ordering Rationale
 
@@ -231,15 +201,13 @@ The ordering follows a **troubleshooting decision tree** - each section answers 
 - Mailing list evidence: Nearly every troubleshooting thread starts with "my relay is/isn't in consensus"
 
 **2. Connectivity and Location** - "Can the network reach my relay? Where is it?"
-- **Merged section** combining addresses + reachability + AS info + geographic location
+- Combines addresses + reachability + AS info + geographic location in one section
 - If relay is NOT in consensus, the first thing to check is reachability
 - Shows OR port, Dir port, IPv4/IPv6 reachability status
 - Also shows AS number (relevant for ISP/network troubleshooting) and geographic location
 - Most common cause of "not in consensus": firewall/NAT blocking ports
 - Mailing list evidence: "Check your firewall" is the #1 response to "relay not working" posts
 - Troubleshooting dependency: Must be reachable before flags can be assigned
-- **Why merged:** AS info is troubleshooting-relevant (ISP blocks), and addresses without network context is incomplete
-- **Why "Connectivity":** Better describes the troubleshooting purpose - "can authorities connect to this relay?"
 
 **3. Flags and Eligibility** - "Why don't I have [Guard/Stable/Fast] flag?"
 - Once connectivity is confirmed, operators ask about missing flags
@@ -262,13 +230,11 @@ The ordering follows a **troubleshooting decision tree** - each section answers 
 - Troubleshooting dependency: Explains flag eligibility failures from section 3
 
 **6. Operator and Family** - "Who runs this relay? What other relays do they operate?"
-- **Merged section** combining AROI operator info + Family configuration
 - Shows AROI domain and relay count (when present) - verified operator identity
 - Shows Family breakdown: effective vs alleged vs indirect members
 - Common misconfiguration: asymmetric family declarations ("alleged" members)
 - Mailing list evidence: Frequent questions about family setup errors
 - Position rationale: Not critical for basic operation, but important for operators running multiple relays
-- **Why merged:** Both AROI and Family answer "who operates this relay" - AROI is verified, Family is fingerprint-based
 
 **7. Software and Version** - "Is my Tor version OK?"
 - Version issues are less urgent but can affect flags
@@ -284,7 +250,6 @@ The ordering follows a **troubleshooting decision tree** - each section answers 
 **9. Per-Authority Vote Details** - "Which specific authority is not voting for me?"
 - Advanced diagnostics for edge cases
 - Detailed per-authority breakdown (the table with all 9 authorities)
-- **Note:** "Summary: Your Relay vs Consensus" table REMOVED - it duplicates data from sections 1, 3, and 4
 - Position rationale: Only needed when Health Status or Flags sections show problems
 - Used by experienced operators or when guided by support
 
@@ -360,32 +325,28 @@ Left Column:                              - Contact
   - Nickname/Fingerprint                  - Operator (AROI) or Family link
   - AROI/Contact          ─┐            
   - Exit Policies          │            Sections (full-width, top-to-bottom):
-  - Family                 │              1. Health Status [NEW]
-                           │              2. Connectivity & Location [MERGED]
-Right Column:              │                 (addresses + reachability + AS + geo)
-  - Bandwidth              │              3. Flags + Eligibility Table
-  - Network Participation  │              4. Bandwidth + Consensus Weight
-  - OR/Exit/Dir Addresses  ├─ scattered   5. Uptime/Stability
-  - Location               │              6. Operator & Family [MERGED]
-  - Flags                  │                 (AROI info + Family breakdown)
-  - Uptime                 │              7. Software/Version
-  - Platform/Version      ─┘              8. Exit Policy
-                                          9. Per-Authority Details
-Bottom (separate section):                   (summary table REMOVED - duplicate)
+  - Family                 │              1. Health Status
+                           │              2. Connectivity & Location
+Right Column:              │              3. Flags + Eligibility Table
+  - Bandwidth              │              4. Bandwidth + Consensus Weight
+  - Network Participation  │              5. Uptime/Stability
+  - OR/Exit/Dir Addresses  ├─ scattered   6. Operator & Family
+  - Location               │              7. Software/Version
+  - Flags                  │              8. Exit Policy
+  - Uptime                 │              9. Per-Authority Details
+  - Platform/Version      ─┘
+                                  
+Bottom (separate section):
   - Consensus Evaluation (detailed)
-    - Summary Table ──────────────────> REMOVED (duplicate of 1, 3, 4)
-    - Per-Authority Table ────────────> KEPT in section 9
 ```
 
 **Why single-column?** Two-column layouts force users to scan horizontally and make mental connections between scattered data. A linear flow matches how troubleshooting actually works: check one thing, then the next logical thing.
 
-**Why identity in header?** Operators need to confirm they're viewing the correct relay before doing anything else. The header is always visible at the top, and on most screens remains visible while scrolling (or can be quickly scrolled back to).
+**Why identity in header?** Operators need to confirm they're viewing the correct relay before doing anything else. The header is always visible at the top.
 
-**Why merge Connectivity + Location?** AS number is troubleshooting-relevant (ISP blocks, network issues). IP addresses without their network/geographic context is incomplete. All "where is this relay on the network" info belongs together.
+**Why Connectivity and Location together?** AS number is troubleshooting-relevant (ISP blocks, network issues). IP addresses without their network/geographic context is incomplete. All "where is this relay on the network" info belongs together.
 
-**Why merge Operator + Family?** Both answer "who runs this relay and what other relays do they operate?" AROI provides verified operator identity; Family provides fingerprint-based grouping. Showing both together reveals the relationship and any discrepancies.
-
-**Why remove Summary Table?** 90% of its data is already shown in Health Status (consensus status), Flags (eligibility thresholds), and Bandwidth (consensus weight). The Per-Authority Details table is kept because it provides unique per-authority breakdown not shown elsewhere.
+**Why Operator and Family together?** Both answer "who runs this relay and what other relays do they operate?" AROI provides verified operator identity; Family provides fingerprint-based grouping. Showing both together reveals the relationship and any discrepancies.
 
 ---
 
@@ -436,10 +397,6 @@ Add a dedicated flag eligibility section showing requirements vs current values.
 
 ### 4. Remove All Emoji Icons, Use Text Labels
 
-**Source:** User requirement, both proposals support
-
-**Changes:**
-
 | Current | Replace With |
 |---------|--------------|
 | Checkmark icon | Text: "Yes" or "Meets" |
@@ -476,11 +433,11 @@ BELOW            (red text)
 | Anchor ID | Section | Priority |
 |-----------|---------|----------|
 | `#status` | Health Status Summary | Critical |
-| `#connectivity` | Connectivity and Location (merged section) | High |
+| `#connectivity` | Connectivity and Location | High |
 | `#flags` | Flags and Eligibility | High |
 | `#bandwidth` | Bandwidth Metrics | High |
 | `#uptime` | Uptime and Stability | High |
-| `#operator` | Operator and Family (merged section) | Medium |
+| `#operator` | Operator and Family | Medium |
 | `#authority-votes` | Per-Authority Vote Table | High |
 | `#effective-family` | Effective Family Members (within #operator) | Medium |
 | `#alleged-family` | Alleged Family Members (within #operator) | Medium |
@@ -490,12 +447,9 @@ BELOW            (red text)
 | `#ipv4-exit-policy-summary` | IPv4 Exit Policy Summary (existing) | Low |
 | `#ipv6-exit-policy-summary` | IPv6 Exit Policy Summary (existing) | Low |
 
-**Removed/Changed Anchors:**
-- `#network` → now `#connectivity` (renamed for clarity)
-- `#location` → merged into `#connectivity`
-- `#family` → merged into `#operator` (alias kept for backward compatibility)
-- `#relay-summary` → **REMOVED** (duplicate table removed)
-- `#consensus-evaluation` → alias for `#authority-votes` (for backward compatibility)
+**Backward-Compatible Aliases:**
+- `#family` → redirects to `#operator`
+- `#consensus-evaluation` → redirects to `#authority-votes`
 
 **Implementation:**
 Each section header should be clickable and link to itself:
@@ -579,7 +533,7 @@ Every item from the current relay page mapped to the proposed structure:
 | Consensus Eval | Identified Issues | Error/Warning list |
 | Consensus Eval | Notes | Info items |
 
-### Section 2: Connectivity and Location (`#connectivity`) - MERGED SECTION
+### Section 2: Connectivity and Location (`#connectivity`)
 
 | Current Location | Item | Notes |
 |------------------|------|-------|
@@ -596,9 +550,6 @@ Every item from the current relay page mapped to the proposed structure:
 | Right column | Interactive Map link | External link |
 | Right column | AS Number | With link to AS page |
 | Right column | AS Name | With BGP.tools link |
-
-**Why merged:** Addresses, reachability, AS info, and location are all related to "where is this relay and can it be reached?"
-**Why "Connectivity":** Better describes the troubleshooting purpose - can authorities connect to this relay?
 
 ### Section 3: Flags and Eligibility (`#flags`)
 
@@ -645,7 +596,7 @@ Every item from the current relay page mapped to the proposed structure:
 | Right column | Last Restarted | Timestamp |
 | Right column | Hibernating | Yes/No |
 
-### Section 6: Operator and Family (`#operator`) - MERGED SECTION
+### Section 6: Operator and Family (`#operator`)
 
 | Current Location | Item | Notes |
 |------------------|------|-------|
@@ -658,11 +609,6 @@ Every item from the current relay page mapped to the proposed structure:
 | Left column | Alleged Family list | Fingerprint links |
 | Left column | Indirect Family count | They list you, you don't list them |
 | Left column | Indirect Family list | Fingerprint links |
-
-**Why merged:** Both AROI and Family answer "who operates this relay and what other relays do they run?"
-- AROI = verified operator identity (ContactInfo spec), more accurate relay count
-- Family = fingerprint-based grouping, may have alleged/indirect mismatches
-- Showing both reveals relationship and discrepancies between the two grouping methods
 
 ### Section 7: Software and Version (`#software`)
 
@@ -685,22 +631,14 @@ Every item from the current relay page mapped to the proposed structure:
 
 ### Section 9: Per-Authority Vote Details (`#authority-votes`)
 
-| Current Location | Item | Keep/Remove | Notes |
-|------------------|------|-------------|-------|
-| Consensus Eval | Summary Table header | **REMOVE** | Duplicate - data in sections 1, 3, 4 |
-| Consensus Eval | Summary Table (full) | **REMOVE** | Duplicate - data in sections 1, 3, 4 |
-| Consensus Eval | Per-Authority Details table | **KEEP** | Unique - per-authority breakdown |
-| Consensus Eval | Bandwidth Values Explained | **KEEP** | Helpful context for the table |
-| Consensus Eval | Stable Uptime Explained | **KEEP** | Helpful context for the table |
-| Consensus Eval | Data source attribution | **KEEP** | CollecTor link |
+| Current Location | Item | Notes |
+|------------------|------|-------|
+| Consensus Eval | Per-Authority Details table | Per-authority voting breakdown |
+| Consensus Eval | Bandwidth Values Explained | Helpful context for the table |
+| Consensus Eval | Stable Uptime Explained | Helpful context for the table |
+| Consensus Eval | Data source attribution | CollecTor link |
 
-**Why remove Summary Table?** Its 14 rows duplicate data already shown:
-- In Consensus, Running, Valid → Health Status section
-- Guard WFU/TK/BW, Stable MTBF/Uptime, Fast Speed, HSDir WFU/TK → Flags section
-- Consensus Weight → Bandwidth section
-- IPv6 Reachability → Network section
-
-The Per-Authority table is kept because it shows which SPECIFIC authority is/isn't voting - not shown elsewhere.
+This section shows which SPECIFIC authority is/isn't voting - essential for advanced troubleshooting.
 
 ---
 
