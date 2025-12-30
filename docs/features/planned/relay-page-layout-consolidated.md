@@ -1885,37 +1885,33 @@ Country: unknown
     scroll-margin-top: 20px;
 }
 
-/* Fingerprint display - full and copyable */
+/* Fingerprint display - full and easily selectable (no JS needed) */
 .fingerprint-full {
     font-family: Consolas, "Courier New", monospace;
     font-size: 12px;
     word-break: break-all;
-    user-select: all;
-    cursor: text;
+    user-select: all;  /* Select entire text on click */
+    cursor: pointer;
     background: #f8f9fa;
     padding: 4px 8px;
     border-radius: 4px;
+    display: inline-block;
 }
 
-/* Copy button styling */
-.copy-button {
-    font-size: 11px;
-    padding: 2px 6px;
-    margin-left: 8px;
-    cursor: pointer;
-    border: 1px solid #ccc;
-    background: #fff;
-    border-radius: 3px;
+.fingerprint-full:hover {
+    background: #e8e8e8;
 }
 
-.copy-button:hover {
-    background: #f0f0f0;
+.fingerprint-full:focus,
+.fingerprint-full::selection {
+    background: #cce5ff;
+    outline: 2px solid #007bff;
 }
 ```
 
 ---
 
-#### 2.5 Move Fingerprint to Header, Make Full and Copyable
+#### 2.5 Move Fingerprint to Header, Make Full and Selectable
 
 **File:** `allium/templates/relay-info.html`
 
@@ -1925,16 +1921,49 @@ Country: unknown
 <div id="content" class="relay-page-content">
 <h2>View Relay "{{ relay['nickname'] }}"</h2>
 
-{# Full fingerprint with copy functionality #}
+{# Full fingerprint - CSS makes it easily selectable for copying #}
 <p style="margin-bottom: 10px;">
     <strong>Fingerprint:</strong> 
-    <code class="fingerprint-full" id="relay-fingerprint">{{ relay['fingerprint']|escape }}</code>
-    <button class="copy-button" onclick="navigator.clipboard.writeText('{{ relay['fingerprint']|escape }}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy', 1500);">Copy</button>
+    <code class="fingerprint-full" id="relay-fingerprint" title="Click to select, then Ctrl+C to copy">{{ relay['fingerprint']|escape }}</code>
 </p>
 
 {% set relay_data = {'nickname': relay['nickname'], 'fingerprint': relay['fingerprint'], 'as_number': relay['as']} %}
 {{ navigation('all', page_ctx) }}
 ```
+
+**CSS-only copy approach (in skeleton.html):**
+
+```css
+/* Fingerprint styling - full width, easily selectable */
+.fingerprint-full {
+    font-family: monospace;
+    font-size: 12px;
+    background: #f5f5f5;
+    padding: 4px 8px;
+    border-radius: 4px;
+    user-select: all;  /* Select entire text on click */
+    cursor: pointer;
+    display: inline-block;
+    word-break: break-all;
+}
+
+.fingerprint-full:hover {
+    background: #e8e8e8;
+}
+
+/* Visual hint on focus */
+.fingerprint-full:focus,
+.fingerprint-full::selection {
+    background: #cce5ff;
+    outline: 2px solid #007bff;
+}
+```
+
+**How it works:**
+- `user-select: all` makes the entire fingerprint select on a single click
+- User then presses Ctrl+C (or Cmd+C) to copy
+- No JavaScript required
+- Title attribute provides hint to users
 
 ---
 
@@ -2288,48 +2317,39 @@ Data from <a href="https://collector.torproject.org/recent/relay-descriptors/vot
 
 **File:** `allium/templates/relay-info.html`
 
-**Add at the top of the content div (after line 35):**
+**CSS-only approach (no JavaScript):**
+
+Place invisible anchor elements immediately before the target sections they should redirect to:
 
 ```jinja2
-{# Backward-compatible anchor aliases - invisible anchor points for old URLs #}
-<span id="network" style="display: none;"></span>
-<span id="family" style="display: none;"></span>
-<span id="location" style="display: none;"></span>
-<span id="consensus-evaluation" style="display: none;"></span>
+{# Backward-compatible anchor aliases #}
+{# Place these invisible spans immediately before their target sections #}
 
-{# JavaScript for redirect (optional, for better UX) #}
-<script>
-// Redirect old anchors to new ones
-document.addEventListener('DOMContentLoaded', function() {
-    const redirects = {
-        '#network': '#connectivity',
-        '#location': '#connectivity', 
-        '#family': '#operator',
-        '#consensus-evaluation': '#authority-votes'
-    };
-    if (redirects[window.location.hash]) {
-        window.location.hash = redirects[window.location.hash];
-    }
-});
-</script>
+{# Before #connectivity section: #}
+<span id="network" style="position: absolute; visibility: hidden;"></span>
+<span id="location" style="position: absolute; visibility: hidden;"></span>
+<section id="connectivity" ...>
+
+{# Before #operator section: #}
+<span id="family" style="position: absolute; visibility: hidden;"></span>
+<section id="operator" ...>
 ```
 
-**Alternative CSS-only approach (no JavaScript):**
+**Styling in skeleton.html:**
 
 ```css
-/* In skeleton.html CSS section */
-
-/* Anchor aliases - position at the target section */
-#network, #location {
+/* Anchor aliases - invisible but targetable */
+span#network, span#location, span#family {
     position: absolute;
-    /* These will be positioned via template to sit at #connectivity */
-}
-
-#family {
-    position: absolute;
-    /* Positioned at #operator */
+    visibility: hidden;
+    pointer-events: none;
 }
 ```
+
+**How it works:**
+- When a user visits `#network`, the browser scrolls to the invisible `<span id="network">` 
+- Since the span is positioned immediately before `#connectivity`, the user sees the correct section
+- No JavaScript required - pure CSS/HTML solution
 
 ---
 
