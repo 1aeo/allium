@@ -869,8 +869,6 @@ Two columns inside each section to maximize information density on wide screens.
 ┃ PER-AUTHORITY VOTE DETAILS                                                                        [#authority-votes] ┃
 ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
 ┃ Data from Tor CollecTor (authority votes, fetched 2024-12-29 14:00 UTC)                                              ┃
-┃                                                                                                                      ┃
-┃ Note: "Summary: Your Relay vs Consensus" table removed - data shown in Health Status, Flags, and Bandwidth sections ┃
 ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
 ┃ Per-Authority Voting Details (for advanced troubleshooting - which specific authority is/isn't voting?)              ┃
 ┃ ┌───────────┬────────┬───────┬────────┬────┬────┬─────────────────────┬───────────┬────────────┬─────────┬─────────┐ ┃
@@ -1105,9 +1103,6 @@ Single column layout for narrow screens. All content stacks vertically.
 ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
 ┃ Data from Tor CollecTor                   ┃
 ┃ (fetched 2024-12-29 14:00 UTC)            ┃
-┃                                           ┃
-┃ Note: Summary table removed (data shown   ┃
-┃ in Health Status, Flags, Bandwidth)       ┃
 ┃                                           ┃
 ┃ Per-Authority Table                       ┃
 ┃   [Horizontal scroll on mobile]           ┃
