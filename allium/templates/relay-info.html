@@ -58,22 +58,28 @@ Country: unknown
 <div class="row">
 <div class="col-md-6">
 <dl>
-<dt>
-Nickname
+<dt id="nickname">
+<div class="section-header">
+<a href="#nickname" class="anchor-link">Nickname</a>
+</div>
 </dt>
 <dd>
 {{ relay['nickname']|escape }}
 </dd>
 
-<dt>
-Fingerprint
+<dt id="fingerprint">
+<div class="section-header">
+<a href="#fingerprint" class="anchor-link">Fingerprint</a>
+</div>
 </dt>
 <dd>
 <code>{{ relay['fingerprint']|escape }}</code>
 </dd>
 
-<dt>
-AROI <a href="https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/" target="_blank" title="Autonomous Relay Operator Identifier - unverified">(?)</a>
+<dt id="aroi">
+<div class="section-header">
+<a href="#aroi" class="anchor-link">AROI</a> <a href="https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/" target="_blank" title="Autonomous Relay Operator Identifier - unverified">(?)</a>
+</div>
 </dt>
 {% if relay['aroi_domain'] and relay['aroi_domain'] != 'none' -%}
 <dd>
@@ -88,8 +94,10 @@ AROI <a href="https://nusenu.github.io/ContactInfo-Information-Sharing-Specifica
 none
 </dd>
 {% endif -%}
-<dt>
-Contact
+<dt id="contact">
+<div class="section-header">
+<a href="#contact" class="anchor-link">Contact</a>
+</div>
 </dt>
 {% if relay['contact'] -%}
 <dd style="word-wrap: break-word; word-break: break-all; max-width: 100%; overflow-wrap: break-word;">
@@ -209,8 +217,10 @@ relay['contact']|escape }}</a>
 </div>
 <div class="col-md-6">
 <dl>
-<dt title="Bandwidth capacity details: Observed capacity | Advertised capability | Rate limit | Burst limit">
-Bandwidth Capacity (Observed | Advertised | Rate Limit | Burst Limit)
+<dt id="bandwidth-capacity" title="Bandwidth capacity details: Observed capacity | Advertised capability | Rate limit | Burst limit">
+<div class="section-header">
+<a href="#bandwidth-capacity" class="anchor-link">Bandwidth Capacity (Observed | Advertised | Rate Limit | Burst Limit)</a>
+</div>
 </dt>
     {% set obs_unit = relay['observed_bandwidth']|determine_unit(relays.use_bits) -%}
     {% set obs_bandwidth = relay['observed_bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
@@ -221,17 +231,19 @@ Bandwidth Capacity (Observed | Advertised | Rate Limit | Burst Limit)
 {% if relay['bandwidth_burst'] -%}{% set burst_unit = relay['bandwidth_burst']|determine_unit(relays.use_bits) -%}{% set burst_bandwidth = relay['bandwidth_burst']|format_bandwidth_with_unit(burst_unit) -%}<span title="Burst: {{ burst_bandwidth }} {{ burst_unit }}">{{ burst_bandwidth }} {{ burst_unit }}</span>{% else -%}<span title="Burst: unknown">unknown</span>{% endif -%}
 {% if relay['measured'] is not none -%}
     {% if relay['measured'] -%}
-        &nbsp;&nbsp;<span style="color: #28a745; font-weight: bold;" title="Bandwidth capacity measured by ≥3 bandwidth authorities">✓</span>
+        &nbsp;&nbsp;<span style="color: #28a745; font-weight: bold;" title="Bandwidth capacity measured by ≥3 bandwidth authorities">Measured</span>
     {% else -%}
-        &nbsp;&nbsp;<span style="color: #dc3545; font-weight: bold;" title="Bandwidth capacity not measured by ≥3 bandwidth authorities">✗</span>
+        &nbsp;&nbsp;<span style="color: #dc3545; font-weight: bold;" title="Bandwidth capacity not measured by ≥3 bandwidth authorities">Not Measured</span>
     {% endif -%}
 {% else -%}
-    &nbsp;&nbsp;<span style="color: #6c757d;" title="Bandwidth capacity measurement status unknown">?</span>
+    &nbsp;&nbsp;<span style="color: #6c757d;" title="Bandwidth capacity measurement status unknown">Unknown</span>
 {% endif -%}
 </dd>
 
-<dt>
-Network Participation (Consensus Weight | Guard | Middle | Exit)
+<dt id="network-participation">
+<div class="section-header">
+<a href="#network-participation" class="anchor-link">Network Participation (Consensus Weight | Guard | Middle | Exit)</a>
+</div>
 </dt>
 <dd>
 <span title="Fraction of this relay's consensus weight compared to the sum of all consensus weights in the network. This fraction is a very rough approximation of the probability of this relay to be selected by clients.">{% if relay['consensus_weight_fraction'] -%}{{ "%.2f"|format(relay['consensus_weight_fraction'] * 100) }}%{% else -%}N/A{% endif -%}</span> | 
@@ -239,12 +251,14 @@ Network Participation (Consensus Weight | Guard | Middle | Exit)
 <span title="Probability of this relay to be selected for the middle position. This probability is calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so that this probability can only be an approximation.">{% if relay['middle_probability'] -%}{{ "%.2f"|format(relay['middle_probability'] * 100) }}%{% else -%}N/A{% endif -%}</span> | 
 <span title="Probability of this relay to be selected for the exit position. This probability is calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so that this probability can only be an approximation.">{% if relay['exit_probability'] -%}{{ "%.2f"|format(relay['exit_probability'] * 100) }}%{% else -%}N/A{% endif -%}</span>
 {% if relay['fingerprint'] in relays.json.smart_context.performance_correlation.template_optimized.underutilized_fingerprints %}
-<br><small class="text-warning">⚠️ Underutilized: High bandwidth capacity but low consensus weight</small>
+<br><small class="text-warning">[Warning] Underutilized: High bandwidth capacity but low consensus weight</small>
 {% endif %}
 </dd>
 
-<dt title="IP address and TCP port where this relay accepts onion-routing connections, with hostname when available">
-OR Address
+<dt id="or-address" title="IP address and TCP port where this relay accepts onion-routing connections, with hostname when available">
+<div class="section-header">
+<a href="#or-address" class="anchor-link">OR Address</a>
+</div>
 </dt>
 <dd>
 {% if relay['verified_host_names'] -%}
@@ -259,8 +273,10 @@ OR Address
 {% for address in relay['or_addresses'] -%}{{ address }}{% if not loop.last %}, {% endif %}{% endfor -%}
 {% endif -%}
 </dd>
-<dt>
-Exit Address
+<dt id="exit-address">
+<div class="section-header">
+<a href="#exit-address" class="anchor-link">Exit Address</a>
+</div>
 </dt>
 {% if relay['exit_address'] -%}
 <dd>
@@ -271,8 +287,10 @@ Exit Address
 none
 </dd>
 {% endif -%}
-<dt>
-Dir Address
+<dt id="dir-address">
+<div class="section-header">
+<a href="#dir-address" class="anchor-link">Dir Address</a>
+</div>
 </dt>
 {% if relay['dir_address'] -%}
 <dd>
@@ -285,8 +303,10 @@ none
 </dd>
 {% endif -%}
 
-<dt>
-{% if relay['city_name'] or relay['region_name'] -%}City | Region | Country{% else -%}Country{% endif -%}
+<dt id="location">
+<div class="section-header">
+<a href="#location" class="anchor-link">{% if relay['city_name'] or relay['region_name'] -%}City | Region | Country{% else -%}Country{% endif -%}</a>
+</div>
 </dt>
 <dd>
 {% if relay['city_name'] -%}
@@ -308,22 +328,28 @@ unknown
 {% endif -%}
 </dd>
 {% if relay['latitude'] and relay['longitude'] and relay['latitude'] != 0 and relay['longitude'] != 0 -%}
-<dt>
-Latitude, Longitude
+<dt id="coordinates">
+<div class="section-header">
+<a href="#coordinates" class="anchor-link">Latitude, Longitude</a>
+</div>
 </dt>
 <dd>
 <span title="Latitude of the location of this relay as found by a geolocation database based on the relay's IP address. Omitted if the relay location could not be found.">{{ relay['latitude']|escape }}</span>, 
 <span title="Longitude of the location of this relay as found by a geolocation database based on the relay's IP address. Omitted if the relay location could not be found.">{{ relay['longitude']|escape }}</span>
 </dd>
 {% endif -%}
-<dt>
-Interactive Map
+<dt id="interactive-map">
+<div class="section-header">
+<a href="#interactive-map" class="anchor-link">Interactive Map</a>
+</div>
 </dt>
 <dd>
-<a href="https://routefluxmap.1aeo.com/#relay={{ relay['fingerprint']|escape }}" target="_blank" rel="noopener" title="View this relay on RouteFluxMap interactive visualization">🗺️ View on Interactive Map</a>
+<a href="https://routefluxmap.1aeo.com/#relay={{ relay['fingerprint']|escape }}" target="_blank" rel="noopener" title="View this relay on RouteFluxMap interactive visualization">View on Interactive Map</a>
 </dd>
-<dt>
-Autonomous System (AS Number | AS Name)
+<dt id="autonomous-system">
+<div class="section-header">
+<a href="#autonomous-system" class="anchor-link">Autonomous System (AS Number | AS Name)</a>
+</div>
 </dt>
 <dd>
 {% if relay['as'] -%}
@@ -337,8 +363,10 @@ Autonomous System (AS Number | AS Name)
 {% endif -%}
 </dd>
 
-<dt>
-Flags: {{ relay['flags']|reject('equalto', 'StaleDesc')|list|length }}
+<dt id="flags">
+<div class="section-header">
+<a href="#flags" class="anchor-link">Flags: {{ relay['flags']|reject('equalto', 'StaleDesc')|list|length }}</a>
+</div>
 </dt>
 <dd>
 {% for flag in relay['flags'] -%}
@@ -352,8 +380,10 @@ alt="{{ flag|escape }}">
 {% endfor -%}
 </dd>
 
-<dt title="Flag-specific uptime percentages showing the reliability of this relay when operating in its primary network role. Priority: Exit > Guard > Fast > Running flags.">
-Flag Uptime (1M/6M/1Y/5Y)
+<dt id="flag-uptime" title="Flag-specific uptime percentages showing the reliability of this relay when operating in its primary network role. Priority: Exit > Guard > Fast > Running flags.">
+<div class="section-header">
+<a href="#flag-uptime" class="anchor-link">Flag Uptime (1M/6M/1Y/5Y)</a>
+</div>
 </dt>
 <dd>
 {% if relay.get('flag_uptime_display') and relay['flag_uptime_display'] != 'N/A' -%}
@@ -366,8 +396,10 @@ Flag Uptime (1M/6M/1Y/5Y)
 N/A
 {% endif -%}
 </dd>
-<dt title="{% if contact_display_data and contact_display_data.outliers and contact_display_data.outliers.tooltip %}{{ contact_display_data.outliers.tooltip }}{% else %}Statistical outliers: ≥2σ from average{% endif %}">
-Uptime (1M/6M/1Y/5Y)
+<dt id="uptime-history" title="{% if contact_display_data and contact_display_data.outliers and contact_display_data.outliers.tooltip %}{{ contact_display_data.outliers.tooltip }}{% else %}Statistical outliers: ≥2σ from average{% endif %}">
+<div class="section-header">
+<a href="#uptime-history" class="anchor-link">Uptime (1M/6M/1Y/5Y)</a>
+</div>
 </dt>
 <dd>
 {% if relay.get('uptime_api_display') -%}
@@ -376,8 +408,10 @@ Uptime (1M/6M/1Y/5Y)
     N/A
 {% endif -%}
 </dd>
-<dt>
-Uptime / Downtime
+<dt id="uptime-downtime">
+<div class="section-header">
+<a href="#uptime-downtime" class="anchor-link">Uptime / Downtime</a>
+</div>
 </dt>
 <dd>
 {% if relay.get('uptime_display') -%}
@@ -390,14 +424,18 @@ Uptime / Downtime
     N/A
 {% endif -%}
 </dd>
-<dt>
-Seen (First | Last)
+<dt id="first-last-seen">
+<div class="section-header">
+<a href="#first-last-seen" class="anchor-link">Seen (First | Last)</a>
+</div>
 </dt>
 <dd>
 <a href="{{ page_ctx.path_prefix }}first_seen/{{ relay['first_seen'].split(' ', 1)[0]|escape }}/">{{ relay['first_seen']|format_time_ago }} ({{ relay['first_seen']|escape }})</a> | {{ relay['last_seen']|format_time_ago }} ({{ relay['last_seen']|escape }})
 </dd>
-<dt title="UTC timestamp when this relay was last (re-)started. Missing if router descriptor containing this information cannot be found.">
-Last Restarted
+<dt id="last-restarted" title="UTC timestamp when this relay was last (re-)started. Missing if router descriptor containing this information cannot be found.">
+<div class="section-header">
+<a href="#last-restarted" class="anchor-link">Last Restarted</a>
+</div>
 </dt>
 <dd>
 {% if relay['last_restarted'] -%}
@@ -406,8 +444,10 @@ Last Restarted
 unknown
 {% endif -%}
 </dd>
-<dt title="UTC timestamp when this relay last stopped announcing an IPv4 or IPv6 address or TCP port where it previously accepted onion-routing or directory connections. This timestamp can serve as indicator whether this relay would be a suitable fallback directory.">
-Last Changed Address or Port
+<dt id="last-changed-address" title="UTC timestamp when this relay last stopped announcing an IPv4 or IPv6 address or TCP port where it previously accepted onion-routing or directory connections. This timestamp can serve as indicator whether this relay would be a suitable fallback directory.">
+<div class="section-header">
+<a href="#last-changed-address" class="anchor-link">Last Changed Address or Port</a>
+</div>
 </dt>
 <dd>
 {% if relay['last_changed_address_or_port'] -%}
@@ -416,8 +456,10 @@ Last Changed Address or Port
 unknown
 {% endif -%}
 </dd>
-<dt title="Boolean field saying whether this relay indicated that it is hibernating in its last known server descriptor. This information may be helpful to decide whether a relay that is not running anymore has reached its accounting limit and has not dropped out due to a technical problem. Omitted if the last known server descriptor of this relay does not contain hibernation information or if no such descriptor is known.">
-Hibernating
+<dt id="hibernating" title="Boolean field saying whether this relay indicated that it is hibernating in its last known server descriptor. This information may be helpful to decide whether a relay that is not running anymore has reached its accounting limit and has not dropped out due to a technical problem. Omitted if the last known server descriptor of this relay does not contain hibernation information or if no such descriptor is known.">
+<div class="section-header">
+<a href="#hibernating" class="anchor-link">Hibernating</a>
+</div>
 </dt>
 <dd>
 {% if relay['hibernating'] is not none -%}
@@ -426,14 +468,18 @@ Hibernating
 unknown
 {% endif -%}
 </dd>
-<dt>
-Platform (Short | Long)
+<dt id="platform">
+<div class="section-header">
+<a href="#platform" class="anchor-link">Platform (Short | Long)</a>
+</div>
 </dt>
 <dd>
 <a href='{{ page_ctx.path_prefix }}platform/{{ relay['platform']|escape }}/' title="Simplified platform identifier for categorization">{{ relay['platform']|escape }}</a> | <span title="Complete platform information as reported by relay">{% if relay['platform_raw'] -%}{{ relay['platform_raw']|escape }}{% else -%}{{ relay['platform']|escape }}{% endif -%}</span>
 </dd>
-<dt>
-Version (Running | Recommended | Status)
+<dt id="version">
+<div class="section-header">
+<a href="#version" class="anchor-link">Version (Running | Recommended | Status)</a>
+</div>
 </dt>
 <dd>
 <span title="Tor software version without leading 'Tor' as reported by the directory authorities in the 'v' line of the consensus. Omitted if either the directory authorities or the relay did not report which version the relay runs or if the relay runs an alternative Tor implementation.">{% if relay['version'] -%}{{ relay['version']|escape }}{% else -%}unknown{% endif -%}</span> | 
@@ -452,7 +498,7 @@ Version (Running | Recommended | Status)
 <div class="col-md-12">
 <h3 id="consensus-evaluation">
 <div class="section-header">
-<a href="#consensus-evaluation" class="anchor-link">🔍 Consensus Evaluation</a>
+<a href="#consensus-evaluation" class="anchor-link">Consensus Evaluation</a>
 </div>
 </h3>
 <p class="text-muted" style="font-size: 12px; margin-bottom: 10px;">
@@ -503,7 +549,7 @@ Data from <a href="https://collector.torproject.org/recent/relay-descriptors/vot
     {% if diag.bandwidth_summary and diag.bandwidth_summary.median is not none %}
     <li><strong>Consensus Weight</strong> <span style="color: #6c757d; font-size: 10px;">(Dir. Auth.)</span><strong>:</strong>
         <span title="Tor consensus uses median of authority measurements for path selection. This is a scaled value used for traffic distribution.">Median: {{ diag.bandwidth_summary.median_display }} | Min: {{ diag.bandwidth_summary.min_display }} | Max: {{ diag.bandwidth_summary.max_display }}</span>
-        {% if diag.bandwidth_summary.deviation_class == 'warning' %}<span style="color: #856404;"> ⚠️ High deviation</span>{% endif %}
+        {% if diag.bandwidth_summary.deviation_class == 'warning' %}<span style="color: #856404;"> [Warning] High deviation</span>{% endif %}
     </li>
     {% endif %}
     
@@ -517,7 +563,7 @@ Data from <a href="https://collector.torproject.org/recent/relay-descriptors/vot
             <li>
                 <span style="color: {% if issue.severity == 'error' %}#dc3545{% else %}#856404{% endif %};">{{ issue.title }}</span>: {{ issue.description|safe }}
                 {% if issue.suggestion %}
-                <ul style="margin: 2px 0; padding-left: 15px;"><li style="color: #666; font-size: 12px;">💡 {{ issue.suggestion|safe }}</li></ul>
+                <ul style="margin: 2px 0; padding-left: 15px;"><li style="color: #666; font-size: 12px;"><strong>Suggestion:</strong> {{ issue.suggestion|safe }}</li></ul>
                 {% endif %}
             </li>
         {% endfor %}
@@ -610,7 +656,7 @@ Data from <a href="https://collector.torproject.org/recent/relay-descriptors/vot
         <td title="Source: CollecTor | File: vote | Field: flag-thresholds stable-uptime=X | Range varies by authority">
             ≥{{ rv.stable_uptime_min_display }} - {{ rv.stable_uptime_typical_display }} <span style="color: #666; font-size: 11px;">(typical)</span>
             {% if rv.stable_uptime_strict_auths %}
-            <br><span style="color: #856404; font-size: 10px;" title="These authorities have stricter requirements">⚠️ {{ rv.stable_uptime_strict_auths|join(', ') }}: ≥{{ rv.stable_uptime_max_display }}</span>
+            <br><span style="color: #856404; font-size: 10px;" title="These authorities have stricter requirements">[Stricter] {{ rv.stable_uptime_strict_auths|join(', ') }}: ≥{{ rv.stable_uptime_max_display }}</span>
             {% endif %}
         </td>
         <td>{% if rv.stable_uptime_meets_all %}<span style="color: #28a745; font-weight: bold;">MEETS - all authorities</span>{% elif rv.stable_uptime_meets_count >= diag.majority_required %}<span style="color: #ffc107; font-weight: bold;">PARTIAL - {{ rv.stable_uptime_meets_count }}/{{ rv.total_authorities }}</span>{% elif rv.stable_uptime is none %}<span style="color: #6c757d;">N/A - uptime not available</span>{% else %}<span style="color: #dc3545; font-weight: bold;">BELOW - {{ rv.stable_uptime_meets_count }}/{{ rv.total_authorities }}</span>{% endif %}</td>
@@ -621,7 +667,7 @@ Data from <a href="https://collector.torproject.org/recent/relay-descriptors/vot
         <td title="Most authorities: ≥{{ rv.stable_mtbf_typical_display }}{% if rv.stable_mtbf_strict_auths %}; Stricter: {{ rv.stable_mtbf_strict_auths|join(', ') }} uses ≥{{ rv.stable_mtbf_max_display }}{% endif %}">
             ≥{{ rv.stable_mtbf_min_display }} - {{ rv.stable_mtbf_typical_display }} <span style="color: #666; font-size: 11px;">(typical)</span>
             {% if rv.stable_mtbf_strict_auths %}
-            <br><span style="color: #856404; font-size: 10px;" title="These authorities have stricter requirements">⚠️ {{ rv.stable_mtbf_strict_auths|join(', ') }}: ≥{{ rv.stable_mtbf_max_display }}</span>
+            <br><span style="color: #856404; font-size: 10px;" title="These authorities have stricter requirements">[Stricter] {{ rv.stable_mtbf_strict_auths|join(', ') }}: ≥{{ rv.stable_mtbf_max_display }}</span>
             {% endif %}
         </td>
         <td>{% if rv.stable_mtbf_meets_all|default(false) %}<span style="color: #28a745; font-weight: bold;">MEETS - all authorities</span>{% elif rv.stable_mtbf_meets_count|default(0) >= diag.majority_required %}<span style="color: #ffc107; font-weight: bold;">PARTIAL - {{ rv.stable_mtbf_meets_count|default(0) }}/{{ rv.total_authorities }}</span>{% else %}<span style="color: #dc3545; font-weight: bold;">BELOW - {{ rv.stable_mtbf_meets_count|default(0) }}/{{ rv.total_authorities }}</span>{% endif %}</td>
@@ -632,7 +678,7 @@ Data from <a href="https://collector.torproject.org/recent/relay-descriptors/vot
         <td title="Most authorities: ≥{{ rv.fast_speed_typical_display }}{% if rv.fast_speed_strict_auths %}; Stricter: {{ rv.fast_speed_strict_auths|join(', ') }} uses ≥{{ rv.fast_speed_max_display }}{% endif %}">
             ≥{{ rv.fast_minimum_display }} <span style="color: #666; font-size: 11px;">(guarantee)</span> OR ≥{{ rv.fast_speed_typical_display }} <span style="color: #666; font-size: 11px;">(typical)</span>
             {% if rv.fast_speed_strict_auths %}
-            <br><span style="color: #856404; font-size: 10px;" title="These authorities have stricter requirements">⚠️ {{ rv.fast_speed_strict_auths|join(', ') }}: ≥{{ rv.fast_speed_max_display }}</span>
+            <br><span style="color: #856404; font-size: 10px;" title="These authorities have stricter requirements">[Stricter] {{ rv.fast_speed_strict_auths|join(', ') }}: ≥{{ rv.fast_speed_max_display }}</span>
             {% endif %}
         </td>
         <td>{% if rv.fast_meets_minimum %}<span style="color: #28a745; font-weight: bold;">MEETS - ≥100 KB/s guarantee</span>{% elif rv.fast_meets_all %}<span style="color: #28a745; font-weight: bold;">MEETS - all {{ rv.total_authorities }} auths</span>{% elif rv.fast_meets_count > 0 %}<span style="color: #ffc107; font-weight: bold;">PARTIAL - {{ rv.fast_meets_count }}/{{ rv.total_authorities }}</span>{% else %}<span style="color: #dc3545; font-weight: bold;">BELOW - need ≥100 KB/s</span>{% endif %}</td>
@@ -649,7 +695,7 @@ Data from <a href="https://collector.torproject.org/recent/relay-descriptors/vot
         <td title="dir-spec default: 25 hours ({{ rv.hsdir_tk_default_count }} auths){% if rv.hsdir_tk_strict_auths %}; Stricter: {{ rv.hsdir_tk_strict_auths|join(', ') }} uses {{ rv.hsdir_tk_max_display }}{% endif %}">
             ≥{{ rv.hsdir_tk_consensus_display }} <span style="color: #666; font-size: 11px;">({{ rv.hsdir_tk_default_count }}/{{ diag.total_authorities }} auths)</span>
             {% if rv.hsdir_tk_strict_auths %}
-            <br><span style="color: #856404; font-size: 10px;" title="These authorities have stricter requirements">⚠️ {{ rv.hsdir_tk_strict_auths|join(', ') }}: ≥{{ rv.hsdir_tk_max_display }}</span>
+            <br><span style="color: #856404; font-size: 10px;" title="These authorities have stricter requirements">[Stricter] {{ rv.hsdir_tk_strict_auths|join(', ') }}: ≥{{ rv.hsdir_tk_max_display }}</span>
             {% endif %}
         </td>
         <td>{% if diag.flag_summary.hsdir.eligible_count == diag.total_authorities %}<span style="color: #28a745; font-weight: bold;">MEETS - all {{ diag.total_authorities }} auths</span>{% elif diag.flag_summary.hsdir.eligible_count >= diag.majority_required %}<span style="color: #ffc107; font-weight: bold;">PARTIAL - {{ diag.flag_summary.hsdir.eligible_count }}/{{ diag.total_authorities }}</span>{% else %}<span style="color: #dc3545; font-weight: bold;">BELOW - {{ diag.flag_summary.hsdir.eligible_count }}/{{ diag.total_authorities }}</span>{% endif %}</td>
@@ -717,18 +763,18 @@ Flags: <span style="color: #28a745; font-weight: bold;">green</span> = all autho
     {# Running: Did this authority vote for this relay (i.e., could it reach the relay)? #}
     <td>
         {% if vote.voted %}
-            <span style="color: #28a745;" title="Authority voted for this relay (Running)">✓</span>
+            <span style="color: #28a745;" title="Authority voted for this relay (Running)">Yes</span>
         {% else %}
-            <span style="color: #dc3545;" title="Authority did NOT vote for this relay (not reachable)">✗</span>
+            <span style="color: #dc3545;" title="Authority did NOT vote for this relay (not reachable)">No</span>
         {% endif %}
     </td>
     {# Valid: Relay has Valid flag from this authority #}
     <td>
         {% if vote.voted and vote.flags %}
             {% if 'Valid' in vote.flags %}
-                <span style="color: #28a745;" title="Relay is Valid (verified, allowed in network)">✓</span>
+                <span style="color: #28a745;" title="Relay is Valid (verified, allowed in network)">Yes</span>
             {% else %}
-                <span style="color: #dc3545;" title="Relay does NOT have Valid flag">✗</span>
+                <span style="color: #dc3545;" title="Relay does NOT have Valid flag">No</span>
             {% endif %}
         {% else %}
             <span style="color: #6c757d;">—</span>
@@ -743,17 +789,17 @@ Flags: <span style="color: #28a745; font-weight: bold;">green</span> = all autho
     </td>
     <td>
         {% if vote.ipv4_reachable %}
-            <span style="color: #28a745;">✓</span>
+            <span style="color: #28a745;">Yes</span>
         {% else %}
-            <span style="color: #dc3545;">✗</span>
+            <span style="color: #dc3545;">No</span>
         {% endif %}
     </td>
     {% if has_ipv6 %}
     <td>
         {% if vote.ipv6_reachable == true %}
-            <span style="color: #28a745;">✓</span>
+            <span style="color: #28a745;">Yes</span>
         {% elif vote.ipv6_reachable == false %}
-            <span style="color: #dc3545;">✗</span>
+            <span style="color: #dc3545;">No</span>
         {% else %}
             <span style="color: #6c757d;">—</span>
         {% endif %}
@@ -887,7 +933,7 @@ Flags: <span style="color: #28a745; font-weight: bold;">green</span> = all autho
         {% if vote.voted %}
             {% if vote.has_staledesc %}
                 <span style="color: #8b0000; font-weight: bold;" title="StaleDesc flag assigned - descriptor is >18 hours old. This is a negative flag.">
-                    {{ vote.descriptor_published|default('N/A') }} ⚠️
+                    {{ vote.descriptor_published|default('N/A') }} [Stale]
                 </span>
             {% else %}
                 <span style="color: #28a745;" title="Descriptor is fresh (no StaleDesc flag)">
@@ -920,14 +966,14 @@ Flags: <span style="color: #28a745; font-weight: bold;">green</span> = all autho
 </p>
 
 <div style="font-size: 11px; color: #555; margin-top: 10px; padding: 8px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #007bff;">
-<strong>📊 Bandwidth Values Explained:</strong><br>
+<strong>Bandwidth Values Explained:</strong><br>
 <strong>Relay Reported</strong> = Your relay's self-reported bandwidth from its descriptor (observed_bandwidth). Used for <em>flag eligibility</em> (Guard, Fast).<br>
 <strong>Authority Measured</strong> = Bandwidth measured by authority's sbws scanner. Used for <em>consensus weight</em> (path selection probability).<br>
 <em>Why different?</em> Authorities verify your reported bandwidth independently. 6 of 9 authorities run bandwidth scanners; 3 use relay-reported values directly.
 </div>
 
 <div style="font-size: 11px; color: #555; margin-top: 10px; padding: 8px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #17a2b8;">
-<strong>⏱️ Stable Uptime (Two Data Sources):</strong><br>
+<strong>Stable Uptime (Two Data Sources):</strong><br>
 <strong>Relay Uptime</strong> = From <em>Onionoo API</em> (last_restarted field). This is your relay's self-reported uptime from its descriptor. Same value for all authorities.<br>
 <strong>Authority Threshold</strong> = From <em>CollecTor vote files</em> (flag-thresholds stable-uptime). Each authority may have different thresholds.<br>
 <em>Why two sources?</em> Vote files contain authority thresholds but not per-relay uptime values. Onionoo aggregates relay descriptors which include uptime.
