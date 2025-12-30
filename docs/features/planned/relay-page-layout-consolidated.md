@@ -1295,48 +1295,76 @@ Country: unknown
 
 **File:** `allium/templates/relay-info.html`
 
-**Design Principle:** Show both data sources side-by-side for transparency:
-- **Onionoo (API)**: Aggregated consensus data, what "the network" currently sees
-- **CollecTor (Dir. Auth.)**: Per-authority voting details, for troubleshooting discrepancies
+**Design Principle:** Simple, at-a-glance health summary. One clear answer per question. 
+No dual-column comparison here - that goes in the Consensus Evaluation section for troubleshooting.
 
-**Data Source Comparison:**
+**Visual Mockup:**
 
-| Metric | Onionoo Source | CollecTor Source |
-|--------|----------------|------------------|
-| Running Status | `relay['uptime_display']` - "UP for X days" or "DOWN for X hours" | `diag.vote_count`/`diag.total_authorities` - How many authorities voted (Running = reachable) |
-| Bandwidth Measured | `relay['measured']` - bool (≥3 bandwidth authorities measured) | `diag.bandwidth_summary.measurement_count` - Count of authority measurements |
-| Flags | `relay['flags']` - Current consensus flags | `diag.flag_summary` - Per-flag eligibility (e.g., "Guard: 7/9") |
+```
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ HEALTH STATUS                                                    [#status] ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃                                                                             ┃
+┃  [✓] CONSENSUS      IN CONSENSUS - 9/9 authorities                          ┃
+┃  [✓] UPTIME         UP for 47 days                                          ┃
+┃  [✓] BANDWIDTH      Measured by 6 authorities                               ┃
+┃  [✓] FLAGS          Guard, Stable, Fast, Valid, V2Dir, Running (6 flags)    ┃
+┃                                                                             ┃
+┃  ─────────────────────────────────────────────────────────────────────────  ┃
+┃  [No issues detected]                                                       ┃
+┃                                                                             ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+```
+
+**4 Clear Status Rows:**
+
+| Row | What it answers | Data Source | Display Format |
+|-----|-----------------|-------------|----------------|
+| **Consensus** | "Is my relay in the network?" | `diag.in_consensus` + `diag.vote_count` | "IN CONSENSUS - 9/9 authorities" or "NOT IN CONSENSUS - 3/9 (need 5)" |
+| **Uptime** | "How long has it been running?" | `relay['uptime_display']` | "UP for 47 days" or "DOWN for 2 hours" |
+| **Bandwidth** | "Is my bandwidth being measured?" | `diag.bandwidth_summary.measurement_count` | "Measured by 6 authorities" or "Not measured" |
+| **Flags** | "What flags does my relay have?" | `relay['flags']` | "Guard, Stable, Fast, Valid (4 flags)" |
 
 **Insert After Header (after line 67, after the `</h4>` closing tag):**
 
 ```jinja2
 {# ============== HEALTH STATUS SUMMARY ============== #}
-{# Shows dual-source data: Onionoo (aggregated) and CollecTor (per-authority) #}
+{# Simple at-a-glance health check - combines best data from Onionoo and CollecTor #}
 {% set diag = relay.consensus_evaluation if relay.consensus_evaluation and relay.consensus_evaluation.available else none %}
 
-<div id="status" style="margin: 15px 0; padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid {% if diag and diag.in_consensus %}#28a745{% else %}#dc3545{% endif %};">
+<div id="status" style="margin: 15px 0; padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid {% if diag and diag.in_consensus %}#28a745{% elif 'Running' in relay['flags'] %}#28a745{% else %}#dc3545{% endif %};">
 <h4 style="margin-top: 0; margin-bottom: 12px;">
 <div class="section-header">
-<a href="#status" class="anchor-link">Health Status Summary</a>
+<a href="#status" class="anchor-link">Health Status</a>
 </div>
 </h4>
 
-<div class="row">
-{# Left Column: Running Status and Bandwidth #}
-<div class="col-md-6">
-<table class="table table-condensed" style="margin-bottom: 10px; font-size: 13px;">
-<thead>
-    <tr>
-        <th style="width: 35%;">Metric</th>
-        <th style="width: 32%;">Onionoo (API)</th>
-        <th style="width: 33%;">Dir. Authorities</th>
-    </tr>
-</thead>
-<tbody>
-    {# Running Status Row #}
-    <tr>
-        <td><strong>Running Status</strong></td>
-        <td>
+<dl style="margin: 0; font-size: 14px;">
+    {# Row 1: Consensus Status #}
+    <div style="display: flex; align-items: baseline; margin-bottom: 8px;">
+        <dt style="width: 120px; font-weight: bold; color: #495057;">Consensus</dt>
+        <dd style="margin: 0;">
+            {% if diag -%}
+                {% if diag.in_consensus -%}
+                    <span style="color: #28a745; font-weight: bold;">IN CONSENSUS</span>
+                    <span style="color: #6c757d;">— {{ diag.vote_count }}/{{ diag.total_authorities }} authorities</span>
+                {% else -%}
+                    <span style="color: #dc3545; font-weight: bold;">NOT IN CONSENSUS</span>
+                    <span style="color: #6c757d;">— {{ diag.vote_count }}/{{ diag.total_authorities }} authorities (need {{ diag.majority_required }})</span>
+                {% endif -%}
+            {% elif 'Running' in relay['flags'] -%}
+                <span style="color: #28a745; font-weight: bold;">IN CONSENSUS</span>
+                <span style="color: #6c757d;">— has Running flag</span>
+            {% else -%}
+                <span style="color: #dc3545; font-weight: bold;">NOT IN CONSENSUS</span>
+            {% endif -%}
+        </dd>
+    </div>
+    
+    {# Row 2: Uptime #}
+    <div style="display: flex; align-items: baseline; margin-bottom: 8px;">
+        <dt style="width: 120px; font-weight: bold; color: #495057;">Uptime</dt>
+        <dd style="margin: 0;">
             {% if relay.get('uptime_display') -%}
                 {% if relay['uptime_display'].startswith('DOWN') -%}
                     <span style="color: #dc3545; font-weight: bold;">{{ relay['uptime_display']|escape }}</span>
@@ -1346,113 +1374,43 @@ Country: unknown
             {% else -%}
                 <span style="color: #6c757d;">Unknown</span>
             {% endif -%}
-        </td>
-        <td>
-            {% if diag -%}
-                <span style="color: {% if diag.vote_count >= diag.majority_required %}#28a745{% else %}#dc3545{% endif %}; font-weight: bold;">
-                    {{ diag.vote_count }}/{{ diag.total_authorities }} voted
-                </span>
-                <span style="color: #6c757d; font-size: 11px;">(need {{ diag.majority_required }})</span>
-            {% else -%}
-                <span style="color: #6c757d;">No data</span>
-            {% endif -%}
-        </td>
-    </tr>
+        </dd>
+    </div>
     
-    {# Bandwidth Measured Row #}
-    <tr>
-        <td><strong>Bandwidth Measured</strong></td>
-        <td>
-            {% if relay['measured'] is not none -%}
-                {% if relay['measured'] -%}
-                    <span style="color: #28a745; font-weight: bold;">Yes</span>
-                {% else -%}
-                    <span style="color: #dc3545;">No</span>
-                {% endif -%}
-            {% else -%}
+    {# Row 3: Bandwidth Measured #}
+    <div style="display: flex; align-items: baseline; margin-bottom: 8px;">
+        <dt style="width: 120px; font-weight: bold; color: #495057;">Bandwidth</dt>
+        <dd style="margin: 0;">
+            {% if diag and diag.bandwidth_summary and diag.bandwidth_summary.measurement_count -%}
+                <span style="color: #28a745;">Measured by {{ diag.bandwidth_summary.measurement_count }} authorities</span>
+            {% elif relay['measured'] -%}
+                <span style="color: #28a745;">Measured</span>
+            {% elif relay['measured'] is none -%}
                 <span style="color: #6c757d;">Unknown</span>
-            {% endif -%}
-        </td>
-        <td>
-            {% if diag and diag.bandwidth_summary -%}
-                {% if diag.bandwidth_summary.measurement_count > 0 -%}
-                    <span style="color: #28a745;">{{ diag.bandwidth_summary.measurement_count }} measurements</span>
-                {% else -%}
-                    <span style="color: #6c757d;">0 measurements</span>
-                {% endif -%}
             {% else -%}
-                <span style="color: #6c757d;">No data</span>
+                <span style="color: #856404;">Not measured</span>
+                <span style="color: #6c757d;">— using relay-reported values</span>
             {% endif -%}
-        </td>
-    </tr>
+        </dd>
+    </div>
     
-    {# Consensus Status Row #}
-    <tr>
-        <td><strong>In Consensus</strong></td>
-        <td>
-            {% if 'Running' in relay['flags'] -%}
-                <span style="color: #28a745; font-weight: bold;">Yes</span>
-            {% else -%}
-                <span style="color: #dc3545; font-weight: bold;">No</span>
-            {% endif -%}
-        </td>
-        <td>
-            {% if diag -%}
-                {% if diag.in_consensus -%}
-                    <span style="color: #28a745; font-weight: bold;">Yes</span>
-                {% else -%}
-                    <span style="color: #dc3545; font-weight: bold;">No</span>
-                {% endif -%}
-            {% else -%}
-                <span style="color: #6c757d;">No data</span>
-            {% endif -%}
-        </td>
-    </tr>
-</tbody>
-</table>
-</div>
-
-{# Right Column: Flags #}
-<div class="col-md-6">
-<table class="table table-condensed" style="margin-bottom: 10px; font-size: 13px;">
-<thead>
-    <tr>
-        <th style="width: 35%;">Flags</th>
-        <th style="width: 32%;">Onionoo (Current)</th>
-        <th style="width: 33%;">Dir. Auth. (Eligibility)</th>
-    </tr>
-</thead>
-<tbody>
-    {# Flags Row - Show current flags and eligibility side by side #}
-    <tr>
-        <td><strong>Consensus Flags</strong></td>
-        <td>
+    {# Row 4: Flags #}
+    <div style="display: flex; align-items: baseline; margin-bottom: 8px;">
+        <dt style="width: 120px; font-weight: bold; color: #495057;">Flags</dt>
+        <dd style="margin: 0;">
+            {% set flag_count = relay['flags']|reject('equalto', 'StaleDesc')|list|length -%}
             {% for flag in relay['flags'] -%}
                 {% if flag != 'StaleDesc' -%}
-                    <a href="{{ page_ctx.path_prefix }}flag/{{ flag.lower()|escape }}/" style="font-size: 12px;">{{ flag|escape }}</a>{% if not loop.last %}, {% endif %}
+                    <a href="{{ page_ctx.path_prefix }}flag/{{ flag.lower()|escape }}/">{{ flag|escape }}</a>{% if not loop.last %}, {% endif %}
                 {% endif -%}
             {% endfor -%}
+            <span style="color: #6c757d;">({{ flag_count }} flags)</span>
             {% if 'StaleDesc' in relay['flags'] -%}
-                <br><span style="color: #dc3545; font-size: 11px;">[Warning] StaleDesc</span>
+                <br><span style="color: #dc3545; font-size: 12px;">[Warning] StaleDesc flag - descriptor may be stale</span>
             {% endif -%}
-        </td>
-        <td>
-            {% if diag and diag.flag_summary -%}
-                {% for flag_name, flag_data in diag.flag_summary.items() %}
-                    {% set display_name = 'HSDir' if flag_name.lower() == 'hsdir' else flag_name|capitalize %}
-                    <span style="color: {% if flag_data.status_class == 'success' %}#28a745{% elif flag_data.status_class == 'danger' %}#dc3545{% else %}#856404{% endif %}; font-size: 12px;">
-                        {{ display_name }}: {{ flag_data.eligible_count }}/{{ flag_data.total_authorities }}
-                    </span>{% if not loop.last %}<br>{% endif %}
-                {% endfor %}
-            {% else -%}
-                <span style="color: #6c757d;">No data</span>
-            {% endif -%}
-        </td>
-    </tr>
-</tbody>
-</table>
-</div>
-</div>
+        </dd>
+    </div>
+</dl>
 
 {# Issues and Warnings - Prominent display #}
 {% if diag and diag.issues %}
@@ -1460,7 +1418,7 @@ Country: unknown
 {% set info_notes = diag.issues | selectattr('severity', 'equalto', 'info') | list %}
 
 {% if real_issues %}
-<div style="margin-top: 10px; padding: 10px; background: #fff3cd; border-radius: 4px; border-left: 3px solid #ffc107;">
+<div style="margin-top: 12px; padding: 10px; background: #fff3cd; border-radius: 4px; border-left: 3px solid #ffc107;">
     <strong style="color: #856404;">Issues Detected:</strong>
     <ul style="margin: 5px 0 0 0; padding-left: 20px;">
     {% for issue in real_issues %}
@@ -1487,11 +1445,8 @@ Country: unknown
     </ul>
 </div>
 {% endif %}
-{% endif %}
-
-{# No issues message - only show if diag available and no issues #}
-{% if diag and (not diag.issues or diag.issues|length == 0) %}
-<div style="margin-top: 10px; padding: 10px; background: #d4edda; border-radius: 4px; border-left: 3px solid #28a745;">
+{% elif diag %}
+<div style="margin-top: 12px; padding: 10px; background: #d4edda; border-radius: 4px; border-left: 3px solid #28a745;">
     <span style="color: #155724;"><strong>No issues detected.</strong> Relay appears to be operating normally.</span>
 </div>
 {% endif %}
@@ -1501,23 +1456,21 @@ Country: unknown
 
 **Variables Used:**
 
-*From Onionoo (relay dict):*
-- `relay['uptime_display']` (str) - "UP for X days" or "DOWN for X hours"
-- `relay['measured']` (bool/None) - Whether bandwidth is measured by ≥3 bandwidth authorities
-- `relay['flags']` (list) - Current consensus flags
+| Variable | Type | Source | Purpose |
+|----------|------|--------|---------|
+| `diag.in_consensus` | bool | CollecTor | Primary consensus status |
+| `diag.vote_count` | int | CollecTor | Authority vote count |
+| `diag.total_authorities` | int | CollecTor | Total authorities (9) |
+| `diag.majority_required` | int | CollecTor | Votes needed (5) |
+| `diag.bandwidth_summary.measurement_count` | int | CollecTor | Bandwidth measurement count |
+| `diag.issues` | list | CollecTor | Detected issues |
+| `relay['uptime_display']` | str | Onionoo | "UP for X days" or "DOWN for X hours" |
+| `relay['measured']` | bool | Onionoo | Fallback if CollecTor unavailable |
+| `relay['flags']` | list | Onionoo | Current consensus flags |
 
-*From CollecTor (relay.consensus_evaluation / diag):*
-- `diag.available` (bool) - Whether consensus evaluation data is available
-- `diag.in_consensus` (bool) - Whether relay is in consensus
-- `diag.vote_count` (int) - Number of authorities that voted for this relay
-- `diag.total_authorities` (int) - Total voting authorities (9)
-- `diag.majority_required` (int) - Votes needed for consensus (5)
-- `diag.bandwidth_summary.measurement_count` (int) - Number of bandwidth measurements from authorities
-- `diag.flag_summary` (dict) - Per-flag eligibility with keys like 'guard', 'stable', 'hsdir', each containing:
-  - `eligible_count` (int) - How many authorities would assign this flag
-  - `total_authorities` (int) - Total authorities
-  - `status_class` (str) - 'success', 'warning', or 'danger'
-- `diag.issues` (list) - List of issue dicts with `severity`, `title`, `description`, `suggestion`
+**Side-by-Side Comparison Location:**
+
+The detailed Onionoo vs CollecTor comparison table should be added to the **Consensus Evaluation** section (`#consensus-evaluation`) further down the page, before the Per-Authority Details table. This is where users go for troubleshooting, making it the appropriate place for data source comparison.
 
 ---
 
