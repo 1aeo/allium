@@ -28,6 +28,117 @@ Based on mailing list analysis, relay operators most frequently troubleshoot:
 
 ## Top 5 Improvements
 
+### 0. Design Decisions (Prerequisites)
+
+Before the 5 improvements, these design decisions address layout and structure:
+
+#### Single Column Width on Desktop
+
+**Problem:** A single narrow column on a wide desktop screen wastes space and looks odd.
+
+**Solution:** Use a fluid-width single column with a maximum width for readability:
+
+```css
+/* Single column that fills available width, maxes at readable limit */
+.relay-page-content {
+    max-width: 1400px;      /* Prevent overly wide lines on 4K monitors */
+    width: 100%;            /* Fill available space */
+    margin: 0 auto;         /* Center on very wide screens */
+    padding: 0 20px;        /* Breathing room on edges */
+}
+
+/* Tables and data sections can use full width */
+.relay-section {
+    width: 100%;
+}
+
+/* On narrower screens, use full width */
+@media (max-width: 1400px) {
+    .relay-page-content {
+        max-width: 100%;
+    }
+}
+```
+
+**Why 1400px?** Wide enough for data tables with many columns (like the per-authority table), but not so wide that text becomes hard to scan. Bootstrap's `container-xl` uses 1320px for reference.
+
+#### Relay Identity in Page Header (Not a "Section")
+
+**Problem:** Original proposal put "Operator Information" at position 12 (bottom), but operators need to confirm they're viewing the correct relay immediately.
+
+**Solution:** Relay identity stays in the **page header** (not a numbered section). This is already how the current template works:
+
+```
++==================================================================+
+| View Relay "MyRelay"                              [PAGE HEADER]  |
+| Fingerprint: ABCD1234EFGH5678...                                 |
+| Contact: admin@example.com | AROI: example.com                   |
+| Family: 5 relays | AS12345 | Germany | Linux                     |
++==================================================================+
+|                                                                  |
+| [SECTIONS START HERE - Health Status, Connectivity, etc.]        |
+```
+
+**What stays in header:**
+- Nickname (large, prominent)
+- Fingerprint (full, copyable)
+- Contact info (for verification: "yes, this is my relay")
+- AROI domain (if set)
+- Quick links: Family count, AS, Country, Platform
+
+**What moves to sections below:**
+- Detailed family member lists → `#family` section
+- Detailed contact parsing → stays in header, no separate section needed
+
+This means "Operator Information" is **removed as a section** - it's in the header where it belongs.
+
+#### Consensus Summary: Removed (Redundant)
+
+**Problem:** The proposed "Consensus Summary" section overlaps significantly with:
+- Health Status (consensus status, flags, issues)
+- Connectivity (reachability counts)
+- Flags (eligibility counts)
+- Bandwidth (measured values)
+
+**Analysis of overlap:**
+
+| Data Point | Health Status | Connectivity | Flags | Bandwidth | Consensus Summary |
+|------------|---------------|--------------|-------|-----------|-------------------|
+| In consensus (Y/N) | Yes | - | - | - | Yes (redundant) |
+| Authority vote count | Yes | - | - | - | Yes (redundant) |
+| Reachability IPv4/v6 | - | Yes | - | - | Yes (redundant) |
+| Current flags | Yes | - | Yes | - | Yes (redundant) |
+| Flag eligibility counts | - | - | Yes | - | Yes (redundant) |
+| Measured bandwidth | - | - | - | Yes | Yes (redundant) |
+| Issues/warnings | Yes | - | - | - | Yes (redundant) |
+
+**Solution:** Remove "Consensus Summary" as a separate section. Its content is distributed to the appropriate sections:
+
+- Consensus status, vote count, issues → **Health Status**
+- Reachability counts → **Connectivity**
+- Flag eligibility → **Flags**
+- Bandwidth measurements → **Bandwidth**
+
+The **Per-Authority Details** table remains as the deep-dive section for advanced troubleshooting.
+
+#### Revised Section List (11 sections, not 12)
+
+| Order | Section | Anchor |
+|-------|---------|--------|
+| - | Page Header (Identity, Contact, Quick Links) | - |
+| 1 | Health Status Summary | `#status` |
+| 2 | Connectivity and Addresses | `#connectivity` |
+| 3 | Flags and Eligibility | `#flags` |
+| 4 | Bandwidth Metrics | `#bandwidth` |
+| 5 | Uptime and Stability | `#uptime` |
+| 6 | Family Configuration | `#family` |
+| 7 | Software and Version | `#software` |
+| 8 | Exit Policy | `#exit-policy` |
+| 9 | Location and Network | `#location` |
+| 10 | Per-Authority Vote Details | `#authority-votes` |
+
+---
+
 ### 1. Health Status Summary at Page Top
 
 **Source:** Both proposals recommend status-first approach
@@ -72,18 +183,19 @@ Move critical "is my relay working?" information to the very top of the page, im
 
 | Order | Section | Anchor |
 |-------|---------|--------|
+| - | Page Header (Identity, Contact) | n/a |
 | 1 | Health Status Summary | `#status` |
 | 2 | Connectivity and Addresses | `#connectivity` |
 | 3 | Flags and Eligibility | `#flags` |
 | 4 | Bandwidth Metrics | `#bandwidth` |
-| 5 | Consensus Evaluation Summary | `#consensus-summary` |
-| 6 | Uptime and Stability | `#uptime` |
-| 7 | Family Configuration | `#family` |
-| 8 | Software and Version | `#software` |
-| 9 | Exit Policy | `#exit-policy` |
-| 10 | Location and Network | `#location` |
-| 11 | Per-Authority Vote Details | `#authority-votes` |
-| 12 | Operator Information | `#operator` |
+| 5 | Uptime and Stability | `#uptime` |
+| 6 | Family Configuration | `#family` |
+| 7 | Software and Version | `#software` |
+| 8 | Exit Policy | `#exit-policy` |
+| 9 | Location and Network | `#location` |
+| 10 | Per-Authority Vote Details | `#authority-votes` |
+
+Note: "Operator Information" moved to Page Header. "Consensus Summary" removed (redundant - data distributed to sections 1-4).
 
 #### Detailed Ordering Rationale
 
@@ -115,50 +227,45 @@ The ordering follows a **troubleshooting decision tree** - each section answers 
 - Mailing list evidence: "I have 1 Gbit/s but only getting 10 Mbit/s traffic"
 - Troubleshooting dependency: Flags affect bandwidth allocation (Guard/Fast)
 
-**5. Consensus Evaluation Summary** - "What do the authorities think of my relay?"
-- Condensed view of authority voting and measurements
-- Bridges the gap between "what I configured" and "what authorities see"
-- Quick diagnostic without scrolling to detailed tables
-- Troubleshooting dependency: Summarizes results of connectivity + flags + bandwidth checks
-
-**6. Uptime and Stability** - "Why did I lose my Stable/Guard flag?"
+**5. Uptime and Stability** - "Why did I lose my Stable/Guard flag?"
 - Stable and Guard flags require sustained uptime
 - Shows historical uptime percentages (1M/6M/1Y)
 - Explains flag loss after restarts or outages
 - Mailing list evidence: "I restarted my relay and lost Guard flag"
 - Troubleshooting dependency: Explains flag eligibility failures from section 3
 
-**7. Family Configuration** - "Why are my family members showing as 'alleged'?"
+**6. Family Configuration** - "Why are my family members showing as 'alleged'?"
 - Common misconfiguration: asymmetric family declarations
 - Shows effective vs alleged vs indirect family members
 - Mailing list evidence: Frequent questions about family setup errors
 - Position rationale: Not critical for basic operation, but important for operators running multiple relays
 
-**8. Software and Version** - "Is my Tor version OK?"
+**7. Software and Version** - "Is my Tor version OK?"
 - Version issues are less urgent but can affect flags
 - Shows recommended/obsolete status
 - Position rationale: Usually not the cause of immediate problems, but good to verify
 - Mailing list evidence: Occasional "upgrade your Tor" responses
 
-**9. Exit Policy** - "What traffic does my relay allow?"
+**8. Exit Policy** - "What traffic does my relay allow?"
 - Reference information, rarely the cause of troubleshooting issues
 - Mostly static configuration data
 - Position rationale: Operators know their exit policy; this is for verification
 
-**10. Location and Network** - "Where is my relay located?"
+**9. Location and Network** - "Where is my relay located?"
 - Geographic and AS information
 - Rarely relevant to troubleshooting
 - Position rationale: Reference data, not diagnostic
 
-**11. Per-Authority Vote Details** - "Which specific authority is not voting for me?"
+**10. Per-Authority Vote Details** - "Which specific authority is not voting for me?"
 - Advanced diagnostics for edge cases
 - Detailed per-authority breakdown
-- Position rationale: Only needed when summary (section 5) shows problems
+- Position rationale: Only needed when Health Status or Flags sections show problems
 - Used by experienced operators or when guided by support
 
-**12. Operator Information** - "How do I contact the operator?"
-- Contact info and AROI
-- Position rationale: Reference data, not needed for self-troubleshooting
+**Page Header (not a numbered section)** - "Am I looking at the right relay?"
+- Nickname, Fingerprint, Contact, AROI displayed prominently at page top
+- Position rationale: Identity verification happens before any troubleshooting
+- Always visible without scrolling
 
 #### The Troubleshooting Flow Visualized
 
@@ -167,7 +274,12 @@ START: "My relay isn't working"
          │
          ▼
     ┌─────────────────┐
-    │ 1. HEALTH STATUS │ ──── "In consensus? Running? Any issues?"
+    │ PAGE HEADER     │ ──── "Is this my relay?" (Nickname, Fingerprint, Contact)
+    └────────┬────────┘
+             │ Yes, this is my relay...
+             ▼
+    ┌─────────────────┐
+    │ 1. HEALTH STATUS│ ──── "In consensus? Running? Any issues?"
     └────────┬────────┘
              │ If NOT in consensus or has issues...
              ▼
@@ -184,33 +296,27 @@ START: "My relay isn't working"
     ┌─────────────────┐
     │ 4. BANDWIDTH    │ ──── "Why is my measured BW different from capacity?"
     └────────┬────────┘
-             │ Need more detail on authority measurements...
-             ▼
-    ┌─────────────────┐
-    │ 5. CONSENSUS    │ ──── "Summary of what authorities see"
-    │    SUMMARY      │
-    └────────┬────────┘
              │ If flag was lost recently...
              ▼
     ┌─────────────────┐
-    │ 6. UPTIME       │ ──── "Did downtime cause flag loss?"
+    │ 5. UPTIME       │ ──── "Did downtime cause flag loss?"
     └────────┬────────┘
              │ Running multiple relays...
              ▼
     ┌─────────────────┐
-    │ 7. FAMILY       │ ──── "Is family configured correctly?"
+    │ 6. FAMILY       │ ──── "Is family configured correctly?"
     └────────┬────────┘
              │ Check software version...
              ▼
     ┌─────────────────┐
-    │ 8. SOFTWARE     │ ──── "Is my Tor version recommended?"
+    │ 7. SOFTWARE     │ ──── "Is my Tor version recommended?"
     └────────┬────────┘
              │
              ▼
     ┌─────────────────────────────────────────┐
-    │ 9-12. REFERENCE DATA                    │
-    │ Exit Policy, Location, Authority Detail,│
-    │ Operator Info                           │
+    │ 8-10. REFERENCE & ADVANCED              │
+    │ Exit Policy, Location, Per-Authority    │
+    │ Vote Details (deep diagnostics)         │
     └─────────────────────────────────────────┘
 ```
 
@@ -219,26 +325,31 @@ START: "My relay isn't working"
 ```
 CURRENT (two-column, scattered):        PROPOSED (single-column, flow):
                                   
-Left Column:                            Top-to-Bottom:
-  - Nickname/Fingerprint                  1. Health Status [NEW]
-  - AROI/Contact          ─┐              2. Connectivity
-  - Exit Policies          │              3. Flags + Eligibility
-  - Family                 │              4. Bandwidth
-                           │              5. Consensus Summary
-Right Column:              │              6. Uptime/Stability
-  - Bandwidth              │              7. Family
-  - Network Participation  │              8. Software/Version
-  - OR/Exit/Dir Addresses  ├─ scattered   9. Exit Policy
-  - Location               │              10. Location/AS
-  - Flags                  │              11. Per-Authority Details
-  - Uptime                 │              12. Operator info
-  - Platform/Version      ─┘
+Header:                                 Header (Identity - always visible):
+  - Nickname                              - Nickname (large)
+                                          - Fingerprint (full, copyable)
+Left Column:                              - Contact / AROI
+  - Nickname/Fingerprint                  - Quick links (Family, AS, Country)
+  - AROI/Contact          ─┐            
+  - Exit Policies          │            Sections (full-width, top-to-bottom):
+  - Family                 │              1. Health Status [NEW]
+                           │              2. Connectivity + Reachability
+Right Column:              │              3. Flags + Eligibility Table
+  - Bandwidth              │              4. Bandwidth + Consensus Weight
+  - Network Participation  │              5. Uptime/Stability
+  - OR/Exit/Dir Addresses  ├─ scattered   6. Family (detailed)
+  - Location               │              7. Software/Version
+  - Flags                  │              8. Exit Policy
+  - Uptime                 │              9. Location/AS
+  - Platform/Version      ─┘              10. Per-Authority Details
                                   
 Bottom (separate section):
   - Consensus Evaluation (detailed)
 ```
 
 **Why single-column?** Two-column layouts force users to scan horizontally and make mental connections between scattered data. A linear flow matches how troubleshooting actually works: check one thing, then the next logical thing.
+
+**Why identity in header?** Operators need to confirm they're viewing the correct relay before doing anything else. The header is always visible at the top, and on most screens remains visible while scrolling (or can be quickly scrolled back to).
 
 ---
 
@@ -332,10 +443,8 @@ BELOW            (red text)
 | `#connectivity` | OR/Exit/Dir Addresses, Reachability | High |
 | `#flags` | Flags and Eligibility | High |
 | `#bandwidth` | Bandwidth Metrics | High |
-| `#consensus-summary` | Consensus Evaluation Summary | High |
-| `#consensus-evaluation` | Full Consensus Evaluation (existing) | High |
-| `#authority-votes` | Per-Authority Vote Table | Medium |
-| `#uptime` | Uptime and Stability | Medium |
+| `#uptime` | Uptime and Stability | High |
+| `#authority-votes` | Per-Authority Vote Table | High |
 | `#family` | Family Configuration | Medium |
 | `#effective-family` | Effective Family Members (existing) | Medium |
 | `#alleged-family` | Alleged Family Members (existing) | Medium |
@@ -345,8 +454,10 @@ BELOW            (red text)
 | `#ipv4-exit-policy-summary` | IPv4 Exit Policy Summary (existing) | Low |
 | `#ipv6-exit-policy-summary` | IPv6 Exit Policy Summary (existing) | Low |
 | `#location` | Geographic Location | Low |
-| `#operator` | Operator/Contact Info | Low |
 | `#relay-summary` | Summary Table (existing) | Low |
+| `#consensus-evaluation` | Full Consensus Evaluation (existing, alias for authority-votes) | Low |
+
+Note: Operator/contact info is in the page header, not a separate section. The `#consensus-summary` anchor was removed as that section was merged into Health Status.
 
 **Implementation:**
 Each section header should be clickable and link to itself:
@@ -370,16 +481,20 @@ Each section header should be clickable and link to itself:
 1. Remove all emoji icons, replace with text labels
 2. Add missing anchor links to all sections
 3. Ensure existing anchor links work correctly
+4. Move Contact/AROI to be more prominent in page header
 
 ### Phase 2: Layout Restructure
-1. Add Health Status Summary section at top
-2. Reorder sections by troubleshooting priority
+1. Add Health Status Summary section at top (new section)
+2. Reorder sections by troubleshooting priority (see Section 2)
 3. Consolidate two-column layout into single-column flow
+4. Add CSS for fluid-width single column (max-width: 1400px)
+5. Move Fingerprint to header, make full and copyable
 
 ### Phase 3: Content Enhancement
-1. Add Flag Eligibility table (if data available)
+1. Add Flag Eligibility table to Flags section (data already available from consensus_evaluation)
 2. Improve Issues/Warnings display with actionable advice
-3. Add "Missing Flags" explanation section
+3. Move reachability counts from Consensus Evaluation to Connectivity section
+4. Ensure Per-Authority Details table is at bottom for advanced users
 
 ---
 
@@ -387,9 +502,13 @@ Each section header should be clickable and link to itself:
 
 ```
 +==================================================================+
+|                        PAGE HEADER                               |
 |  View Relay "MyRelay"                                            |
+|  Fingerprint: ABCD1234EFGH5678IJKL9012MNOP3456QRST7890           |
+|  Contact: admin@example.com | AROI: example.com                  |
 |  Family: 5 relays | AS12345 | Germany | Linux                    |
 +==================================================================+
+      ↑ Identity always visible at top - confirms correct relay
 
 +------------------------------------------------------------------+
 | HEALTH STATUS                                          [#status] |
@@ -398,6 +517,7 @@ Each section header should be clickable and link to itself:
 | Measured: Yes (6 auths)        |  Flags: Guard Stable Fast ...   |
 | Issues: None                                                     |
 +------------------------------------------------------------------+
+      ↑ Quick pass/fail - if all green, operator can stop here
 
 +------------------------------------------------------------------+
 | CONNECTIVITY                                      [#connectivity] |
@@ -408,6 +528,7 @@ Each section header should be clickable and link to itself:
 | IPv4 Reachable: 9/9 authorities                                  |
 | IPv6 Reachable: 3/5 testers (2 don't test IPv6)                  |
 +------------------------------------------------------------------+
+      ↑ If not in consensus, check ports/firewall first
 
 +------------------------------------------------------------------+
 | FLAGS AND ELIGIBILITY                                   [#flags] |
@@ -423,6 +544,7 @@ Each section header should be clickable and link to itself:
 | | Fast     | 125 Mbit/s  | >=100 KB/s  | Meets  |                |
 | +----------+-------------+-------------+--------+                |
 +------------------------------------------------------------------+
+      ↑ Answers "why don't I have X flag?"
 
 +------------------------------------------------------------------+
 | BANDWIDTH                                           [#bandwidth] |
@@ -434,16 +556,7 @@ Each section header should be clickable and link to itself:
 | Network Participation:                                           |
 | Consensus Weight: 0.15% | Guard: 0.12% | Middle: 0.18% | Exit: 0%|
 +------------------------------------------------------------------+
-
-+------------------------------------------------------------------+
-| CONSENSUS EVALUATION SUMMARY                 [#consensus-summary] |
-+------------------------------------------------------------------+
-| - In Consensus: 9/9 authorities (need >=5/9)                     |
-| - Flag Eligibility: Guard 9/9 | Stable 9/9 | Fast 9/9 | HSDir 9/9|
-| - Reachability: IPv4 9/9 | IPv6 3/5                              |
-| - Consensus Weight: Median 98 KB/s (Min 95 | Max 102)            |
-| - Issues: None detected                                          |
-+------------------------------------------------------------------+
+      ↑ Answers "why is my traffic so low?"
 
 +------------------------------------------------------------------+
 | UPTIME AND STABILITY                                   [#uptime] |
@@ -455,6 +568,7 @@ Each section header should be clickable and link to itself:
 | Last Restarted: 2024-11-12                                       |
 | Hibernating: No                                                  |
 +------------------------------------------------------------------+
+      ↑ Explains flag loss after restarts
 
 +------------------------------------------------------------------+
 | FAMILY CONFIGURATION                                   [#family] |
@@ -462,6 +576,7 @@ Each section header should be clickable and link to itself:
 | Effective Family: 5 relays [View Family Page]                    |
 | Alleged Family: 2 relays (they don't list you back)              |
 | Indirect Family: 0 relays                                        |
+| [Expandable: list of fingerprints]                               |
 +------------------------------------------------------------------+
 
 +------------------------------------------------------------------+
@@ -477,7 +592,7 @@ Each section header should be clickable and link to itself:
 +------------------------------------------------------------------+
 | IPv4 Summary: reject *:*                                         |
 | IPv6 Summary: reject *:*                                         |
-| [Full policy details...]                                         |
+| [Expandable: Full policy details]                                |
 +------------------------------------------------------------------+
 
 +------------------------------------------------------------------+
@@ -493,14 +608,9 @@ Each section header should be clickable and link to itself:
 | PER-AUTHORITY VOTE DETAILS                     [#authority-votes] |
 +------------------------------------------------------------------+
 | [Detailed table showing per-authority voting information...]     |
-| [This is the existing detailed consensus evaluation table]       |
-+------------------------------------------------------------------+
-
-+------------------------------------------------------------------+
-| OPERATOR INFORMATION                                 [#operator] |
-+------------------------------------------------------------------+
-| AROI: example.com [View operator page]                           |
-| Contact: admin@example.com                                       |
+| [Full existing consensus evaluation tables]                      |
+| [Used for advanced troubleshooting when sections above show      |
+|  problems - e.g., which specific authority isn't voting]         |
 +------------------------------------------------------------------+
 ```
 
