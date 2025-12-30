@@ -83,8 +83,16 @@ Before the 5 improvements, these design decisions address layout and structure:
 - Nickname (large, prominent)
 - Fingerprint (full, copyable)
 - Contact info (for verification: "yes, this is my relay")
-- AROI domain (if set)
-- Quick links: Family count, AS, Country, Platform
+- **Primary operator link (AROI or Family):**
+  - If AROI present: Show AROI domain as primary link (more accurate operator grouping)
+  - If no AROI: Show Family count as primary link (fingerprint-based grouping)
+- Quick links: AS, Country, Platform
+
+**AROI vs Family Priority:**
+- AROI provides verified operator identity with more accurate relay grouping
+- Family is fingerprint-based and can have mismatches (alleged/indirect)
+- When AROI is present, it supersedes Family as the primary "see all my relays" link
+- Family link still appears in the Family section for detailed breakdown
 
 **What moves to sections below:**
 - Detailed family member lists → `#family` section
@@ -531,12 +539,22 @@ Every item from the current relay page mapped to the proposed structure:
 | Title | Nickname | Large, prominent |
 | Left column | Fingerprint | Full, copyable |
 | Left column | Contact | Link to contact page |
-| Left column | AROI | Link to operator page |
-| Header h4 | Family link (count) | Quick link |
+| Left column | AROI | **Primary operator link when present** |
+| Header h4 | Family link (count) | **Fallback when no AROI** |
 | Header h4 | AS link | Quick link |
 | Header h4 | Country link | Quick link |
 | Header h4 | Platform link | Quick link |
 | Header | Last fetch timestamp | Data freshness indicator |
+
+**AROI vs Family Priority Logic:**
+- **If AROI present:** Show "Operator: {domain} ({count} relays)" as primary link
+  - AROI provides verified operator identity
+  - More accurate relay count (all relays by this operator)
+  - Links to operator page with full relay list
+- **If no AROI:** Show "Family: {count} relays" as primary link
+  - Fingerprint-based family grouping
+  - May include alleged/indirect mismatches
+  - Links to family page
 
 ### Section 1: Health Status (`#status`)
 
@@ -675,9 +693,17 @@ Two columns inside each section to maximize information density on wide screens.
 ║                                              PAGE HEADER                                                             ║
 ║  View Relay "MyRelay"                                                                                                ║
 ║  Fingerprint: ABCD1234EFGH5678IJKL9012MNOP3456QRST7890UVWX                                            [Copy Button]  ║
-║  Contact: admin@example.com                              AROI: example.com [View Operator Page]                      ║
+║  Contact: admin@example.com                                                                                          ║
 ║  ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────── ║
-║  Family: 5 relays | AS24940 | Germany | Linux                                     Last updated: 2024-12-29 14:30 UTC ║
+║                                                                                                                      ║
+║  WHEN AROI PRESENT (preferred):                                                                                      ║
+║  Operator: example.com (12 relays) [View All]  |  AS24940  |  Germany  |  Linux       Last updated: 2024-12-29 14:30 ║
+║                 ↑ Primary link - verified operator with accurate relay count                                         ║
+║                                                                                                                      ║
+║  WHEN NO AROI (fallback):                                                                                            ║
+║  Family: 5 relays [View]  |  AS24940  |  Germany  |  Linux                         Last updated: 2024-12-29 14:30 UTC║
+║            ↑ Fallback link - fingerprint-based family (may have alleged/indirect mismatches)                         ║
+║                                                                                                                      ║
 ╚══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
 
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
@@ -853,9 +879,15 @@ Single column layout for narrow screens. All content stacks vertically.
 ║  ABCD1234EFGH5678IJKL9012MN...   [Copy]   ║
 ║                                           ║
 ║  Contact: admin@example.com               ║
-║  AROI: example.com                        ║
 ║                                           ║
-║  Family: 5 | AS24940 | DE | Linux         ║
+║  WHEN AROI PRESENT:                       ║
+║  Operator: example.com (12 relays)        ║
+║  AS24940 | DE | Linux                     ║
+║                                           ║
+║  WHEN NO AROI:                            ║
+║  Family: 5 relays                         ║
+║  AS24940 | DE | Linux                     ║
+║                                           ║
 ║  Updated: 2024-12-29 14:30 UTC            ║
 ╚═══════════════════════════════════════════╝
 
