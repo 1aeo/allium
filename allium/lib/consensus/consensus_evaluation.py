@@ -162,7 +162,7 @@ def _parse_wfu_threshold(value) -> Optional[float]:
     return float(value)
 
 
-def format_relay_consensus_evaluation(evaluation: dict, flag_thresholds: dict = None, current_flags: list = None, observed_bandwidth: int = 0, use_bits: bool = False, relay_uptime: float = None) -> dict:
+def format_relay_consensus_evaluation(evaluation: dict, flag_thresholds: dict = None, current_flags: list = None, observed_bandwidth: int = 0, use_bits: bool = False, relay_uptime: float = None, version: str = None, recommended_version: bool = None) -> dict:
     """
     Format relay consensus evaluation for template display.
     
@@ -178,6 +178,8 @@ def format_relay_consensus_evaluation(evaluation: dict, flag_thresholds: dict = 
         relay_uptime: Relay's current uptime in seconds (from Onionoo last_restarted).
                       This is the relay's self-reported uptime, same for all authorities.
                       Used for Stable flag comparison against each authority's stable-uptime threshold.
+        version: Tor version string running on the relay (from Onionoo).
+        recommended_version: Whether the version is recommended (from Onionoo).
         
     Returns:
         dict: Formatted evaluation ready for template rendering
@@ -224,7 +226,7 @@ def format_relay_consensus_evaluation(evaluation: dict, flag_thresholds: dict = 
         'bandwidth_summary': _format_bandwidth_summary(evaluation, use_bits),
         
         # Issues and advice
-        'issues': _identify_issues(evaluation, current_flags, observed_bandwidth),
+        'issues': _identify_issues(evaluation, current_flags, observed_bandwidth, version, recommended_version),
         'advice': _generate_advice(evaluation),
     }
     
@@ -875,10 +877,13 @@ def _format_bandwidth_summary(consensus_data: dict, use_bits: bool = False) -> d
         'deviation_display': _format_bandwidth_value(deviation, use_bits),
         'measurement_count': bandwidth.get('measurement_count', 0),
         'deviation_class': 'warning' if deviation and median and deviation > median * 0.5 else 'normal',
+        # Pass through BW authority measurement counts from collector_fetcher
+        'bw_auth_measured_count': bandwidth.get('bw_auth_measured_count', 0),
+        'bw_auth_total': bandwidth.get('bw_auth_total', 0),
     }
 
 
-def _identify_issues(consensus_data: dict, current_flags: list = None, observed_bandwidth: int = 0) -> List[dict]:
+def _identify_issues(consensus_data: dict, current_flags: list = None, observed_bandwidth: int = 0, version: str = None, recommended_version: bool = None) -> List[dict]:
     """
     Identify issues that may affect relay status.
     
@@ -889,6 +894,8 @@ def _identify_issues(consensus_data: dict, current_flags: list = None, observed_
         consensus_data: Raw consensus evaluation data
         current_flags: Relay's current flags (from Onionoo)
         observed_bandwidth: Relay's observed bandwidth for Guard eligibility
+        version: Tor version string running on the relay
+        recommended_version: Whether the version is recommended
     """
     issues = []
     current_flags = current_flags or []
@@ -1115,6 +1122,19 @@ def _identify_issues(consensus_data: dict, current_flags: list = None, observed_
             'description': 'This relay has been flagged as a bad exit by directory authorities. BadExit means authorities detected malicious behavior (traffic modification, SSL stripping, etc.).',
             'suggestion': 'Contact <a href="mailto:bad-relays@lists.torproject.org">bad-relays@lists.torproject.org</a> to understand and resolve this issue.',
             'doc_ref': 'https://community.torproject.org/relay/',
+        })
+    
+    # =========================================================================
+    # VERSION ISSUES
+    # =========================================================================
+    if recommended_version is False and version:
+        issues.append({
+            'severity': 'warning',
+            'category': 'version',
+            'title': 'Tor version not recommended',
+            'description': f'Running Tor version {version} which is not on the recommended list.',
+            'suggestion': 'Update to the latest stable Tor version. Outdated versions may have security vulnerabilities and could eventually be rejected by the network. See <a href="https://www.torproject.org/download/tor/">torproject.org/download</a> for latest releases.',
+            'doc_ref': 'https://www.torproject.org/download/tor/',
         })
     
     return issues

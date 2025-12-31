@@ -197,6 +197,7 @@ ENV.filters['determine_unit'] = determine_unit_filter
 ENV.filters['format_bandwidth_with_unit'] = format_bandwidth_with_unit
 ENV.filters['format_bandwidth'] = format_bandwidth_filter
 ENV.filters['format_time_ago'] = format_time_ago
+ENV.filters['split'] = lambda s, sep='/': s.split(sep) if s else []
 
 # Multiprocessing globals (initialized via fork for copy-on-write memory sharing)
 _mp_relay_set = None
@@ -892,10 +893,14 @@ class Relays:
                 # NOT the scaled consensus weight or vote Measured value
                 current_flags = relay.get('flags', [])
                 observed_bandwidth = relay.get('observed_bandwidth', 0)
+                version = relay.get('version')
+                recommended_version = relay.get('recommended_version')
                 formatted_consensus_evaluation = format_relay_consensus_evaluation(
                     raw_consensus_evaluation, flag_thresholds, current_flags, observed_bandwidth,
                     use_bits=self.use_bits,  # Pass use_bits for consistent bandwidth formatting
-                    relay_uptime=relay_uptime  # Pass relay uptime from Onionoo for Stable comparison
+                    relay_uptime=relay_uptime,  # Pass relay uptime from Onionoo for Stable comparison
+                    version=version,  # Pass version for outdated version detection
+                    recommended_version=recommended_version  # Pass recommended status
                 )
                 
                 # Attach to relay
