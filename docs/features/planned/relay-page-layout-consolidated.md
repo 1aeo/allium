@@ -1295,124 +1295,276 @@ Country: unknown
 
 **File:** `allium/templates/relay-info.html`
 
-**Design Principle:** Simple, at-a-glance health summary. One clear answer per question. 
-No dual-column comparison here - that goes in the Consensus Evaluation section for troubleshooting.
+**Overview:**
+The enhanced Health Status section displays 14 metrics in 8 display cells using a responsive two-column layout (60/40 split). On desktop (≥768px), metrics display in a 60/40 column split. On mobile (<768px), metrics stack in priority order.
 
-**Visual Mockup:**
+**Desktop Wireframe (60/40 split):**
 
 ```
-┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ HEALTH STATUS                                                    [#status] ┃
-┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
-┃                                                                             ┃
-┃  [✓] CONSENSUS      IN CONSENSUS - 9/9 authorities                          ┃
-┃  [✓] UPTIME         UP for 47 days                                          ┃
-┃  [✓] BANDWIDTH      Measured by 6 authorities                               ┃
-┃  [✓] FLAGS          Guard, Stable, Fast, Valid, V2Dir, Running (6 flags)    ┃
-┃                                                                             ┃
-┃  ─────────────────────────────────────────────────────────────────────────  ┃
-┃  [No issues detected]                                                       ┃
-┃                                                                             ┃
-┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Health Status                                                               [#status] ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Consensus      IN CONSENSUS — 9/9 authorities      ┃ Reachability  IPv4: 9/9 | v6: 5/5┃
+┃ Flags          Guard, Stable, Fast, HSDir... (7)   ┃ Uptime        UP 1mo 1w | 99%(1M)┃
+┃ Cons. Weight   0.04% of network (98 Mbit/s meas.)  ┃ Bandwidth     419 Mbit/s (Meas.) ┃
+┃ First Seen     2y 3mo ago                          ┃ Version       0.4.8.14 [OK]      ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Issues Detected:                                                                      ┃
+┃   • High consensus weight deviation: Large variation across authorities...            ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 ```
 
-**4 Clear Status Rows:**
+**Mobile Wireframe (single column, <768px):**
 
-| Row | What it answers | Data Source | Display Format |
-|-----|-----------------|-------------|----------------|
-| **Consensus** | "Is my relay in the network?" | `diag.in_consensus` + `diag.vote_count` | "IN CONSENSUS - 9/9 authorities" or "NOT IN CONSENSUS - 3/9 (need 5)" |
-| **Uptime** | "How long has it been running?" | `relay['uptime_display']` | "UP for 47 days" or "DOWN for 2 hours" |
-| **Bandwidth** | "Is my bandwidth being measured?" | `diag.bandwidth_summary.measurement_count` | "Measured by 6 authorities" or "Not measured" |
-| **Flags** | "What flags does my relay have?" | `relay['flags']` | "Guard, Stable, Fast, Valid (4 flags)" |
+```
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Health Status               [#status] ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Consensus    IN CONSENSUS — 9/9       ┃
+┃ Reachability IPv4: 9/9 | v6: 5/5      ┃
+┃ Flags        Guard, Stable, Fast... 7 ┃
+┃ Uptime       UP 1mo 1w | 99% (1M)     ┃
+┃ Cons. Weight 0.04% (98 Mbit/s meas.)  ┃
+┃ Bandwidth    419 Mbit/s (Measured)    ┃
+┃ First Seen   2y 3mo ago               ┃
+┃ Version      0.4.8.14 [OK]            ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Issues Detected:                      ┃
+┃   • High consensus weight deviation...┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+```
 
-**Insert After Header (after line 67, after the `</h4>` closing tag):**
+**Metrics Mapping (14 metrics → 8 cells):**
+
+| Cell | Label | Metrics Merged | Source Variables | Example Display |
+|------|-------|----------------|------------------|-----------------|
+| 1 | Consensus | Consensus In/Out + Authority Vote Count | `diag.in_consensus`, `diag.vote_count`, `diag.total_authorities` | IN CONSENSUS — 9/9 authorities |
+| 2 | Reachability | IPv4 Count + IPv6 Count | `diag.reachability_summary.ipv4.*`, `diag.reachability_summary.ipv6.*` | IPv4: 9/9 \| v6: 5/5 |
+| 3 | Flags | Flags List + Count | `relay['flags']` | Guard, Stable, Fast, HSDir... (7) |
+| 4 | Uptime | Current Session + Historical 1M% | `relay['uptime_display']`, `relay['uptime_api_display']` | UP 1mo 1w \| 99% (1M) |
+| 5 | Cons. Weight | Network Fraction + Authority Median | `relay['consensus_weight_fraction']`, `diag.bandwidth_summary.median_display` | 0.04% of network (98 Mbit/s meas.) |
+| 6 | Bandwidth | Observed Bandwidth + Measured Status | `relay['observed_bandwidth']`, `relay['measured']`, `diag.bandwidth_summary.measurement_count` | 419 Mbit/s (Measured by 6) |
+| 7 | First Seen | Relay Age | `relay['first_seen']` | 2y 3mo ago |
+| 8 | Version | Version + Recommended Status | `relay['version']`, `relay['recommended_version']`, `relay['version_status']` | 0.4.8.14 [OK] or 0.4.7.8 [Warning] obsolete |
+
+**Priority Order (for mobile stacking):**
+
+| Priority | Metric | Rationale |
+|----------|--------|-----------|
+| 1 | Consensus | "Is my relay working at all?" — #1 question |
+| 2 | Reachability | If not in consensus, check this first |
+| 3 | Flags | "What roles can my relay play?" |
+| 4 | Uptime | "How stable is my relay?" |
+| 5 | Cons. Weight | "How much traffic am I getting?" |
+| 6 | Bandwidth | "Is my bandwidth being measured?" |
+| 7 | First Seen | "How old is my relay?" — explains missing flags |
+| 8 | Version | Least urgent — good to know but rarely the problem |
+
+**CSS (add to `<style>` section in relay-info.html):**
+
+```css
+/* Health Status Grid Layout */
+.health-status-grid {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;  /* 60/40 split */
+    gap: 8px 24px;
+}
+
+.health-status-grid dl {
+    margin: 0;
+    font-size: 14px;
+}
+
+.health-status-grid .health-row {
+    display: flex;
+    align-items: baseline;
+    margin-bottom: 8px;
+}
+
+.health-status-grid dt {
+    width: 100px;
+    font-weight: bold;
+    color: #495057;
+    flex-shrink: 0;
+}
+
+.health-status-grid dd {
+    margin: 0;
+    flex: 1;
+}
+
+/* Responsive: Stack on mobile */
+@media (max-width: 767px) {
+    .health-status-grid {
+        grid-template-columns: 1fr;
+    }
+}
+```
+
+**HTML/Jinja2 Template (insert after header, after line 67):**
 
 ```jinja2
-{# ============== HEALTH STATUS SUMMARY ============== #}
-{# Simple at-a-glance health check - combines best data from Onionoo and CollecTor #}
+{# ============== HEALTH STATUS SUMMARY (Enhanced) ============== #}
+{# Displays 14 metrics in 8 cells using responsive 2-column layout #}
 {% set diag = relay.consensus_evaluation if relay.consensus_evaluation and relay.consensus_evaluation.available else none %}
 
 <div id="status" style="margin: 15px 0; padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid {% if diag and diag.in_consensus %}#28a745{% elif 'Running' in relay['flags'] %}#28a745{% else %}#dc3545{% endif %};">
+
 <h4 style="margin-top: 0; margin-bottom: 12px;">
-<div class="section-header">
-<a href="#status" class="anchor-link">Health Status</a>
-</div>
+    <div class="section-header">
+        <a href="#status" class="anchor-link">Health Status</a>
+    </div>
 </h4>
 
-<dl style="margin: 0; font-size: 14px;">
-    {# Row 1: Consensus Status #}
-    <div style="display: flex; align-items: baseline; margin-bottom: 8px;">
-        <dt style="width: 120px; font-weight: bold; color: #495057;">Consensus</dt>
-        <dd style="margin: 0;">
-            {% if diag -%}
-                {% if diag.in_consensus -%}
+<div class="health-status-grid">
+    {# LEFT COLUMN (60%) #}
+    <dl>
+        {# Row 1 Left: Consensus Status (merges: in_consensus + vote_count) #}
+        <div class="health-row">
+            <dt>Consensus</dt>
+            <dd>
+                {% if diag -%}
+                    {% if diag.in_consensus -%}
+                        <span style="color: #28a745; font-weight: bold;">IN CONSENSUS</span>
+                        <span style="color: #6c757d;">— {{ diag.vote_count }}/{{ diag.total_authorities }} authorities</span>
+                    {% else -%}
+                        <span style="color: #dc3545; font-weight: bold;">NOT IN CONSENSUS</span>
+                        <span style="color: #6c757d;">— {{ diag.vote_count }}/{{ diag.total_authorities }} authorities (need {{ diag.majority_required }})</span>
+                    {% endif -%}
+                {% elif 'Running' in relay['flags'] -%}
                     <span style="color: #28a745; font-weight: bold;">IN CONSENSUS</span>
-                    <span style="color: #6c757d;">— {{ diag.vote_count }}/{{ diag.total_authorities }} authorities</span>
+                    <span style="color: #6c757d;">— has Running flag</span>
                 {% else -%}
                     <span style="color: #dc3545; font-weight: bold;">NOT IN CONSENSUS</span>
-                    <span style="color: #6c757d;">— {{ diag.vote_count }}/{{ diag.total_authorities }} authorities (need {{ diag.majority_required }})</span>
                 {% endif -%}
-            {% elif 'Running' in relay['flags'] -%}
-                <span style="color: #28a745; font-weight: bold;">IN CONSENSUS</span>
-                <span style="color: #6c757d;">— has Running flag</span>
-            {% else -%}
-                <span style="color: #dc3545; font-weight: bold;">NOT IN CONSENSUS</span>
-            {% endif -%}
-        </dd>
-    </div>
-    
-    {# Row 2: Uptime #}
-    <div style="display: flex; align-items: baseline; margin-bottom: 8px;">
-        <dt style="width: 120px; font-weight: bold; color: #495057;">Uptime</dt>
-        <dd style="margin: 0;">
-            {% if relay.get('uptime_display') -%}
-                {% if relay['uptime_display'].startswith('DOWN') -%}
-                    <span style="color: #dc3545; font-weight: bold;">{{ relay['uptime_display']|escape }}</span>
-                {% else -%}
-                    <span style="color: #28a745;">{{ relay['uptime_display']|escape }}</span>
-                {% endif -%}
-            {% else -%}
-                <span style="color: #6c757d;">Unknown</span>
-            {% endif -%}
-        </dd>
-    </div>
-    
-    {# Row 3: Bandwidth Measured #}
-    <div style="display: flex; align-items: baseline; margin-bottom: 8px;">
-        <dt style="width: 120px; font-weight: bold; color: #495057;">Bandwidth</dt>
-        <dd style="margin: 0;">
-            {% if diag and diag.bandwidth_summary and diag.bandwidth_summary.measurement_count -%}
-                <span style="color: #28a745;">Measured by {{ diag.bandwidth_summary.measurement_count }} authorities</span>
-            {% elif relay['measured'] -%}
-                <span style="color: #28a745;">Measured</span>
-            {% elif relay['measured'] is none -%}
-                <span style="color: #6c757d;">Unknown</span>
-            {% else -%}
-                <span style="color: #856404;">Not measured</span>
-                <span style="color: #6c757d;">— using relay-reported values</span>
-            {% endif -%}
-        </dd>
-    </div>
-    
-    {# Row 4: Flags #}
-    <div style="display: flex; align-items: baseline; margin-bottom: 8px;">
-        <dt style="width: 120px; font-weight: bold; color: #495057;">Flags</dt>
-        <dd style="margin: 0;">
-            {% set flag_count = relay['flags']|reject('equalto', 'StaleDesc')|list|length -%}
-            {% for flag in relay['flags'] -%}
-                {% if flag != 'StaleDesc' -%}
-                    <a href="{{ page_ctx.path_prefix }}flag/{{ flag.lower()|escape }}/">{{ flag|escape }}</a>{% if not loop.last %}, {% endif %}
-                {% endif -%}
-            {% endfor -%}
-            <span style="color: #6c757d;">({{ flag_count }} flags)</span>
-            {% if 'StaleDesc' in relay['flags'] -%}
-                <br><span style="color: #dc3545; font-size: 12px;">[Warning] StaleDesc flag - descriptor may be stale</span>
-            {% endif -%}
-        </dd>
-    </div>
-</dl>
+            </dd>
+        </div>
 
-{# Issues and Warnings - Prominent display #}
+        {# Row 2 Left: Flags #}
+        <div class="health-row">
+            <dt>Flags</dt>
+            <dd>
+                {% set flag_list = relay['flags']|reject('equalto', 'StaleDesc')|list -%}
+                {% set flag_count = flag_list|length -%}
+                {% for flag in flag_list -%}
+                    <a href="{{ page_ctx.path_prefix }}flag/{{ flag.lower()|escape }}/">{{ flag|escape }}</a>{% if not loop.last %}, {% endif %}
+                {% endfor -%}
+                <span style="color: #6c757d;">({{ flag_count }})</span>
+                {% if 'StaleDesc' in relay['flags'] -%}
+                    <br><span style="color: #dc3545; font-size: 12px;">[Warning] StaleDesc</span>
+                {% endif -%}
+            </dd>
+        </div>
+
+        {# Row 3 Left: Consensus Weight (merges: fraction + authority median) #}
+        <div class="health-row">
+            <dt>Cons. Weight</dt>
+            <dd>
+                {% if relay['consensus_weight_fraction'] -%}
+                    <span title="Fraction of total network consensus weight">{{ "%.2f"|format(relay['consensus_weight_fraction'] * 100) }}% of network</span>
+                    {% if diag and diag.bandwidth_summary and diag.bandwidth_summary.median_display -%}
+                        <span style="color: #6c757d;">({{ diag.bandwidth_summary.median_display }} meas.)</span>
+                    {% endif -%}
+                {% else -%}
+                    <span style="color: #6c757d;">N/A</span>
+                {% endif -%}
+            </dd>
+        </div>
+
+        {# Row 4 Left: First Seen #}
+        <div class="health-row">
+            <dt>First Seen</dt>
+            <dd>
+                {% if relay['first_seen'] -%}
+                    <a href="{{ page_ctx.path_prefix }}first_seen/{{ relay['first_seen'].split(' ', 1)[0]|escape }}/">{{ relay['first_seen']|format_time_ago }}</a>
+                {% else -%}
+                    <span style="color: #6c757d;">Unknown</span>
+                {% endif -%}
+            </dd>
+        </div>
+    </dl>
+
+    {# RIGHT COLUMN (40%) #}
+    <dl>
+        {# Row 1 Right: Reachability (merges: IPv4 + IPv6) #}
+        <div class="health-row">
+            <dt>Reachability</dt>
+            <dd>
+                {% if diag and diag.reachability_summary -%}
+                    IPv4: <span style="color: {% if diag.reachability_summary.ipv4.status_class == 'success' %}#28a745{% else %}#dc3545{% endif %}; font-weight: bold;">{{ diag.reachability_summary.ipv4.reachable_count }}/{{ diag.reachability_summary.ipv4.total }}</span>
+                    {% if diag.reachability_summary.ipv6.total > 0 -%}
+                        | v6: <span style="color: {% if diag.reachability_summary.ipv6.status_class == 'success' %}#28a745{% elif diag.reachability_summary.ipv6.status_class == 'muted' %}#6c757d{% else %}#dc3545{% endif %}; font-weight: bold;">{{ diag.reachability_summary.ipv6.reachable_count }}/{{ diag.reachability_summary.ipv6.total }}</span>
+                    {% endif -%}
+                {% else -%}
+                    <span style="color: #6c757d;">N/A</span>
+                {% endif -%}
+            </dd>
+        </div>
+
+        {# Row 2 Right: Uptime (merges: current session + historical 1M%) #}
+        <div class="health-row">
+            <dt>Uptime</dt>
+            <dd>
+                {% if relay.get('uptime_display') -%}
+                    {% if relay['uptime_display'].startswith('DOWN') -%}
+                        <span style="color: #dc3545; font-weight: bold;">{{ relay['uptime_display']|escape }}</span>
+                    {% else -%}
+                        <span style="color: #28a745;">{{ relay['uptime_display']|escape }}</span>
+                    {% endif -%}
+                {% else -%}
+                    <span style="color: #6c757d;">Unknown</span>
+                {% endif -%}
+                {% if relay.get('uptime_api_display') -%}
+                    {# Extract 1M percentage from uptime_api_display (format: "X%/Y%/Z%/W%") #}
+                    {% set uptime_parts = relay['uptime_api_display']|striptags|replace('%', '')|replace(' ', '')|split('/') -%}
+                    {% if uptime_parts and uptime_parts[0] -%}
+                        | <span style="color: #6c757d;">{{ uptime_parts[0] }}% (1M)</span>
+                    {% endif -%}
+                {% endif -%}
+            </dd>
+        </div>
+
+        {# Row 3 Right: Bandwidth (merges: observed + measured status) #}
+        <div class="health-row">
+            <dt>Bandwidth</dt>
+            <dd>
+                {% set obs_unit = relay['observed_bandwidth']|determine_unit(relays.use_bits) -%}
+                {% set obs_bandwidth = relay['observed_bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
+                <span title="Relay's observed bandwidth capacity">{{ obs_bandwidth }} {{ obs_unit }}</span>
+                {% if diag and diag.bandwidth_summary and diag.bandwidth_summary.measurement_count -%}
+                    <span style="color: #28a745;">(Measured by {{ diag.bandwidth_summary.measurement_count }})</span>
+                {% elif relay['measured'] -%}
+                    <span style="color: #28a745;">(Measured)</span>
+                {% elif relay['measured'] is none -%}
+                    <span style="color: #6c757d;">(Unknown)</span>
+                {% else -%}
+                    <span style="color: #856404;">(Not measured)</span>
+                {% endif -%}
+            </dd>
+        </div>
+
+        {# Row 4 Right: Version (merges: version + recommended status) #}
+        <div class="health-row">
+            <dt>Version</dt>
+            <dd>
+                {% if relay['version'] -%}
+                    <span>{{ relay['version']|escape }}</span>
+                    {% if relay['recommended_version'] is not none -%}
+                        {% if relay['recommended_version'] -%}
+                            <span style="color: #28a745;" title="Version is recommended">[OK]</span>
+                        {% else -%}
+                            <span style="color: #dc3545;" title="Version is {{ relay['version_status']|default('not recommended') }}">[Warning] {{ relay['version_status']|default('not recommended')|escape }}</span>
+                        {% endif -%}
+                    {% endif -%}
+                {% else -%}
+                    <span style="color: #6c757d;">Unknown</span>
+                {% endif -%}
+            </dd>
+        </div>
+    </dl>
+</div>
+
+{# Issues and Warnings - Full width below grid #}
 {% if diag and diag.issues %}
 {% set real_issues = diag.issues | selectattr('severity', 'ne', 'info') | list %}
 {% set info_notes = diag.issues | selectattr('severity', 'equalto', 'info') | list %}
@@ -1454,19 +1606,64 @@ No dual-column comparison here - that goes in the Consensus Evaluation section f
 </div>
 ```
 
-**Variables Used:**
+**Display Logic Details:**
 
-| Variable | Type | Source | Purpose |
-|----------|------|--------|---------|
-| `diag.in_consensus` | bool | CollecTor | Primary consensus status |
-| `diag.vote_count` | int | CollecTor | Authority vote count |
-| `diag.total_authorities` | int | CollecTor | Total authorities (9) |
-| `diag.majority_required` | int | CollecTor | Votes needed (5) |
-| `diag.bandwidth_summary.measurement_count` | int | CollecTor | Bandwidth measurement count |
-| `diag.issues` | list | CollecTor | Detected issues |
-| `relay['uptime_display']` | str | Onionoo | "UP for X days" or "DOWN for X hours" |
-| `relay['measured']` | bool | Onionoo | Fallback if CollecTor unavailable |
-| `relay['flags']` | list | Onionoo | Current consensus flags |
+| Metric | Logic |
+|--------|-------|
+| **Consensus** | IF `diag.in_consensus`: "IN CONSENSUS — {vote_count}/{total} authorities"<br>ELSE: "NOT IN CONSENSUS — {vote_count}/{total} (need {majority})"<br>FALLBACK: Check Running flag |
+| **Reachability** | "IPv4: {reachable}/{total}" + IF ipv6.total > 0: " \| v6: {reachable}/{total}" |
+| **Flags** | "{flag1}, {flag2}... ({count})" + IF StaleDesc: show warning |
+| **Uptime** | "{uptime_display}" + IF uptime_api_display: " \| {1M%}% (1M)" |
+| **Cons. Weight** | "{fraction * 100}% of network" + IF median: "({median} meas.)" |
+| **Bandwidth** | "{observed formatted}" + measurement status indicator |
+| **First Seen** | "{first_seen\|format_time_ago}" (e.g., "2y 3mo ago") |
+| **Version** | "{version}" + IF recommended: "[OK]" ELIF not: "[Warning] {status}" |
+
+**Data Source Reference:**
+
+| Variable | Source | Description |
+|----------|--------|-------------|
+| `diag` | `relay.consensus_evaluation` | Consensus evaluation object (from CollecTor) |
+| `diag.in_consensus` | CollecTor votes | Boolean: relay in consensus |
+| `diag.vote_count` | CollecTor votes | Number of authorities that voted for relay |
+| `diag.total_authorities` | CollecTor votes | Total directory authorities (typically 9) |
+| `diag.majority_required` | Calculated | floor(total/2) + 1 (typically 5) |
+| `diag.reachability_summary.ipv4.reachable_count` | CollecTor votes | Authorities that reached relay via IPv4 |
+| `diag.reachability_summary.ipv4.total` | CollecTor votes | Authorities that tested IPv4 |
+| `diag.reachability_summary.ipv6.reachable_count` | CollecTor votes | Authorities that reached relay via IPv6 |
+| `diag.reachability_summary.ipv6.total` | CollecTor votes | Authorities that test IPv6 (not all do) |
+| `diag.bandwidth_summary.median_display` | CollecTor votes | Median of authority-measured bandwidth |
+| `diag.bandwidth_summary.measurement_count` | CollecTor votes | Number of authorities that measured bandwidth |
+| `diag.issues` | Consensus evaluation | List of detected issues/warnings |
+| `relay['flags']` | Onionoo API | List of current flags |
+| `relay['uptime_display']` | Calculated | Formatted current uptime (e.g., "UP 1mo 1w 4d") |
+| `relay['uptime_api_display']` | Onionoo API | Historical uptime percentages (1M/6M/1Y/5Y) |
+| `relay['consensus_weight_fraction']` | Onionoo API | Fraction of total network consensus weight |
+| `relay['observed_bandwidth']` | Onionoo API | Relay's self-reported observed bandwidth (bytes/s) |
+| `relay['measured']` | Onionoo API | Boolean: bandwidth measured by ≥3 authorities |
+| `relay['first_seen']` | Onionoo API | UTC timestamp when relay first appeared |
+| `relay['version']` | Onionoo API | Tor software version |
+| `relay['recommended_version']` | Onionoo API | Boolean: version is recommended |
+| `relay['version_status']` | Onionoo API | Status: recommended, experimental, obsolete, etc. |
+
+**Testing Checklist:**
+
+- [ ] Health Status section displays at top of relay page
+- [ ] Two-column layout displays correctly on desktop (≥768px)
+- [ ] Single-column layout stacks correctly on mobile (<768px)
+- [ ] Priority order maintained when stacked (Consensus → Reachability → Flags → Uptime → Cons. Weight → Bandwidth → First Seen → Version)
+- [ ] Consensus status shows correct IN/NOT IN with authority count
+- [ ] Reachability shows IPv4 count; shows IPv6 only if relay has IPv6
+- [ ] Flags list displays with count; StaleDesc shows warning
+- [ ] Uptime shows current session + 1M historical percentage
+- [ ] Consensus Weight shows network fraction + authority median
+- [ ] Bandwidth shows observed capacity + measured status
+- [ ] First Seen displays formatted time ago
+- [ ] Version shows version number + recommended/obsolete status
+- [ ] Issues section displays below grid when issues exist
+- [ ] "No issues detected" message shows when relay is healthy
+- [ ] All anchor links work (#status)
+- [ ] Colors indicate status (green=good, red=bad, yellow=warning, gray=unknown)
 
 ---
 
