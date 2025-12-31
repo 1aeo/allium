@@ -32,7 +32,7 @@
 {# Option 1: Two-Column Layout (60/40 Split) - Final Version #}
 <div class="row" style="margin-bottom: 20px;">
     {# Left Column (60%): Contact & Network Overview + Operator Intelligence #}
-    <div class="col-md-7" style="padding-right: 20px;">
+    <div class="col-md-7" style="padding-right: 20px; overflow-wrap: break-word; word-wrap: break-word;">
         <div style="padding: 15px; background-color: #f8f9fa; border-left: 4px solid #007bff; margin-bottom: 20px;">
             <h4 style="margin-top: 0; color: #495057;">📋 Contact & Network Overview</h4>
             
@@ -354,7 +354,7 @@
     </div>
     
     {# Right Column (40%): AROI Rankings & Flag Reliability, or Relay Reliability when no AROI #}
-    <div class="col-md-5">
+    <div class="col-md-5" style="overflow-wrap: break-word; word-wrap: break-word;">
         {# AROI Leaderboard Rankings - Sorted by rank #}
         {% if contact_rankings %}
         <div class="aroi-rankings-section" style="margin-bottom: 20px; padding: 15px; background-color: #f0f8ff; border-left: 4px solid #28a745;">
