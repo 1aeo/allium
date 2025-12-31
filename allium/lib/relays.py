@@ -2033,8 +2033,8 @@ class Relays:
         if not contact_hashes:
             return
         
-        # Pre-compute AROI validation timestamp once (same for all contacts)
-        aroi_validation_timestamp = self._get_aroi_validation_timestamp()
+        # Use cached AROI validation timestamp (same for all contacts)
+        aroi_validation_timestamp = self._aroi_validation_timestamp
         validated_aroi_domains = getattr(self, 'validated_aroi_domains', set())
         
         # Use multiprocessing if available and beneficial
@@ -2632,14 +2632,6 @@ class Relays:
                 i['contact_display_data'] = contact_display_data
                 # Get primary country data for this contact
                 primary_country_data = i.get("primary_country_data")
-                # Get AROI validation status for this contact (Phase 2)
-                # Reuse validation status from write_misc if already calculated, otherwise calculate now
-                if "aroi_validation_full" in i:
-                    contact_validation_status = i["aroi_validation_full"]
-                else:
-                    contact_validation_status = self._get_contact_validation_status(members)
-                # Extract AROI validation timestamp for display
-                aroi_validation_timestamp = self._get_aroi_validation_timestamp()
             
             # Add family-specific data for family templates (used by detail_summary macro)
             family_aroi_domain = None
@@ -2649,9 +2641,13 @@ class Relays:
                 family_aroi_domain = i.get("aroi_domain", "")
                 family_contact = i.get("contact", "")
                 family_contact_md5 = i.get("contact_md5", "")
-                # AROI validation status (reuse same logic as contacts)
-                contact_validation_status = i.get("contact_validation_status") or self._get_contact_validation_status(members)
-                aroi_validation_timestamp = self._get_aroi_validation_timestamp()
+            
+            # AROI validation status for contact and family pages (DRY - shared logic)
+            if k in ("contact", "family"):
+                contact_validation_status = (i.get("aroi_validation_full") or 
+                                             i.get("contact_validation_status") or 
+                                             self._get_contact_validation_status(members))
+                aroi_validation_timestamp = self._aroi_validation_timestamp
             
             # Check if this contact has a validated AROI domain for vanity URL display
             is_validated_aroi = False
@@ -2798,15 +2794,15 @@ class Relays:
             contact_rankings = i.get("contact_rankings", [])
             operator_reliability = i.get("operator_reliability")
             contact_display_data = i.get("contact_display_data")
-            contact_validation_status = i.get("contact_validation_status")
-            aroi_validation_timestamp = i.get("aroi_validation_timestamp")
             is_validated_aroi = i.get("is_validated_aroi", False)
             primary_country_data = i.get("primary_country_data")
         
-        # AROI validation status for family pages (reuse same logic as contacts)
-        if k == "family":
-            contact_validation_status = i.get("contact_validation_status") or self._get_contact_validation_status(members)
-            aroi_validation_timestamp = self._get_aroi_validation_timestamp()
+        # AROI validation status for contact and family pages (DRY - shared logic)
+        if k in ("contact", "family"):
+            contact_validation_status = (i.get("aroi_validation_full") or 
+                                         i.get("contact_validation_status") or 
+                                         self._get_contact_validation_status(members))
+            aroi_validation_timestamp = self._aroi_validation_timestamp
         
         return {
             'relay_subset': members,
@@ -2992,23 +2988,29 @@ class Relays:
         # Pass shared validation_map to avoid rebuilding it 3,000+ times
         return get_contact_validation_status(members, validation_data, validation_map)
     
-    def _get_aroi_validation_timestamp(self):
+    @property
+    def _aroi_validation_timestamp(self):
         """
-        Get formatted timestamp from AROI validation data.
+        Cached AROI validation timestamp (computed once, reused for all pages).
         
         Returns:
             str: Formatted timestamp or 'Unknown' if not available
         """
+        # Use cached value if available
+        if hasattr(self, '__aroi_validation_timestamp_cached'):
+            return self.__aroi_validation_timestamp_cached
+        
         from .aroi_validation import _format_timestamp
         
         validation_data = getattr(self, 'aroi_validation_data', None)
         if not validation_data:
-            return 'Unknown'
+            self.__aroi_validation_timestamp_cached = 'Unknown'
+        else:
+            metadata = validation_data.get('metadata', {})
+            timestamp_str = metadata.get('timestamp', '')
+            self.__aroi_validation_timestamp_cached = _format_timestamp(timestamp_str)
         
-        metadata = validation_data.get('metadata', {})
-        timestamp_str = metadata.get('timestamp', '')
-        
-        return _format_timestamp(timestamp_str)
+        return self.__aroi_validation_timestamp_cached
 
     def _generate_contact_rankings(self, contact_hash):
         """
