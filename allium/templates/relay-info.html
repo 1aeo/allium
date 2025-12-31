@@ -119,64 +119,91 @@ Country: unknown
     <dl>
         {# Row 1 Left: Consensus Status (merges: in_consensus + vote_count) #}
         <div class="health-row">
-            <dt>Consensus</dt>
+            <dt title="Inclusion in network consensus. Majority of Directory Auths must vote yes.">Consensus</dt>
             <dd>
                 {% if diag -%}
                     {% if diag.in_consensus -%}
-                        <span style="color: #28a745; font-weight: bold;">IN CONSENSUS</span>
-                        <span style="color: #6c757d;">— {{ diag.vote_count }}/{{ diag.total_authorities }} authorities</span>
+                        <span style="color: #28a745;" title="Relay IS in the network consensus. Tor clients will use this relay.">In Consensus</span>
+                        <span title="Number of Directory Authorities that voted for this relay. Need majority ({{ diag.majority_required }}/{{ diag.total_authorities }}) for consensus.">({{ diag.vote_count }}/{{ diag.total_authorities }} Directory Auths)</span>
                     {% else -%}
-                        <span style="color: #dc3545; font-weight: bold;">NOT IN CONSENSUS</span>
-                        <span style="color: #6c757d;">— {{ diag.vote_count }}/{{ diag.total_authorities }} authorities (need {{ diag.majority_required }})</span>
+                        <span style="color: #dc3545;" title="Relay is NOT in the network consensus. Tor clients will NOT use this relay.">Not In Consensus</span>
+                        <span title="Number of Directory Authorities that voted for this relay. Need majority ({{ diag.majority_required }}/{{ diag.total_authorities }}) for consensus.">({{ diag.vote_count }}/{{ diag.total_authorities }} Directory Auths, need {{ diag.majority_required }})</span>
                     {% endif -%}
                 {% elif 'Running' in relay['flags'] -%}
-                    <span style="color: #28a745; font-weight: bold;">IN CONSENSUS</span>
-                    <span style="color: #6c757d;">— has Running flag</span>
+                    <span style="color: #28a745;" title="Relay IS in the network consensus. Tor clients will use this relay.">In Consensus</span>
+                    <span title="Inferred from Running flag in Onionoo data.">(has Running flag)</span>
                 {% else -%}
-                    <span style="color: #dc3545; font-weight: bold;">NOT IN CONSENSUS</span>
+                    <span style="color: #dc3545;" title="Relay is NOT in the network consensus. Tor clients will NOT use this relay.">Not In Consensus</span>
                 {% endif -%}
             </dd>
         </div>
 
         {# Row 2 Left: Flags #}
         <div class="health-row">
-            <dt>Flags</dt>
+            <dt title="Capabilities assigned by Dir. Auth. based on performance.">Flags</dt>
             <dd>
                 {% set flag_list = relay['flags']|reject('equalto', 'StaleDesc')|list -%}
                 {% set flag_count = flag_list|length -%}
-                {% for flag in flag_list -%}
+                <span title="Guard=entry point, Exit=exit node, Stable=long-lived connections, Fast=high bandwidth, Valid=properly configured, Running=currently reachable.">{% for flag in flag_list -%}
                     <a href="{{ page_ctx.path_prefix }}flag/{{ flag.lower()|escape }}/">{{ flag|escape }}</a>{% if not loop.last %}, {% endif %}
-                {% endfor -%}
-                <span style="color: #6c757d;">({{ flag_count }})</span>
+                {% endfor %}</span> <span title="Total number of flags assigned to this relay.">({{ flag_count }})</span>
                 {% if 'StaleDesc' in relay['flags'] -%}
-                    <br><span style="color: #dc3545; font-size: 12px;">[Warning] StaleDesc</span>
+                    <br><span style="color: #dc3545; font-size: 12px;" title="Relay's descriptor is outdated. May indicate connectivity issues.">[Warning] StaleDesc</span>
                 {% endif -%}
             </dd>
         </div>
 
-        {# Row 3 Left: Consensus Weight (merges: fraction + authority median) #}
+        {# Row 3 Left: BW Verified (authority measurement count + median) #}
         <div class="health-row">
-            <dt>Cons. Weight</dt>
+            <dt title="Bandwidth verification by directory authorities running sbws scanners.">BW Verified</dt>
             <dd>
-                {% if relay['consensus_weight_fraction'] -%}
-                    <span title="Fraction of total network consensus weight">{{ "%.2f"|format(relay['consensus_weight_fraction'] * 100) }}% of network</span>
-                    {% if diag and diag.bandwidth_summary and diag.bandwidth_summary.median_display -%}
-                        <span style="color: #6c757d;">({{ diag.bandwidth_summary.median_display }} meas.)</span>
+                {% if diag and diag.bandwidth_summary and diag.bandwidth_summary.bw_auth_total -%}
+                    {# Color code: green for majority, yellow for 3 to <majority, red for 0-2 #}
+                    {% set measured = diag.bandwidth_summary.bw_auth_measured_count -%}
+                    {% set total = diag.bandwidth_summary.bw_auth_total -%}
+                    {% set majority = (total // 2) + 1 -%}
+                    {% if measured >= majority -%}
+                        {% set bw_color = '#28a745' -%}
+                    {% elif measured >= 3 -%}
+                        {% set bw_color = '#856404' -%}
+                    {% else -%}
+                        {% set bw_color = '#dc3545' -%}
+                    {% endif -%}
+                    <span style="color: {{ bw_color }};" title="Number of bandwidth authorities (sbws scanners) that measured this relay. Currently {{ total }} authorities run bandwidth scanners.">{{ measured }}/{{ total }}</span> BW Auths Measured
+                    {% if diag.bandwidth_summary.median_display -%}
+                        {% set median_parts = diag.bandwidth_summary.median_display.split(' ') -%}
+                        <span title="Median bandwidth measurement from bandwidth authorities. Used to calculate consensus weight.">{{ median_parts[0]|float|int }} {{ median_parts[1] }} Median</span>
+                    {% endif -%}
+                {% elif relay['measured'] -%}
+                    <span style="color: #28a745;" title="Relay has been measured by bandwidth authorities.">Measured</span>
+                {% elif relay['measured'] is none -%}
+                    <span style="color: #6c757d;">Unknown</span>
+                {% else -%}
+                    <span style="color: #856404;" title="Relay has not been measured by bandwidth authorities yet.">Not Measured</span>
+                {% endif -%}
+            </dd>
+        </div>
+
+        {# Row 4 Left: Uptime (swapped with First Seen) #}
+        <div class="health-row">
+            <dt title="Current session duration and monthly availability.">Uptime</dt>
+            <dd>
+                {% if relay.get('uptime_display') -%}
+                    {% if relay['uptime_display'].startswith('DOWN') -%}
+                        <span style="color: #dc3545;" title="Relay is currently offline.">{{ relay['uptime_display']|escape }}</span>
+                    {% else -%}
+                        <span style="color: #28a745;" title="Time since last restart. Source: relay descriptor.">{{ relay['uptime_display']|escape }}</span>
                     {% endif -%}
                 {% else -%}
-                    <span style="color: #6c757d;">N/A</span>
-                {% endif -%}
-            </dd>
-        </div>
-
-        {# Row 4 Left: First Seen #}
-        <div class="health-row">
-            <dt>First Seen</dt>
-            <dd>
-                {% if relay['first_seen'] -%}
-                    <a href="{{ page_ctx.path_prefix }}first_seen/{{ relay['first_seen'].split(' ', 1)[0]|escape }}/">{{ relay['first_seen']|format_time_ago }}</a>
-                {% else -%}
                     <span style="color: #6c757d;">Unknown</span>
+                {% endif -%}
+                {% if relay.get('uptime_api_display') -%}
+                    {# Extract 1M percentage from uptime_api_display (format: "X%/Y%/Z%/W%") #}
+                    {% set uptime_parts = relay['uptime_api_display']|striptags|replace('%', '')|replace(' ', '')|split('/') -%}
+                    {% if uptime_parts and uptime_parts[0] -%}
+                        {% set uptime_val = uptime_parts[0]|float -%}
+                        | <span style="color: {% if uptime_val >= 100 %}#28a745{% elif uptime_val >= 90 %}#856404{% else %}#dc3545{% endif %};" title="Percentage of time relay had Running flag in last month. 100%=always up, <90%=reliability concerns.">{{ uptime_val|int }}%</span> <span title="1 Month availability percentage.">(1M)</span>
+                    {% endif -%}
                 {% endif -%}
             </dd>
         </div>
@@ -186,73 +213,62 @@ Country: unknown
     <dl>
         {# Row 1 Right: Reachability (merges: IPv4 + IPv6) #}
         <div class="health-row">
-            <dt>Reachability</dt>
+            <dt title="Directory Auths connectivity to relay's OR port.">Reachability</dt>
             <dd>
                 {% if diag and diag.reachability_summary -%}
-                    IPv4: <span style="color: {% if diag.reachability_summary.ipv4.status_class == 'success' %}#28a745{% else %}#dc3545{% endif %}; font-weight: bold;">{{ diag.reachability_summary.ipv4.reachable_count }}/{{ diag.reachability_summary.ipv4.total }}</span>
+                    <span title="Number of Directory Authorities that successfully connected to relay's IPv4 OR port.">IPv4: <span style="color: {% if diag.reachability_summary.ipv4.status_class == 'success' %}#28a745{% else %}#dc3545{% endif %};">{{ diag.reachability_summary.ipv4.reachable_count }}/{{ diag.reachability_summary.ipv4.total }}</span></span>
                     {% if diag.reachability_summary.ipv6.total > 0 -%}
-                        | v6: <span style="color: {% if diag.reachability_summary.ipv6.status_class == 'success' %}#28a745{% elif diag.reachability_summary.ipv6.status_class == 'muted' %}#6c757d{% else %}#dc3545{% endif %}; font-weight: bold;">{{ diag.reachability_summary.ipv6.reachable_count }}/{{ diag.reachability_summary.ipv6.total }}</span>
+                        | <span title="Number of Directory Authorities that successfully connected to relay's IPv6 OR port.">v6: <span style="color: {% if diag.reachability_summary.ipv6.status_class == 'success' %}#28a745{% elif diag.reachability_summary.ipv6.status_class == 'muted' %}#6c757d{% else %}#dc3545{% endif %};">{{ diag.reachability_summary.ipv6.reachable_count }}/{{ diag.reachability_summary.ipv6.total }}</span></span>
                     {% endif -%}
+                    <span title="Reachability tested by Directory Authorities.">(Directory Auths)</span>
                 {% else -%}
                     <span style="color: #6c757d;">N/A</span>
                 {% endif -%}
             </dd>
         </div>
 
-        {# Row 2 Right: Uptime (merges: current session + historical 1M%) #}
+        {# Row 2 Right: First Seen (swapped with Uptime) #}
         <div class="health-row">
-            <dt>Uptime</dt>
+            <dt title="First appearance in network consensus.">First Seen</dt>
             <dd>
-                {% if relay.get('uptime_display') -%}
-                    {% if relay['uptime_display'].startswith('DOWN') -%}
-                        <span style="color: #dc3545; font-weight: bold;">{{ relay['uptime_display']|escape }}</span>
-                    {% else -%}
-                        <span style="color: #28a745;">{{ relay['uptime_display']|escape }}</span>
-                    {% endif -%}
+                {% if relay['first_seen'] -%}
+                    <a href="{{ page_ctx.path_prefix }}first_seen/{{ relay['first_seen'].split(' ', 1)[0]|escape }}/" title="Date relay first appeared in consensus. Newer relays have restrictions (Guard flag requires ~8 days).">{{ relay['first_seen']|format_time_ago }}</a>
                 {% else -%}
                     <span style="color: #6c757d;">Unknown</span>
-                {% endif -%}
-                {% if relay.get('uptime_api_display') -%}
-                    {# Extract 1M percentage from uptime_api_display (format: "X%/Y%/Z%/W%") #}
-                    {% set uptime_parts = relay['uptime_api_display']|striptags|replace('%', '')|replace(' ', '')|split('/') -%}
-                    {% if uptime_parts and uptime_parts[0] -%}
-                        | <span style="color: #6c757d;">{{ uptime_parts[0] }}% (1M)</span>
-                    {% endif -%}
                 {% endif -%}
             </dd>
         </div>
 
-        {# Row 3 Right: Bandwidth (merges: observed + measured status) #}
+        {# Row 3 Right: BW Weight (network percentage + observed bandwidth) #}
         <div class="health-row">
-            <dt>Bandwidth</dt>
+            <dt title="Traffic share and self-reported bandwidth capacity.">BW Weight</dt>
             <dd>
-                {% set obs_unit = relay['observed_bandwidth']|determine_unit(relays.use_bits) -%}
-                {% set obs_bandwidth = relay['observed_bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
-                <span title="Relay's observed bandwidth capacity">{{ obs_bandwidth }} {{ obs_unit }}</span>
-                {% if diag and diag.bandwidth_summary and diag.bandwidth_summary.measurement_count -%}
-                    <span style="color: #28a745;">(Measured by {{ diag.bandwidth_summary.measurement_count }})</span>
-                {% elif relay['measured'] -%}
-                    <span style="color: #28a745;">(Measured)</span>
-                {% elif relay['measured'] is none -%}
-                    <span style="color: #6c757d;">(Unknown)</span>
+                {% if relay['consensus_weight_fraction'] -%}
+                    <span title="Percentage of total network consensus weight. Determines probability of being selected by clients.">{{ "%.2f"|format(relay['consensus_weight_fraction'] * 100) }}% of Network</span>
+                    | {% set obs_unit = relay['observed_bandwidth']|determine_unit(relays.use_bits) -%}
+                    {% set obs_bandwidth = relay['observed_bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
+                    <span title="Bandwidth capacity reported by the relay itself. May differ from measured bandwidth.">{{ obs_bandwidth|float|int }} {{ obs_unit }} Observed By Relay</span>
                 {% else -%}
-                    <span style="color: #856404;">(Not measured)</span>
+                    {% set obs_unit = relay['observed_bandwidth']|determine_unit(relays.use_bits) -%}
+                    {% set obs_bandwidth = relay['observed_bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
+                    <span title="Bandwidth capacity reported by the relay itself.">{{ obs_bandwidth|float|int }} {{ obs_unit }} Observed By Relay</span>
                 {% endif -%}
             </dd>
         </div>
 
         {# Row 4 Right: Version (merges: version + recommended status) #}
         <div class="health-row">
-            <dt>Version</dt>
+            <dt title="Tor software version. Outdated versions may be rejected by Tor network and have security vulnerabilities.">Version</dt>
             <dd>
                 {% if relay['version'] -%}
-                    <span>{{ relay['version']|escape }}</span>
                     {% if relay['recommended_version'] is not none -%}
                         {% if relay['recommended_version'] -%}
-                            <span style="color: #28a745;" title="Version is recommended">[OK]</span>
+                            <span style="color: #28a745;" title="This Tor version is on the recommended list. Safe to use.">{{ relay['version']|escape }} Recommended</span>
                         {% else -%}
-                            <span style="color: #dc3545;" title="Version is {{ relay['version_status']|default('not recommended') }}">[Warning] {{ relay['version_status']|default('not recommended')|escape }}</span>
+                            <span style="color: #dc3545;" title="This Tor version is outdated. May have security issues or be rejected by the network.">{{ relay['version']|escape }} Not Recommended</span>
                         {% endif -%}
+                    {% else -%}
+                        <span title="Version recommendation status unknown.">{{ relay['version']|escape }}</span>
                     {% endif -%}
                 {% else -%}
                     <span style="color: #6c757d;">Unknown</span>

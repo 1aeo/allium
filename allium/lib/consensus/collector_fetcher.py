@@ -938,22 +938,38 @@ class CollectorFetcher:
     def _format_bandwidth(self, relay: dict) -> dict:
         """
         Format bandwidth information from all sources.
+        
+        Tracks:
+        - bw_auth_measured_count: How many BW authorities actually measured this relay
+        - bw_auth_total: Total number of BW authorities (denominator)
+        - measurement_count: Total bandwidth values (from all sources)
         """
         votes = relay.get('votes', {})
         measurements = relay.get('bandwidth_measurements', {})
         
         bandwidth_values = []
+        bw_auth_measured_count = 0  # BW authorities that measured THIS relay
+        
         for auth_name, vote in votes.items():
             if vote.get('measured') is not None:
                 bandwidth_values.append(vote['measured'])
+                # Count if this is a BW authority that actually measured
+                if auth_name in self.bw_authorities:
+                    bw_auth_measured_count += 1
             elif vote.get('bandwidth') is not None:
+                # This is just relay-reported bandwidth, not a measurement
                 bandwidth_values.append(vote['bandwidth'])
         
         # Add measurements from bandwidth files
         bandwidth_values.extend(measurements.values())
         
         if not bandwidth_values:
-            return {'median': None, 'average': None, 'min': None, 'max': None, 'deviation': None}
+            return {
+                'median': None, 'average': None, 'min': None, 'max': None, 
+                'deviation': None, 'measurement_count': 0,
+                'bw_auth_measured_count': 0,
+                'bw_auth_total': len(self.bw_authorities),
+            }
         
         # Calculate median (what Tor consensus actually uses)
         sorted_values = sorted(bandwidth_values)
@@ -971,6 +987,8 @@ class CollectorFetcher:
             'max': max(bandwidth_values),
             'deviation': max(bandwidth_values) - min(bandwidth_values) if len(bandwidth_values) > 1 else 0,
             'measurement_count': len(bandwidth_values),
+            'bw_auth_measured_count': bw_auth_measured_count,  # Numerator: BW auths that measured this relay
+            'bw_auth_total': len(self.bw_authorities),  # Denominator: Total BW authorities
         }
     
     def _format_reachability(self, relay: dict) -> dict:
