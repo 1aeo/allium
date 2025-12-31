@@ -39,8 +39,9 @@
             {# Contact Information #}
             <div style="margin-bottom: 15px;">
                 <ul style="list-style-type: disc; padding-left: 20px; margin-bottom: 0;">
-                    {% if aroi_domain and aroi_domain != 'none' %}
-                    <li><strong>AROI Domain:</strong> {{ aroi_domain|escape }}
+                    {# AROI with merged validation badge - only show if has AROI data #}
+                    {% if aroi_domain and aroi_domain != 'none' and (not contact_validation_status or contact_validation_status.has_aroi) %}
+                    <li><strong>AROI:</strong> {{ aroi_domain|escape }}
                         {{- aroi_validation_badge(contact_validation_status) }}
                     </li>
                     {# Vanity URL display for validated AROI domains - only show if base_url is configured #}
@@ -50,8 +51,8 @@
                     </li>
                     {% endif %}
                     {% elif contact_validation_status and contact_validation_status.has_aroi %}
-                    {# Show AROI validation status even when domain wasn't parsed #}
-                    <li><strong>AROI Validation:</strong>
+                    {# Show AROI with validation status even when domain wasn't parsed #}
+                    <li><strong>AROI:</strong>
                         {{- aroi_validation_badge_with_count(contact_validation_status) }}
                     </li>
                     {% endif %}

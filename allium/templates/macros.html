@@ -149,7 +149,7 @@
     </div>
 {%- endmacro %}
 
-{% macro detail_summary(bandwidth, bandwidth_unit, guard_bandwidth, middle_bandwidth, exit_bandwidth, consensus_weight_fraction, guard_consensus_weight_fraction, middle_consensus_weight_fraction, exit_consensus_weight_fraction, guard_count, middle_count, exit_count, total_relays, network_position, aroi_domain=none, contact=none, contact_md5=none, page_ctx=none, unique_aroi_list=none, unique_contact_list=none, unique_aroi_count=none, unique_contact_count=none, unique_aroi_contact_html=none, aroi_to_contact_map=none) -%}
+{% macro detail_summary(bandwidth, bandwidth_unit, guard_bandwidth, middle_bandwidth, exit_bandwidth, consensus_weight_fraction, guard_consensus_weight_fraction, middle_consensus_weight_fraction, exit_consensus_weight_fraction, guard_count, middle_count, exit_count, total_relays, network_position, aroi_domain=none, contact=none, contact_md5=none, page_ctx=none, unique_aroi_list=none, unique_contact_list=none, unique_aroi_count=none, unique_contact_count=none, unique_aroi_contact_html=none, aroi_to_contact_map=none, contact_validation_status=none) -%}
 <ul style="list-style-type: disc; padding-left: 20px; margin-bottom: 15px;">
     <li><strong><span title="Observed bandwidth capacity represents the estimated maximum throughput this group can handle, combining total, guard, middle, and exit bandwidth contributions">Bandwidth Capacity</span>:</strong> ~{{ bandwidth }} {{ bandwidth_unit }}
         {%- if guard_count > 0 or middle_count > 0 or exit_count > 0 %} 
@@ -171,13 +171,20 @@
         {%- if unique_aroi_contact_html %}, {{ unique_aroi_contact_html|safe }}{% endif -%}
     </li>
     {%- endif %}
-    {%- if aroi_domain and aroi_domain != 'none' and aroi_domain != '' %}
-    <li><strong><span title="Autonomous Relay Operator Identifier - unverified">AROI</span>:</strong> 
+    {#- AROI with merged validation badge (only show if has AROI data) -#}
+    {%- if aroi_domain and aroi_domain != 'none' and aroi_domain != '' and (contact_validation_status is none or contact_validation_status.has_aroi) %}
+    <li><strong><span title="Autonomous Relay Operator Identifier">AROI</span>:</strong> 
     {% if base_url and aroi_domain in validated_aroi_domains -%}
     <a href="{{ base_url }}/{{ aroi_domain|lower|escape }}/">{{ aroi_domain|escape }}</a>
     {% else -%}
     <a href="{{ page_ctx.path_prefix if page_ctx else '../../' }}contact/{{ contact_md5|escape }}/">{{ aroi_domain|escape }}</a>
     {% endif -%}
+    {{- aroi_validation_badge(contact_validation_status) -}}
+    </li>
+    {%- elif contact_validation_status and contact_validation_status.has_aroi %}
+    {#- Show validation status even when AROI domain wasn't parsed -#}
+    <li><strong><span title="Autonomous Relay Operator Identifier">AROI</span>:</strong>
+        {{- aroi_validation_badge_with_count(contact_validation_status) -}}
     </li>
     {%- endif %}
     {%- if contact_md5 %}
