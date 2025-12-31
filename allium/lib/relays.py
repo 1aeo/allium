@@ -2649,13 +2649,8 @@ class Relays:
                 family_aroi_domain = i.get("aroi_domain", "")
                 family_contact = i.get("contact", "")
                 family_contact_md5 = i.get("contact_md5", "")
-                # Family pages also need AROI validation status (same relays often shared with contact pages)
-                # Use precomputed validation status if available, otherwise compute it
-                if "contact_validation_status" in i:
-                    contact_validation_status = i.get("contact_validation_status")
-                else:
-                    contact_validation_status = self._get_contact_validation_status(members)
-                # Extract AROI validation timestamp for display
+                # AROI validation status (reuse same logic as contacts)
+                contact_validation_status = i.get("contact_validation_status") or self._get_contact_validation_status(members)
                 aroi_validation_timestamp = self._get_aroi_validation_timestamp()
             
             # Check if this contact has a validated AROI domain for vanity URL display
@@ -2789,8 +2784,16 @@ class Relays:
         except Exception:
             network_position = {'label': 'Mixed', 'formatted_string': f'{len(members)} relays'}
         
+        # Default values for all page types
+        contact_rankings = []
+        operator_reliability = None
+        contact_display_data = None
+        contact_validation_status = None
+        aroi_validation_timestamp = None
+        is_validated_aroi = False
+        primary_country_data = None
+        
         # For contact pages, use precomputed data stored directly on contact_data
-        # (flat storage pattern for simpler access - Sonnet-style with Opus-style parallel precompute)
         if k == "contact":
             contact_rankings = i.get("contact_rankings", [])
             operator_reliability = i.get("operator_reliability")
@@ -2799,27 +2802,11 @@ class Relays:
             aroi_validation_timestamp = i.get("aroi_validation_timestamp")
             is_validated_aroi = i.get("is_validated_aroi", False)
             primary_country_data = i.get("primary_country_data")
-        elif k == "family":
-            # Family pages also need AROI validation status (same relays as contact pages)
-            contact_rankings = []
-            operator_reliability = None
-            contact_display_data = None
-            # Use precomputed validation status if available, otherwise compute it
-            if "contact_validation_status" in i:
-                contact_validation_status = i.get("contact_validation_status")
-            else:
-                contact_validation_status = self._get_contact_validation_status(members)
+        
+        # AROI validation status for family pages (reuse same logic as contacts)
+        if k == "family":
+            contact_validation_status = i.get("contact_validation_status") or self._get_contact_validation_status(members)
             aroi_validation_timestamp = self._get_aroi_validation_timestamp()
-            is_validated_aroi = False
-            primary_country_data = None
-        else:
-            contact_rankings = []
-            operator_reliability = None
-            contact_display_data = None
-            contact_validation_status = None
-            aroi_validation_timestamp = None
-            is_validated_aroi = False
-            primary_country_data = None
         
         return {
             'relay_subset': members,
