@@ -205,6 +205,24 @@
                     }
                 }
 
+                /* Fix two-column layout overflow in contact/operator pages */
+                .row > .col-md-7,
+                .row > .col-md-5 {
+                    overflow-wrap: break-word;
+                    word-wrap: break-word;
+                    word-break: break-word;
+                    min-width: 0; /* Allow flex/grid children to shrink below content size */
+                }
+                
+                /* Ensure nested content doesn't overflow columns */
+                .col-md-7 ul,
+                .col-md-7 li,
+                .col-md-5 ul,
+                .col-md-5 li {
+                    overflow-wrap: break-word;
+                    word-wrap: break-word;
+                }
+
                 /* AROI Leaderboards - Consolidated CSS Components */
                 
                 /* Section Spacing */
