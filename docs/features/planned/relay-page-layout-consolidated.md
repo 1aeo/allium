@@ -91,14 +91,30 @@ Before the 5 improvements, these design decisions address layout and structure:
   - If no AROI: Show Family count as primary link (fingerprint-based grouping)
 - Quick links: AS, Country, Platform
 
-**AROI Validation Status in Header:**
-- **Display terminology:** Use "Verified" (user-facing) which maps to `validated` (code variable)
-- **Data source:** Reuse `contact_validation_status` already computed for operator pages
-- **Badge behavior:**
-  - ✓ Verified (green): All relays with AROI have valid cryptographic proofs
-  - ⚠ Partially Verified (yellow): Some relays validated, links to `#aroi-validation-issues`
-  - ✗ Unvalidated (red): No relays validated, links to `#aroi-validation-issues`
-- **No new computation:** Use existing `validated_aroi_domains` set and validation map
+**AROI Validation Status - Two Levels:**
+
+There are TWO distinct validation statuses to display:
+
+1. **Operator-level validation** (next to "Operator: example.com"):
+   - Shows whether ALL relays under this AROI domain are validated
+   - ✓ Verified (green): All relays by this operator have valid proofs
+   - ⚠ Partially Verified (yellow): Some relays validated, some not
+   - ✗ Unvalidated (red): No relays by this operator are validated
+   - Data source: `validated_aroi_domains` set + `contact_validation_status`
+
+2. **Relay-level validation** (for THIS specific relay):
+   - Shows whether THIS relay's AROI proof is valid
+   - ✓ Verified (green): This relay has a valid cryptographic proof
+   - ✗ Unvalidated (red): This relay's proof failed validation
+   - Data source: `validation_map[fingerprint]`
+
+**Example scenarios:**
+- Operator has 10 relays, all validated → Operator: "✓ Verified", This Relay: "✓ Verified"
+- Operator has 10 relays, 9 validated → Operator: "⚠ Partially Verified (9/10)", This Relay: depends on whether THIS one is the failing relay
+- Operator has 10 relays, 0 validated → Operator: "✗ Unvalidated", This Relay: "✗ Unvalidated"
+
+**Display terminology:** Use "Verified" (user-facing) which maps to `validated` (code variable)
+**No new computation:** Use existing `validated_aroi_domains` set and validation map
 
 **AROI vs Family Priority:**
 - AROI provides verified operator identity with more accurate relay grouping
@@ -522,29 +538,41 @@ Every item from the current relay page mapped to the proposed structure:
 | Title | Nickname | Large, prominent |
 | Left column | Fingerprint | Full, copyable |
 | Left column | Contact | Link to contact page |
-| Left column | AROI | **Primary operator link with validation badge** |
-| Header h4 | AROI validation status | ✓ Verified / ⚠ Partially Verified / ✗ Unvalidated |
+| Left column | AROI | **Primary operator link** |
+| Header h4 | **Operator-level** validation | ✓ Verified (X/X) / ⚠ Partially Verified (X/Y) / ✗ Unvalidated (0/Y) |
+| Header h4 | **This relay's** validation | ✓ Verified / ✗ Unvalidated (links to #aroi-validation-issues) |
 | Header h4 | Family link (count) | **Fallback when no AROI** |
 | Header h4 | AS link | Quick link |
 | Header h4 | Country link | Quick link |
 | Header h4 | Platform link | Quick link |
 | Header | Last fetch timestamp | Data freshness indicator |
 
-**AROI vs Family Priority Logic (with Validation Status):**
-- **If AROI present + validated:** Show "Operator: {domain} ✓ Verified" (green)
-  - AROI provides verified operator identity with cryptographic proof
-  - All relays have valid DNS-RSA or URI-RSA proofs
-  - Links to operator page with full relay list
-- **If AROI present + partially validated:** Show "Operator: {domain} ⚠ Partially Verified (X/Y)" (yellow)
+**AROI Display Logic (Two-Level Validation):**
+
+**Level 1 - Operator Validation** (next to "Operator: domain"):
+- **Fully validated:** "Operator: {domain} ✓ Verified (X/X)" (green)
+  - All relays by this operator have valid proofs
+- **Partially validated:** "Operator: {domain} ⚠ Partially Verified (X/Y)" (yellow)
   - Some relays validated, some have issues
-  - Badge links to `#aroi-validation-issues` anchor in Health Status Issues
-- **If AROI present + unvalidated:** Show "Operator: {domain} ✗ Unvalidated" (red)
-  - AROI configured but validation failed
-  - Badge links to `#aroi-validation-issues` anchor with specific error
-- **If no AROI:** Show "Family: {count} relays" as primary link
-  - Fingerprint-based family grouping
-  - May include alleged/indirect mismatches
-  - Links to family page
+- **Unvalidated:** "Operator: {domain} ✗ Unvalidated (0/Y)" (red)
+  - No relays by this operator pass validation
+
+**Level 2 - This Relay's Validation** (separate badge):
+- **Validated:** "This Relay: ✓ Verified" (green)
+  - This specific relay's cryptographic proof is valid
+- **Unvalidated:** "This Relay: ✗ Unvalidated" (red, links to #aroi-validation-issues)
+  - This specific relay's proof failed - see issues section for error + fix
+
+**Why both levels?**
+- Operator might have 99 validated relays and 1 failing
+- User viewing that 1 failing relay needs to know:
+  1. The operator is generally trustworthy (99/100 validated)
+  2. But THIS relay specifically has an issue to fix
+
+**If no AROI:** Show "Family: {count} relays" as primary link
+- Fingerprint-based family grouping
+- May include alleged/indirect mismatches
+- Links to family page
 
 ### Section 1: Health Status (`#status`)
 
@@ -639,9 +667,10 @@ Every item from the current relay page mapped to the proposed structure:
 |------------------|------|-------|
 | Left column | AROI domain | Verified operator identifier (when present) |
 | Left column | AROI relay count | All relays by this operator |
-| Left column | AROI validation status | ✓ Verified / ⚠ Partially Verified / ✗ Unvalidated |
-| **NEW** | AROI validation details | Proof type (DNS-RSA/URI-RSA), validation timestamp |
-| **NEW** | AROI validation issues | If unvalidated: specific error + fix suggestion |
+| **NEW** | **Operator-level** validation status | ✓ Verified (all) / ⚠ Partially Verified (X/Y) / ✗ Unvalidated (none) |
+| **NEW** | **This relay's** validation status | ✓ Verified / ✗ Unvalidated (for THIS specific relay) |
+| **NEW** | This relay's proof type | DNS-RSA or URI-RSA (if validated) |
+| **NEW** | This relay's validation error | If unvalidated: specific error + fix suggestion |
 | Left column | Effective Family count | With "View" link |
 | Left column | Effective Family list | Fingerprint links |
 | Left column | Alleged Family count | They don't list you back |
@@ -649,23 +678,32 @@ Every item from the current relay page mapped to the proposed structure:
 | Left column | Indirect Family count | They list you, you don't list them |
 | Left column | Indirect Family list | Fingerprint links |
 
-**AROI Validation Display Details:**
-- **Data source:** Reuse `contact_validation_status` from `get_contact_validation_status()` in `aroi_validation.py`
-- **No new loops needed:** Single relay lookup in pre-built `validation_map`
-- **Validation badge mirrors header:** Same ✓/⚠/✗ display as page header
-- **Details shown:**
-  - Validation status (validated/partially_validated/unvalidated)
-  - Proof type: DNS-RSA or URI-RSA
-  - If error: specific error message with actionable fix suggestion
-  - Link to full AROI specification
+**AROI Validation - Two Distinct Levels:**
+
+1. **Operator-level validation** (shown next to domain name):
+   - Answers: "Is this operator fully verified across ALL their relays?"
+   - ✓ Verified (12/12): All relays by this operator have valid proofs
+   - ⚠ Partially Verified (10/12): Some relays have issues
+   - ✗ Unvalidated (0/12): No relays by this operator are verified
+   - Data source: `contact_validation_status` (already computed for operator pages)
+
+2. **This relay's validation** (shown separately):
+   - Answers: "Is THIS SPECIFIC relay's AROI proof valid?"
+   - ✓ Verified: This relay has a valid cryptographic proof
+   - ✗ Unvalidated: This relay's proof failed - show error + fix suggestion
+   - Data source: `validation_map[fingerprint]`
+
+**Why show both?**
+- An operator with 100 relays might have 99 validated and 1 failing
+- The relay page visitor needs to know:
+  1. Overall operator trustworthiness (operator-level)
+  2. Whether THIS specific relay has an issue they need to fix (relay-level)
 
 **Implementation Note - Efficiency:**
-```python
-# In relay page template context, reuse existing data:
-# - validated_aroi_domains: set of validated domains (already computed)
-# - validation_map: fingerprint -> validation result (already computed in network health)
-# - No additional loops or API calls needed for single relay lookup
-```
+- Reuse `validated_aroi_domains` set (already computed)
+- Reuse `validation_map` (fingerprint → result, already computed in network health)
+- Reuse `contact_validation_status` (already computed for operator pages)
+- No additional loops or API calls needed - single O(1) lookup per relay
 
 ### Section 7: Software and Version (`#software`)
 
@@ -711,17 +749,23 @@ Two columns inside each section to maximize information density on wide screens.
 ║  Contact: admin@example.com                                                                                          ║
 ║  ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────── ║
 ║                                                                                                                      ║
-║  WHEN AROI PRESENT + VALIDATED:                                                                                      ║
-║  Operator: example.com ✓ Verified (12 relays) [View All]  |  AS24940  |  Germany  |  Linux   Updated: 2024-12-29 14:30║
-║                        ↑ Green badge - all relays have valid cryptographic proofs                                    ║
+║  WHEN AROI PRESENT - Show BOTH operator-level AND relay-level validation:                                            ║
 ║                                                                                                                      ║
-║  WHEN AROI PRESENT + PARTIALLY VALIDATED:                                                                            ║
-║  Operator: example.com ⚠ Partially Verified (10/12) [View All]  |  AS24940  |  Germany  |  Linux                     ║
-║                        ↑ Yellow badge links to #aroi-validation-issues - some relays have validation errors          ║
+║  OPERATOR FULLY VALIDATED + THIS RELAY VALIDATED:                                                                    ║
+║  Operator: example.com ✓ Verified (12 relays) [View All]  |  This Relay: ✓ Verified  |  AS24940  |  Germany          ║
+║                        ↑ All operator relays verified       ↑ This specific relay verified                           ║
 ║                                                                                                                      ║
-║  WHEN AROI PRESENT + UNVALIDATED:                                                                                    ║
-║  Operator: example.com ✗ Unvalidated [View All]  |  AS24940  |  Germany  |  Linux                                    ║
-║                        ↑ Red badge links to #aroi-validation-issues - validation failed for all relays               ║
+║  OPERATOR PARTIALLY VALIDATED + THIS RELAY VALIDATED:                                                                ║
+║  Operator: example.com ⚠ Partially Verified (10/12) [View All]  |  This Relay: ✓ Verified  |  AS24940  |  Germany    ║
+║                        ↑ Some operator relays have issues         ↑ But THIS relay is verified                       ║
+║                                                                                                                      ║
+║  OPERATOR PARTIALLY VALIDATED + THIS RELAY UNVALIDATED:                                                              ║
+║  Operator: example.com ⚠ Partially Verified (10/12) [View All]  |  This Relay: ✗ Unvalidated  |  AS24940  |  Germany ║
+║                        ↑ Some operator relays have issues         ↑ THIS relay is one with issues (see #aroi-issues) ║
+║                                                                                                                      ║
+║  OPERATOR UNVALIDATED + THIS RELAY UNVALIDATED:                                                                      ║
+║  Operator: example.com ✗ Unvalidated [View All]  |  This Relay: ✗ Unvalidated  |  AS24940  |  Germany                ║
+║                        ↑ No operator relays verified       ↑ This relay also not verified (see #aroi-issues)         ║
 ║                                                                                                                      ║
 ║  WHEN NO AROI (fallback):                                                                                            ║
 ║  Family: 5 relays [View]  |  AS24940  |  Germany  |  Linux                         Last updated: 2024-12-29 14:30 UTC║
@@ -828,20 +872,24 @@ Two columns inside each section to maximize information density on wide screens.
 ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
 ┃ Operator (AROI) - when present                      ┃ Family (fingerprint-based)                      [#effective-family]┃
 ┃                                                     ┃                                                                  ┃
-┃   Domain: example.com ✓ Verified                    ┃ Effective Family: 5 relays [View Family Page]                   ┃
-┃   Relays by this operator: 12                       ┃   ABCD1234EFGH5678... (this relay)                               ┃
-┃   Proof type: DNS-RSA                               ┃   WXYZ9876LMNO5432...                                            ┃
-┃   [View All Operator Relays]                        ┃   HIJK4567DEFG8901...                                            ┃
-┃                                                     ┃   STUV2345WXYZ6789...                                            ┃
-┃   -or if unvalidated-                               ┃   EFGH8901IJKL2345...                                            ┃
-┃   Domain: example.com ✗ Unvalidated                 ┃                                                        [#alleged-family]┃
-┃   Error: DNS TXT record not found                   ┃ Alleged Family: 2 relays                                        ┃
-┃   Fix: Add TXT to _tor-relay.example.com            ┃   (They don't list you back - check their MyFamily config)      ┃
-┃   [AROI Spec Documentation]                         ┃   QRST1111UVWX2222...                                            ┃
-┃                                                     ┃   MNOP3333STUV4444...                                            ┃
-┃ When NO AROI:                                       ┃                                                       [#indirect-family]┃
-┃   Operator: Not specified                           ┃ Indirect Family: 0 relays                                       ┃
-┃   Contact: admin@example.com                        ┃   (They list you, but you don't list them)                      ┃
+┃   OPERATOR-LEVEL VALIDATION:                        ┃ Effective Family: 5 relays [View Family Page]                   ┃
+┃   Domain: example.com ✓ Verified (12/12 relays)     ┃   ABCD1234EFGH5678... (this relay)                               ┃
+┃   [View All Operator Relays]                        ┃   WXYZ9876LMNO5432...                                            ┃
+┃                                                     ┃   HIJK4567DEFG8901...                                            ┃
+┃   THIS RELAY'S VALIDATION:              [#aroi]     ┃   STUV2345WXYZ6789...                                            ┃
+┃   Status: ✓ Verified                                ┃   EFGH8901IJKL2345...                                            ┃
+┃   Proof type: DNS-RSA                               ┃                                                        [#alleged-family]┃
+┃                                                     ┃ Alleged Family: 2 relays                                        ┃
+┃   -or if THIS relay unvalidated-                    ┃   (They don't list you back - check their MyFamily config)      ┃
+┃   THIS RELAY'S VALIDATION:  [#aroi-validation-issues]┃   QRST1111UVWX2222...                                            ┃
+┃   Status: ✗ Unvalidated                             ┃   MNOP3333STUV4444...                                            ┃
+┃   Error: DNS TXT record not found                   ┃                                                       [#indirect-family]┃
+┃   Fix: Add TXT to _tor-relay.example.com            ┃ Indirect Family: 0 relays                                       ┃
+┃   [AROI Spec Documentation]                         ┃   (They list you, but you don't list them)                      ┃
+┃                                                     ┃                                                                  ┃
+┃ When NO AROI:                                       ┃                                                                  ┃
+┃   Operator: Not specified                           ┃                                                                  ┃
+┃   Contact: admin@example.com                        ┃                                                                  ┃
 ┃   Use Family for relay grouping →                   ┃                                                                  ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
@@ -912,8 +960,14 @@ Single column layout for narrow screens. All content stacks vertically.
 ║                                           ║
 ║  Contact: admin@example.com               ║
 ║                                           ║
-║  WHEN AROI PRESENT:                       ║
-║  Operator: example.com (12 relays)        ║
+║  WHEN AROI PRESENT - show BOTH levels:    ║
+║  Operator: example.com ✓ Verified (12/12) ║
+║  This Relay: ✓ Verified                   ║
+║  AS24940 | DE | Linux                     ║
+║                                           ║
+║  OPERATOR PARTIAL + THIS RELAY FAILING:   ║
+║  Operator: example.com ⚠ (10/12)          ║
+║  This Relay: ✗ Unvalidated (see issues)   ║
 ║  AS24940 | DE | Linux                     ║
 ║                                           ║
 ║  WHEN NO AROI:                            ║
@@ -1049,12 +1103,19 @@ Single column layout for narrow screens. All content stacks vertically.
 ┃ OPERATOR AND FAMILY        [#operator]    ┃
 ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
 ┃ Operator (AROI) - when present            ┃
-┃   Domain: example.com ✓ Verified          ┃
-┃   Relays: 12 [View All]                   ┃
-┃   Proof: DNS-RSA                          ┃
 ┃                                           ┃
-┃   -or if unvalidated-                     ┃
-┃   Domain: example.com ✗ Unvalidated       ┃
+┃ OPERATOR-LEVEL VALIDATION:                ┃
+┃   Domain: example.com                     ┃
+┃   Status: ✓ Verified (12/12 relays)       ┃
+┃   [View All Operator Relays]              ┃
+┃                                           ┃
+┃ THIS RELAY'S VALIDATION:        [#aroi]   ┃
+┃   Status: ✓ Verified                      ┃
+┃   Proof type: DNS-RSA                     ┃
+┃                                           ┃
+┃   -or if THIS relay unvalidated-          ┃
+┃ THIS RELAY'S VALIDATION:                  ┃
+┃   Status: ✗ Unvalidated                   ┃
 ┃   Error: DNS TXT not found                ┃
 ┃   Fix: Add TXT to _tor-relay.domain       ┃
 ┃                                           ┃
@@ -2696,142 +2757,85 @@ span#network, span#location, span#family {
 
 ### Overview
 
-Each relay with AROI should display its validation status prominently. Relays that fail AROI validation should show actionable error messages with fix suggestions.
+Each relay with AROI should display TWO levels of validation status:
+1. **Operator-level**: Are ALL relays by this operator validated?
+2. **Relay-level**: Is THIS SPECIFIC relay validated?
+
+Relays that fail AROI validation should show actionable error messages with fix suggestions.
+
+### Two-Level Validation Display
+
+#### Level 1: Operator Validation (in header, next to "Operator: domain")
+
+Shows whether the AROI domain/operator has ALL their relays validated:
+
+| Status | Display | Meaning |
+|--------|---------|---------|
+| All validated | `Operator: example.com ✓ Verified (12/12)` | All 12 relays by this operator pass validation |
+| Partially validated | `Operator: example.com ⚠ Partially Verified (10/12)` | 10 of 12 relays pass, 2 have issues |
+| None validated | `Operator: example.com ✗ Unvalidated (0/12)` | No relays by this operator pass validation |
+
+**Data source:** Reuse `contact_validation_status` already computed for operator pages
+
+#### Level 2: This Relay's Validation (in header AND Section 6)
+
+Shows whether THIS SPECIFIC relay's AROI proof is valid:
+
+| Status | Display | Meaning |
+|--------|---------|---------|
+| Validated | `This Relay: ✓ Verified` | This relay's cryptographic proof is valid |
+| Unvalidated | `This Relay: ✗ Unvalidated` | This relay's proof failed - show error + suggestion |
+
+**Data source:** Reuse `validation_map[fingerprint]` already computed in network health
+
+### Display Locations
+
+#### 1. Page Header (Phase 1)
+
+Show both levels in the h4 header bar:
+```
+Operator: example.com ⚠ Partially Verified (10/12)  |  This Relay: ✗ Unvalidated  |  AS24940  |  Germany
+```
+
+- Operator badge links to operator page
+- "This Relay: ✗ Unvalidated" links to `#aroi-validation-issues` anchor
+
+#### 2. Health Status Issues Section (Phase 2)
+
+If THIS relay is unvalidated, add to Issues section:
+```
+Issues:
+  [Warning] AROI Unvalidated: DNS TXT record not found
+            Suggestion: Add TXT record to _tor-relay.example.com with your relay fingerprint
+```
+
+#### 3. Section 6: Operator and Family (Phase 3)
+
+Full details in dedicated AROI subsection:
+```
+OPERATOR-LEVEL VALIDATION:
+  Domain: example.com ⚠ Partially Verified (10/12 relays)
+  [View All Operator Relays]
+
+THIS RELAY'S VALIDATION:
+  Status: ✗ Unvalidated
+  Error: DNS TXT record not found
+  Fix: Add TXT record to _tor-relay.example.com
+  [AROI Specification]
+```
 
 ### Implementation Approach (Compute Efficient)
 
 **Key Principle:** Reuse existing data - no new API calls or loops needed.
 
-**Data Sources Already Available:**
-- `validated_aroi_domains` - Set of validated domains (already passed to templates)
-- `aroi_validation_metrics._validation_map` - Fingerprint → validation result (already computed in network health)
+**Data Already Available:**
+- `validated_aroi_domains` - Set of fully validated domains
+- `validation_map` - Fingerprint → validation result (O(1) lookup)
+- `contact_validation_status` - Operator-level summary (already computed for operator pages)
 
-### Template Implementation
-
-#### 1. Header Validation Badge (Phase 1)
-
-**File:** `allium/templates/relay-info.html`
-
-**Location:** In the h4 header section (lines 75-88), after the Operator link:
-
-```jinja2
-{# AROI validation badge - show next to operator domain #}
-{% if relay['aroi_domain'] and relay['aroi_domain'] != 'none' -%}
-    {% set relay_fp = relay['fingerprint'] %}
-    {% set is_validated = relay_fp in aroi_validation_metrics._validation_map and aroi_validation_metrics._validation_map[relay_fp].get('valid', False) %}
-    
-    {% if base_url and relay['aroi_domain'] in validated_aroi_domains -%}
-        <a href="{{ base_url }}/{{ relay['aroi_domain']|lower|escape }}/" title="Verified operator - view all relays">Operator: {{ relay['aroi_domain']|escape }}</a>
-        <span style="color: #28a745; font-weight: bold; margin-left: 5px;" title="AROI cryptographic proof verified">✓ Verified</span>
-    {% elif is_validated -%}
-        <a href="{{ page_ctx.path_prefix }}contact/{{ relay['contact_md5'] }}/">Operator: {{ relay['aroi_domain']|escape }}</a>
-        <span style="color: #28a745; font-weight: bold; margin-left: 5px;" title="AROI cryptographic proof verified">✓ Verified</span>
-    {% else -%}
-        <a href="{{ page_ctx.path_prefix }}contact/{{ relay['contact_md5'] }}/" title="Operator (unverified AROI)">Operator: {{ relay['aroi_domain']|escape }}</a>
-        <a href="#aroi-validation-issues" style="color: #dc3545; font-weight: bold; margin-left: 5px; text-decoration: none;" title="AROI validation failed - see issues below">✗ Unvalidated</a>
-    {% endif -%}
-{% endif -%}
-```
-
-#### 2. Health Status Issues (Phase 2)
-
-**File:** `allium/templates/relay-info.html`
-
-**Location:** In the Issues section (after line 281), add AROI validation issues:
-
-```jinja2
-{# AROI Validation Issues - integrate with existing issues section #}
-{% if relay['aroi_domain'] and relay['aroi_domain'] != 'none' %}
-    {% set relay_fp = relay['fingerprint'] %}
-    {% if relay_fp in aroi_validation_metrics._validation_map %}
-        {% set val_result = aroi_validation_metrics._validation_map[relay_fp] %}
-        {% if not val_result.get('valid', False) %}
-            {% set error = val_result.get('error', 'Unknown error') %}
-            {% set proof_type = val_result.get('proof_type', 'unknown') %}
-            
-            <li style="margin-bottom: 5px;" id="aroi-validation-issues">
-                <span style="color: #dc3545; font-weight: bold;">[Warning] AROI Unvalidated</span>: {{ error|escape }}
-                {% if proof_type == 'dns-rsa' %}
-                <br><span style="color: #666; font-size: 12px;"><strong>Suggestion:</strong> Add a TXT record to _tor-relay.{{ relay['aroi_domain']|escape }} containing your relay fingerprint.</span>
-                {% elif proof_type == 'uri-rsa' %}
-                <br><span style="color: #666; font-size: 12px;"><strong>Suggestion:</strong> Ensure the proof file at your domain contains your relay fingerprint and is accessible.</span>
-                {% else %}
-                <br><span style="color: #666; font-size: 12px;"><strong>Suggestion:</strong> Check your AROI configuration. See <a href="https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/" target="_blank">AROI Specification</a>.</span>
-                {% endif %}
-            </li>
-        {% endif %}
-    {% endif %}
-{% endif %}
-```
-
-#### 3. Section 6 Operator Details (Phase 3)
-
-**File:** `allium/templates/relay-info.html`
-
-**Location:** In the AROI section (after line 344), add validation details:
-
-```jinja2
-<dt id="aroi">
-<div class="section-header">
-<a href="#aroi" class="anchor-link">AROI</a> <a href="https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/" target="_blank" title="Authenticated Relay Operator Identifier">(?)</a>
-</div>
-</dt>
-{% if relay['aroi_domain'] and relay['aroi_domain'] != 'none' -%}
-<dd>
-    {# Domain with link #}
-    {% if base_url and relay['aroi_domain'] in validated_aroi_domains -%}
-    <a href="{{ base_url }}/{{ relay['aroi_domain']|lower|escape }}/">{{ relay['aroi_domain']|escape }}</a>
-    {% else -%}
-    <a href="{{ page_ctx.path_prefix }}contact/{{ relay['contact_md5'] }}/">{{ relay['aroi_domain']|escape }}</a>
-    {% endif -%}
-    
-    {# Validation status #}
-    {% set relay_fp = relay['fingerprint'] %}
-    {% if relay_fp in aroi_validation_metrics._validation_map %}
-        {% set val_result = aroi_validation_metrics._validation_map[relay_fp] %}
-        {% if val_result.get('valid', False) %}
-            <span style="color: #28a745; font-weight: bold; margin-left: 5px;">✓ Verified</span>
-            {% if val_result.get('proof_type') %}
-            <span style="color: #666; font-size: 12px; margin-left: 5px;">({{ val_result.proof_type }})</span>
-            {% endif %}
-        {% else %}
-            <span style="color: #dc3545; font-weight: bold; margin-left: 5px;">✗ Unvalidated</span>
-            {% set error = val_result.get('error', 'Unknown error') %}
-            <br><span style="color: #dc3545; font-size: 12px;">Error: {{ error|escape }}</span>
-            {% set proof_type = val_result.get('proof_type', 'unknown') %}
-            {% if proof_type == 'dns-rsa' %}
-            <br><span style="color: #666; font-size: 12px;">Fix: Add TXT record to _tor-relay.{{ relay['aroi_domain']|escape }}</span>
-            {% elif proof_type == 'uri-rsa' %}
-            <br><span style="color: #666; font-size: 12px;">Fix: Check proof file accessibility at {{ relay['aroi_domain']|escape }}</span>
-            {% endif %}
-        {% endif %}
-    {% elif relay['aroi_domain'] in validated_aroi_domains %}
-        <span style="color: #28a745; font-weight: bold; margin-left: 5px;">✓ Verified</span>
-    {% else %}
-        <span style="color: #6c757d; font-size: 12px; margin-left: 5px;">(validation status unknown)</span>
-    {% endif %}
-</dd>
-{% else -%}
-<dd>none</dd>
-{% endif -%}
-```
-
-### Backend Data Preparation
-
-**File:** `allium/lib/relays.py` (or wherever relay page context is prepared)
-
-**Ensure validation_map is available in template context:**
-
-```python
-# In the function that prepares relay page context:
-# The validation_map is already computed during network health calculation
-# Just ensure it's passed to the template
-
-relay_template_context = {
-    # ... existing context ...
-    'aroi_validation_metrics': relays_json.get('network_health', {}),  # Already has _validation_map
-}
-```
+**No New Computation Needed:**
+- Single relay lookup: O(1) in `validation_map`
+- Operator status: Reuse existing `contact_validation_status`
 
 ### Common AROI Validation Errors and Fix Suggestions
 
