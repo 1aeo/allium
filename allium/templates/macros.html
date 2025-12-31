@@ -194,4 +194,78 @@
     {% elif aroi_domain and aroi_domain != 'none' -%}
         <span style="color: #dc3545; margin-left: 4px;" title="No AROI Validation: This relay has AROI configured but no validation data is available">✗</span>
     {% endif -%}
+{%- endmacro %}
+
+{# =============================================================================
+   AROI VALIDATION BADGE MACRO (DRY - used by contact.html and family.html)
+   Shows "✓ Verified" / "⚠ Partially Verified" / "✗ Unvalidated" badge
+   ============================================================================= #}
+{% macro aroi_validation_badge(contact_validation_status) -%}
+{% if contact_validation_status and contact_validation_status.has_aroi -%}
+    {% if contact_validation_status.validation_status == 'validated' -%}
+        <span style="color: #28a745; font-weight: bold; margin-left: 5px;" title="All {{ contact_validation_status.validation_summary.relays_with_aroi }} relays with AROI have valid cryptographic proofs">✓ Verified</span>
+    {% elif contact_validation_status.validation_status == 'partially_validated' -%}
+        <a href="#aroi-validation-issues" style="color: #ffc107; font-weight: bold; margin-left: 5px; text-decoration: none;" title="{{ contact_validation_status.validation_summary.validated_count }}/{{ contact_validation_status.validation_summary.relays_with_aroi }} relays validated ({{ "%.1f"|format(contact_validation_status.validation_summary.validation_rate) }}%) - See details below">⚠ Partially Verified</a>
+    {% elif contact_validation_status.validation_status == 'unvalidated' -%}
+        <a href="#aroi-validation-issues" style="color: #dc3545; font-weight: bold; margin-left: 5px; text-decoration: none;" title="AROI validation failed - See details below">✗ Unvalidated</a>
+    {% endif -%}
+{% endif -%}
+{%- endmacro %}
+
+{# =============================================================================
+   AROI VALIDATION BADGE WITH COUNT MACRO (for when domain isn't parsed)
+   Shows relay count in badge: "✓ Verified (X relays)"
+   ============================================================================= #}
+{% macro aroi_validation_badge_with_count(contact_validation_status) -%}
+{% if contact_validation_status and contact_validation_status.has_aroi -%}
+    {% if contact_validation_status.validation_status == 'validated' -%}
+        <span style="color: #28a745; font-weight: bold;" title="All {{ contact_validation_status.validation_summary.relays_with_aroi }} relays with AROI have valid cryptographic proofs">✓ Verified ({{ contact_validation_status.validation_summary.relays_with_aroi }} relays)</span>
+    {% elif contact_validation_status.validation_status == 'partially_validated' -%}
+        <a href="#aroi-validation-issues" style="color: #ffc107; font-weight: bold; text-decoration: none;" title="{{ contact_validation_status.validation_summary.validated_count }}/{{ contact_validation_status.validation_summary.relays_with_aroi }} relays validated ({{ "%.1f"|format(contact_validation_status.validation_summary.validation_rate) }}%) - See details below">⚠ Partially Verified ({{ contact_validation_status.validation_summary.validated_count }}/{{ contact_validation_status.validation_summary.relays_with_aroi }})</a>
+    {% elif contact_validation_status.validation_status == 'unvalidated' -%}
+        <a href="#aroi-validation-issues" style="color: #dc3545; font-weight: bold; text-decoration: none;" title="AROI validation failed for {{ contact_validation_status.validation_summary.relays_with_aroi }} relays - See details below">✗ Unvalidated ({{ contact_validation_status.validation_summary.relays_with_aroi }} relays)</a>
+    {% endif -%}
+{% endif -%}
+{%- endmacro %}
+
+{# =============================================================================
+   AROI VALIDATION ISSUES SECTION MACRO (DRY - used by contact.html and family.html)
+   Shows detailed error list for relays with validation failures
+   ============================================================================= #}
+{% macro aroi_validation_issues_section(contact_validation_status, aroi_validation_timestamp, page_ctx) -%}
+{% if contact_validation_status and contact_validation_status.has_aroi and contact_validation_status.unvalidated_relays and contact_validation_status.show_detailed_errors %}
+<div id="aroi-validation-issues" style="margin-top: 30px; padding: 15px; background-color: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px; max-width: 1200px;">
+    <h4 style="margin-top: 0; margin-bottom: 12px; color: #856404;">
+        <strong>⚠️ AROI Validation Issues ({{ contact_validation_status.validation_summary.validated_count }}/{{ contact_validation_status.validation_summary.relays_with_aroi }} relays validated)</strong>
+    </h4>
+    
+    <p style="margin-bottom: 10px; font-size: 14px; color: #856404;">
+        The following relays have AROI validation errors. Fix these to improve your validation status:
+    </p>
+    
+    {% if contact_validation_status.validation_available %}
+    <p style="margin-bottom: 12px; font-size: 13px; color: #666; font-style: italic;">
+        Validation data last updated: {{ aroi_validation_timestamp if aroi_validation_timestamp else 'Unknown' }}
+    </p>
+    {% endif %}
+    
+    <ul style="list-style-type: none; padding-left: 0; margin-bottom: 10px;">
+        {% for relay in contact_validation_status.unvalidated_relays %}
+        <li style="margin-bottom: 6px; padding: 8px; background-color: #fff; border-radius: 3px; font-size: 13px; border: 1px solid #ffeeba;">
+            <strong><a href="{{ page_ctx.path_prefix }}relay/{{ relay.fingerprint }}/">{{ relay.nickname|escape }}</a></strong>
+            <span style="color: #666;">•</span>
+            <span style="color: #dc3545;">{{ relay.error|escape }}</span>
+            {% if relay.proof_type and relay.proof_type != 'unknown' %}
+                <span style="color: #666;">• Proof type: {{ relay.proof_type }}</span>
+            {% endif %}
+            <span style="color: #666;">• Fingerprint: <code style="font-size: 11px;">{{ relay.fingerprint }}</code></span>
+        </li>
+        {% endfor %}
+    </ul>
+    
+    <p style="font-size: 12px; color: #856404; margin-bottom: 0;">
+        📖 <strong>Need help?</strong> See the <a href="https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/" target="_blank" rel="noopener" style="color: #856404; text-decoration: underline;">AROI Specification</a> for guidance on setting up valid cryptographic proofs.
+    </p>
+</div>
+{% endif %}
 {%- endmacro %} 
