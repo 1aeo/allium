@@ -6,7 +6,11 @@ different progress logging implementations found in allium.py, coordinator.py, a
 """
 
 import time
+import threading
 from .progress import log_progress
+
+# Thread-safe lock for progress step increment to prevent race conditions
+_step_lock = threading.Lock()
 
 
 class ProgressLogger:
@@ -39,14 +43,21 @@ class ProgressLogger:
         """
         Log a progress message with optional step increment.
         
+        Thread-safe: Uses a lock to ensure step increment and logging are atomic.
+        This prevents race conditions where multiple threads could increment the
+        counter and log with inconsistent step numbers or timestamps.
+        
         Args:
             message: Progress message to display
             increment_step: Whether to increment the step counter (default: True)
         """
-        if increment_step:
-            self.progress_step += 1
+        with _step_lock:
+            if increment_step:
+                self.progress_step += 1
+            # Capture step value while holding lock to ensure consistency
+            current_step = self.progress_step
         
-        log_progress(message, self.start_time, self.progress_step, self.total_steps, self.progress_enabled)
+        log_progress(message, self.start_time, current_step, self.total_steps, self.progress_enabled)
     
     def log_without_increment(self, message):
         """
@@ -92,30 +103,35 @@ class ProgressLogger:
         self.log(message, increment_step=True)
     
     def get_current_step(self):
-        """Get the current progress step."""
-        return self.progress_step
+        """Get the current progress step. Thread-safe."""
+        with _step_lock:
+            return self.progress_step
     
     def set_step(self, step):
-        """Set the current progress step."""
-        self.progress_step = step
+        """Set the current progress step. Thread-safe."""
+        with _step_lock:
+            self.progress_step = step
     
     def increment_step(self):
-        """Increment the progress step without logging."""
-        self.progress_step += 1
+        """Increment the progress step without logging. Thread-safe."""
+        with _step_lock:
+            self.progress_step += 1
     
     def update_from_other_logger(self, other_logger):
         """
         Update this logger's step count from another ProgressLogger instance.
+        Thread-safe.
         
         Args:
             other_logger: Another ProgressLogger instance to sync from
         """
-        if isinstance(other_logger, ProgressLogger):
-            self.progress_step = other_logger.progress_step
-        else:
-            # Handle cases where we're passed a simple step counter
-            if hasattr(other_logger, 'progress_step'):
+        with _step_lock:
+            if isinstance(other_logger, ProgressLogger):
                 self.progress_step = other_logger.progress_step
+            else:
+                # Handle cases where we're passed a simple step counter
+                if hasattr(other_logger, 'progress_step'):
+                    self.progress_step = other_logger.progress_step
     
     def create_child_logger(self, api_name=""):
         """
