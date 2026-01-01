@@ -725,7 +725,17 @@ def get_contact_validation_status(relays: List[Dict], validation_data: Optional[
         
         # Check validation status
         if fingerprint not in validation_map:
-            # Has AROI domain but not in validation data (shouldn't happen normally)
+            # Has AROI domain but not in validation data
+            # This can happen for newly added relays not yet processed by the validator
+            result['validation_summary']['unvalidated_count'] += 1
+            result['unvalidated_relays'].append({
+                'fingerprint': fingerprint,
+                'nickname': nickname,
+                'aroi_domain': aroi_domain if aroi_domain != 'none' else 'unknown',
+                'error': 'Not yet processed by validator (relay may be new)',
+                'proof_type': 'unknown',
+            })
+            all_missing_aroi_fields = False  # This is a real validation gap
             continue
         
         val_result = validation_map[fingerprint]
