@@ -2945,22 +2945,38 @@ class Relays:
             rmtree(output_path)
         os.makedirs(output_path)
 
+        # Optimization: Move imports and setup outside the loop (10k+ iterations)
+        from .page_context import StandardTemplateContexts
+        standard_contexts = StandardTemplateContexts(self)
+        
+        # Optimization: Pre-fetch collections for fast lookup
+        # Safely get contact map - avoiding 3-level .get() in loop
+        contact_map = self.json.get("sorted", {}).get("contact", {})
+        
+        # Optimization: Cache validated domains set
+        validated_aroi_domains = getattr(self, 'validated_aroi_domains', set())
+
         for relay in relay_list:
             if not relay["fingerprint"].isalnum():
                 continue
-            # Use centralized page context generation
-            from .page_context import StandardTemplateContexts
             
-            # Get the contact display data from existing contact structure
-            contact_display_data = self._get_contact_display_data_for_relay(relay)
+            # Optimization: Fast direct lookup for contact data
+            contact_hash = relay.get('contact_md5')
+            contact_display_data = {}
+            contact_validation_status = None
             
-            standard_contexts = StandardTemplateContexts(self)
+            if contact_hash and contact_hash in contact_map:
+                contact_data = contact_map[contact_hash]
+                contact_display_data = contact_data.get('contact_display_data', {})
+                contact_validation_status = contact_data.get('contact_validation_status')
+            
             full_context = standard_contexts.get_relay_page_context(relay, contact_display_data)
             page_ctx = full_context
             
             rendered = template.render(
                 relay=relay, page_ctx=page_ctx, relays=self, contact_display_data=contact_display_data,
-                validated_aroi_domains=self.validated_aroi_domains if hasattr(self, 'validated_aroi_domains') else set(),
+                contact_validation_status=contact_validation_status,
+                validated_aroi_domains=validated_aroi_domains,
                 base_url=self.base_url
             )
             
@@ -2974,32 +2990,6 @@ class Relays:
                 encoding="utf8",
             ) as html:
                 html.write(rendered)
-
-    def _get_contact_display_data_for_relay(self, relay):
-        """
-        Get existing contact display data for a relay by looking up its contact hash.
-        
-        Args:
-            relay (dict): Single relay object
-            
-        Returns:
-            dict: Contact display data if available, empty dict otherwise
-        """
-        contact_hash = relay.get('contact_md5')
-        if not contact_hash:
-            return {}
-        
-        # Check if this contact has already computed display data in sorted contacts
-        contact_data = self.json.get("sorted", {}).get("contact", {}).get(contact_hash)
-        if not contact_data:
-            return {}
-        
-        # If contact display data was already computed and stored, return it
-        if 'contact_display_data' in contact_data:
-            return contact_data['contact_display_data']
-        
-        # Otherwise return empty dict and template will use fallback
-        return {}
 
     def _get_contact_validation_status(self, members):
         """

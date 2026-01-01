@@ -209,17 +209,20 @@
    AROI VALIDATION BADGE MACRO (DRY - single macro with optional count display)
    Shows "✓ Verified" / "⚠ Partially Verified" / "✗ Unvalidated" badge
    Set show_count=true to include relay counts (used when domain isn't displayed)
+   Set issues_link to override default #aroi-validation-issues anchor (for relay pages)
    ============================================================================= #}
-{% macro aroi_validation_badge(contact_validation_status, show_count=false) -%}
+{% macro aroi_validation_badge(contact_validation_status, show_count=false, issues_link=none) -%}
 {% if contact_validation_status and contact_validation_status.has_aroi -%}
     {%- set summary = contact_validation_status.validation_summary -%}
     {%- set status = contact_validation_status.validation_status -%}
+    {%- set link_target = issues_link if issues_link else '#aroi-validation-issues' -%}
+    {%- set link_title_suffix = 'See details on operator page' if issues_link else 'See details below' -%}
     {% if status == 'validated' -%}
         <span style="color: #28a745; font-weight: bold;{% if not show_count %} margin-left: 5px;{% endif %}" title="All {{ summary.relays_with_aroi }} relays with AROI have valid cryptographic proofs">✓ Verified{% if show_count %} ({{ summary.relays_with_aroi }} relays){% endif %}</span>
     {% elif status == 'partially_validated' -%}
-        <a href="#aroi-validation-issues" style="color: #ffc107; font-weight: bold;{% if not show_count %} margin-left: 5px;{% endif %} text-decoration: none;" title="{{ summary.validated_count }}/{{ summary.relays_with_aroi }} relays validated ({{ "%.1f"|format(summary.validation_rate) }}%) - See details below">⚠ Partially Verified{% if show_count %} ({{ summary.validated_count }}/{{ summary.relays_with_aroi }}){% endif %}</a>
+        <a href="{{ link_target }}" style="color: #ffc107; font-weight: bold;{% if not show_count %} margin-left: 5px;{% endif %} text-decoration: none;" title="{{ summary.validated_count }}/{{ summary.relays_with_aroi }} relays validated ({{ "%.1f"|format(summary.validation_rate) }}%) - {{ link_title_suffix }}">⚠ Partially Verified{% if show_count %} ({{ summary.validated_count }}/{{ summary.relays_with_aroi }}){% endif %}</a>
     {% elif status == 'unvalidated' -%}
-        <a href="#aroi-validation-issues" style="color: #dc3545; font-weight: bold;{% if not show_count %} margin-left: 5px;{% endif %} text-decoration: none;" title="AROI validation failed{% if show_count %} for {{ summary.relays_with_aroi }} relays{% endif %} - See details below">✗ Unvalidated{% if show_count %} ({{ summary.relays_with_aroi }} relays){% endif %}</a>
+        <a href="{{ link_target }}" style="color: #dc3545; font-weight: bold;{% if not show_count %} margin-left: 5px;{% endif %} text-decoration: none;" title="AROI validation failed{% if show_count %} for {{ summary.relays_with_aroi }} relays{% endif %} - {{ link_title_suffix }}">✗ Unvalidated{% if show_count %} ({{ summary.relays_with_aroi }} relays){% endif %}</a>
     {% endif -%}
 {% endif -%}
 {%- endmacro %}
