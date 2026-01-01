@@ -2518,6 +2518,7 @@ class Relays:
 
         if os.path.exists(output_path):
             rmtree(output_path)
+        os.makedirs(output_path)
 
         sorted_values = sorted(self.json["sorted"][k].keys()) if k == "first_seen" else list(self.json["sorted"][k].keys())
         
