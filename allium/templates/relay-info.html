@@ -158,28 +158,16 @@ Country: unknown
             <dt title="Bandwidth verification by directory authorities running sbws scanners.">BW Verified</dt>
             <dd>
                 {% if diag and diag.bandwidth_summary and diag.bandwidth_summary.bw_auth_total -%}
-                    {# Color code: green for majority, yellow for 3 to <majority, red for 0-2 #}
-                    {% set measured = diag.bandwidth_summary.bw_auth_measured_count -%}
-                    {% set total = diag.bandwidth_summary.bw_auth_total -%}
-                    {% set majority = (total // 2) + 1 -%}
-                    {% if measured >= majority -%}
-                        {% set bw_color = '#28a745' -%}
-                    {% elif measured >= 3 -%}
-                        {% set bw_color = '#856404' -%}
-                    {% else -%}
-                        {% set bw_color = '#dc3545' -%}
-                    {% endif -%}
-                    <span style="color: {{ bw_color }};" title="Number of bandwidth authorities (sbws scanners) that measured this relay. Currently {{ total }} authorities run bandwidth scanners.">{{ measured }}/{{ total }}</span> BW Auths Measured
-                    {% if diag.bandwidth_summary.median_display -%}
-                        {% set median_parts = diag.bandwidth_summary.median_display.split(' ') -%}
-                        <span title="Median bandwidth measurement from bandwidth authorities. Used to calculate consensus weight.">{{ median_parts[0]|float|int }} {{ median_parts[1] }} Median</span>
+<span style="color: {{ diag.bandwidth_summary.bw_auth_color }};" title="Number of bandwidth authorities (sbws scanners) that measured this relay. Currently {{ diag.bandwidth_summary.bw_auth_total }} authorities run bandwidth scanners.">{{ diag.bandwidth_summary.bw_auth_measured_count }}/{{ diag.bandwidth_summary.bw_auth_total }}</span> BW Auths Measured
+                    {% if diag.bandwidth_summary.median_int -%}
+<span title="Median bandwidth measurement from bandwidth authorities. Used to calculate consensus weight.">{{ diag.bandwidth_summary.median_int }} {{ diag.bandwidth_summary.median_unit }} Median</span>
                     {% endif -%}
                 {% elif relay['measured'] -%}
-                    <span style="color: #28a745;" title="Relay has been measured by bandwidth authorities.">Measured</span>
+<span style="color: #28a745;" title="Relay has been measured by bandwidth authorities.">Measured</span>
                 {% elif relay['measured'] is none -%}
-                    <span style="color: #6c757d;">Unknown</span>
+<span style="color: #6c757d;">Unknown</span>
                 {% else -%}
-                    <span style="color: #856404;" title="Relay has not been measured by bandwidth authorities yet.">Not Measured</span>
+<span style="color: #856404;" title="Relay has not been measured by bandwidth authorities yet.">Not Measured</span>
                 {% endif -%}
             </dd>
         </div>
@@ -197,13 +185,9 @@ Country: unknown
                 {% else -%}
                     <span style="color: #6c757d;">Unknown</span>
                 {% endif -%}
-                {% if relay.get('uptime_api_display') -%}
-                    {# Extract 1M percentage from uptime_api_display (format: "X%/Y%/Z%/W%") #}
-                    {% set uptime_parts = relay['uptime_api_display']|striptags|replace('%', '')|replace(' ', '')|split('/') -%}
-                    {% if uptime_parts and uptime_parts[0] -%}
-                        {% set uptime_val = uptime_parts[0]|float -%}
-                        | <span style="color: {% if uptime_val >= 100 %}#28a745{% elif uptime_val >= 90 %}#856404{% else %}#dc3545{% endif %};" title="Percentage of time relay had Running flag in last month. 100%=always up, <90%=reliability concerns.">{{ uptime_val|int }}%</span> <span title="1 Month availability percentage.">(1M)</span>
-                    {% endif -%}
+                {% set uptime_1m = relay.get('uptime_percentages', {}).get('1_month', 0) -%}
+                {% if uptime_1m > 0 -%}
+                    | <span style="color: {% if uptime_1m >= 100 %}#28a745{% elif uptime_1m >= 90 %}#856404{% else %}#dc3545{% endif %};" title="Percentage of time relay had Running flag in last month. 100%=always up, <90%=reliability concerns.">{{ uptime_1m|int }}%</span> <span title="1 Month availability percentage.">(1M)</span>
                 {% endif -%}
             </dd>
         </div>
@@ -243,15 +227,14 @@ Country: unknown
         <div class="health-row">
             <dt title="Traffic share and self-reported bandwidth capacity.">BW Weight</dt>
             <dd>
+                {# Compute observed bandwidth once, used in both branches #}
+                {% set obs_unit = relay['observed_bandwidth']|determine_unit(relays.use_bits) -%}
+                {% set obs_bandwidth = relay['observed_bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
                 {% if relay['consensus_weight_fraction'] -%}
-                    <span title="Percentage of total network consensus weight. Determines probability of being selected by clients.">{{ "%.2f"|format(relay['consensus_weight_fraction'] * 100) }}% of Network</span>
-                    | {% set obs_unit = relay['observed_bandwidth']|determine_unit(relays.use_bits) -%}
-                    {% set obs_bandwidth = relay['observed_bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
-                    <span title="Bandwidth capacity reported by the relay itself. May differ from measured bandwidth.">{{ obs_bandwidth|float|int }} {{ obs_unit }} Observed By Relay</span>
+<span title="Percentage of total network consensus weight. Determines probability of being selected by clients.">{{ "%.2f"|format(relay['consensus_weight_fraction'] * 100) }}% of Network</span>
+                    | <span title="Bandwidth capacity reported by the relay itself. May differ from measured bandwidth.">{{ obs_bandwidth|float|int }} {{ obs_unit }} Observed By Relay</span>
                 {% else -%}
-                    {% set obs_unit = relay['observed_bandwidth']|determine_unit(relays.use_bits) -%}
-                    {% set obs_bandwidth = relay['observed_bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
-                    <span title="Bandwidth capacity reported by the relay itself.">{{ obs_bandwidth|float|int }} {{ obs_unit }} Observed By Relay</span>
+<span title="Bandwidth capacity reported by the relay itself.">{{ obs_bandwidth|float|int }} {{ obs_unit }} Observed By Relay</span>
                 {% endif -%}
             </dd>
         </div>

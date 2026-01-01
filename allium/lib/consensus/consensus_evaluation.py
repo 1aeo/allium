@@ -864,9 +864,37 @@ def _format_bandwidth_summary(consensus_data: dict, use_bits: bool = False) -> d
     max_bw = bandwidth.get('max')
     deviation = bandwidth.get('deviation')
     
+    # Pre-compute median display components for template efficiency
+    median_display = _format_bandwidth_value(median, use_bits)
+    median_int = None
+    median_unit = None
+    if median_display and median_display != 'N/A':
+        parts = median_display.split(' ', 1)
+        if len(parts) == 2:
+            try:
+                median_int = int(float(parts[0]))
+                median_unit = parts[1]
+            except (ValueError, TypeError):
+                pass
+    
+    # Pre-compute BW authority color coding for template efficiency
+    bw_auth_measured = bandwidth.get('bw_auth_measured_count', 0)
+    bw_auth_total = bandwidth.get('bw_auth_total', 0)
+    bw_auth_majority = (bw_auth_total // 2) + 1 if bw_auth_total > 0 else 0
+    
+    # Color logic: green for majority, yellow for 3 to <majority, red for 0-2
+    if bw_auth_measured >= bw_auth_majority:
+        bw_auth_color = '#28a745'  # green
+    elif bw_auth_measured >= 3:
+        bw_auth_color = '#856404'  # yellow
+    else:
+        bw_auth_color = '#dc3545'  # red
+    
     return {
         'median': median,
-        'median_display': _format_bandwidth_value(median, use_bits),
+        'median_display': median_display,
+        'median_int': median_int,      # Pre-computed integer for template
+        'median_unit': median_unit,    # Pre-computed unit for template
         'average': avg,
         'average_display': _format_bandwidth_value(avg, use_bits),
         'min': min_bw,
@@ -877,9 +905,11 @@ def _format_bandwidth_summary(consensus_data: dict, use_bits: bool = False) -> d
         'deviation_display': _format_bandwidth_value(deviation, use_bits),
         'measurement_count': bandwidth.get('measurement_count', 0),
         'deviation_class': 'warning' if deviation and median and deviation > median * 0.5 else 'normal',
-        # Pass through BW authority measurement counts from collector_fetcher
-        'bw_auth_measured_count': bandwidth.get('bw_auth_measured_count', 0),
-        'bw_auth_total': bandwidth.get('bw_auth_total', 0),
+        # BW authority measurement data with pre-computed values
+        'bw_auth_measured_count': bw_auth_measured,
+        'bw_auth_total': bw_auth_total,
+        'bw_auth_majority': bw_auth_majority,  # Pre-computed for template
+        'bw_auth_color': bw_auth_color,        # Pre-computed for template
     }
 
 
