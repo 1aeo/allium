@@ -194,7 +194,7 @@ if __name__ == "__main__":
 
     start_time = time.time()
     
-    # Progress step breakdown (total: 74 steps):
+    # Progress step breakdown (total: 53 steps):
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # Setup (4 steps):
     #   1. Starting allium
@@ -202,46 +202,44 @@ if __name__ == "__main__":
     #   3. Output directory ready
     #   4. Initializing relay data
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # Coordinator - API Fetching (~31-35 steps, varies by cache state):
-    #   - Section start
-    #   - Starting threaded API fetching
-    #   - Per API worker (5 workers: details, uptime, bandwidth, aroi, collector):
-    #     - Start message (1 per worker)
-    #     - Cache/fetch status message (1 per worker)
-    #     - Optional: parsing, caching, success messages (0-3 per worker)
-    #     - Complete message (1 per worker)
-    #   - All workers completed
-    #   - Section end
-    #   Total: ~31 steps with cache hits, ~35 steps with fresh fetches
+    # Coordinator - API Fetching (14 steps, FIXED count):
+    #   - Section start (1)
+    #   - Starting threaded API fetching (1)
+    #   - 5 API workers start messages (5) - details, uptime, bandwidth, aroi, collector
+    #   - 5 API workers complete messages (5)
+    #   - All workers completed (1)
+    #   - Section end (1)
+    #   Note: Intermediate messages (cache status, parsing, etc.) are logged
+    #   but don't increment the counter, making total predictable.
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # Coordinator - Data Processing (4 steps):
-    #   - Section start
-    #   - Creating relay set (internal messages don't increment)
-    #   - Relay set created
-    #   - Section end
+    #   - Section start (1)
+    #   - Creating relay set (1) - internal messages don't increment
+    #   - Relay set created (1)
+    #   - Section end (1)
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # Page Generation (31 steps):
-    #   - Details API data loaded
-    #   - Section start
+    #   - Details API data loaded (1)
+    #   - Section start (1)
     #   - Index page (generating + generated) x2
-    #   - Top 500 page (generating + generated) x2
-    #   - All relays page (generating + generated) x2
-    #   - AROI leaderboards page (generating + generated) x2
-    #   - Network health dashboard (generating + generated) x2
-    #   - Miscellaneous sorted pages (generating + generated) x2
-    #   - Directory authorities (generating + generated) x2
+    #   - Top 500 page x2
+    #   - All relays page x2
+    #   - AROI leaderboards page x2
+    #   - Network health dashboard x2
+    #   - Miscellaneous sorted pages x2
+    #   - Directory authorities x2
     #   - 7 key type pages complete (family, contact, as, country, flag, platform, first_seen)
-    #   - Individual relay pages (generating + generated) x2
-    #   - Static files (copying + result) x2
-    #   - Search index (generating + generated) x2
-    #   - Section end
-    #   - Completion message
+    #   - Individual relay pages x2
+    #   - Static files x2
+    #   - Search index x2
+    #   - Section end (1)
+    #   - Completion message (1)
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     
     setup_steps = 4
-    coordinator_steps = 39  # API Fetching (~35 max) + Data Processing (4)
+    coordinator_steps = 18  # API Fetching (14) + Data Processing (4)
     page_generation_steps = 31  # Page generation and completion
-    total_steps = setup_steps + coordinator_steps + page_generation_steps  # 74 total steps
+    total_steps = setup_steps + coordinator_steps + page_generation_steps  # 53 total steps
 
     # Create unified progress logger
     progress_logger = create_progress_logger(start_time, 0, total_steps, args.progress)

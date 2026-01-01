@@ -26,7 +26,7 @@ class Coordinator:
     Phase 2: Multiple API support with incremental rendering.
     """
     
-    def __init__(self, output_dir, onionoo_details_url, onionoo_uptime_url, onionoo_bandwidth_url, aroi_url, bandwidth_cache_hours, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=74, enabled_apis='all', filter_downtime_days=7, base_url='', progress_logger=None, mp_workers=4):
+    def __init__(self, output_dir, onionoo_details_url, onionoo_uptime_url, onionoo_bandwidth_url, aroi_url, bandwidth_cache_hours, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=53, enabled_apis='all', filter_downtime_days=7, base_url='', progress_logger=None, mp_workers=4):
         self.output_dir = output_dir
         self.onionoo_details_url = onionoo_details_url
         self.onionoo_uptime_url = onionoo_uptime_url
@@ -133,15 +133,26 @@ class Coordinator:
             return api_name.replace("_", " ").title()
 
     def _create_api_specific_logger(self, api_name):
-        """Create a progress logger that includes API name in messages"""
+        """Create a progress logger that includes API name in messages.
+        
+        These loggers are used for intermediate progress messages within API workers
+        (cache status, parsing, etc.) and do NOT increment the step counter.
+        Only the coordinator's explicit start/complete messages increment the counter,
+        making the total step count predictable regardless of cache state.
+        """
         api_display_name = self._get_api_display_name(api_name)
         
         def api_logger(message):
-            # Format message with API name prefix and increment step
+            # Format message with API name prefix but DON'T increment step
+            # This keeps step count predictable (only start/complete increment)
             formatted_message = f"{api_display_name} - {message}"
-            self._log_progress_with_step_increment(formatted_message)
+            self._log_progress_without_increment(formatted_message)
         
         return api_logger
+
+    def _log_progress_without_increment(self, message):
+        """Log progress message without incrementing progress step (for intermediate messages)"""
+        self.progress_logger.log_without_increment(message)
 
     def _log_progress_with_step_increment(self, message):
         """Log progress message and increment progress step"""
@@ -355,7 +366,7 @@ class Coordinator:
 
 
 # For backwards compatibility, provide a simple function that mimics the original Relays constructor
-def create_relay_set_with_coordinator(output_dir, onionoo_details_url, onionoo_uptime_url, onionoo_bandwidth_url, aroi_url, bandwidth_cache_hours, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=74, enabled_apis='all', filter_downtime_days=7, base_url='', progress_logger=None, mp_workers=4):
+def create_relay_set_with_coordinator(output_dir, onionoo_details_url, onionoo_uptime_url, onionoo_bandwidth_url, aroi_url, bandwidth_cache_hours, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=53, enabled_apis='all', filter_downtime_days=7, base_url='', progress_logger=None, mp_workers=4):
     """
     Create a relay set using the coordinator system.
     Phase 2: Support for multiple APIs with threading.
