@@ -1,5 +1,5 @@
 {% extends "contact-relay-list.html" %}
-{% from "macros.html" import navigation, detail_summary, aroi_validation_badge, aroi_validation_badge_with_count, aroi_validation_issues_section %}
+{% from "macros.html" import navigation, detail_summary, aroi_validation_badge, aroi_validation_issues_section %}
 {% set contact_hash = relay_subset[0]['contact_md5'] %}
 {% if relay_subset[0]['contact'] %}
     {% set contact = relay_subset[0]['contact']|escape %}
@@ -39,20 +39,21 @@
             {# Contact Information #}
             <div style="margin-bottom: 15px;">
                 <ul style="list-style-type: disc; padding-left: 20px; margin-bottom: 0;">
-                    {% if aroi_domain and aroi_domain != 'none' %}
-                    <li><strong>AROI Domain:</strong> {{ aroi_domain|escape }}
+                    {# AROI with merged validation badge - only show if has AROI data #}
+                    {%- set has_aroi_domain = aroi_domain and aroi_domain != 'none' -%}
+                    {%- set has_validation = contact_validation_status and contact_validation_status.has_aroi -%}
+                    {% if has_aroi_domain and (not contact_validation_status or has_validation) %}
+                    <li><strong>AROI:</strong> {{ aroi_domain|escape }}
                         {{- aroi_validation_badge(contact_validation_status) }}
                     </li>
-                    {# Vanity URL display for validated AROI domains - only show if base_url is configured #}
                     {% if is_validated_aroi and base_url %}
                     <li style="margin-left: 20px;">
                         <strong>Vanity URL:</strong> <a href="{{ base_url }}/{{ aroi_domain|lower|escape }}/">{{ base_url }}/{{ aroi_domain|lower|escape }}/</a>
                     </li>
                     {% endif %}
-                    {% elif contact_validation_status and contact_validation_status.has_aroi %}
-                    {# Show AROI validation status even when domain wasn't parsed #}
-                    <li><strong>AROI Validation:</strong>
-                        {{- aroi_validation_badge_with_count(contact_validation_status) }}
+                    {% elif has_validation %}
+                    <li><strong>AROI:</strong>
+                        {{- aroi_validation_badge(contact_validation_status, show_count=true) }}
                     </li>
                     {% endif %}
                     {% if contact != 'none' %}

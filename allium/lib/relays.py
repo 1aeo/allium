@@ -5,6 +5,7 @@ Relays class object consisting of relays (list of dict) and onionoo fetch
 timestamp
 """
 
+import functools
 import hashlib
 import json
 import multiprocessing as mp
@@ -2828,9 +2829,11 @@ class Relays:
             'primary_country_data': primary_country_data,
             'contact_validation_status': contact_validation_status,
             'aroi_validation_timestamp': aroi_validation_timestamp,
-            'family_aroi_domain': i.get("aroi_domain", "") if k == "family" else None,
-            'family_contact': i.get("contact", "") if k == "family" else None,
-            'family_contact_md5': i.get("contact_md5", "") if k == "family" else None,
+            # Family-specific data (extracted once, not per-field)
+            **({'family_aroi_domain': i.get("aroi_domain", ""),
+                'family_contact': i.get("contact", ""),
+                'family_contact_md5': i.get("contact_md5", "")} if k == "family" else 
+               {'family_aroi_domain': None, 'family_contact': None, 'family_contact_md5': None}),
             'consensus_weight_percentage': f"{i['consensus_weight_fraction'] * 100:.2f}%",
             'guard_consensus_weight_percentage': f"{i['guard_consensus_weight_fraction'] * 100:.2f}%",
             'middle_consensus_weight_percentage': f"{i['middle_consensus_weight_fraction'] * 100:.2f}%",
@@ -2988,7 +2991,7 @@ class Relays:
         # Pass shared validation_map to avoid rebuilding it 3,000+ times
         return get_contact_validation_status(members, validation_data, validation_map)
     
-    @property
+    @functools.cached_property
     def _aroi_validation_timestamp(self):
         """
         Cached AROI validation timestamp (computed once, reused for all pages).
@@ -2996,21 +2999,15 @@ class Relays:
         Returns:
             str: Formatted timestamp or 'Unknown' if not available
         """
-        # Use cached value if available
-        if hasattr(self, '__aroi_validation_timestamp_cached'):
-            return self.__aroi_validation_timestamp_cached
-        
         from .aroi_validation import _format_timestamp
         
         validation_data = getattr(self, 'aroi_validation_data', None)
         if not validation_data:
-            self.__aroi_validation_timestamp_cached = 'Unknown'
-        else:
-            metadata = validation_data.get('metadata', {})
-            timestamp_str = metadata.get('timestamp', '')
-            self.__aroi_validation_timestamp_cached = _format_timestamp(timestamp_str)
+            return 'Unknown'
         
-        return self.__aroi_validation_timestamp_cached
+        metadata = validation_data.get('metadata', {})
+        timestamp_str = metadata.get('timestamp', '')
+        return _format_timestamp(timestamp_str)
 
     def _generate_contact_rankings(self, contact_hash):
         """

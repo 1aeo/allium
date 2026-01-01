@@ -1,5 +1,5 @@
 {% extends "contact-relay-list.html" %}
-{% from "macros.html" import navigation, detail_summary, aroi_validation_badge, aroi_validation_badge_with_count, aroi_validation_issues_section %}
+{% from "macros.html" import navigation, detail_summary, aroi_validation_issues_section %}
 {% set family_hash = value %}
 {% set family_aroi = family_aroi_domain if family_aroi_domain else '' %}
 {% block title %}Tor Relays :: Family {% if family_aroi and family_aroi != 'none' and family_aroi != '' %}{{ family_aroi }}{% elif family_contact and family_contact.strip() %}{{ family_contact|truncate(30) }}{% else %}{{ family_hash[:8] }}{% endif %}{% endblock %}
@@ -14,22 +14,7 @@
 {{ navigation('families', page_ctx) }}
 {% endblock -%}
 {% block description %}Relays with effective family member <code>{{ value|escape }}</code> summary:
-{{ detail_summary(bandwidth, bandwidth_unit, guard_bandwidth, middle_bandwidth, exit_bandwidth, consensus_weight_fraction, guard_consensus_weight_fraction, middle_consensus_weight_fraction, exit_consensus_weight_fraction, guard_count, middle_count, exit_count, relay_subset|length, network_position, family_aroi_domain, family_contact, family_contact_md5, page_ctx) }}
-{# AROI Validation Status - shows badge if family has AROI #}
-{% if family_aroi and family_aroi != 'none' and family_aroi != '' %}
-<ul style="list-style-type: disc; padding-left: 20px; margin-bottom: 15px; margin-top: -10px;">
-    <li><strong>AROI Validation:</strong>{{ aroi_validation_badge(contact_validation_status) }}
-    {% if not contact_validation_status or not contact_validation_status.has_aroi %}
-        <span style="color: #6c757d; margin-left: 5px;">No validation data</span>
-    {% endif %}
-    </li>
-</ul>
-{% elif contact_validation_status and contact_validation_status.has_aroi %}
-{# Show validation status even when AROI domain wasn't parsed #}
-<ul style="list-style-type: disc; padding-left: 20px; margin-bottom: 15px; margin-top: -10px;">
-    <li><strong>AROI Validation:</strong>{{ aroi_validation_badge_with_count(contact_validation_status) }}</li>
-</ul>
-{% endif %}
+{{ detail_summary(bandwidth, bandwidth_unit, guard_bandwidth, middle_bandwidth, exit_bandwidth, consensus_weight_fraction, guard_consensus_weight_fraction, middle_consensus_weight_fraction, exit_consensus_weight_fraction, guard_count, middle_count, exit_count, relay_subset|length, network_position, family_aroi_domain, family_contact, family_contact_md5, page_ctx, contact_validation_status=contact_validation_status) }}
 {% endblock %}
 
 {# AROI Validation Issues Section - Placed after table, before footer #}
