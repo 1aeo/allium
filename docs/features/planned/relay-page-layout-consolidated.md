@@ -1936,6 +1936,143 @@ The enhanced Health Status section displays 14 metrics in 8 display cells using 
 
 ---
 
+#### 2.3.1 Enhanced AROI Validation Status Display
+
+**Purpose:**
+Display detailed AROI validation status for the operator, showing how many relays are cryptographically validated vs unvalidated.
+
+**Backend Requirement:**
+To enable AROI validation status in relay pages, `contact_validation_status` must be passed to the template.
+
+**File:** `allium/lib/relays.py` (in `write_relay_info()` method)
+
+**Add to `write_relay_info()`:**
+```python
+def write_relay_info(self):
+    """..."""
+    relay_list = self.json["relays"]
+    template = ENV.get_template("relay-info.html")
+    output_path = os.path.join(self.output_dir, "relay")
+    # ... existing setup code ...
+
+    for relay in relay_list:
+        if not relay["fingerprint"].isalnum():
+            continue
+        
+        # ... existing code for contact_display_data and standard_contexts ...
+        
+        # NEW: Get AROI validation status for this relay's contact
+        contact_validation_status = self._get_contact_validation_status_for_relay(relay)
+        
+        rendered = template.render(
+            relay=relay, 
+            page_ctx=page_ctx, 
+            relays=self, 
+            contact_display_data=contact_display_data,
+            contact_validation_status=contact_validation_status,  # NEW
+            validated_aroi_domains=self.validated_aroi_domains if hasattr(self, 'validated_aroi_domains') else set(),
+            base_url=self.base_url
+        )
+        # ... rest of method ...
+
+def _get_contact_validation_status_for_relay(self, relay):
+    """
+    Get AROI validation status for a single relay's contact.
+    
+    Returns dict with:
+    - validation_status: 'validated', 'partially_validated', 'unvalidated'
+    - validation_summary: {validated_count, unvalidated_count, total_relays, validation_rate}
+    - validated_relays: list of {fingerprint, nickname, proof_type}
+    - unvalidated_relays: list of {fingerprint, nickname, error}
+    """
+    contact_hash = relay.get('contact_md5')
+    if not contact_hash:
+        return None
+    
+    # Check if validation status was already computed for this contact
+    contact_data = self.json.get("sorted", {}).get("contact", {}).get(contact_hash)
+    if contact_data and 'contact_validation_status' in contact_data:
+        return contact_data['contact_validation_status']
+    
+    # Compute on-demand (fallback for edge cases)
+    relay_indices = contact_data.get("relays", []) if contact_data else []
+    members = [self.json["relays"][idx] for idx in relay_indices] if relay_indices else [relay]
+    return self._get_contact_validation_status(members)
+```
+
+**Template Enhancement:**
+
+**File:** `allium/templates/relay-info.html` (in Operator and Family section)
+
+**Enhanced AROI Validation Display:**
+```jinja2
+{# In Operator Identity section, after AROI Domain #}
+
+{% if contact_validation_status and contact_validation_status.validation_summary %}
+    <dt>Validation Status</dt>
+    <dd>
+        {% set vs = contact_validation_status.validation_summary %}
+        {% set status = contact_validation_status.validation_status %}
+        {% if status == 'validated' %}
+            <span style="color: #28a745;" title="All {{ vs.validated_count }} relays cryptographically validated">
+                Validated ({{ vs.validated_count }}/{{ vs.total_relays }})
+            </span>
+        {% elif status == 'partially_validated' %}
+            <span style="color: #ffc107;" title="{{ vs.validated_count }} of {{ vs.total_relays }} relays validated">
+                Partially Validated ({{ vs.validated_count }}/{{ vs.total_relays }})
+            </span>
+        {% else %}
+            <span style="color: #dc3545;" title="No relays have AROI validation">
+                Unvalidated
+            </span>
+        {% endif %}
+    </dd>
+{% endif %}
+
+{# Show this relay's specific validation status #}
+{% if contact_validation_status %}
+    {% set this_fp = relay.fingerprint %}
+    {% if this_fp in contact_validation_status.validated_fingerprints %}
+        <dt>This Relay</dt>
+        <dd>
+            <span style="color: #28a745;" title="This relay's fingerprint was found in AROI proof">
+                Validated
+            </span>
+            {% for vr in contact_validation_status.validated_relays if vr.fingerprint == this_fp %}
+                <span style="font-size: 11px; color: #666;">({{ vr.proof_type }})</span>
+            {% endfor %}
+        </dd>
+    {% elif relay['aroi_domain'] and relay['aroi_domain'] != 'none' %}
+        <dt>This Relay</dt>
+        <dd>
+            <span style="color: #dc3545;" title="This relay has AROI configured but is not validated">
+                Unvalidated
+            </span>
+            {% for ur in contact_validation_status.unvalidated_relays if ur.fingerprint == this_fp %}
+                <span style="font-size: 11px; color: #856404;">({{ ur.error }})</span>
+            {% endfor %}
+        </dd>
+    {% endif %}
+{% endif %}
+```
+
+**New Variables Available in Template:**
+| Variable | Type | Description |
+|----------|------|-------------|
+| `contact_validation_status` | dict/None | Full validation status for this contact |
+| `contact_validation_status.validation_status` | str | 'validated', 'partially_validated', 'unvalidated' |
+| `contact_validation_status.validation_summary.validated_count` | int | Count of validated relays |
+| `contact_validation_status.validation_summary.unvalidated_count` | int | Count of unvalidated relays |
+| `contact_validation_status.validation_summary.total_relays` | int | Total relay count |
+| `contact_validation_status.validation_summary.validation_rate` | float | Percentage (0-100) |
+| `contact_validation_status.validated_relays` | list | List of validated relay details |
+| `contact_validation_status.unvalidated_relays` | list | List of unvalidated relay details |
+| `contact_validation_status.validated_fingerprints` | set | Set of validated fingerprints for O(1) lookup |
+
+**Data Source:** `allium/lib/aroi_validation.py` - `get_contact_validation_status()` function
+
+---
+
 #### 2.4 Add CSS for Fluid-Width Single Column
 
 **File:** `allium/templates/skeleton.html`
@@ -2652,6 +2789,8 @@ span#network, span#location, span#family {
 | `page_ctx` | dict | Page context (path_prefix, etc.) | `page_context.py` |
 | `base_url` | str | Base URL for AROI links | Config |
 | `validated_aroi_domains` | set | Validated AROI domains | AROI validation |
+| `contact_validation_status` | dict/None | Full AROI validation status for relay's contact | `aroi_validation.py` |
+| `contact_display_data` | dict | Pre-computed contact display data | `relays.py` |
 
 **Key Relay Fields Used:**
 
@@ -2698,6 +2837,8 @@ span#network, span#location, span#family {
 - [ ] Issues/warnings display correctly
 - [ ] Connectivity and Location section combines all address/geo data
 - [ ] Operator and Family section shows AROI + family together
+- [ ] AROI validation status shows validated/partially/unvalidated with counts
+- [ ] Per-relay validation indicator shows for current relay
 - [ ] Single-column layout fills width appropriately
 - [ ] Responsive layout works on mobile (<768px)
 - [ ] Fingerprint is full and copyable
