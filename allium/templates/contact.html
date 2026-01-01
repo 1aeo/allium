@@ -175,6 +175,7 @@
                 {% endif %}
             </ul>
         </div>
+        {% endif %}
         
         {# Relay Reliability on Left Side (when AROI rankings present) #}
         {% if contact_rankings and operator_reliability and operator_reliability.valid_relays > 0 %}
@@ -349,7 +350,6 @@
                 Reliability data available for {{ operator_reliability.valid_relays }}/{{ operator_reliability.total_relays }} relays{% if contact_display_data and contact_display_data.uptime_timestamp %}, from {{ contact_display_data.uptime_timestamp }}{% endif %}
             </div>
         </div>
-        {% endif %}
         {% endif %}
     </div>
     
