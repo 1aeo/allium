@@ -2518,6 +2518,7 @@ class Relays:
 
         if os.path.exists(output_path):
             rmtree(output_path)
+        os.makedirs(output_path)
 
         sorted_values = sorted(self.json["sorted"][k].keys()) if k == "first_seen" else list(self.json["sorted"][k].keys())
         
@@ -2545,7 +2546,7 @@ class Relays:
             else:
                 dir_path = os.path.join(output_path, v)
 
-            os.makedirs(dir_path)
+            os.makedirs(dir_path, exist_ok=True)
             # relay_subset passed directly to template for thread safety (no shared state)
             
             bandwidth_unit = self.bandwidth_formatter.determine_unit(i["bandwidth"])
@@ -2875,10 +2876,13 @@ class Relays:
                 if aroi_domain and aroi_domain != "none":
                     vanity_url_tasks.append((html_path, aroi_domain, output_path))
         
+        pool = None
         try:
             ctx = mp.get_context('fork')
-            with ctx.Pool(self.mp_workers, _init_mp_worker, (self, template)) as pool:
-                pool.map(_render_page_mp, page_args)
+            pool = ctx.Pool(self.mp_workers, _init_mp_worker, (self, template))
+            pool.map(_render_page_mp, page_args)
+            pool.close()
+            pool.join()
             
             # Post-process vanity URLs for contact pages (after parallel generation)
             if vanity_url_tasks:
@@ -2900,8 +2904,28 @@ class Relays:
             if self.progress:
                 print(f"    🚀 Parallel: {self.mp_workers} workers, {total_time/len(page_args)*1000:.1f}ms/page avg")
         except Exception as e:
+            # Ensure pool is properly terminated before fallback
+            if pool is not None:
+                try:
+                    pool.terminate()
+                    pool.join()
+                except Exception:
+                    pass  # Ignore cleanup errors
+            
             self._log_progress(f"Multiprocessing failed ({e}), falling back to sequential...")
             self.mp_workers = 0
+            
+            # Clean up partial output before sequential fallback (with retry for lingering file handles)
+            for retry in range(3):
+                try:
+                    if os.path.exists(output_path):
+                        rmtree(output_path)
+                    os.makedirs(output_path)
+                    break
+                except OSError:
+                    if retry < 2:
+                        time.sleep(0.1)  # Brief pause before retry
+            
             self.write_pages_by_key(k)
 
     def write_relay_info(self):
@@ -2937,7 +2961,7 @@ class Relays:
             
             # Create directory structure: relay/FINGERPRINT/index.html (depth 2)
             relay_dir = os.path.join(output_path, relay["fingerprint"])
-            os.makedirs(relay_dir)
+            os.makedirs(relay_dir, exist_ok=True)
             
             with open(
                 os.path.join(relay_dir, "index.html"),
