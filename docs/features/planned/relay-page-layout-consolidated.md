@@ -83,19 +83,23 @@ Before the 5 improvements, these design decisions address layout and structure:
 - Nickname (large, prominent)
 - Fingerprint (full, copyable)
 - Contact info (for verification: "yes, this is my relay")
-- **Primary operator link (AROI or Family):**
-  - If AROI present: Show AROI domain as primary link (more accurate operator grouping)
-  - If no AROI: Show Family count as primary link (fingerprint-based grouping)
+- **Operator info (AROI) with validation status:**
+  - Operator domain and relay count (links to operator page)
+  - AROI validation status: "Validated (10/12 relays)" or "Partially Validated" or "Unvalidated"
+  - This relay's validation: "This relay: Validated" or "This relay: Unvalidated"
+- **Family info (always shown, separate from AROI):**
+  - Family count with link to family page
+  - Fingerprint-based grouping (may differ from AROI count)
 - Quick links: AS, Country, Platform
 
-**AROI vs Family Priority:**
-- AROI provides verified operator identity with more accurate relay grouping
-- Family is fingerprint-based and can have mismatches (alleged/indirect)
-- When AROI is present, it supersedes Family as the primary "see all my relays" link
-- Family link still appears in the Family section for detailed breakdown
+**AROI and Family - Both Displayed:**
+- **AROI:** Verified operator identity with accurate relay grouping. Shows validation status at operator level (how many relays validated) and relay level (is THIS relay validated).
+- **Family:** Fingerprint-based grouping. Always shown separately. May have mismatches (alleged/indirect members).
+- Both provide value: AROI for verified identity, Family for declared relationships.
 
 **What moves to sections below:**
-- Detailed family member lists → `#family` section
+- Detailed family member lists (effective/alleged/indirect) → `#operator` section
+- Detailed AROI validation details → `#operator` section
 - Detailed contact parsing → stays in header, no separate section needed
 
 This means operator identity info is in the header where it belongs, not buried in a separate section.
@@ -504,22 +508,25 @@ Every item from the current relay page mapped to the proposed structure:
 | Title | Nickname | Large, prominent |
 | Left column | Fingerprint | Full, copyable |
 | Left column | Contact | Link to contact page |
-| Left column | AROI | **Primary operator link when present** |
-| Header h4 | Family link (count) | **Fallback when no AROI** |
+| Header row | AROI Operator | Domain + relay count (link to operator page) |
+| Header row | AROI Validation | "Validated (X/Y)" or "Partially Validated" or "Unvalidated" |
+| Header row | This Relay AROI | "This relay: Validated" or "This relay: Unvalidated" |
+| Header row | Family | Relay count (link to family page) - always shown |
 | Header h4 | AS link | Quick link |
 | Header h4 | Country link | Quick link |
 | Header h4 | Platform link | Quick link |
 | Header | Last fetch timestamp | Data freshness indicator |
 
-**AROI vs Family Priority Logic:**
-- **If AROI present:** Show "Operator: {domain} ({count} relays)" as primary link
-  - AROI provides verified operator identity
-  - More accurate relay count (all relays by this operator)
-  - Links to operator page with full relay list
-- **If no AROI:** Show "Family: {count} relays" as primary link
-  - Fingerprint-based family grouping
-  - May include alleged/indirect mismatches
-  - Links to family page
+**AROI and Family - Both Displayed:**
+- **Operator (AROI):** Shows operator domain and relay count. Links to operator page.
+- **AROI Validation Status:** Shows how many of operator's relays are cryptographically validated.
+  - "Validated (10/12 relays)" - all or most relays validated
+  - "Partially Validated (5/12 relays)" - some relays validated
+  - "Unvalidated" - no validation proof found
+- **This Relay AROI:** Shows if THIS specific relay's fingerprint is in the AROI proof.
+  - "This relay: Validated" - fingerprint found in proof
+  - "This relay: Unvalidated" - fingerprint not in proof (error shown on hover)
+- **Family:** Always shown separately. Fingerprint-based grouping with link to family page.
 
 ### Section 1: Health Status (`#status`)
 
@@ -654,13 +661,16 @@ Two columns inside each section to maximize information density on wide screens.
 ║  Contact: admin@example.com                                                                                          ║
 ║  ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────── ║
 ║                                                                                                                      ║
-║  WHEN AROI PRESENT (preferred):                                                                                      ║
-║  Operator: example.com (12 relays) [View All]  |  AS24940  |  Germany  |  Linux       Last updated: 2024-12-29 14:30 ║
-║                 ↑ Primary link - verified operator with accurate relay count                                         ║
+║  EXAMPLE WITH AROI:                                                                                                  ║
+║  Operator: example.com (12 relays) [View All]       AROI: Validated (10/12 relays) | This relay: Validated           ║
+║  Family: 5 relays [View]                                                                                             ║
+║  ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────── ║
+║  AS24940  |  Germany  |  Linux                                                     Last updated: 2024-12-29 14:30 UTC║
 ║                                                                                                                      ║
-║  WHEN NO AROI (fallback):                                                                                            ║
-║  Family: 5 relays [View]  |  AS24940  |  Germany  |  Linux                         Last updated: 2024-12-29 14:30 UTC║
-║            ↑ Fallback link - fingerprint-based family (may have alleged/indirect mismatches)                         ║
+║  EXAMPLE WITHOUT AROI (Family always shown):                                                                         ║
+║  Family: 3 relays [View]                                                                                             ║
+║  ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────── ║
+║  AS24940  |  Germany  |  Linux                                                     Last updated: 2024-12-29 14:30 UTC║
 ║                                                                                                                      ║
 ╚══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
 
@@ -759,20 +769,20 @@ Two columns inside each section to maximize information density on wide screens.
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃ OPERATOR AND FAMILY                                                                                     [#operator] ┃
 ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
-┃ Operator (AROI) - when present                      ┃ Family (fingerprint-based)                      [#effective-family]┃
+┃ Operator (AROI)                                     ┃ Family (fingerprint-based)                      [#effective-family]┃
 ┃                                                     ┃                                                                  ┃
-┃   Domain: example.com (validated)                   ┃ Effective Family: 5 relays [View Family Page]                   ┃
-┃   Relays by this operator: 12                       ┃   ABCD1234EFGH5678... (this relay)                               ┃
-┃   [View All Operator Relays]                        ┃   WXYZ9876LMNO5432...                                            ┃
-┃                                                     ┃   HIJK4567DEFG8901...                                            ┃
-┃                                                     ┃   STUV2345WXYZ6789...                                            ┃
-┃                                                     ┃   EFGH8901IJKL2345...                                            ┃
+┃   Domain: example.com                               ┃ Effective Family: 5 relays [View Family Page]                   ┃
+┃   Relays by this operator: 12 [View All]            ┃   ABCD1234EFGH5678... (this relay)                               ┃
+┃                                                     ┃   WXYZ9876LMNO5432...                                            ┃
+┃   AROI Validation:                                  ┃   HIJK4567DEFG8901...                                            ┃
+┃     Operator: Validated (10/12 relays)              ┃   STUV2345WXYZ6789...                                            ┃
+┃     This relay: Validated (DNS-RSA proof)           ┃   EFGH8901IJKL2345...                                            ┃
 ┃                                                     ┃                                                        [#alleged-family]┃
-┃ When NO AROI:                                       ┃ Alleged Family: 2 relays                                        ┃
-┃   Operator: Not specified                           ┃   (They don't list you back - check their MyFamily config)      ┃
-┃   Contact: admin@example.com                        ┃   QRST1111UVWX2222...                                            ┃
-┃   Use Family for relay grouping →                   ┃   MNOP3333STUV4444...                                            ┃
-┃                                                     ┃                                                       [#indirect-family]┃
+┃   Contact: admin@example.com                        ┃ Alleged Family: 2 relays                                        ┃
+┃                                                     ┃   (They don't list you back - check their MyFamily config)      ┃
+┃ When NO AROI:                                       ┃   QRST1111UVWX2222...                                            ┃
+┃   Operator: Not specified                           ┃   MNOP3333STUV4444...                                            ┃
+┃   Contact: admin@example.com                        ┃                                                       [#indirect-family]┃
 ┃                                                     ┃ Indirect Family: 0 relays                                       ┃
 ┃                                                     ┃   (They list you, but you don't list them)                      ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
@@ -844,14 +854,16 @@ Single column layout for narrow screens. All content stacks vertically.
 ║                                           ║
 ║  Contact: admin@example.com               ║
 ║                                           ║
-║  WHEN AROI PRESENT:                       ║
+║  WITH AROI:                               ║
 ║  Operator: example.com (12 relays)        ║
-║  AS24940 | DE | Linux                     ║
-║                                           ║
-║  WHEN NO AROI:                            ║
+║  AROI: Validated (10/12 relays)           ║
+║  This relay: Validated                    ║
 ║  Family: 5 relays                         ║
-║  AS24940 | DE | Linux                     ║
 ║                                           ║
+║  WITHOUT AROI (Family always shown):      ║
+║  Family: 3 relays                         ║
+║                                           ║
+║  AS24940 | DE | Linux                     ║
 ║  Updated: 2024-12-29 14:30 UTC            ║
 ╚═══════════════════════════════════════════╝
 
@@ -980,9 +992,12 @@ Single column layout for narrow screens. All content stacks vertically.
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃ OPERATOR AND FAMILY        [#operator]    ┃
 ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
-┃ Operator (AROI) - when present            ┃
-┃   Domain: example.com (validated)         ┃
+┃ Operator (AROI)                           ┃
+┃   Domain: example.com                     ┃
 ┃   Relays: 12 [View All]                   ┃
+┃   AROI: Validated (10/12)                 ┃
+┃   This relay: Validated                   ┃
+┃   Contact: admin@example.com              ┃
 ┃                                           ┃
 ┃ When NO AROI:                             ┃
 ┃   Operator: Not specified                 ┃
@@ -1222,7 +1237,7 @@ Bandwidth Capacity (Observed | Advertised | Rate Limit | Burst Limit)
 
 ---
 
-#### 1.4 Move Contact to Page Header, Make AROI Primary Link
+#### 1.4 Move Contact to Page Header, Add AROI + Family with Validation Status
 
 **File:** `allium/templates/relay-info.html`
 
@@ -1242,21 +1257,74 @@ Family: {{ relay['effective_family']|length }} relay
 
 **New Structure (replace lines 39-56):**
 
+Shows BOTH AROI operator AND Family, plus AROI validation status at operator and relay level.
+
 ```jinja2
-<h4>
-{# AROI takes priority when present - verified operator identity #}
-{% if relay['aroi_domain'] and relay['aroi_domain'] != 'none' -%}
-    {% if base_url and relay['aroi_domain'] in validated_aroi_domains -%}
-        <a href="{{ base_url }}/{{ relay['aroi_domain']|lower|escape }}/" title="Verified operator - view all relays">Operator: {{ relay['aroi_domain']|escape }}</a>
-    {% else -%}
-        <a href="{{ page_ctx.path_prefix }}contact/{{ relay['contact_md5'] }}/" title="Operator (unverified AROI)">Operator: {{ relay['aroi_domain']|escape }}</a>
+{# ============== OPERATOR & FAMILY ROW ============== #}
+{# Shows AROI operator info (when present) AND Family info (always) #}
+<div class="header-operator-row" style="margin-bottom: 8px;">
+    {# AROI Operator Info - when AROI domain is present #}
+    {% if relay['aroi_domain'] and relay['aroi_domain'] != 'none' -%}
+        <div class="aroi-info" style="margin-bottom: 4px;">
+            {# Operator link #}
+            {% if base_url and relay['aroi_domain'] in validated_aroi_domains -%}
+                <a href="{{ base_url }}/{{ relay['aroi_domain']|lower|escape }}/" title="Verified operator - view all relays">
+                    <strong>Operator:</strong> {{ relay['aroi_domain']|escape }}</a>
+            {% else -%}
+                <a href="{{ page_ctx.path_prefix }}contact/{{ relay['contact_md5'] }}/" title="Operator page">
+                    <strong>Operator:</strong> {{ relay['aroi_domain']|escape }}</a>
+            {% endif -%}
+            
+            {# AROI Validation Status - Operator level #}
+            {% if contact_validation_status and contact_validation_status.validation_summary -%}
+                {% set vs = contact_validation_status.validation_summary -%}
+                {% set status = contact_validation_status.validation_status -%}
+                | <span class="aroi-status">AROI: 
+                {% if status == 'validated' -%}
+                    <span style="color: #28a745;" title="All {{ vs.validated_count }} relays have valid AROI proof">
+                        Validated ({{ vs.validated_count }}/{{ vs.total_relays }})</span>
+                {% elif status == 'partially_validated' -%}
+                    <span style="color: #ffc107;" title="{{ vs.validated_count }} of {{ vs.total_relays }} relays validated">
+                        Partially Validated ({{ vs.validated_count }}/{{ vs.total_relays }})</span>
+                {% else -%}
+                    <span style="color: #dc3545;" title="No relays have AROI validation proof">Unvalidated</span>
+                {% endif -%}
+                </span>
+                
+                {# AROI Validation Status - This Relay #}
+                {% set this_fp = relay.fingerprint -%}
+                | <span class="aroi-relay-status">This relay: 
+                {% if this_fp in contact_validation_status.validated_fingerprints -%}
+                    <span style="color: #28a745;" title="This relay's fingerprint found in AROI proof">Validated</span>
+                {% else -%}
+                    <span style="color: #dc3545;" title="This relay's fingerprint not in AROI proof">Unvalidated</span>
+                {% endif -%}
+                </span>
+            {% elif relay['aroi_domain'] in validated_aroi_domains -%}
+                | <span style="color: #28a745;">AROI: Validated</span>
+            {% else -%}
+                | <span style="color: #ffc107;">AROI: Unvalidated</span>
+            {% endif -%}
+        </div>
     {% endif -%}
-{% elif relay['effective_family']|length > 1 -%}
-    {# Fallback to Family when no AROI #}
-    <a href="{{ page_ctx.path_prefix }}family/{{ relay['fingerprint']|escape }}/" title="View family members">Family: {{ relay['effective_family']|length }} relays</a>
-{% else -%}
-    Family: {{ relay['effective_family']|length }} relay
-{% endif -%} | 
+    
+    {# Family Info - always shown (separate from AROI) #}
+    <div class="family-info">
+        {% if relay['effective_family']|length > 1 -%}
+            <a href="{{ page_ctx.path_prefix }}family/{{ relay['fingerprint']|escape }}/" title="View family members">
+                <strong>Family:</strong> {{ relay['effective_family']|length }} relays</a>
+        {% else -%}
+            <strong>Family:</strong> {{ relay['effective_family']|length }} relay
+        {% endif -%}
+        {% if relay['alleged_family'] and relay['alleged_family']|length > 0 -%}
+            <span style="color: #856404; font-size: 11px;" title="You list these relays but they don't list you back">
+                ({{ relay['alleged_family']|length }} alleged)</span>
+        {% endif -%}
+    </div>
+</div>
+
+{# ============== QUICK LINKS ROW ============== #}
+<h4>
 {% if relay['contact'] -%}
     <a href="{{ page_ctx.path_prefix }}contact/{{ relay['contact_md5'] }}/" title="Contact information">{{ relay['contact']|truncate(40)|escape }}</a> | 
 {% endif -%}
@@ -1275,12 +1343,28 @@ Country: unknown
 ```
 
 **Variables Used:**
-- `relay['aroi_domain']` - AROI domain from contact info parsing
-- `relay['contact_md5']` - MD5 hash of contact for contact page link
-- `relay['contact']` - Raw contact string
-- `relay['effective_family']` - List of family member fingerprints
-- `validated_aroi_domains` - Set of validated AROI domains (from template context)
-- `base_url` - Base URL for validated AROI links
+- `relay['aroi_domain']` (str) - AROI domain from contact info parsing
+- `relay['contact_md5']` (str) - MD5 hash of contact for contact page link
+- `relay['contact']` (str) - Raw contact string
+- `relay['effective_family']` (list) - List of family member fingerprints
+- `relay['alleged_family']` (list) - Relays you list but don't list you back
+- `validated_aroi_domains` (set) - Set of validated AROI domains (from template context)
+- `base_url` (str) - Base URL for validated AROI links
+- `contact_validation_status` (dict) - Full AROI validation status (see section 2.3.1)
+- `contact_validation_status.validation_status` (str) - 'validated', 'partially_validated', 'unvalidated'
+- `contact_validation_status.validation_summary` (dict) - Contains validated_count, total_relays
+- `contact_validation_status.validated_fingerprints` (set) - Set of validated relay fingerprints
+
+**Display Logic Summary:**
+
+| Condition | Operator (AROI) Row | AROI Validation Status | Family Row |
+|-----------|---------------------|------------------------|------------|
+| Has AROI + validated | Show domain link | "Validated (X/Y)" + "This relay: Validated/Unvalidated" | **Always shown** - count + link |
+| Has AROI + partial | Show domain link | "Partially Validated (X/Y)" + "This relay: ..." | **Always shown** - count + link |
+| Has AROI + unvalidated | Show domain link | "Unvalidated" | **Always shown** - count + link |
+| No AROI | Not shown | Not shown | **Always shown** - count + link |
+
+**Key Rule:** Family is ALWAYS displayed in header, regardless of AROI presence.
 
 ---
 
@@ -1849,15 +1933,50 @@ The enhanced Health Status section displays 14 metrics in 8 display cells using 
         {% if relay['aroi_domain'] and relay['aroi_domain'] != 'none' -%}
             {% if base_url and relay['aroi_domain'] in validated_aroi_domains -%}
                 <a href="{{ base_url }}/{{ relay['aroi_domain']|lower|escape }}/">{{ relay['aroi_domain']|escape }}</a>
-                <span style="color: #28a745; margin-left: 4px;" title="AROI Validated">Validated</span>
             {% else -%}
                 <a href="{{ page_ctx.path_prefix }}contact/{{ relay['contact_md5'] }}/">{{ relay['aroi_domain']|escape }}</a>
-                <span style="color: #ffc107; margin-left: 4px;" title="AROI Unvalidated">Unvalidated</span>
             {% endif -%}
         {% else -%}
             Not specified
         {% endif -%}
     </dd>
+    
+    {# AROI Validation Status - Operator level (how many relays validated) #}
+    {% if contact_validation_status and contact_validation_status.validation_summary -%}
+    <dt>Operator Validation</dt>
+    <dd>
+        {% set vs = contact_validation_status.validation_summary -%}
+        {% set status = contact_validation_status.validation_status -%}
+        {% if status == 'validated' -%}
+            <span style="color: #28a745;" title="All {{ vs.validated_count }} relays have valid AROI proof">
+                Validated ({{ vs.validated_count }}/{{ vs.total_relays }} relays)</span>
+        {% elif status == 'partially_validated' -%}
+            <span style="color: #ffc107;" title="{{ vs.validated_count }} of {{ vs.total_relays }} relays have valid proof">
+                Partially Validated ({{ vs.validated_count }}/{{ vs.total_relays }} relays)</span>
+        {% else -%}
+            <span style="color: #dc3545;" title="No relays have AROI validation proof">Unvalidated</span>
+        {% endif -%}
+    </dd>
+    
+    {# AROI Validation Status - This relay specifically #}
+    <dt>This Relay</dt>
+    <dd>
+        {% set this_fp = relay.fingerprint -%}
+        {% if this_fp in contact_validation_status.validated_fingerprints -%}
+            <span style="color: #28a745;" title="This relay's fingerprint found in AROI proof">Validated</span>
+            {% for vr in contact_validation_status.validated_relays if vr.fingerprint == this_fp -%}
+                <span style="font-size: 11px; color: #666;">({{ vr.proof_type }})</span>
+            {% endfor -%}
+        {% elif relay['aroi_domain'] and relay['aroi_domain'] != 'none' -%}
+            <span style="color: #dc3545;" title="AROI configured but fingerprint not in proof">Unvalidated</span>
+            {% for ur in contact_validation_status.unvalidated_relays if ur.fingerprint == this_fp -%}
+                <span style="font-size: 11px; color: #856404;">({{ ur.error }})</span>
+            {% endfor -%}
+        {% else -%}
+            <span style="color: #6c757d;">N/A (no AROI configured)</span>
+        {% endif -%}
+    </dd>
+    {% endif -%}
     
     <dt>Contact</dt>
     <dd style="word-wrap: break-word; word-break: break-all; max-width: 100%;">
@@ -1872,7 +1991,7 @@ The enhanced Health Status section displays 14 metrics in 8 display cells using 
 {% if relay['aroi_domain'] and relay['aroi_domain'] != 'none' %}
 <div class="alert alert-info" style="font-size: 12px; padding: 8px;">
     <strong>About AROI:</strong> The Autonomous Relay Operator Identifier provides verified operator identity.
-    When validated, it accurately groups all relays by this operator.
+    When validated, it cryptographically proves relay ownership.
     <a href="https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/" target="_blank" rel="noopener">Learn more</a>
 </div>
 {% endif %}
@@ -1933,6 +2052,149 @@ The enhanced Health Status section displays 14 metrics in 8 display cells using 
 - `relay['indirect_family']` (list/None) - They list you, you don't list them
 - `validated_aroi_domains` (set) - Set of validated AROI domains
 - `base_url` (str) - Base URL for validated AROI links
+- `contact_validation_status` (dict) - Full AROI validation data (see section 2.3.1)
+- `contact_validation_status.validation_status` (str) - 'validated', 'partially_validated', 'unvalidated'
+- `contact_validation_status.validation_summary` (dict) - {validated_count, total_relays, validation_rate}
+- `contact_validation_status.validated_fingerprints` (set) - Set of validated relay fingerprints
+- `contact_validation_status.validated_relays` (list) - List with fingerprint, proof_type details
+- `contact_validation_status.unvalidated_relays` (list) - List with fingerprint, error details
+
+---
+
+#### 2.3.1 Backend: Pass AROI Validation Status to Relay Pages
+
+**Purpose:**
+Display detailed AROI validation status for the operator, showing how many relays are cryptographically validated vs unvalidated.
+
+**Backend Requirement:**
+To enable AROI validation status in relay pages, `contact_validation_status` must be passed to the template.
+
+**File:** `allium/lib/relays.py` (in `write_relay_info()` method)
+
+**Add to `write_relay_info()`:**
+```python
+def write_relay_info(self):
+    """..."""
+    relay_list = self.json["relays"]
+    template = ENV.get_template("relay-info.html")
+    output_path = os.path.join(self.output_dir, "relay")
+    # ... existing setup code ...
+
+    for relay in relay_list:
+        if not relay["fingerprint"].isalnum():
+            continue
+        
+        # ... existing code for contact_display_data and standard_contexts ...
+        
+        # NEW: Get AROI validation status for this relay's contact
+        contact_validation_status = self._get_contact_validation_status_for_relay(relay)
+        
+        rendered = template.render(
+            relay=relay, 
+            page_ctx=page_ctx, 
+            relays=self, 
+            contact_display_data=contact_display_data,
+            contact_validation_status=contact_validation_status,  # NEW
+            validated_aroi_domains=self.validated_aroi_domains if hasattr(self, 'validated_aroi_domains') else set(),
+            base_url=self.base_url
+        )
+        # ... rest of method ...
+
+def _get_contact_validation_status_for_relay(self, relay):
+    """
+    Get AROI validation status for a single relay's contact.
+    
+    Returns dict with:
+    - validation_status: 'validated', 'partially_validated', 'unvalidated'
+    - validation_summary: {validated_count, unvalidated_count, total_relays, validation_rate}
+    - validated_relays: list of {fingerprint, nickname, proof_type}
+    - unvalidated_relays: list of {fingerprint, nickname, error}
+    """
+    contact_hash = relay.get('contact_md5')
+    if not contact_hash:
+        return None
+    
+    # Check if validation status was already computed for this contact
+    contact_data = self.json.get("sorted", {}).get("contact", {}).get(contact_hash)
+    if contact_data and 'contact_validation_status' in contact_data:
+        return contact_data['contact_validation_status']
+    
+    # Compute on-demand (fallback for edge cases)
+    relay_indices = contact_data.get("relays", []) if contact_data else []
+    members = [self.json["relays"][idx] for idx in relay_indices] if relay_indices else [relay]
+    return self._get_contact_validation_status(members)
+```
+
+**Template Enhancement:**
+
+**File:** `allium/templates/relay-info.html` (in Operator and Family section)
+
+**Enhanced AROI Validation Display:**
+```jinja2
+{# In Operator Identity section, after AROI Domain #}
+
+{% if contact_validation_status and contact_validation_status.validation_summary %}
+    <dt>Validation Status</dt>
+    <dd>
+        {% set vs = contact_validation_status.validation_summary %}
+        {% set status = contact_validation_status.validation_status %}
+        {% if status == 'validated' %}
+            <span style="color: #28a745;" title="All {{ vs.validated_count }} relays cryptographically validated">
+                Validated ({{ vs.validated_count }}/{{ vs.total_relays }})
+            </span>
+        {% elif status == 'partially_validated' %}
+            <span style="color: #ffc107;" title="{{ vs.validated_count }} of {{ vs.total_relays }} relays validated">
+                Partially Validated ({{ vs.validated_count }}/{{ vs.total_relays }})
+            </span>
+        {% else %}
+            <span style="color: #dc3545;" title="No relays have AROI validation">
+                Unvalidated
+            </span>
+        {% endif %}
+    </dd>
+{% endif %}
+
+{# Show this relay's specific validation status #}
+{% if contact_validation_status %}
+    {% set this_fp = relay.fingerprint %}
+    {% if this_fp in contact_validation_status.validated_fingerprints %}
+        <dt>This Relay</dt>
+        <dd>
+            <span style="color: #28a745;" title="This relay's fingerprint was found in AROI proof">
+                Validated
+            </span>
+            {% for vr in contact_validation_status.validated_relays if vr.fingerprint == this_fp %}
+                <span style="font-size: 11px; color: #666;">({{ vr.proof_type }})</span>
+            {% endfor %}
+        </dd>
+    {% elif relay['aroi_domain'] and relay['aroi_domain'] != 'none' %}
+        <dt>This Relay</dt>
+        <dd>
+            <span style="color: #dc3545;" title="This relay has AROI configured but is not validated">
+                Unvalidated
+            </span>
+            {% for ur in contact_validation_status.unvalidated_relays if ur.fingerprint == this_fp %}
+                <span style="font-size: 11px; color: #856404;">({{ ur.error }})</span>
+            {% endfor %}
+        </dd>
+    {% endif %}
+{% endif %}
+```
+
+**New Variables Available in Template:**
+| Variable | Type | Description |
+|----------|------|-------------|
+| `contact_validation_status` | dict/None | Full validation status for this contact |
+| `contact_validation_status.validation_status` | str | 'validated', 'partially_validated', 'unvalidated' |
+| `contact_validation_status.validation_summary.validated_count` | int | Count of validated relays |
+| `contact_validation_status.validation_summary.unvalidated_count` | int | Count of unvalidated relays |
+| `contact_validation_status.validation_summary.total_relays` | int | Total relay count |
+| `contact_validation_status.validation_summary.validation_rate` | float | Percentage (0-100) |
+| `contact_validation_status.validated_relays` | list | List of validated relay details |
+| `contact_validation_status.unvalidated_relays` | list | List of unvalidated relay details |
+| `contact_validation_status.validated_fingerprints` | set | Set of validated fingerprints for O(1) lookup |
+
+**Data Source:** `allium/lib/aroi_validation.py` - `get_contact_validation_status()` function
 
 ---
 
@@ -2652,6 +2914,8 @@ span#network, span#location, span#family {
 | `page_ctx` | dict | Page context (path_prefix, etc.) | `page_context.py` |
 | `base_url` | str | Base URL for AROI links | Config |
 | `validated_aroi_domains` | set | Validated AROI domains | AROI validation |
+| `contact_validation_status` | dict/None | Full AROI validation status for relay's contact | `aroi_validation.py` |
+| `contact_display_data` | dict | Pre-computed contact display data | `relays.py` |
 
 **Key Relay Fields Used:**
 
@@ -2698,6 +2962,8 @@ span#network, span#location, span#family {
 - [ ] Issues/warnings display correctly
 - [ ] Connectivity and Location section combines all address/geo data
 - [ ] Operator and Family section shows AROI + family together
+- [ ] AROI validation status shows validated/partially/unvalidated with counts
+- [ ] Per-relay validation indicator shows for current relay
 - [ ] Single-column layout fills width appropriately
 - [ ] Responsive layout works on mobile (<768px)
 - [ ] Fingerprint is full and copyable
