@@ -661,8 +661,14 @@ Two columns inside each section to maximize information density on wide screens.
 ║  Contact: admin@example.com                                                                                          ║
 ║  ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────── ║
 ║                                                                                                                      ║
+║  EXAMPLE WITH AROI:                                                                                                  ║
 ║  Operator: example.com (12 relays) [View All]       AROI: Validated (10/12 relays) | This relay: Validated           ║
-║  Family: 5 relays [View]                            (or: Partially Validated | This relay: Unvalidated)              ║
+║  Family: 5 relays [View]                                                                                             ║
+║  ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────── ║
+║  AS24940  |  Germany  |  Linux                                                     Last updated: 2024-12-29 14:30 UTC║
+║                                                                                                                      ║
+║  EXAMPLE WITHOUT AROI (Family always shown):                                                                         ║
+║  Family: 3 relays [View]                                                                                             ║
 ║  ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────── ║
 ║  AS24940  |  Germany  |  Linux                                                     Last updated: 2024-12-29 14:30 UTC║
 ║                                                                                                                      ║
@@ -848,11 +854,14 @@ Single column layout for narrow screens. All content stacks vertically.
 ║                                           ║
 ║  Contact: admin@example.com               ║
 ║                                           ║
+║  WITH AROI:                               ║
 ║  Operator: example.com (12 relays)        ║
 ║  AROI: Validated (10/12 relays)           ║
 ║  This relay: Validated                    ║
-║                                           ║
 ║  Family: 5 relays                         ║
+║                                           ║
+║  WITHOUT AROI (Family always shown):      ║
+║  Family: 3 relays                         ║
 ║                                           ║
 ║  AS24940 | DE | Linux                     ║
 ║  Updated: 2024-12-29 14:30 UTC            ║
@@ -1348,11 +1357,14 @@ Country: unknown
 
 **Display Logic Summary:**
 
-| Condition | Operator Row | AROI Status | Family Row |
-|-----------|--------------|-------------|------------|
-| Has AROI + validated | Show domain link | "Validated (X/Y)" + "This relay: Validated/Unvalidated" | Show count + link |
-| Has AROI + unvalidated | Show domain link | "Unvalidated" | Show count + link |
-| No AROI | Hidden | Hidden | Show count + link |
+| Condition | Operator (AROI) Row | AROI Validation Status | Family Row |
+|-----------|---------------------|------------------------|------------|
+| Has AROI + validated | Show domain link | "Validated (X/Y)" + "This relay: Validated/Unvalidated" | **Always shown** - count + link |
+| Has AROI + partial | Show domain link | "Partially Validated (X/Y)" + "This relay: ..." | **Always shown** - count + link |
+| Has AROI + unvalidated | Show domain link | "Unvalidated" | **Always shown** - count + link |
+| No AROI | Not shown | Not shown | **Always shown** - count + link |
+
+**Key Rule:** Family is ALWAYS displayed in header, regardless of AROI presence.
 
 ---
 
