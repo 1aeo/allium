@@ -23,7 +23,7 @@ class ProgressLogger:
     - _log_progress() in relays.py
     """
     
-    def __init__(self, start_time=None, progress_step=0, total_steps=34, progress_enabled=True):
+    def __init__(self, start_time=None, progress_step=0, total_steps=53, progress_enabled=True):
         """
         Initialize the progress logger.
         
@@ -153,7 +153,7 @@ class ProgressLogger:
         return child_log
 
 
-def create_progress_logger(start_time=None, progress_step=0, total_steps=34, progress_enabled=True):
+def create_progress_logger(start_time=None, progress_step=0, total_steps=53, progress_enabled=True):
     """
     Factory function to create a ProgressLogger instance.
     
