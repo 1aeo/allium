@@ -673,9 +673,11 @@ def get_contact_validation_status(relays: List[Dict], validation_data: Optional[
         'validation_status': 'no_aroi',  # no_aroi, validated, partially_validated, unvalidated
         'validated_relays': [],
         'unvalidated_relays': [],
+        'no_aroi_relays': [],
         'validation_summary': {
             'total_relays': len(relays),
             'relays_with_aroi': 0,
+            'relays_no_aroi': 0,
             'validated_count': 0,
             'unvalidated_count': 0,
             'validation_rate': 0.0
@@ -716,7 +718,15 @@ def get_contact_validation_status(relays: List[Dict], validation_data: Optional[
         has_aroi_setup = aroi_domain and aroi_domain != 'none'
         
         if not has_aroi_setup:
-            # Relay doesn't have all 3 required AROI fields, skip validation check
+            # Relay doesn't have all 3 required AROI fields
+            result['validation_summary']['relays_no_aroi'] += 1
+            result['no_aroi_relays'].append({
+                'fingerprint': fingerprint,
+                'nickname': nickname,
+                'aroi_domain': 'none',
+                'error': 'Missing AROI setup',
+                'proof_type': 'none',
+            })
             continue
         
         # Relay has proper AROI setup (all 3 required fields present)
@@ -793,5 +803,6 @@ def get_contact_validation_status(relays: List[Dict], validation_data: Optional[
     # Build fingerprint sets for O(1) lookups in templates
     result['validated_fingerprints'] = {r['fingerprint'] for r in result['validated_relays']}
     result['unvalidated_fingerprints'] = {r['fingerprint'] for r in result['unvalidated_relays']}
+    result['no_aroi_fingerprints'] = {r['fingerprint'] for r in result['no_aroi_relays']}
     
     return result

@@ -65,176 +65,217 @@
     {# Use pre-computed fingerprint sets from Python for O(1) lookups #}
     {% set validated_fps = contact_validation_status.validated_fingerprints if contact_validation_status else {} -%}
     {% set unvalidated_fps = contact_validation_status.unvalidated_fingerprints if contact_validation_status else {} -%}
-    {% for relay in relay_list -%}
-	<tr>
-	    {% set obs_unit = relay['observed_bandwidth']|determine_unit(relays.use_bits) -%}
-	    {% set obs_bandwidth = relay['observed_bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
-	    <td>
-		{% if relay['running'] -%}
-		    <span class="circle circle-online" title="This relay is online"></span>
-		{% else -%}
-		    <span class="circle circle-offline" title="This relay is offline"></span>
-		{% endif -%}
-		{{- aroi_validation_icon(relay['fingerprint'], relay['aroi_domain'], validated_fps, unvalidated_fps) }}
-	    </td>
-	    {% if relay['effective_family']|length > 1 -%}
-		<td title="{{ relay['nickname']|escape }}">
-		    <a href="{{ page_ctx.path_prefix }}relay/{{ relay['fingerprint']|escape }}/">{{ relay['nickname']|truncate(14)|escape
-			}}</a> (<a href="{{ page_ctx.path_prefix }}family/{{ relay['fingerprint']|escape }}/">{{
-			relay['effective_family']| length }}</a>)</td>
-		{% else -%}
-		    <td title="{{ relay['nickname']|escape }}">
-			<a href="{{ page_ctx.path_prefix }}relay/{{ relay['fingerprint']|escape }}/">{{ relay['nickname']|truncate(14)|escape
-			}}</a></td>
-		{% endif -%}
-		<td>
-		    {{ obs_bandwidth }} {{ obs_unit }}
-		    {% if relay['measured'] is not none -%}
-		        {% if relay['measured'] -%}
-		            &nbsp;&nbsp;<span style="color: #28a745; font-weight: bold;" title="Bandwidth measured by ≥3 bandwidth authorities">✓</span>
-		        {% else -%}
-		            &nbsp;&nbsp;<span style="color: #dc3545; font-weight: bold;" title="Bandwidth not measured by ≥3 bandwidth authorities">✗</span>
-		        {% endif -%}
-		    {% else -%}
-		        &nbsp;&nbsp;<span style="color: #6c757d;" title="Bandwidth measurement status unknown">?</span>
-		    {% endif -%}
-		</td>
-		<td>
-		    {% if relay.get('uptime_display') -%}
-		        {% if relay['uptime_display'].startswith('DOWN') -%}
-		            <span style="color: #dc3545;">{{ relay['uptime_display']|escape }}</span>
-		        {% else -%}
-		            {{ relay['uptime_display']|escape }}
-		        {% endif -%}
-		    {% else -%}
-		        N/A
-		    {% endif -%}
-		</td>
-		<td>
-		    {% if relay.get('uptime_api_display') -%}
-		        {{ relay['uptime_api_display']|safe }}
-		    {% else -%}
-		        N/A
-		    {% endif -%}
-		</td>
-		<td>
-		    {% if relay.get('flag_uptime_display') and relay['flag_uptime_display'] != 'N/A' -%}
-		        <span title="{{ relay['flag_uptime_tooltip']|escape }}">{{ relay['flag_uptime_display']|safe }}</span>
-		    {% else -%}
-		        N/A
-		    {% endif -%}
-		</td>
-		<td>
-		    {% if relay.get('or_addresses') and relay['or_addresses']|length > 0 -%}
-		        {% set ipv4_addr = relay['or_addresses'][0].split(':', 1)[0] -%}
-		        <a href="https://bgp.tools/prefix/{{ ipv4_addr|escape }}">{{ ipv4_addr|escape }}</a>
-		    {% else -%}
-		        N/A
-		    {% endif -%}
-		</td>
-		{# PERF: Use pre-rendered flags HTML from Python (eliminates Jinja2 loop) - THE KEY OPTIMIZATION #}
-		<td>{{ relay['_flags_html']|replace('{path}', page_ctx.path_prefix)|safe }}</td>
-		{% if relay['country'] -%}
-		    {% if key != 'country' -%}
-			<td>
-			    <a href="{{ page_ctx.path_prefix }}country/{{ relay['country']|escape }}/">
-				<img src="{{ page_ctx.path_prefix }}static/images/cc/{{ relay['country']|lower|escape }}.png"
-				     title="{{ relay['country_name']|escape }}"
-				     alt="{{ relay['country_name']|escape }}">
-			    {{ relay['country']|escape }}
-			    </a>
-			</td>
-		    {% else -%}
-			<td>
-			    <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ relay['country']|lower|escape }}.png"
-				 title="{{ relay['country_name']|escape }}"
-				 alt="{{ relay['country_name']|escape }}">
-			    {{ relay['country_name']|escape }}
-			</td>
-		    {% endif -%}
-		{% else -%}
-		    <td>X</td>
-		{% endif -%}
-		{% if relay['as'] -%}
-		    {% if key != 'as' -%}
-			<td>
-			    <a href="{{ page_ctx.path_prefix }}as/{{ relay['as']|escape }}/">{{
-			    relay['as']|escape }}</a>
-			</td>
-		    {% else -%}
-			<td>{{ relay['as']|escape }}</td>
-		    {% endif -%}
-		{% else -%}
-		    <td>Unknown</td>
-		{% endif -%}
-		{% if relay['as_name'] -%}
-		    <td>
-			<a href="https://bgp.tools/{{ relay['as']|escape }}"
-			   title="{{ relay['as_name']|escape }}">{{
-			relay['as_name']|escape|truncate(length=20) }}</a>
-		    </td>
-		{% else -%}
-		    <td>Unknown</td>
-		{% endif -%}
-		{% if key != 'platform' -%}
-		    <td>
-			<a href="{{ page_ctx.path_prefix }}platform/{{ relay['platform']|escape }}/">{{
-			relay['platform']|truncate(length=10)|escape }}</a>
-		    </td>
-		{% else -%}
-		    <td>{{ relay['platform']|truncate(length=10)|escape }}</td>
-		{% endif -%}
-		{% if key != 'first_seen' -%}
-		    <td>
-			<a href="{{ page_ctx.path_prefix }}first_seen/{{ relay['first_seen_date_escaped'] }}/" title="{{ relay['first_seen'].split(' ', 1)[0]|escape }}">
-			    {% if relay['first_seen'] -%}
-			        {{ relay['first_seen']|format_time_ago }}
-			    {% else -%}
-			        unknown
-			    {% endif -%}
-			</a>
-		    </td>
-		{% else -%}
-		    <td title="{{ relay['first_seen'].split(' ', 1)[0]|escape }}">
-			{% if relay['first_seen'] -%}
-			    {{ relay['first_seen']|format_time_ago }}
-			{% else -%}
-			    unknown
-			{% endif -%}
-		    </td>
-		{% endif -%}
-		<td title="{% if relay['last_restarted'] -%}{{ relay['last_restarted'].split(' ', 1)[0]|escape }}{% else -%}unknown{% endif -%}">
-		    {% if relay['last_restarted'] -%}
-		        {{ relay['last_restarted']|format_time_ago }}
-		    {% else -%}
-		        unknown
-		    {% endif -%}
-		</td>
-		{% if has_ipv6 -%}
-		<td>
-		    {% set ipv6_found = false -%}
-		    {% set ipv6_addr = '' -%}
-		    {% if relay.get('or_addresses') -%}
-		        {% for addr in relay['or_addresses'] -%}
-		            {% if ':' in addr and addr.count(':') > 1 and not ipv6_found -%}
-		                {% set ipv6_addr = addr.split(']')[0].lstrip('[') -%}
-		                {% set ipv6_found = true -%}
-		            {% endif -%}
-		        {% endfor -%}
-		    {% endif -%}
-		    {% if ipv6_found -%}
-		        {{ ipv6_addr|escape }}
-		    {% else -%}
-		        N/A
-		    {% endif -%}
-		</td>
-		{% endif -%}
-	    </tr>
-	{% endfor -%}
-    </tbody>
+    {% set no_aroi_fps = contact_validation_status.no_aroi_fingerprints if contact_validation_status else {} -%}
+    
+    {# Define iteration groups #}
+    {% set groups = [] %}
+    {% if contact_validation_status %}
+        {% set _ = groups.append(('validated', '✅ Validated Relays', 'background-color: #d4edda; font-weight: bold; color: #155724;', validated_fps)) %}
+        {% set _ = groups.append(('unvalidated', '⚠️ Unvalidated Relays - Action Required', 'background-color: #fff3cd; font-weight: bold; color: #856404;', unvalidated_fps)) %}
+        {% set _ = groups.append(('no_aroi', '❔ Unverified / Other Relays', 'background-color: #f8f9fa; font-weight: bold; color: #6c757d;', no_aroi_fps)) %}
+    {% else %}
+        {# Just one pass for non-contact pages #}
+        {% set _ = groups.append(('all', '', '', {})) %}
+    {% endif %}
+
+    {% for group_name, group_label, group_style, group_fps in groups %}
+        
+        {# Check if we need a header #}
+        {% set group_has_items = false %}
+        {% if contact_validation_status %}
+            {% for relay in relay_list if relay.fingerprint in group_fps %}
+                {% set group_has_items = true %}
+            {% endfor %}
+            
+            {% if group_has_items %}
+               <tr class="section-header"><td colspan="16" style="{{ group_style }} padding: 10px; text-align: left;">{{ group_label }}</td></tr>
+            {% endif %}
+        {% else %}
+            {% set group_has_items = true %}
+        {% endif %}
+
+        {% if group_has_items %}
+            {% for relay in relay_list %}
+                {% set show_row = false %}
+                {% if not contact_validation_status %}
+                     {% set show_row = true %}
+                {% elif relay.fingerprint in group_fps %}
+                     {% set show_row = true %}
+                {% endif %}
+
+                {% if show_row %}
+                <tr>
+                    {% set obs_unit = relay['observed_bandwidth']|determine_unit(relays.use_bits) -%}
+                    {% set obs_bandwidth = relay['observed_bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
+                    <td>
+                        {% if relay['running'] -%}
+                            <span class="circle circle-online" title="This relay is online"></span>
+                        {% else -%}
+                            <span class="circle circle-offline" title="This relay is offline"></span>
+                        {% endif -%}
+                        {{- aroi_validation_icon(relay['fingerprint'], relay['aroi_domain'], validated_fps, unvalidated_fps) }}
+                    </td>
+                    {% if relay['effective_family']|length > 1 -%}
+                    <td title="{{ relay['nickname']|escape }}">
+                        <a href="{{ page_ctx.path_prefix }}relay/{{ relay['fingerprint']|escape }}/">{{ relay['nickname']|truncate(14)|escape
+                        }}</a> (<a href="{{ page_ctx.path_prefix }}family/{{ relay['fingerprint']|escape }}/">{{
+                        relay['effective_family']| length }}</a>)</td>
+                    {% else -%}
+                        <td title="{{ relay['nickname']|escape }}">
+                        <a href="{{ page_ctx.path_prefix }}relay/{{ relay['fingerprint']|escape }}/">{{ relay['nickname']|truncate(14)|escape
+                        }}</a></td>
+                    {% endif -%}
+                    <td>
+                        {{ obs_bandwidth }} {{ obs_unit }}
+                        {% if relay['measured'] is not none -%}
+                            {% if relay['measured'] -%}
+                                &nbsp;&nbsp;<span style="color: #28a745; font-weight: bold;" title="Bandwidth measured by ≥3 bandwidth authorities">✓</span>
+                            {% else -%}
+                                &nbsp;&nbsp;<span style="color: #dc3545; font-weight: bold;" title="Bandwidth not measured by ≥3 bandwidth authorities">✗</span>
+                            {% endif -%}
+                        {% else -%}
+                            &nbsp;&nbsp;<span style="color: #6c757d;" title="Bandwidth measurement status unknown">?</span>
+                        {% endif -%}
+                    </td>
+                    <td>
+                        {% if relay.get('uptime_display') -%}
+                            {% if relay['uptime_display'].startswith('DOWN') -%}
+                                <span style="color: #dc3545;">{{ relay['uptime_display']|escape }}</span>
+                            {% else -%}
+                                {{ relay['uptime_display']|escape }}
+                            {% endif -%}
+                        {% else -%}
+                            N/A
+                        {% endif -%}
+                    </td>
+                    <td>
+                        {% if relay.get('uptime_api_display') -%}
+                            {{ relay['uptime_api_display']|safe }}
+                        {% else -%}
+                            N/A
+                        {% endif -%}
+                    </td>
+                    <td>
+                        {% if relay.get('flag_uptime_display') and relay['flag_uptime_display'] != 'N/A' -%}
+                            <span title="{{ relay['flag_uptime_tooltip']|escape }}">{{ relay['flag_uptime_display']|safe }}</span>
+                        {% else -%}
+                            N/A
+                        {% endif -%}
+                    </td>
+                    <td>
+                        {% if relay.get('or_addresses') and relay['or_addresses']|length > 0 -%}
+                            {% set ipv4_addr = relay['or_addresses'][0].split(':', 1)[0] -%}
+                            <a href="https://bgp.tools/prefix/{{ ipv4_addr|escape }}">{{ ipv4_addr|escape }}</a>
+                        {% else -%}
+                            N/A
+                        {% endif -%}
+                    </td>
+                    {# PERF: Use pre-rendered flags HTML from Python (eliminates Jinja2 loop) - THE KEY OPTIMIZATION #}
+                    <td>{{ relay['_flags_html']|replace('{path}', page_ctx.path_prefix)|safe }}</td>
+                    {% if relay['country'] -%}
+                        {% if key != 'country' -%}
+                        <td>
+                            <a href="{{ page_ctx.path_prefix }}country/{{ relay['country']|escape }}/">
+                            <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ relay['country']|lower|escape }}.png"
+                                 title="{{ relay['country_name']|escape }}"
+                                 alt="{{ relay['country_name']|escape }}">
+                            {{ relay['country']|escape }}
+                            </a>
+                        </td>
+                        {% else -%}
+                        <td>
+                            <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ relay['country']|lower|escape }}.png"
+                             title="{{ relay['country_name']|escape }}"
+                             alt="{{ relay['country_name']|escape }}">
+                            {{ relay['country_name']|escape }}
+                        </td>
+                        {% endif -%}
+                    {% else -%}
+                        <td>X</td>
+                    {% endif -%}
+                    {% if relay['as'] -%}
+                        {% if key != 'as' -%}
+                        <td>
+                            <a href="{{ page_ctx.path_prefix }}as/{{ relay['as']|escape }}/">{{
+                            relay['as']|escape }}</a>
+                        </td>
+                        {% else -%}
+                        <td>{{ relay['as']|escape }}</td>
+                        {% endif -%}
+                    {% else -%}
+                        <td>Unknown</td>
+                    {% endif -%}
+                    {% if relay['as_name'] -%}
+                        <td>
+                        <a href="https://bgp.tools/{{ relay['as']|escape }}"
+                           title="{{ relay['as_name']|escape }}">{{
+                        relay['as_name']|escape|truncate(length=20) }}</a>
+                        </td>
+                    {% else -%}
+                        <td>Unknown</td>
+                    {% endif -%}
+                    {% if key != 'platform' -%}
+                        <td>
+                        <a href="{{ page_ctx.path_prefix }}platform/{{ relay['platform']|escape }}/">{{
+                        relay['platform']|truncate(length=10)|escape }}</a>
+                        </td>
+                    {% else -%}
+                        <td>{{ relay['platform']|truncate(length=10)|escape }}</td>
+                    {% endif -%}
+                    {% if key != 'first_seen' -%}
+                        <td>
+                        <a href="{{ page_ctx.path_prefix }}first_seen/{{ relay['first_seen_date_escaped'] }}/" title="{{ relay['first_seen'].split(' ', 1)[0]|escape }}">
+                            {% if relay['first_seen'] -%}
+                                {{ relay['first_seen']|format_time_ago }}
+                            {% else -%}
+                                unknown
+                            {% endif -%}
+                        </a>
+                        </td>
+                    {% else -%}
+                        <td title="{{ relay['first_seen'].split(' ', 1)[0]|escape }}">
+                        {% if relay['first_seen'] -%}
+                            {{ relay['first_seen']|format_time_ago }}
+                        {% else -%}
+                            unknown
+                        {% endif -%}
+                        </td>
+                    {% endif -%}
+                    <td title="{% if relay['last_restarted'] -%}{{ relay['last_restarted'].split(' ', 1)[0]|escape }}{% else -%}unknown{% endif -%}">
+                        {% if relay['last_restarted'] -%}
+                            {{ relay['last_restarted']|format_time_ago }}
+                        {% else -%}
+                            unknown
+                        {% endif -%}
+                    </td>
+                    {% if has_ipv6 -%}
+                    <td>
+                        {% set ipv6_found = false -%}
+                        {% set ipv6_addr = '' -%}
+                        {% if relay.get('or_addresses') -%}
+                            {% for addr in relay['or_addresses'] -%}
+                                {% if ':' in addr and addr.count(':') > 1 and not ipv6_found -%}
+                                    {% set ipv6_addr = addr.split(']')[0].lstrip('[') -%}
+                                    {% set ipv6_found = true -%}
+                                {% endif -%}
+                            {% endfor -%}
+                        {% endif -%}
+                        {% if ipv6_found -%}
+                            {{ ipv6_addr|escape }}
+                        {% else -%}
+                            N/A
+                        {% endif -%}
+                    </td>
+                    {% endif -%}
+                </tr>
+                {% endif %}
+            {% endfor %}
+        {% endif %}
+    {% endfor %}
+</tbody>
 </table>
 
 {# Additional content block for child templates to add content after the table #}
 {% block after_table %}{% endblock %}
 
-{% endblock -%} 
+{% endblock -%}
