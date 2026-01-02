@@ -792,7 +792,12 @@ def get_contact_validation_status(relays: List[Dict], validation_data: Optional[
     if result['validation_summary']['validated_count'] == result['validation_summary']['relays_with_aroi']:
         result['validation_status'] = 'validated'
     elif result['validation_summary']['validated_count'] > 0:
-        result['validation_status'] = 'partially_validated'
+        # User Feedback: "metric: They impact the operator AROI overall validation status"
+        # Solution: Distinguish between "Verified Identity" (has at least one valid proof) 
+        # vs "Perfect Configuration" (all relays valid).
+        # We introduce 'verified_with_failures' to keep the Green "Verified" status 
+        # while acknowledging the presence of illegitimate/broken relays.
+        result['validation_status'] = 'verified_with_failures'
     else:
         result['validation_status'] = 'unvalidated'
     

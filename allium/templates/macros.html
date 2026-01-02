@@ -219,8 +219,9 @@
     {%- set link_title_suffix = 'See details on operator page' if issues_link else 'See details below' -%}
     {% if status == 'validated' -%}
         <span style="color: #28a745; font-weight: bold;{% if not show_count %} margin-left: 5px;{% endif %}" title="All {{ summary.relays_with_aroi }} relays with AROI have valid cryptographic proofs">✓ Verified{% if show_count %} ({{ summary.relays_with_aroi }} relays){% endif %}</span>
-    {% elif status == 'partially_validated' -%}
-        <a href="{{ link_target }}" style="color: #ffc107; font-weight: bold;{% if not show_count %} margin-left: 5px;{% endif %} text-decoration: none;" title="{{ summary.validated_count }}/{{ summary.relays_with_aroi }} relays validated ({{ "%.1f"|format(summary.validation_rate) }}%) - {{ link_title_suffix }}">⚠ Partially Verified{% if show_count %} ({{ summary.validated_count }}/{{ summary.relays_with_aroi }}){% endif %}</a>
+    {% elif status == 'verified_with_failures' -%}
+        <span style="color: #28a745; font-weight: bold;{% if not show_count %} margin-left: 5px;{% endif %}" title="Identity Verified: Operator has successfully proven ownership. Some associated relays failed validation.">✓ Verified Identity</span>
+        <a href="{{ link_target }}" style="color: #ffc107; font-weight: normal; margin-left: 5px; text-decoration: none; font-size: 0.9em;" title="{{ summary.validated_count }}/{{ summary.relays_with_aroi }} relays validated. {{ summary.relays_with_aroi - summary.validated_count }} relays failed validation.">(⚠ {{ summary.relays_with_aroi - summary.validated_count }} unvalidated)</a>
     {% elif status == 'unvalidated' -%}
         <a href="{{ link_target }}" style="color: #dc3545; font-weight: bold;{% if not show_count %} margin-left: 5px;{% endif %} text-decoration: none;" title="AROI validation failed{% if show_count %} for {{ summary.relays_with_aroi }} relays{% endif %} - {{ link_title_suffix }}">✗ Unvalidated{% if show_count %} ({{ summary.relays_with_aroi }} relays){% endif %}</a>
     {% endif -%}
