@@ -1910,6 +1910,19 @@ The enhanced Health Status section displays 14 metrics in 8 display cells using 
 
 ---
 
+#### 2.2.1 Future Enhancement: Add Overload Status to Health Section
+
+**TODO:** Add the Onionoo API field `overload_general_timestamp` to the Health Status section.
+
+Per Onionoo API documentation, this field indicates when a relay last reported being overloaded. This would be valuable information for relay operators troubleshooting performance issues.
+
+**Implementation:**
+- Add to Health Status section (not Connectivity)
+- Display as warning/info when timestamp is recent
+- Show "Relay reported overload on: {timestamp}" or similar
+
+---
+
 #### 2.3 Merge AROI + Family into "Operator and Family" Section
 
 **New Section Structure:**
