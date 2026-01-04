@@ -312,7 +312,7 @@ Country: unknown
 
 {# ============== SECTION 2: CONNECTIVITY AND LOCATION ============== #}
 {# NOTE: Reuses existing 'diag' variable (defined line 115) - no new variables #}
-<section id="connectivity" style="margin: 20px 0; padding: 15px; padding-bottom: 5px; background: #f8f9fa; border-radius: 8px;">
+<section id="connectivity" class="section-box" style="padding-bottom: 5px;">
 <h4 style="margin-top: 0; margin-bottom: 12px;">
     <div class="section-header">
         <a href="#connectivity" class="anchor-link">Connectivity and Location</a>
@@ -322,8 +322,9 @@ Country: unknown
 <div class="row">
 {# ===== Left Column: Addresses and Reachability ===== #}
 <div class="col-md-6">
-<h5 style="margin-top: 0; border-bottom: 1px solid #dee2e6; padding-bottom: 5px;">Addresses</h5>
-<dl style="margin-bottom: 15px;">
+<div class="subsection-card">
+<h5 class="subsection-header">Addresses</h5>
+<dl>
     <dt>OR Address</dt>
     <dd>
         {% if relay['verified_host_names'] -%}
@@ -350,8 +351,10 @@ Country: unknown
     <dd><a href="http://{{ relay['dir_address']|escape }}">{{ relay['dir_address']|escape }}</a></dd>
     {% endif %}
 </dl>
+</div>
 
-<h5 style="border-bottom: 1px solid #dee2e6; padding-bottom: 5px;">Reachability (Directory Authorities)</h5>
+<div class="subsection-card">
+<h5 class="subsection-header">Reachability</h5>
 <dl>
     {% if diag and diag.reachability_summary %}
     {%- set reach = diag.reachability_summary -%}
@@ -363,20 +366,22 @@ Country: unknown
     {% if reach.ipv6.total > 0 %}
     <dt>IPv6</dt>
     <dd>
-        <span class="status-{{ reach.ipv6.status_class }}">{{ reach.ipv6.reachable_count }}/{{ reach.ipv6.total }}</span>{% if reach.ipv6.not_tested %} <span class="status-muted" style="font-size: 11px; font-weight: normal;">({{ reach.ipv6.not_tested|length }} don't test)</span>{% endif %}
+        <span class="status-{{ reach.ipv6.status_class }}">{{ reach.ipv6.reachable_count }}/{{ reach.ipv6.total }}</span>{% if reach.ipv6.not_tested %} <span class="status-note">({{ reach.ipv6.not_tested|length }} don't test)</span>{% endif %}
     </dd>
     {% endif %}
     {% else %}
     <dt>Status</dt>
-    <dd><span class="status-muted" style="font-weight: normal;">Reachability data unavailable</span></dd>
+    <dd><span class="status-note">Reachability data unavailable</span></dd>
     {% endif %}
 </dl>
+</div>
 </div>
 
 {# ===== Right Column: Location and AS ===== #}
 <div class="col-md-6">
-<h5 style="margin-top: 0; border-bottom: 1px solid #dee2e6; padding-bottom: 5px;">Location</h5>
-<dl style="margin-bottom: 15px;">
+<div class="subsection-card">
+<h5 class="subsection-header">Location</h5>
+<dl>
     <dt>Country</dt>
     <dd>
         {% if relay['country'] -%}
@@ -407,8 +412,10 @@ Country: unknown
     <dt>Interactive Map</dt>
     <dd><a href="https://routefluxmap.1aeo.com/#relay={{ relay['fingerprint']|escape }}" target="_blank" rel="noopener">View on Interactive Map</a></dd>
 </dl>
+</div>
 
-<h5 style="border-bottom: 1px solid #dee2e6; padding-bottom: 5px;">Autonomous System</h5>
+<div class="subsection-card">
+<h5 class="subsection-header">Autonomous System</h5>
 <dl>
     <dt>AS Number</dt>
     <dd>
@@ -429,6 +436,7 @@ Country: unknown
         {% endif -%}
     </dd>
 </dl>
+</div>
 </div>
 </div>
 </section>
