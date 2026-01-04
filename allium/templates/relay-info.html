@@ -310,6 +310,129 @@ Country: unknown
 
 </div>
 
+{# ============== SECTION 2: CONNECTIVITY AND LOCATION ============== #}
+{# NOTE: Reuses existing 'diag' variable (defined line 115) - no new variables #}
+<section id="connectivity" style="margin: 20px 0; padding: 15px; padding-bottom: 5px; background: #f8f9fa; border-radius: 8px;">
+<h4 style="margin-top: 0; margin-bottom: 12px;">
+    <div class="section-header">
+        <a href="#connectivity" class="anchor-link">Connectivity and Location</a>
+    </div>
+</h4>
+
+<div class="row">
+{# ===== Left Column: Addresses and Reachability ===== #}
+<div class="col-md-6">
+<h5 style="margin-top: 0; border-bottom: 1px solid #dee2e6; padding-bottom: 5px;">Addresses</h5>
+<dl style="margin-bottom: 15px;">
+    <dt>OR Address</dt>
+    <dd>
+        {% if relay['verified_host_names'] -%}
+            {% for hostname in relay['verified_host_names'] -%}
+                <span class="verified-hostname" title="Verified: reverse DNS lookup matched a forward A record (DNSSEC validated). Source: Onionoo API">{{ hostname|escape }}</span>{% if not loop.last %}, {% endif %}
+            {% endfor %}<br>
+        {% elif relay['unverified_host_names'] -%}
+            {% for hostname in relay['unverified_host_names'] -%}
+                <span class="unverified-hostname" title="Unverified: reverse DNS found but no matching A record. Source: Onionoo API">{{ hostname|escape }}</span>{% if not loop.last %}, {% endif %}
+            {% endfor %}<br>
+        {% endif -%}
+        {% for address in relay['or_addresses'] -%}
+            {{ address }}{% if not loop.last %}<br>{% endif %}
+        {% endfor -%}
+    </dd>
+    
+    {% if relay['exit_addresses'] %}
+    <dt>Exit Address</dt>
+    <dd>{% for addr in relay['exit_addresses'] %}{{ addr|escape }}{% if not loop.last %}<br>{% endif %}{% endfor %}</dd>
+    {% endif %}
+    
+    {% if relay['dir_address'] %}
+    <dt>Dir Address</dt>
+    <dd><a href="http://{{ relay['dir_address']|escape }}">{{ relay['dir_address']|escape }}</a></dd>
+    {% endif %}
+</dl>
+
+<h5 style="border-bottom: 1px solid #dee2e6; padding-bottom: 5px;">Reachability (Directory Authorities)</h5>
+<dl>
+    {% if diag and diag.reachability_summary %}
+    {%- set reach = diag.reachability_summary -%}
+    <dt>IPv4</dt>
+    <dd>
+        <span class="status-{{ reach.ipv4.status_class }}">{{ reach.ipv4.reachable_count }}/{{ reach.ipv4.total }}</span>
+    </dd>
+    {# IPv6: Use ipv6.total > 0 check (same as Health Status line 212) - no new loop needed #}
+    {% if reach.ipv6.total > 0 %}
+    <dt>IPv6</dt>
+    <dd>
+        <span class="status-{{ reach.ipv6.status_class }}">{{ reach.ipv6.reachable_count }}/{{ reach.ipv6.total }}</span>{% if reach.ipv6.not_tested %} <span class="status-muted" style="font-size: 11px; font-weight: normal;">({{ reach.ipv6.not_tested|length }} don't test)</span>{% endif %}
+    </dd>
+    {% endif %}
+    {% else %}
+    <dt>Status</dt>
+    <dd><span class="status-muted" style="font-weight: normal;">Reachability data unavailable</span></dd>
+    {% endif %}
+</dl>
+</div>
+
+{# ===== Right Column: Location and AS ===== #}
+<div class="col-md-6">
+<h5 style="margin-top: 0; border-bottom: 1px solid #dee2e6; padding-bottom: 5px;">Location</h5>
+<dl style="margin-bottom: 15px;">
+    <dt>Country</dt>
+    <dd>
+        {% if relay['country'] -%}
+            <a href="{{ page_ctx.path_prefix }}country/{{ relay['country']|escape }}/">
+                <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ relay['country']|lower|escape }}.png"
+                     title="{{ relay['country_name']|escape }}" alt="{{ relay['country_name']|escape }}">
+            </a> {{ relay['country_name']|escape }}
+        {% else -%}
+            Unknown
+        {% endif -%}
+    </dd>
+    
+    {% if relay['region_name'] %}
+    <dt>Region</dt>
+    <dd>{{ relay['region_name']|escape }}</dd>
+    {% endif %}
+    
+    {% if relay['city_name'] %}
+    <dt>City</dt>
+    <dd>{{ relay['city_name']|escape }}</dd>
+    {% endif %}
+    
+    {% if relay['latitude'] and relay['longitude'] and relay['latitude'] != 0 and relay['longitude'] != 0 %}
+    <dt>Coordinates</dt>
+    <dd>{{ relay['latitude']|escape }}, {{ relay['longitude']|escape }}</dd>
+    {% endif %}
+    
+    <dt>Interactive Map</dt>
+    <dd><a href="https://routefluxmap.1aeo.com/#relay={{ relay['fingerprint']|escape }}" target="_blank" rel="noopener">View on Interactive Map</a></dd>
+</dl>
+
+<h5 style="border-bottom: 1px solid #dee2e6; padding-bottom: 5px;">Autonomous System</h5>
+<dl>
+    <dt>AS Number</dt>
+    <dd>
+        {% if relay['as'] -%}
+            <a href="{{ page_ctx.path_prefix }}as/{{ relay['as']|escape }}/">{{ relay['as']|escape }}</a>
+        {% else -%}
+            Unknown
+        {% endif -%}
+    </dd>
+    
+    <dt>AS Name</dt>
+    <dd>
+        {% if relay['as_name'] -%}
+            {{ relay['as_name']|escape }}
+            {% if relay['as'] %}(<a href="https://bgp.tools/{{ relay['as']|escape }}">BGP.tools</a>){% endif %}
+        {% else -%}
+            Unknown
+        {% endif -%}
+    </dd>
+</dl>
+</div>
+</div>
+</section>
+
 <p>Last fetch was at {{ relays.timestamp }}.</p>
 <div class="row">
 <div class="col-md-6">
