@@ -2088,14 +2088,172 @@ The enhanced Health Status section displays 14 metrics in 8 display cells using 
 
 #### 2.2.1 Future Enhancement: Add Overload Status to Health Section
 
-**TODO:** Add the Onionoo API field `overload_general_timestamp` to the Health Status section.
+**Overview:** Add overload status indicator to the Health Status section's "Stability" row, with tooltip showing details from all 5 Onionoo overload fields.
 
-Per Onionoo API documentation, this field indicates when a relay last reported being overloaded. This would be valuable information for relay operators troubleshooting performance issues.
+**Onionoo API Overload Fields (5 total):**
 
-**Implementation:**
-- Add to Health Status section (not Connectivity)
-- Display as warning/info when timestamp is recent
-- Show "Relay reported overload on: {timestamp}" or similar
+| Field | Type | Source | Description |
+|-------|------|--------|-------------|
+| `overload_general` | Boolean | details | Relay is currently in overloaded state |
+| `overload_general_timestamp` | int (ms) | details | UTC timestamp when relay last reported being overloaded |
+| `overload_fd_exhausted` | Boolean | details | File descriptors exhausted (ran out of FDs) |
+| `overload_write_limit` | Boolean | details | Write bandwidth limit reached |
+| `overload_read_limit` | Boolean | details | Read bandwidth limit reached |
+
+**Note:** The bandwidth document also contains `overload_ratelimits` (dict with rate-limit, burst-limit, write-count, read-count, timestamp) and `overload_fd_exhausted` (dict with timestamp). These provide additional detail beyond the boolean flags.
+
+**Health Status Display:**
+
+Rename "Uptime" row to "Stability" and add overload indicator as first element:
+
+```
+┃ Stability      Not Overloaded | UP 1mo 1w | 99% (1M)                                  ┃
+```
+
+When overloaded:
+```
+┃ Stability      Overloaded | UP 1mo 1w | 99% (1M)                                      ┃
+```
+
+**Display Logic:**
+
+| Condition | Display | Color | 
+|-----------|---------|-------|
+| No overload fields set | "Not Overloaded" | Green (#28a745) |
+| Any overload field is true/present | "Overloaded" | Red (#dc3545) |
+
+**Tooltip Content (shows on hover over "Overloaded"/"Not Overloaded"):**
+
+When NOT overloaded:
+```
+No overload conditions reported.
+- General: No
+- FD Exhausted: No
+- Write Limit: No
+- Read Limit: No
+```
+
+When overloaded (example with multiple conditions):
+```
+Overload conditions detected:
+- General: Yes (last: 2026-01-04 06:00 UTC, 2h ago)
+- FD Exhausted: No
+- Write Limit: Yes
+- Read Limit: No
+```
+
+**Jinja2 Template for Stability Row:**
+
+```jinja2
+{# Row: Stability (renamed from Uptime, with overload indicator) #}
+<div class="health-row">
+    <dt title="Relay stability: overload status and current uptime.">Stability</dt>
+    <dd>
+        {# Determine overload status from all 5 fields #}
+        {% set is_overloaded = (
+            relay.get('overload_general') or 
+            relay.get('overload_general_timestamp') or 
+            relay.get('overload_fd_exhausted') or 
+            relay.get('overload_write_limit') or 
+            relay.get('overload_read_limit')
+        ) %}
+        
+        {# Build tooltip with all 5 fields #}
+        {% set tooltip_lines = [] %}
+        {% if is_overloaded %}
+            {% set _ = tooltip_lines.append("Overload conditions detected:") %}
+        {% else %}
+            {% set _ = tooltip_lines.append("No overload conditions reported.") %}
+        {% endif %}
+        
+        {# General overload #}
+        {% if relay.get('overload_general') %}
+            {% if relay.get('overload_general_timestamp') %}
+                {% set _ = tooltip_lines.append("- General: Yes (last: " ~ relay['overload_general_timestamp']|format_timestamp ~ ")") %}
+            {% else %}
+                {% set _ = tooltip_lines.append("- General: Yes") %}
+            {% endif %}
+        {% else %}
+            {% set _ = tooltip_lines.append("- General: No") %}
+        {% endif %}
+        
+        {# FD exhausted #}
+        {% if relay.get('overload_fd_exhausted') %}
+            {% set _ = tooltip_lines.append("- FD Exhausted: Yes") %}
+        {% else %}
+            {% set _ = tooltip_lines.append("- FD Exhausted: No") %}
+        {% endif %}
+        
+        {# Write limit #}
+        {% if relay.get('overload_write_limit') %}
+            {% set _ = tooltip_lines.append("- Write Limit: Yes") %}
+        {% else %}
+            {% set _ = tooltip_lines.append("- Write Limit: No") %}
+        {% endif %}
+        
+        {# Read limit #}
+        {% if relay.get('overload_read_limit') %}
+            {% set _ = tooltip_lines.append("- Read Limit: Yes") %}
+        {% else %}
+            {% set _ = tooltip_lines.append("- Read Limit: No") %}
+        {% endif %}
+        
+        {% set overload_tooltip = tooltip_lines|join('\n') %}
+        
+        {# Display overload status with link to detailed section #}
+        <a href="#overload" title="{{ overload_tooltip }}" style="text-decoration: none;">
+            {% if is_overloaded %}
+                <span style="color: #dc3545; font-weight: bold;">Overloaded</span>
+            {% else %}
+                <span style="color: #28a745;">Not Overloaded</span>
+            {% endif %}
+        </a>
+        
+        <span style="color: #6c757d;"> | </span>
+        
+        {# Uptime display (existing logic) #}
+        {% if relay.get('uptime_display') %}
+            {% if relay['uptime_display'].startswith('DOWN') %}
+                <span style="color: #dc3545; font-weight: bold;">{{ relay['uptime_display']|escape }}</span>
+            {% else %}
+                <span style="color: #28a745;">{{ relay['uptime_display']|escape }}</span>
+            {% endif %}
+        {% else %}
+            <span style="color: #6c757d;">Unknown</span>
+        {% endif %}
+        
+        {# 1M uptime percentage #}
+        {% set uptime_1m = relay.get('uptime_percentages', {}).get('1_month', 0) %}
+        {% if uptime_1m > 0 %}
+            | <span style="color: {% if uptime_1m >= 100 %}#28a745{% elif uptime_1m >= 90 %}#856404{% else %}#dc3545{% endif %};">{{ uptime_1m|int }}%</span> (1M)
+        {% endif %}
+    </dd>
+</div>
+```
+
+**Variables Reference:**
+
+| Variable | Type | Source | Description |
+|----------|------|--------|-------------|
+| `relay['overload_general']` | bool | Onionoo details | Currently in overloaded state |
+| `relay['overload_general_timestamp']` | int (ms) | Onionoo details | When last reported overloaded |
+| `relay['overload_fd_exhausted']` | bool | Onionoo details | File descriptor exhaustion |
+| `relay['overload_write_limit']` | bool | Onionoo details | Write bandwidth limit hit |
+| `relay['overload_read_limit']` | bool | Onionoo details | Read bandwidth limit hit |
+| `relay['uptime_display']` | str | Calculated | Formatted uptime (e.g., "UP 1mo 1w") |
+| `relay['uptime_percentages']['1_month']` | float | Onionoo | 1-month uptime percentage |
+
+**Testing Checklist:**
+
+- [ ] Row label changed from "Uptime" to "Stability"
+- [ ] Overload status appears first in the cell
+- [ ] "Not Overloaded" shows in green when all 5 overload fields are false/absent
+- [ ] "Overloaded" shows in red when ANY of the 5 overload fields is true/present
+- [ ] Tooltip shows status of all 5 overload fields
+- [ ] Tooltip shows timestamp for `overload_general_timestamp` when present
+- [ ] Clicking overload status navigates to #overload section
+- [ ] Uptime display unchanged after overload status
+- [ ] 1M uptime percentage still displays correctly
 
 ---
 
@@ -2573,17 +2731,36 @@ def _get_contact_validation_status_for_relay(self, relay):
 - Only ~2% of relays have overload data, so section is minimal for most relays
 - When overload IS present, detailed information helps operators troubleshoot
 
-**Desktop Wireframe:**
+**Onionoo API Overload Fields (5 total):**
+
+| Field | Type | Source | Description |
+|-------|------|--------|-------------|
+| `overload_general` | Boolean | details | Relay is currently in overloaded state |
+| `overload_general_timestamp` | int (ms) | details | UTC timestamp when relay last reported being overloaded |
+| `overload_fd_exhausted` | Boolean | details | File descriptors exhausted (ran out of FDs) |
+| `overload_write_limit` | Boolean | details | Write bandwidth limit reached |
+| `overload_read_limit` | Boolean | details | Read bandwidth limit reached |
+
+**Additional Detail Fields (from /bandwidth document):**
+
+| Field | Type | Source | Description |
+|-------|------|--------|-------------|
+| `overload_ratelimits` | dict | bandwidth | Contains rate-limit, burst-limit, write-count, read-count, timestamp |
+| `overload_fd_exhausted` | dict | bandwidth | Contains timestamp when FD exhaustion occurred |
+
+**Desktop Wireframe (Not Overloaded - showing all 5 fields):**
 
 ```
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃ Overload Status                                                          [#overload]  ┃
 ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
-┃ Not Overloaded                                                                        ┃
+┃ Not Overloaded — No overload conditions reported by this relay.                       ┃
+┃                                                                                        ┃
+┃   General: No | FD Exhausted: No | Write Limit: No | Read Limit: No                   ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 ```
 
-**When Overloaded (detailed view):**
+**Desktop Wireframe (Overloaded - detailed view with all 5 fields):**
 
 ```
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
@@ -2591,31 +2768,38 @@ def _get_contact_validation_status_for_relay(self, relay):
 ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
 ┃ [Warning] OVERLOADED                                                                  ┃
 ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
-┃ General Overload                                ┃ Rate Limits                          ┃
-┃   Status: Reported                              ┃   Rate Limit: 20.0 MB/s              ┃
-┃   Last Reported: 2 hours ago                    ┃   Burst Limit: 30.0 MB/s             ┃
-┃   Timestamp: 2026-01-04 06:00 UTC               ┃   Write Limit Hit: 4,680 times       ┃
+┃ General Overload                                ┃ Bandwidth Limits                     ┃
+┃   overload_general: Yes                         ┃   overload_write_limit: Yes          ┃
+┃   overload_general_timestamp:                   ┃   overload_read_limit: No            ┃
+┃       2026-01-04 06:00 UTC (2 hours ago)        ┃                                      ┃
+┃                                                 ┃ Rate Limit Details (from /bandwidth):┃
+┃                                                 ┃   Rate Limit: 20.0 MB/s              ┃
+┃                                                 ┃   Burst Limit: 30.0 MB/s             ┃
+┃                                                 ┃   Write Limit Hit: 4,680 times       ┃
 ┃                                                 ┃   Read Limit Hit: 1,525 times        ┃
-┃                                                 ┃   Last Reported: 9 hours ago         ┃
 ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╋━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
 ┃ File Descriptors                                ┃ Recommendations                      ┃
-┃   Status: Not Reported                          ┃   - Check CPU/memory usage           ┃
+┃   overload_fd_exhausted: No                     ┃   - Check CPU/memory usage           ┃
 ┃                                                 ┃   - Review RelayBandwidthRate        ┃
 ┃                                                 ┃   - If FD issues: increase ulimit    ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 ```
 
-**Mobile Wireframe:**
+**Mobile Wireframe (Not Overloaded):**
 
 ```
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃ Overload Status          [#overload]  ┃
 ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
 ┃ Not Overloaded                        ┃
+┃   General: No                         ┃
+┃   FD Exhausted: No                    ┃
+┃   Write Limit: No                     ┃
+┃   Read Limit: No                      ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 ```
 
-**Mobile Wireframe (when overloaded):**
+**Mobile Wireframe (Overloaded - all 5 fields):**
 
 ```
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
@@ -2624,16 +2808,18 @@ def _get_contact_validation_status_for_relay(self, relay):
 ┃ [Warning] OVERLOADED                  ┃
 ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
 ┃ General Overload                      ┃
-┃   Status: Reported                    ┃
-┃   Last: 2 hours ago                   ┃
+┃   overload_general: Yes               ┃
+┃   Timestamp: 2026-01-04 06:00 UTC     ┃
+┃   (2 hours ago)                       ┃
 ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
-┃ Rate Limits                           ┃
-┃   Rate: 20.0 MB/s                     ┃
-┃   Write Hit: 4,680x                   ┃
-┃   Read Hit: 1,525x                    ┃
+┃ Bandwidth Limits                      ┃
+┃   overload_write_limit: Yes           ┃
+┃   overload_read_limit: No             ┃
+┃   Write Hit: 4,680x (from /bandwidth) ┃
+┃   Read Hit: 1,525x (from /bandwidth)  ┃
 ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
 ┃ File Descriptors                      ┃
-┃   Status: Not Reported                ┃
+┃   overload_fd_exhausted: No           ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 ```
 
@@ -2648,37 +2834,33 @@ def _get_contact_validation_status_for_relay(self, relay):
 </div>
 </h3>
 
-{# Determine if relay is overloaded #}
-{% set is_overloaded = false %}
-{% set has_general_overload = relay.get('overload_general_timestamp') %}
+{# Determine if relay is overloaded using all 5 boolean fields from /details #}
+{% set is_overloaded = (
+    relay.get('overload_general') or
+    relay.get('overload_general_timestamp') or
+    relay.get('overload_fd_exhausted') or
+    relay.get('overload_write_limit') or
+    relay.get('overload_read_limit')
+) %}
+
+{# Also check for additional detail from /bandwidth document #}
 {% set has_ratelimits = relay.get('overload_ratelimits') %}
-{% set has_fd_exhausted = relay.get('overload_fd_exhausted') %}
 
-{# Check if any overload condition is recent (within 24h for general, any data for others) #}
-{% if has_general_overload %}
-    {% set general_ts = relay['overload_general_timestamp'] %}
-    {# Note: Actual age calculation would need now_timestamp variable #}
-    {% set is_overloaded = true %}
-{% endif %}
-{% if has_ratelimits %}
-    {% set rl = relay['overload_ratelimits'] %}
-    {% if rl.get('write-count', 0) > 0 or rl.get('read-count', 0) > 0 %}
-        {% set is_overloaded = true %}
-    {% endif %}
-{% endif %}
-{% if has_fd_exhausted %}
-    {% set is_overloaded = true %}
-{% endif %}
-
-{# Simple status when not overloaded #}
+{# Simple status when not overloaded - still show all 5 fields #}
 {% if not is_overloaded %}
 <div style="padding: 15px; background: #d4edda; border-radius: 8px; border-left: 4px solid #28a745;">
     <span style="color: #155724; font-weight: bold;">Not Overloaded</span>
     <span style="color: #155724;"> — No overload conditions reported by this relay.</span>
+    <div style="margin-top: 10px; color: #155724; font-size: 13px;">
+        <span>General: No</span> | 
+        <span>FD Exhausted: No</span> | 
+        <span>Write Limit: No</span> | 
+        <span>Read Limit: No</span>
+    </div>
 </div>
 
 {% else %}
-{# Detailed view when overloaded #}
+{# Detailed view when overloaded - show all 5 fields with details #}
 <div style="padding: 15px; background: #fff3cd; border-radius: 8px; border-left: 4px solid #ffc107;">
     <div style="margin-bottom: 15px;">
         <span style="color: #856404; font-weight: bold; font-size: 16px;">[Warning] OVERLOADED</span>
@@ -2689,43 +2871,63 @@ def _get_contact_validation_status_for_relay(self, relay):
         <div class="col-md-6">
             <h5 style="margin-top: 0;">General Overload</h5>
             <dl class="dl-horizontal-compact">
-                <dt>Status</dt>
+                <dt>overload_general</dt>
                 <dd>
-                    {% if has_general_overload %}
-                        <span style="color: #dc3545; font-weight: bold;">Reported</span>
+                    {% if relay.get('overload_general') %}
+                        <span style="color: #dc3545; font-weight: bold;">Yes</span>
                     {% else %}
-                        <span style="color: #28a745;">Not Reported</span>
+                        <span style="color: #28a745;">No</span>
                     {% endif %}
                 </dd>
-                {% if has_general_overload %}
-                <dt>Last Reported</dt>
-                <dd>{{ relay['overload_general_timestamp']|format_timestamp_ago }}</dd>
-                <dt>Timestamp</dt>
-                <dd>{{ relay['overload_general_timestamp']|format_timestamp }} UTC</dd>
-                {% endif %}
+                <dt>overload_general_timestamp</dt>
+                <dd>
+                    {% if relay.get('overload_general_timestamp') %}
+                        {{ relay['overload_general_timestamp']|format_timestamp }} UTC
+                        <br><small style="color: #6c757d;">({{ relay['overload_general_timestamp']|format_timestamp_ago }})</small>
+                    {% else %}
+                        <span style="color: #6c757d;">N/A</span>
+                    {% endif %}
+                </dd>
             </dl>
             
             <h5>File Descriptors</h5>
             <dl class="dl-horizontal-compact">
-                <dt>Status</dt>
+                <dt>overload_fd_exhausted</dt>
                 <dd>
-                    {% if has_fd_exhausted %}
-                        <span style="color: #dc3545; font-weight: bold;">Exhaustion Reported</span>
+                    {% if relay.get('overload_fd_exhausted') %}
+                        <span style="color: #dc3545; font-weight: bold;">Yes</span>
                     {% else %}
-                        <span style="color: #28a745;">Not Reported</span>
+                        <span style="color: #28a745;">No</span>
                     {% endif %}
                 </dd>
-                {% if has_fd_exhausted and relay['overload_fd_exhausted'].get('timestamp') %}
-                <dt>Last Reported</dt>
-                <dd>{{ relay['overload_fd_exhausted']['timestamp']|format_timestamp_ago }}</dd>
-                {% endif %}
             </dl>
         </div>
         
-        {# Right Column: Rate Limits + Recommendations #}
+        {# Right Column: Bandwidth Limits + Rate Limit Details + Recommendations #}
         <div class="col-md-6">
-            <h5 style="margin-top: 0;">Rate Limits</h5>
+            <h5 style="margin-top: 0;">Bandwidth Limits</h5>
+            <dl class="dl-horizontal-compact">
+                <dt>overload_write_limit</dt>
+                <dd>
+                    {% if relay.get('overload_write_limit') %}
+                        <span style="color: #dc3545; font-weight: bold;">Yes</span>
+                    {% else %}
+                        <span style="color: #28a745;">No</span>
+                    {% endif %}
+                </dd>
+                <dt>overload_read_limit</dt>
+                <dd>
+                    {% if relay.get('overload_read_limit') %}
+                        <span style="color: #dc3545; font-weight: bold;">Yes</span>
+                    {% else %}
+                        <span style="color: #28a745;">No</span>
+                    {% endif %}
+                </dd>
+            </dl>
+            
+            {# Additional details from /bandwidth document if available #}
             {% if has_ratelimits %}
+            <h5>Rate Limit Details (from /bandwidth)</h5>
             {% set rl = relay['overload_ratelimits'] %}
             <dl class="dl-horizontal-compact">
                 <dt>Rate Limit</dt>
@@ -2753,20 +2955,19 @@ def _get_contact_validation_status_for_relay(self, relay):
                 <dd>{{ rl['timestamp']|format_timestamp_ago }}</dd>
                 {% endif %}
             </dl>
-            {% else %}
-            <p style="color: #6c757d;">No rate limit data available.</p>
             {% endif %}
             
             <h5>Recommendations</h5>
             <ul style="margin: 0; padding-left: 20px; font-size: 13px;">
-                {% if has_general_overload %}
+                {% if relay.get('overload_general') or relay.get('overload_general_timestamp') %}
                 <li>Check CPU and memory usage with <code>htop</code></li>
                 <li>Review <code>RelayBandwidthRate</code> in torrc</li>
                 {% endif %}
-                {% if has_ratelimits and (rl.get('write-count', 0) > 0 or rl.get('read-count', 0) > 0) %}
+                {% if relay.get('overload_write_limit') or relay.get('overload_read_limit') %}
                 <li>Consider increasing <code>RelayBandwidthRate</code></li>
+                <li>Check if your ISP is throttling traffic</li>
                 {% endif %}
-                {% if has_fd_exhausted %}
+                {% if relay.get('overload_fd_exhausted') %}
                 <li>Increase file descriptor limit: <code>ulimit -n 65535</code></li>
                 <li>For systemd: add <code>LimitNOFILE=65535</code> to service</li>
                 {% endif %}
@@ -2783,19 +2984,30 @@ def _get_contact_validation_status_for_relay(self, relay):
 
 The overload data comes from two Onionoo API endpoints:
 
-**1. Details Document (`/details`):**
+**1. Details Document (`/details`) - 5 Primary Overload Fields:**
 ```python
 # In allium/lib/relays.py - when processing relay data
+# All 5 overload fields are available in the details document
+
 relay_data = {
     # ... existing fields ...
-    'overload_general_timestamp': relay.get('overload_general_timestamp'),  # int (milliseconds)
+    
+    # 5 Primary Overload Fields from /details
+    'overload_general': relay.get('overload_general'),              # bool - Currently overloaded
+    'overload_general_timestamp': relay.get('overload_general_timestamp'),  # int (ms) - When last reported
+    'overload_fd_exhausted': relay.get('overload_fd_exhausted'),    # bool - FD exhaustion
+    'overload_write_limit': relay.get('overload_write_limit'),      # bool - Write limit reached
+    'overload_read_limit': relay.get('overload_read_limit'),        # bool - Read limit reached
 }
 ```
 
-**2. Bandwidth Document (`/bandwidth`):**
+**2. Bandwidth Document (`/bandwidth`) - Additional Detail Fields:**
 ```python
-# Need to fetch bandwidth document for overload_ratelimits and overload_fd_exhausted
-# These fields are NOT in the details document
+# The bandwidth document provides additional detail beyond the boolean flags
+# - overload_ratelimits: dict with rate-limit, burst-limit, write-count, read-count, timestamp
+# - overload_fd_exhausted: dict with timestamp (when FD exhaustion occurred)
+#
+# These fields require a separate API call to /bandwidth endpoint
 
 def fetch_bandwidth_overload_data(fingerprint: str) -> dict:
     """Fetch overload data from bandwidth document for a specific relay."""
@@ -2806,21 +3018,24 @@ def fetch_bandwidth_overload_data(fingerprint: str) -> dict:
     if data.get('relays'):
         relay = data['relays'][0]
         return {
-            'overload_ratelimits': relay.get('overload_ratelimits'),
-            'overload_fd_exhausted': relay.get('overload_fd_exhausted'),
+            'overload_ratelimits': relay.get('overload_ratelimits'),   # dict or None
+            'overload_fd_exhausted': relay.get('overload_fd_exhausted'),  # dict or None (note: different type than details!)
         }
     return {}
 ```
 
-**Note:** The bandwidth document fields (`overload_ratelimits`, `overload_fd_exhausted`) may require additional API calls or batch fetching strategy to avoid performance issues.
+**Note:** 
+- The 5 boolean fields from `/details` are the primary overload indicators
+- The `/bandwidth` document provides additional detail (counts, timestamps, limits)
+- Be careful: `overload_fd_exhausted` is a `bool` in `/details` but a `dict` in `/bandwidth`
 
 **Alternative - Batch Fetch Strategy:**
 ```python
-# Fetch bandwidth data for all relays with overload indicators
-# Add to relays.py during initial data fetch
+# Fetch bandwidth data for relays with overload indicators
+# Only fetch for relays that have any overload boolean set to True
 
 def _fetch_overload_data(self, fingerprints_with_overload: list) -> dict:
-    """Batch fetch bandwidth document overload data."""
+    """Batch fetch bandwidth document overload data for detailed info."""
     overload_data = {}
     
     # Fetch in batches of 100
@@ -2837,10 +3052,22 @@ def _fetch_overload_data(self, fingerprints_with_overload: list) -> dict:
                 if fp:
                     overload_data[fp] = {
                         'overload_ratelimits': relay.get('overload_ratelimits'),
-                        'overload_fd_exhausted': relay.get('overload_fd_exhausted'),
+                        'overload_fd_exhausted_detail': relay.get('overload_fd_exhausted'),  # Renamed to avoid confusion
                     }
     
     return overload_data
+
+
+def _get_fingerprints_with_overload(self, relays: list) -> list:
+    """Get list of fingerprints that have any overload flag set."""
+    return [
+        r['fingerprint'] for r in relays
+        if (r.get('overload_general') or 
+            r.get('overload_general_timestamp') or 
+            r.get('overload_fd_exhausted') or 
+            r.get('overload_write_limit') or 
+            r.get('overload_read_limit'))
+    ]
 ```
 
 **Template Filters Needed:**
@@ -2900,22 +3127,36 @@ def format_timestamp_ago(ts_ms: int) -> str:
 }
 ```
 
-**Variables Used:**
+**Variables Used (5 Primary Overload Fields from /details):**
 
 | Variable | Source | Type | Description |
 |----------|--------|------|-------------|
-| `relay['overload_general_timestamp']` | Onionoo details | int (ms) | UTC timestamp of last general overload |
+| `relay['overload_general']` | Onionoo details | bool | Relay is currently in overloaded state |
+| `relay['overload_general_timestamp']` | Onionoo details | int (ms) | UTC timestamp when relay last reported being overloaded |
+| `relay['overload_fd_exhausted']` | Onionoo details | bool | File descriptors exhausted |
+| `relay['overload_write_limit']` | Onionoo details | bool | Write bandwidth limit reached |
+| `relay['overload_read_limit']` | Onionoo details | bool | Read bandwidth limit reached |
+
+**Additional Detail Variables (from /bandwidth):**
+
+| Variable | Source | Type | Description |
+|----------|--------|------|-------------|
 | `relay['overload_ratelimits']` | Onionoo bandwidth | dict | Rate limit info: rate-limit, burst-limit, write-count, read-count, timestamp |
-| `relay['overload_fd_exhausted']` | Onionoo bandwidth | dict | FD exhaustion info: timestamp |
+| `relay['overload_fd_exhausted']` | Onionoo bandwidth | dict | FD exhaustion info: timestamp (note: same field name, different type in bandwidth doc) |
 
 **Testing Checklist:**
 
 - [ ] Section appears after Uptime/Stability section
-- [ ] "Not Overloaded" shows with green background when no overload data
-- [ ] Detailed view shows when ANY overload condition is present
-- [ ] General Overload subsection shows status and timestamp
-- [ ] Rate Limits subsection shows all metrics with formatting
-- [ ] File Descriptors subsection shows status
+- [ ] "Not Overloaded" shows with green background when no overload fields are true
+- [ ] Not Overloaded view shows all 5 fields with "No" status
+- [ ] Detailed view shows when ANY of the 5 overload fields is true/present
+- [ ] overload_general shows Yes/No status
+- [ ] overload_general_timestamp shows timestamp when present
+- [ ] overload_fd_exhausted shows Yes/No status
+- [ ] overload_write_limit shows Yes/No status
+- [ ] overload_read_limit shows Yes/No status
+- [ ] Rate Limit Details from /bandwidth shows when available
+- [ ] Recommendations dynamically update based on which overload conditions are present
 - [ ] Recommendations list is context-aware (shows relevant tips)
 - [ ] Mobile layout stacks subsections vertically
 - [ ] Anchor link #overload works from Health Status section
@@ -3208,48 +3449,104 @@ if relay_data.get('aroi_domain') and relay_data['aroi_domain'] != 'none':
         })
 
 # =========================================================================
-# OVERLOAD ISSUES (from Onionoo API)
+# OVERLOAD ISSUES (from Onionoo API - 5 Primary Fields)
 # =========================================================================
 from datetime import datetime, timezone
 
-# Issue 1: General Overload (overload_general_timestamp from details document)
+# Onionoo provides 5 overload fields in the /details document:
+# 1. overload_general (bool) - Currently overloaded
+# 2. overload_general_timestamp (int, ms) - When last reported overloaded  
+# 3. overload_fd_exhausted (bool) - File descriptors exhausted
+# 4. overload_write_limit (bool) - Write bandwidth limit reached
+# 5. overload_read_limit (bool) - Read bandwidth limit reached
+#
+# Additionally, the /bandwidth document may contain:
+# - overload_ratelimits (dict) - Detailed rate limit info with counts
+# - overload_fd_exhausted (dict) - Detailed FD exhaustion with timestamp
+
+# Issue 1: General Overload (overload_general boolean flag)
+if relay_data.get('overload_general'):
+    issues.append({
+        'severity': 'error',
+        'category': 'overload',
+        'title': 'General Overload Active',
+        'description': 'Relay is currently in overloaded state (overload_general=true)',
+        'suggestion': 'Check CPU and memory usage with htop. Monitor system load. Consider reducing RelayBandwidthRate in torrc if relay is consistently overloaded.',
+        'doc_ref': 'https://community.torproject.org/relay/setup/post-install/',
+    })
+
+# Issue 2: General Overload Timestamp (when relay last reported being overloaded)
 if relay_data.get('overload_general_timestamp'):
     ts_ms = relay_data['overload_general_timestamp']
     ts_dt = datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc)
     now = datetime.now(tz=timezone.utc)
     age_hours = (now - ts_dt).total_seconds() / 3600
     
-    if age_hours < 24:
+    # Only report if overload was recent (within 24h) and not already flagged by overload_general
+    if age_hours < 24 and not relay_data.get('overload_general'):
         issues.append({
-            'severity': 'error' if age_hours < 1 else 'warning',
+            'severity': 'warning',
             'category': 'overload',
-            'title': 'General Overload Reported',
+            'title': 'Recent Overload Reported',
             'description': f"Relay reported being overloaded {format_time_ago(ts_dt)} ({ts_dt.strftime('%Y-%m-%d %H:%M')} UTC)",
-            'suggestion': 'Check CPU and memory usage. Consider reducing RelayBandwidthRate in torrc if relay is consistently overloaded. Monitor system resources with htop or similar tools.',
+            'suggestion': 'Check CPU and memory usage. Review system logs for resource issues. Consider reducing RelayBandwidthRate if overloads are frequent.',
             'doc_ref': 'https://community.torproject.org/relay/setup/post-install/',
         })
 
-# Issue 2: Rate Limits Hit (overload_ratelimits from bandwidth document)
+# Issue 3: File Descriptor Exhaustion (overload_fd_exhausted boolean flag)
+if relay_data.get('overload_fd_exhausted') == True:  # Explicitly check for True (bool)
+    issues.append({
+        'severity': 'error',
+        'category': 'overload',
+        'title': 'File Descriptor Exhaustion',
+        'description': 'Relay has exhausted file descriptors (overload_fd_exhausted=true)',
+        'suggestion': 'Increase file descriptor limits. For systemd: add "LimitNOFILE=65535" to [Service] section. For shell: "ulimit -n 65535". Also consider adding "ConnLimit 10000" to torrc.',
+        'doc_ref': 'https://community.torproject.org/relay/setup/post-install/#file-descriptor-limits',
+    })
+
+# Issue 4: Write Bandwidth Limit Reached (overload_write_limit boolean flag)
+if relay_data.get('overload_write_limit'):
+    issues.append({
+        'severity': 'warning',
+        'category': 'overload',
+        'title': 'Write Bandwidth Limit Reached',
+        'description': 'Relay has hit its write bandwidth limit (overload_write_limit=true)',
+        'suggestion': 'Consider increasing RelayBandwidthRate in torrc if your connection can handle more traffic. Check if ISP is throttling uploads.',
+        'doc_ref': 'https://community.torproject.org/relay/setup/post-install/#bandwidth-limits',
+    })
+
+# Issue 5: Read Bandwidth Limit Reached (overload_read_limit boolean flag)
+if relay_data.get('overload_read_limit'):
+    issues.append({
+        'severity': 'warning',
+        'category': 'overload',
+        'title': 'Read Bandwidth Limit Reached',
+        'description': 'Relay has hit its read bandwidth limit (overload_read_limit=true)',
+        'suggestion': 'Consider increasing RelayBandwidthRate in torrc if your connection can handle more traffic. Check if ISP is throttling downloads.',
+        'doc_ref': 'https://community.torproject.org/relay/setup/post-install/#bandwidth-limits',
+    })
+
+# Issue 6: Rate Limits Hit (detailed info from /bandwidth document)
 if relay_data.get('overload_ratelimits'):
     rl = relay_data['overload_ratelimits']
     write_count = rl.get('write-count', 0)
     read_count = rl.get('read-count', 0)
     rate_limit = rl.get('rate-limit', 0)
-    burst_limit = rl.get('burst-limit', 0)
     
     if write_count > 0 or read_count > 0:
-        rate_mb = rate_limit / 1024 / 1024
+        rate_mb = rate_limit / 1024 / 1024 if rate_limit else 0
         issues.append({
-            'severity': 'warning',
+            'severity': 'info',
             'category': 'overload',
-            'title': 'Rate Limits Hit',
+            'title': 'Rate Limit Statistics',
             'description': f"Write limit hit {write_count:,} times, Read limit hit {read_count:,} times. Current rate limit: {rate_mb:.1f} MB/s",
-            'suggestion': f"Consider increasing RelayBandwidthRate (currently {rate_mb:.1f} MB/s) if your connection can handle more traffic. Edit torrc: RelayBandwidthRate {int(rate_mb * 1.5)} MBytes",
+            'suggestion': f"These counts indicate how often your configured limits were reached. Consider increasing RelayBandwidthRate if your connection can handle more traffic.",
             'doc_ref': 'https://community.torproject.org/relay/setup/post-install/#bandwidth-limits',
         })
 
-# Issue 3: File Descriptor Exhaustion (overload_fd_exhausted from bandwidth document)
-if relay_data.get('overload_fd_exhausted'):
+# Issue 7: FD Exhaustion with timestamp (detailed info from /bandwidth document)
+# Note: overload_fd_exhausted can be a bool (from /details) or dict (from /bandwidth)
+if isinstance(relay_data.get('overload_fd_exhausted'), dict):
     fd_data = relay_data['overload_fd_exhausted']
     fd_ts = fd_data.get('timestamp')
     
@@ -3258,17 +3555,8 @@ if relay_data.get('overload_fd_exhausted'):
         issues.append({
             'severity': 'error',
             'category': 'overload',
-            'title': 'File Descriptor Exhaustion',
-            'description': f"Relay ran out of file descriptors {format_time_ago(ts_dt)}",
-            'suggestion': 'Increase file descriptor limits. For systemd: add "LimitNOFILE=65535" to [Service] section. For shell: "ulimit -n 65535". Also consider adding "ConnLimit 10000" to torrc.',
-            'doc_ref': 'https://community.torproject.org/relay/setup/post-install/#file-descriptor-limits',
-        })
-    else:
-        issues.append({
-            'severity': 'error',
-            'category': 'overload',
-            'title': 'File Descriptor Exhaustion',
-            'description': 'Relay reported file descriptor exhaustion',
+            'title': 'File Descriptor Exhaustion (with timestamp)',
+            'description': f"Relay ran out of file descriptors {format_time_ago(ts_dt)} ({ts_dt.strftime('%Y-%m-%d %H:%M')} UTC)",
             'suggestion': 'Increase file descriptor limits. For systemd: add "LimitNOFILE=65535" to [Service] section. For shell: "ulimit -n 65535". Also consider adding "ConnLimit 10000" to torrc.',
             'doc_ref': 'https://community.torproject.org/relay/setup/post-install/#file-descriptor-limits',
         })
