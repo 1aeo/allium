@@ -158,6 +158,40 @@ class TestAROIValidation(unittest.TestCase):
         self.assertEqual(len(result['unvalidated_relays']), 1)
         self.assertTrue(result['show_detailed_errors'])
     
+    def test_relay_with_aroi_not_in_validation_map(self):
+        """Test that relays with AROI not in validation_map are added to unvalidated_relays.
+        
+        This is a regression test for the bug where partially validated operators
+        would not show the validation issues section because relays not in the
+        validation_map were silently skipped.
+        """
+        relays = [
+            {'fingerprint': 'ABC123', 'nickname': 'validated1', 'aroi_domain': 'example.com'},
+            {'fingerprint': 'DEF456', 'nickname': 'missing_from_map', 'aroi_domain': 'example.com'}
+        ]
+        validation_data = {
+            'results': [
+                # Only ABC123 is in validation data, DEF456 is missing
+                {'fingerprint': 'ABC123', 'valid': True, 'proof_type': 'uri-rsa'}
+            ]
+        }
+        result = get_contact_validation_status(relays, validation_data)
+        
+        # Should be partially validated (1 validated, 1 not in validation data)
+        self.assertTrue(result['has_aroi'])
+        self.assertEqual(result['validation_status'], 'partially_validated')
+        self.assertEqual(result['validation_summary']['relays_with_aroi'], 2)
+        self.assertEqual(result['validation_summary']['validated_count'], 1)
+        self.assertEqual(result['validation_summary']['unvalidated_count'], 1)
+        
+        # Critical: unvalidated_relays should NOT be empty
+        self.assertEqual(len(result['unvalidated_relays']), 1)
+        self.assertEqual(result['unvalidated_relays'][0]['fingerprint'], 'DEF456')
+        self.assertIn('validator', result['unvalidated_relays'][0]['error'].lower())
+        
+        # Should show detailed errors since it's not just "Missing AROI fields"
+        self.assertTrue(result['show_detailed_errors'])
+    
     def test_operator_metrics_exclude_missing_aroi_fields(self):
         """Test that operator-level metrics don't count relays with Missing AROI fields."""
         relays = [
