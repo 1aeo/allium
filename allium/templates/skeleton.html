@@ -169,6 +169,49 @@
                     color: #FE9F30;
                 }
 
+                /* DRY Status Classes - reusable across templates */
+                .status-success { color: #28a745; font-weight: bold; }
+                .status-danger { color: #dc3545; font-weight: bold; }
+                .status-warning { color: #ffc107; font-weight: bold; }
+                .status-muted { color: #6c757d; font-weight: bold; }
+
+                /* Section box - gray background container for major sections */
+                .section-box {
+                    margin: 20px 0;
+                    padding: 15px;
+                    background: #f8f9fa;
+                    border-radius: 8px;
+                }
+
+                /* Subsection cards - visual containers for Level 2 content */
+                .subsection-card {
+                    background: #ffffff;
+                    border-radius: 6px;
+                    padding: 12px;
+                    margin-bottom: 12px;
+                }
+                .subsection-card dl {
+                    margin-bottom: 0;
+                }
+
+                /* Subsection headers - Level 2 in information hierarchy */
+                .subsection-header {
+                    margin-top: 0;
+                    margin-bottom: 10px;
+                    padding-bottom: 6px;
+                    font-weight: 600;
+                    font-size: 15px;
+                    color: #495057;
+                    border-bottom: 2px solid #dee2e6;
+                }
+
+                /* Status note - small muted text for additional context */
+                .status-note {
+                    font-size: 11px;
+                    font-weight: normal;
+                    color: #6c757d;
+                }
+
                 /* Dynamic text truncation for contact information */
                 .contact-text {
                     display: inline-block;
