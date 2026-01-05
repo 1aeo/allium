@@ -130,10 +130,11 @@ The **Per-Authority Details** table (section 9) provides the detailed per-author
 | 3 | Flags and Eligibility | `#flags` |
 | 4 | Bandwidth Metrics | `#bandwidth` |
 | 5 | Uptime and Stability | `#uptime` |
-| 6 | Operator and Family | `#operator` |
-| 7 | Software and Version | `#software` |
-| 8 | Exit Policy | `#exit-policy` |
-| 9 | Per-Authority Vote Details | `#authority-votes` |
+| 6 | Overload Status | `#overload` |
+| 7 | Operator and Family | `#operator` |
+| 8 | Software and Version | `#software` |
+| 9 | Exit Policy | `#exit-policy` |
+| 10 | Per-Authority Vote Details | `#authority-votes` |
 
 
 ---
@@ -188,10 +189,11 @@ Move critical "is my relay working?" information to the very top of the page, im
 | 3 | Flags and Eligibility | `#flags` |
 | 4 | Bandwidth Metrics | `#bandwidth` |
 | 5 | Uptime and Stability | `#uptime` |
-| 6 | Operator and Family | `#operator` |
-| 7 | Software and Version | `#software` |
-| 8 | Exit Policy | `#exit-policy` |
-| 9 | Per-Authority Vote Details | `#authority-votes` |
+| 6 | Overload Status | `#overload` |
+| 7 | Operator and Family | `#operator` |
+| 8 | Software and Version | `#software` |
+| 9 | Exit Policy | `#exit-policy` |
+| 10 | Per-Authority Vote Details | `#authority-votes` |
 
 
 #### Detailed Ordering Rationale
@@ -233,25 +235,32 @@ The ordering follows a **troubleshooting decision tree** - each section answers 
 - Mailing list evidence: "I restarted my relay and lost Guard flag"
 - Troubleshooting dependency: Explains flag eligibility failures from section 3
 
-**6. Operator and Family** - "Who runs this relay? What other relays do they operate?"
+**6. Overload Status** - "Is my relay under too much load?"
+- Shows if relay has reported overload conditions
+- Includes general overload, rate limits hit, file descriptor exhaustion
+- Data from Onionoo API (overload_general_timestamp, overload_ratelimits, overload_fd_exhausted)
+- Only ~2% of relays have overload data - section shows "Not Overloaded" when no data
+- Position rationale: Related to stability, placed after uptime section
+
+**7. Operator and Family** - "Who runs this relay? What other relays do they operate?"
 - Shows AROI domain and relay count (when present) - verified operator identity
 - Shows Family breakdown: effective vs alleged vs indirect members
 - Common misconfiguration: asymmetric family declarations ("alleged" members)
 - Mailing list evidence: Frequent questions about family setup errors
 - Position rationale: Not critical for basic operation, but important for operators running multiple relays
 
-**7. Software and Version** - "Is my Tor version OK?"
+**8. Software and Version** - "Is my Tor version OK?"
 - Version issues are less urgent but can affect flags
 - Shows recommended/obsolete status
 - Position rationale: Usually not the cause of immediate problems, but good to verify
 - Mailing list evidence: Occasional "upgrade your Tor" responses
 
-**8. Exit Policy** - "What traffic does my relay allow?"
+**9. Exit Policy** - "What traffic does my relay allow?"
 - Reference information, rarely the cause of troubleshooting issues
 - Mostly static configuration data
 - Position rationale: Operators know their exit policy; this is for verification
 
-**9. Per-Authority Vote Details** - "Which specific authority is not voting for me?"
+**10. Per-Authority Vote Details** - "Which specific authority is not voting for me?"
 - Advanced diagnostics for edge cases
 - Detailed per-authority breakdown (the table with all 9 authorities)
 - Position rationale: Only needed when Health Status or Flags sections show problems
@@ -297,24 +306,30 @@ START: "My relay isn't working"
     ┌─────────────────┐
     │ 5. UPTIME       │ ──── "Did downtime cause flag loss?"
     └────────┬────────┘
+             │ Is relay under too much load?
+             ▼
+    ┌─────────────────┐
+    │ 6. OVERLOAD     │ ──── "Is my relay overloaded?"
+    │    STATUS       │      (general, rate limits, file descriptors)
+    └────────┬────────┘
              │ Running multiple relays...
              ▼
     ┌─────────────────┐
-    │ 6. OPERATOR &   │ ──── "Who runs this? Is family configured correctly?"
+    │ 7. OPERATOR &   │ ──── "Who runs this? Is family configured correctly?"
     │    FAMILY       │      (AROI verified identity + fingerprint-based family)
     └────────┬────────┘
              │ Check software version...
              ▼
     ┌─────────────────┐
-    │ 7. SOFTWARE     │ ──── "Is my Tor version recommended?"
+    │ 8. SOFTWARE     │ ──── "Is my Tor version recommended?"
     └────────┬────────┘
              │
              ▼
-    ┌─────────────────────────────────────────┐
-    │ 8-9. REFERENCE & ADVANCED               │
-    │ Exit Policy, Per-Authority Vote Details │
-    │ (deep diagnostics - no duplicate tables)│
-    └─────────────────────────────────────────┘
+    ┌──────────────────────────────────────────┐
+    │ 9-10. REFERENCE & ADVANCED               │
+    │ Exit Policy, Per-Authority Vote Details  │
+    │ (deep diagnostics - no duplicate tables) │
+    └──────────────────────────────────────────┘
 ```
 
 #### Current vs Proposed Layout
@@ -334,11 +349,11 @@ Left Column:                              - Contact
 Right Column:              │              3. Flags + Eligibility Table
   - Bandwidth              │              4. Bandwidth + Consensus Weight
   - Network Participation  │              5. Uptime/Stability
-  - OR/Exit/Dir Addresses  ├─ scattered   6. Operator & Family
-  - Location               │              7. Software/Version
-  - Flags                  │              8. Exit Policy
-  - Uptime                 │              9. Per-Authority Details
-  - Platform/Version      ─┘
+  - OR/Exit/Dir Addresses  ├─ scattered   6. Overload Status
+  - Location               │              7. Operator & Family
+  - Flags                  │              8. Software/Version
+  - Uptime                 │              9. Exit Policy
+  - Platform/Version      ─┘              10. Per-Authority Details
                                   
 Bottom (separate section):
   - Consensus Evaluation (detailed)
@@ -441,6 +456,7 @@ BELOW            (red text)
 | `#flags` | Flags and Eligibility | High |
 | `#bandwidth` | Bandwidth Metrics | High |
 | `#uptime` | Uptime and Stability | High |
+| `#overload` | Overload Status | High |
 | `#operator` | Operator and Family | Medium |
 | `#authority-votes` | Per-Authority Vote Table | High |
 | `#effective-family` | Effective Family Members (within #operator) | Medium |
@@ -767,6 +783,12 @@ Two columns inside each section to maximize information density on wide screens.
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ OVERLOAD STATUS                                                                                        [#overload] ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Not Overloaded — No overload conditions reported by this relay.                                                     ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃ OPERATOR AND FAMILY                                                                                     [#operator] ┃
 ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
 ┃ Operator (AROI)                                     ┃ Family (fingerprint-based)                      [#effective-family]┃
@@ -987,6 +1009,12 @@ Single column layout for narrow screens. All content stacks vertically.
 ┃ First/Last Seen                           ┃
 ┃   First: 2023-06-01 (1.5y ago)            ┃
 ┃   Last:  2024-12-29 14:30 (now)           ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ OVERLOAD STATUS           [#overload]     ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Not Overloaded                            ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
@@ -1389,13 +1417,18 @@ The enhanced Health Status section displays 14 metrics in 8 display cells using 
 ┃ Health Status                                                               [#status] ┃
 ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
 ┃ Consensus      IN CONSENSUS — 9/9 authorities      ┃ Reachability  IPv4: 9/9 | v6: 5/5┃
-┃ Flags          Guard, Stable, Fast, HSDir... (7)   ┃ Uptime        UP 1mo 1w | 99%(1M)┃
+┃ Flags          Guard, Stable, Fast, HSDir... (7)   ┃ First Seen    2y 3mo ago          ┃
 ┃ Cons. Weight   0.04% of network (98 Mbit/s meas.)  ┃ Bandwidth     419 Mbit/s (Meas.) ┃
-┃ First Seen     2y 3mo ago                          ┃ Version       0.4.8.14 [OK]      ┃
+┃ Stability      Not Overloaded | UP 1mo 1w | 99%(1M)┃ Version       0.4.8.14 [OK]      ┃
 ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
 ┃ Issues Detected:                                                                      ┃
 ┃   • High consensus weight deviation: Large variation across authorities...            ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+```
+
+**When overloaded:**
+```
+┃ Stability      Overloaded | UP 1mo 1w | 99% (1M)   ┃ Version       0.4.8.14 [OK]      ┃
 ```
 
 **Mobile Wireframe (single column, <768px):**
@@ -1407,7 +1440,7 @@ The enhanced Health Status section displays 14 metrics in 8 display cells using 
 ┃ Consensus    IN CONSENSUS — 9/9       ┃
 ┃ Reachability IPv4: 9/9 | v6: 5/5      ┃
 ┃ Flags        Guard, Stable, Fast... 7 ┃
-┃ Uptime       UP 1mo 1w | 99% (1M)     ┃
+┃ Stability    Not Overloaded | UP 1mo  ┃
 ┃ Cons. Weight 0.04% (98 Mbit/s meas.)  ┃
 ┃ Bandwidth    419 Mbit/s (Measured)    ┃
 ┃ First Seen   2y 3mo ago               ┃
@@ -1418,14 +1451,14 @@ The enhanced Health Status section displays 14 metrics in 8 display cells using 
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 ```
 
-**Metrics Mapping (14 metrics → 8 cells):**
+**Metrics Mapping (15 metrics → 8 cells):**
 
 | Cell | Label | Metrics Merged | Source Variables | Example Display |
 |------|-------|----------------|------------------|-----------------|
 | 1 | Consensus | Consensus In/Out + Authority Vote Count | `diag.in_consensus`, `diag.vote_count`, `diag.total_authorities` | IN CONSENSUS — 9/9 authorities |
 | 2 | Reachability | IPv4 Count + IPv6 Count | `diag.reachability_summary.ipv4.*`, `diag.reachability_summary.ipv6.*` | IPv4: 9/9 \| v6: 5/5 |
 | 3 | Flags | Flags List + Count | `relay['flags']` | Guard, Stable, Fast, HSDir... (7) |
-| 4 | Uptime | Current Session + Historical 1M% | `relay['uptime_display']`, `relay['uptime_api_display']` | UP 1mo 1w \| 99% (1M) |
+| 4 | Stability | Overload Status + Current Session + Historical 1M% | `relay['overload_general_timestamp']`, `relay['overload_ratelimits']`, `relay['overload_fd_exhausted']`, `relay['uptime_display']`, `relay['uptime_percentages']` | Not Overloaded \| UP 1mo 1w \| 99% (1M) |
 | 5 | Cons. Weight | Network Fraction + Authority Median | `relay['consensus_weight_fraction']`, `diag.bandwidth_summary.median_display` | 0.04% of network (98 Mbit/s meas.) |
 | 6 | Bandwidth | Observed Bandwidth + Measured Status | `relay['observed_bandwidth']`, `relay['measured']`, `diag.bandwidth_summary.measurement_count` | 419 Mbit/s (Measured by 6) |
 | 7 | First Seen | Relay Age | `relay['first_seen']` | 2y 3mo ago |
@@ -1438,7 +1471,7 @@ The enhanced Health Status section displays 14 metrics in 8 display cells using 
 | 1 | Consensus | "Is my relay working at all?" — #1 question |
 | 2 | Reachability | If not in consensus, check this first |
 | 3 | Flags | "What roles can my relay play?" |
-| 4 | Uptime | "How stable is my relay?" |
+| 4 | Stability | "Is my relay overloaded? How long has it been up?" — includes overload + uptime |
 | 5 | Cons. Weight | "How much traffic am I getting?" |
 | 6 | Bandwidth | "Is my bandwidth being measured?" |
 | 7 | First Seen | "How old is my relay?" — explains missing flags |
@@ -1697,7 +1730,7 @@ The enhanced Health Status section displays 14 metrics in 8 display cells using 
 | **Consensus** | IF `diag.in_consensus`: "IN CONSENSUS — {vote_count}/{total} authorities"<br>ELSE: "NOT IN CONSENSUS — {vote_count}/{total} (need {majority})"<br>FALLBACK: Check Running flag |
 | **Reachability** | "IPv4: {reachable}/{total}" + IF ipv6.total > 0: " \| v6: {reachable}/{total}" |
 | **Flags** | "{flag1}, {flag2}... ({count})" + IF StaleDesc: show warning |
-| **Uptime** | "{uptime_display}" + IF uptime_api_display: " \| {1M%}% (1M)" |
+| **Stability** | "{overload_status} \| {uptime_display} \| {1M%}% (1M)" where overload_status links to #overload section. See section 2.2.1 for full logic. |
 | **Cons. Weight** | "{fraction * 100}% of network" + IF median: "({median} meas.)" |
 | **Bandwidth** | "{observed formatted}" + measurement status indicator |
 | **First Seen** | "{first_seen\|format_time_ago}" (e.g., "2y 3mo ago") |
@@ -1748,6 +1781,149 @@ The enhanced Health Status section displays 14 metrics in 8 display cells using 
 - [ ] "No issues detected" message shows when relay is healthy
 - [ ] All anchor links work (#status)
 - [ ] Colors indicate status (green=good, red=bad, yellow=warning, gray=unknown)
+- [ ] Stability row shows overload status with hyperlink to #overload section
+
+---
+
+#### 2.2.1 Add Overload Status to Health Status (Stability Row)
+
+**Change:** Rename "Uptime" cell to "Stability" and add overload indicator as the first element.
+
+**Rationale:** 
+- Stability encompasses both uptime AND load handling
+- The "UP/DOWN" text in the content already indicates uptime status
+- Adding overload status answers "is my relay struggling under load?"
+- Only ~2% of relays have overload data, so most will show "Not Overloaded"
+
+**Before (current Uptime row):**
+```
+┃ Uptime         UP 1mo 1w | 99% (1M)                ┃
+```
+
+**After (renamed to Stability with overload first):**
+```
+┃ Stability      Not Overloaded | UP 1mo 1w | 99% (1M)                                  ┃
+```
+
+**When overloaded:**
+```
+┃ Stability      Overloaded | UP 1mo 1w | 99% (1M)                                      ┃
+```
+
+**Display Format:**
+```
+{overload_status} | {uptime_display} | {1M_uptime}%
+```
+
+**Display Logic:**
+
+| Condition | Display | Color | Tooltip |
+|-----------|---------|-------|---------|
+| No overload data | "Not Overloaded" | Green (#28a745) | "No overload reported by this relay" |
+| `overload_general_timestamp` < 24h | "Overloaded" | Red (#dc3545) | "Last overload: {timestamp formatted}" |
+| `overload_general_timestamp` >= 24h | "Not Overloaded" | Green | "Last overload: {X} days ago" |
+| `overload_ratelimits` present | "Overloaded" | Red | "Rate limits hit: W:{write_count} R:{read_count}" |
+| `overload_fd_exhausted` present | "Overloaded" | Red | "File descriptor exhaustion: {timestamp}" |
+
+**Jinja2 Template Update:**
+
+```jinja2
+{# Row 4 Left: Stability (renamed from Uptime, with overload indicator) #}
+<div class="health-row">
+    <dt title="Relay stability: overload status and current uptime.">Stability</dt>
+    <dd>
+        {# Overload status (first) - links to #overload section #}
+        {% set is_overloaded = false %}
+        {% set overload_tooltip = "No overload reported by this relay" %}
+        
+        {# Check overload_general_timestamp (from details document) #}
+        {% if relay.get('overload_general_timestamp') %}
+            {% set ts = relay['overload_general_timestamp'] %}
+            {% set age_hours = ((now_timestamp - ts / 1000) / 3600)|int %}
+            {% if age_hours < 24 %}
+                {% set is_overloaded = true %}
+                {% set overload_tooltip = "Last overload: " ~ (ts|format_timestamp) %}
+            {% else %}
+                {% set overload_tooltip = "Last overload: " ~ age_hours // 24 ~ " days ago" %}
+            {% endif %}
+        {% endif %}
+        
+        {# Check overload_ratelimits (from bandwidth document) #}
+        {% if relay.get('overload_ratelimits') %}
+            {% set rl = relay['overload_ratelimits'] %}
+            {% if rl.get('write-count', 0) > 0 or rl.get('read-count', 0) > 0 %}
+                {% set is_overloaded = true %}
+                {% set overload_tooltip = "Rate limits hit: W:" ~ rl.get('write-count', 0) ~ " R:" ~ rl.get('read-count', 0) %}
+            {% endif %}
+        {% endif %}
+        
+        {# Check overload_fd_exhausted (from bandwidth document) #}
+        {% if relay.get('overload_fd_exhausted') %}
+            {% set is_overloaded = true %}
+            {% set fd_ts = relay['overload_fd_exhausted'].get('timestamp') %}
+            {% set overload_tooltip = "File descriptor exhaustion reported" %}
+        {% endif %}
+        
+        {# Display overload status with link to detailed section #}
+        <a href="#overload" title="{{ overload_tooltip }}" style="text-decoration: none;">
+            {% if is_overloaded %}
+                <span style="color: #dc3545; font-weight: bold;">Overloaded</span>
+            {% else %}
+                <span style="color: #28a745;">Not Overloaded</span>
+            {% endif %}
+        </a>
+        
+        {# Separator #}
+        <span style="color: #6c757d;"> | </span>
+        
+        {# Uptime display (existing logic) #}
+        {% if relay.get('uptime_display') %}
+            {% if relay['uptime_display'].startswith('DOWN') %}
+                <span style="color: #dc3545; font-weight: bold;">{{ relay['uptime_display']|escape }}</span>
+            {% else %}
+                <span style="color: #28a745;">{{ relay['uptime_display']|escape }}</span>
+            {% endif %}
+        {% else %}
+            <span style="color: #6c757d;">Unknown</span>
+        {% endif %}
+        
+        {# 1M uptime percentage (existing logic) #}
+        {% set uptime_1m = relay.get('uptime_percentages', {}).get('1_month', 0) %}
+        {% if uptime_1m > 0 %}
+            | <span style="color: {% if uptime_1m >= 100 %}#28a745{% elif uptime_1m >= 90 %}#856404{% else %}#dc3545{% endif %};">{{ uptime_1m|int }}%</span> (1M)
+        {% endif %}
+    </dd>
+</div>
+```
+
+**Variables Used:**
+
+| Variable | Source | Type | Description |
+|----------|--------|------|-------------|
+| `relay['overload_general_timestamp']` | Onionoo details | int (ms) | UTC timestamp when general overload was last reported |
+| `relay['overload_ratelimits']` | Onionoo bandwidth | dict | Rate limit overload info with write-count, read-count, timestamp |
+| `relay['overload_fd_exhausted']` | Onionoo bandwidth | dict | File descriptor exhaustion info with timestamp |
+| `relay['uptime_display']` | Calculated | str | Formatted uptime (e.g., "UP 1mo 1w 4d") |
+| `relay['uptime_percentages']['1_month']` | Onionoo | float | 1-month uptime percentage |
+
+**Data Availability (from Onionoo API analysis):**
+
+| Field | Source Document | Network Coverage | Update Frequency |
+|-------|-----------------|------------------|------------------|
+| `overload_general_timestamp` | details | ~0.3% (28 relays) | When relay reports overload |
+| `overload_ratelimits` | bandwidth | ~1.8% (~175 relays) | With bandwidth history |
+| `overload_fd_exhausted` | bandwidth | ~0.3% (~33 relays) | When FD exhaustion occurs |
+
+**Testing Checklist:**
+
+- [ ] Row label changed from "Uptime" to "Stability"
+- [ ] Overload status appears first in the cell
+- [ ] "Not Overloaded" shows in green when no overload data
+- [ ] "Overloaded" shows in red when any overload condition present
+- [ ] Tooltip shows timestamp or details on hover
+- [ ] Clicking overload status navigates to #overload section
+- [ ] Uptime display unchanged after overload status
+- [ ] 1M uptime percentage still displays correctly
 
 ---
 
@@ -1928,7 +2104,7 @@ Per Onionoo API documentation, this field indicates when a relay last reported b
 **New Section Structure:**
 
 ```jinja2
-{# ============== SECTION 6: OPERATOR AND FAMILY ============== #}
+{# ============== SECTION 7: OPERATOR AND FAMILY ============== #}
 <section id="operator" class="relay-section">
 <h3>
 <div class="section-header">
@@ -2388,7 +2564,365 @@ def _get_contact_validation_status_for_relay(self, relay):
 
 ---
 
-#### 2.6 Section Reordering - Complete Template Structure
+#### 2.6 Add Dedicated Overload Status Section
+
+**Position:** Between Section 5 (Uptime and Stability) and Section 7 (Operator and Family)
+
+**Rationale:** 
+- Overload is related to stability/performance, logically follows uptime
+- Only ~2% of relays have overload data, so section is minimal for most relays
+- When overload IS present, detailed information helps operators troubleshoot
+
+**Desktop Wireframe:**
+
+```
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Overload Status                                                          [#overload]  ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Not Overloaded                                                                        ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+```
+
+**When Overloaded (detailed view):**
+
+```
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Overload Status                                                          [#overload]  ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ [Warning] OVERLOADED                                                                  ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ General Overload                                ┃ Rate Limits                          ┃
+┃   Status: Reported                              ┃   Rate Limit: 20.0 MB/s              ┃
+┃   Last Reported: 2 hours ago                    ┃   Burst Limit: 30.0 MB/s             ┃
+┃   Timestamp: 2026-01-04 06:00 UTC               ┃   Write Limit Hit: 4,680 times       ┃
+┃                                                 ┃   Read Limit Hit: 1,525 times        ┃
+┃                                                 ┃   Last Reported: 9 hours ago         ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╋━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ File Descriptors                                ┃ Recommendations                      ┃
+┃   Status: Not Reported                          ┃   - Check CPU/memory usage           ┃
+┃                                                 ┃   - Review RelayBandwidthRate        ┃
+┃                                                 ┃   - If FD issues: increase ulimit    ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+```
+
+**Mobile Wireframe:**
+
+```
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Overload Status          [#overload]  ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Not Overloaded                        ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+```
+
+**Mobile Wireframe (when overloaded):**
+
+```
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Overload Status          [#overload]  ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ [Warning] OVERLOADED                  ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ General Overload                      ┃
+┃   Status: Reported                    ┃
+┃   Last: 2 hours ago                   ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Rate Limits                           ┃
+┃   Rate: 20.0 MB/s                     ┃
+┃   Write Hit: 4,680x                   ┃
+┃   Read Hit: 1,525x                    ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ File Descriptors                      ┃
+┃   Status: Not Reported                ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+```
+
+**Jinja2 Template:**
+
+```jinja2
+{# ============== SECTION 6: OVERLOAD STATUS (#overload) ============== #}
+<section id="overload" class="relay-section">
+<h3>
+<div class="section-header">
+<a href="#overload" class="anchor-link">Overload Status</a>
+</div>
+</h3>
+
+{# Determine if relay is overloaded #}
+{% set is_overloaded = false %}
+{% set has_general_overload = relay.get('overload_general_timestamp') %}
+{% set has_ratelimits = relay.get('overload_ratelimits') %}
+{% set has_fd_exhausted = relay.get('overload_fd_exhausted') %}
+
+{# Check if any overload condition is recent (within 24h for general, any data for others) #}
+{% if has_general_overload %}
+    {% set general_ts = relay['overload_general_timestamp'] %}
+    {# Note: Actual age calculation would need now_timestamp variable #}
+    {% set is_overloaded = true %}
+{% endif %}
+{% if has_ratelimits %}
+    {% set rl = relay['overload_ratelimits'] %}
+    {% if rl.get('write-count', 0) > 0 or rl.get('read-count', 0) > 0 %}
+        {% set is_overloaded = true %}
+    {% endif %}
+{% endif %}
+{% if has_fd_exhausted %}
+    {% set is_overloaded = true %}
+{% endif %}
+
+{# Simple status when not overloaded #}
+{% if not is_overloaded %}
+<div style="padding: 15px; background: #d4edda; border-radius: 8px; border-left: 4px solid #28a745;">
+    <span style="color: #155724; font-weight: bold;">Not Overloaded</span>
+    <span style="color: #155724;"> — No overload conditions reported by this relay.</span>
+</div>
+
+{% else %}
+{# Detailed view when overloaded #}
+<div style="padding: 15px; background: #fff3cd; border-radius: 8px; border-left: 4px solid #ffc107;">
+    <div style="margin-bottom: 15px;">
+        <span style="color: #856404; font-weight: bold; font-size: 16px;">[Warning] OVERLOADED</span>
+    </div>
+    
+    <div class="row">
+        {# Left Column: General Overload + File Descriptors #}
+        <div class="col-md-6">
+            <h5 style="margin-top: 0;">General Overload</h5>
+            <dl class="dl-horizontal-compact">
+                <dt>Status</dt>
+                <dd>
+                    {% if has_general_overload %}
+                        <span style="color: #dc3545; font-weight: bold;">Reported</span>
+                    {% else %}
+                        <span style="color: #28a745;">Not Reported</span>
+                    {% endif %}
+                </dd>
+                {% if has_general_overload %}
+                <dt>Last Reported</dt>
+                <dd>{{ relay['overload_general_timestamp']|format_timestamp_ago }}</dd>
+                <dt>Timestamp</dt>
+                <dd>{{ relay['overload_general_timestamp']|format_timestamp }} UTC</dd>
+                {% endif %}
+            </dl>
+            
+            <h5>File Descriptors</h5>
+            <dl class="dl-horizontal-compact">
+                <dt>Status</dt>
+                <dd>
+                    {% if has_fd_exhausted %}
+                        <span style="color: #dc3545; font-weight: bold;">Exhaustion Reported</span>
+                    {% else %}
+                        <span style="color: #28a745;">Not Reported</span>
+                    {% endif %}
+                </dd>
+                {% if has_fd_exhausted and relay['overload_fd_exhausted'].get('timestamp') %}
+                <dt>Last Reported</dt>
+                <dd>{{ relay['overload_fd_exhausted']['timestamp']|format_timestamp_ago }}</dd>
+                {% endif %}
+            </dl>
+        </div>
+        
+        {# Right Column: Rate Limits + Recommendations #}
+        <div class="col-md-6">
+            <h5 style="margin-top: 0;">Rate Limits</h5>
+            {% if has_ratelimits %}
+            {% set rl = relay['overload_ratelimits'] %}
+            <dl class="dl-horizontal-compact">
+                <dt>Rate Limit</dt>
+                <dd>{{ (rl.get('rate-limit', 0) / 1024 / 1024)|round(1) }} MB/s</dd>
+                <dt>Burst Limit</dt>
+                <dd>{{ (rl.get('burst-limit', 0) / 1024 / 1024)|round(1) }} MB/s</dd>
+                <dt>Write Limit Hit</dt>
+                <dd>
+                    {% if rl.get('write-count', 0) > 0 %}
+                        <span style="color: #dc3545;">{{ "{:,}".format(rl.get('write-count', 0)) }} times</span>
+                    {% else %}
+                        <span style="color: #28a745;">0 times</span>
+                    {% endif %}
+                </dd>
+                <dt>Read Limit Hit</dt>
+                <dd>
+                    {% if rl.get('read-count', 0) > 0 %}
+                        <span style="color: #dc3545;">{{ "{:,}".format(rl.get('read-count', 0)) }} times</span>
+                    {% else %}
+                        <span style="color: #28a745;">0 times</span>
+                    {% endif %}
+                </dd>
+                {% if rl.get('timestamp') %}
+                <dt>Last Reported</dt>
+                <dd>{{ rl['timestamp']|format_timestamp_ago }}</dd>
+                {% endif %}
+            </dl>
+            {% else %}
+            <p style="color: #6c757d;">No rate limit data available.</p>
+            {% endif %}
+            
+            <h5>Recommendations</h5>
+            <ul style="margin: 0; padding-left: 20px; font-size: 13px;">
+                {% if has_general_overload %}
+                <li>Check CPU and memory usage with <code>htop</code></li>
+                <li>Review <code>RelayBandwidthRate</code> in torrc</li>
+                {% endif %}
+                {% if has_ratelimits and (rl.get('write-count', 0) > 0 or rl.get('read-count', 0) > 0) %}
+                <li>Consider increasing <code>RelayBandwidthRate</code></li>
+                {% endif %}
+                {% if has_fd_exhausted %}
+                <li>Increase file descriptor limit: <code>ulimit -n 65535</code></li>
+                <li>For systemd: add <code>LimitNOFILE=65535</code> to service</li>
+                {% endif %}
+            </ul>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+</section>
+```
+
+**Python Backend - Data Flow from Onionoo API:**
+
+The overload data comes from two Onionoo API endpoints:
+
+**1. Details Document (`/details`):**
+```python
+# In allium/lib/relays.py - when processing relay data
+relay_data = {
+    # ... existing fields ...
+    'overload_general_timestamp': relay.get('overload_general_timestamp'),  # int (milliseconds)
+}
+```
+
+**2. Bandwidth Document (`/bandwidth`):**
+```python
+# Need to fetch bandwidth document for overload_ratelimits and overload_fd_exhausted
+# These fields are NOT in the details document
+
+def fetch_bandwidth_overload_data(fingerprint: str) -> dict:
+    """Fetch overload data from bandwidth document for a specific relay."""
+    url = f"https://onionoo.torproject.org/bandwidth?lookup={fingerprint}"
+    response = requests.get(url)
+    data = response.json()
+    
+    if data.get('relays'):
+        relay = data['relays'][0]
+        return {
+            'overload_ratelimits': relay.get('overload_ratelimits'),
+            'overload_fd_exhausted': relay.get('overload_fd_exhausted'),
+        }
+    return {}
+```
+
+**Note:** The bandwidth document fields (`overload_ratelimits`, `overload_fd_exhausted`) may require additional API calls or batch fetching strategy to avoid performance issues.
+
+**Alternative - Batch Fetch Strategy:**
+```python
+# Fetch bandwidth data for all relays with overload indicators
+# Add to relays.py during initial data fetch
+
+def _fetch_overload_data(self, fingerprints_with_overload: list) -> dict:
+    """Batch fetch bandwidth document overload data."""
+    overload_data = {}
+    
+    # Fetch in batches of 100
+    for i in range(0, len(fingerprints_with_overload), 100):
+        batch = fingerprints_with_overload[i:i+100]
+        lookup_param = ','.join(batch)
+        url = f"https://onionoo.torproject.org/bandwidth?lookup={lookup_param}"
+        
+        response = requests.get(url, timeout=30)
+        if response.ok:
+            data = response.json()
+            for relay in data.get('relays', []):
+                fp = relay.get('fingerprint')
+                if fp:
+                    overload_data[fp] = {
+                        'overload_ratelimits': relay.get('overload_ratelimits'),
+                        'overload_fd_exhausted': relay.get('overload_fd_exhausted'),
+                    }
+    
+    return overload_data
+```
+
+**Template Filters Needed:**
+
+```python
+# Add to allium/lib/filters.py
+
+def format_timestamp(ts_ms: int) -> str:
+    """Format millisecond timestamp to readable date string."""
+    if not ts_ms:
+        return "N/A"
+    from datetime import datetime, timezone
+    dt = datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc)
+    return dt.strftime('%Y-%m-%d %H:%M')
+
+def format_timestamp_ago(ts_ms: int) -> str:
+    """Format millisecond timestamp to 'X hours/days ago' string."""
+    if not ts_ms:
+        return "N/A"
+    from datetime import datetime, timezone
+    dt = datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc)
+    now = datetime.now(tz=timezone.utc)
+    delta = now - dt
+    
+    hours = delta.total_seconds() / 3600
+    if hours < 1:
+        return f"{int(delta.total_seconds() / 60)} minutes ago"
+    elif hours < 24:
+        return f"{int(hours)} hours ago"
+    else:
+        days = int(hours / 24)
+        return f"{days} days ago"
+```
+
+**CSS Additions:**
+
+```css
+/* Overload section styling */
+#overload .dl-horizontal-compact dt {
+    width: 120px;
+    font-weight: bold;
+    color: #495057;
+}
+
+#overload .dl-horizontal-compact dd {
+    margin-left: 130px;
+    margin-bottom: 5px;
+}
+
+#overload h5 {
+    font-size: 14px;
+    font-weight: bold;
+    margin-bottom: 10px;
+    color: #495057;
+    border-bottom: 1px solid #dee2e6;
+    padding-bottom: 5px;
+}
+```
+
+**Variables Used:**
+
+| Variable | Source | Type | Description |
+|----------|--------|------|-------------|
+| `relay['overload_general_timestamp']` | Onionoo details | int (ms) | UTC timestamp of last general overload |
+| `relay['overload_ratelimits']` | Onionoo bandwidth | dict | Rate limit info: rate-limit, burst-limit, write-count, read-count, timestamp |
+| `relay['overload_fd_exhausted']` | Onionoo bandwidth | dict | FD exhaustion info: timestamp |
+
+**Testing Checklist:**
+
+- [ ] Section appears after Uptime/Stability section
+- [ ] "Not Overloaded" shows with green background when no overload data
+- [ ] Detailed view shows when ANY overload condition is present
+- [ ] General Overload subsection shows status and timestamp
+- [ ] Rate Limits subsection shows all metrics with formatting
+- [ ] File Descriptors subsection shows status
+- [ ] Recommendations list is context-aware (shows relevant tips)
+- [ ] Mobile layout stacks subsections vertically
+- [ ] Anchor link #overload works from Health Status section
+
+---
+
+#### 2.7 Section Reordering - Complete Template Structure
 
 **File:** `allium/templates/relay-info.html`
 
@@ -2413,16 +2947,19 @@ def _get_contact_validation_status_for_relay(self, relay):
 {# ============== SECTION 5: UPTIME AND STABILITY (#uptime) ============== #}
 {# Current status, Historical uptime, First/Last seen, Hibernating #}
 
-{# ============== SECTION 6: OPERATOR AND FAMILY (#operator) ============== #}
+{# ============== SECTION 6: OVERLOAD STATUS (#overload) ============== #}
+{# General overload, Rate limits, File descriptor exhaustion, Recommendations #}
+
+{# ============== SECTION 7: OPERATOR AND FAMILY (#operator) ============== #}
 {# AROI info, Contact, Effective/Alleged/Indirect family #}
 
-{# ============== SECTION 7: SOFTWARE AND VERSION (#software) ============== #}
+{# ============== SECTION 8: SOFTWARE AND VERSION (#software) ============== #}
 {# Platform, Version, Recommended status, Last changed #}
 
-{# ============== SECTION 8: EXIT POLICY (#exit-policy) ============== #}
+{# ============== SECTION 9: EXIT POLICY (#exit-policy) ============== #}
 {# IPv4/IPv6 summary, Full policy #}
 
-{# ============== SECTION 9: PER-AUTHORITY VOTE DETAILS (#authority-votes) ============== #}
+{# ============== SECTION 10: PER-AUTHORITY VOTE DETAILS (#authority-votes) ============== #}
 {# Detailed per-authority table, Explanatory info boxes #}
 ```
 
@@ -2668,6 +3205,72 @@ if relay_data.get('aroi_domain') and relay_data['aroi_domain'] != 'none':
             'description': f"AROI domain {relay_data['aroi_domain']} is configured but not cryptographically validated",
             'suggestion': 'Set up AROI validation using DNS-RSA or URI-RSA proof. See https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/',
             'doc_ref': 'https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/',
+        })
+
+# =========================================================================
+# OVERLOAD ISSUES (from Onionoo API)
+# =========================================================================
+from datetime import datetime, timezone
+
+# Issue 1: General Overload (overload_general_timestamp from details document)
+if relay_data.get('overload_general_timestamp'):
+    ts_ms = relay_data['overload_general_timestamp']
+    ts_dt = datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc)
+    now = datetime.now(tz=timezone.utc)
+    age_hours = (now - ts_dt).total_seconds() / 3600
+    
+    if age_hours < 24:
+        issues.append({
+            'severity': 'error' if age_hours < 1 else 'warning',
+            'category': 'overload',
+            'title': 'General Overload Reported',
+            'description': f"Relay reported being overloaded {format_time_ago(ts_dt)} ({ts_dt.strftime('%Y-%m-%d %H:%M')} UTC)",
+            'suggestion': 'Check CPU and memory usage. Consider reducing RelayBandwidthRate in torrc if relay is consistently overloaded. Monitor system resources with htop or similar tools.',
+            'doc_ref': 'https://community.torproject.org/relay/setup/post-install/',
+        })
+
+# Issue 2: Rate Limits Hit (overload_ratelimits from bandwidth document)
+if relay_data.get('overload_ratelimits'):
+    rl = relay_data['overload_ratelimits']
+    write_count = rl.get('write-count', 0)
+    read_count = rl.get('read-count', 0)
+    rate_limit = rl.get('rate-limit', 0)
+    burst_limit = rl.get('burst-limit', 0)
+    
+    if write_count > 0 or read_count > 0:
+        rate_mb = rate_limit / 1024 / 1024
+        issues.append({
+            'severity': 'warning',
+            'category': 'overload',
+            'title': 'Rate Limits Hit',
+            'description': f"Write limit hit {write_count:,} times, Read limit hit {read_count:,} times. Current rate limit: {rate_mb:.1f} MB/s",
+            'suggestion': f"Consider increasing RelayBandwidthRate (currently {rate_mb:.1f} MB/s) if your connection can handle more traffic. Edit torrc: RelayBandwidthRate {int(rate_mb * 1.5)} MBytes",
+            'doc_ref': 'https://community.torproject.org/relay/setup/post-install/#bandwidth-limits',
+        })
+
+# Issue 3: File Descriptor Exhaustion (overload_fd_exhausted from bandwidth document)
+if relay_data.get('overload_fd_exhausted'):
+    fd_data = relay_data['overload_fd_exhausted']
+    fd_ts = fd_data.get('timestamp')
+    
+    if fd_ts:
+        ts_dt = datetime.fromtimestamp(fd_ts / 1000, tz=timezone.utc)
+        issues.append({
+            'severity': 'error',
+            'category': 'overload',
+            'title': 'File Descriptor Exhaustion',
+            'description': f"Relay ran out of file descriptors {format_time_ago(ts_dt)}",
+            'suggestion': 'Increase file descriptor limits. For systemd: add "LimitNOFILE=65535" to [Service] section. For shell: "ulimit -n 65535". Also consider adding "ConnLimit 10000" to torrc.',
+            'doc_ref': 'https://community.torproject.org/relay/setup/post-install/#file-descriptor-limits',
+        })
+    else:
+        issues.append({
+            'severity': 'error',
+            'category': 'overload',
+            'title': 'File Descriptor Exhaustion',
+            'description': 'Relay reported file descriptor exhaustion',
+            'suggestion': 'Increase file descriptor limits. For systemd: add "LimitNOFILE=65535" to [Service] section. For shell: "ulimit -n 65535". Also consider adding "ConnLimit 10000" to torrc.',
+            'doc_ref': 'https://community.torproject.org/relay/setup/post-install/#file-descriptor-limits',
         })
 ```
 
