@@ -196,6 +196,11 @@ BANDWIDTH_TIMEOUT_STALE_CACHE = 600   # 10 minutes for stale/missing cache
 AROI_CACHE_MAX_AGE_HOURS = 1          # Cache older than this is considered stale (1 hour)
 AROI_TIMEOUT_FRESH_CACHE = 90         # 90 seconds for fresh cache
 AROI_TIMEOUT_STALE_CACHE = 120        # 2 minutes for stale/missing cache
+
+# COLLECTOR CONSENSUS API - Fetches authority votes from CollecTor
+COLLECTOR_CACHE_MAX_AGE_HOURS = 1     # Cache older than this is considered stale (1 hour)
+COLLECTOR_TIMEOUT_FRESH_CACHE = 30    # 30 seconds when cache is available (fallback on timeout)
+COLLECTOR_TIMEOUT_STALE_CACHE = 300   # 5 minutes when no cache exists
 # ============================================================================
 
 
@@ -699,10 +704,11 @@ def fetch_collector_consensus_data(authorities=None, progress_logger=None):
         log_progress("consensus evaluation feature is disabled")
         return None
     
-    # Check cache age first - only refresh if older than 1 hour
+    # Check cache age first - only refresh if older than configured hours
     cache_age = _cache_manager.get_cache_age(api_name)
-    if cache_age is not None and cache_age < 3600:  # 1 hour
-        log_progress(f"using cached collector consensus data (less than 1 hour old)")
+    cache_max_age_seconds = COLLECTOR_CACHE_MAX_AGE_HOURS * 3600
+    if cache_age is not None and cache_age < cache_max_age_seconds:
+        log_progress(f"using cached collector consensus data (less than {COLLECTOR_CACHE_MAX_AGE_HOURS} hour(s) old)")
         cached_data = _load_cache(api_name)
         if cached_data and _validate_collector_cache(cached_data):
             _mark_ready(api_name)
@@ -711,10 +717,17 @@ def fetch_collector_consensus_data(authorities=None, progress_logger=None):
             return cached_data
     
     try:
-        log_progress("fetching fresh collector consensus data from CollecTor...")
+        # Determine timeout based on cache availability
+        cached_data = _load_cache(api_name)
+        if cached_data and _validate_collector_cache(cached_data):
+            timeout_seconds = COLLECTOR_TIMEOUT_FRESH_CACHE
+            log_progress(f"cache is {(cache_age or 0) / 3600:.1f} hours old (>={COLLECTOR_CACHE_MAX_AGE_HOURS}h), using {timeout_seconds} second timeout to refresh...")
+        else:
+            timeout_seconds = COLLECTOR_TIMEOUT_STALE_CACHE
+            log_progress(f"no valid cache exists, using {timeout_seconds // 60} minute timeout for initial fetch...")
         
         # Create fetcher with optional discovered authorities
-        fetcher = CollectorFetcher(timeout=30, authorities=authorities)
+        fetcher = CollectorFetcher(timeout=timeout_seconds, authorities=authorities)
         
         # Fetch all data (votes, bandwidth files, build index)
         data = fetcher.fetch_all()
@@ -726,12 +739,11 @@ def fetch_collector_consensus_data(authorities=None, progress_logger=None):
         
         # Validate data before caching
         if not data.get('relay_index') and not data.get('votes'):
-            log_progress("warning: no relay data in collector response")
+            log_progress("warning: invalid collector consensus data structure")
             _mark_stale(api_name, "No relay data in response")
             # Try to use cache as fallback
-            cached_data = _load_cache(api_name)
             if cached_data:
-                log_progress("using stale cache as fallback")
+                log_progress("using cached collector consensus data due to invalid response")
                 return cached_data
             return None
         
@@ -751,17 +763,17 @@ def fetch_collector_consensus_data(authorities=None, progress_logger=None):
         return data
         
     except Exception as e:
-        error_msg = f"Failed to fetch collector consensus data: {str(e)}"
-        log_progress(f"error: {error_msg}")
-        _mark_stale(api_name, error_msg)
+        error_msg = str(e)
+        is_timeout = 'timeout' in error_msg.lower()
+        reason = "timeout" if is_timeout else "error"
         
-        # Try to use cache as fallback
-        cached_data = _load_cache(api_name)
+        log_progress(f"request timed out after {timeout_seconds} seconds..." if is_timeout else f"error: {error_msg}")
+        _mark_stale(api_name, f"{reason}: {error_msg}")
+        
         if cached_data:
-            cache_age_hours = (cache_age / 3600) if cache_age else 0
-            log_progress(f"using cached data as fallback ({cache_age_hours:.1f} hours old)")
+            log_progress(f"using cached collector consensus data due to {reason}")
             return cached_data
-        
+        log_progress(f"no cached data available after {reason}")
         return None
 
 
