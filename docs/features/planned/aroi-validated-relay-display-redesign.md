@@ -85,7 +85,7 @@ The domain owner's **AROI proof file** (DNS TXT record or URI proof) serves as t
 └─────────────────────────────────────────────────────────────────────────┘
 
 ┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─┐
-│  🚨 Unauthorized Claims (3)                              [Show/Hide]    │
+│  🚨 Unauthorized Claims (3)                                             │
 │                                                                         │
 │  These relays claim association with example.com but their fingerprints │
 │  are NOT in your AROI proof file.                                       │
@@ -358,10 +358,6 @@ Add a new macro for the unauthorized claims section:
 <div id="unauthorized-claims" style="margin-top: 30px; border: 2px dashed #dc3545; padding: 20px; border-radius: 8px;">
     <h3 style="color: #dc3545; margin-top: 0;">
         🚨 Unauthorized Claims ({{ contact_validation_status.unauthorized_claims|length }})
-        <button onclick="toggleUnauthorizedSection()" 
-                style="float: right; font-size: 12px; padding: 4px 8px; cursor: pointer;">
-            Show/Hide
-        </button>
     </h3>
     
     <p style="color: #666; margin-bottom: 15px;">
@@ -375,70 +371,57 @@ Add a new macro for the unauthorized claims section:
         <li><strong>Your own relay:</strong> You haven't added this relay's fingerprint to your proof file yet</li>
     </ul>
     
-    <div id="unauthorized-list">
-        <table class="table table-condensed" style="background-color: #fff5f5;">
-            <thead>
-                <tr style="background-color: #f8d7da;">
-                    <th>Status</th>
-                    <th>Nickname</th>
-                    <th>Fingerprint</th>
-                    <th>Error Detail</th>
-                    <th>First Seen</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for claim in contact_validation_status.unauthorized_claims %}
-                <tr>
-                    <td><span style="color: #dc3545; font-weight: bold;">🚫 Unauthorized</span></td>
-                    <td>{{ claim.nickname|escape }}</td>
-                    <td>
-                        <code style="font-size: 11px; background-color: #f8f9fa; padding: 2px 4px;">
-                            {{ claim.fingerprint[:16] }}...
-                        </code>
-                    </td>
-                    <td style="font-size: 12px; color: #666;">
-                        {{ claim.error|escape|truncate(50) }}
-                    </td>
-                    <td>{{ claim.first_seen|format_time_ago if claim.first_seen else 'Unknown' }}</td>
-                    <td>
-                        <a href="{{ page_ctx.path_prefix }}relay/{{ claim.fingerprint }}/" 
-                           title="View relay details to investigate this claim"
-                           style="color: #007bff;">
-                            Inspect →
-                        </a>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    <table class="table table-condensed" style="background-color: #fff5f5;">
+        <thead>
+            <tr style="background-color: #f8d7da;">
+                <th>Status</th>
+                <th>Nickname</th>
+                <th>Fingerprint</th>
+                <th>Error Detail</th>
+                <th>First Seen</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for claim in contact_validation_status.unauthorized_claims %}
+            <tr>
+                <td><span style="color: #dc3545; font-weight: bold;">🚫 Unauthorized</span></td>
+                <td>{{ claim.nickname|escape }}</td>
+                <td>
+                    <code style="font-size: 11px; background-color: #f8f9fa; padding: 2px 4px;">
+                        {{ claim.fingerprint[:16] }}...
+                    </code>
+                </td>
+                <td style="font-size: 12px; color: #666;">
+                    {{ claim.error|escape|truncate(50) }}
+                </td>
+                <td>{{ claim.first_seen|format_time_ago if claim.first_seen else 'Unknown' }}</td>
+                <td>
+                    <a href="{{ page_ctx.path_prefix }}relay/{{ claim.fingerprint }}/" 
+                       title="View relay details to investigate this claim"
+                       style="color: #007bff;">
+                        Inspect →
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    
+    {# Help box for operators #}
+    <div style="margin-top: 15px; padding: 12px; background-color: #e8f4fd; border-radius: 4px; border-left: 4px solid #007bff;">
+        <strong>💡 If this is your relay:</strong><br>
+        Add the fingerprint to your 
+        <a href="https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/" 
+           target="_blank" style="color: #007bff;">AROI proof file</a> 
+        to authorize it and remove it from this list.
         
-        {# Help box for operators #}
-        <div style="margin-top: 15px; padding: 12px; background-color: #e8f4fd; border-radius: 4px; border-left: 4px solid #007bff;">
-            <strong>💡 If this is your relay:</strong><br>
-            Add the fingerprint to your 
-            <a href="https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/" 
-               target="_blank" style="color: #007bff;">AROI proof file</a> 
-            to authorize it and remove it from this list.
-            
-            <div style="margin-top: 8px; font-size: 12px; color: #666;">
-                <strong>DNS-RSA:</strong> Add TXT record: <code>_tor.&lt;fingerprint&gt;.{{ contact_validation_status.unauthorized_claims[0].aroi_domain|escape }}</code><br>
-                <strong>URI-RSA:</strong> Add fingerprint to: <code>/.well-known/tor-relay/rsa-fingerprint.txt</code>
-            </div>
+        <div style="margin-top: 8px; font-size: 12px; color: #666;">
+            <strong>DNS-RSA:</strong> Add TXT record: <code>_tor.&lt;fingerprint&gt;.{{ contact_validation_status.unauthorized_claims[0].aroi_domain|escape }}</code><br>
+            <strong>URI-RSA:</strong> Add fingerprint to: <code>/.well-known/tor-relay/rsa-fingerprint.txt</code>
         </div>
     </div>
 </div>
-
-<script>
-function toggleUnauthorizedSection() {
-    var list = document.getElementById('unauthorized-list');
-    if (list.style.display === 'none') {
-        list.style.display = 'block';
-    } else {
-        list.style.display = 'none';
-    }
-}
-</script>
 {% endif %}
 {%- endmacro %}
 ```
@@ -534,8 +517,7 @@ The operator's page shows only their authorized relays.
 ### Preference 2: "Show me who's claiming my domain so I can investigate"
 
 **Solution:** Unauthorized relays are:
-- **Visible** in a clearly separated "Unauthorized Claims" section at the bottom
-- **Collapsible** via Show/Hide button for operators who don't want to see them
+- **Always visible** in a clearly separated "Unauthorized Claims" section at the bottom (important information should not be hidden)
 - **Actionable** with "Inspect" links to view relay details
 - **Informative** with fingerprints and first-seen dates for investigation
 
@@ -576,9 +558,8 @@ The operator's page shows only their authorized relays.
 ### Phase 2: Template Changes
 - [ ] Add unauthorized claims alert in Contact & Network Overview
 - [ ] Filter main relay table to show only authorized relays
-- [ ] Create `unauthorized_claims_section` macro
+- [ ] Create `unauthorized_claims_section` macro (always visible)
 - [ ] Create `misconfigured_relays_section` macro
-- [ ] Add collapsible functionality with JavaScript
 - [ ] Update relay count in headers
 
 ### Phase 3: Testing
@@ -618,7 +599,7 @@ The operator's page shows only their authorized relays.
 3. ✅ Summary bullet shows unauthorized claim count at top of page
 4. ✅ Operators can investigate unauthorized claims via "Inspect" links
 5. ✅ Misconfigured relays (operator's own) shown with actionable guidance
-6. ✅ Collapsible unauthorized claims section for operators who prefer not to see them
+6. ✅ Unauthorized claims section always visible (important security information)
 7. ✅ Backward compatibility maintained for existing pages
 
 ---
