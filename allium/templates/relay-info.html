@@ -274,9 +274,11 @@ Country: unknown
 </div>
 
 {# Issues and Warnings - Full width below grid #}
-{% if diag and diag.issues %}
-{% set real_issues = diag.issues | selectattr('severity', 'ne', 'info') | list %}
-{% set info_notes = diag.issues | selectattr('severity', 'equalto', 'info') | list %}
+{# Use new diagnostics if available (includes overload issues), fallback to consensus_evaluation #}
+{% set all_issues = relay.diagnostics.issues if relay.diagnostics else (diag.issues if diag else []) %}
+{% if all_issues %}
+{% set real_issues = all_issues | selectattr('severity', 'ne', 'info') | list %}
+{% set info_notes = all_issues | selectattr('severity', 'equalto', 'info') | list %}
 
 {% if real_issues %}
 <div style="margin-top: 12px; padding: 10px; background: #fff3cd; border-radius: 4px; border-left: 3px solid #ffc107;">
@@ -306,10 +308,13 @@ Country: unknown
     </ul>
 </div>
 {% endif %}
-{% elif diag %}
+{% else %}
+{# No issues found - show green box if we have diagnostics data #}
+{% if relay.diagnostics or diag %}
 <div style="margin-top: 12px; padding: 10px; background: #d4edda; border-radius: 4px; border-left: 3px solid #28a745;">
     <span style="color: #155724;"><strong>No issues detected.</strong> Relay appears to be operating normally.</span>
 </div>
+{% endif %}
 {% endif %}
 
 </div>
@@ -945,8 +950,10 @@ Data from <a href="https://collector.torproject.org/recent/relay-descriptors/vot
     {% endif %}
     
     {# 4. Identified Issues #}
-    {% set real_issues = diag.issues | selectattr('severity', 'ne', 'info') | list %}
-    {% set info_notes = diag.issues | selectattr('severity', 'equalto', 'info') | list %}
+    {# Use new diagnostics if available (includes overload issues), fallback to consensus_evaluation #}
+    {% set section_issues = relay.diagnostics.issues if relay.diagnostics else (diag.issues if diag else []) %}
+    {% set real_issues = section_issues | selectattr('severity', 'ne', 'info') | list %}
+    {% set info_notes = section_issues | selectattr('severity', 'equalto', 'info') | list %}
     {% if real_issues %}
     <li><strong>Identified Issues:</strong>
         <ul style="margin: 3px 0; padding-left: 15px;">

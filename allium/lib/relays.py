@@ -836,8 +836,10 @@ class Relays:
             return
         
         try:
+            import time as _time
             from .consensus import CollectorFetcher, format_relay_consensus_evaluation
             from .consensus.collector_fetcher import calculate_consensus_requirement, discover_authorities
+            from .relay_diagnostics import generate_relay_issues
             
             self._log_progress("Processing CollecTor consensus data for relay consensus evaluation...")
             
@@ -877,6 +879,9 @@ class Relays:
             
             # Process consensus evaluation for each relay
             evaluation_count = 0
+            # PERF: Compute timestamp once for all relays (avoid ~10k time.time() calls)
+            now_timestamp = _time.time()
+            
             for relay in self.json["relays"]:
                 fingerprint = relay.get('fingerprint', '').upper()
                 if not fingerprint:
@@ -921,6 +926,17 @@ class Relays:
                 
                 # Attach to relay
                 relay['consensus_evaluation'] = formatted_consensus_evaluation
+                
+                # Generate full diagnostics including overload issues
+                # (overload data was merged in _reprocess_bandwidth_data)
+                relay['diagnostics'] = {
+                    'issues': generate_relay_issues(
+                        relay,
+                        consensus_data=raw_consensus_evaluation,
+                        use_bits=self.use_bits,
+                        now_timestamp=now_timestamp  # PERF: Reuse timestamp
+                    )
+                }
                 
                 if formatted_consensus_evaluation.get('available'):
                     evaluation_count += 1
