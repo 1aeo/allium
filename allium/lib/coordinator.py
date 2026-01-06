@@ -312,7 +312,11 @@ class Coordinator:
         if bandwidth_data and hasattr(relay_set, 'json') and relay_set.json.get('relays'):
             try:
                 # Reprocess bandwidth data for individual relays and contact pages
+                # This also merges overload fields and computes stability for each relay
                 relay_set._reprocess_bandwidth_data()
+                # Recalculate network health metrics with complete overload data
+                # (stability_is_overloaded is now computed from all 3 overload indicators)
+                relay_set._calculate_network_health_metrics()
             except Exception as e:
                 print(f"Warning: Bandwidth processing failed ({e}), continuing without bandwidth metrics")
                 # Continue without bandwidth metrics rather than crashing

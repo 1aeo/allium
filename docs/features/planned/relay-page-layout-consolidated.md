@@ -1795,6 +1795,11 @@ The enhanced Health Status section displays 14 metrics in 8 display cells using 
 - Adding overload status answers "is my relay struggling under load?"
 - Only ~2% of relays have overload data, so most will show "Not Overloaded"
 
+**Overload Threshold:** Per [Tor spec proposal 328](https://spec.torproject.org/proposals/328-relay-overload-report.html), 
+relay descriptors keep the overload flag for **72 hours** after the last overload event.
+- `overload_general_timestamp` < 72h → "Overloaded" (red)
+- `overload_general_timestamp` >= 72h → "Not Overloaded" (green), tooltip shows "Last general overload: X days ago"
+
 **Before (current Uptime row):**
 ```
 ┃ Uptime         UP 1mo 1w | 99% (1M)                ┃
@@ -1802,109 +1807,93 @@ The enhanced Health Status section displays 14 metrics in 8 display cells using 
 
 **After (renamed to Stability with overload first):**
 ```
-┃ Stability      Not Overloaded | UP 1mo 1w | 99% (1M)                                  ┃
+┃ Stability      Not Overloaded | UP 1mo 1w | UP 99% (1M)                               ┃
 ```
 
 **When overloaded:**
 ```
-┃ Stability      Overloaded | UP 1mo 1w | 99% (1M)                                      ┃
+┃ Stability      Overloaded | UP 1mo 1w | UP 99% (1M)                                   ┃
 ```
 
 **Display Format:**
 ```
-{overload_status} | {uptime_display} | {1M_uptime}%
+{overload_status} | {uptime_display} | UP {1M_uptime}% (1M)
 ```
 
 **Display Logic:**
 
 | Condition | Display | Color | Tooltip |
 |-----------|---------|-------|---------|
-| No overload data | "Not Overloaded" | Green (#28a745) | "No overload reported by this relay" |
-| `overload_general_timestamp` < 24h | "Overloaded" | Red (#dc3545) | "Last overload: {timestamp formatted}" |
-| `overload_general_timestamp` >= 24h | "Not Overloaded" | Green | "Last overload: {X} days ago" |
-| `overload_ratelimits` present | "Overloaded" | Red | "Rate limits hit: W:{write_count} R:{read_count}" |
-| `overload_fd_exhausted` present | "Overloaded" | Red | "File descriptor exhaustion: {timestamp}" |
+| No overload data | "Not Overloaded" | Green (#28a745) | "No overload reported" |
+| `overload_general_timestamp` < 72h | "Overloaded" | Red (#dc3545) | "General overload at {YYYY-MM-DD HH:MM} UTC" |
+| `overload_general_timestamp` >= 72h | "Not Overloaded" | Green | "Last general overload: {X} days ago" |
+| `overload_ratelimits` with counts > 0 | "Overloaded" | Red | "Rate limits hit W:{write_count} R:{read_count} (limit: {rate formatted})" |
+| `overload_fd_exhausted` present | "Overloaded" | Red | "FD exhaustion (last: {YYYY-MM-DD})" |
+| Multiple conditions | "Overloaded" | Red | Semicolon-separated list of all active conditions |
 
-**Jinja2 Template Update:**
+**Implementation:** Stability fields are pre-computed in Python (`stability_utils.py`) 
+rather than calculated in Jinja2 templates. This provides:
+- **DRY:** Single source of truth used by template AND network health dashboard
+- **Testable:** Helper function can be unit tested with injectable timestamp
+- **Efficient:** Computed once during data processing, not on every page render
+- **Consistent:** Rate/burst limits use existing `BandwidthFormatter` (respects --bits flag)
+
+**Jinja2 Template (simplified - uses pre-computed fields):**
 
 ```jinja2
 {# Row 4 Left: Stability (renamed from Uptime, with overload indicator) #}
 <div class="health-row">
-    <dt title="Relay stability: overload status and current uptime.">Stability</dt>
+    <dt title="Relay stability: overload status and uptime.">Stability</dt>
     <dd>
-        {# Overload status (first) - links to #overload section #}
-        {% set is_overloaded = false %}
-        {% set overload_tooltip = "No overload reported by this relay" %}
-        
-        {# Check overload_general_timestamp (from details document) #}
-        {% if relay.get('overload_general_timestamp') %}
-            {% set ts = relay['overload_general_timestamp'] %}
-            {% set age_hours = ((now_timestamp - ts / 1000) / 3600)|int %}
-            {% if age_hours < 24 %}
-                {% set is_overloaded = true %}
-                {% set overload_tooltip = "Last overload: " ~ (ts|format_timestamp) %}
-            {% else %}
-                {% set overload_tooltip = "Last overload: " ~ age_hours // 24 ~ " days ago" %}
-            {% endif %}
-        {% endif %}
-        
-        {# Check overload_ratelimits (from bandwidth document) #}
-        {% if relay.get('overload_ratelimits') %}
-            {% set rl = relay['overload_ratelimits'] %}
-            {% if rl.get('write-count', 0) > 0 or rl.get('read-count', 0) > 0 %}
-                {% set is_overloaded = true %}
-                {% set overload_tooltip = "Rate limits hit: W:" ~ rl.get('write-count', 0) ~ " R:" ~ rl.get('read-count', 0) %}
-            {% endif %}
-        {% endif %}
-        
-        {# Check overload_fd_exhausted (from bandwidth document) #}
-        {% if relay.get('overload_fd_exhausted') %}
-            {% set is_overloaded = true %}
-            {% set fd_ts = relay['overload_fd_exhausted'].get('timestamp') %}
-            {% set overload_tooltip = "File descriptor exhaustion reported" %}
-        {% endif %}
-        
-        {# Display overload status with link to detailed section #}
-        <a href="#overload" title="{{ overload_tooltip }}" style="text-decoration: none;">
-            {% if is_overloaded %}
-                <span style="color: #dc3545; font-weight: bold;">Overloaded</span>
-            {% else %}
-                <span style="color: #28a745;">Not Overloaded</span>
-            {% endif %}
+        <a href="#overload" title="{{ relay['stability_tooltip']|escape }}" style="text-decoration: none;">
+            <span style="color: {{ relay['stability_color'] }};">{{ relay['stability_text'] }}</span>
         </a>
-        
-        {# Separator #}
         <span style="color: #6c757d;"> | </span>
-        
-        {# Uptime display (existing logic) #}
-        {% if relay.get('uptime_display') %}
-            {% if relay['uptime_display'].startswith('DOWN') %}
-                <span style="color: #dc3545; font-weight: bold;">{{ relay['uptime_display']|escape }}</span>
-            {% else %}
+        {% if relay.get('uptime_display') -%}
+            {% if relay['uptime_display'].startswith('DOWN') -%}
+                <span style="color: #dc3545;">{{ relay['uptime_display']|escape }}</span>
+            {% else -%}
                 <span style="color: #28a745;">{{ relay['uptime_display']|escape }}</span>
-            {% endif %}
-        {% else %}
+            {% endif -%}
+        {% else -%}
             <span style="color: #6c757d;">Unknown</span>
-        {% endif %}
-        
-        {# 1M uptime percentage (existing logic) #}
-        {% set uptime_1m = relay.get('uptime_percentages', {}).get('1_month', 0) %}
-        {% if uptime_1m > 0 %}
-            | <span style="color: {% if uptime_1m >= 100 %}#28a745{% elif uptime_1m >= 90 %}#856404{% else %}#dc3545{% endif %};">{{ uptime_1m|int }}%</span> (1M)
-        {% endif %}
+        {% endif -%}
+        {% set uptime_1m = relay.get('uptime_percentages', {}).get('1_month', 0) -%}
+        {% if uptime_1m > 0 -%}
+            | <span style="color: {% if uptime_1m >= 100 %}#28a745{% elif uptime_1m >= 90 %}#856404{% else %}#dc3545{% endif %};">UP {{ uptime_1m|int }}%</span> (1M)
+        {% endif -%}
     </dd>
 </div>
 ```
 
-**Variables Used:**
+**Pre-computed Variables (from `stability_utils.py`):**
 
-| Variable | Source | Type | Description |
-|----------|--------|------|-------------|
-| `relay['overload_general_timestamp']` | Onionoo details | int (ms) | UTC timestamp when general overload was last reported |
-| `relay['overload_ratelimits']` | Onionoo bandwidth | dict | Rate limit overload info with write-count, read-count, timestamp |
-| `relay['overload_fd_exhausted']` | Onionoo bandwidth | dict | File descriptor exhaustion info with timestamp |
-| `relay['uptime_display']` | Calculated | str | Formatted uptime (e.g., "UP 1mo 1w 4d") |
-| `relay['uptime_percentages']['1_month']` | Onionoo | float | 1-month uptime percentage |
+| Variable | Type | Description |
+|----------|------|-------------|
+| `relay['stability_is_overloaded']` | bool | True if any overload condition is active |
+| `relay['stability_text']` | str | "Overloaded" or "Not Overloaded" |
+| `relay['stability_color']` | str | "#dc3545" (red) or "#28a745" (green) |
+| `relay['stability_tooltip']` | str | Human-readable description of overload conditions |
+
+**Onionoo API Data Sources:**
+
+| Field | Onionoo Endpoint | Type | Description |
+|-------|------------------|------|-------------|
+| `overload_general_timestamp` | /details | int (ms) | UTC timestamp when general overload was last reported |
+| `overload_ratelimits` | /bandwidth | dict | `{rate-limit, burst-limit, write-count, read-count, timestamp}` |
+| `overload_fd_exhausted` | /bandwidth | dict | `{timestamp}` |
+
+**Example Tooltips:**
+
+| State | `stability_tooltip` |
+|-------|---------------------|
+| Not overloaded, no history | "No overload reported" |
+| Not overloaded, was 5 days ago | "Last general overload: 5 days ago" |
+| Overloaded (general, within 72h) | "General overload at 2025-01-04 15:30 UTC" |
+| Overloaded (rate limits, bits mode) | "Rate limits hit W:981 R:6284 (limit: 840 Kbit/s)" |
+| Overloaded (rate limits, bytes mode) | "Rate limits hit W:981 R:6284 (limit: 105 KB/s)" |
+| Overloaded (FD) | "FD exhaustion (last: 2025-01-04)" |
+| Multiple | "General overload at 2025-01-04 15:30 UTC; Rate limits hit W:5 R:3 (limit: 20 Mbit/s)" |
 
 **Data Availability (from Onionoo API analysis):**
 
@@ -1919,11 +1908,99 @@ The enhanced Health Status section displays 14 metrics in 8 display cells using 
 - [ ] Row label changed from "Uptime" to "Stability"
 - [ ] Overload status appears first in the cell
 - [ ] "Not Overloaded" shows in green when no overload data
-- [ ] "Overloaded" shows in red when any overload condition present
+- [ ] "Overloaded" shows in red when any overload condition present (within 72h)
 - [ ] Tooltip shows timestamp or details on hover
+- [ ] Rate limit tooltip shows formatted bandwidth (respects --bits flag)
 - [ ] Clicking overload status navigates to #overload section
 - [ ] Uptime display unchanged after overload status
-- [ ] 1M uptime percentage still displays correctly
+- [ ] 1M uptime percentage displays with "UP" prefix: "UP 99% (1M)"
+- [ ] Network Health Dashboard "Overloaded" count uses same logic
+
+---
+
+#### 2.2.2 Overload Issues in Health Status Issues Section
+
+**Overview:** When a relay is overloaded, the issues should appear in the "Issues Detected" section below the Health Status grid. This provides operators with actionable troubleshooting guidance.
+
+**Onionoo API Overload Variables:**
+
+| Variable | Endpoint | Type | Description |
+|----------|----------|------|-------------|
+| `overload_general_timestamp` | `/details` | int (ms) | UTC timestamp when general overload was last reported. Indicates OOM killer invocation, onionskin queuing overload, or TCP port exhaustion. Per Tor spec prop 328, flag remains for 72 hours after last event. |
+| `overload_ratelimits` | `/bandwidth` | dict | Rate limit overload info containing: `rate-limit` (bytes/s configured limit), `burst-limit` (bytes configured), `write-count` (times write limit hit), `read-count` (times read limit hit), `timestamp` (ms when recorded) |
+| `overload_fd_exhausted` | `/bandwidth` | dict | File descriptor exhaustion info containing: `timestamp` (ms when FD exhaustion occurred) |
+
+**Pre-computed Stability Variables (from `stability_utils.py`):**
+
+| Variable | Type | Description |
+|----------|------|-------------|
+| `relay['stability_is_overloaded']` | bool | True if any overload condition is active (general within 72h, ratelimits with counts > 0, or fd_exhausted present) |
+| `relay['stability_text']` | str | "Overloaded" or "Not Overloaded" |
+| `relay['stability_color']` | str | "#dc3545" (red) or "#28a745" (green) |
+| `relay['stability_tooltip']` | str | Human-readable description with timestamps and formatted bandwidth |
+
+**Issue Definitions for Health Status Issues Section:**
+
+| Condition | Severity | Title | Description | Suggestion |
+|-----------|----------|-------|-------------|------------|
+| `overload_general_timestamp` < 72h | warning | General Overload Detected | Relay reported general overload at {timestamp}. This indicates OOM killer invocation, onionskin queue saturation, or TCP port exhaustion. | Check system memory usage, consider increasing `MaxMemInQueues`, verify TCP port availability (65535 ports max). |
+| `overload_ratelimits` with write-count > 0 | warning | Write Rate Limit Exceeded | Write rate limit ({rate} formatted) was hit {write-count} times. Relay is throttling outbound traffic. | Increase `RelayBandwidthRate` and `RelayBandwidthBurst` in torrc if your server has capacity. |
+| `overload_ratelimits` with read-count > 0 | warning | Read Rate Limit Exceeded | Read rate limit ({rate} formatted) was hit {read-count} times. Relay is throttling inbound traffic. | Increase `RelayBandwidthRate` and `RelayBandwidthBurst` in torrc if your server has capacity. |
+| `overload_fd_exhausted` present | error | File Descriptor Exhaustion | Relay ran out of file descriptors on {timestamp}. This severely impacts relay performance. | Increase system ulimits (`ulimit -n`), check `/etc/security/limits.conf`, or add `LimitNOFILE=65535` to systemd unit. |
+
+**Multiple Conditions:** When multiple overload conditions are present, each should be listed as a separate issue in the Issues Detected section.
+
+**Implementation Notes:**
+
+1. **Data Source Integration:** Overload issues should be merged into the `diag.issues` list (or a separate `overload_issues` list) during data processing, alongside existing consensus evaluation issues.
+
+2. **Pre-computation Location:** The overload issue objects should be created in `stability_utils.py` or during `_reprocess_bandwidth_data()` where stability is computed.
+
+3. **Issue Object Format:** Each issue should follow the existing format:
+   ```python
+   {
+       'severity': 'warning' | 'error' | 'info',
+       'title': 'Issue Title',
+       'description': 'Detailed description with {variables}',
+       'suggestion': 'Actionable recommendation'
+   }
+   ```
+
+4. **Bandwidth Formatting:** Rate/burst limits in descriptions should use `BandwidthFormatter` to respect `--bits` flag (e.g., "840 Kbit/s" vs "105 KB/s").
+
+**Example Issues Display:**
+
+When a relay has rate limit overload:
+```
+Issues Detected:
+• Write Rate Limit Exceeded: Write rate limit (840 Kbit/s) was hit 981 times. 
+  Relay is throttling outbound traffic.
+  Suggestion: Increase RelayBandwidthRate and RelayBandwidthBurst in torrc if your 
+  server has capacity.
+• Read Rate Limit Exceeded: Read rate limit (840 Kbit/s) was hit 6284 times.
+  Relay is throttling inbound traffic.
+  Suggestion: Increase RelayBandwidthRate and RelayBandwidthBurst in torrc if your
+  server has capacity.
+```
+
+When a relay has FD exhaustion:
+```
+Issues Detected:
+• File Descriptor Exhaustion: Relay ran out of file descriptors on 2025-01-04.
+  This severely impacts relay performance.
+  Suggestion: Increase system ulimits (ulimit -n), check /etc/security/limits.conf,
+  or add LimitNOFILE=65535 to systemd unit.
+```
+
+**Testing Checklist:**
+
+- [ ] Overload issues appear in Issues Detected section when relay is overloaded
+- [ ] General overload shows as warning with timestamp
+- [ ] Rate limit issues show with formatted bandwidth (respects --bits flag)
+- [ ] FD exhaustion shows as error (highest severity)
+- [ ] Each overload condition creates separate issue entry
+- [ ] Suggestions provide actionable torrc/system configuration advice
+- [ ] No duplicate issues (Stability row tooltip + Issues section should complement, not duplicate)
 
 ---
 
