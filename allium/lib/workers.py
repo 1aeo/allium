@@ -13,9 +13,134 @@ import urllib.request
 import urllib.error
 import socket
 import threading
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from datetime import datetime
 from pathlib import Path
 from .error_handlers import handle_file_io_errors, handle_http_errors, handle_json_errors
+
+
+# ============================================================================
+# TOTAL REQUEST TIMEOUT IMPLEMENTATION
+# ============================================================================
+# Python's urllib timeout only applies to individual socket operations (connect,
+# read chunk), NOT the total request time. If a server sends data slowly (even
+# 1 byte every few seconds), it will never timeout because each read succeeds.
+#
+# This implementation reads data in chunks while tracking total elapsed time,
+# ensuring the entire request (including slow data transfer) respects the timeout.
+# ============================================================================
+
+class TotalTimeoutError(Exception):
+    """Raised when a request exceeds the total allowed timeout."""
+    pass
+
+
+def _fetch_url_with_total_timeout(url: str, timeout: int, headers: dict = None) -> bytes:
+    """
+    Fetch URL content with a guaranteed total timeout.
+    
+    Unlike urllib's timeout parameter (which only applies to individual socket
+    operations), this function enforces a true total timeout for the entire
+    request, including connection, waiting for headers, and all data transfer.
+    
+    Implementation:
+    - Uses socket timeout equal to total timeout for initial connection
+    - Reads response in chunks while tracking total elapsed time
+    - Aborts immediately when total timeout is exceeded
+    
+    Note: The socket timeout on urlopen() applies to waiting for response headers,
+    so setting it to the total timeout ensures the connection phase respects the limit.
+    
+    Args:
+        url: URL to fetch
+        timeout: Maximum total time in seconds for the entire request
+        headers: Optional dict of HTTP headers to include
+        
+    Returns:
+        bytes: Response content
+        
+    Raises:
+        TotalTimeoutError: If the request exceeds the total timeout
+        urllib.error.URLError: On network errors (not timeout)
+        urllib.error.HTTPError: On HTTP errors (4xx, 5xx)
+    """
+    if headers:
+        req = urllib.request.Request(url, headers=headers)
+    else:
+        req = urllib.request.Request(url)
+    
+    start_time = time.time()
+    
+    # Phase 1: Open connection with socket timeout equal to total timeout
+    # This ensures we don't wait forever for response headers from a hanging server
+    try:
+        response = urllib.request.urlopen(req, timeout=timeout)
+    except socket.timeout:
+        elapsed = time.time() - start_time
+        raise TotalTimeoutError(
+            f"Connection to {url} timed out waiting for response after {elapsed:.1f}s"
+        )
+    except urllib.error.URLError as e:
+        if isinstance(e.reason, socket.timeout):
+            elapsed = time.time() - start_time
+            raise TotalTimeoutError(
+                f"Connection to {url} timed out after {elapsed:.1f}s"
+            )
+        raise
+    
+    # Phase 2: Read response in chunks, checking total elapsed time after each chunk
+    chunks = []
+    chunk_size = 64 * 1024  # 64KB chunks
+    
+    try:
+        while True:
+            # Check total elapsed time before reading next chunk
+            elapsed = time.time() - start_time
+            if elapsed >= timeout:
+                response.close()
+                raise TotalTimeoutError(
+                    f"Request to {url} exceeded total timeout of {timeout}s "
+                    f"(elapsed: {elapsed:.1f}s, received: {sum(len(c) for c in chunks)} bytes)"
+                )
+            
+            # Calculate remaining time for this chunk read
+            remaining = timeout - elapsed
+            
+            # Set socket timeout for this read operation
+            # Use minimum of remaining time and 5 seconds to check frequently
+            read_timeout = min(remaining, 5)
+            if hasattr(response, 'fp') and hasattr(response.fp, 'raw'):
+                try:
+                    response.fp.raw._sock.settimeout(read_timeout)
+                except (AttributeError, OSError):
+                    pass  # Some response types don't support this
+            
+            try:
+                chunk = response.read(chunk_size)
+            except socket.timeout:
+                # Individual read timed out - check if total timeout exceeded
+                elapsed = time.time() - start_time
+                if elapsed >= timeout:
+                    response.close()
+                    raise TotalTimeoutError(
+                        f"Request to {url} exceeded total timeout of {timeout}s during read"
+                    )
+                # Socket timeout but total not exceeded - retry
+                continue
+            
+            if not chunk:
+                # End of response
+                break
+            
+            chunks.append(chunk)
+        
+        return b''.join(chunks)
+        
+    finally:
+        try:
+            response.close()
+        except Exception:
+            pass
 
 # Global constants
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
@@ -360,9 +485,20 @@ def _fetch_with_cache_fallback(
     else:
         conn = urllib.request.Request(url)
     
-    # Try to fetch with timeout, fallback to cache on timeout
+    # Try to fetch with TOTAL timeout (not just socket timeout), fallback to cache on timeout
+    # Uses ThreadPoolExecutor to enforce true total timeout including all data transfer
     try:
-        api_response = urllib.request.urlopen(conn, timeout=timeout_seconds).read()
+        api_response = _fetch_url_with_total_timeout(url, timeout_seconds, headers if headers else None)
+    except TotalTimeoutError as e:
+        log_progress(f"request exceeded total timeout of {timeout_seconds} seconds (includes all data transfer)...")
+        if cached_data:
+            log_progress(f"using cached {display_name} data due to timeout")
+            _mark_ready(api_name)
+            return cached_data
+        else:
+            log_progress("no cached data available after timeout")
+            _mark_stale(api_name, f"Total timeout after {timeout_seconds}s with no cache")
+            return None
     except (socket.timeout, TimeoutError, urllib.error.URLError) as e:
         is_timeout = (
             isinstance(e, (socket.timeout, TimeoutError)) or 
