@@ -12,6 +12,96 @@ Consolidated recommendations from Gemini 3 Pro and Opus 4.5 proposals, optimized
 
 ---
 
+## Implementation Status Summary
+
+> **Last Updated:** 2026-01-04
+
+### Legend
+- ✅ **Fully Implemented** - Code complete and deployed
+- 🔶 **Partially Implemented** - Some parts done, others pending
+- ⏳ **Not Started** - Planning complete, implementation pending
+
+---
+
+### Section 0: Design Decisions (Prerequisites)
+
+| Item | Status | Location | Notes |
+|------|--------|----------|-------|
+| 0.1 Single Column Width on Desktop | ⏳ Not Started | `relay-info.html` CSS | Max-width 1400px, fluid layout |
+| 0.2 Relay Identity in Page Header | ✅ Implemented | `relay-info.html` lines 70-100 | Nickname, Contact, AROI, Family, AS, Country, Platform |
+| 0.3 Section List (10 sections) | 🔶 Partial | `relay-info.html` | Health Status (#status), Connectivity (#connectivity) done; others still dt/dd format |
+
+### Section 1: Health Status Summary at Page Top
+
+| Item | Status | Location | Notes |
+|------|--------|----------|-------|
+| 1.1 Health Status Grid (8-cell layout) | ✅ Implemented | `relay-info.html` lines 117-300 | 2-column responsive grid with all 8 metrics |
+| 1.2 Stability Row with Overload Indicator | ✅ Implemented | `relay-info.html` lines 174-205 | Pre-computed fields from stability_utils.py |
+| 1.3 Issues/Warnings Display | ✅ Implemented | `relay-info.html` lines 280-310 | Shows errors/warnings with suggestions |
+
+### Section 2: Section Reordering and Merging
+
+| Item | Status | Location | Notes |
+|------|--------|----------|-------|
+| 2.1 Health Status Section | ✅ Implemented | `relay-info.html` #status | Full grid layout with 14 metrics in 8 cells |
+| 2.2 Connectivity and Location Section | ✅ Implemented | `relay-info.html` #connectivity | Addresses, Reachability, Location, AS in 2-column layout |
+| 2.2.1 Overload in Stability Row | ✅ Implemented | `stability_utils.py`, `relay-info.html` | 72h threshold per Tor spec 328 |
+| 2.2.2 Overload Issues in Health Section | 🔶 Partial | `consensus_evaluation.py` | Basic issues, needs all 5 Onionoo fields |
+| 2.3 Operator and Family Section | ⏳ Not Started | — | Merge AROI + Family into dedicated #operator section |
+| 2.4 CSS Fluid-Width Single Column | ⏳ Not Started | `relay-info.html` CSS | Max-width, responsive design |
+| 2.5 Fingerprint in Header (Selectable) | 🔶 Partial | `relay-info.html` | Shown but not full/selectable design |
+| 2.6 Dedicated Overload Section (#overload) | ⏳ Not Started | — | Section 6 with detailed overload info |
+| 2.7 Template Section Reordering | 🔶 Partial | `relay-info.html` | New sections exist, old content in dt/dd format |
+
+### Section 3: Flag Eligibility and Issues
+
+| Item | Status | Location | Notes |
+|------|--------|----------|-------|
+| 3.1 Flag Eligibility Table | 🔶 Partial | `relay-info.html` lines 918-1000 | Shown as bullet list, not dedicated table |
+| 3.2 Issues/Warnings with Actionable Advice | ✅ Implemented | `consensus_evaluation.py` | Suggestions included for each issue type |
+| 3.3 Remove "Summary: Your Relay vs Consensus" | ⏳ Not Started | `relay-info.html` | Old table still present |
+| 3.4 Data Source Comparison Table | ⏳ Not Started | — | Onionoo vs CollecTor comparison |
+| 3.5 Backward-Compatible Anchor Aliases | ⏳ Not Started | `relay-info.html` | Hidden anchors for old URLs |
+
+### Backend Components
+
+| Item | Status | Location | Notes |
+|------|--------|----------|-------|
+| stability_utils.py | ✅ Implemented | `allium/lib/stability_utils.py` | compute_relay_stability() with 72h threshold |
+| Overload Data Fetching | ✅ Implemented | `allium/lib/relays.py` lines 782-797 | Merges /details and /bandwidth overload fields |
+| AROI Validation Backend | ✅ Implemented | `allium/lib/aroi_validation.py` | Validation status passed to templates |
+| BandwidthFormatter | ✅ Implemented | `allium/lib/bandwidth_formatter.py` | Respects --bits flag for rate formatting |
+| Consensus Evaluation | ✅ Implemented | `consensus_evaluation.py` | Per-authority data, flag thresholds, issues |
+
+### Templates
+
+| Item | Status | Location | Notes |
+|------|--------|----------|-------|
+| Health Status Section | ✅ Implemented | `relay-info.html` | #status with grid layout |
+| Connectivity Section | ✅ Implemented | `relay-info.html` | #connectivity with 2-col layout |
+| Per-Authority Details | ✅ Implemented | `relay-info.html` | #authority-votes table |
+| Flags Section (dedicated) | ⏳ Not Started | — | Needs #flags section with eligibility table |
+| Bandwidth Section (dedicated) | ⏳ Not Started | — | Needs #bandwidth section |
+| Uptime Section (dedicated) | ⏳ Not Started | — | Needs #uptime section |
+| Overload Section (dedicated) | ⏳ Not Started | — | Needs #overload section |
+| Operator Section (merged) | ⏳ Not Started | — | Needs #operator with AROI + Family |
+| Software Section (dedicated) | ⏳ Not Started | — | Needs #software section |
+| Exit Policy Section (dedicated) | ⏳ Not Started | — | Needs #exit-policy section |
+
+---
+
+### Implementation Priority (Recommended Order)
+
+1. **2.6 Dedicated Overload Section** - Links exist from Stability row
+2. **2.3 Operator and Family Section** - Consolidate AROI + Family
+3. **3.1 Flag Eligibility Table** - Convert bullet list to proper table
+4. **2.4 CSS Fluid-Width** - Better desktop layout
+5. **Remaining dedicated sections** - #flags, #bandwidth, #uptime, #software, #exit-policy
+6. **3.3 Remove old summary table** - Clean up deprecated content
+7. **3.5 Anchor aliases** - Backward compatibility
+
+---
+
 ## Common Relay Troubleshooting Issues (from tor-relays@lists.torproject.org)
 
 Based on mailing list analysis, relay operators most frequently troubleshoot:
