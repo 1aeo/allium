@@ -770,6 +770,9 @@ class Relays:
             self._consolidated_bandwidth_results = consolidated_results
             
             # Apply results to individual relays
+            # PERF: Compute timestamp once for all relays (avoids ~10k time.time() calls)
+            now_timestamp = time.time()
+            
             for relay in self.json["relays"]:
                 fingerprint = relay.get('fingerprint', '')
                 
@@ -791,7 +794,7 @@ class Relays:
                 # Compute stability using helper with bandwidth formatter
                 # (overload_general_timestamp from /details is already in relay,
                 #  overload_ratelimits/overload_fd_exhausted now merged from /bandwidth)
-                relay.update(compute_relay_stability(relay, bandwidth_formatter=self.bandwidth_formatter))
+                relay.update(compute_relay_stability(relay, now_timestamp, self.bandwidth_formatter))
             
             # Process flag bandwidth display data
             self._process_flag_bandwidth_display(network_flag_statistics)

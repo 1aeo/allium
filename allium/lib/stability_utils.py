@@ -31,7 +31,8 @@ def compute_relay_stability(relay, now_timestamp=None, bandwidth_formatter=None)
     
     Args:
         relay: Dict with potential overload fields from Onionoo
-        now_timestamp: Current Unix timestamp (seconds). Defaults to time.time()
+        now_timestamp: Current Unix timestamp (seconds). Defaults to time.time().
+                      For batch processing, pass once to avoid repeated time.time() calls.
         bandwidth_formatter: BandwidthFormatter instance for rate/burst formatting.
                             If None, raw bytes values are shown.
         
@@ -42,6 +43,21 @@ def compute_relay_stability(relay, now_timestamp=None, bandwidth_formatter=None)
         - stability_color (str): hex color code
         - stability_tooltip (str): description of active conditions
     """
+    # PERF: Early return for relays with no overload data (~98% of relays)
+    # Avoid creating lists and doing datetime operations for the common case
+    general_ts = relay.get('overload_general_timestamp')
+    ratelimits = relay.get('overload_ratelimits')
+    fd_exhausted = relay.get('overload_fd_exhausted')
+    
+    if not general_ts and not ratelimits and not fd_exhausted:
+        return {
+            'stability_is_overloaded': False,
+            'stability_tooltip': 'No overload reported',
+            'stability_text': 'Not Overloaded',
+            'stability_color': '#28a745'
+        }
+    
+    # Only compute timestamp once if needed (for the ~2% with overload data)
     if now_timestamp is None:
         now_timestamp = time.time()
     
@@ -50,7 +66,6 @@ def compute_relay_stability(relay, now_timestamp=None, bandwidth_formatter=None)
     stale_reasons = []  # For "last overload X days ago" info
     
     # Check overload_general_timestamp with 72-hour threshold (Tor spec proposal 328)
-    general_ts = relay.get('overload_general_timestamp')
     if general_ts:
         # Onionoo timestamps are in milliseconds
         age_hours = (now_timestamp - general_ts / 1000) / 3600
@@ -64,7 +79,6 @@ def compute_relay_stability(relay, now_timestamp=None, bandwidth_formatter=None)
             stale_reasons.append(f"Last general overload: {days_ago} days ago")
     
     # Check overload_ratelimits (from bandwidth)
-    ratelimits = relay.get('overload_ratelimits')
     if ratelimits:
         write_count = ratelimits.get('write-count', 0)
         read_count = ratelimits.get('read-count', 0)
@@ -82,7 +96,6 @@ def compute_relay_stability(relay, now_timestamp=None, bandwidth_formatter=None)
             reasons.append(f"Rate limits hit W:{write_count} R:{read_count} (limit: {rate_str})")
     
     # Check overload_fd_exhausted (from bandwidth)
-    fd_exhausted = relay.get('overload_fd_exhausted')
     if fd_exhausted:
         is_overloaded = True
         fd_ts = fd_exhausted.get('timestamp', 0)
