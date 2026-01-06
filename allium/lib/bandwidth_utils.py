@@ -424,7 +424,10 @@ def process_all_bandwidth_data_consolidated(all_relays, bandwidth_data, include_
         
         relay_bandwidth_data[fingerprint] = {
             'bandwidth_averages': bandwidth_averages,
-            'flag_data': flag_data
+            'flag_data': flag_data,
+            # Overload fields from bandwidth endpoint (for stability computation)
+            'overload_ratelimits': bandwidth_relay.get('overload_ratelimits'),
+            'overload_fd_exhausted': bandwidth_relay.get('overload_fd_exhausted'),
         }
     
     # Calculate network flag statistics

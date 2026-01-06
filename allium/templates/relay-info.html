@@ -180,10 +180,14 @@ Country: unknown
             </dd>
         </div>
 
-        {# Row 4 Left: Uptime (swapped with First Seen) #}
+        {# Row 4 Left: Stability (renamed from Uptime, with overload indicator) #}
         <div class="health-row">
-            <dt title="Current session duration and monthly availability.">Uptime</dt>
+            <dt title="Relay stability: overload status and uptime.">Stability</dt>
             <dd>
+                <a href="#overload" title="{{ relay['stability_tooltip']|escape }}" style="text-decoration: none;">
+                    <span style="color: {{ relay['stability_color'] }};">{{ relay['stability_text'] }}</span>
+                </a>
+                <span style="color: #6c757d;"> | </span>
                 {% if relay.get('uptime_display') -%}
                     {% if relay['uptime_display'].startswith('DOWN') -%}
                         <span style="color: #dc3545;" title="Relay is currently offline.">{{ relay['uptime_display']|escape }}</span>
@@ -195,7 +199,7 @@ Country: unknown
                 {% endif -%}
                 {% set uptime_1m = relay.get('uptime_percentages', {}).get('1_month', 0) -%}
                 {% if uptime_1m > 0 -%}
-                    | <span style="color: {% if uptime_1m >= 100 %}#28a745{% elif uptime_1m >= 90 %}#856404{% else %}#dc3545{% endif %};" title="Percentage of time relay had Running flag in last month. 100%=always up, <90%=reliability concerns.">{{ uptime_1m|int }}%</span> <span title="1 Month availability percentage.">(1M)</span>
+                    | <span style="color: {% if uptime_1m >= 100 %}#28a745{% elif uptime_1m >= 90 %}#856404{% else %}#dc3545{% endif %};" title="Percentage of time relay had Running flag in last month. 100%=always up, <90%=reliability concerns.">UP {{ uptime_1m|int }}%</span> <span title="1 Month availability percentage.">(1M)</span>
                 {% endif -%}
             </dd>
         </div>

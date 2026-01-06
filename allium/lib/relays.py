@@ -28,6 +28,7 @@ from .bandwidth_formatter import (
     determine_unit_filter, 
     format_bandwidth_filter
 )
+from .stability_utils import compute_relay_stability
 import logging
 import statistics
 from datetime import datetime, timedelta
@@ -769,17 +770,31 @@ class Relays:
             self._consolidated_bandwidth_results = consolidated_results
             
             # Apply results to individual relays
+            # PERF: Compute timestamp once for all relays (avoids ~10k time.time() calls)
+            now_timestamp = time.time()
+            
             for relay in self.json["relays"]:
                 fingerprint = relay.get('fingerprint', '')
                 
                 # Apply bandwidth data from consolidated processing
                 if fingerprint in relay_bandwidth_data:
-                    relay["bandwidth_averages"] = relay_bandwidth_data[fingerprint]['bandwidth_averages']
+                    bw_data = relay_bandwidth_data[fingerprint]
+                    relay["bandwidth_averages"] = bw_data['bandwidth_averages']
                     # Store flag bandwidth data for flag bandwidth analysis
-                    relay["_flag_bandwidth_data"] = relay_bandwidth_data[fingerprint]['flag_data']
+                    relay["_flag_bandwidth_data"] = bw_data['flag_data']
+                    # Merge overload fields from bandwidth endpoint
+                    if bw_data.get('overload_ratelimits'):
+                        relay['overload_ratelimits'] = bw_data['overload_ratelimits']
+                    if bw_data.get('overload_fd_exhausted'):
+                        relay['overload_fd_exhausted'] = bw_data['overload_fd_exhausted']
                 else:
                     relay["bandwidth_averages"] = {'6_months': 0.0, '1_year': 0.0, '5_years': 0.0}
                     relay["_flag_bandwidth_data"] = {}
+                
+                # Compute stability using helper with bandwidth formatter
+                # (overload_general_timestamp from /details is already in relay,
+                #  overload_ratelimits/overload_fd_exhausted now merged from /bandwidth)
+                relay.update(compute_relay_stability(relay, now_timestamp, self.bandwidth_formatter))
             
             # Process flag bandwidth display data
             self._process_flag_bandwidth_display(network_flag_statistics)
@@ -4686,10 +4701,8 @@ class Relays:
             is_sybil = 'Sybil' in flags
             is_running = relay.get('running', True)
             # REMOVED: is_hibernating
-            is_overloaded = bool(relay.get('overload_general', False) or 
-                                relay.get('overload_fd_exhausted', False) or 
-                                relay.get('overload_write_limit', False) or 
-                                relay.get('overload_read_limit', False))
+            # Use pre-computed stability field (computed in _reprocess_bandwidth_data)
+            is_overloaded = relay.get('stability_is_overloaded', False)
             
             # Counts
             if is_authority:
