@@ -14,9 +14,9 @@ Onionoo API overload fields:
 """
 
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
-# Tor spec proposal 328: overload flag remains for 72 hours
+# Tor spec proposal 328: overload flag remains for 72 hours (canonical source)
 OVERLOAD_THRESHOLD_HOURS = 72
 
 
@@ -71,7 +71,7 @@ def compute_relay_stability(relay, now_timestamp=None, bandwidth_formatter=None)
         age_hours = (now_timestamp - general_ts / 1000) / 3600
         if age_hours < OVERLOAD_THRESHOLD_HOURS:
             is_overloaded = True
-            gen_date = datetime.utcfromtimestamp(general_ts / 1000).strftime('%Y-%m-%d %H:%M')
+            gen_date = datetime.fromtimestamp(general_ts / 1000, tz=timezone.utc).strftime('%Y-%m-%d %H:%M')
             reasons.append(f"General overload at {gen_date} UTC")
         else:
             # Not currently overloaded, but note when it last was
@@ -100,7 +100,7 @@ def compute_relay_stability(relay, now_timestamp=None, bandwidth_formatter=None)
         is_overloaded = True
         fd_ts = fd_exhausted.get('timestamp', 0)
         if fd_ts:
-            fd_date = datetime.utcfromtimestamp(fd_ts / 1000).strftime('%Y-%m-%d')
+            fd_date = datetime.fromtimestamp(fd_ts / 1000, tz=timezone.utc).strftime('%Y-%m-%d')
             reasons.append(f"FD exhaustion (last: {fd_date})")
         else:
             reasons.append("FD exhaustion reported")
