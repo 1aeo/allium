@@ -84,8 +84,8 @@
     {% if contact_validation_status and contact_validation_status.validation_summary -%}
         ({{ contact_validation_status.validation_summary.total_relays }} relay{% if contact_validation_status.validation_summary.total_relays != 1 %}s{% endif %})
     {% endif -%}
-    {# Verification badge - DRY macro with link to operator page #}
-    {{- aroi_validation_badge(contact_validation_status, issues_link=page_ctx.path_prefix ~ 'contact/' ~ relay['contact_md5'] ~ '/#aroi-validation-issues') -}}
+    {# Verification badge - DRY macro (links to operator page sections) #}
+    {{- aroi_validation_badge(contact_validation_status) -}}
     | 
 {% endif -%}
 {# Family - always shown (not just as fallback) #}

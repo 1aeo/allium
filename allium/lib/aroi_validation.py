@@ -654,11 +654,18 @@ def get_contact_validation_status(relays: List[Dict], validation_data: Optional[
     """
     Get validation status for a specific contact's relays.
     
-    Analyzes all relays belonging to a contact and returns:
-    - Overall validation status (validated, partially_validated, unvalidated)
-    - List of validated relays with proof details
-    - List of unvalidated relays with error messages
-    - Summary statistics
+    Categorizes relays into:
+    - validated: All 3 AROI fields + validation passed
+    - unauthorized: All 3 AROI fields + "fingerprint not found" error
+    - misconfigured: All 3 AROI fields + DNS/SSL/timeout errors
+    - incomplete_*: Missing 1-2 AROI fields (granular sub-categories)
+    - not_configured_*: No AROI fields (granular sub-categories)
+    
+    Operator status cascade:
+    - validated: At least 1 relay passes validation
+    - unauthorized: 0 validated AND at least 1 unauthorized
+    - misconfigured: 0 validated AND 0 unauthorized AND at least 1 misconfigured/incomplete
+    - not_configured: All relays have no AROI info
     
     Args:
         relays: List of relay dictionaries for this contact
@@ -670,18 +677,41 @@ def get_contact_validation_status(relays: List[Dict], validation_data: Optional[
     """
     result = {
         'has_aroi': False,
-        'validation_status': 'no_aroi',  # no_aroi, validated, partially_validated, unvalidated
+        'validation_status': 'not_configured',  # validated | unauthorized | misconfigured | not_configured
+        
+        # Complete AROI relays (all 3 fields present)
         'validated_relays': [],
-        'unvalidated_relays': [],
+        'unauthorized_relays': [],    # "fingerprint not found" errors
+        'misconfigured_relays': [],   # DNS/SSL/timeout errors
+        
+        # Incomplete AROI relays (1-2 fields) - combined for display
+        'incomplete_relays': [],
+        
+        # No AROI relays (0 fields) - combined for display
+        'not_configured_relays': [],
+        
+        # Fingerprint sets for O(1) lookups in templates
+        'validated_fingerprints': set(),
+        'unauthorized_fingerprints': set(),
+        'misconfigured_fingerprints': set(),
+        
         'validation_summary': {
             'total_relays': len(relays),
-            'relays_with_aroi': 0,
             'validated_count': 0,
-            'unvalidated_count': 0,
-            'validation_rate': 0.0
+            'unauthorized_count': 0,
+            'misconfigured_count': 0,
+            'incomplete_count': 0,        # Sum of all incomplete_* counts
+            'not_configured_count': 0,    # Sum of all not_configured_* counts
+            # Granular counts for troubleshooting tooltips
+            'incomplete_no_proof_count': 0,
+            'incomplete_no_domain_count': 0,
+            'incomplete_no_ciissversion_count': 0,
+            'incomplete_missing_two_count': 0,
+            'not_configured_no_aroi_info_count': 0,
+            'not_configured_no_contact_count': 0,
         },
         'validation_available': False,
-        'show_detailed_errors': True  # Show detailed error list (False if all errors are just "Missing AROI fields")
+        'show_detailed_errors': True
     }
     
     if not relays:
@@ -690,7 +720,6 @@ def get_contact_validation_status(relays: List[Dict], validation_data: Optional[
     # Use pre-built validation_map if provided (much faster - avoids rebuilding map 3,000+ times)
     if validation_map is None:
         # FALLBACK: Build fingerprint -> validation result mapping
-        # This is used for testing or when validation_map not available
         validation_map = {}
         if validation_data and 'results' in validation_data:
             for val_result in validation_data.get('results', []):
@@ -699,99 +728,160 @@ def get_contact_validation_status(relays: List[Dict], validation_data: Optional[
                     validation_map[fingerprint] = val_result
             result['validation_available'] = True
     else:
-        # Using shared map
         result['validation_available'] = len(validation_map) > 0
     
-    # OPTIMIZED: Single pass through relays - check AROI existence AND build validation lists
-    all_missing_aroi_fields = True  # Track if all errors are "Missing AROI fields"
-    
+    # Single pass through relays - categorize each one
     for relay in relays:
         fingerprint = relay.get('fingerprint')
         aroi_domain = relay.get('aroi_domain', 'none')
         nickname = relay.get('nickname', 'Unnamed')
+        contact = relay.get('contact', '')
+        first_seen = relay.get('first_seen', 'Unknown')
         
-        # AROI Standard: A relay must have ciissversion:2, proof:dns-rsa/uri-rsa, and url:domain
-        # Only consider relays with proper AROI setup (aroi_domain != 'none')
-        # The validator checks ALL relays, including ones without AROI setup
-        has_aroi_setup = aroi_domain and aroi_domain != 'none'
+        # Check if relay has complete AROI setup (all 3 required fields)
+        has_complete_aroi = aroi_domain and aroi_domain != 'none'
         
-        if not has_aroi_setup:
-            # Relay doesn't have all 3 required AROI fields, skip validation check
-            continue
-        
-        # Relay has proper AROI setup (all 3 required fields present)
-        result['has_aroi'] = True
-        result['validation_summary']['relays_with_aroi'] += 1
-        
-        # Check validation status
-        if fingerprint not in validation_map:
-            # Has AROI domain but not in validation data
-            # This can happen for newly added relays not yet processed by the validator
-            result['validation_summary']['unvalidated_count'] += 1
-            result['unvalidated_relays'].append({
-                'fingerprint': fingerprint,
-                'nickname': nickname,
-                'aroi_domain': aroi_domain if aroi_domain != 'none' else 'unknown',
-                'error': 'Not yet processed by validator (relay may be new)',
-                'proof_type': 'unknown',
-            })
-            all_missing_aroi_fields = False  # This is a real validation gap
-            continue
-        
-        val_result = validation_map[fingerprint]
-        
-        if val_result.get('valid', False):
-            # Relay is validated
-            result['validation_summary']['validated_count'] += 1
-            result['validated_relays'].append({
-                'fingerprint': fingerprint,
-                'nickname': nickname,
-                'aroi_domain': aroi_domain if aroi_domain != 'none' else 'unknown',
-                'proof_type': val_result.get('proof_type', 'unknown'),
-                'proof_uri': val_result.get('proof_uri', ''),
-            })
+        if has_complete_aroi:
+            # Relay has all 3 AROI fields - check validation result
+            result['has_aroi'] = True
+            
+            if fingerprint not in validation_map:
+                # Has AROI but not in validation data - treat as misconfigured (unknown status)
+                result['validation_summary']['misconfigured_count'] += 1
+                result['misconfigured_relays'].append({
+                    'fingerprint': fingerprint,
+                    'nickname': nickname,
+                    'aroi_domain': aroi_domain,
+                    'error': 'Not yet processed by validator (relay may be new)',
+                    'proof_type': 'unknown',
+                    'first_seen': first_seen,
+                    'relay': relay,  # Include full relay for table display
+                })
+                continue
+            
+            val_result = validation_map[fingerprint]
+            
+            if val_result.get('valid', False):
+                # VALIDATED: Validation passed
+                result['validation_summary']['validated_count'] += 1
+                result['validated_relays'].append({
+                    'fingerprint': fingerprint,
+                    'nickname': nickname,
+                    'aroi_domain': aroi_domain,
+                    'proof_type': val_result.get('proof_type', 'unknown'),
+                    'proof_uri': val_result.get('proof_uri', ''),
+                    'first_seen': first_seen,
+                    'relay': relay,
+                })
+            else:
+                # Validation failed - categorize by error type
+                error = val_result.get('error', 'Unknown error')
+                error = _deduplicate_fingerprint_not_found_error(error)
+                
+                # Check if unauthorized error (fingerprint/record not found) -> unauthorized
+                # These indicate the relay is NOT in the operator's proof file
+                # NXDOMAIN stays as misconfigured (domain doesn't exist = config error, not unauthorized claim)
+                # HTTP 404 stays as misconfigured (proof file doesn't exist = setup error)
+                error_lower = error.lower()
+                is_http_error = '404' in error_lower or 'http error' in error_lower
+                is_unauthorized = (
+                    not is_http_error and (
+                        'fingerprint not found' in error_lower or
+                        ('not found' in error_lower and ('dns' in error_lower or 'txt' in error_lower or 'record' in error_lower) and 'nxdomain' not in error_lower)
+                    )
+                )
+                
+                relay_info = {
+                    'fingerprint': fingerprint,
+                    'nickname': nickname,
+                    'aroi_domain': aroi_domain,
+                    'error': error,  # Show full error from API
+                    'proof_type': val_result.get('proof_type', 'unknown'),
+                    'first_seen': first_seen,
+                    'relay': relay,
+                }
+                
+                if is_unauthorized:
+                    result['validation_summary']['unauthorized_count'] += 1
+                    result['unauthorized_relays'].append(relay_info)
+                else:
+                    # SSL/timeout/connection/other errors -> misconfigured
+                    result['validation_summary']['misconfigured_count'] += 1
+                    result['misconfigured_relays'].append(relay_info)
         else:
-            # Relay has validation error
-            error = val_result.get('error', 'Unknown error')
-            # Deduplicate repeated "Fingerprint not found" messages
-            error = _deduplicate_fingerprint_not_found_error(error)
-            result['validation_summary']['unvalidated_count'] += 1
-            result['unvalidated_relays'].append({
+            # Relay does NOT have complete AROI - categorize as incomplete or not_configured
+            aroi_fields = _check_aroi_fields(contact)
+            has_contact = bool(contact and contact.strip())
+            category = _categorize_by_missing_fields(aroi_fields, has_contact)
+            
+            relay_info = {
                 'fingerprint': fingerprint,
                 'nickname': nickname,
-                'aroi_domain': aroi_domain if aroi_domain != 'none' else 'unknown',
-                'error': error,
-                'proof_type': val_result.get('proof_type', 'unknown'),
-            })
-            # Track if any error is NOT "Missing AROI fields"
-            if error.strip() != 'Missing AROI fields':
-                all_missing_aroi_fields = False
+                'aroi_domain': aroi_domain if aroi_domain != 'none' else None,
+                'contact': contact,
+                'first_seen': first_seen,
+                'category': category,
+                'relay': relay,
+            }
+            
+            if category in ('no_contact',):
+                # Not configured: no contact at all
+                result['validation_summary']['not_configured_count'] += 1
+                result['validation_summary']['not_configured_no_contact_count'] += 1
+                relay_info['missing'] = 'No contact info'
+                result['not_configured_relays'].append(relay_info)
+            elif category == 'no_aroi_info':
+                # Not configured: has contact but no AROI fields
+                result['validation_summary']['not_configured_count'] += 1
+                result['validation_summary']['not_configured_no_aroi_info_count'] += 1
+                relay_info['missing'] = 'Has contact, no AROI fields'
+                result['not_configured_relays'].append(relay_info)
+            else:
+                # Incomplete: has 1-2 AROI fields
+                result['has_aroi'] = True  # Has some AROI info
+                result['validation_summary']['incomplete_count'] += 1
+                
+                if category == 'no_proof':
+                    result['validation_summary']['incomplete_no_proof_count'] += 1
+                    relay_info['missing'] = 'Missing proof field (has domain + ciissversion)'
+                elif category == 'no_domain':
+                    result['validation_summary']['incomplete_no_domain_count'] += 1
+                    relay_info['missing'] = 'Missing domain/URL field (has proof + ciissversion)'
+                elif category == 'no_ciissversion':
+                    result['validation_summary']['incomplete_no_ciissversion_count'] += 1
+                    relay_info['missing'] = 'Missing ciissversion (has proof + domain)'
+                elif category == 'missing_two_aroi':
+                    result['validation_summary']['incomplete_missing_two_count'] += 1
+                    # Identify which 2 fields are missing (only 1 is present)
+                    missing_fields = []
+                    if not aroi_fields['has_proof']:
+                        missing_fields.append('proof')
+                    if not aroi_fields['has_url']:
+                        missing_fields.append('url/domain')
+                    if not aroi_fields['has_ciissversion']:
+                        missing_fields.append('ciissversion')
+                    relay_info['missing'] = f"Missing {' and '.join(missing_fields)}"
+                else:
+                    relay_info['missing'] = 'Incomplete AROI configuration'
+                
+                result['incomplete_relays'].append(relay_info)
     
-    # Early exit if no AROI found
-    if not result['has_aroi']:
-        return result
-    
-    # Calculate validation rate
-    if result['validation_summary']['relays_with_aroi'] > 0:
-        result['validation_summary']['validation_rate'] = (
-            result['validation_summary']['validated_count'] / 
-            result['validation_summary']['relays_with_aroi'] * 100
-        )
-    
-    # Determine overall status
-    if result['validation_summary']['validated_count'] == result['validation_summary']['relays_with_aroi']:
+    # Determine operator status using cascade logic
+    summary = result['validation_summary']
+    if summary['validated_count'] > 0:
         result['validation_status'] = 'validated'
-    elif result['validation_summary']['validated_count'] > 0:
-        result['validation_status'] = 'partially_validated'
+    elif summary['unauthorized_count'] > 0:
+        result['validation_status'] = 'unauthorized'
+    elif summary['misconfigured_count'] > 0:
+        result['validation_status'] = 'misconfigured'
+    elif summary['incomplete_count'] > 0:
+        result['validation_status'] = 'incomplete'
     else:
-        result['validation_status'] = 'unvalidated'
-    
-    # Set show_detailed_errors flag (already computed during loop)
-    if result['unvalidated_relays'] and all_missing_aroi_fields:
-        result['show_detailed_errors'] = False
+        result['validation_status'] = 'not_configured'
     
     # Build fingerprint sets for O(1) lookups in templates
     result['validated_fingerprints'] = {r['fingerprint'] for r in result['validated_relays']}
-    result['unvalidated_fingerprints'] = {r['fingerprint'] for r in result['unvalidated_relays']}
+    result['unauthorized_fingerprints'] = {r['fingerprint'] for r in result['unauthorized_relays']}
+    result['misconfigured_fingerprints'] = {r['fingerprint'] for r in result['misconfigured_relays']}
     
     return result

@@ -195,11 +195,13 @@
 </ul>
 {%- endmacro %}
 
-{% macro aroi_validation_icon(fingerprint, aroi_domain, validated_fps, unvalidated_fps) -%}
+{% macro aroi_validation_icon(fingerprint, aroi_domain, validated_fps, unauthorized_fps, misconfigured_fps) -%}
     {% if fingerprint in validated_fps -%}
         <span style="color: #28a745; margin-left: 4px;" title="AROI Validated: This relay's fingerprint has been cryptographically verified via the operator's AROI proof">✓</span>
-    {% elif fingerprint in unvalidated_fps -%}
-        <a href="#aroi-validation-issues" style="color: #ffc107; margin-left: 4px; text-decoration: none;" title="AROI Validation Failed: This relay has AROI configured but validation failed - see details below">⚠</a>
+    {% elif fingerprint in unauthorized_fps -%}
+        <a href="#unauthorized-relays" style="color: #dc3545; margin-left: 4px; text-decoration: none;" title="Unauthorized Relay: This relay claims the domain but fingerprint is NOT in the AROI proof file">🚫</a>
+    {% elif fingerprint in misconfigured_fps -%}
+        <a href="#misconfigured-relays" style="color: #ffc107; margin-left: 4px; text-decoration: none;" title="AROI Misconfigured: Validation failed due to DNS/SSL/connection errors - see details below">⚠</a>
     {% elif aroi_domain and aroi_domain != 'none' -%}
         <span style="color: #dc3545; margin-left: 4px;" title="No AROI Validation: This relay has AROI configured but no validation data is available">✗</span>
     {% endif -%}
@@ -207,64 +209,173 @@
 
 {# =============================================================================
    AROI VALIDATION BADGE MACRO (DRY - single macro with optional count display)
-   Shows "✓ Verified" / "⚠ Partially Verified" / "✗ Unvalidated" badge
+   Shows operator-level validation status badge.
+   
+   Operator statuses (cascade):
+   - validated: At least 1 relay passes validation (green ✓)
+   - unauthorized: 0 validated, but has unauthorized claims (red 🚫)
+   - misconfigured: 0 validated, 0 unauthorized, but has config issues (yellow ⚠)
+   - not_configured: No AROI info at all (no badge shown)
+   
    Set show_count=true to include relay counts (used when domain isn't displayed)
-   Set issues_link to override default #aroi-validation-issues anchor (for relay pages)
    ============================================================================= #}
-{% macro aroi_validation_badge(contact_validation_status, show_count=false, issues_link=none) -%}
-{% if contact_validation_status and contact_validation_status.has_aroi -%}
+{% macro aroi_validation_badge(contact_validation_status, show_count=false) -%}
+{% if contact_validation_status -%}
     {%- set summary = contact_validation_status.validation_summary -%}
     {%- set status = contact_validation_status.validation_status -%}
-    {%- set link_target = issues_link if issues_link else '#aroi-validation-issues' -%}
-    {%- set link_title_suffix = 'See details on operator page' if issues_link else 'See details below' -%}
     {% if status == 'validated' -%}
-        <span style="color: #28a745; font-weight: bold;{% if not show_count %} margin-left: 5px;{% endif %}" title="All {{ summary.relays_with_aroi }} relays with AROI have valid cryptographic proofs">✓ Verified{% if show_count %} ({{ summary.relays_with_aroi }} relays){% endif %}</span>
-    {% elif status == 'partially_validated' -%}
-        <a href="{{ link_target }}" style="color: #ffc107; font-weight: bold;{% if not show_count %} margin-left: 5px;{% endif %} text-decoration: none;" title="{{ summary.validated_count }}/{{ summary.relays_with_aroi }} relays validated ({{ "%.1f"|format(summary.validation_rate) }}%) - {{ link_title_suffix }}">⚠ Partially Verified{% if show_count %} ({{ summary.validated_count }}/{{ summary.relays_with_aroi }}){% endif %}</a>
-    {% elif status == 'unvalidated' -%}
-        <a href="{{ link_target }}" style="color: #dc3545; font-weight: bold;{% if not show_count %} margin-left: 5px;{% endif %} text-decoration: none;" title="AROI validation failed{% if show_count %} for {{ summary.relays_with_aroi }} relays{% endif %} - {{ link_title_suffix }}">✗ Unvalidated{% if show_count %} ({{ summary.relays_with_aroi }} relays){% endif %}</a>
+        <span style="color: #28a745; font-weight: bold;{% if not show_count %} margin-left: 5px;{% endif %}" title="{{ summary.validated_count }} relays validated{% if summary.unauthorized_count > 0 %}, {{ summary.unauthorized_count }} unauthorized claims{% endif %}{% if summary.misconfigured_count > 0 %}, {{ summary.misconfigured_count }} misconfigured{% endif %}">✓ Validated{% if show_count %} ({{ summary.validated_count }} relays){% endif %}</span>
+    {% elif status == 'unauthorized' -%}
+        <a href="#unauthorized-relays" style="color: #dc3545; font-weight: bold;{% if not show_count %} margin-left: 5px;{% endif %} text-decoration: none;" title="{{ summary.unauthorized_count }} relays claiming this domain but NOT in proof file - see details below">🚫 Unauthorized{% if show_count %} ({{ summary.unauthorized_count }} relays){% endif %}</a>
+    {% elif status == 'misconfigured' -%}
+        <a href="#misconfigured-relays" style="color: #ffc107; font-weight: bold;{% if not show_count %} margin-left: 5px;{% endif %} text-decoration: none;" title="{{ summary.misconfigured_count }} relays with AROI config errors - see details below">⚠ Misconfigured{% if show_count %} ({{ summary.misconfigured_count }} relays){% endif %}</a>
+    {% elif status == 'incomplete' -%}
+        <a href="#not_configured-relays" style="color: #6c757d; font-weight: bold;{% if not show_count %} margin-left: 5px;{% endif %} text-decoration: none;" title="{{ summary.incomplete_count }} relays with incomplete AROI configuration - see details below">Incomplete{% if show_count %} ({{ summary.incomplete_count }} relays){% endif %}</a>
+    {# not_configured status shows no badge #}
     {% endif -%}
 {% endif -%}
 {%- endmacro %}
 
 {# =============================================================================
-   AROI VALIDATION ISSUES SECTION MACRO (DRY - used by contact.html and family.html)
-   Shows detailed error list for relays with validation failures
+   AROI SUB-BULLETS MACRO (DRY - shows category counts as sub-bullets)
+   Used in Contact & Network Overview section
    ============================================================================= #}
-{% macro aroi_validation_issues_section(contact_validation_status, aroi_validation_timestamp, page_ctx) -%}
-{% if contact_validation_status and contact_validation_status.has_aroi and contact_validation_status.unvalidated_relays and contact_validation_status.show_detailed_errors %}
-<div id="aroi-validation-issues" style="margin-top: 30px; padding: 15px; background-color: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px; max-width: 1200px;">
-    <h4 style="margin-top: 0; margin-bottom: 12px; color: #856404;">
-        <strong>⚠️ AROI Validation Issues ({{ contact_validation_status.validation_summary.validated_count }}/{{ contact_validation_status.validation_summary.relays_with_aroi }} relays validated)</strong>
-    </h4>
+{% macro aroi_sub_bullets(contact_validation_status) -%}
+{% if contact_validation_status -%}
+{% set summary = contact_validation_status.validation_summary -%}
+{% set status = contact_validation_status.validation_status -%}
+{# Only show sub-bullets for categories OTHER than the main status #}
+{% set show_unauthorized = summary.unauthorized_count > 0 and status != 'unauthorized' -%}
+{% set show_misconfigured = summary.misconfigured_count > 0 and status != 'misconfigured' -%}
+{% set show_incomplete = summary.incomplete_count > 0 and status != 'incomplete' -%}
+{% set show_not_configured = summary.not_configured_count > 0 -%}
+{% if show_unauthorized or show_misconfigured or show_incomplete or show_not_configured -%}
+<ul style="list-style-type: circle; padding-left: 20px; margin-top: 0; margin-bottom: 0;">
+{% if show_unauthorized -%}
+<li><a href="#unauthorized-relays" style="color: #dc3545; text-decoration: none;">🚫 Unauthorized: {{ summary.unauthorized_count }} relay{{ 's' if summary.unauthorized_count != 1 else '' }}</a></li>
+{% endif -%}
+{% if show_misconfigured -%}
+<li><a href="#misconfigured-relays" style="color: #ffc107; text-decoration: none;">⚠ Misconfigured: {{ summary.misconfigured_count }} relay{{ 's' if summary.misconfigured_count != 1 else '' }}</a></li>
+{% endif -%}
+{% if show_incomplete -%}
+<li><a href="#not_configured-relays" style="color: #6c757d; text-decoration: none;">○ Incomplete: {{ summary.incomplete_count }} relay{{ 's' if summary.incomplete_count != 1 else '' }}</a></li>
+{% endif -%}
+{% if show_not_configured -%}
+<li><a href="#not_configured-relays" style="color: #6c757d; text-decoration: none;">○ Not configured: {{ summary.not_configured_count }} relay{{ 's' if summary.not_configured_count != 1 else '' }}</a></li>
+{% endif -%}
+</ul>
+{% endif -%}
+{% endif -%}
+{%- endmacro %}
+
+{# =============================================================================
+   AROI RELAY DETAIL BOX MACRO (DRY - reused by all section macros)
+   Shows per-relay status details in a styled box below each table
+   ============================================================================= #}
+{% macro aroi_relay_detail_box(relays, box_type, page_ctx, aroi_validation_timestamp) -%}
+{# box_type: 'misconfigured' | 'unauthorized' | 'not_configured' #}
+{% if relays %}
+    {# Style configuration based on box type #}
+    {% if box_type == 'misconfigured' -%}
+        {% set bg_color = '#fff3cd' -%}
+        {% set border_color = '#ffc107' -%}
+        {% set text_color = '#856404' -%}
+        {% set icon = '⚠️' -%}
+        {% set title = 'MISCONFIGURED RELAY DETAILS' -%}
+        {% set description = 'These relays have AROI configured but validation failed due to errors.' -%}
+        {% set help_text = 'Fix: Check DNS records, renew SSL certificates, or verify server connectivity.' -%}
+    {% elif box_type == 'unauthorized' -%}
+        {% set bg_color = '#f8d7da' -%}
+        {% set border_color = '#dc3545' -%}
+        {% set text_color = '#721c24' -%}
+        {% set icon = '🚫' -%}
+        {% set title = 'UNAUTHORIZED RELAY DETAILS' -%}
+        {% set description = 'These relays claim this domain but their fingerprints are NOT in the AROI proof file. This could be someone falsely claiming your domain.' -%}
+        {% set help_text = 'If this is YOUR relay: Add the fingerprint to your AROI proof file.' -%}
+    {% else -%}
+        {% set bg_color = '#e9ecef' -%}
+        {% set border_color = '#6c757d' -%}
+        {% set text_color = '#495057' -%}
+        {% set icon = '○' -%}
+        {% set title = 'NOT CONFIGURED RELAY DETAILS' -%}
+        {% set description = 'These relays have no AROI configuration or incomplete setup.' -%}
+        {% set help_text = 'To add AROI: Set contact info with ciissversion:2, proof:dns-rsa or proof:uri-rsa, and url:yourdomain.com' -%}
+    {% endif -%}
     
-    <p style="margin-bottom: 10px; font-size: 14px; color: #856404;">
-        The following relays have AROI validation errors. Fix these to improve your validation status:
+<div style="margin-top: 15px; padding: 15px; background-color: {{ bg_color }}; border-left: 4px solid {{ border_color }}; border-radius: 4px;">
+    <h5 style="margin-top: 0; margin-bottom: 10px; color: {{ text_color }}; font-size: 14px;">
+        <strong>{{ icon }} {{ title }}</strong>
+    </h5>
+    
+    <p style="margin-bottom: 10px; font-size: 13px; color: {{ text_color }};">
+        {{ description }}
     </p>
     
-    {% if contact_validation_status.validation_available %}
-    <p style="margin-bottom: 12px; font-size: 13px; color: #666; font-style: italic;">
-        Validation data last updated: {{ aroi_validation_timestamp if aroi_validation_timestamp else 'Unknown' }}
+    {% if aroi_validation_timestamp %}
+    <p style="margin-bottom: 10px; font-size: 12px; color: #666; font-style: italic;">
+        Validation data last updated: {{ aroi_validation_timestamp }}
     </p>
     {% endif %}
     
     <ul style="list-style-type: none; padding-left: 0; margin-bottom: 10px;">
-        {% for relay in contact_validation_status.unvalidated_relays %}
-        <li style="margin-bottom: 6px; padding: 8px; background-color: #fff; border-radius: 3px; font-size: 13px; border: 1px solid #ffeeba;">
-            <strong><a href="{{ page_ctx.path_prefix }}relay/{{ relay.fingerprint }}/">{{ relay.nickname|escape }}</a></strong>
+        {% for relay_info in relays %}
+        <li style="margin-bottom: 6px; padding: 8px; background-color: #fff; border-radius: 3px; font-size: 13px; border: 1px solid {{ border_color }}40;">
+            <strong><a href="{{ page_ctx.path_prefix }}relay/{{ relay_info.fingerprint }}/">{{ relay_info.nickname|escape }}</a></strong>
             <span style="color: #666;">•</span>
-            <span style="color: #dc3545;">{{ relay.error|escape }}</span>
-            {% if relay.proof_type and relay.proof_type != 'unknown' %}
-                <span style="color: #666;">• Proof type: {{ relay.proof_type }}</span>
+            {% if relay_info.error -%}
+                <span style="color: #dc3545;">{{ relay_info.error|escape }}</span>
+            {% elif relay_info.missing -%}
+                <span style="color: #856404;">{{ relay_info.missing|escape }}</span>
+            {% endif -%}
+            {% if relay_info.proof_type and relay_info.proof_type != 'unknown' %}
+                <span style="color: #666;">• Proof: {{ relay_info.proof_type }}</span>
             {% endif %}
-            <span style="color: #666;">• Fingerprint: <code style="font-size: 11px;">{{ relay.fingerprint }}</code></span>
+            <span style="color: #666;">• FP: <code style="font-size: 11px;">{{ relay_info.fingerprint }}</code></span>
         </li>
         {% endfor %}
     </ul>
     
-    <p style="font-size: 12px; color: #856404; margin-bottom: 0;">
-        📖 <strong>Need help?</strong> See the <a href="https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/" target="_blank" rel="noopener" style="color: #856404; text-decoration: underline;">AROI Specification</a> for guidance on setting up valid cryptographic proofs.
+    <p style="font-size: 12px; color: {{ text_color }}; margin-bottom: 0;">
+        💡 <strong>{{ help_text }}</strong>
+        <br>📖 See the <a href="https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/" target="_blank" rel="noopener" style="color: {{ text_color }}; text-decoration: underline;">AROI Specification</a> for guidance.
     </p>
 </div>
 {% endif %}
+{%- endmacro %}
+
+{# =============================================================================
+   AROI SECTION HEADER MACRO (DRY - reused by all section macros)
+   ============================================================================= #}
+{% macro aroi_section_header(title, count, style_type) -%}
+{# style_type: 'validated' | 'misconfigured' | 'unauthorized' | 'not_configured' #}
+{% if style_type == 'validated' -%}
+    {% set border_style = '3px solid #28a745' -%}
+    {% set icon = '✓' -%}
+    {% set color = '#28a745' -%}
+{% elif style_type == 'misconfigured' -%}
+    {% set border_style = '3px solid #ffc107' -%}
+    {% set icon = '⚠' -%}
+    {% set color = '#ffc107' -%}
+{% elif style_type == 'unauthorized' -%}
+    {% set border_style = '3px dashed #dc3545' -%}
+    {% set icon = '🚫' -%}
+    {% set color = '#dc3545' -%}
+{% else -%}
+    {% set border_style = '3px solid #6c757d' -%}
+    {% set icon = '○' -%}
+    {% set color = '#6c757d' -%}
+{% endif -%}
+<div id="{{ style_type }}-relays" style="margin-top: 30px; padding: 15px 0; border-top: {{ border_style }};">
+    <h3 style="margin: 0 0 15px 0; font-size: 16px;">
+        <a href="#{{ style_type }}-relays" style="color: {{ color }}; text-decoration: none;">{{ icon }} {{ title }} ({{ count }})</a>
+    </h3>
+{%- endmacro %}
+
+{# =============================================================================
+   LEGACY AROI_VALIDATION_ISSUES_SECTION MACRO 
+   (Kept for backwards compatibility - calls are replaced with new section macros)
+   ============================================================================= #}
+{% macro aroi_validation_issues_section(contact_validation_status, aroi_validation_timestamp, page_ctx) -%}
+{# This macro is deprecated - issues are now shown in per-category sections #}
+{# Kept empty for backwards compatibility during transition #}
 {%- endmacro %} 
