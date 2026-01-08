@@ -94,7 +94,7 @@ This document proposes a redesign of the Allium relay page to prioritize operato
 | Connectivity Section | ✅ Implemented | `relay-info.html` | #connectivity with 2-col layout |
 | Per-Authority Details | ✅ Implemented | `relay-info.html` | #authority-votes table |
 | Flags Section (dedicated) | ⏳ Not Started | — | Needs #flags section with eligibility table |
-| Bandwidth Section (dedicated) | ⏳ Not Started | — | Needs #bandwidth section |
+| Bandwidth Section (dedicated) | 📋 Documented | Section 3.4 | Full spec ready, code implementation pending |
 | Uptime Section (dedicated) | ⏳ Not Started | — | Needs #uptime section |
 | Overload Section (dedicated) | ⏳ Not Started | — | Needs #overload section |
 | Operator Section (merged) | ⏳ Not Started | — | Needs #operator with AROI + Family |
@@ -1640,26 +1640,370 @@ rather than calculated in Jinja2 templates. This provides:
 
 ### 3.4 Bandwidth Metrics (#bandwidth)
 
-**Status:** ⏳ Not Started - Needs dedicated section implementation
+---
 
-#### Data Fields (from Complete Item Mapping)
+#### Overview
 
-#### Section 4: Bandwidth (`#bandwidth`)
+| Attribute | Value |
+|-----------|-------|
+| **Section Number** | 4 |
+| **Anchor** | `#bandwidth` |
+| **Position** | After `#flags`, before `#uptime` |
+| **Template File** | `allium/templates/relay-info.html` |
+| **Backend Status** | ✅ All data available (no new data gathering needed) |
+| **Template Status** | 🔶 Partial (exists as dt/dd, needs dedicated section) |
 
-| Current Location | Item | Notes |
-|------------------|------|-------|
-| Right column | Observed Bandwidth | Self-reported |
-| Right column | Advertised Bandwidth | Min of rate/burst/observed |
-| Right column | Rate Limit | Configured limit |
-| Right column | Burst Limit | Configured burst |
-| Right column | Measured indicator | By bandwidth authorities |
-| Right column | Consensus Weight % | Network participation |
-| Right column | Guard Probability % | Position probability |
-| Right column | Middle Probability % | Position probability |
-| Right column | Exit Probability % | Position probability |
-| Right column | Underutilized warning | If applicable |
-| Consensus Eval | Authority Measured BW | Median/Min/Max |
-| Summary Table | Consensus Weight row | From consensus eval |
+---
+
+#### Rationale
+
+- Bandwidth determines traffic allocation and consensus weight
+- Operators troubleshoot "why is my relay not getting traffic?"
+- Multiple bandwidth metrics (observed, advertised, measured, rate, burst) are confusing
+- Need clear explanation of what each metric means and how they relate
+- Authority measurement data helps diagnose bandwidth scanner issues
+
+---
+
+#### Data Fields (All Available - No New Data Needed)
+
+**From Onionoo /details (already in relay dict):**
+
+| Variable | Type | Template Access | Description |
+|----------|------|-----------------|-------------|
+| `relay['observed_bandwidth']` | int | `relay['observed_bandwidth']` | Self-reported bandwidth capacity (bytes/s) |
+| `relay['advertised_bandwidth']` | int | `relay['advertised_bandwidth']` | min(observed, rate, burst) (bytes/s) |
+| `relay['bandwidth_rate']` | int | `relay['bandwidth_rate']` | Configured RelayBandwidthRate (bytes/s) |
+| `relay['bandwidth_burst']` | int | `relay['bandwidth_burst']` | Configured RelayBandwidthBurst (bytes/s) |
+| `relay['consensus_weight']` | int | `relay['consensus_weight']` | Consensus weight value |
+| `relay['consensus_weight_fraction']` | float | `relay['consensus_weight_fraction']` | Fraction of total network weight (0.0-1.0) |
+| `relay['guard_probability']` | float | `relay['guard_probability']` | Probability selected as guard (0.0-1.0) |
+| `relay['middle_probability']` | float | `relay['middle_probability']` | Probability selected as middle (0.0-1.0) |
+| `relay['exit_probability']` | float | `relay['exit_probability']` | Probability selected as exit (0.0-1.0) |
+| `relay['measured']` | bool/None | `relay['measured']` | Whether bandwidth was measured by ≥3 authorities |
+
+**Pre-computed Display Values (from relays.py):**
+
+| Variable | Type | Template Access | Description |
+|----------|------|-----------------|-------------|
+| `relay['obs_bandwidth_formatted']` | str | `relay['obs_bandwidth_formatted']` | Pre-formatted observed bandwidth (e.g., "125") |
+| `relay['obs_bandwidth_unit']` | str | `relay['obs_bandwidth_unit']` | Unit for observed bandwidth (e.g., "Mbit/s") |
+| `relay['obs_bandwidth_with_unit']` | str | `relay['obs_bandwidth_with_unit']` | Combined (e.g., "125 Mbit/s") |
+
+**From CollecTor (consensus_evaluation.bandwidth_summary):**
+
+| Variable | Type | Template Access | Description |
+|----------|------|-----------------|-------------|
+| `bandwidth_summary.median` | int | `diag.bandwidth_summary.median` | Median measured bandwidth (bytes/s) |
+| `bandwidth_summary.median_display` | str | `diag.bandwidth_summary.median_display` | Formatted (e.g., "98 Mbit/s") |
+| `bandwidth_summary.median_int` | int | `diag.bandwidth_summary.median_int` | Integer part (e.g., 98) |
+| `bandwidth_summary.median_unit` | str | `diag.bandwidth_summary.median_unit` | Unit (e.g., "Mbit/s") |
+| `bandwidth_summary.min` | int | `diag.bandwidth_summary.min` | Min measured bandwidth |
+| `bandwidth_summary.min_display` | str | `diag.bandwidth_summary.min_display` | Formatted min |
+| `bandwidth_summary.max` | int | `diag.bandwidth_summary.max` | Max measured bandwidth |
+| `bandwidth_summary.max_display` | str | `diag.bandwidth_summary.max_display` | Formatted max |
+| `bandwidth_summary.deviation` | int | `diag.bandwidth_summary.deviation` | Max - Min deviation |
+| `bandwidth_summary.deviation_display` | str | `diag.bandwidth_summary.deviation_display` | Formatted deviation |
+| `bandwidth_summary.deviation_class` | str | `diag.bandwidth_summary.deviation_class` | 'warning' if high deviation |
+| `bandwidth_summary.measurement_count` | int | `diag.bandwidth_summary.measurement_count` | Total bandwidth values |
+| `bandwidth_summary.bw_auth_measured_count` | int | `diag.bandwidth_summary.bw_auth_measured_count` | BW authorities that measured this relay |
+| `bandwidth_summary.bw_auth_total` | int | `diag.bandwidth_summary.bw_auth_total` | Total BW authorities (6) |
+| `bandwidth_summary.bw_auth_color` | str | `diag.bandwidth_summary.bw_auth_color` | Pre-computed color (#28a745/#856404/#dc3545) |
+
+**Underutilized Detection (from smart_context):**
+
+| Variable | Type | Template Access | Description |
+|----------|------|-----------------|-------------|
+| underutilized | bool | `relay['fingerprint'] in relays.json.smart_context.performance_correlation.template_optimized.underutilized_fingerprints` | High capacity, low consensus weight |
+
+---
+
+#### Mockups
+
+**Desktop Wireframe:**
+
+```
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Bandwidth Metrics                                                      [#bandwidth]   ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Capacity (Relay-Reported)                       ┃ Measurement (Authority-Verified)     ┃
+┃                                                 ┃                                      ┃
+┃   Observed Bandwidth:    125 Mbit/s             ┃   Measured By: 4/6 BW Authorities    ┃
+┃   Advertised Bandwidth:  100 Mbit/s             ┃   Median Measurement: 98 Mbit/s      ┃
+┃   Rate Limit (torrc):    100 Mbit/s             ┃   Min: 95 Mbit/s | Max: 102 Mbit/s   ┃
+┃   Burst Limit (torrc):   200 Mbit/s             ┃   Deviation: 7 Mbit/s                ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Network Participation:                                                                ┃
+┃   Consensus Weight: 0.15% of network (125,000)                                        ┃
+┃   Guard: 0.12% | Middle: 0.18% | Exit: 0.00%                                          ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ [Info] Advertised = min(Observed, Rate, Burst). Authorities measure actual throughput.┃
+┃        [Warning] Underutilized: High bandwidth capacity but low consensus weight      ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+```
+
+**Mobile Wireframe:**
+
+```
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Bandwidth Metrics      [#bandwidth]   ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Capacity (Relay-Reported)             ┃
+┃   Observed:   125 Mbit/s              ┃
+┃   Advertised: 100 Mbit/s              ┃
+┃   Rate Limit: 100 Mbit/s              ┃
+┃   Burst:      200 Mbit/s              ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Measurement (Authority-Verified)      ┃
+┃   Measured By: 4/6 BW Authorities     ┃
+┃   Median: 98 Mbit/s                   ┃
+┃   Min: 95 | Max: 102 Mbit/s           ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Network Participation                 ┃
+┃   Consensus Weight: 0.15%             ┃
+┃   Guard: 0.12%                        ┃
+┃   Middle: 0.18%                       ┃
+┃   Exit: 0.00%                         ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ [Warning] Underutilized               ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+```
+
+---
+
+#### Jinja2 Template
+
+```jinja2
+{# ============== SECTION 4: BANDWIDTH METRICS (#bandwidth) ============== #}
+<section id="bandwidth" class="relay-section">
+<h3>
+<div class="section-header">
+<a href="#bandwidth" class="anchor-link">Bandwidth Metrics</a>
+</div>
+</h3>
+
+{% set diag = relay.consensus_evaluation if relay.consensus_evaluation and relay.consensus_evaluation.available else none %}
+
+<div class="row">
+    {# Left Column: Relay-Reported Capacity #}
+    <div class="col-md-6">
+        <h5>Capacity (Relay-Reported)</h5>
+        <dl class="dl-horizontal-compact">
+            <dt title="Bandwidth capacity your relay measured and reported in its descriptor">Observed Bandwidth</dt>
+            <dd>
+                {% set obs_unit = relay['observed_bandwidth']|determine_unit(relays.use_bits) %}
+                {{ relay['observed_bandwidth']|format_bandwidth_with_unit(obs_unit) }} {{ obs_unit }}
+            </dd>
+            
+            <dt title="min(Observed, Rate, Burst) - what your relay advertises to the network">Advertised Bandwidth</dt>
+            <dd>
+                {% if relay['advertised_bandwidth'] %}
+                    {% set adv_unit = relay['advertised_bandwidth']|determine_unit(relays.use_bits) %}
+                    {{ relay['advertised_bandwidth']|format_bandwidth_with_unit(adv_unit) }} {{ adv_unit }}
+                {% else %}
+                    <span style="color: #6c757d;">Unknown</span>
+                {% endif %}
+            </dd>
+            
+            <dt title="RelayBandwidthRate setting in torrc">Rate Limit</dt>
+            <dd>
+                {% if relay['bandwidth_rate'] %}
+                    {% set rate_unit = relay['bandwidth_rate']|determine_unit(relays.use_bits) %}
+                    {{ relay['bandwidth_rate']|format_bandwidth_with_unit(rate_unit) }} {{ rate_unit }}
+                {% else %}
+                    <span style="color: #6c757d;">Not set</span>
+                {% endif %}
+            </dd>
+            
+            <dt title="RelayBandwidthBurst setting in torrc">Burst Limit</dt>
+            <dd>
+                {% if relay['bandwidth_burst'] %}
+                    {% set burst_unit = relay['bandwidth_burst']|determine_unit(relays.use_bits) %}
+                    {{ relay['bandwidth_burst']|format_bandwidth_with_unit(burst_unit) }} {{ burst_unit }}
+                {% else %}
+                    <span style="color: #6c757d;">Not set</span>
+                {% endif %}
+            </dd>
+        </dl>
+    </div>
+    
+    {# Right Column: Authority-Measured #}
+    <div class="col-md-6">
+        <h5>Measurement (Authority-Verified)</h5>
+        <dl class="dl-horizontal-compact">
+            <dt title="How many bandwidth authorities measured this relay">Measured By</dt>
+            <dd>
+                {% if diag and diag.bandwidth_summary %}
+                    <span style="color: {{ diag.bandwidth_summary.bw_auth_color }}; font-weight: bold;">
+                        {{ diag.bandwidth_summary.bw_auth_measured_count }}/{{ diag.bandwidth_summary.bw_auth_total }}
+                    </span> BW Authorities
+                {% elif relay['measured'] is not none %}
+                    {% if relay['measured'] %}
+                        <span style="color: #28a745; font-weight: bold;">Yes</span> (≥3 authorities)
+                    {% else %}
+                        <span style="color: #856404;">Not Yet Measured</span>
+                    {% endif %}
+                {% else %}
+                    <span style="color: #6c757d;">Unknown</span>
+                {% endif %}
+            </dd>
+            
+            {% if diag and diag.bandwidth_summary and diag.bandwidth_summary.median_display %}
+            <dt title="Median of measurements from bandwidth authorities">Median Measurement</dt>
+            <dd>{{ diag.bandwidth_summary.median_display }}</dd>
+            
+            <dt title="Range of measurements across authorities">Min / Max</dt>
+            <dd>
+                {{ diag.bandwidth_summary.min_display|default('N/A') }} / {{ diag.bandwidth_summary.max_display|default('N/A') }}
+            </dd>
+            
+            {% if diag.bandwidth_summary.deviation_class == 'warning' %}
+            <dt title="Large variation in measurements across authorities">Deviation</dt>
+            <dd>
+                <span style="color: #856404;">{{ diag.bandwidth_summary.deviation_display }}</span>
+                <small style="color: #856404;">[Warning] High variation</small>
+            </dd>
+            {% endif %}
+            {% endif %}
+        </dl>
+    </div>
+</div>
+
+{# Network Participation - Full width #}
+<div style="margin-top: 15px; padding: 12px; background: #f8f9fa; border-radius: 4px;">
+    <strong>Network Participation:</strong>
+    <div style="margin-top: 8px;">
+        <span title="Fraction of total network consensus weight. Determines probability of being selected by clients.">
+            <strong>Consensus Weight:</strong>
+            {% if relay['consensus_weight_fraction'] %}
+                {{ "%.4f"|format(relay['consensus_weight_fraction'] * 100) }}% of network
+                {% if relay['consensus_weight'] %}
+                    <span style="color: #6c757d;">({{ "{:,}".format(relay['consensus_weight']) }})</span>
+                {% endif %}
+            {% else %}
+                <span style="color: #6c757d;">N/A</span>
+            {% endif %}
+        </span>
+    </div>
+    <div style="margin-top: 5px;">
+        <span title="Probability of being selected as guard">Guard: 
+            {% if relay['guard_probability'] %}{{ "%.4f"|format(relay['guard_probability'] * 100) }}%{% else %}N/A{% endif %}
+        </span> |
+        <span title="Probability of being selected as middle">Middle: 
+            {% if relay['middle_probability'] %}{{ "%.4f"|format(relay['middle_probability'] * 100) }}%{% else %}N/A{% endif %}
+        </span> |
+        <span title="Probability of being selected as exit">Exit: 
+            {% if relay['exit_probability'] %}{{ "%.4f"|format(relay['exit_probability'] * 100) }}%{% else %}N/A{% endif %}
+        </span>
+    </div>
+    
+    {# Underutilized warning #}
+    {% if relay['fingerprint'] in relays.json.smart_context.performance_correlation.template_optimized.underutilized_fingerprints %}
+    <div style="margin-top: 10px; color: #856404;">
+        <strong>[Warning] Underutilized:</strong> High bandwidth capacity but low consensus weight.
+        This may indicate measurement issues or recent bandwidth increase.
+    </div>
+    {% endif %}
+</div>
+
+{# Explanation Box (collapsible) #}
+<details style="margin-top: 15px;">
+    <summary style="cursor: pointer; color: #007bff;">Understanding Bandwidth Metrics</summary>
+    <div style="padding: 10px; background: #e9ecef; border-radius: 4px; margin-top: 5px; font-size: 13px;">
+        <p><strong>Relay-Reported</strong> (from your relay's descriptor):</p>
+        <ul style="margin-bottom: 10px;">
+            <li><strong>Observed:</strong> What your relay measured as its actual throughput capacity</li>
+            <li><strong>Rate/Burst:</strong> Your torrc settings (RelayBandwidthRate/RelayBandwidthBurst)</li>
+            <li><strong>Advertised:</strong> min(Observed, Rate, Burst) — what your relay tells the network</li>
+        </ul>
+        <p><strong>Authority-Measured</strong> (from bandwidth scanners):</p>
+        <ul style="margin-bottom: 10px;">
+            <li>6 of 9 Directory Authorities run bandwidth scanners (sbws)</li>
+            <li>They actively probe relays to verify actual throughput</li>
+            <li>Consensus weight is based on measured bandwidth (or advertised if not measured)</li>
+        </ul>
+        <p><strong>Why Measured < Advertised?</strong></p>
+        <ul style="margin: 0;">
+            <li>Network congestion during measurement</li>
+            <li>ISP throttling or traffic shaping</li>
+            <li>Geographic distance from scanner</li>
+            <li>Rate limiting in torrc (check RelayBandwidthRate)</li>
+        </ul>
+    </div>
+</details>
+
+</section>
+```
+
+---
+
+#### Template Filters Used
+
+All filters are already available in `relays.py`:
+
+| Filter | Usage | Description |
+|--------|-------|-------------|
+| `determine_unit(bytes, use_bits)` | `relay['observed_bandwidth']|determine_unit(relays.use_bits)` | Returns "Mbit/s" or "MB/s" etc. |
+| `format_bandwidth_with_unit(bytes, unit)` | `relay['observed_bandwidth']|format_bandwidth_with_unit(obs_unit)` | Formats value with appropriate decimals |
+
+---
+
+#### CSS Additions
+
+```css
+/* Bandwidth section styling */
+#bandwidth h5 {
+    font-size: 14px;
+    font-weight: bold;
+    margin-bottom: 10px;
+    color: #495057;
+    border-bottom: 1px solid #dee2e6;
+    padding-bottom: 5px;
+}
+
+#bandwidth .dl-horizontal-compact dt {
+    width: 160px;
+    font-weight: normal;
+    color: #495057;
+}
+
+#bandwidth .dl-horizontal-compact dd {
+    margin-left: 170px;
+    margin-bottom: 5px;
+}
+
+/* Responsive stacking for mobile */
+@media (max-width: 767px) {
+    #bandwidth .row > div {
+        margin-bottom: 15px;
+    }
+    #bandwidth .dl-horizontal-compact dt {
+        width: auto;
+        float: none;
+    }
+    #bandwidth .dl-horizontal-compact dd {
+        margin-left: 0;
+    }
+}
+```
+
+---
+
+#### Testing Checklist
+
+- [ ] Section appears at position 4 (after #flags, before #uptime)
+- [ ] Observed/Advertised/Rate/Burst shown with correct formatting
+- [ ] BandwidthFormatter respects --bits flag (Mbit/s vs MB/s)
+- [ ] BW authority count shown (X/6 BW Authorities) with color coding
+- [ ] Median measurement shown when CollecTor data available
+- [ ] Min/Max range displayed
+- [ ] High deviation warning appears when deviation_class == 'warning'
+- [ ] Consensus weight formatted with thousands separator
+- [ ] Network participation percentages shown (Guard/Middle/Exit)
+- [ ] Underutilized warning shown when fingerprint in underutilized list
+- [ ] Explanation collapsible expands correctly
+- [ ] Mobile layout stacks columns
+- [ ] Anchor link #bandwidth works
 
 
 ---
