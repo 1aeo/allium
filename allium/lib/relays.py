@@ -29,6 +29,7 @@ from .bandwidth_formatter import (
     format_bandwidth_filter
 )
 from .stability_utils import compute_relay_stability
+from .intelligence_engine import IntelligenceEngine
 import logging
 import statistics
 from datetime import datetime, timedelta
@@ -215,7 +216,16 @@ def _init_mp_worker(relay_set, template):
 
 def _render_page_mp(args):
     """Render single page in worker process"""
-    html_path, template_args = args
+    # Optimized: Receive raw keys instead of full template args to avoid expensive pickling
+    k, v, html_path, the_prefixed, validated_aroi_domains = args
+    
+    # Reconstruct data from shared memory (fast access)
+    i = _mp_relay_set.json["sorted"][k][v]
+    
+    # Build template args locally in the worker process
+    # This parallelizes the argument building logic which was previously a serial bottleneck
+    template_args = _mp_relay_set._build_template_args(k, v, i, the_prefixed, validated_aroi_domains)
+    
     rendered = _mp_template.render(relays=_mp_relay_set, **template_args)
     with open(html_path, "w", encoding="utf8") as f:
         f.write(rendered)
@@ -2812,7 +2822,7 @@ class Relays:
         
         # Calculate network position
         try:
-            from .intelligence_engine import IntelligenceEngine
+            # IntelligenceEngine imported at module level for performance
             network_position = IntelligenceEngine({})._calculate_network_position(
                 i["guard_count"], i["middle_count"], i["exit_count"], len(members))
         except Exception:
@@ -2903,7 +2913,9 @@ class Relays:
             dir_path = os.path.join(output_path, v.lower() if k == "flag" else v)
             os.makedirs(dir_path, exist_ok=True)
             html_path = os.path.join(dir_path, "index.html")
-            page_args.append((html_path, self._build_template_args(k, v, i, the_prefixed, validated_aroi_domains)))
+            # Optimization: Pass only keys to worker to minimize IPC serialization overhead
+            # The worker will build the template args locally in parallel
+            page_args.append((k, v, html_path, the_prefixed, validated_aroi_domains))
             
             # Collect vanity URL tasks for contact pages (to be processed after parallel generation)
             # Uses precomputed aroi_domain to avoid re-fetching members

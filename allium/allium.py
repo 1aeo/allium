@@ -186,8 +186,8 @@ if __name__ == "__main__":
         "--workers",
         dest="mp_workers",
         type=int,
-        default=4,
-        help="parallel workers for page generation (default: 4, use 0 to disable)",
+        default=max(4, os.cpu_count() or 4),
+        help="parallel workers for page generation (default: auto-detected CPU count, min 4)",
         required=False,
     )
     args = parser.parse_args()
