@@ -450,6 +450,86 @@ Country: unknown
 </div>
 </section>
 
+{# ============== SECTION 3: FLAGS AND ELIGIBILITY ============== #}
+{% set rv = diag.relay_values if diag and diag.available else none %}
+{% if diag and diag.available and rv %}
+<section id="flags" class="section-box" style="margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+<h4 style="margin-top: 0; margin-bottom: 12px;">
+    <div class="section-header">
+        <a href="#flags" class="anchor-link" title="Consensus flags assigned by Directory Authorities based on relay performance and eligibility requirements.">Flags and Eligibility</a>
+    </div>
+</h4>
+
+{# Current Flags Row - White box, ordered by dependency (using pre-computed FLAG_ORDER) #}
+{% set efd = diag.eligible_flags_display %}
+{% set flag_list_raw = relay['flags']|reject('equalto', 'StaleDesc')|list %}
+{% set flag_list = [] %}
+{% for f in efd.flag_order %}{% if f in flag_list_raw %}{% set _ = flag_list.append(f) %}{% endif %}{% endfor %}
+{% for f in flag_list_raw %}{% if f not in efd.flag_order %}{% set _ = flag_list.append(f) %}{% endif %}{% endfor %}
+<div style="margin-bottom: 10px; padding: 10px; background: #ffffff; border-radius: 6px; border: 1px solid #e9ecef;">
+    <strong title="Flags currently assigned to this relay in the network consensus. Flags determine what roles the relay can serve.">Current Flags ({{ flag_list|length }}):</strong>
+    {% for flag in flag_list -%}
+        <a href="{{ page_ctx.path_prefix }}flag/{{ flag.lower()|escape }}/" title="{{ diag.tooltips.flags[flag.lower()]|default(flag ~ ' flag') }}">{{ flag|escape }}</a>{% if not loop.last %}, {% endif %}
+    {% endfor -%}
+    {% if 'StaleDesc' in relay['flags'] -%}
+        <span style="color: #dc3545; font-size: 12px; margin-left: 8px;" title="Relay's descriptor is outdated. May indicate connectivity issues.">[Warning] StaleDesc</span>
+    {% endif -%}
+</div>
+
+{# Eligible Flags Row - Using pre-computed display data (DRY optimization) #}
+<div style="margin-bottom: 12px; padding: 10px; background: #ffffff; border-radius: 6px; border: 1px solid #e9ecef;">
+    <strong title="Number of Directory Authorities that consider this relay eligible for each flag. Need majority for flag assignment.">Eligible Flags ({{ efd.eligible_count }}):</strong>
+    {# Flags with eligibility thresholds (Exit, Guard, Stable, Fast, HSDir) - pre-computed #}
+    {% for flag in efd.flags %}
+    <span style="color: {{ flag.color }}; font-weight: bold;" title="{{ flag.tooltip }} Eligible from {{ flag.count }}/{{ flag.total }} authorities.">{{ flag.name }}: {{ flag.count }}/{{ flag.total }}</span>{% if not loop.last %} | {% endif %}
+    {% endfor %}
+    {# Vote-based flags (Running, V2Dir, Valid) - pre-computed #}
+    {% for flag in efd.vote_flags %}
+     | <span style="color: {{ flag.color }}; font-weight: bold;" title="{{ flag.tooltip }}">{{ flag.name }}: {{ flag.count }}/{{ flag.total }}</span>
+    {% endfor %}
+    <span style="color: #6c757d; font-size: 11px; margin-left: 8px;">(need ≥{{ diag.majority_required }}/{{ diag.total_authorities }} for flag)</span>
+</div>
+
+{# Eligibility Flag Vote Details Table - White box, reordered columns #}
+<div style="padding: 10px; background: #ffffff; border-radius: 6px; border: 1px solid #e9ecef;">
+<h5 style="margin-top: 0; margin-bottom: 8px;" title="Detailed breakdown of relay's values vs Directory Authority thresholds for each flag.">Eligibility Flag Vote Details</h5>
+<div class="table-responsive">
+<table class="table table-condensed table-striped" style="font-size: 12px; margin-bottom: 0;">
+<thead>
+<tr>
+    <th style="width: 12%;" title="The consensus flag and its requirements. Flags are assigned when relay meets majority of authority thresholds.">Flag</th>
+    <th style="width: 13%;" title="The specific measurement used to evaluate flag eligibility. Each flag may have multiple requirements.">Metric</th>
+    <th style="width: 15%;" title="Whether relay meets the threshold: Meets (green), Partial (yellow), or Below (red).">Status</th>
+    <th style="width: 25%;" title="Your relay's current value for this metric. (DA)=measured by authorities, (R)=reported by relay.">Relay Value</th>
+    <th style="width: 35%;" title="The minimum value required by Directory Authorities. May vary per authority; range shown when applicable.">Threshold Required</th>
+</tr>
+</thead>
+<tbody>
+    {% for row in diag.flag_requirements_table %}
+    <tr>
+        {% if row.rowspan > 0 %}
+        <td rowspan="{{ row.rowspan }}" style="vertical-align: middle; color: {{ row.flag_color }}; font-weight: bold;" title="{{ row.flag_tooltip }}">{{ row.flag }}</td>
+        {% endif %}
+        <td title="{{ row.metric_tooltip }}">{{ row.metric }}</td>
+        <td><span style="color: {{ row.status_color }}; font-weight: bold;" title="{{ row.status_tooltip }}">{{ row.status_text }}</span></td>
+        <td>{{ row.value }} <span style="color: #6c757d; font-size: 10px;" title="{{ row.value_source_tooltip }}">({{ 'DA' if row.value_source == 'da' else 'R' }})</span></td>
+        <td>{{ row.threshold }}</td>
+    </tr>
+    {% endfor %}
+</tbody>
+</table>
+</div>
+</div>
+
+{# Footer with legend and timestamp #}
+<p style="font-size: 11px; color: #6c757d; margin-top: 8px; margin-bottom: 0;">
+    <span title="Directory Authority Measured: Value measured by Dir. Authorities from CollecTor vote files. Authorities independently track relay performance.">(DA)</span> = Dir. Auth. Measured | 
+    <span title="Relay Reported: Value self-reported by the relay in its descriptor. Verified by authorities but originates from relay.">(R)</span> = Relay Reported<br>
+    Data from <a href="https://collector.torproject.org/recent/relay-descriptors/votes/" target="_blank" rel="noopener">Tor CollecTor</a> (authority votes{% if relays.collector_fetched_at %}, fetched {{ relays.collector_fetched_at.replace('T', ' ').split('.')[0] }}{% endif %}).
+</p>
+</section>
+{% endif %}
+
 <p>Last fetch was at {{ relays.timestamp }}.</p>
 <div class="row">
 <div class="col-md-6">
