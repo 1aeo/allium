@@ -75,8 +75,9 @@
 
 {# =============================================================================
    MACRO: Render a single relay row (DRY - used by all sections)
+   PERF: IPv6 check is now passed as parameter (computed once per table, not per row)
    ============================================================================= #}
-{% macro relay_row(relay, show_validation_icon=true, validation_icon_type=none) -%}
+{% macro relay_row(relay, show_validation_icon=true, validation_icon_type=none, table_has_ipv6=false) -%}
 <tr>
     {% set obs_unit = relay['observed_bandwidth']|determine_unit(relays.use_bits) -%}
     {% set obs_bandwidth = relay['observed_bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
@@ -234,18 +235,8 @@
             unknown
         {% endif -%}
     </td>
-    {# IPv6 column - check if any relay in full list has IPv6 #}
-    {% set has_ipv6_check = [] -%}
-    {% for r in relay_subset -%}
-        {% if r.get('or_addresses') -%}
-            {% for addr in r['or_addresses'] -%}
-                {% if ':' in addr and addr.count(':') > 1 -%}
-                    {% set _ = has_ipv6_check.append(true) -%}
-                {% endif -%}
-            {% endfor -%}
-        {% endif -%}
-    {% endfor -%}
-    {% if has_ipv6_check -%}
+    {# PERF: IPv6 column uses pre-computed table_has_ipv6 flag (O(1) instead of O(n²)) #}
+    {% if table_has_ipv6 -%}
     <td>
         {% set ipv6_found = false -%}
         {% set ipv6_addr = '' -%}
@@ -274,12 +265,14 @@
 
 {# SECTION 1: Validated Relays (Green border) #}
 {% if contact_validation_status.validated_relays %}
+{% set section1_relays = contact_validation_status.validated_relays|map(attribute='relay')|list %}
+{% set section1_has_ipv6 = section1_relays|selectattr('ipv6_support', 'equalto', 'both')|list|length > 0 or section1_relays|selectattr('ipv6_support', 'equalto', 'ipv6_only')|list|length > 0 %}
 {{ aroi_section_header('VALIDATED RELAYS', contact_validation_status.validated_relays|length, 'validated') }}
 <table class="table table-condensed" style="border-left: 3px solid #28a745;">
-{{ relay_table_header(contact_validation_status.validated_relays|map(attribute='relay')|list) }}
+{{ relay_table_header(section1_relays) }}
 <tbody>
     {% for relay_info in contact_validation_status.validated_relays -%}
-        {{ relay_row(relay_info.relay, show_validation_icon=true, validation_icon_type='validated') }}
+        {{ relay_row(relay_info.relay, show_validation_icon=true, validation_icon_type='validated', table_has_ipv6=section1_has_ipv6) }}
     {% endfor -%}
 </tbody>
 </table>
@@ -288,12 +281,14 @@
 
 {# SECTION 2: Misconfigured Relays (Yellow border) #}
 {% if contact_validation_status.misconfigured_relays %}
+{% set section2_relays = contact_validation_status.misconfigured_relays|map(attribute='relay')|list %}
+{% set section2_has_ipv6 = section2_relays|selectattr('ipv6_support', 'equalto', 'both')|list|length > 0 or section2_relays|selectattr('ipv6_support', 'equalto', 'ipv6_only')|list|length > 0 %}
 {{ aroi_section_header('MISCONFIGURED RELAYS', contact_validation_status.misconfigured_relays|length, 'misconfigured') }}
 <table class="table table-condensed" style="border-left: 3px solid #ffc107;">
-{{ relay_table_header(contact_validation_status.misconfigured_relays|map(attribute='relay')|list) }}
+{{ relay_table_header(section2_relays) }}
 <tbody>
     {% for relay_info in contact_validation_status.misconfigured_relays -%}
-        {{ relay_row(relay_info.relay, show_validation_icon=true, validation_icon_type='misconfigured') }}
+        {{ relay_row(relay_info.relay, show_validation_icon=true, validation_icon_type='misconfigured', table_has_ipv6=section2_has_ipv6) }}
     {% endfor -%}
 </tbody>
 </table>
@@ -303,12 +298,14 @@
 
 {# SECTION 3: Unauthorized Relays (Red dashed border) #}
 {% if contact_validation_status.unauthorized_relays %}
+{% set section3_relays = contact_validation_status.unauthorized_relays|map(attribute='relay')|list %}
+{% set section3_has_ipv6 = section3_relays|selectattr('ipv6_support', 'equalto', 'both')|list|length > 0 or section3_relays|selectattr('ipv6_support', 'equalto', 'ipv6_only')|list|length > 0 %}
 {{ aroi_section_header('UNAUTHORIZED RELAYS', contact_validation_status.unauthorized_relays|length, 'unauthorized') }}
 <table class="table table-condensed" style="border-left: 3px dashed #dc3545;">
-{{ relay_table_header(contact_validation_status.unauthorized_relays|map(attribute='relay')|list) }}
+{{ relay_table_header(section3_relays) }}
 <tbody>
     {% for relay_info in contact_validation_status.unauthorized_relays -%}
-        {{ relay_row(relay_info.relay, show_validation_icon=true, validation_icon_type='unauthorized') }}
+        {{ relay_row(relay_info.relay, show_validation_icon=true, validation_icon_type='unauthorized', table_has_ipv6=section3_has_ipv6) }}
     {% endfor -%}
 </tbody>
 </table>
@@ -319,12 +316,14 @@
 {# SECTION 4: Not Configured Relays (Gray border) - includes incomplete_relays + not_configured_relays #}
 {% set not_configured_combined = (contact_validation_status.incomplete_relays or []) + (contact_validation_status.not_configured_relays or []) %}
 {% if not_configured_combined %}
+{% set section4_relays = not_configured_combined|map(attribute='relay')|list %}
+{% set section4_has_ipv6 = section4_relays|selectattr('ipv6_support', 'equalto', 'both')|list|length > 0 or section4_relays|selectattr('ipv6_support', 'equalto', 'ipv6_only')|list|length > 0 %}
 {{ aroi_section_header('NOT CONFIGURED RELAYS', not_configured_combined|length, 'not_configured') }}
 <table class="table table-condensed" style="border-left: 3px solid #6c757d;">
-{{ relay_table_header(not_configured_combined|map(attribute='relay')|list) }}
+{{ relay_table_header(section4_relays) }}
 <tbody>
     {% for relay_info in not_configured_combined -%}
-        {{ relay_row(relay_info.relay, show_validation_icon=true, validation_icon_type='not_configured') }}
+        {{ relay_row(relay_info.relay, show_validation_icon=true, validation_icon_type='not_configured', table_has_ipv6=section4_has_ipv6) }}
     {% endfor -%}
 </tbody>
 </table>
@@ -352,21 +351,13 @@
     <th>Platform</th>
     <th>First Seen</th>
     <th>Last Restarted</th>
-    {% set has_ipv6 = false -%}
+    {# PERF: Use pre-computed ipv6_support field (O(n) instead of O(n) nested loops) #}
     {% if is_index -%}
 	{% set relay_list_check = relay_subset[:500] -%}
     {% else -%}
 	{% set relay_list_check = relay_subset -%}
     {% endif -%}
-    {% for relay in relay_list_check -%}
-        {% if relay.get('or_addresses') and not has_ipv6 -%}
-            {% for addr in relay['or_addresses'] -%}
-                {% if ':' in addr and addr.count(':') > 1 -%}
-                    {% set has_ipv6 = true -%}
-                {% endif -%}
-            {% endfor -%}
-        {% endif -%}
-    {% endfor -%}
+    {% set has_ipv6 = relay_list_check|selectattr('ipv6_support', 'equalto', 'both')|list|length > 0 or relay_list_check|selectattr('ipv6_support', 'equalto', 'ipv6_only')|list|length > 0 -%}
     {% if has_ipv6 -%}
     <th>IPv6</th>
     {% endif -%}

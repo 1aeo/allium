@@ -204,17 +204,47 @@ ENV.filters['split'] = lambda s, sep='/': s.split(sep) if s else []
 # Multiprocessing globals (initialized via fork for copy-on-write memory sharing)
 _mp_relay_set = None
 _mp_template = None
+_mp_page_type = None
+_mp_the_prefixed = None
+_mp_validated_aroi_domains = None
 
 
-def _init_mp_worker(relay_set, template):
+def _init_mp_worker(relay_set, template, page_type=None, the_prefixed=None, validated_aroi_domains=None):
     """Initialize worker with shared data via fork"""
-    global _mp_relay_set, _mp_template
+    global _mp_relay_set, _mp_template, _mp_page_type, _mp_the_prefixed, _mp_validated_aroi_domains
     _mp_relay_set = relay_set
     _mp_template = template
+    _mp_page_type = page_type
+    _mp_the_prefixed = the_prefixed if the_prefixed is not None else []
+    _mp_validated_aroi_domains = validated_aroi_domains if validated_aroi_domains is not None else set()
 
 
 def _render_page_mp(args):
-    """Render single page in worker process"""
+    """Render single page in worker process.
+    
+    OPTIMIZED: Now receives only (html_path, value) and builds template args
+    using forked memory. This avoids serializing large relay_subset data
+    through IPC, reducing overhead from ~300KB/page to ~100 bytes/page.
+    """
+    html_path, value = args
+    
+    # Get page data from forked memory (no IPC serialization needed)
+    page_data = _mp_relay_set.json["sorted"][_mp_page_type][value]
+    
+    # Build template args in worker (uses forked memory)
+    template_args = _mp_relay_set._build_template_args(
+        _mp_page_type, value, page_data, _mp_the_prefixed, _mp_validated_aroi_domains
+    )
+    
+    # Render and write
+    rendered = _mp_template.render(relays=_mp_relay_set, **template_args)
+    with open(html_path, "w", encoding="utf8") as f:
+        f.write(rendered)
+    return True
+
+
+def _render_page_mp_legacy(args):
+    """Legacy render function for backwards compatibility (receives full template_args)."""
     html_path, template_args = args
     rendered = _mp_template.render(relays=_mp_relay_set, **template_args)
     with open(html_path, "w", encoding="utf8") as f:
@@ -289,6 +319,49 @@ def _precompute_contact_worker(args):
     except Exception as e:
         # Return None on error, sequential fallback will handle it
         return (contact_hash, None)
+
+
+def _precompute_family_worker(args):
+    """Precompute data for a single family in worker process.
+    
+    Returns a flat dict of precomputed values to store directly on family_data.
+    Mirrors _precompute_contact_worker pattern for consistency.
+    """
+    family_hash, = args
+    
+    try:
+        family_data = _precompute_relay_set.json["sorted"]["family"][family_hash]
+        
+        # Get member relays for this family
+        members = [_precompute_relay_set.json["relays"][idx] 
+                   for idx in family_data.get("relays", [])]
+        if not members:
+            return (family_hash, None)
+        
+        # Pre-compute AROI validation status (the expensive operation)
+        # Check for cached validation status first
+        if "aroi_validation_full" in family_data:
+            contact_validation_status = family_data["aroi_validation_full"]
+        else:
+            contact_validation_status = _precompute_relay_set._get_contact_validation_status(members)
+        
+        # Pre-compute network position (moderately expensive)
+        try:
+            from .intelligence_engine import IntelligenceEngine
+            network_position = IntelligenceEngine({})._calculate_network_position(
+                family_data["guard_count"], family_data["middle_count"], 
+                family_data["exit_count"], len(members))
+        except Exception:
+            network_position = {'label': 'Mixed', 'formatted_string': f'{len(members)} relays'}
+        
+        # Return flat dict for direct storage on family_data
+        return (family_hash, {
+            "contact_validation_status": contact_validation_status,
+            "network_position": network_position,
+        })
+    except Exception as e:
+        # Return None on error, sequential fallback will handle it
+        return (family_hash, None)
 
 
 def determine_ipv6_support(or_addresses):
@@ -2173,6 +2246,101 @@ class Relays:
                 if processed % 500 == 0:
                     self._log_progress(f"Pre-computed {processed}/{total_contacts} contacts...")
 
+    def _precompute_all_family_page_data(self):
+        """
+        PERF OPTIMIZATION: Pre-compute all family page data using parallel processing.
+        
+        Family pages were 6-10x slower than contact pages because they computed
+        expensive validation status on every page render. By pre-computing this data
+        during the Data Processing phase, we achieve similar speedup to contact pages.
+        
+        Pre-computes for each family:
+        - contact_validation_status: AROI validation status for the family's relays
+        - network_position: Pre-computed network position data
+        """
+        if "family" not in self.json["sorted"]:
+            return
+        
+        family_hashes = list(self.json["sorted"]["family"].keys())
+        if not family_hashes:
+            return
+        
+        # Use multiprocessing if available and beneficial
+        use_mp = (self.mp_workers > 0 and len(family_hashes) >= 100 and 
+                  hasattr(mp, 'get_context'))
+        
+        if use_mp:
+            try:
+                self._precompute_families_parallel(family_hashes)
+                return
+            except Exception as e:
+                # Fall back to sequential if parallel fails
+                if self.progress:
+                    self._log_progress(f"Parallel family precomputation failed ({e}), using sequential...")
+        
+        # Sequential fallback
+        for family_hash in family_hashes:
+            self._precompute_single_family(family_hash)
+    
+    def _precompute_single_family(self, family_hash):
+        """Precompute data for a single family (used by both sequential and parallel paths).
+        
+        Stores precomputed values directly on family_data for simple access.
+        """
+        family_data = self.json["sorted"]["family"][family_hash]
+        
+        # Get member relays for this family
+        members = [self.json["relays"][idx] for idx in family_data.get("relays", [])]
+        if not members:
+            return
+        
+        # Pre-compute AROI validation status (the expensive operation)
+        if "aroi_validation_full" in family_data:
+            family_data["contact_validation_status"] = family_data["aroi_validation_full"]
+        else:
+            family_data["contact_validation_status"] = self._get_contact_validation_status(members)
+        
+        # Pre-compute network position
+        try:
+            from .intelligence_engine import IntelligenceEngine
+            family_data["network_position"] = IntelligenceEngine({})._calculate_network_position(
+                family_data["guard_count"], family_data["middle_count"], 
+                family_data["exit_count"], len(members))
+        except Exception:
+            family_data["network_position"] = {'label': 'Mixed', 'formatted_string': f'{len(members)} relays'}
+    
+    def _precompute_families_parallel(self, family_hashes):
+        """Parallel family precomputation using fork() with imap_unordered.
+        
+        Mirrors _precompute_contacts_parallel for consistency.
+        """
+        # Use fork context for efficient memory sharing
+        ctx = mp.get_context('fork')
+        
+        # Prepare arguments for worker function (single-element tuple)
+        worker_args = [(family_hash,) for family_hash in family_hashes]
+        
+        total_families = len(family_hashes)
+        processed = 0
+        chunk_size = max(50, total_families // (self.mp_workers * 4))
+        
+        # Initialize workers with self reference (fork shares memory)
+        with ctx.Pool(self.mp_workers, _init_precompute_worker, (self,)) as pool:
+            # Use imap_unordered for streaming results
+            for family_hash, precomputed_data in pool.imap_unordered(
+                _precompute_family_worker, worker_args, chunksize=chunk_size
+            ):
+                # Apply result directly to family data
+                if precomputed_data and family_hash in self.json["sorted"]["family"]:
+                    family_data = self.json["sorted"]["family"][family_hash]
+                    for key, value in precomputed_data.items():
+                        family_data[key] = value
+                
+                # Progress reporting
+                processed += 1
+                if processed % 1000 == 0:
+                    self._log_progress(f"Pre-computed {processed}/{total_families} families...")
+
     def _generate_aroi_leaderboards(self):
         """
         Generate AROI operator leaderboards using pre-processed relay data.
@@ -2810,13 +2978,16 @@ class Relays:
         bw = self.bandwidth_formatter
         bw_unit = bw.determine_unit(i["bandwidth"])
         
-        # Calculate network position
-        try:
-            from .intelligence_engine import IntelligenceEngine
-            network_position = IntelligenceEngine({})._calculate_network_position(
-                i["guard_count"], i["middle_count"], i["exit_count"], len(members))
-        except Exception:
-            network_position = {'label': 'Mixed', 'formatted_string': f'{len(members)} relays'}
+        # Use precomputed network_position if available (family pages precompute this)
+        # Otherwise calculate it (for non-family pages or fallback)
+        network_position = i.get("network_position")
+        if network_position is None:
+            try:
+                from .intelligence_engine import IntelligenceEngine
+                network_position = IntelligenceEngine({})._calculate_network_position(
+                    i["guard_count"], i["middle_count"], i["exit_count"], len(members))
+            except Exception:
+                network_position = {'label': 'Mixed', 'formatted_string': f'{len(members)} relays'}
         
         # Default values for all page types
         contact_rankings = []
@@ -2836,10 +3007,13 @@ class Relays:
             primary_country_data = i.get("primary_country_data")
         
         # AROI validation status for contact and family pages (DRY - shared logic)
+        # Uses precomputed data if available (both contact and family pages precompute this)
         if k in ("contact", "family"):
             contact_validation_status = (i.get("aroi_validation_full") or 
-                                         i.get("contact_validation_status") or 
-                                         self._get_contact_validation_status(members))
+                                         i.get("contact_validation_status"))
+            # Only compute on-the-fly if no precomputed data exists (fallback)
+            if contact_validation_status is None:
+                contact_validation_status = self._get_contact_validation_status(members)
             aroi_validation_timestamp = self._aroi_validation_timestamp
         
         return {
@@ -2892,7 +3066,12 @@ class Relays:
         }
 
     def _write_pages_parallel(self, k, sorted_values, template, output_path, the_prefixed, start_time):
-        """Parallel page generation using fork() for ~70% speedup on large page sets."""
+        """Parallel page generation using fork() for significant speedup on large page sets.
+        
+        OPTIMIZED: Now passes only (html_path, value) to workers instead of full template args.
+        Workers build template args from forked memory, avoiding ~300KB/page IPC serialization.
+        This dramatically improves performance for large page sets like families (105+ members avg).
+        """
         validated_aroi_domains = getattr(self, 'validated_aroi_domains', set())
         page_args = []
         vanity_url_tasks = []  # Collect vanity URL tasks for post-processing
@@ -2903,7 +3082,8 @@ class Relays:
             dir_path = os.path.join(output_path, v.lower() if k == "flag" else v)
             os.makedirs(dir_path, exist_ok=True)
             html_path = os.path.join(dir_path, "index.html")
-            page_args.append((html_path, self._build_template_args(k, v, i, the_prefixed, validated_aroi_domains)))
+            # OPTIMIZED: Pass only (html_path, value) - workers build template args from forked memory
+            page_args.append((html_path, v))
             
             # Collect vanity URL tasks for contact pages (to be processed after parallel generation)
             # Uses precomputed aroi_domain to avoid re-fetching members
@@ -2915,7 +3095,9 @@ class Relays:
         pool = None
         try:
             ctx = mp.get_context('fork')
-            pool = ctx.Pool(self.mp_workers, _init_mp_worker, (self, template))
+            # Initialize workers with page_type and shared data for building template args
+            pool = ctx.Pool(self.mp_workers, _init_mp_worker, 
+                           (self, template, k, the_prefixed, validated_aroi_domains))
             pool.map(_render_page_mp, page_args)
             pool.close()
             pool.join()
@@ -4947,6 +5129,7 @@ class Relays:
             # NEW: IPv6 support analysis - determine IP version support for this relay
             or_addresses = relay.get('or_addresses', [])
             ipv6_support = determine_ipv6_support(or_addresses)
+            relay['ipv6_support'] = ipv6_support  # Store for template O(1) access
             
             # Count relay-level IPv6 support
             if ipv6_support == 'ipv4_only':
