@@ -52,6 +52,11 @@ Consolidated recommendations from Gemini 3 Pro and Opus 4.5 proposals, optimized
 | 2.5 Fingerprint in Header (Selectable) | 🔶 Partial | `relay-info.html` | Shown but not full/selectable design |
 | 2.6 Dedicated Overload Section (#overload) | ⏳ Not Started | — | Section 6 after #uptime, shows 3 fields + sub-fields |
 | 2.7 Template Section Reordering | 🔶 Partial | `relay-info.html` | New sections exist, old content in dt/dd format |
+| 2.8 Flags and Eligibility Section (#flags) | ⏳ Not Started | — | Section 3, flag eligibility table with thresholds |
+| 2.9 Bandwidth Metrics Section (#bandwidth) | ⏳ Not Started | — | Section 4, observed/advertised/measured comparison |
+| 2.10 Uptime and Stability Section (#uptime) | ⏳ Not Started | — | Section 5, current status + historical percentages |
+| 2.11 Software and Version Section (#software) | ⏳ Not Started | — | Section 8, version status + upgrade guidance |
+| 2.12 Exit Policy Section (#exit-policy) | ⏳ Not Started | — | Section 9, policy summary + full rules |
 
 ### Section 3: Flag Eligibility and Issues
 
@@ -3563,6 +3568,1185 @@ ENV.filters['format_timestamp_ago'] = format_timestamp_ago
 {# ============== SECTION 10: PER-AUTHORITY VOTE DETAILS (#authority-votes) ============== #}
 {# Detailed per-authority table, Explanatory info boxes #}
 ```
+
+---
+
+#### 2.8 Add Flags and Eligibility Section (#flags)
+
+---
+
+##### Overview
+
+| Attribute | Value |
+|-----------|-------|
+| **Section Number** | 3 |
+| **Anchor** | `#flags` |
+| **Position** | After `#connectivity`, before `#bandwidth` |
+| **Template File** | `allium/templates/relay-info.html` |
+| **Backend Status** | ✅ Implemented (`consensus_evaluation.py`) |
+| **Template Status** | 🔶 Partial (exists as dt/dd, needs dedicated section) |
+
+---
+
+##### Rationale
+
+- Flags determine relay capabilities and traffic allocation
+- Operators frequently troubleshoot "why don't I have Guard/Stable flag?"
+- Eligibility thresholds vary per authority - need to show comparison
+- Current display is buried in old format, needs promotion to dedicated section
+
+---
+
+##### Integration Points
+
+| From | To | Link Type | Purpose |
+|------|-----|-----------|---------|
+| Health Status → Flags row | `#flags` | Anchor link | Click flag count to see details |
+| Health Status → Issues | `#flags` | Reference | Flag-related issues link here |
+| Per-Authority table → Flags | N/A | Cross-reference | Detailed flag votes per authority |
+
+---
+
+##### Implementation Checklist
+
+| Component | Status | File | Notes |
+|-----------|--------|------|-------|
+| Flag eligibility calculation | ✅ Done | `consensus_evaluation.py` | `relay_values` with all thresholds |
+| Per-authority flag data | ✅ Done | `consensus_evaluation.py` | In `authority_table` |
+| Current flags display | ✅ Done | `relay-info.html` | As dt/dd at line 762 |
+| Dedicated section | ⏳ TODO | `relay-info.html` | Convert to `<section id="flags">` |
+| Eligibility table | ⏳ TODO | `relay-info.html` | Add comparison table |
+
+---
+
+##### Data Fields
+
+**Current Flags (from Onionoo /details):**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `relay['flags']` | list | Current flags: Guard, Stable, Fast, Valid, Running, V2Dir, HSDir, Exit, Authority |
+
+**Flag Eligibility (from `consensus_evaluation.relay_values`):**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `wfu_display` | str | Weighted Fractional Uptime (e.g., "99.2%") |
+| `wfu_meets` | bool | Meets WFU threshold for Guard |
+| `tk_display` | str | Time Known (e.g., "45 days") |
+| `tk_meets` | bool | Meets TK threshold for Guard (≥8 days) |
+| `tk_days_needed` | float | Days remaining if not met |
+| `observed_bw_display` | str | Observed bandwidth (e.g., "15.2 MB/s") |
+| `guard_bw_meets_guarantee` | bool | Meets ≥2 MB/s guarantee |
+| `guard_bw_meets_some` | bool | In top 25% for some authorities |
+| `stable_mtbf_meets_all` | bool | Meets MTBF threshold for all authorities |
+| `stable_uptime_meets_all` | bool | Meets uptime threshold for all authorities |
+| `fast_meets_minimum` | bool | Meets ≥100 KB/s guarantee |
+| `hsdir_wfu_meets` | bool | Meets HSDir WFU threshold |
+| `hsdir_tk_meets` | bool | Meets HSDir TK threshold |
+
+---
+
+##### Mockups
+
+**Desktop Wireframe:**
+
+```
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Flags and Eligibility                                                    [#flags]     ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Current Flags (7):                                                                    ┃
+┃   Guard | Stable | Fast | Valid | Running | V2Dir | HSDir                             ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Flag Eligibility Requirements                                                         ┃
+┃ ┌─────────┬────────────────┬─────────────┬──────────────────────┬──────────────┐      ┃
+┃ │ Flag    │ Metric         │ Your Value  │ Threshold Required   │ Status       │      ┃
+┃ ├─────────┼────────────────┼─────────────┼──────────────────────┼──────────────┤      ┃
+┃ │ Guard   │ WFU            │ 99.2%       │ ≥98%                 │ ✓ Meets      │      ┃
+┃ │         │ Time Known     │ 45 days     │ ≥8 days              │ ✓ Meets      │      ┃
+┃ │         │ Bandwidth      │ 15.2 MB/s   │ ≥2 MB/s OR top 25%   │ ✓ Meets      │      ┃
+┃ ├─────────┼────────────────┼─────────────┼──────────────────────┼──────────────┤      ┃
+┃ │ Stable  │ MTBF           │ 12.5 days   │ ≥5-7 days (varies)   │ ✓ Meets      │      ┃
+┃ │         │ Uptime         │ 47 days     │ ≥1-7 days (varies)   │ ✓ Meets      │      ┃
+┃ ├─────────┼────────────────┼─────────────┼──────────────────────┼──────────────┤      ┃
+┃ │ Fast    │ Bandwidth      │ 15.2 MB/s   │ ≥100 KB/s OR top 7/8 │ ✓ Meets      │      ┃
+┃ ├─────────┼────────────────┼─────────────┼──────────────────────┼──────────────┤      ┃
+┃ │ HSDir   │ WFU            │ 99.2%       │ ≥96%                 │ ✓ Meets      │      ┃
+┃ │         │ Time Known     │ 45 days     │ ≥3 days (consensus)  │ ✓ Meets      │      ┃
+┃ └─────────┴────────────────┴─────────────┴──────────────────────┴──────────────┘      ┃
+┃                                                                                        ┃
+┃ Missing Flags:                                                                         ┃
+┃   Exit — Not configured (exit_policy rejects all)                                     ┃
+┃   Authority — Reserved for Directory Authorities                                      ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+```
+
+**Mobile Wireframe:**
+
+```
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Flags and Eligibility     [#flags]    ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Current Flags (7):                    ┃
+┃ Guard, Stable, Fast, Valid,           ┃
+┃ Running, V2Dir, HSDir                 ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Guard Requirements:                   ┃
+┃   WFU: 99.2% (≥98%) ✓                 ┃
+┃   TK: 45d (≥8d) ✓                     ┃
+┃   BW: 15.2 MB/s (≥2 MB/s) ✓           ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Stable Requirements:                  ┃
+┃   MTBF: 12.5d (≥5-7d) ✓               ┃
+┃   Uptime: 47d (≥1-7d) ✓               ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Fast Requirements:                    ┃
+┃   BW: 15.2 MB/s (≥100 KB/s) ✓         ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ HSDir Requirements:                   ┃
+┃   WFU: 99.2% (≥96%) ✓                 ┃
+┃   TK: 45d (≥3d) ✓                     ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+```
+
+---
+
+##### Troubleshooting Priority
+
+| Priority | Scenario | Display |
+|----------|----------|---------|
+| 1 | Missing Guard flag | Highlight which requirement not met (WFU, TK, or BW) |
+| 2 | Missing Stable flag | Show MTBF and uptime vs thresholds |
+| 3 | New relay (<8 days) | Show "Need X more days for Guard eligibility" |
+| 4 | Partial flag eligibility | Show "Meets for X/9 authorities" |
+
+---
+
+##### Jinja2 Template
+
+```jinja2
+{# ============== SECTION 3: FLAGS AND ELIGIBILITY (#flags) ============== #}
+<section id="flags" class="relay-section">
+<h3>
+<div class="section-header">
+<a href="#flags" class="anchor-link">Flags and Eligibility</a>
+</div>
+</h3>
+
+{# Current Flags Display #}
+<div style="margin-bottom: 15px;">
+    <strong>Current Flags ({{ relay['flags']|reject('equalto', 'StaleDesc')|list|length }}):</strong>
+    {% for flag in relay['flags'] if flag != 'StaleDesc' %}
+        <a href="{{ page_ctx.path_prefix }}flag/{{ flag.lower()|escape }}/" 
+           style="display: inline-block; padding: 2px 8px; margin: 2px; background: #e9ecef; 
+                  border-radius: 4px; text-decoration: none; color: #495057;">
+            {{ flag|escape }}
+        </a>
+    {% endfor %}
+    {% if 'StaleDesc' in relay['flags'] %}
+        <span style="color: #dc3545; margin-left: 10px;">[Warning: StaleDesc]</span>
+    {% endif %}
+</div>
+
+{# Flag Eligibility Table #}
+{% if relay.consensus_evaluation and relay.consensus_evaluation.available %}
+{% set rv = relay.consensus_evaluation.relay_values %}
+{% set ce = relay.consensus_evaluation %}
+
+<h4 style="margin-top: 20px;">Flag Eligibility Requirements</h4>
+<p style="font-size: 12px; color: #6c757d;">
+    Your relay's metrics vs threshold required. Green = meets, Red = below, Yellow = partial (some authorities).
+</p>
+
+<div class="table-responsive">
+<table class="table table-condensed table-striped" style="font-size: 12px;">
+<thead>
+<tr>
+    <th>Flag</th>
+    <th>Metric</th>
+    <th>Your Value</th>
+    <th>Threshold</th>
+    <th>Status</th>
+</tr>
+</thead>
+<tbody>
+    {# Guard Requirements #}
+    <tr>
+        <td rowspan="3"><strong>Guard</strong></td>
+        <td>WFU (Weighted Fractional Uptime)</td>
+        <td>{{ rv.wfu_display }}</td>
+        <td>≥98%</td>
+        <td>
+            {% if rv.wfu_meets %}
+                <span style="color: #28a745; font-weight: bold;">Meets</span>
+            {% else %}
+                <span style="color: #dc3545; font-weight: bold;">Below</span>
+            {% endif %}
+        </td>
+    </tr>
+    <tr>
+        <td>Time Known (TK)</td>
+        <td>{{ rv.tk_display }}</td>
+        <td>≥8 days</td>
+        <td>
+            {% if rv.tk_meets %}
+                <span style="color: #28a745; font-weight: bold;">Meets</span>
+            {% else %}
+                <span style="color: #dc3545; font-weight: bold;">Below</span>
+                {% if rv.tk_days_needed > 0 %}
+                    <br><small>({{ "%.1f"|format(rv.tk_days_needed) }} more days needed)</small>
+                {% endif %}
+            {% endif %}
+        </td>
+    </tr>
+    <tr>
+        <td>Bandwidth</td>
+        <td>{{ rv.observed_bw_display }}</td>
+        <td>≥2 MB/s OR top 25%</td>
+        <td>
+            {% if rv.guard_bw_meets_guarantee %}
+                <span style="color: #28a745; font-weight: bold;">Meets (≥2 MB/s)</span>
+            {% elif rv.guard_bw_meets_some %}
+                <span style="color: #ffc107; font-weight: bold;">Partial (top 25% for some)</span>
+            {% else %}
+                <span style="color: #dc3545; font-weight: bold;">Below</span>
+            {% endif %}
+        </td>
+    </tr>
+    
+    {# Stable Requirements #}
+    <tr>
+        <td rowspan="2"><strong>Stable</strong></td>
+        <td>MTBF (Mean Time Between Failures)</td>
+        <td>{{ rv.mtbf_display|default('N/A') }}</td>
+        <td>{{ rv.stable_mtbf_min_display }} - {{ rv.stable_mtbf_typical_display }}</td>
+        <td>
+            {% if rv.stable_mtbf_meets_all|default(false) %}
+                <span style="color: #28a745; font-weight: bold;">Meets</span>
+            {% elif rv.stable_mtbf_meets_count|default(0) >= ce.majority_required %}
+                <span style="color: #ffc107; font-weight: bold;">Partial ({{ rv.stable_mtbf_meets_count }}/{{ ce.total_authorities }})</span>
+            {% else %}
+                <span style="color: #dc3545; font-weight: bold;">Below</span>
+            {% endif %}
+        </td>
+    </tr>
+    <tr>
+        <td>Uptime</td>
+        <td>{{ rv.stable_uptime_display }}</td>
+        <td>{{ rv.stable_uptime_min_display }} - {{ rv.stable_uptime_typical_display }}</td>
+        <td>
+            {% if rv.stable_uptime_meets_all %}
+                <span style="color: #28a745; font-weight: bold;">Meets</span>
+            {% elif rv.stable_uptime_meets_count >= ce.majority_required %}
+                <span style="color: #ffc107; font-weight: bold;">Partial</span>
+            {% else %}
+                <span style="color: #dc3545; font-weight: bold;">Below</span>
+            {% endif %}
+        </td>
+    </tr>
+    
+    {# Fast Requirements #}
+    <tr>
+        <td><strong>Fast</strong></td>
+        <td>Bandwidth</td>
+        <td>{{ rv.fast_speed_display }}</td>
+        <td>≥100 KB/s OR top 7/8</td>
+        <td>
+            {% if rv.fast_meets_minimum or rv.fast_meets_all %}
+                <span style="color: #28a745; font-weight: bold;">Meets</span>
+            {% elif rv.fast_meets_count > 0 %}
+                <span style="color: #ffc107; font-weight: bold;">Partial</span>
+            {% else %}
+                <span style="color: #dc3545; font-weight: bold;">Below</span>
+            {% endif %}
+        </td>
+    </tr>
+    
+    {# HSDir Requirements #}
+    <tr>
+        <td rowspan="2"><strong>HSDir</strong></td>
+        <td>WFU</td>
+        <td>{{ rv.wfu_display }}</td>
+        <td>≥{{ "%.0f"|format(rv.hsdir_wfu_threshold * 100) }}%</td>
+        <td>
+            {% if rv.hsdir_wfu_meets %}
+                <span style="color: #28a745; font-weight: bold;">Meets</span>
+            {% else %}
+                <span style="color: #dc3545; font-weight: bold;">Below</span>
+            {% endif %}
+        </td>
+    </tr>
+    <tr>
+        <td>Time Known</td>
+        <td>{{ rv.tk_display }}</td>
+        <td>≥{{ rv.hsdir_tk_consensus_display }}</td>
+        <td>
+            {% if rv.hsdir_tk_meets %}
+                <span style="color: #28a745; font-weight: bold;">Meets</span>
+            {% else %}
+                <span style="color: #dc3545; font-weight: bold;">Below</span>
+            {% endif %}
+        </td>
+    </tr>
+</tbody>
+</table>
+</div>
+
+{# Missing Flags Explanation #}
+{% set missing_flags = [] %}
+{% if 'Exit' not in relay['flags'] %}
+    {% set _ = missing_flags.append('Exit — Not configured (exit policy rejects all or most ports)') %}
+{% endif %}
+{% if 'Authority' not in relay['flags'] %}
+    {% set _ = missing_flags.append('Authority — Reserved for Directory Authorities only') %}
+{% endif %}
+{% if 'BadExit' in relay['flags'] %}
+    {% set _ = missing_flags.append('BadExit — Contact Tor Project, exit may be misconfigured') %}
+{% endif %}
+
+{% if missing_flags %}
+<div style="margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 4px;">
+    <strong>Other Flags:</strong>
+    <ul style="margin: 5px 0 0 0; padding-left: 20px;">
+    {% for msg in missing_flags %}
+        <li style="color: #6c757d; font-size: 13px;">{{ msg }}</li>
+    {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+{% else %}
+<div style="padding: 15px; background: #f8f9fa; border-radius: 8px;">
+    <span style="color: #6c757d;">Flag eligibility data not available (requires CollecTor data).</span>
+</div>
+{% endif %}
+
+</section>
+```
+
+---
+
+##### Testing Checklist
+
+- [ ] Section appears at position 3 (after #connectivity, before #bandwidth)
+- [ ] Current flags displayed with links to flag pages
+- [ ] StaleDesc warning shown if present
+- [ ] Flag eligibility table shows all 4 flag types (Guard, Stable, Fast, HSDir)
+- [ ] "Meets" shows in green, "Below" in red, "Partial" in yellow
+- [ ] Days remaining shown for Time Known if not met
+- [ ] Missing flags section explains why Exit/Authority not present
+- [ ] Mobile layout readable (horizontal scroll on table)
+
+---
+
+#### 2.9 Add Bandwidth Metrics Section (#bandwidth)
+
+---
+
+##### Overview
+
+| Attribute | Value |
+|-----------|-------|
+| **Section Number** | 4 |
+| **Anchor** | `#bandwidth` |
+| **Position** | After `#flags`, before `#uptime` |
+| **Template File** | `allium/templates/relay-info.html` |
+| **Backend Status** | ✅ Implemented (`relays.py`, `bandwidth_formatter.py`) |
+| **Template Status** | 🔶 Partial (exists as dt/dd, needs dedicated section) |
+
+---
+
+##### Rationale
+
+- Bandwidth determines traffic allocation and consensus weight
+- Operators troubleshoot "why is my relay not getting traffic?"
+- Multiple bandwidth metrics (observed, advertised, measured, rate, burst) are confusing
+- Need clear explanation of what each metric means and how they relate
+
+---
+
+##### Data Fields
+
+**From Onionoo /details:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `relay['observed_bandwidth']` | int | Self-reported bandwidth capacity (bytes/s) |
+| `relay['advertised_bandwidth']` | int | min(observed, rate, burst) (bytes/s) |
+| `relay['bandwidth_rate']` | int | Configured RelayBandwidthRate (bytes/s) |
+| `relay['bandwidth_burst']` | int | Configured RelayBandwidthBurst (bytes) |
+| `relay['consensus_weight']` | int | Consensus weight value |
+| `relay['consensus_weight_fraction']` | float | Fraction of total network weight |
+| `relay['guard_probability']` | float | Probability selected as guard |
+| `relay['middle_probability']` | float | Probability selected as middle |
+| `relay['exit_probability']` | float | Probability selected as exit |
+| `relay['measured']` | bool/None | Whether bandwidth was measured by authorities |
+
+**From CollecTor (consensus_evaluation):**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `bandwidth_summary.median_int` | int | Median measured bandwidth |
+| `bandwidth_summary.median_unit` | str | Unit (KB/s, MB/s) |
+| `bandwidth_summary.bw_auth_measured_count` | int | Number of BW authorities that measured |
+| `bandwidth_summary.bw_auth_total` | int | Total BW authorities |
+
+---
+
+##### Mockups
+
+**Desktop Wireframe:**
+
+```
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Bandwidth Metrics                                                      [#bandwidth]   ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ ┌───────────────────────────────────────┬───────────────────────────────────────┐      ┃
+┃ │ Capacity (Relay-Reported)             │ Measurement (Authority-Verified)      │      ┃
+┃ ├───────────────────────────────────────┼───────────────────────────────────────┤      ┃
+┃ │ Observed Bandwidth:    15.2 MB/s      │ Measured By:       4/6 BW Authorities │      ┃
+┃ │ Advertised Bandwidth:  10.0 MB/s      │ Median Measurement: 8.5 MB/s          │      ┃
+┃ │ Rate Limit (torrc):    10.0 MB/s      │ Consensus Weight:   125,000           │      ┃
+┃ │ Burst Limit (torrc):   20.0 MB/s      │                                       │      ┃
+┃ └───────────────────────────────────────┴───────────────────────────────────────┘      ┃
+┃                                                                                        ┃
+┃ Network Participation:                                                                 ┃
+┃   Overall: 0.015% of network | Guard: 0.012% | Middle: 0.018% | Exit: 0.000%          ┃
+┃                                                                                        ┃
+┃ [Info] Advertised = min(Observed, Rate, Burst). Authorities measure actual throughput.┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+```
+
+**Bandwidth Explanation Box:**
+
+```
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Understanding Bandwidth Metrics                                                        ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃                                                                                        ┃
+┃ Relay-Reported (from your relay's descriptor):                                         ┃
+┃   • Observed: What your relay measured as its capacity                                 ┃
+┃   • Rate/Burst: Your torrc settings (RelayBandwidthRate/Burst)                        ┃
+┃   • Advertised: min(Observed, Rate, Burst) — what your relay tells the network        ┃
+┃                                                                                        ┃
+┃ Authority-Measured (from bandwidth scanners):                                          ┃
+┃   • 6 of 9 Directory Authorities run bandwidth scanners (sbws)                        ┃
+┃   • They actively probe relays to verify actual throughput                            ┃
+┃   • Consensus weight is based on measured bandwidth (or advertised if not measured)   ┃
+┃                                                                                        ┃
+┃ Why Measured < Advertised?                                                             ┃
+┃   • Network congestion during measurement                                              ┃
+┃   • ISP throttling                                                                     ┃
+┃   • Geographic distance from scanner                                                   ┃
+┃                                                                                        ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+```
+
+---
+
+##### Jinja2 Template
+
+```jinja2
+{# ============== SECTION 4: BANDWIDTH METRICS (#bandwidth) ============== #}
+<section id="bandwidth" class="relay-section">
+<h3>
+<div class="section-header">
+<a href="#bandwidth" class="anchor-link">Bandwidth Metrics</a>
+</div>
+</h3>
+
+{% set diag = relay.consensus_evaluation if relay.consensus_evaluation and relay.consensus_evaluation.available else none %}
+
+<div class="row">
+    {# Left Column: Relay-Reported Capacity #}
+    <div class="col-md-6">
+        <h5>Capacity (Relay-Reported)</h5>
+        <dl class="dl-horizontal-compact">
+            <dt title="Bandwidth capacity your relay measured">Observed Bandwidth</dt>
+            <dd>
+                {% set obs_unit = relay['observed_bandwidth']|determine_unit(relays.use_bits) %}
+                {{ relay['observed_bandwidth']|format_bandwidth_with_unit(obs_unit) }} {{ obs_unit }}
+            </dd>
+            
+            <dt title="min(Observed, Rate, Burst) - what your relay advertises">Advertised Bandwidth</dt>
+            <dd>
+                {% if relay['advertised_bandwidth'] %}
+                    {% set adv_unit = relay['advertised_bandwidth']|determine_unit(relays.use_bits) %}
+                    {{ relay['advertised_bandwidth']|format_bandwidth_with_unit(adv_unit) }} {{ adv_unit }}
+                {% else %}
+                    <span style="color: #6c757d;">Unknown</span>
+                {% endif %}
+            </dd>
+            
+            <dt title="RelayBandwidthRate in torrc">Rate Limit</dt>
+            <dd>
+                {% if relay['bandwidth_rate'] %}
+                    {% set rate_unit = relay['bandwidth_rate']|determine_unit(relays.use_bits) %}
+                    {{ relay['bandwidth_rate']|format_bandwidth_with_unit(rate_unit) }} {{ rate_unit }}
+                {% else %}
+                    <span style="color: #6c757d;">Not set</span>
+                {% endif %}
+            </dd>
+            
+            <dt title="RelayBandwidthBurst in torrc">Burst Limit</dt>
+            <dd>
+                {% if relay['bandwidth_burst'] %}
+                    {% set burst_unit = relay['bandwidth_burst']|determine_unit(relays.use_bits) %}
+                    {{ relay['bandwidth_burst']|format_bandwidth_with_unit(burst_unit) }} {{ burst_unit }}
+                {% else %}
+                    <span style="color: #6c757d;">Not set</span>
+                {% endif %}
+            </dd>
+        </dl>
+    </div>
+    
+    {# Right Column: Authority-Measured #}
+    <div class="col-md-6">
+        <h5>Measurement (Authority-Verified)</h5>
+        <dl class="dl-horizontal-compact">
+            <dt title="How many bandwidth authorities measured this relay">Measured By</dt>
+            <dd>
+                {% if diag and diag.bandwidth_summary %}
+                    <span style="color: {{ diag.bandwidth_summary.bw_auth_color }};">
+                        {{ diag.bandwidth_summary.bw_auth_measured_count }}/{{ diag.bandwidth_summary.bw_auth_total }}
+                    </span> BW Authorities
+                {% elif relay['measured'] is not none %}
+                    {% if relay['measured'] %}
+                        <span style="color: #28a745;">Yes (≥3 authorities)</span>
+                    {% else %}
+                        <span style="color: #856404;">Not Yet Measured</span>
+                    {% endif %}
+                {% else %}
+                    <span style="color: #6c757d;">Unknown</span>
+                {% endif %}
+            </dd>
+            
+            {% if diag and diag.bandwidth_summary and diag.bandwidth_summary.median_int %}
+            <dt title="Median of measurements from bandwidth authorities">Median Measurement</dt>
+            <dd>{{ diag.bandwidth_summary.median_int }} {{ diag.bandwidth_summary.median_unit }}</dd>
+            {% endif %}
+            
+            <dt title="Weight used for path selection probability">Consensus Weight</dt>
+            <dd>
+                {% if relay['consensus_weight'] %}
+                    {{ "{:,}".format(relay['consensus_weight']) }}
+                {% else %}
+                    <span style="color: #6c757d;">N/A</span>
+                {% endif %}
+            </dd>
+        </dl>
+    </div>
+</div>
+
+{# Network Participation #}
+<div style="margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 4px;">
+    <strong>Network Participation:</strong>
+    <span style="margin-left: 10px;">
+        Overall: {% if relay['consensus_weight_fraction'] %}{{ "%.4f"|format(relay['consensus_weight_fraction'] * 100) }}%{% else %}N/A{% endif %}
+        | Guard: {% if relay['guard_probability'] %}{{ "%.4f"|format(relay['guard_probability'] * 100) }}%{% else %}N/A{% endif %}
+        | Middle: {% if relay['middle_probability'] %}{{ "%.4f"|format(relay['middle_probability'] * 100) }}%{% else %}N/A{% endif %}
+        | Exit: {% if relay['exit_probability'] %}{{ "%.4f"|format(relay['exit_probability'] * 100) }}%{% else %}N/A{% endif %}
+    </span>
+</div>
+
+{# Explanation Box (collapsible) #}
+<details style="margin-top: 15px;">
+    <summary style="cursor: pointer; color: #007bff;">Understanding Bandwidth Metrics</summary>
+    <div style="padding: 10px; background: #e9ecef; border-radius: 4px; margin-top: 5px; font-size: 13px;">
+        <p><strong>Relay-Reported</strong> (from your relay's descriptor):</p>
+        <ul>
+            <li><strong>Observed:</strong> What your relay measured as its capacity</li>
+            <li><strong>Rate/Burst:</strong> Your torrc settings (RelayBandwidthRate/Burst)</li>
+            <li><strong>Advertised:</strong> min(Observed, Rate, Burst) — what your relay tells the network</li>
+        </ul>
+        <p><strong>Authority-Measured</strong> (from bandwidth scanners):</p>
+        <ul>
+            <li>6 of 9 Directory Authorities run bandwidth scanners (sbws)</li>
+            <li>They actively probe relays to verify actual throughput</li>
+            <li>Consensus weight is based on measured bandwidth (or advertised if not measured)</li>
+        </ul>
+    </div>
+</details>
+
+</section>
+```
+
+---
+
+##### Testing Checklist
+
+- [ ] Section appears at position 4 (after #flags, before #uptime)
+- [ ] Observed/Advertised/Rate/Burst shown with correct formatting
+- [ ] BandwidthFormatter respects --bits flag (Mbit/s vs MB/s)
+- [ ] Measured count shown (X/6 BW Authorities)
+- [ ] Consensus weight formatted with thousands separator
+- [ ] Network participation percentages shown
+- [ ] Explanation collapsible expands correctly
+- [ ] Mobile layout stacks columns
+
+---
+
+#### 2.10 Add Uptime and Stability Section (#uptime)
+
+---
+
+##### Overview
+
+| Attribute | Value |
+|-----------|-------|
+| **Section Number** | 5 |
+| **Anchor** | `#uptime` |
+| **Position** | After `#bandwidth`, before `#overload` |
+| **Template File** | `allium/templates/relay-info.html` |
+| **Backend Status** | ✅ Implemented (`uptime_utils.py`, `relays.py`) |
+| **Template Status** | 🔶 Partial (exists as dt/dd, needs dedicated section) |
+
+---
+
+##### Rationale
+
+- Uptime affects Stable flag eligibility
+- Operators troubleshoot "why did I lose Stable flag?"
+- Historical uptime percentages help identify reliability patterns
+- First seen date affects Guard flag eligibility (≥8 days required)
+
+---
+
+##### Data Fields
+
+**From Onionoo /details:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `relay['uptime']` | int | Current uptime in seconds |
+| `relay['last_restarted']` | str | ISO timestamp of last restart |
+| `relay['first_seen']` | str | ISO timestamp when first seen in consensus |
+| `relay['last_seen']` | str | ISO timestamp when last seen |
+| `relay['running']` | bool | Currently running |
+
+**From Onionoo /uptime:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `relay['uptime_percentages']['1_month']` | float | 1-month uptime percentage |
+| `relay['uptime_percentages']['6_months']` | float | 6-month uptime percentage |
+| `relay['uptime_percentages']['1_year']` | float | 1-year uptime percentage |
+| `relay['uptime_percentages']['5_years']` | float | 5-year uptime percentage |
+
+**Calculated fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `relay['uptime_display']` | str | Formatted uptime (e.g., "UP 1mo 2w 3d") |
+| `relay['uptime_api_display']` | str | Formatted percentages with color coding |
+
+---
+
+##### Mockups
+
+**Desktop Wireframe:**
+
+```
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Uptime and Stability                                                   [#uptime]      ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ ┌───────────────────────────────────────┬───────────────────────────────────────┐      ┃
+┃ │ Current Status                        │ Historical Uptime                     │      ┃
+┃ ├───────────────────────────────────────┼───────────────────────────────────────┤      ┃
+┃ │ Status:         UP (Running)          │ 1 Month:   99.2%                      │      ┃
+┃ │ Current Uptime: 47 days 12 hours      │ 6 Months:  98.5%                      │      ┃
+┃ │ Last Restarted: 2024-11-12 08:30 UTC  │ 1 Year:    97.8%                      │      ┃
+┃ │                 (47 days ago)         │ 5 Years:   N/A (relay too new)        │      ┃
+┃ └───────────────────────────────────────┴───────────────────────────────────────┘      ┃
+┃                                                                                        ┃
+┃ Network History:                                                                       ┃
+┃   First Seen: 2024-01-15 (324 days ago) — Eligible for Guard flag (≥8 days)           ┃
+┃   Last Seen:  2024-12-30 15:00 UTC (current consensus)                                ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+```
+
+**Down Relay Wireframe:**
+
+```
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Uptime and Stability                                                   [#uptime]      ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ [Warning] RELAY IS DOWN                                                               ┃
+┃                                                                                        ┃
+┃ Status:    DOWN (Not Running)                                                         ┃
+┃ Last Seen: 2024-12-28 10:00 UTC (2 days ago)                                          ┃
+┃                                                                                        ┃
+┃ Possible causes:                                                                       ┃
+┃   • Tor service stopped or crashed                                                    ┃
+┃   • Network connectivity issues                                                       ┃
+┃   • Server reboot or maintenance                                                      ┃
+┃   • Firewall blocking OR port                                                         ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+```
+
+---
+
+##### Jinja2 Template
+
+```jinja2
+{# ============== SECTION 5: UPTIME AND STABILITY (#uptime) ============== #}
+<section id="uptime" class="relay-section">
+<h3>
+<div class="section-header">
+<a href="#uptime" class="anchor-link">Uptime and Stability</a>
+</div>
+</h3>
+
+{% set is_running = relay.get('running', True) %}
+
+{# Down relay warning #}
+{% if not is_running %}
+<div style="padding: 15px; background: #f8d7da; border-radius: 8px; border-left: 4px solid #dc3545; margin-bottom: 15px;">
+    <span style="color: #721c24; font-weight: bold; font-size: 16px;">[Warning] RELAY IS DOWN</span>
+    <div style="margin-top: 10px; color: #721c24;">
+        <strong>Last Seen:</strong> {{ relay['last_seen']|format_time_ago }} 
+        ({{ relay['last_seen'] }} UTC)
+    </div>
+    <div style="margin-top: 10px; color: #856404; font-size: 13px;">
+        <strong>Possible causes:</strong>
+        <ul style="margin: 5px 0 0 0; padding-left: 20px;">
+            <li>Tor service stopped or crashed</li>
+            <li>Network connectivity issues</li>
+            <li>Server reboot or maintenance</li>
+            <li>Firewall blocking OR port</li>
+        </ul>
+    </div>
+</div>
+{% endif %}
+
+<div class="row">
+    {# Left Column: Current Status #}
+    <div class="col-md-6">
+        <h5>Current Status</h5>
+        <dl class="dl-horizontal-compact">
+            <dt>Status</dt>
+            <dd>
+                {% if is_running %}
+                    <span style="color: #28a745; font-weight: bold;">UP (Running)</span>
+                {% else %}
+                    <span style="color: #dc3545; font-weight: bold;">DOWN (Not Running)</span>
+                {% endif %}
+            </dd>
+            
+            {% if is_running %}
+            <dt>Current Uptime</dt>
+            <dd>{{ relay.get('uptime_display', 'Unknown') }}</dd>
+            
+            <dt>Last Restarted</dt>
+            <dd>
+                {% if relay['last_restarted'] %}
+                    {{ relay['last_restarted'] }} UTC
+                    <br><small style="color: #6c757d;">({{ relay['last_restarted']|format_time_ago }})</small>
+                {% else %}
+                    <span style="color: #6c757d;">Unknown</span>
+                {% endif %}
+            </dd>
+            {% endif %}
+        </dl>
+    </div>
+    
+    {# Right Column: Historical Uptime #}
+    <div class="col-md-6">
+        <h5>Historical Uptime</h5>
+        <dl class="dl-horizontal-compact">
+            {% set up = relay.get('uptime_percentages', {}) %}
+            
+            <dt>1 Month</dt>
+            <dd>
+                {% if up.get('1_month') %}
+                    <span style="color: {% if up['1_month'] >= 99 %}#28a745{% elif up['1_month'] >= 95 %}#856404{% else %}#dc3545{% endif %};">
+                        {{ "%.1f"|format(up['1_month']) }}%
+                    </span>
+                {% else %}
+                    <span style="color: #6c757d;">N/A</span>
+                {% endif %}
+            </dd>
+            
+            <dt>6 Months</dt>
+            <dd>
+                {% if up.get('6_months') %}
+                    <span style="color: {% if up['6_months'] >= 99 %}#28a745{% elif up['6_months'] >= 95 %}#856404{% else %}#dc3545{% endif %};">
+                        {{ "%.1f"|format(up['6_months']) }}%
+                    </span>
+                {% else %}
+                    <span style="color: #6c757d;">N/A</span>
+                {% endif %}
+            </dd>
+            
+            <dt>1 Year</dt>
+            <dd>
+                {% if up.get('1_year') %}
+                    <span style="color: {% if up['1_year'] >= 99 %}#28a745{% elif up['1_year'] >= 95 %}#856404{% else %}#dc3545{% endif %};">
+                        {{ "%.1f"|format(up['1_year']) }}%
+                    </span>
+                {% else %}
+                    <span style="color: #6c757d;">N/A</span>
+                {% endif %}
+            </dd>
+            
+            <dt>5 Years</dt>
+            <dd>
+                {% if up.get('5_years') %}
+                    {{ "%.1f"|format(up['5_years']) }}%
+                {% else %}
+                    <span style="color: #6c757d;">N/A (relay too new)</span>
+                {% endif %}
+            </dd>
+        </dl>
+    </div>
+</div>
+
+{# Network History #}
+<div style="margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 4px;">
+    <strong>Network History:</strong>
+    <div style="margin-top: 5px;">
+        <strong>First Seen:</strong> 
+        {% if relay['first_seen'] %}
+            <a href="{{ page_ctx.path_prefix }}first_seen/{{ relay['first_seen'].split(' ', 1)[0]|escape }}/">
+                {{ relay['first_seen'] }}
+            </a>
+            ({{ relay['first_seen']|format_time_ago }})
+            {% set days_since_first = ((now_timestamp - relay['first_seen_timestamp']) / 86400)|int if relay.get('first_seen_timestamp') else 0 %}
+            {% if days_since_first >= 8 %}
+                — <span style="color: #28a745;">Eligible for Guard flag (≥8 days)</span>
+            {% else %}
+                — <span style="color: #856404;">Need {{ 8 - days_since_first }} more days for Guard flag</span>
+            {% endif %}
+        {% else %}
+            <span style="color: #6c757d;">Unknown</span>
+        {% endif %}
+    </div>
+    <div style="margin-top: 5px;">
+        <strong>Last Seen:</strong> 
+        {% if relay['last_seen'] %}
+            {{ relay['last_seen'] }} UTC
+        {% else %}
+            <span style="color: #6c757d;">Unknown</span>
+        {% endif %}
+    </div>
+</div>
+
+</section>
+```
+
+---
+
+##### Testing Checklist
+
+- [ ] Section appears at position 5 (after #bandwidth, before #overload)
+- [ ] UP/DOWN status shown with appropriate color
+- [ ] Down relay shows warning box with possible causes
+- [ ] Current uptime formatted correctly (e.g., "47 days 12 hours")
+- [ ] Historical uptime percentages color-coded (green ≥99%, yellow ≥95%, red <95%)
+- [ ] First seen shows Guard eligibility status
+- [ ] Last seen timestamp shown
+- [ ] Mobile layout stacks columns
+
+---
+
+#### 2.11 Add Software and Version Section (#software)
+
+---
+
+##### Overview
+
+| Attribute | Value |
+|-----------|-------|
+| **Section Number** | 8 |
+| **Anchor** | `#software` |
+| **Position** | After `#operator`, before `#exit-policy` |
+| **Template File** | `allium/templates/relay-info.html` |
+| **Backend Status** | ✅ Implemented (Onionoo data) |
+| **Template Status** | 🔶 Partial (version in Health Status, needs dedicated section) |
+
+---
+
+##### Data Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `relay['version']` | str | Tor version (e.g., "0.4.8.12") |
+| `relay['version_status']` | str | "recommended", "experimental", "obsolete", "new" |
+| `relay['recommended_version']` | bool | Whether version is recommended |
+| `relay['platform']` | str | OS platform (e.g., "Linux") |
+
+---
+
+##### Mockups
+
+**Desktop Wireframe:**
+
+```
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Software and Version                                                   [#software]    ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Tor Version:   0.4.8.12                                                               ┃
+┃ Status:        Recommended ✓                                                          ┃
+┃ Platform:      Linux                                                                  ┃
+┃                                                                                        ┃
+┃ [Info] Running a recommended version. No action needed.                               ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+```
+
+**Obsolete Version Warning:**
+
+```
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Software and Version                                                   [#software]    ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Tor Version:   0.4.5.7                                                                ┃
+┃ Status:        OBSOLETE ⚠                                                             ┃
+┃ Platform:      Linux                                                                  ┃
+┃                                                                                        ┃
+┃ [Warning] This version is obsolete and may have security vulnerabilities.             ┃
+┃ Upgrade to the latest stable version: https://www.torproject.org/download/            ┃
+┃                                                                                        ┃
+┃ On Debian/Ubuntu:  sudo apt update && sudo apt upgrade tor                            ┃
+┃ On Fedora/RHEL:    sudo dnf upgrade tor                                               ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+```
+
+---
+
+##### Jinja2 Template
+
+```jinja2
+{# ============== SECTION 8: SOFTWARE AND VERSION (#software) ============== #}
+<section id="software" class="relay-section">
+<h3>
+<div class="section-header">
+<a href="#software" class="anchor-link">Software and Version</a>
+</div>
+</h3>
+
+<dl class="dl-horizontal-compact">
+    <dt>Tor Version</dt>
+    <dd>{{ relay['version']|escape }}</dd>
+    
+    <dt>Status</dt>
+    <dd>
+        {% if relay['recommended_version'] %}
+            <span style="color: #28a745; font-weight: bold;">Recommended</span>
+        {% elif relay['version_status'] == 'obsolete' %}
+            <span style="color: #dc3545; font-weight: bold;">OBSOLETE</span>
+        {% elif relay['version_status'] == 'experimental' %}
+            <span style="color: #856404; font-weight: bold;">Experimental</span>
+        {% elif relay['version_status'] == 'new' %}
+            <span style="color: #17a2b8; font-weight: bold;">New (not yet recommended)</span>
+        {% else %}
+            <span style="color: #856404; font-weight: bold;">Not Recommended</span>
+        {% endif %}
+    </dd>
+    
+    <dt>Platform</dt>
+    <dd>
+        <a href="{{ page_ctx.path_prefix }}platform/{{ relay['platform']|escape }}/">
+            {{ relay['platform']|escape }}
+        </a>
+    </dd>
+</dl>
+
+{# Version status message #}
+{% if relay['recommended_version'] %}
+<div style="margin-top: 15px; padding: 10px; background: #d4edda; border-radius: 4px; border-left: 3px solid #28a745;">
+    <span style="color: #155724;">Running a recommended version. No action needed.</span>
+</div>
+{% elif relay['version_status'] == 'obsolete' %}
+<div style="margin-top: 15px; padding: 10px; background: #f8d7da; border-radius: 4px; border-left: 3px solid #dc3545;">
+    <span style="color: #721c24; font-weight: bold;">This version is obsolete and may have security vulnerabilities.</span>
+    <div style="margin-top: 10px; color: #721c24;">
+        <strong>Upgrade to the latest stable version:</strong> 
+        <a href="https://www.torproject.org/download/" target="_blank" rel="noopener">torproject.org/download</a>
+    </div>
+    <div style="margin-top: 10px; font-size: 13px; color: #721c24;">
+        <code>Debian/Ubuntu: sudo apt update && sudo apt upgrade tor</code><br>
+        <code>Fedora/RHEL: sudo dnf upgrade tor</code>
+    </div>
+</div>
+{% elif relay['version_status'] == 'experimental' %}
+<div style="margin-top: 15px; padding: 10px; background: #fff3cd; border-radius: 4px; border-left: 3px solid #ffc107;">
+    <span style="color: #856404;">Running an experimental version. Consider using a stable release for production relays.</span>
+</div>
+{% endif %}
+
+</section>
+```
+
+---
+
+##### Testing Checklist
+
+- [ ] Section appears at position 8 (after #operator, before #exit-policy)
+- [ ] Version number displayed
+- [ ] Status shows Recommended (green), Obsolete (red), Experimental (yellow), Not Recommended (yellow)
+- [ ] Platform links to platform page
+- [ ] Obsolete version shows warning with upgrade instructions
+- [ ] Recommended version shows green confirmation
+
+---
+
+#### 2.12 Add Exit Policy Section (#exit-policy)
+
+---
+
+##### Overview
+
+| Attribute | Value |
+|-----------|-------|
+| **Section Number** | 9 |
+| **Anchor** | `#exit-policy` |
+| **Position** | After `#software`, before `#authority-votes` |
+| **Template File** | `allium/templates/relay-info.html` |
+| **Backend Status** | ✅ Implemented (Onionoo data) |
+| **Template Status** | 🔶 Partial (exists as dt/dd, needs dedicated section) |
+
+---
+
+##### Data Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `relay['exit_policy']` | list | Full exit policy rules |
+| `relay['exit_policy_summary']` | dict | Summary (accept/reject port ranges) |
+| `relay['exit_policy_v6_summary']` | dict | IPv6 exit policy summary |
+| `relay['exit_addresses']` | list | Exit IP addresses if different from OR |
+
+---
+
+##### Mockups
+
+**Desktop Wireframe (Exit Relay):**
+
+```
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Exit Policy                                                           [#exit-policy]  ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Exit Type: Reduced Exit (common ports only)                                           ┃
+┃                                                                                        ┃
+┃ IPv4 Summary:                                                                          ┃
+┃   accept: 20-21, 22, 23, 43, 53, 79-81, 88, 110, 143, 194, 220, 389, 443, 464-465,    ┃
+┃           531, 543-544, 554, 563, 587, 636, 706, 749, 873, 902-904, 981, 989-995,     ┃
+┃           1194, 1220, 1293, 1500, 1533, 1677, 1723, 1755, 1863, 2082-2083, ...        ┃
+┃                                                                                        ┃
+┃ IPv6 Summary:                                                                          ┃
+┃   accept: 20-21, 22, 23, 43, 53, 79-81, 88, 110, ...                                  ┃
+┃                                                                                        ┃
+┃ ▸ View Full Exit Policy (15 rules)                                                    ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+```
+
+**Desktop Wireframe (Non-Exit):**
+
+```
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Exit Policy                                                           [#exit-policy]  ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Exit Type: Non-Exit (rejects all)                                                     ┃
+┃                                                                                        ┃
+┃ This relay does not allow exit traffic.                                               ┃
+┃ It operates as a guard/middle relay only.                                             ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+```
+
+---
+
+##### Jinja2 Template
+
+```jinja2
+{# ============== SECTION 9: EXIT POLICY (#exit-policy) ============== #}
+<section id="exit-policy" class="relay-section">
+<h3>
+<div class="section-header">
+<a href="#exit-policy" class="anchor-link">Exit Policy</a>
+</div>
+</h3>
+
+{# Determine exit type #}
+{% set is_exit = 'Exit' in relay['flags'] %}
+{% set has_policy = relay['exit_policy_summary'] %}
+
+<dl class="dl-horizontal-compact">
+    <dt>Exit Type</dt>
+    <dd>
+        {% if is_exit %}
+            {% if relay.get('exit_policy_summary', {}).get('accept') %}
+                <span style="color: #28a745; font-weight: bold;">Exit Relay</span>
+                {% set accept_ports = relay['exit_policy_summary'].get('accept', [])|length %}
+                {% if accept_ports < 100 %}
+                    (Reduced Exit - common ports)
+                {% else %}
+                    (Full Exit)
+                {% endif %}
+            {% else %}
+                <span style="color: #28a745; font-weight: bold;">Exit Relay</span>
+            {% endif %}
+        {% else %}
+            <span style="color: #6c757d;">Non-Exit (rejects all)</span>
+        {% endif %}
+    </dd>
+</dl>
+
+{% if is_exit and has_policy %}
+    {# IPv4 Summary #}
+    {% if relay['exit_policy_summary'] %}
+    <h5 style="margin-top: 15px;">IPv4 Summary</h5>
+    <pre class="pre-scrollable" style="max-height: 80px; font-size: 11px; background: #f8f9fa;">
+{% for key, ports in relay['exit_policy_summary'].items() %}
+{{ key }}: {{ ports|join(', ') }}
+{% endfor %}
+    </pre>
+    {% endif %}
+    
+    {# IPv6 Summary #}
+    {% if relay['exit_policy_v6_summary'] %}
+    <h5 style="margin-top: 15px;">IPv6 Summary</h5>
+    <pre class="pre-scrollable" style="max-height: 80px; font-size: 11px; background: #f8f9fa;">
+{% for key, ports in relay['exit_policy_v6_summary'].items() %}
+{{ key }}: {{ ports|join(', ') }}
+{% endfor %}
+    </pre>
+    {% endif %}
+    
+    {# Full Policy (collapsible) #}
+    <details style="margin-top: 15px;">
+        <summary style="cursor: pointer; color: #007bff;">
+            View Full Exit Policy ({{ relay['exit_policy']|length }} rules)
+        </summary>
+        <pre class="pre-scrollable" style="max-height: 200px; font-size: 11px; margin-top: 5px;">
+{% for rule in relay['exit_policy'] %}
+{{ rule }}
+{% endfor %}
+        </pre>
+    </details>
+    
+{% elif not is_exit %}
+    <div style="margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 4px;">
+        <span style="color: #6c757d;">
+            This relay does not allow exit traffic.<br>
+            It operates as a guard/middle relay only.
+        </span>
+    </div>
+{% endif %}
+
+</section>
+```
+
+---
+
+##### Testing Checklist
+
+- [ ] Section appears at position 9 (after #software, before #authority-votes)
+- [ ] Exit type shows "Exit Relay", "Reduced Exit", or "Non-Exit"
+- [ ] IPv4 summary shown for exit relays
+- [ ] IPv6 summary shown if present
+- [ ] Full policy expandable via details element
+- [ ] Non-exit shows explanation message
+- [ ] Policy summaries scrollable if long
 
 ---
 
