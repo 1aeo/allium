@@ -70,7 +70,7 @@ This document proposes a redesign of the Allium relay page to prioritize operato
 
 | Item | Status | Location | Notes |
 |------|--------|----------|-------|
-| 3.1 Flag Eligibility Table | 🔶 Partial | `relay-info.html` lines 918-1000 | Shown as bullet list, not dedicated table |
+| 3.1 Flag Eligibility Table | ✅ Implemented | `relay-info.html` lines 453-555 | New #flags section with Current Flags, Eligible Flags, and Eligibility Flag Vote Details table |
 | 3.2 Issues/Warnings with Actionable Advice | ✅ Implemented | `consensus_evaluation.py` | Suggestions included for each issue type |
 | 3.3 Remove "Summary: Your Relay vs Consensus" | ⏳ Not Started | `relay-info.html` | Old table still present |
 | 3.4 Data Source Comparison Table | ⏳ Not Started | — | Onionoo vs CollecTor comparison |
@@ -107,9 +107,9 @@ This document proposes a redesign of the Allium relay page to prioritize operato
 
 1. **2.6 Dedicated Overload Section** - Links exist from Stability row
 2. **2.3 Operator and Family Section** - Consolidate AROI + Family
-3. **3.1 Flag Eligibility Table** - Convert bullet list to proper table
+3. ~~**3.1 Flag Eligibility Table**~~ ✅ Completed - New #flags section with table
 4. **2.4 CSS Fluid-Width** - Better desktop layout
-5. **Remaining dedicated sections** - #flags, #bandwidth, #uptime, #software, #exit-policy
+5. **Remaining dedicated sections** - #bandwidth, #uptime, #software, #exit-policy
 6. **3.3 Remove old summary table** - Clean up deprecated content
 7. **3.5 Anchor aliases** - Backward compatibility
 

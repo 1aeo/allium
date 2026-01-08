@@ -236,6 +236,27 @@ def format_relay_consensus_evaluation(evaluation: dict, flag_thresholds: dict = 
         'advice': _generate_advice(evaluation),
     }
     
+    # Add pre-computed flag requirements table (Phase 4 optimization)
+    # This moves complex template conditionals to Python for better performance
+    formatted['flag_requirements_table'] = _format_flag_requirements_table(
+        formatted['relay_values'], 
+        formatted
+    )
+    
+    # Pre-compute eligible flags display data (DRY optimization)
+    # Moves repeated color mapping and flag display logic from template to Python
+    formatted['eligible_flags_display'] = _format_eligible_flags_display(formatted)
+    
+    # Export tooltip constants for template use
+    formatted['tooltips'] = {
+        'flags': FLAG_TOOLTIPS,
+        'sources': SOURCE_TOOLTIPS,
+        'status': STATUS_TOOLTIPS,
+    }
+    
+    # Export color constants for template use
+    formatted['status_colors'] = STATUS_COLORS
+    
     return formatted
 
 
@@ -511,6 +532,393 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
         'total_authorities': total_authorities,
         'majority_required': majority_required,
     }
+
+
+# ============================================================================
+# FLAG REQUIREMENTS TABLE - Pre-computed data for template efficiency
+# ============================================================================
+
+# Tooltip constants for DRY - defined once, used in both Python and templates
+FLAG_TOOLTIPS = {
+    'guard': "Entry Guard: First hop in Tor circuits. Requires high uptime (WFU>=98%), sufficient age (TK>=8d), and bandwidth (>=2MB/s or top 25%).",
+    'stable': "Suitable for long-lived connections. Requires sufficient MTBF and uptime to handle persistent streams.",
+    'fast': "High bandwidth relay. Requires >=100 KB/s or in top 7/8 of network bandwidth.",
+    'hsdir': "Hidden Service Directory: Stores and serves hidden service descriptors. Requires high uptime (WFU>=98%) and sufficient age.",
+    'running': "Relay is reachable: Directory Authority successfully connected to relay's OR port.",
+    'valid': "Relay is verified: Not blacklisted, has valid descriptor, and properly configured.",
+    'v2dir': "Supports directory protocol v2+: Can serve directory information to clients.",
+    'exit': "Exit node: Can relay traffic to the regular internet.",
+    'authority': "Directory Authority: Votes on network consensus.",
+    'badexit': "Flagged as misbehaving exit node.",
+}
+
+METRIC_TOOLTIPS = {
+    'wfu_guard': "Weighted Fractional Uptime: Measures relay reliability with recent uptime weighted more heavily. Required >=98% for Guard flag. Source: Dir. Auth. vote files.",
+    'tk_guard': "How long Directory Authorities have tracked this relay. Required >=8 days for Guard flag to prevent Sybil attacks. Source: Dir. Auth. vote files.",
+    'bw_guard': "Relay's observed bandwidth capacity. Required >=2 MB/s (guaranteed) OR in top 25% of network for Guard flag. Source: Relay descriptor.",
+    'mtbf_stable': "Mean Time Between Failures: Average uptime between restarts/crashes. Higher = more reliable for long-lived connections. Source: Dir. Auth. vote files.",
+    'uptime_stable': "Current session uptime since last restart. Compared against each authority's stable-uptime threshold. Source: Relay descriptor.",
+    'speed_fast': "Relay's observed bandwidth. Required >=100 KB/s (guaranteed) OR in top 7/8 of network for Fast flag. Source: Relay descriptor.",
+    'wfu_hsdir': "Weighted Fractional Uptime: Required >=98% for HSDir flag to ensure reliable hidden service directory. Source: Dir. Auth. vote files.",
+    'tk_hsdir': "How long authorities have tracked this relay. Most require >=25 hours; some (moria1) require ~10 days. Source: Dir. Auth. vote files.",
+}
+
+SOURCE_TOOLTIPS = {
+    'da': "Directory Authority Measured: Value measured by Dir. Authorities from CollecTor vote files.",
+    'relay': "Relay Reported: Value self-reported by the relay in its descriptor.",
+}
+
+STATUS_TOOLTIPS = {
+    'meets': "Relay meets or exceeds threshold for all/majority of Directory Authorities. Flag will be assigned.",
+    'partial': "Relay meets threshold for some but not all authorities. May receive flag depending on which authorities agree.",
+    'below': "Relay does not meet threshold. Flag will not be assigned until requirements are met.",
+}
+
+# Color constants
+STATUS_COLORS = {
+    'meets': '#28a745',
+    'partial': '#856404', 
+    'below': '#dc3545',
+}
+
+# Flag ordering by dependency (flags requiring other flags go first)
+FLAG_ORDER = ['Exit', 'Guard', 'Stable', 'Fast', 'HSDir', 'Running', 'V2Dir', 'Valid', 'Authority', 'BadExit']
+ELIGIBLE_FLAG_ORDER = ['exit', 'guard', 'stable', 'fast', 'hsdir', 'running', 'v2dir', 'valid']
+
+
+def _get_status_color(status_class: str) -> str:
+    """Convert status_class to hex color. DRY helper."""
+    if status_class == 'success':
+        return STATUS_COLORS['meets']
+    elif status_class == 'warning':
+        return STATUS_COLORS['partial']
+    else:
+        return STATUS_COLORS['below']
+
+
+def _format_eligible_flags_display(diag: dict) -> dict:
+    """
+    Pre-compute eligible flags display data for template efficiency.
+    
+    Moves repeated color mapping and flag iteration from template to Python.
+    This is a DRY optimization - the same logic was repeated 5+ times in Jinja2.
+    
+    Returns:
+        dict with:
+        - flags: list of flag display dicts (name, count, total, color, tooltip)
+        - eligible_count: number of flags with majority (>=5/9)
+        - vote_flags: list for Running, V2Dir, Valid (always from vote_count)
+    """
+    flag_summary = diag.get('flag_summary', {})
+    vote_count = diag.get('vote_count', 0)
+    total_authorities = diag.get('total_authorities', 9)
+    majority_required = diag.get('majority_required', 5)
+    
+    # Build ordered list of eligible flag displays
+    flags = []
+    eligible_count = 0
+    
+    # Process flags in dependency order
+    for flag_name in ['exit', 'guard', 'stable', 'fast', 'hsdir']:
+        flag_data = flag_summary.get(flag_name)
+        if flag_data is None:
+            continue
+            
+        display_name = 'HSDir' if flag_name == 'hsdir' else flag_name.capitalize()
+        status_color = _get_status_color(flag_data.get('status_class', 'danger'))
+        flag_eligible_count = flag_data.get('eligible_count', 0)
+        
+        if flag_eligible_count >= majority_required:
+            eligible_count += 1
+        
+        flags.append({
+            'name': display_name,
+            'key': flag_name,
+            'count': flag_eligible_count,
+            'total': flag_data.get('total_authorities', total_authorities),
+            'color': status_color,
+            'tooltip': FLAG_TOOLTIPS.get(flag_name, f'{display_name} flag'),
+        })
+    
+    # Vote-based flags (Running, V2Dir, Valid) - always from vote_count
+    vote_flags = []
+    for flag_name in ['running', 'v2dir', 'valid']:
+        display_name = 'V2Dir' if flag_name == 'v2dir' else flag_name.capitalize()
+        vote_flags.append({
+            'name': display_name,
+            'key': flag_name,
+            'count': vote_count,
+            'total': total_authorities,
+            'color': STATUS_COLORS['meets'],  # Always green if in consensus
+            'tooltip': FLAG_TOOLTIPS.get(flag_name, f'{display_name} flag'),
+        })
+    
+    # Count vote-based flags toward eligible count
+    if vote_count >= majority_required:
+        eligible_count += 3  # Running, V2Dir, Valid
+    
+    return {
+        'flags': flags,
+        'vote_flags': vote_flags,
+        'eligible_count': eligible_count,
+        'flag_order': FLAG_ORDER,
+    }
+
+
+def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
+    """
+    Pre-compute flag requirements table data for template efficiency.
+    
+    Returns a list of row dictionaries with all display values and colors pre-computed.
+    This moves complex Jinja2 conditionals to Python for better performance.
+    
+    Args:
+        rv: relay_values dict from _format_relay_values()
+        diag: Full consensus evaluation dict (for majority_required, total_authorities)
+    
+    Returns:
+        List of row dicts, each containing:
+        - flag: Flag name
+        - flag_tooltip: Tooltip for flag
+        - flag_color: Color for flag column based on eligibility status
+        - metric: Metric name
+        - metric_tooltip: Tooltip for metric
+        - value: Relay value display
+        - value_source: 'da' or 'relay'
+        - threshold: Threshold display
+        - status: 'meets', 'partial', or 'below'
+        - status_text: Display text for status
+        - status_color: Hex color for status
+        - status_tooltip: Tooltip for status
+        - rowspan: Number of rows this flag spans (only set on first row of flag)
+    """
+    if not rv or not diag:
+        return []
+    
+    majority_required = diag.get('majority_required', 5)
+    total_authorities = diag.get('total_authorities', 9)
+    flag_summary = diag.get('flag_summary', {})
+    
+    def get_flag_color(flag_name: str) -> str:
+        """Get color for flag column based on eligibility status."""
+        flag_data = flag_summary.get(flag_name.lower(), {})
+        status_class = flag_data.get('status_class', 'danger')
+        if status_class == 'success':
+            return STATUS_COLORS['meets']
+        elif status_class == 'warning':
+            return STATUS_COLORS['partial']
+        else:
+            return STATUS_COLORS['below']
+    
+    rows = []
+    
+    # Guard flag (3 rows)
+    guard_color = get_flag_color('guard')
+    # Row 1: WFU
+    wfu_status = 'meets' if rv.get('wfu_meets') else 'below'
+    rows.append({
+        'flag': 'Guard',
+        'flag_tooltip': FLAG_TOOLTIPS['guard'],
+        'flag_color': guard_color,
+        'metric': 'WFU',
+        'metric_tooltip': METRIC_TOOLTIPS['wfu_guard'],
+        'value': rv.get('wfu_display', 'N/A'),
+        'value_source': 'da',
+        'value_source_tooltip': SOURCE_TOOLTIPS['da'],
+        'threshold': '≥98% (all authorities)',
+        'status': wfu_status,
+        'status_text': 'Meets' if wfu_status == 'meets' else 'Below',
+        'status_color': STATUS_COLORS[wfu_status],
+        'status_tooltip': STATUS_TOOLTIPS[wfu_status],
+        'rowspan': 3,
+    })
+    
+    # Row 2: Time Known
+    tk_status = 'meets' if rv.get('tk_meets') else 'below'
+    tk_extra = ''
+    if not rv.get('tk_meets') and rv.get('tk_days_needed', 0) > 0:
+        tk_extra = f" (need {rv['tk_days_needed']:.1f} more days)"
+    rows.append({
+        'flag': 'Guard',
+        'flag_tooltip': FLAG_TOOLTIPS['guard'],
+        'flag_color': guard_color,
+        'metric': 'Time Known',
+        'metric_tooltip': METRIC_TOOLTIPS['tk_guard'],
+        'value': rv.get('tk_display', 'N/A'),
+        'value_source': 'da',
+        'value_source_tooltip': SOURCE_TOOLTIPS['da'],
+        'threshold': '≥8 days (all authorities)',
+        'status': tk_status,
+        'status_text': 'Meets' if tk_status == 'meets' else f'Below{tk_extra}',
+        'status_color': STATUS_COLORS[tk_status],
+        'status_tooltip': STATUS_TOOLTIPS[tk_status],
+        'rowspan': 0,  # Continuation row
+    })
+    
+    # Row 3: Bandwidth
+    if rv.get('guard_bw_meets_guarantee'):
+        bw_status = 'meets'
+        bw_extra = ' (≥2 MB/s)'
+    elif rv.get('guard_bw_meets_some'):
+        bw_status = 'partial'
+        bw_extra = f" (top 25% for {rv.get('guard_bw_meets_count', 0)})"
+    else:
+        bw_status = 'below'
+        bw_extra = ''
+    rows.append({
+        'flag': 'Guard',
+        'flag_tooltip': FLAG_TOOLTIPS['guard'],
+        'flag_color': guard_color,
+        'metric': 'Bandwidth',
+        'metric_tooltip': METRIC_TOOLTIPS['bw_guard'],
+        'value': rv.get('observed_bw_display', 'N/A'),
+        'value_source': 'relay',
+        'value_source_tooltip': SOURCE_TOOLTIPS['relay'],
+        'threshold': f"≥{rv.get('guard_bw_guarantee_display', '2 MB/s')} OR ≥{rv.get('guard_bw_range', 'top 25%')}",
+        'status': bw_status,
+        'status_text': f"{'Meets' if bw_status == 'meets' else 'Partial' if bw_status == 'partial' else 'Below'}{bw_extra}",
+        'status_color': STATUS_COLORS[bw_status],
+        'status_tooltip': STATUS_TOOLTIPS[bw_status],
+        'rowspan': 0,
+    })
+    
+    # Stable flag (2 rows)
+    stable_color = get_flag_color('stable')
+    # Row 1: MTBF
+    mtbf_meets_all = rv.get('stable_mtbf_meets_all', False)
+    mtbf_meets_count = rv.get('stable_mtbf_meets_count', 0)
+    if mtbf_meets_all:
+        mtbf_status = 'meets'
+        mtbf_extra = ''
+    elif mtbf_meets_count >= majority_required:
+        mtbf_status = 'partial'
+        mtbf_extra = f" ({mtbf_meets_count}/{total_authorities})"
+    else:
+        mtbf_status = 'below'
+        mtbf_extra = ''
+    rows.append({
+        'flag': 'Stable',
+        'flag_tooltip': FLAG_TOOLTIPS['stable'],
+        'flag_color': stable_color,
+        'metric': 'MTBF',
+        'metric_tooltip': METRIC_TOOLTIPS['mtbf_stable'],
+        'value': rv.get('mtbf_display', 'N/A'),
+        'value_source': 'da',
+        'value_source_tooltip': SOURCE_TOOLTIPS['da'],
+        'threshold': f"≥{rv.get('stable_mtbf_min_display', 'N/A')} - {rv.get('stable_mtbf_typical_display', 'N/A')} (varies)",
+        'status': mtbf_status,
+        'status_text': f"{'Meets' if mtbf_status == 'meets' else 'Partial' if mtbf_status == 'partial' else 'Below'}{mtbf_extra}",
+        'status_color': STATUS_COLORS[mtbf_status],
+        'status_tooltip': STATUS_TOOLTIPS[mtbf_status],
+        'rowspan': 2,
+    })
+    
+    # Row 2: Uptime
+    uptime_meets_all = rv.get('stable_uptime_meets_all', False)
+    uptime_meets_count = rv.get('stable_uptime_meets_count', 0)
+    uptime_value = rv.get('stable_uptime')
+    if uptime_value is None:
+        uptime_status = 'below'
+        uptime_text = 'N/A'
+    elif uptime_meets_all:
+        uptime_status = 'meets'
+        uptime_text = 'Meets'
+    elif uptime_meets_count >= majority_required:
+        uptime_status = 'partial'
+        uptime_text = f"Partial ({uptime_meets_count}/{total_authorities})"
+    else:
+        uptime_status = 'below'
+        uptime_text = 'Below'
+    rows.append({
+        'flag': 'Stable',
+        'flag_tooltip': FLAG_TOOLTIPS['stable'],
+        'flag_color': stable_color,
+        'metric': 'Uptime',
+        'metric_tooltip': METRIC_TOOLTIPS['uptime_stable'],
+        'value': rv.get('stable_uptime_display', 'N/A'),
+        'value_source': 'relay',
+        'value_source_tooltip': SOURCE_TOOLTIPS['relay'],
+        'threshold': f"≥{rv.get('stable_uptime_min_display', 'N/A')} - {rv.get('stable_uptime_typical_display', 'N/A')} (varies)",
+        'status': uptime_status,
+        'status_text': uptime_text,
+        'status_color': STATUS_COLORS[uptime_status],
+        'status_tooltip': STATUS_TOOLTIPS[uptime_status],
+        'rowspan': 0,
+    })
+    
+    # Fast flag (1 row)
+    fast_color = get_flag_color('fast')
+    if rv.get('fast_meets_minimum'):
+        fast_status = 'meets'
+        fast_extra = ' (≥100 KB/s)'
+    elif rv.get('fast_meets_all'):
+        fast_status = 'meets'
+        fast_extra = ''
+    elif rv.get('fast_meets_count', 0) > 0:
+        fast_status = 'partial'
+        fast_extra = f" ({rv.get('fast_meets_count', 0)}/{total_authorities})"
+    else:
+        fast_status = 'below'
+        fast_extra = ''
+    rows.append({
+        'flag': 'Fast',
+        'flag_tooltip': FLAG_TOOLTIPS['fast'],
+        'flag_color': fast_color,
+        'metric': 'Speed',
+        'metric_tooltip': METRIC_TOOLTIPS['speed_fast'],
+        'value': rv.get('fast_speed_display', 'N/A'),
+        'value_source': 'relay',
+        'value_source_tooltip': SOURCE_TOOLTIPS['relay'],
+        'threshold': f"≥{rv.get('fast_minimum_display', '100 KB/s')} (guarantee) OR top 7/8",
+        'status': fast_status,
+        'status_text': f"{'Meets' if fast_status == 'meets' else 'Partial' if fast_status == 'partial' else 'Below'}{fast_extra}",
+        'status_color': STATUS_COLORS[fast_status],
+        'status_tooltip': STATUS_TOOLTIPS[fast_status],
+        'rowspan': 1,
+    })
+    
+    # HSDir flag (2 rows)
+    hsdir_color = get_flag_color('hsdir')
+    # Row 1: WFU
+    hsdir_wfu_status = 'meets' if rv.get('hsdir_wfu_meets') else 'below'
+    hsdir_wfu_threshold = rv.get('hsdir_wfu_threshold', 0.98)
+    rows.append({
+        'flag': 'HSDir',
+        'flag_tooltip': FLAG_TOOLTIPS['hsdir'],
+        'flag_color': hsdir_color,
+        'metric': 'WFU',
+        'metric_tooltip': METRIC_TOOLTIPS['wfu_hsdir'],
+        'value': rv.get('wfu_display', 'N/A'),
+        'value_source': 'da',
+        'value_source_tooltip': SOURCE_TOOLTIPS['da'],
+        'threshold': f"≥{hsdir_wfu_threshold * 100:.1f}%",
+        'status': hsdir_wfu_status,
+        'status_text': 'Meets' if hsdir_wfu_status == 'meets' else 'Below',
+        'status_color': STATUS_COLORS[hsdir_wfu_status],
+        'status_tooltip': STATUS_TOOLTIPS[hsdir_wfu_status],
+        'rowspan': 2,
+    })
+    
+    # Row 2: Time Known
+    hsdir_tk_status = 'meets' if rv.get('hsdir_tk_meets') else 'below'
+    rows.append({
+        'flag': 'HSDir',
+        'flag_tooltip': FLAG_TOOLTIPS['hsdir'],
+        'flag_color': hsdir_color,
+        'metric': 'Time Known',
+        'metric_tooltip': METRIC_TOOLTIPS['tk_hsdir'],
+        'value': rv.get('tk_display', 'N/A'),
+        'value_source': 'da',
+        'value_source_tooltip': SOURCE_TOOLTIPS['da'],
+        'threshold': f"≥{rv.get('hsdir_tk_consensus_display', '25h')} (most) / {rv.get('hsdir_tk_max_display', '10d')} (max)",
+        'status': hsdir_tk_status,
+        'status_text': 'Meets' if hsdir_tk_status == 'meets' else 'Below',
+        'status_color': STATUS_COLORS[hsdir_tk_status],
+        'status_tooltip': STATUS_TOOLTIPS[hsdir_tk_status],
+        'rowspan': 0,
+    })
+    
+    return rows
 
 
 def _format_range(values: list, formatter) -> str:
