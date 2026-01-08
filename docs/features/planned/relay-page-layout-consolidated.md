@@ -2712,6 +2712,135 @@ def _get_contact_validation_status_for_relay(self, relay):
 
 ---
 
+#### 2.3.2 AROI Validator API Error Message Mapping
+
+**Purpose:**
+Document the complete mapping of error messages from the AROI Validator API (aroivalidator.1aeo.com) to how they are displayed in Allium templates, enabling operators to understand validation failures.
+
+**Data Flow Architecture:**
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│ AROI Validator API (aroivalidator.1aeo.com/latest.json)                        │
+│   └── Returns: { "error": "URI-RSA: HTTP error 404 for..." }                   │
+└──────────────────────────────────┬──────────────────────────────────────────────┘
+                                   ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│ Python: aroi_validation.py                                                      │
+│   ├── _simplify_error_message() → Converts to simplified display message        │
+│   ├── get_contact_validation_status() → Categorizes relays                      │
+│   └── Stores in: relay_info['error'] or relay_info['missing']                   │
+└──────────────────────────────────┬──────────────────────────────────────────────┘
+                                   ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│ Jinja2 Templates: contact-relay-list.html + macros.html                        │
+│   ├── aroi_relay_detail_box() macro → Renders error detail box                 │
+│   ├── {{ relay_info.error|escape }} → Shows full error from API                │
+│   └── {{ relay_info.missing|escape }} → Shows missing field descriptions       │
+└──────────────────────────────────┬──────────────────────────────────────────────┘
+                                   ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│ Web Page: Contact Page (/contact/<hash>/)                                       │
+│   ├── Section: "MISCONFIGURED RELAY DETAILS" (yellow box)                      │
+│   ├── Section: "UNAUTHORIZED RELAY DETAILS" (red box)                          │
+│   └── Section: "NOT CONFIGURED RELAY DETAILS" (gray box)                       │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Complete Error Message Mapping Table:**
+
+| # | AROI Validator API Error (raw) | Category | Python Processing | Template Display |
+|---|-------------------------------|----------|-------------------|------------------|
+| **Setup Issues (No validation attempted)** |
+| 1 | `No contact information` | Setup | Filtered out - no AROI | Not shown (relay has no AROI) |
+| 2 | `Missing AROI fields: ciissversion, proof` | Setup | Filtered out - no AROI | Not shown (incomplete AROI) |
+| 3 | `Missing AROI fields: proof` | Incomplete | `_categorize_by_missing_fields()` → `'no_proof'` | `relay_info['missing']` = **"Missing proof field (has domain + ciissversion)"** |
+| 4 | `Missing AROI fields: ciissversion` | Incomplete | `_categorize_by_missing_fields()` → `'no_ciissversion'` | `relay_info['missing']` = **"Missing ciissversion (has proof + domain)"** |
+| 5 | `Missing AROI fields: url` | Incomplete | `_categorize_by_missing_fields()` → `'no_domain'` | `relay_info['missing']` = **"Missing domain/URL field (has proof + ciissversion)"** |
+| **DNS-RSA Validation Errors** |
+| 6 | `DNS-RSA: TXT record not found at <domain>` | Misconfigured | Passed through as-is | `relay_info['error']` = **"DNS-RSA: TXT record not found at <domain>"** |
+| 7 | `DNS-RSA: TXT record has invalid proof content. Expected 'we-run-this-tor-relay', found: <content>` | Misconfigured | Passed through as-is | `relay_info['error']` = full message |
+| **URI-RSA HTTP Errors** |
+| 8 | `URI-RSA: HTTP error 404 for <domain> at URL: <url>` | Misconfigured | Passed through as-is | `relay_info['error']` = **"URI-RSA: HTTP error 404 for <domain> at URL: <url>"** |
+| 9 | `URI-RSA: HTTP error 526 for <domain> at URL: <url>` | Misconfigured | Passed through as-is | `relay_info['error']` = full message (SSL error) |
+| **URI-RSA Connection Errors** |
+| 10 | `URI-RSA: HTTP error connection timed out after 5s for URL: <url>` | Misconfigured | Passed through as-is | `relay_info['error']` = full message |
+| 11 | `URI-RSA: HTTP error connection timed out... Used domain cache after <N> attempts.` | Misconfigured | Passed through as-is | `relay_info['error']` = full message |
+| 12 | `URI-RSA: HTTP error connection max retries exceeded for URL: <url>` | Misconfigured | Passed through as-is | `relay_info['error']` = full message |
+| 13 | `URI-RSA: HTTP error connection max retries... Used domain cache after <N> attempts.` | Misconfigured | Passed through as-is | `relay_info['error']` = full message |
+| 14 | `URI-RSA: HTTP error name resolution failed for <domain> at URL: <url>` | Misconfigured | Passed through as-is | `relay_info['error']` = full message |
+| **Authorization Errors (Fingerprint Issues)** |
+| 15 | `URI-RSA: Fingerprint not listed at <domain>` | **Unauthorized** | `is_unauthorized = True` → Goes to `unauthorized_relays` | `relay_info['error']` = **"URI-RSA: Fingerprint not listed at <domain>"** |
+| **Internal Allium Error** |
+| 16 | (no error - relay not in validation data) | Misconfigured | Added by Allium | `relay_info['error']` = **"Not yet processed by validator (relay may be new)"** |
+
+**Simplified Error Messages (for Dashboard Tooltips):**
+
+The `_simplify_error_message()` function in `aroi_validation.py` (lines 178-231) converts verbose API errors to short display messages for aggregated statistics:
+
+| API Error Pattern | Simplified Message | Proof Type |
+|-------------------|-------------------|------------|
+| NXDOMAIN / no such domain | "DNS: Domain not found (NXDOMAIN)" | dns |
+| SERVFAIL | "DNS: Server failure (SERVFAIL)" | dns |
+| TXT record not found/missing | "DNS: TXT record not found" | dns |
+| TXT record error | "DNS: TXT record error" | dns |
+| DNS lookup failed | "DNS: Lookup failed" | dns |
+| SSLV3_ALERT_HANDSHAKE_FAILURE | "URI: SSL/TLS v3 handshake failed" | uri |
+| SSL handshake/alert | "URI: SSL/TLS handshake failed" | uri |
+| Certificate error | "URI: SSL certificate error" | uri |
+| 404 / not found (non-DNS) | "URI: Proof file not found (404)" or "URI: Fingerprint file not found (404)" | uri |
+| 403 / forbidden | "URI: Access forbidden (403)" | uri |
+| Connection refused | "URI: Connection refused" | uri |
+| Timeout | "URI: Connection timeout" | uri |
+| Max retries exceeded | "URI: Server unreachable" | uri |
+| Name resolution failed | "URI: Domain resolution failed" | uri |
+| Fingerprint not found in proof | "URI: Fingerprint not in proof" | uri |
+| Fingerprint mismatch | "DNS: Fingerprint mismatch" or "URI: Fingerprint mismatch" | dns/uri |
+
+**Visual Display Mapping:**
+
+| Validation Status | Icon | Color | Border Style | Detail Box Style |
+|------------------|------|-------|--------------|------------------|
+| **Validated** | `✓` | `#28a745` (green) | Solid green | N/A (no error box) |
+| **Misconfigured** | `⚠` | `#ffc107` (yellow) | Solid yellow | Yellow background `#fff3cd` |
+| **Unauthorized** | `🚫` | `#dc3545` (red) | Dashed red | Red background `#f8d7da` |
+| **Not Configured** | `○` | `#6c757d` (gray) | Solid gray | Gray background `#e9ecef` |
+
+**Key Code Locations:**
+
+| File | Function/Macro | Purpose |
+|------|---------------|---------|
+| `aroi_validation.py:178-231` | `_simplify_error_message()` | Simplifies errors for tooltips (relay_error_top5, etc.) |
+| `aroi_validation.py:776-810` | `get_contact_validation_status()` | Categorizes errors into unauthorized vs misconfigured |
+| `macros.html:275-344` | `aroi_relay_detail_box()` | Renders error detail boxes with full API error |
+| `macros.html:198-208` | `aroi_validation_icon()` | Shows validation icon next to relay name |
+| `contact-relay-list.html:289-302` | Misconfigured section | Renders yellow-bordered table + detail box |
+| `contact-relay-list.html:304-317` | Unauthorized section | Renders red-dashed table + detail box |
+
+**Two Error Display Contexts:**
+
+1. **Network Health Dashboard Tooltips** → Uses `_simplify_error_message()` output (e.g., "URI: Connection timeout")
+2. **Contact/Relay Pages Detail Boxes** → Shows **raw API error** verbatim (e.g., "URI-RSA: HTTP error connection timed out after 5s for URL: https://quetzalcoatl-relays.org/.well-known/tor-relay/rsa-fingerprint.txt")
+
+**Error Distribution (Current API Data):**
+
+| Error Type | Approximate Count |
+|------------|-------------------|
+| Connection timeout (quetzalcoatl-relays.org) | ~700 |
+| Fingerprint not listed (zwiebeltoralf.de) | 52 |
+| Max retries exceeded (relayon.org) | ~45 |
+| Fingerprint not listed (artikel5ev.de) | 21 |
+| Connection timeout (middelstaedt.com) | ~15 |
+| DNS TXT record not found | ~10 |
+| Name resolution failed | ~10 |
+| HTTP 404 errors | ~10 |
+| Invalid TXT proof content | 4 |
+| HTTP 526 (SSL error) | 1 |
+
+**API Endpoint:** `https://aroivalidator.1aeo.com/latest.json`
+
+---
+
 #### 2.4 Add CSS for Fluid-Width Single Column
 
 **File:** `allium/templates/skeleton.html`
