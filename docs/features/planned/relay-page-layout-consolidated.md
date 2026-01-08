@@ -3020,15 +3020,60 @@ The `_simplify_error_message()` function in `aroi_validation.py` (lines 178-231)
 
 #### 2.6 Add Dedicated Overload Status Section
 
-**Position:** Section 6, between `#uptime` (Uptime and Stability) and `#operator` (Operator and Family)
+---
 
-**Rationale:** 
+##### Overview
+
+| Attribute | Value |
+|-----------|-------|
+| **Section Number** | 6 |
+| **Anchor** | `#overload` |
+| **Position** | After `#uptime` (Uptime and Stability), before `#operator` (Operator and Family) |
+| **Template File** | `allium/templates/relay-info.html` |
+| **Backend Status** | ✅ Implemented (`stability_utils.py`, `relays.py`) |
+| **Template Status** | ⏳ Not Started |
+
+---
+
+##### Rationale
+
 - Overload is related to stability/performance, logically follows uptime section
-- Links from Health Status "Stability" row tooltip to this section for details
+- Links from Health Status "Stability" row to this section for detailed breakdown
 - Only ~2% of relays have overload data, so section is minimal for most relays
-- When overload IS present, detailed sub-fields help operators troubleshoot
+- When overload IS present, detailed sub-fields help operators troubleshoot specific issues
 
-**Onionoo API Overload Fields (3 actual fields):**
+---
+
+##### Integration Points
+
+| From | To | Link Type | Purpose |
+|------|-----|-----------|---------|
+| Health Status → Stability row | `#overload` | Anchor link | Click "Overloaded" or "Not Overloaded" to see details |
+| Health Status → Issues section | `#overload` | Reference | Overload issues link to detailed section |
+| Stability tooltip | N/A | Hover preview | Shows summary: "Rate limits hit W:981 R:6284 (limit: 105 KB/s)" |
+
+**User Flow:**
+1. User sees "Overloaded" (red) in Health Status Stability row
+2. Hovers to see tooltip summary of conditions
+3. Clicks to jump to `#overload` section for full details and recommendations
+
+---
+
+##### Implementation Checklist
+
+| Component | Status | File | Notes |
+|-----------|--------|------|-------|
+| Stability computation | ✅ Done | `stability_utils.py` | `compute_relay_stability()` with 72h threshold |
+| Overload data fetching | ✅ Done | `relays.py` lines 782-797 | Merges `/details` and `/bandwidth` fields |
+| Pre-computed variables | ✅ Done | `relays.py` | `stability_is_overloaded`, `stability_text`, `stability_color`, `stability_tooltip` |
+| Health Status link | ✅ Done | `relay-info.html` line 175 | `<a href="#overload">` wraps stability text |
+| Template section | ⏳ TODO | `relay-info.html` | Add `<section id="overload">` |
+| Timestamp filters | ⏳ TODO | `relays.py` | Add `format_timestamp`, `format_timestamp_ago` for ms timestamps |
+| CSS styling | ⏳ TODO | `relay-info.html` | Add `#overload .dl-horizontal-compact` styles |
+
+---
+
+##### Onionoo API Fields (3 Actual Fields)
 
 | Field | Endpoint | Type | Description |
 |-------|----------|------|-------------|
@@ -3038,22 +3083,26 @@ The `_simplify_error_message()` function in `aroi_validation.py` (lines 178-231)
 
 **Sub-fields of `overload_ratelimits`:**
 
-| Sub-field | Type | Description |
-|-----------|------|-------------|
-| `rate-limit` | int (bytes/s) | Configured RelayBandwidthRate |
-| `burst-limit` | int (bytes) | Configured RelayBandwidthBurst |
-| `write-count` | int | Number of times write limit was hit |
-| `read-count` | int | Number of times read limit was hit |
-| `timestamp` | int (ms) | When this data was recorded |
+| Sub-field | Type | Description | Display Format |
+|-----------|------|-------------|----------------|
+| `rate-limit` | int (bytes/s) | Configured RelayBandwidthRate | Use BandwidthFormatter |
+| `burst-limit` | int (bytes) | Configured RelayBandwidthBurst | Use BandwidthFormatter |
+| `write-count` | int | Number of times write limit was hit | Thousands separator |
+| `read-count` | int | Number of times read limit was hit | Thousands separator |
+| `timestamp` | int (ms) | When this data was recorded | "X hours/days ago" |
 
 **Sub-fields of `overload_fd_exhausted`:**
 
-| Sub-field | Type | Description |
-|-----------|------|-------------|
-| `timestamp` | int (ms) | When file descriptor exhaustion occurred |
+| Sub-field | Type | Description | Display Format |
+|-----------|------|-------------|----------------|
+| `timestamp` | int (ms) | When file descriptor exhaustion occurred | "YYYY-MM-DD (X days ago)" |
 
 **72-Hour Threshold:** Per [Tor spec proposal 328](https://spec.torproject.org/proposals/328-relay-overload-report.html), 
 relay descriptors keep the overload flag for 72 hours after the last overload event.
+
+---
+
+##### Mockups
 
 **Desktop Wireframe (Not Overloaded):**
 
@@ -3304,59 +3353,47 @@ relay descriptors keep the overload flag for 72 hours after the last overload ev
 </section>
 ```
 
-**Python Backend - Data Flow from Onionoo API:**
+---
 
-**✅ Already Implemented** in `allium/lib/relays.py` and `allium/lib/stability_utils.py`
+##### Backend Implementation (✅ Already Done)
 
-The overload data comes from two Onionoo API endpoints:
+**Data Flow:**
 
-**1. Details Document (`/details`):**
-```python
-# In allium/lib/relays.py - automatically included when fetching relay data
-# Only ONE overload field exists in /details:
-
-relay_data = {
-    # ... existing fields ...
-    'overload_general_timestamp': relay.get('overload_general_timestamp'),  # int (ms) - When last reported
-}
+```
+Onionoo /details ─────────────────┐
+  └─ overload_general_timestamp   │
+                                  ▼
+Onionoo /bandwidth ───────────► relays.py ──► stability_utils.py ──► Template
+  ├─ overload_ratelimits                          │
+  │    ├─ rate-limit                              │
+  │    ├─ burst-limit                             ▼
+  │    ├─ write-count                    Pre-computed fields:
+  │    ├─ read-count                     • stability_is_overloaded
+  │    └─ timestamp                      • stability_text
+  └─ overload_fd_exhausted               • stability_color
+       └─ timestamp                      • stability_tooltip
 ```
 
-**2. Bandwidth Document (`/bandwidth`):**
-```python
-# In allium/lib/relays.py lines 782-797 - merged during _reprocess_bandwidth_data()
-# Two overload fields from /bandwidth:
+**Files:**
+- `allium/lib/relays.py` lines 782-797 — Merges overload data during `_reprocess_bandwidth_data()`
+- `allium/lib/stability_utils.py` — `compute_relay_stability()` with 72h threshold
 
-if bw_data.get('overload_ratelimits'):
-    relay['overload_ratelimits'] = bw_data['overload_ratelimits']
-    # Contains: rate-limit, burst-limit, write-count, read-count, timestamp
-    
-if bw_data.get('overload_fd_exhausted'):
-    relay['overload_fd_exhausted'] = bw_data['overload_fd_exhausted']
-    # Contains: timestamp
-```
+---
 
-**3. Stability Computation (`stability_utils.py`):**
-```python
-# Pre-computes stability fields for each relay during data processing
-# Uses all 3 overload fields with 72-hour threshold per Tor spec 328
+##### Template Filters
 
-from .stability_utils import compute_relay_stability
+**Existing filters** (in `allium/lib/relays.py`):
 
-relay.update(compute_relay_stability(relay, now_timestamp, self.bandwidth_formatter))
-# Adds: stability_is_overloaded, stability_text, stability_color, stability_tooltip
-```
-
-**Template Filters:**
-
-**Existing filters** (already in `allium/lib/relays.py`):
-- `format_time_ago(timestamp_str)` - for ISO timestamp strings
-- `determine_unit(bytes, use_bits)` - get appropriate bandwidth unit
-- `format_bandwidth_with_unit(bytes, unit)` - format bandwidth value
+| Filter | Purpose |
+|--------|---------|
+| `format_time_ago(timestamp_str)` | ISO timestamp → "X days ago" |
+| `determine_unit(bytes, use_bits)` | Get appropriate bandwidth unit |
+| `format_bandwidth_with_unit(bytes, unit)` | Format bandwidth value |
 
 **New filters needed** (for millisecond timestamps):
 
 ```python
-# Add to allium/lib/relays.py or filters.py
+# Add to allium/lib/relays.py
 
 def format_timestamp(ts_ms: int) -> str:
     """Format millisecond timestamp to readable date string."""
@@ -3371,7 +3408,6 @@ def format_timestamp_ago(ts_ms: int) -> str:
     if not ts_ms:
         return "N/A"
     import time
-    from datetime import datetime
     age_seconds = time.time() - (ts_ms / 1000)
     
     if age_seconds < 3600:
@@ -3386,21 +3422,20 @@ ENV.filters['format_timestamp'] = format_timestamp
 ENV.filters['format_timestamp_ago'] = format_timestamp_ago
 ```
 
-**Note:** The `stability_utils.py` already handles timestamp formatting internally for the tooltip,
-so these filters are only needed if displaying raw timestamps in the template.
+---
 
-**CSS Additions:**
+##### CSS Additions
 
 ```css
 /* Overload section styling */
 #overload .dl-horizontal-compact dt {
-    width: 120px;
+    width: 140px;
     font-weight: bold;
     color: #495057;
 }
 
 #overload .dl-horizontal-compact dd {
-    margin-left: 130px;
+    margin-left: 150px;
     margin-bottom: 5px;
 }
 
@@ -3412,56 +3447,80 @@ so these filters are only needed if displaying raw timestamps in the template.
     border-bottom: 1px solid #dee2e6;
     padding-bottom: 5px;
 }
+
+/* Responsive stacking for mobile */
+@media (max-width: 767px) {
+    #overload .row > div {
+        margin-bottom: 20px;
+    }
+}
 ```
 
-**Variables Used (3 Actual Onionoo Overload Fields):**
+---
 
-| Variable | Source | Type | Description |
-|----------|--------|------|-------------|
-| `relay['overload_general_timestamp']` | /details | int (ms) | UTC timestamp when relay last reported being overloaded |
-| `relay['overload_ratelimits']` | /bandwidth | dict | Rate limit overload details |
-| `relay['overload_fd_exhausted']` | /bandwidth | dict | FD exhaustion details |
-
-**Sub-fields of `overload_ratelimits`:**
-
-| Sub-field | Type | Description |
-|-----------|------|-------------|
-| `rate-limit` | int | Configured RelayBandwidthRate in bytes/s |
-| `burst-limit` | int | Configured RelayBandwidthBurst in bytes |
-| `write-count` | int | Number of times write limit was hit |
-| `read-count` | int | Number of times read limit was hit |
-| `timestamp` | int (ms) | When this data was recorded |
-
-**Sub-fields of `overload_fd_exhausted`:**
-
-| Sub-field | Type | Description |
-|-----------|------|-------------|
-| `timestamp` | int (ms) | When file descriptor exhaustion occurred |
+##### Variables Reference
 
 **Pre-computed Stability Variables (from `stability_utils.py`):**
 
-| Variable | Type | Description |
-|----------|------|-------------|
-| `relay['stability_is_overloaded']` | bool | True if any overload condition is active (72h threshold) |
-| `relay['stability_text']` | str | "Overloaded" or "Not Overloaded" |
-| `relay['stability_color']` | str | "#dc3545" (red) or "#28a745" (green) |
-| `relay['stability_tooltip']` | str | Human-readable summary of conditions |
+| Variable | Type | Example | Description |
+|----------|------|---------|-------------|
+| `relay['stability_is_overloaded']` | bool | `true` | Any overload condition active (72h threshold) |
+| `relay['stability_text']` | str | `"Overloaded"` | Display text |
+| `relay['stability_color']` | str | `"#dc3545"` | Red or green hex color |
+| `relay['stability_tooltip']` | str | `"Rate limits hit W:981 R:6284 (limit: 105 KB/s)"` | Human-readable summary |
 
-**Testing Checklist:**
+**Raw Onionoo Fields (for detailed section display):**
 
-- [ ] Section appears after #uptime, before #operator (position 6)
-- [ ] "Not Overloaded" shows with green background when stability_is_overloaded is false
-- [ ] Shows "Last general overload: X days ago" when timestamp exists but older than 72h
-- [ ] Detailed view shows when stability_is_overloaded is true
-- [ ] General Overload section shows timestamp and age when present
-- [ ] Rate Limits section shows all 5 sub-fields with proper formatting
-- [ ] Rate/burst limits use BandwidthFormatter (respects --bits flag)
-- [ ] Write/read hit counts formatted with thousands separator
-- [ ] File Descriptor section shows timestamp when present
-- [ ] Recommendations are context-aware (different tips for each condition)
-- [ ] Mobile layout stacks all subsections vertically
-- [ ] Anchor link #overload works from Health Status Stability row
+| Variable | Type | Example |
+|----------|------|---------|
+| `relay['overload_general_timestamp']` | int (ms) | `1767474000000` |
+| `relay['overload_ratelimits']` | dict | `{rate-limit: 107520, burst-limit: 1073741824, write-count: 981, read-count: 6284, timestamp: 1767646800000}` |
+| `relay['overload_fd_exhausted']` | dict | `{timestamp: 1767474000000}` |
 
+---
+
+##### Testing Checklist
+
+**Section Structure:**
+- [ ] Section appears at position 6 (after #uptime, before #operator)
+- [ ] Section header shows "Overload Status" with anchor link
+- [ ] Mobile layout stacks subsections vertically
+
+**Not Overloaded State:**
+- [ ] Green background with "Not Overloaded" message
+- [ ] Shows "Last general overload: X days ago" if timestamp > 72h old
+- [ ] No detailed subsections shown
+
+**Overloaded State:**
+- [ ] Yellow/warning background with "[Warning] OVERLOADED" header
+- [ ] Summary tooltip text shown below header
+- [ ] Two-column layout on desktop
+
+**General Overload Subsection:**
+- [ ] Shows "Reported" or "Not Reported" status
+- [ ] Timestamp displayed as "YYYY-MM-DD HH:MM UTC"
+- [ ] Age displayed as "X hours/days ago"
+- [ ] Explanation text about what triggers general overload
+
+**Rate Limits Subsection:**
+- [ ] Rate Limit uses BandwidthFormatter (respects --bits flag)
+- [ ] Burst Limit uses BandwidthFormatter
+- [ ] Write/Read counts show thousands separators (e.g., "6,284")
+- [ ] Red color for counts > 0
+- [ ] Last Reported timestamp shown
+
+**File Descriptors Subsection:**
+- [ ] Shows "Reported" or "Not Reported" status
+- [ ] Timestamp shown if present
+
+**Recommendations:**
+- [ ] Context-aware (different tips for each condition type)
+- [ ] Shows relevant torrc config suggestions
+- [ ] Includes systemd tips for FD issues
+
+**Integration:**
+- [ ] Health Status "Stability" row links to #overload
+- [ ] Anchor link works correctly
 ---
 
 #### 2.7 Section Reordering - Complete Template Structure
