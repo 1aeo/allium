@@ -336,6 +336,11 @@ class Coordinator:
         # Enables ~33x speedup for contact page generation via parallelization.
         relay_set._precompute_all_contact_page_data()
         
+        # PERF OPTIMIZATION: Pre-compute all family page data
+        # Family pages were 6-10x slower than contact pages due to per-page validation status computation.
+        # Pre-computing this data enables similar speedup (from ~22ms/page to ~3ms/page).
+        relay_set._precompute_all_family_page_data()
+        
         # Update the relay_set's progress_step to match our current progress
         relay_set.progress_step = self.progress_step
         
