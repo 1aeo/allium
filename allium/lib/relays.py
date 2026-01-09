@@ -29,6 +29,7 @@ from .bandwidth_formatter import (
     format_bandwidth_filter
 )
 from .stability_utils import compute_relay_stability
+from .intelligence_engine import IntelligenceEngine
 import logging
 import statistics
 from datetime import datetime, timedelta
@@ -346,8 +347,8 @@ def _precompute_family_worker(args):
             contact_validation_status = _precompute_relay_set._get_contact_validation_status(members)
         
         # Pre-compute network position (moderately expensive)
+        # IntelligenceEngine imported at module level for performance
         try:
-            from .intelligence_engine import IntelligenceEngine
             network_position = IntelligenceEngine({})._calculate_network_position(
                 family_data["guard_count"], family_data["middle_count"], 
                 family_data["exit_count"], len(members))
@@ -2301,8 +2302,8 @@ class Relays:
             family_data["contact_validation_status"] = self._get_contact_validation_status(members)
         
         # Pre-compute network position
+        # IntelligenceEngine imported at module level for performance
         try:
-            from .intelligence_engine import IntelligenceEngine
             family_data["network_position"] = IntelligenceEngine({})._calculate_network_position(
                 family_data["guard_count"], family_data["middle_count"], 
                 family_data["exit_count"], len(members))
@@ -2351,16 +2352,7 @@ class Relays:
         """
         Generate smart context information using intelligence engine
         """
-        try:
-            from .intelligence_engine import IntelligenceEngine
-        except ImportError as e:
-            if self.progress:
-                self._log_progress(f"Intelligence engine not available: {e}")
-            print("⚠️  Intelligence engine module not available, skipping analysis")
-            self.json['smart_context'] = {}
-            self.progress_step += 2  # Skip both analysis steps
-            return
-        
+        # IntelligenceEngine imported at module level for performance
         self.progress_step += 1
         self._log_progress("Starting Tier 1 intelligence analysis...")
         engine = IntelligenceEngine(self.json)
@@ -2761,8 +2753,8 @@ class Relays:
             exit_bandwidth = self.bandwidth_formatter.format_bandwidth_with_unit(i["exit_bandwidth"], bandwidth_unit)
             
             # Calculate network position using intelligence engine
+            # IntelligenceEngine imported at module level for performance
             try:
-                from .intelligence_engine import IntelligenceEngine
                 intelligence = IntelligenceEngine({})  # Empty intelligence engine just for utility method
                 total_relays = len(members)
                 network_position = intelligence._calculate_network_position(
@@ -2770,45 +2762,6 @@ class Relays:
                 )
                 # Use the pre-formatted string from intelligence engine
                 network_position_display = network_position.get('formatted_string', 'unknown')
-            except ImportError:
-                # Fallback if intelligence engine is not available
-                total_relays = len(members)
-                guard_ratio = i["guard_count"] / total_relays if total_relays > 0 else 0
-                middle_ratio = i["middle_count"] / total_relays if total_relays > 0 else 0
-                exit_ratio = i["exit_count"] / total_relays if total_relays > 0 else 0
-                
-                # Simple network position calculation
-                if guard_ratio > 0.5:
-                    network_position_label = "Guard-focused"
-                elif exit_ratio > 0.5:
-                    network_position_label = "Exit-focused"
-                elif middle_ratio > 0.5:
-                    network_position_label = "Middle-focused"
-                else:
-                    network_position_label = "Mixed"
-                
-                # Create simple fallback display
-                position_components = []
-                if i["guard_count"] > 0:
-                    guard_text = 'guard' if i["guard_count"] == 1 else 'guards'
-                    position_components.append(f"{i['guard_count']} {guard_text}")
-                if i["middle_count"] > 0:
-                    middle_text = 'middle' if i["middle_count"] == 1 else 'middles'
-                    position_components.append(f"{i['middle_count']} {middle_text}")
-                if i["exit_count"] > 0:
-                    exit_text = 'exit' if i["exit_count"] == 1 else 'exits'
-                    position_components.append(f"{i['exit_count']} {exit_text}")
-                
-                total_text = 'relay' if total_relays == 1 else 'relays'
-                components_text = ', ' + ', '.join(position_components) if position_components else ''
-                network_position_display = f"{network_position_label} ({total_relays} total {total_text}{components_text})"
-                
-                # Create fallback network_position object
-                network_position = {
-                    'label': network_position_label,
-                    'formatted_string': network_position_display
-                }
-                
             except Exception as e:
                 print(f"DEBUG: Network position calculation error for {k}={v}: {e}")
                 network_position = {
@@ -2982,8 +2935,8 @@ class Relays:
         # Otherwise calculate it (for non-family pages or fallback)
         network_position = i.get("network_position")
         if network_position is None:
+            # IntelligenceEngine imported at module level for performance
             try:
-                from .intelligence_engine import IntelligenceEngine
                 network_position = IntelligenceEngine({})._calculate_network_position(
                     i["guard_count"], i["middle_count"], i["exit_count"], len(members))
             except Exception:
