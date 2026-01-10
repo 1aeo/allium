@@ -70,7 +70,7 @@ This document proposes a redesign of the Allium relay page to prioritize operato
 
 | Item | Status | Location | Notes |
 |------|--------|----------|-------|
-| 3.1 Flag Eligibility Table | ✅ Implemented | `relay-info.html` lines 453-555 | New #flags section with Current Flags, Eligible Flags, and Eligibility Flag Vote Details table |
+| 3.1 Flag Eligibility Table | ✅ Implemented | `relay-info.html` lines 453-530 | Full `<section id="flags">` with Current Flags, Eligible Flags, and Eligibility Details table |
 | 3.2 Issues/Warnings with Actionable Advice | ✅ Implemented | `consensus_evaluation.py` | Suggestions included for each issue type |
 | 3.3 Remove "Summary: Your Relay vs Consensus" | ⏳ Not Started | `relay-info.html` | Old table still present |
 | 3.4 Data Source Comparison Table | ⏳ Not Started | — | Onionoo vs CollecTor comparison |
@@ -86,32 +86,32 @@ This document proposes a redesign of the Allium relay page to prioritize operato
 | BandwidthFormatter | ✅ Implemented | `allium/lib/bandwidth_formatter.py` | Respects --bits flag for rate formatting |
 | Consensus Evaluation | ✅ Implemented | `consensus_evaluation.py` | Per-authority data, flag thresholds, issues |
 
-#### Templates
+#### Template Sections (Dedicated `<section>` Elements)
 
-| Item | Status | Location | Notes |
-|------|--------|----------|-------|
-| Health Status Section | ✅ Implemented | `relay-info.html` | #status with grid layout |
-| Connectivity Section | ✅ Implemented | `relay-info.html` | #connectivity with 2-col layout |
-| Per-Authority Details | ✅ Implemented | `relay-info.html` | #authority-votes table |
-| Flags Section (dedicated) | ⏳ Not Started | — | Needs #flags section with eligibility table |
-| Bandwidth Section (dedicated) | 📋 Documented | Section 3.4 | Full spec ready, code implementation pending |
-| Uptime Section (dedicated) | ⏳ Not Started | — | Needs #uptime section |
-| Overload Section (dedicated) | ⏳ Not Started | — | Needs #overload section |
-| Operator Section (merged) | ⏳ Not Started | — | Needs #operator with AROI + Family |
-| Software Section (dedicated) | ⏳ Not Started | — | Needs #software section |
-| Exit Policy Section (dedicated) | ⏳ Not Started | — | Needs #exit-policy section |
+| Section | Status | Anchor | Notes |
+|---------|--------|--------|-------|
+| Health Status | ✅ Implemented | `#status` | Grid layout, 14 metrics in 8 cells |
+| Connectivity | ✅ Implemented | `#connectivity` | 2-column layout, addresses/location/AS |
+| Flags & Eligibility | ✅ Implemented | `#flags` | Current/Eligible flags + eligibility table |
+| Bandwidth | 📋 Documented | `#bandwidth` | Spec in 3.4, code pending |
+| Uptime & Stability | ⏳ Not Started | `#uptime` | Data in dt/dd format, needs consolidation |
+| Overload | ⏳ Not Started | `#overload` | **BROKEN**: Stability row links to non-existent section |
+| Operator & Family | ⏳ Not Started | `#operator` | AROI/Family in dt/dd, needs consolidation |
+| Software & Version | ⏳ Not Started | `#software` | Platform in dt/dd, needs consolidation |
+| Exit Policy | ⏳ Not Started | `#exit-policy` | IPv4/IPv6 summary in dt/dd, needs consolidation |
+| Per-Authority Details | ✅ Implemented | `#authority-votes` | Full per-authority voting table |
 
 ---
 
 #### Implementation Priority (Recommended Order)
 
-1. **2.6 Dedicated Overload Section** - Links exist from Stability row
-2. **2.3 Operator and Family Section** - Consolidate AROI + Family
-3. ~~**3.1 Flag Eligibility Table**~~ ✅ Completed - New #flags section with table
-4. **2.4 CSS Fluid-Width** - Better desktop layout
-5. **Remaining dedicated sections** - #bandwidth, #uptime, #software, #exit-policy
-6. **3.3 Remove old summary table** - Clean up deprecated content
-7. **3.5 Anchor aliases** - Backward compatibility
+1. **🚨 URGENT: Dedicated Overload Section (#overload)** - Stability row links to non-existent `#overload` anchor
+2. **Dedicated Bandwidth Section (#bandwidth)** - Spec complete in section 3.4, ready to implement
+3. **Operator and Family Section (#operator)** - Consolidate AROI + Family from dt/dd
+4. **Remaining dedicated sections** - #uptime, #software, #exit-policy
+5. **CSS Fluid-Width** - Better desktop layout
+6. **Remove old dt/dd content** - Clean up after sections migrated
+7. **Anchor aliases** - Backward compatibility for old URLs
 
 ---
 
