@@ -277,5 +277,4 @@ python3 -m pytest tests/test_integration_contact_template.py -v
 
 ---
 
-**Last Updated**: 2025-12-05  
-**Related**: [Performance Guide](../development/performance.md) | [Architecture Overview](README.md)
+**Related**: [Architecture Overview](overview.md) | [Configuration](../user-guide/configuration.md)
