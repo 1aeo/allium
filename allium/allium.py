@@ -439,7 +439,10 @@ if __name__ == "__main__":
     progress_logger.log("Generating search index...")
     from lib.search_index import generate_search_index
     search_index_path = os.path.join(args.output_dir, "search-index.json")
-    search_stats = generate_search_index(RELAY_SET.json, search_index_path)
+    search_stats = generate_search_index(
+        RELAY_SET.json, search_index_path,
+        validated_aroi_domains=getattr(RELAY_SET, 'validated_aroi_domains', None)
+    )
     progress_logger.log(
         f"Generated search index: {search_stats['relay_count']} relays, "
         f"{search_stats['family_count']} families, {search_stats['file_size_kb']} KB"

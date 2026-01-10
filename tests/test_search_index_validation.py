@@ -32,6 +32,13 @@ AS_NUMBER = re.compile(r'^(?:AS)?(\d+)$', re.IGNORECASE)
 # SEARCH SIMULATION (mirrors search.js logic)
 # =============================================================================
 
+def _family_result(f: Dict[str, Any], hint: str = None) -> Dict[str, Any]:
+    """Return operator page if family has validated AROI, otherwise family page."""
+    if f.get('v') and f.get('a'):
+        return {'type': 'operator', 'aroi_domain': f['a'], 'hint': hint}
+    return {'type': 'family', 'family_id': f['id'], 'hint': hint}
+
+
 def search(query: str, index: Dict[str, Any]) -> Dict[str, Any]:
     """Simulate the search function from search.js"""
     q = query.strip()
@@ -51,7 +58,7 @@ def search(query: str, index: Dict[str, Any]) -> Dict[str, Any]:
                 return {'type': 'relay', 'fingerprint': r['f'], 'nickname': r.get('n', '')}
         for f in families:
             if f['id'].upper() == q_upper:
-                return {'type': 'family', 'family_id': f['id']}
+                return _family_result(f)
         return {'type': 'not_found', 'query': q}
     
     # Step 2: Partial fingerprint
@@ -62,7 +69,7 @@ def search(query: str, index: Dict[str, Any]) -> Dict[str, Any]:
         if len(relay_matches) == 1 and len(family_matches) == 0:
             return {'type': 'relay', 'fingerprint': relay_matches[0]['f'], 'nickname': relay_matches[0].get('n', '')}
         if len(family_matches) == 1 and len(relay_matches) == 0:
-            return {'type': 'family', 'family_id': family_matches[0]['id']}
+            return _family_result(family_matches[0])
         if relay_matches or family_matches:
             return {'type': 'multiple', 'relays': len(relay_matches), 'families': len(family_matches)}
     
@@ -71,28 +78,28 @@ def search(query: str, index: Dict[str, Any]) -> Dict[str, Any]:
     if len(exact_matches) == 1:
         return {'type': 'relay', 'fingerprint': exact_matches[0]['f'], 'nickname': exact_matches[0].get('n', '')}
     if len(exact_matches) > 1:
-        # Check if all in same family
         family_ids = set(r.get('fam') for r in exact_matches if r.get('fam'))
         if len(family_ids) == 1:
-            return {'type': 'family', 'family_id': list(family_ids)[0], 'hint': 'same_family'}
+            f = next((f for f in families if f['id'] == list(family_ids)[0]), None)
+            if f:
+                return _family_result(f, 'same_family')
         return {'type': 'multiple', 'relays': len(exact_matches), 'hint': 'nickname'}
     
-    # Step 4: Family prefix
+    # Step 4: Family prefix (non-generic first, then generic)
     for f in families:
         if f.get('px') and f['px'].lower() == q_lower and not f.get('pxg'):
-            return {'type': 'family', 'family_id': f['id'], 'hint': 'prefix'}
+            return _family_result(f, 'prefix')
     for f in families:
         if f.get('px') and f['px'].lower() == q_lower:
-            return {'type': 'family', 'family_id': f['id'], 'hint': 'generic_prefix'}
+            return _family_result(f, 'generic_prefix')
     
     # Step 5: AROI domain
-    for r in relays:
-        if r.get('a') and r['a'].lower() == q_lower:
-            if r.get('c'):
-                return {'type': 'contact', 'contact_md5': r['c'], 'aroi': r['a']}
     for f in families:
         if f.get('a') and f['a'].lower() == q_lower:
-            return {'type': 'family', 'family_id': f['id'], 'hint': 'aroi'}
+            return _family_result(f, 'aroi')
+    for r in relays:
+        if r.get('a') and r['a'].lower() == q_lower and r.get('c'):
+            return {'type': 'contact', 'contact_md5': r['c'], 'aroi': r['a']}
     
     # Step 6: AS number
     as_match = AS_NUMBER.match(q)
@@ -135,7 +142,7 @@ def search(query: str, index: Dict[str, Any]) -> Dict[str, Any]:
     # Step 11: Family nickname search (nn keys are already lowercase)
     family_matches = [f for f in families if any(q_lower in n for n in f.get('nn', {}).keys())][:10]
     if len(family_matches) == 1:
-        return {'type': 'family', 'family_id': family_matches[0]['id'], 'hint': 'member_nickname'}
+        return _family_result(family_matches[0], 'member_nickname')
     if family_matches:
         return {'type': 'multiple', 'families': len(family_matches), 'hint': 'family_nickname'}
     
@@ -264,8 +271,9 @@ def run_search_tests(index: Dict[str, Any]) -> List[Tuple[str, str, bool, str]]:
         tests.append(('Partial fingerprint (8 chars)', sample_relay['f'][:8], 'relay|multiple'))
     
     # Test 3: Nickname search
+    # If all matches in same validated family, returns operator; otherwise relay/multiple/family
     if sample_relay and sample_relay.get('n'):
-        tests.append(('Exact nickname', sample_relay['n'], 'relay|multiple|family'))
+        tests.append(('Exact nickname', sample_relay['n'], 'relay|multiple|family|operator'))
     
     # Test 4: AS number search
     if sample_as:
@@ -291,9 +299,10 @@ def run_search_tests(index: Dict[str, Any]) -> List[Tuple[str, str, bool, str]]:
         tests.append(('Flag', lookups['flags'][0], 'flag'))
     
     # Test 8: AROI domain search
+    # If family has validated AROI, returns operator; otherwise contact or family
     aroi_relay = next((r for r in relays if r.get('a')), None)
     if aroi_relay:
-        tests.append(('AROI domain', aroi_relay['a'], 'contact|family'))
+        tests.append(('AROI domain', aroi_relay['a'], 'contact|family|operator'))
     
     # Test 9: IP address search
     ip_relay = next((r for r in relays if r.get('ip')), None)
@@ -301,9 +310,10 @@ def run_search_tests(index: Dict[str, Any]) -> List[Tuple[str, str, bool, str]]:
         tests.append(('IP address', ip_relay['ip'][0], 'relay'))
     
     # Test 10: Family prefix search
+    # If family has validated AROI, returns operator; otherwise family
     prefix_family = next((f for f in families if f.get('px') and not f.get('pxg')), None)
     if prefix_family:
-        tests.append(('Family prefix', prefix_family['px'], 'family'))
+        tests.append(('Family prefix', prefix_family['px'], 'family|operator'))
     
     # Test 11: Not found
     tests.append(('Non-existent query', 'xyznonexistent12345', 'not_found'))

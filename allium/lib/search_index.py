@@ -155,7 +155,8 @@ def compact_relay_entry(
 def compact_family_entry(
     family_id: str,
     family_data: Dict[str, Any],
-    members: List[Dict[str, Any]]
+    members: List[Dict[str, Any]],
+    validated_aroi_domains: Optional[Set[str]] = None
 ) -> Dict[str, Any]:
     """
     Create a compact family entry for the search index.
@@ -204,6 +205,9 @@ def compact_family_entry(
     aroi = family_data.get('aroi_domain')
     if is_valid_aroi(aroi):
         entry['a'] = aroi
+        # v=True enables operator page redirect instead of family page
+        if validated_aroi_domains and aroi in validated_aroi_domains:
+            entry['v'] = True
 
     if contacts:
         entry['c'] = sorted(contacts)
@@ -300,7 +304,8 @@ def _process_relay_batch(
 def generate_search_index(
     relays_data: Dict[str, Any],
     output_path: str,
-    use_parallel: bool = True
+    use_parallel: bool = True,
+    validated_aroi_domains: Optional[Set[str]] = None
 ) -> Dict[str, int]:
     """
     Generate a compact search index for the Cloudflare Pages Function.
@@ -309,6 +314,7 @@ def generate_search_index(
         relays_data: The RELAY_SET.json data structure from allium
         output_path: Path to write the search-index.json file
         use_parallel: Whether to use parallel processing for large datasets
+        validated_aroi_domains: Set of validated AROI domains for operator page redirects
 
     Returns:
         Dictionary with statistics about the generated index
@@ -399,7 +405,7 @@ def generate_search_index(
         # Get member relays (with bounds checking)
         members = [relays[idx] for idx in relay_indices if idx < len(relays)]
         
-        entry = compact_family_entry(family_id, fdata, members)
+        entry = compact_family_entry(family_id, fdata, members, validated_aroi_domains)
         family_entries.append(entry)
 
     # ==========================================================================
@@ -411,7 +417,7 @@ def generate_search_index(
             'generated_at': relays_data.get('relays_published', ''),
             'relay_count': len(relays),
             'family_count': len(valid_family_ids),
-            'version': '1.3'  # 1.1: nn->dict, 1.2: pxg sparse, 1.3: nn keys lowercase
+            'version': '1.4'  # 1.1: nn->dict, 1.2: pxg sparse, 1.3: nn keys lowercase, 1.4: v (validated) field
         },
         'relays': relay_entries,
         'families': family_entries,
