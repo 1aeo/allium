@@ -80,17 +80,20 @@ docs/
 │   ├── testing.md               # How to run tests (no history)
 │   └── security.md              # Practices (no audit history)
 │
-├── specs/                       # Future work (Now/Next/Later, not Q1/Q2)
-│   ├── README.md                # Index + spec template
-│   ├── visualizations/          # Interactive charts proposal
-│   ├── community-api/           # API proposal
-│   └── ...                      # Other proposals (standardized format)
+├── features/
+│   └── planned/                 # KEEP AS-IS: Future work, roadmap, proposals
+│       ├── README.md            # Index (update to Now/Next/Later framing)
+│       ├── milestone-*.md       # Keep existing milestone docs
+│       ├── visualizations/      # Keep existing proposals
+│       └── ...                  # All existing planned feature docs
 │
 └── archive/                     # Historical only (not indexed as primary)
     └── README.md                # Index to archived materials
 ```
 
-**Total: ~15 active files (down from 117)**
+**Total: ~15 core active files + features/planned/* (kept as-is)**
+
+**Note**: `docs/features/planned/` retained for roadmap and future proposals. Only `docs/features/implemented/` gets consolidated into `reference/current-capabilities.md`.
 
 ---
 
@@ -117,7 +120,7 @@ docs/
 ## For Contributors
 - [Contributing](development/contributing.md) - Setup and PR process
 - [Architecture](architecture/overview.md) - System design
-- [Future Plans](specs/README.md) - Proposals and roadmap
+- [Planned Features](features/planned/README.md) - Roadmap and proposals
 
 ## Archive
 - [Historical Documents](archive/README.md) - Past reports (reference only)
@@ -342,35 +345,35 @@ www/
 
 ---
 
-### 3.9 `docs/specs/README.md` (Future Work Index)
+### 3.9 `docs/features/planned/README.md` (Update Existing)
 
-**Purpose**: Replace dated roadmaps with Now/Next/Later structure.
+**Purpose**: Update existing README to use Now/Next/Later framing instead of dated quarters.
+
+**Changes to make**:
+- Replace "Q1 2025", "Q2 2025" etc. with Now/Next/Later priorities
+- Keep all existing proposal files as-is
+- Update links if any are broken
 
 ```markdown
-# Future Plans
+# Planned Features
 
 ## Priority: Now (Active Development)
-- [Search Implementation](search/) - Full-text relay search
+- [Search Implementation](search-implementation-plan.md)
 
 ## Priority: Next (Planned)
-- [Interactive Visualizations](visualizations/) - Charts, heat maps
-- [Enhanced Authority Monitoring](authority-health/) - Real-time status
+- [Interactive Visualizations](milestone-1-graphs-charts.md)
+- [Enhanced Authority Monitoring](milestone-2-authority-health.md)
 
 ## Priority: Later (Proposals)
-- [Community API](community-api/) - Public API access
-- [AI Analytics](ai-analytics/) - Predictive modeling
-- [ClickHouse Backend](clickhouse/) - High-performance analytics
+- [Network Health Enhancements](milestone-3-network-health.md)
+- [AI Analytics](milestone-4-ai-analytics.md)
+- [Community Tools](milestone-5-community-tools.md)
 
-## Spec Template
-Each proposal must include:
-1. Goal (1-2 sentences)
-2. Non-goals (what this doesn't do)
-3. User experience (how users interact)
-4. Data requirements (APIs, storage)
-5. Implementation outline
-6. Risks
-7. Test plan
+## All Proposals
+[Keep existing file listings...]
 ```
+
+**Note**: Existing proposal files in `features/planned/` are kept. Only update the README index and remove dated timeline references where they appear.
 
 ---
 
@@ -389,16 +392,23 @@ mv docs/features/implemented/IMPLEMENTED_FEATURES_SUMMARY.md docs/archive/
 ```bash
 # Old structure - delete after new docs created
 docs/features/implemented/     # 30+ files → reference/current-capabilities.md
-docs/features/planned/         # 40+ files → specs/
-docs/features/README.md        # → reference/
+docs/features/README.md        # → reference/ (features/planned/ README stays)
 docs/user-guide/README.md      # Content moves to user-guide/*.md
 docs/user-guide/features.md    # → reference/current-capabilities.md
 docs/user-guide/updating.md    # → user-guide/configuration.md
 docs/api/README.md             # → reference/api-integration.md
 docs/development/README.md     # → development/contributing.md
 docs/development/performance.md # Remove history, keep tips in contributing.md
-docs/ROADMAP.md                # → specs/README.md (Now/Next/Later)
+docs/ROADMAP.md                # Consolidate with features/planned/README.md
 docs/studies/                  # → archive/ or delete
+```
+
+### Keep As-Is
+
+```bash
+# Future work - keep existing structure
+docs/features/planned/         # Keep all files, update README only
+docs/features/planned/README.md # Update to Now/Next/Later framing
 ```
 
 ### Scripts Decision
@@ -494,10 +504,11 @@ grep -c "category" /tmp/allium-test/misc/aroi-leaderboards.html
 
 ```bash
 # Search for history language in active docs (should return nothing)
-grep -rn "migration\|completed on\|before/after\|Q[1-4] 202[0-9]" docs/ \
+# Note: features/planned/ is excluded since roadmap docs may reference timelines
+grep -rn "migration\|completed on\|before/after" docs/ \
   --include="*.md" \
   --exclude-dir=archive \
-  --exclude-dir=specs
+  --exclude-dir=planned
 
 # If results, those docs need editing
 ```
@@ -511,37 +522,41 @@ grep -rn "migration\|completed on\|before/after\|Q[1-4] 202[0-9]" docs/ \
 1. Create `docs/STYLE.md`
 2. Create `docs/user-guide/deployment.md`
 3. Create `docs/user-guide/troubleshooting.md`
-4. Create `docs/reference/current-capabilities.md`
-5. Create `docs/reference/output-structure.md`
-6. Create `docs/reference/api-integration.md`
-7. Create `docs/specs/README.md` with Now/Next/Later structure
+4. Create `docs/reference/` directory
+5. Create `docs/reference/current-capabilities.md`
+6. Create `docs/reference/output-structure.md`
+7. Create `docs/reference/api-integration.md`
 8. Create `docs/architecture/overview.md`
 
 ### Phase 2: Fix Existing Files
 
-1. Fix `docs/user-guide/configuration.md` - correct CLI flags
+1. Fix `docs/user-guide/configuration.md` - correct CLI flags, add missing options
 2. Fix `docs/user-guide/quick-start.md` - remove broken links, fix output paths
 3. Fix `docs/development/testing.md` - remove history sections
 4. Fix `docs/development/security.md` - remove history sections
 5. Update `docs/README.md` to new navigation structure
 
-### Phase 3: Migrate Specs
+### Phase 3: Update Planned Features
 
-1. Rename `docs/features/planned/` files to remove spaces
-2. Move proposals to `docs/specs/<topic>/`
-3. Convert Q1/Q2 dates to Now/Next/Later
+1. Update `docs/features/planned/README.md` - Now/Next/Later framing (remove Q1/Q2 dates)
+2. Consolidate `docs/ROADMAP.md` content into `docs/features/planned/README.md`
+3. Fix any broken links within planned features docs
+4. Rename files with spaces (e.g., `2nd - ARCHITECTURE_COMPARISON.md` → `architecture-comparison.md`)
 
 ### Phase 4: Archive Historical
 
 1. Move `POST_MERGE_CLEANUP_COMPLETE.md` to archive
-2. Move implementation summaries to archive
-3. Update `docs/archive/README.md`
+2. Move `docs/features/implemented/` content to archive (after extracting to reference/)
+3. Move implementation summaries to archive
+4. Update `docs/archive/README.md`
 
 ### Phase 5: Delete Redundant
 
-1. Delete empty/stub files
-2. Delete duplicate content files
-3. Delete old directory structure
+1. Delete `docs/features/implemented/` (after content in reference/)
+2. Delete `docs/features/README.md` (navigation now in docs/README.md)
+3. Delete `docs/ROADMAP.md` (consolidated into features/planned/README.md)
+4. Delete empty/stub files
+5. Delete duplicate content files
 
 ### Phase 6: Verify
 
@@ -585,4 +600,4 @@ Run all verification procedures from Section 6.
 2. **Scripts**: Move `docs/scripts/*.py` to repo root, or delete?
 3. **Screenshots**: Keep in `docs/screenshots/` or move to root?
 4. **Root README**: Keep detailed (362 lines) or slim to ~100 lines linking to docs?
-5. **Spec template enforcement**: Require all specs to follow template, or allow flexibility?
+5. **Planned features cleanup**: Update Q1/Q2 dates in `features/planned/` to Now/Next/Later, or leave as-is?
