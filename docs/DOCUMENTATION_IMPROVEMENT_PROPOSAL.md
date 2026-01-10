@@ -82,18 +82,18 @@ docs/
 │
 ├── features/
 │   └── planned/                 # KEEP AS-IS: Future work, roadmap, proposals
-│       ├── README.md            # Index (update to Now/Next/Later framing)
-│       ├── milestone-*.md       # Keep existing milestone docs
-│       ├── visualizations/      # Keep existing proposals
-│       └── ...                  # All existing planned feature docs
+│       └── ...                  # All existing files untouched
 │
-└── archive/                     # Historical only (not indexed as primary)
-    └── README.md                # Index to archived materials
+└── screenshots/                 # Keep 2-3 key images
 ```
 
-**Total: ~15 core active files + features/planned/* (kept as-is)**
+**Total: ~15 core active files + features/planned/* (untouched)**
 
-**Note**: `docs/features/planned/` retained for roadmap and future proposals. Only `docs/features/implemented/` gets consolidated into `reference/current-capabilities.md`.
+**Deleted**:
+- `docs/archive/` - Git preserves history
+- `docs/scripts/` - All obsolete
+- `docs/features/implemented/` - Consolidated to reference/
+- `docs/studies/`
 
 ---
 
@@ -411,12 +411,24 @@ docs/features/planned/         # Keep all files, update README only
 docs/features/planned/README.md # Update to Now/Next/Later framing
 ```
 
-### Scripts Decision
+### Scripts Decision: DELETE ENTIRE DIRECTORY
 
-`docs/scripts/` contains 11 Python files. Options:
-1. **Move to `scripts/`** in repo root if actively used
-2. **Delete** if obsolete (verify first)
-3. **Archive** if historical reference only
+`docs/scripts/` contains 11 Python files. **Analysis result: Delete all.**
+
+| Script | Reason to Delete |
+|--------|------------------|
+| `comprehensive-validation.py` | Hardcoded paths (`/home/tor/metrics/...`), historical |
+| `memory-profiler.py` | Hardcoded paths, historical |
+| `performance-tester.py` | Hardcoded paths, historical |
+| `before-after-performance.py` | **Dangerous** - modifies code directly, historical |
+| `focused-country-benchmark.py` | Historical, optimization complete |
+| `simple-validation.py` | Hardcoded paths, historical |
+| `validate-aroi-totals.py` | Expects non-existent `allium/data.json` |
+| `validate-flag-uptime-calculations.py` | Redundant - tests exist in `tests/test_uptime_utils.py` |
+| `fix-html-injection-vulnerabilities.py` | One-time fix already applied |
+| `reporting/tier1_report_generator.py` | Historical report generator |
+
+**Action**: `rm -rf docs/scripts/`
 
 ---
 
@@ -543,20 +555,16 @@ grep -rn "migration\|completed on\|before/after" docs/ \
 3. Fix any broken links within planned features docs
 4. Rename files with spaces (e.g., `2nd - ARCHITECTURE_COMPARISON.md` → `architecture-comparison.md`)
 
-### Phase 4: Archive Historical
+### Phase 4: Delete Obsolete
 
-1. Move `POST_MERGE_CLEANUP_COMPLETE.md` to archive
-2. Move `docs/features/implemented/` content to archive (after extracting to reference/)
-3. Move implementation summaries to archive
-4. Update `docs/archive/README.md`
-
-### Phase 5: Delete Redundant
-
-1. Delete `docs/features/implemented/` (after content in reference/)
-2. Delete `docs/features/README.md` (navigation now in docs/README.md)
-3. Delete `docs/ROADMAP.md` (consolidated into features/planned/README.md)
-4. Delete empty/stub files
-5. Delete duplicate content files
+1. Delete `docs/archive/` entirely (Git preserves history)
+2. Delete `docs/scripts/` entirely (all obsolete)
+3. Delete `docs/POST_MERGE_CLEANUP_COMPLETE.md`
+4. Delete `docs/features/implemented/` (after content extracted to reference/)
+5. Delete `docs/features/README.md` (navigation now in docs/README.md)
+6. Delete `docs/ROADMAP.md` (consolidated into features/planned/README.md)
+7. Delete `docs/studies/`
+8. Delete empty/stub API docs
 
 ### Phase 6: Verify
 
@@ -594,10 +602,13 @@ Run all verification procedures from Section 6.
 
 ---
 
-## 9. Questions to Decide Before Implementation
+## 9. Decisions Made
 
-1. **Archive policy**: Keep `docs/archive/` or delete entirely (Git has history)?
-2. **Scripts**: Move `docs/scripts/*.py` to repo root, or delete?
-3. **Screenshots**: Keep in `docs/screenshots/` or move to root?
-4. **Root README**: Keep detailed (362 lines) or slim to ~100 lines linking to docs?
-5. **Planned features cleanup**: Update Q1/Q2 dates in `features/planned/` to Now/Next/Later, or leave as-is?
+| Question | Decision |
+|----------|----------|
+| **Archive policy** | Delete `docs/archive/` entirely (Git preserves history) |
+| **Scripts** | Delete `docs/scripts/` entirely (all obsolete/redundant) |
+| **Screenshots** | Keep in `docs/screenshots/` |
+| **Root README** | Keep detailed (362 lines) |
+| **Planned features** | Don't touch `docs/features/planned/` - keep as-is |
+| **Spec template** | Required for new specs only, existing planned features untouched |
