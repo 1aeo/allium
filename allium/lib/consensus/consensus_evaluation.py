@@ -710,6 +710,13 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
         else:
             return STATUS_COLORS['below']
     
+    def format_stricter_threshold(strict_auths: list, max_display: str) -> str:
+        """Format stricter threshold exception HTML snippet."""
+        if not strict_auths:
+            return ''
+        auths_str = ', '.join(strict_auths)
+        return f'<br><span style="color: #856404; font-size: 10px;">[Stricter] {auths_str}: ≥{max_display}</span>'
+    
     rows = []
     
     # Guard flag (3 rows)
@@ -796,6 +803,12 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
     else:
         mtbf_status = 'below'
         mtbf_extra = ''
+    # Build MTBF threshold with stricter exceptions
+    mtbf_threshold = f"≥{rv.get('stable_mtbf_min_display', 'N/A')} - {rv.get('stable_mtbf_typical_display', 'N/A')} (varies)"
+    mtbf_threshold += format_stricter_threshold(
+        rv.get('stable_mtbf_strict_auths', []),
+        rv.get('stable_mtbf_max_display', '')
+    )
     rows.append({
         'flag': 'Stable',
         'flag_tooltip': FLAG_TOOLTIPS['stable'],
@@ -805,7 +818,7 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
         'value': rv.get('mtbf_display', 'N/A'),
         'value_source': 'da',
         'value_source_tooltip': SOURCE_TOOLTIPS['da'],
-        'threshold': f"≥{rv.get('stable_mtbf_min_display', 'N/A')} - {rv.get('stable_mtbf_typical_display', 'N/A')} (varies)",
+        'threshold': mtbf_threshold,
         'status': mtbf_status,
         'status_text': f"{'Meets' if mtbf_status == 'meets' else 'Partial' if mtbf_status == 'partial' else 'Below'}{mtbf_extra}",
         'status_color': STATUS_COLORS[mtbf_status],
@@ -829,6 +842,12 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
     else:
         uptime_status = 'below'
         uptime_text = 'Below'
+    # Build Uptime threshold with stricter exceptions
+    uptime_threshold = f"≥{rv.get('stable_uptime_min_display', 'N/A')} - {rv.get('stable_uptime_typical_display', 'N/A')} (varies)"
+    uptime_threshold += format_stricter_threshold(
+        rv.get('stable_uptime_strict_auths', []),
+        rv.get('stable_uptime_max_display', '')
+    )
     rows.append({
         'flag': 'Stable',
         'flag_tooltip': FLAG_TOOLTIPS['stable'],
@@ -838,7 +857,7 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
         'value': rv.get('stable_uptime_display', 'N/A'),
         'value_source': 'relay',
         'value_source_tooltip': SOURCE_TOOLTIPS['relay'],
-        'threshold': f"≥{rv.get('stable_uptime_min_display', 'N/A')} - {rv.get('stable_uptime_typical_display', 'N/A')} (varies)",
+        'threshold': uptime_threshold,
         'status': uptime_status,
         'status_text': uptime_text,
         'status_color': STATUS_COLORS[uptime_status],
@@ -860,6 +879,12 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
     else:
         fast_status = 'below'
         fast_extra = ''
+    # Build Fast threshold with stricter exceptions
+    fast_threshold = f"≥{rv.get('fast_minimum_display', '100 KB/s')} (guarantee) OR top 7/8"
+    fast_threshold += format_stricter_threshold(
+        rv.get('fast_speed_strict_auths', []),
+        rv.get('fast_speed_max_display', '')
+    )
     rows.append({
         'flag': 'Fast',
         'flag_tooltip': FLAG_TOOLTIPS['fast'],
@@ -869,7 +894,7 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
         'value': rv.get('fast_speed_display', 'N/A'),
         'value_source': 'relay',
         'value_source_tooltip': SOURCE_TOOLTIPS['relay'],
-        'threshold': f"≥{rv.get('fast_minimum_display', '100 KB/s')} (guarantee) OR top 7/8",
+        'threshold': fast_threshold,
         'status': fast_status,
         'status_text': f"{'Meets' if fast_status == 'meets' else 'Partial' if fast_status == 'partial' else 'Below'}{fast_extra}",
         'status_color': STATUS_COLORS[fast_status],
@@ -899,8 +924,13 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
         'rowspan': 2,
     })
     
-    # Row 2: Time Known
+    # Row 2: Time Known - Build with stricter exceptions
     hsdir_tk_status = 'meets' if rv.get('hsdir_tk_meets') else 'below'
+    hsdir_tk_threshold = f"≥{rv.get('hsdir_tk_consensus_display', '25h')} (most)"
+    hsdir_tk_threshold += format_stricter_threshold(
+        rv.get('hsdir_tk_strict_auths', []),
+        rv.get('hsdir_tk_max_display', '10d')
+    )
     rows.append({
         'flag': 'HSDir',
         'flag_tooltip': FLAG_TOOLTIPS['hsdir'],
@@ -910,7 +940,7 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
         'value': rv.get('tk_display', 'N/A'),
         'value_source': 'da',
         'value_source_tooltip': SOURCE_TOOLTIPS['da'],
-        'threshold': f"≥{rv.get('hsdir_tk_consensus_display', '25h')} (most) / {rv.get('hsdir_tk_max_display', '10d')} (max)",
+        'threshold': hsdir_tk_threshold,
         'status': hsdir_tk_status,
         'status_text': 'Meets' if hsdir_tk_status == 'meets' else 'Below',
         'status_color': STATUS_COLORS[hsdir_tk_status],
