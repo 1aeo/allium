@@ -244,13 +244,31 @@ def _render_page_mp(args):
     return True
 
 
-def _render_page_mp_legacy(args):
-    """Legacy render function for backwards compatibility (receives full template_args)."""
-    html_path, template_args = args
-    rendered = _mp_template.render(relays=_mp_relay_set, **template_args)
-    with open(html_path, "w", encoding="utf8") as f:
-        f.write(rendered)
-    return True
+# =============================================================================
+# HELPER FUNCTIONS (DRY - used by multiple precomputation/rendering paths)
+# =============================================================================
+
+def _compute_network_position_safe(guard_count, middle_count, exit_count, total_relays):
+    """Compute network position with fallback handling.
+    
+    DRY helper that wraps IntelligenceEngine._calculate_network_position() with
+    consistent error handling. Used by precomputation workers, template builders,
+    and misc page generation.
+    
+    Args:
+        guard_count: Number of guard relays
+        middle_count: Number of middle relays  
+        exit_count: Number of exit relays
+        total_relays: Total relay count
+        
+    Returns:
+        dict: Network position with 'label' and 'formatted_string' keys
+    """
+    try:
+        return IntelligenceEngine({})._calculate_network_position(
+            guard_count, middle_count, exit_count, total_relays)
+    except Exception:
+        return {'label': 'Mixed', 'formatted_string': f'{total_relays} relays'}
 
 
 # Precomputation worker globals (for contact page data parallelization)
@@ -339,21 +357,14 @@ def _precompute_family_worker(args):
         if not members:
             return (family_hash, None)
         
-        # Pre-compute AROI validation status (the expensive operation)
-        # Check for cached validation status first
-        if "aroi_validation_full" in family_data:
-            contact_validation_status = family_data["aroi_validation_full"]
-        else:
-            contact_validation_status = _precompute_relay_set._get_contact_validation_status(members)
+        # Pre-compute AROI validation status (use cached if available)
+        contact_validation_status = (family_data.get("aroi_validation_full") or 
+                                     _precompute_relay_set._get_contact_validation_status(members))
         
-        # Pre-compute network position (moderately expensive)
-        # IntelligenceEngine imported at module level for performance
-        try:
-            network_position = IntelligenceEngine({})._calculate_network_position(
-                family_data["guard_count"], family_data["middle_count"], 
-                family_data["exit_count"], len(members))
-        except Exception:
-            network_position = {'label': 'Mixed', 'formatted_string': f'{len(members)} relays'}
+        # Pre-compute network position using DRY helper
+        network_position = _compute_network_position_safe(
+            family_data["guard_count"], family_data["middle_count"], 
+            family_data["exit_count"], len(members))
         
         # Return flat dict for direct storage on family_data
         return (family_hash, {
@@ -2295,20 +2306,14 @@ class Relays:
         if not members:
             return
         
-        # Pre-compute AROI validation status (the expensive operation)
-        if "aroi_validation_full" in family_data:
-            family_data["contact_validation_status"] = family_data["aroi_validation_full"]
-        else:
-            family_data["contact_validation_status"] = self._get_contact_validation_status(members)
+        # Pre-compute AROI validation status (use cached if available)
+        family_data["contact_validation_status"] = (family_data.get("aroi_validation_full") or 
+                                                     self._get_contact_validation_status(members))
         
-        # Pre-compute network position
-        # IntelligenceEngine imported at module level for performance
-        try:
-            family_data["network_position"] = IntelligenceEngine({})._calculate_network_position(
-                family_data["guard_count"], family_data["middle_count"], 
-                family_data["exit_count"], len(members))
-        except Exception:
-            family_data["network_position"] = {'label': 'Mixed', 'formatted_string': f'{len(members)} relays'}
+        # Pre-compute network position using DRY helper
+        family_data["network_position"] = _compute_network_position_safe(
+            family_data["guard_count"], family_data["middle_count"], 
+            family_data["exit_count"], len(members))
     
     def _precompute_families_parallel(self, family_hashes):
         """Parallel family precomputation using fork() with imap_unordered.
@@ -2752,22 +2757,10 @@ class Relays:
             middle_bandwidth = self.bandwidth_formatter.format_bandwidth_with_unit(i["middle_bandwidth"], bandwidth_unit)
             exit_bandwidth = self.bandwidth_formatter.format_bandwidth_with_unit(i["exit_bandwidth"], bandwidth_unit)
             
-            # Calculate network position using intelligence engine
-            # IntelligenceEngine imported at module level for performance
-            try:
-                intelligence = IntelligenceEngine({})  # Empty intelligence engine just for utility method
-                total_relays = len(members)
-                network_position = intelligence._calculate_network_position(
-                    i["guard_count"], i["middle_count"], i["exit_count"], total_relays
-                )
-                # Use the pre-formatted string from intelligence engine
-                network_position_display = network_position.get('formatted_string', 'unknown')
-            except Exception as e:
-                print(f"DEBUG: Network position calculation error for {k}={v}: {e}")
-                network_position = {
-                    'label': 'error',
-                    'formatted_string': f'calculation error: {str(e)}'
-                }
+            # Calculate network position using DRY helper
+            network_position = _compute_network_position_safe(
+                i["guard_count"], i["middle_count"], i["exit_count"], len(members))
+            network_position_display = network_position.get('formatted_string', 'unknown')
             
             # Generate page context with correct breadcrumb data
             page_ctx = self.get_detail_page_context(k, v)
@@ -2931,16 +2924,9 @@ class Relays:
         bw = self.bandwidth_formatter
         bw_unit = bw.determine_unit(i["bandwidth"])
         
-        # Use precomputed network_position if available (family pages precompute this)
-        # Otherwise calculate it (for non-family pages or fallback)
-        network_position = i.get("network_position")
-        if network_position is None:
-            # IntelligenceEngine imported at module level for performance
-            try:
-                network_position = IntelligenceEngine({})._calculate_network_position(
-                    i["guard_count"], i["middle_count"], i["exit_count"], len(members))
-            except Exception:
-                network_position = {'label': 'Mixed', 'formatted_string': f'{len(members)} relays'}
+        # Use precomputed network_position if available, otherwise calculate using DRY helper
+        network_position = i.get("network_position") or _compute_network_position_safe(
+            i["guard_count"], i["middle_count"], i["exit_count"], len(members))
         
         # Default values for all page types
         contact_rankings = []

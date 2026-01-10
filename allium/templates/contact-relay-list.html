@@ -40,7 +40,7 @@
 {# =============================================================================
    MACRO: Render relay table header (DRY - used by all sections)
    ============================================================================= #}
-{% macro relay_table_header(relay_list_for_ipv6_check) -%}
+{% macro relay_table_header(table_has_ipv6) -%}
 <tr>
     <th></th>
     <th>Nickname</th>
@@ -56,18 +56,7 @@
     <th>Platform</th>
     <th>First Seen</th>
     <th>Last Restarted</th>
-    {# Check if any relay has IPv6 #}
-    {% set has_ipv6 = [] -%}
-    {% for relay in relay_list_for_ipv6_check -%}
-        {% if relay.get('or_addresses') -%}
-            {% for addr in relay['or_addresses'] -%}
-                {% if ':' in addr and addr.count(':') > 1 -%}
-                    {% set _ = has_ipv6.append(true) -%}
-                {% endif -%}
-            {% endfor -%}
-        {% endif -%}
-    {% endfor -%}
-    {% if has_ipv6 -%}
+    {% if table_has_ipv6 -%}
     <th>IPv6</th>
     {% endif -%}
 </tr>
@@ -269,7 +258,7 @@
 {% set section1_has_ipv6 = section1_relays|selectattr('ipv6_support', 'equalto', 'both')|list|length > 0 or section1_relays|selectattr('ipv6_support', 'equalto', 'ipv6_only')|list|length > 0 %}
 {{ aroi_section_header('VALIDATED RELAYS', contact_validation_status.validated_relays|length, 'validated') }}
 <table class="table table-condensed" style="border-left: 3px solid #28a745;">
-{{ relay_table_header(section1_relays) }}
+{{ relay_table_header(section1_has_ipv6) }}
 <tbody>
     {% for relay_info in contact_validation_status.validated_relays -%}
         {{ relay_row(relay_info.relay, show_validation_icon=true, validation_icon_type='validated', table_has_ipv6=section1_has_ipv6) }}
@@ -285,7 +274,7 @@
 {% set section2_has_ipv6 = section2_relays|selectattr('ipv6_support', 'equalto', 'both')|list|length > 0 or section2_relays|selectattr('ipv6_support', 'equalto', 'ipv6_only')|list|length > 0 %}
 {{ aroi_section_header('MISCONFIGURED RELAYS', contact_validation_status.misconfigured_relays|length, 'misconfigured') }}
 <table class="table table-condensed" style="border-left: 3px solid #ffc107;">
-{{ relay_table_header(section2_relays) }}
+{{ relay_table_header(section2_has_ipv6) }}
 <tbody>
     {% for relay_info in contact_validation_status.misconfigured_relays -%}
         {{ relay_row(relay_info.relay, show_validation_icon=true, validation_icon_type='misconfigured', table_has_ipv6=section2_has_ipv6) }}
@@ -302,7 +291,7 @@
 {% set section3_has_ipv6 = section3_relays|selectattr('ipv6_support', 'equalto', 'both')|list|length > 0 or section3_relays|selectattr('ipv6_support', 'equalto', 'ipv6_only')|list|length > 0 %}
 {{ aroi_section_header('UNAUTHORIZED RELAYS', contact_validation_status.unauthorized_relays|length, 'unauthorized') }}
 <table class="table table-condensed" style="border-left: 3px dashed #dc3545;">
-{{ relay_table_header(section3_relays) }}
+{{ relay_table_header(section3_has_ipv6) }}
 <tbody>
     {% for relay_info in contact_validation_status.unauthorized_relays -%}
         {{ relay_row(relay_info.relay, show_validation_icon=true, validation_icon_type='unauthorized', table_has_ipv6=section3_has_ipv6) }}
@@ -320,7 +309,7 @@
 {% set section4_has_ipv6 = section4_relays|selectattr('ipv6_support', 'equalto', 'both')|list|length > 0 or section4_relays|selectattr('ipv6_support', 'equalto', 'ipv6_only')|list|length > 0 %}
 {{ aroi_section_header('NOT CONFIGURED RELAYS', not_configured_combined|length, 'not_configured') }}
 <table class="table table-condensed" style="border-left: 3px solid #6c757d;">
-{{ relay_table_header(section4_relays) }}
+{{ relay_table_header(section4_has_ipv6) }}
 <tbody>
     {% for relay_info in not_configured_combined -%}
         {{ relay_row(relay_info.relay, show_validation_icon=true, validation_icon_type='not_configured', table_has_ipv6=section4_has_ipv6) }}
@@ -334,207 +323,17 @@
 {% else %}
 {# =============================================================================
    SINGLE TABLE LAYOUT (original behavior for operators without AROI)
+   DRY: Reuses relay_table_header and relay_row macros
    ============================================================================= #}
+{% set relay_list = relay_subset[:500] if is_index else relay_subset %}
+{% set single_table_has_ipv6 = relay_list|selectattr('ipv6_support', 'equalto', 'both')|list|length > 0 or relay_list|selectattr('ipv6_support', 'equalto', 'ipv6_only')|list|length > 0 %}
 <table class="table table-condensed">
-<tr>
-    <th></th>
-    <th>Nickname</th>
-    <th title="Observed bandwidth capacity: An estimate of the capacity this relay can handle. The relay remembers the max bandwidth sustained output over any ten second period in the past 5 days, and another sustained input. The observed value is the lesser of these two numbers.">BW Cap ({{ bandwidth }} {{ bandwidth_unit }})</th>
-    <th>Uptime/Downtime</th>
-    <th title="{% if contact_display_data and contact_display_data.outliers and contact_display_data.outliers.tooltip %}{{ contact_display_data.outliers.tooltip }}{% else %}Statistical outliers: ≥2σ from average{% endif %}">Uptime (1M/6M/1Y/5Y)</th>
-    <th title="Flag-specific uptime percentages showing the reliability of this relay when operating in its primary network role. Priority: Exit > Guard > Fast > Running flags.">Flag Uptime (1M/6M/1Y/5Y)</th>
-    <th>IPv4</th>
-    <th>Flags</th>
-    <th>Country</th>
-    <th>AS Number</th>
-    <th>AS Name</th>
-    <th>Platform</th>
-    <th>First Seen</th>
-    <th>Last Restarted</th>
-    {# PERF: Use pre-computed ipv6_support field (O(n) instead of O(n) nested loops) #}
-    {% if is_index -%}
-	{% set relay_list_check = relay_subset[:500] -%}
-    {% else -%}
-	{% set relay_list_check = relay_subset -%}
-    {% endif -%}
-    {% set has_ipv6 = relay_list_check|selectattr('ipv6_support', 'equalto', 'both')|list|length > 0 or relay_list_check|selectattr('ipv6_support', 'equalto', 'ipv6_only')|list|length > 0 -%}
-    {% if has_ipv6 -%}
-    <th>IPv6</th>
-    {% endif -%}
-</tr>
+{{ relay_table_header(single_table_has_ipv6) }}
 <tbody>
-    {% if is_index -%}
-	{% set relay_list = relay_subset[:500] -%}
-    {% else -%}
-	{% set relay_list = relay_subset -%}
-    {% endif -%}
     {% for relay in relay_list -%}
-	<tr>
-	    {% set obs_unit = relay['observed_bandwidth']|determine_unit(relays.use_bits) -%}
-	    {% set obs_bandwidth = relay['observed_bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
-	    <td>
-		{% if relay['running'] -%}
-		    <span class="circle circle-online" title="This relay is online"></span>
-		{% else -%}
-		    <span class="circle circle-offline" title="This relay is offline"></span>
-		{% endif -%}
-		{{- aroi_validation_icon(relay['fingerprint'], relay['aroi_domain'], validated_fps, unauthorized_fps, misconfigured_fps) }}
-	    </td>
-	    {% if relay['effective_family']|length > 1 -%}
-		<td title="{{ relay['nickname']|escape }}">
-		    <a href="{{ page_ctx.path_prefix }}relay/{{ relay['fingerprint']|escape }}/">{{ relay['nickname']|truncate(14)|escape
-			}}</a> (<a href="{{ page_ctx.path_prefix }}family/{{ relay['fingerprint']|escape }}/">{{
-			relay['effective_family']| length }}</a>)</td>
-		{% else -%}
-		    <td title="{{ relay['nickname']|escape }}">
-			<a href="{{ page_ctx.path_prefix }}relay/{{ relay['fingerprint']|escape }}/">{{ relay['nickname']|truncate(14)|escape
-			}}</a></td>
-		{% endif -%}
-		<td>
-		    {{ obs_bandwidth }} {{ obs_unit }}
-		    {% if relay['measured'] is not none -%}
-		        {% if relay['measured'] -%}
-		            &nbsp;&nbsp;<span style="color: #28a745; font-weight: bold;" title="Bandwidth measured by ≥3 bandwidth authorities">✓</span>
-		        {% else -%}
-		            &nbsp;&nbsp;<span style="color: #dc3545; font-weight: bold;" title="Bandwidth not measured by ≥3 bandwidth authorities">✗</span>
-		        {% endif -%}
-		    {% else -%}
-		        &nbsp;&nbsp;<span style="color: #6c757d;" title="Bandwidth measurement status unknown">?</span>
-		    {% endif -%}
-		</td>
-		<td>
-		    {% if relay.get('uptime_display') -%}
-		        {% if relay['uptime_display'].startswith('DOWN') -%}
-		            <span style="color: #dc3545;">{{ relay['uptime_display']|escape }}</span>
-		        {% else -%}
-		            {{ relay['uptime_display']|escape }}
-		        {% endif -%}
-		    {% else -%}
-		        N/A
-		    {% endif -%}
-		</td>
-		<td>
-		    {% if relay.get('uptime_api_display') -%}
-		        {{ relay['uptime_api_display']|safe }}
-		    {% else -%}
-		        N/A
-		    {% endif -%}
-		</td>
-		<td>
-		    {% if relay.get('flag_uptime_display') and relay['flag_uptime_display'] != 'N/A' -%}
-		        <span title="{{ relay['flag_uptime_tooltip']|escape }}">{{ relay['flag_uptime_display']|safe }}</span>
-		    {% else -%}
-		        N/A
-		    {% endif -%}
-		</td>
-		<td>
-		    {% if relay.get('or_addresses') and relay['or_addresses']|length > 0 -%}
-		        {% set ipv4_addr = relay['or_addresses'][0].split(':', 1)[0] -%}
-		        <a href="https://bgp.tools/prefix/{{ ipv4_addr|escape }}">{{ ipv4_addr|escape }}</a>
-		    {% else -%}
-		        N/A
-		    {% endif -%}
-		</td>
-		{# PERF: Use pre-rendered flags HTML from Python (eliminates Jinja2 loop) - THE KEY OPTIMIZATION #}
-		<td>{{ relay['_flags_html']|replace('{path}', page_ctx.path_prefix)|safe }}</td>
-		{% if relay['country'] -%}
-		    {% if key != 'country' -%}
-			<td>
-			    <a href="{{ page_ctx.path_prefix }}country/{{ relay['country']|escape }}/">
-				<img src="{{ page_ctx.path_prefix }}static/images/cc/{{ relay['country']|lower|escape }}.png"
-				     title="{{ relay['country_name']|escape }}"
-				     alt="{{ relay['country_name']|escape }}">
-			    {{ relay['country']|escape }}
-			    </a>
-			</td>
-		    {% else -%}
-			<td>
-			    <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ relay['country']|lower|escape }}.png"
-				 title="{{ relay['country_name']|escape }}"
-				 alt="{{ relay['country_name']|escape }}">
-			    {{ relay['country_name']|escape }}
-			</td>
-		    {% endif -%}
-		{% else -%}
-		    <td>X</td>
-		{% endif -%}
-		{% if relay['as'] -%}
-		    {% if key != 'as' -%}
-			<td>
-			    <a href="{{ page_ctx.path_prefix }}as/{{ relay['as']|escape }}/">{{
-			    relay['as']|escape }}</a>
-			</td>
-		    {% else -%}
-			<td>{{ relay['as']|escape }}</td>
-		    {% endif -%}
-		{% else -%}
-		    <td>Unknown</td>
-		{% endif -%}
-		{% if relay['as_name'] -%}
-		    <td>
-			<a href="https://bgp.tools/{{ relay['as']|escape }}"
-			   title="{{ relay['as_name']|escape }}">{{
-			relay['as_name']|escape|truncate(length=20) }}</a>
-		    </td>
-		{% else -%}
-		    <td>Unknown</td>
-		{% endif -%}
-		{% if key != 'platform' -%}
-		    <td>
-			<a href="{{ page_ctx.path_prefix }}platform/{{ relay['platform']|escape }}/">{{
-			relay['platform']|truncate(length=10)|escape }}</a>
-		    </td>
-		{% else -%}
-		    <td>{{ relay['platform']|truncate(length=10)|escape }}</td>
-		{% endif -%}
-		{% if key != 'first_seen' -%}
-		    <td>
-			<a href="{{ page_ctx.path_prefix }}first_seen/{{ relay['first_seen_date_escaped'] }}/" title="{{ relay['first_seen'].split(' ', 1)[0]|escape }}">
-			    {% if relay['first_seen'] -%}
-			        {{ relay['first_seen']|format_time_ago }}
-			    {% else -%}
-			        unknown
-			    {% endif -%}
-			</a>
-		    </td>
-		{% else -%}
-		    <td title="{{ relay['first_seen'].split(' ', 1)[0]|escape }}">
-			{% if relay['first_seen'] -%}
-			    {{ relay['first_seen']|format_time_ago }}
-			{% else -%}
-			    unknown
-			{% endif -%}
-		    </td>
-		{% endif -%}
-		<td title="{% if relay['last_restarted'] -%}{{ relay['last_restarted'].split(' ', 1)[0]|escape }}{% else -%}unknown{% endif -%}">
-		    {% if relay['last_restarted'] -%}
-		        {{ relay['last_restarted']|format_time_ago }}
-		    {% else -%}
-		        unknown
-		    {% endif -%}
-		</td>
-		{% if has_ipv6 -%}
-		<td>
-		    {% set ipv6_found = false -%}
-		    {% set ipv6_addr = '' -%}
-		    {% if relay.get('or_addresses') -%}
-		        {% for addr in relay['or_addresses'] -%}
-		            {% if ':' in addr and addr.count(':') > 1 and not ipv6_found -%}
-		                {% set ipv6_addr = addr.split(']')[0].lstrip('[') -%}
-		                {% set ipv6_found = true -%}
-		            {% endif -%}
-		        {% endfor -%}
-		    {% endif -%}
-		    {% if ipv6_found -%}
-		        {{ ipv6_addr|escape }}
-		    {% else -%}
-		        N/A
-		    {% endif -%}
-		</td>
-		{% endif -%}
-	    </tr>
-	{% endfor -%}
-    </tbody>
+        {{ relay_row(relay, show_validation_icon=true, table_has_ipv6=single_table_has_ipv6) }}
+    {% endfor -%}
+</tbody>
 </table>
 {% endif %}
 
