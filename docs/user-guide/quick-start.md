@@ -23,17 +23,26 @@ curl -sSL https://raw.githubusercontent.com/1aeo/allium/master/setup.sh | bash
 
 ```bash
 git clone https://github.com/1aeo/allium.git
-cd allium
+cd allium                              # Enter repository root
 pip3 install -r config/requirements.txt
-cd allium
+cd allium                              # Enter Python module directory
 python3 allium.py --progress
 ```
 
+> **Note**: The repository is named `allium` and contains a subdirectory also named `allium/` (the Python module). You need to `cd` twice to reach the executable.
+
 ## First Run
 
+From the Python module directory (`allium/allium/`):
+
 ```bash
-cd allium
 python3 allium.py --progress
+```
+
+Or from the repository root (`allium/`):
+
+```bash
+python3 allium/allium.py --progress
 ```
 
 Generation takes 2-5 minutes. Output goes to `www/`.
@@ -87,7 +96,7 @@ python3 allium.py --help
 |-------|----------|
 | "Jinja2 not found" | `pip3 install -r config/requirements.txt` |
 | "Permission denied" | `python3 allium.py --out ~/allium-output` |
-| "No module named 'lib'" | Run from `allium/` directory: `cd allium` |
+| "No module named 'lib'" | Run from repo root: `python3 allium/allium.py` |
 | Out of memory | `python3 allium.py --apis details` |
 
 ## Next Steps

@@ -5,8 +5,15 @@
 
 ## CLI Reference
 
+From the repository root:
+
 ```bash
-cd allium
+python3 allium/allium.py [options]
+```
+
+Or from the Python module directory (`allium/allium/`):
+
+```bash
 python3 allium.py [options]
 ```
 
@@ -25,7 +32,7 @@ python3 allium.py [options]
 | `--bandwidth-cache-hours` | `12` | Hours to cache bandwidth data |
 | `--apis` | `all` | `details` (~400MB) or `all` (~2.4GB) |
 | `--filter-downtime` | `7` | Filter relays offline >N days (0=disable) |
-| `--workers` | `4` | Parallel workers (0=disable multiprocessing) |
+| `--workers` | auto | Parallel workers (auto-detected CPU count, min 4; use 0 to disable multiprocessing) |
 
 ## Common Profiles
 
@@ -73,20 +80,20 @@ No progress output, suitable for cron.
 
 ```bash
 crontab -e
-# Add:
-0 */6 * * * cd /path/to/allium && python3 allium.py --out /var/www/tor-metrics >> /var/log/allium.log 2>&1
+# Add (from repository root):
+0 */6 * * * cd /path/to/allium && python3 allium/allium.py --out /var/www/tor-metrics >> /var/log/allium.log 2>&1
 ```
 
 ### Daily at 3 AM
 
 ```bash
-0 3 * * * cd /path/to/allium && python3 allium.py --out /var/www/tor-metrics
+0 3 * * * cd /path/to/allium && python3 allium/allium.py --out /var/www/tor-metrics
 ```
 
 ### Low Memory Cron
 
 ```bash
-0 */6 * * * cd /path/to/allium && python3 allium.py --apis details --out /var/www/tor-metrics
+0 */6 * * * cd /path/to/allium && python3 allium/allium.py --apis details --out /var/www/tor-metrics
 ```
 
 ### Cron Tips
@@ -99,17 +106,17 @@ crontab -e
 ## Virtual Environment
 
 ```bash
-cd allium
+cd allium                              # Repository root
 python3 -m venv venv
 source venv/bin/activate
 pip install -r config/requirements.txt
-python3 allium.py --progress
+python3 allium/allium.py --progress
 ```
 
 For cron with venv:
 
 ```bash
-0 */6 * * * cd /path/to/allium && source venv/bin/activate && python3 allium.py --out /var/www/tor-metrics
+0 */6 * * * cd /path/to/allium && source venv/bin/activate && python3 allium/allium.py --out /var/www/tor-metrics
 ```
 
 ## Performance Tuning

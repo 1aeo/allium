@@ -6,8 +6,11 @@
 ## Quick Deploy
 
 ```bash
-# Generate site
-cd allium && python3 allium.py --out /var/www/tor-metrics --progress
+# Generate site (from repository root)
+python3 allium/allium.py --out /var/www/tor-metrics --progress
+
+# Or from the Python module directory (allium/allium/)
+python3 allium.py --out /var/www/tor-metrics --progress
 
 # Serve (development)
 cd /var/www/tor-metrics && python3 -m http.server 8000
@@ -88,7 +91,7 @@ git push
 ### Basic Setup
 
 1. Connect repository to Cloudflare Pages
-2. Set build command: `cd allium && python3 allium.py --out ../public`
+2. Set build command: `python3 allium/allium.py --out ./public`
 3. Set output directory: `public`
 
 ### Search Function
@@ -131,11 +134,11 @@ export async function onRequest(context) {
 ## Automated Updates (Cron)
 
 ```bash
-# Update every 6 hours
-0 */6 * * * cd /path/to/allium && python3 allium.py --out /var/www/tor-metrics >> /var/log/allium.log 2>&1
+# Update every 6 hours (from repository root)
+0 */6 * * * cd /path/to/allium && python3 allium/allium.py --out /var/www/tor-metrics >> /var/log/allium.log 2>&1
 
 # Update daily at 3 AM
-0 3 * * * cd /path/to/allium && python3 allium.py --out /var/www/tor-metrics
+0 3 * * * cd /path/to/allium && python3 allium/allium.py --out /var/www/tor-metrics
 ```
 
 ### Memory Considerations
@@ -144,7 +147,7 @@ For cron jobs on memory-constrained systems:
 
 ```bash
 # Low memory mode (~400MB)
-0 */6 * * * cd /path/to/allium && python3 allium.py --apis details --out /var/www/tor-metrics
+0 */6 * * * cd /path/to/allium && python3 allium/allium.py --apis details --out /var/www/tor-metrics
 ```
 
 ## Disk Space

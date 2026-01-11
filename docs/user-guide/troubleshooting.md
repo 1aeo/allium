@@ -36,9 +36,13 @@ python3 --version  # Check current version
 ModuleNotFoundError: No module named 'lib'
 ```
 
-**Solution**: Run from the correct directory:
+**Solution**: Run from the correct directory. Either:
 ```bash
-cd allium  # Must be in the allium/ subdirectory
+# From repository root:
+python3 allium/allium.py --progress
+
+# Or from the Python module directory (allium/allium/):
+cd allium/allium
 python3 allium.py --progress
 ```
 
@@ -78,7 +82,7 @@ python3 allium.py --apis details --progress  # ~400MB instead of ~2.4GB
 
 **Solution 2**: Reduce parallel workers:
 ```bash
-python3 allium.py --workers 2 --progress  # Default is 4
+python3 allium.py --workers 2 --progress  # Default is auto-detected CPU count (min 4)
 ```
 
 **Solution 3**: Add swap space:
