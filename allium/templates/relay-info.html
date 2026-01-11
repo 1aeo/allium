@@ -512,7 +512,7 @@ Country: unknown
         {% endif %}
         <td title="{{ row.metric_tooltip }}">{{ row.metric }}</td>
         <td><span style="color: {{ row.status_color }}; font-weight: bold;" title="{{ row.status_tooltip }}">{{ row.status_text }}</span></td>
-        <td>{{ row.value }} <span style="color: #6c757d; font-size: 10px;" title="{{ row.value_source_tooltip }}">({{ 'DA' if row.value_source == 'da' else 'R' }})</span></td>
+        <td>{{ row.value|safe }}</td>
         <td>{{ row.threshold|safe }}</td>
     </tr>
     {% endfor %}
