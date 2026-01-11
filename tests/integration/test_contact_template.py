@@ -16,7 +16,7 @@ class TestContactTemplateIntegration(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures."""
         # Set up Jinja2 environment
-        template_dir = os.path.join(os.path.dirname(__file__), '..', 'allium', 'templates')
+        template_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'allium', 'templates')
         self.jinja_env = Environment(
             loader=FileSystemLoader(template_dir),
             autoescape=select_autoescape(['html', 'xml'])

@@ -17,7 +17,7 @@ class TestAROIPaginationSystem(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures."""
         # Set up Jinja2 environment
-        template_dir = os.path.join(os.path.dirname(__file__), '..', 'allium', 'templates')
+        template_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'allium', 'templates')
         self.jinja_env = Environment(
             loader=FileSystemLoader(template_dir),
             autoescape=select_autoescape(['html', 'xml'])
@@ -271,7 +271,7 @@ class TestAROIPaginationSystem(unittest.TestCase):
     def test_skeleton_css_integration(self):
         """Test that pagination system integrates with skeleton.html CSS."""
         # Read skeleton.html to verify CSS classes are defined
-        skeleton_path = os.path.join(os.path.dirname(__file__), '..', 'allium', 'templates', 'skeleton.html')
+        skeleton_path = os.path.join(os.path.dirname(__file__), '..', '..', 'allium', 'templates', 'skeleton.html')
         with open(skeleton_path, 'r') as f:
             skeleton_content = f.read()
         
@@ -376,7 +376,7 @@ class TestPaginationIntegration(unittest.TestCase):
         relays.use_bits = False
         
         # Test that the pagination system works with real-world data structures
-        template_dir = os.path.join(os.path.dirname(__file__), '..', 'allium', 'templates')
+        template_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'allium', 'templates')
         jinja_env = Environment(
             loader=FileSystemLoader(template_dir),
             autoescape=select_autoescape(['html', 'xml'])

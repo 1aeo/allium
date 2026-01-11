@@ -26,7 +26,8 @@ REQUIRED_CSS_CLASSES = ['section-header', 'anchor-link']
 @pytest.fixture(scope="module")
 def template_content():
     """Load template content once for all tests in this module."""
-    template_path = Path(__file__).parent.parent / "allium" / "templates" / "relay-info.html"
+    # Go up from tests/unit/templates/ to project root
+    template_path = Path(__file__).parent.parent.parent.parent / "allium" / "templates" / "relay-info.html"
     with open(template_path, 'r') as f:
         return f.read()
 

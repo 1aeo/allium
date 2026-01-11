@@ -6,6 +6,10 @@ import pytest
 from jinja2 import Environment, FileSystemLoader, TemplateSyntaxError
 
 
+# Project root relative to this file (tests/unit/infrastructure/)
+PROJECT_ROOT = os.path.join(os.path.dirname(__file__), '..', '..', '..')
+
+
 def test_jinja2_dependency_import_succeeds_without_errors():
     """Test that Jinja2 can be imported successfully"""
     from jinja2 import Environment
@@ -14,13 +18,13 @@ def test_jinja2_dependency_import_succeeds_without_errors():
 
 def test_templates_directory_exists_at_expected_path():
     """Test that the templates directory exists"""
-    template_dir = os.path.join(os.path.dirname(__file__), '..', 'allium', 'templates')
+    template_dir = os.path.join(PROJECT_ROOT, 'allium', 'templates')
     assert os.path.exists(template_dir), f"Template directory not found: {template_dir}"
 
 
 def test_all_jinja2_templates_have_valid_syntax_without_errors():
     """Validate that all Jinja2 templates have correct syntax"""
-    template_dir = os.path.join(os.path.dirname(__file__), '..', 'allium', 'templates')
+    template_dir = os.path.join(PROJECT_ROOT, 'allium', 'templates')
     
     if not os.path.exists(template_dir):
         pytest.skip("Template directory not found")
@@ -53,7 +57,7 @@ def test_all_jinja2_templates_have_valid_syntax_without_errors():
 
 def test_main_allium_script_file_exists_at_expected_location():
     """Test that the main allium.py file exists"""
-    allium_file = os.path.join(os.path.dirname(__file__), '..', 'allium', 'allium.py')
+    allium_file = os.path.join(PROJECT_ROOT, 'allium', 'allium.py')
     assert os.path.exists(allium_file), "Main allium.py file not found"
 
 
@@ -71,7 +75,7 @@ def test_aroileaders_module_import_succeeds_with_expected_functions():
 
 def test_requirements_file_exists_and_contains_required_dependencies():
     """Test that requirements.txt exists and has content"""
-    req_file = os.path.join(os.path.dirname(__file__), '..', 'config', 'requirements.txt')
+    req_file = os.path.join(PROJECT_ROOT, 'config', 'requirements.txt')
     assert os.path.exists(req_file), "requirements.txt not found"
     
     with open(req_file, 'r') as f:

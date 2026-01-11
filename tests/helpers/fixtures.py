@@ -20,7 +20,7 @@ from unittest.mock import Mock, MagicMock, patch
 from allium.lib.relays import Relays
 
 # For backward compatibility with any code that uses ALLIUM_ROOT
-ALLIUM_ROOT = os.path.join(os.path.dirname(__file__), '..')
+ALLIUM_ROOT = os.path.join(os.path.dirname(__file__), '..', '..')
 
 
 class TestDataFactory:

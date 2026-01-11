@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import Mock, patch, MagicMock
 
 # Import consolidated test utilities
-from test_utils import TestDataFactory, TestSetupHelpers, TestPatchingHelpers
+from helpers.fixtures import TestDataFactory, TestSetupHelpers, TestPatchingHelpers
 from allium.lib.relays import Relays
 
 

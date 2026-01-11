@@ -10,7 +10,7 @@ import urllib.error
 from unittest.mock import patch, MagicMock
 
 # Import consolidated test utilities
-from test_utils import TestDataFactory, TestPatchingHelpers
+from helpers.fixtures import TestDataFactory, TestPatchingHelpers
 from allium.lib.coordinator import Coordinator, create_relay_set_with_coordinator
 from allium.lib.workers import fetch_onionoo_details, get_worker_status
 from allium.lib.relays import Relays
