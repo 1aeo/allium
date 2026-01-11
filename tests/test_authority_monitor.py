@@ -12,15 +12,10 @@ Current directory authorities (as of 2025):
 """
 
 import pytest
-from unittest.mock import Mock, patch, MagicMock
-import sys
-import os
 from datetime import datetime
+from unittest.mock import Mock, patch, MagicMock
 
-# Add parent directory to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'allium', 'lib'))
-
-from consensus.authority_monitor import (
+from allium.lib.consensus.authority_monitor import (
     AuthorityMonitor,
     DEFAULT_AUTHORITY_ENDPOINTS,
 )

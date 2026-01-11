@@ -8,13 +8,8 @@ Updated for new categorization system:
 - Relay categories: validated | unauthorized | misconfigured | incomplete_* | not_configured_*
 """
 
-import os
-import sys
 import unittest
 from unittest.mock import Mock
-
-# Add allium to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from allium.lib.aroi_validation import (
     calculate_aroi_validation_metrics,

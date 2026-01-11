@@ -2,16 +2,11 @@
 Tests for lib/workers.py collector-related functions.
 """
 
-import os
-import sys
 import pytest
-from unittest.mock import patch, MagicMock
 from datetime import datetime, timedelta
+from unittest.mock import patch, MagicMock
 
-# Add the allium package to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'allium'))
-
-from lib.workers import (
+from allium.lib.workers import (
     fetch_collector_consensus_data,
     fetch_consensus_health,
     _validate_collector_cache,
@@ -25,14 +20,14 @@ class TestFetchCollectorConsensusData:
         """Test that the function exists and is callable."""
         assert callable(fetch_collector_consensus_data)
     
-    @patch('lib.workers._cache_manager')
-    @patch('lib.workers._mark_ready')
+    @patch('allium.lib.workers._cache_manager')
+    @patch('allium.lib.workers._mark_ready')
     def test_returns_data_dict(self, mock_mark_ready, mock_cache_manager):
         """Test that function returns a dict with expected structure."""
         # Mock that feature is enabled
-        with patch('lib.consensus.is_consensus_evaluation_enabled', return_value=True):
+        with patch('allium.lib.consensus.is_consensus_evaluation_enabled', return_value=True):
             # Mock the CollectorFetcher class
-            with patch('lib.consensus.CollectorFetcher') as MockFetcher:
+            with patch('allium.lib.consensus.CollectorFetcher') as MockFetcher:
                 mock_instance = MagicMock()
                 mock_instance.fetch_all.return_value = {
                     'votes': {'moria1': {}},
@@ -52,7 +47,7 @@ class TestFetchCollectorConsensusData:
                 # Should return dict or None (on error)
                 assert result is None or isinstance(result, dict)
     
-    @patch('lib.workers._cache_manager')
+    @patch('allium.lib.workers._cache_manager')
     def test_uses_cached_data_if_fresh(self, mock_cache_manager):
         """Test that function uses cache if data is fresh."""
         # Mock fresh cache
@@ -65,8 +60,8 @@ class TestFetchCollectorConsensusData:
         }
         mock_cache_manager.load_cache.return_value = cached_data
         
-        with patch('lib.workers._mark_ready'):
-            with patch('lib.consensus.is_consensus_evaluation_enabled', return_value=True):
+        with patch('allium.lib.workers._mark_ready'):
+            with patch('allium.lib.consensus.is_consensus_evaluation_enabled', return_value=True):
                 result = fetch_collector_consensus_data()
                 
                 # Should use cached data without fetching
@@ -80,11 +75,11 @@ class TestFetchConsensusHealth:
         """Test that the function exists and is callable."""
         assert callable(fetch_consensus_health)
     
-    @patch('lib.workers._mark_ready')
+    @patch('allium.lib.workers._mark_ready')
     def test_returns_dict_or_none(self, mock_mark_ready):
         """Test that function returns a dict with expected structure."""
-        with patch('lib.consensus.is_consensus_evaluation_enabled', return_value=True):
-            with patch('lib.consensus.AuthorityMonitor') as MockMonitor:
+        with patch('allium.lib.consensus.is_consensus_evaluation_enabled', return_value=True):
+            with patch('allium.lib.consensus.AuthorityMonitor') as MockMonitor:
                 mock_instance = MagicMock()
                 mock_instance.check_all_authorities.return_value = {
                     'moria1': {'online': True, 'latency_ms': 50},
@@ -154,13 +149,13 @@ class TestFeatureFlagIntegration:
     
     def test_disabled_feature_returns_none(self):
         """Test that disabled feature returns None."""
-        with patch('lib.consensus.is_consensus_evaluation_enabled', return_value=False):
+        with patch('allium.lib.consensus.is_consensus_evaluation_enabled', return_value=False):
             result = fetch_collector_consensus_data()
             assert result is None
     
     def test_health_disabled_returns_none(self):
         """Test that disabled feature returns None for health check."""
-        with patch('lib.consensus.is_consensus_evaluation_enabled', return_value=False):
+        with patch('allium.lib.consensus.is_consensus_evaluation_enabled', return_value=False):
             result = fetch_consensus_health()
             assert result is None
 
@@ -168,15 +163,15 @@ class TestFeatureFlagIntegration:
 class TestErrorHandling:
     """Tests for error handling in collector workers."""
     
-    @patch('lib.workers._cache_manager')
-    @patch('lib.workers._mark_stale')
+    @patch('allium.lib.workers._cache_manager')
+    @patch('allium.lib.workers._mark_stale')
     def test_fetch_collector_handles_exception(self, mock_mark_stale, mock_cache_manager):
         """Test that fetch_collector_consensus_data handles exceptions gracefully."""
         mock_cache_manager.get_cache_age.return_value = 7200  # Force fetch
         mock_cache_manager.load_cache.return_value = None  # No fallback cache
         
-        with patch('lib.consensus.is_consensus_evaluation_enabled', return_value=True):
-            with patch('lib.consensus.CollectorFetcher') as MockFetcher:
+        with patch('allium.lib.consensus.is_consensus_evaluation_enabled', return_value=True):
+            with patch('allium.lib.consensus.CollectorFetcher') as MockFetcher:
                 MockFetcher.side_effect = Exception('Network error')
                 
                 # Should not raise, should return None
@@ -186,11 +181,11 @@ class TestErrorHandling:
                 # Should mark as stale
                 mock_mark_stale.assert_called()
     
-    @patch('lib.workers._mark_stale')
+    @patch('allium.lib.workers._mark_stale')
     def test_fetch_health_handles_exception(self, mock_mark_stale):
         """Test that fetch_consensus_health handles exceptions gracefully."""
-        with patch('lib.consensus.is_consensus_evaluation_enabled', return_value=True):
-            with patch('lib.consensus.AuthorityMonitor') as MockMonitor:
+        with patch('allium.lib.consensus.is_consensus_evaluation_enabled', return_value=True):
+            with patch('allium.lib.consensus.AuthorityMonitor') as MockMonitor:
                 MockMonitor.side_effect = Exception('Network error')
                 
                 # Should not raise, should return None

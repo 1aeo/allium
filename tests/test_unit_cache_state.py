@@ -4,15 +4,11 @@ Unit tests for cache and state management in Phase 1 API system
 import json
 import os
 import pytest
-import sys
 import tempfile
 import time
 import threading
 from pathlib import Path
 from unittest.mock import patch, MagicMock
-
-# Add the allium directory to Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'allium'))
 
 
 class TestCacheManagement:
@@ -28,8 +24,8 @@ class TestCacheManagement:
             assert not os.path.exists(cache_dir)
             
             # Import workers module with patched directories
-            with patch('lib.workers.CACHE_DIR', cache_dir):
-                with patch('lib.workers.DATA_DIR', data_dir):
+            with patch('allium.lib.workers.CACHE_DIR', cache_dir):
+                with patch('allium.lib.workers.DATA_DIR', data_dir):
                     # Create the directories as the workers module would
                     os.makedirs(cache_dir, exist_ok=True)
                     os.makedirs(data_dir, exist_ok=True)
@@ -40,7 +36,7 @@ class TestCacheManagement:
     
     def test_cache_file_format_and_structure(self):
         """Test cache file format and JSON structure"""
-        from lib.file_io_utils import create_cache_manager
+        from allium.lib.file_io_utils import create_cache_manager
         
         test_data = {
             "relays": [
@@ -86,7 +82,7 @@ class TestCacheManagement:
     
     def test_cache_file_size_and_performance(self):
         """Test cache performance with large datasets"""
-        from lib.workers import _save_cache, _load_cache
+        from allium.lib.workers import _save_cache, _load_cache
         
         # Create a larger test dataset
         large_data = {
@@ -107,7 +103,7 @@ class TestCacheManagement:
         }
         
         with tempfile.TemporaryDirectory() as temp_dir:
-            with patch('lib.workers.CACHE_DIR', temp_dir):
+            with patch('allium.lib.workers.CACHE_DIR', temp_dir):
                 # Test save performance
                 start_time = time.time()
                 _save_cache("large_test", large_data)
@@ -128,7 +124,7 @@ class TestCacheManagement:
     
     def test_cache_corruption_handling(self):
         """Test handling of corrupted cache files"""
-        from lib.file_io_utils import create_cache_manager
+        from allium.lib.file_io_utils import create_cache_manager
         
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create corrupted JSON file
@@ -140,7 +136,7 @@ class TestCacheManagement:
             cache_manager = create_cache_manager(temp_dir)
             
             # Should handle corruption gracefully (returns None for corrupt files)
-            with patch('lib.error_handlers.print') as mock_print:
+            with patch('allium.lib.error_handlers.print') as mock_print:
                 result = cache_manager.load_cache("corrupted")
                 
                 # Result should be None for corrupted JSON
@@ -151,7 +147,7 @@ class TestCacheManagement:
     
     def test_cache_concurrent_access(self):
         """Test cache access under concurrent conditions"""
-        from lib.workers import _save_cache, _load_cache
+        from allium.lib.workers import _save_cache, _load_cache
         
         test_data = {"relays": [], "version": "concurrent_test"}
         results = []
@@ -166,7 +162,7 @@ class TestCacheManagement:
                 results.append(False)
         
         with tempfile.TemporaryDirectory() as temp_dir:
-            with patch('lib.workers.CACHE_DIR', temp_dir):
+            with patch('allium.lib.workers.CACHE_DIR', temp_dir):
                 # Create multiple threads
                 threads = []
                 for i in range(5):
@@ -188,14 +184,14 @@ class TestStateManagement:
     
     def test_state_file_structure(self):
         """Test state file JSON structure and format"""
-        from lib.workers import _mark_ready, _mark_stale, _save_state
+        from allium.lib.workers import _mark_ready, _mark_stale, _save_state
         
         with tempfile.TemporaryDirectory() as temp_dir:
             state_file = os.path.join(temp_dir, "state.json")
             
-            with patch('lib.workers.STATE_FILE', state_file):
+            with patch('allium.lib.workers.STATE_FILE', state_file):
                 # Clear any existing worker state for this test
-                with patch('lib.workers._worker_status', {}):
+                with patch('allium.lib.workers._worker_status', {}):
                     # Mark some workers with different statuses
                     _mark_ready("api1")
                     _mark_stale("api2", "Test error")
@@ -226,12 +222,12 @@ class TestStateManagement:
     
     def test_state_persistence_across_sessions(self):
         """Test that state persists across different sessions"""
-        from lib.workers import _mark_ready, _mark_stale, _load_state, get_worker_status
+        from allium.lib.workers import _mark_ready, _mark_stale, _load_state, get_worker_status
         
         with tempfile.TemporaryDirectory() as temp_dir:
             state_file = os.path.join(temp_dir, "state.json")
             
-            with patch('lib.workers.STATE_FILE', state_file):
+            with patch('allium.lib.workers.STATE_FILE', state_file):
                 # Session 1: Create some worker states
                 _mark_ready("persistent_api1")
                 _mark_stale("persistent_api2", "Persistent error")
@@ -245,7 +241,7 @@ class TestStateManagement:
                 assert status2["error"] == "Persistent error"
                 
                 # Clear in-memory state
-                with patch('lib.workers._worker_status', {}):
+                with patch('allium.lib.workers._worker_status', {}):
                     # Verify in-memory state is cleared
                     assert get_worker_status("persistent_api1") is None
                     
@@ -262,7 +258,7 @@ class TestStateManagement:
     
     def test_state_concurrent_updates(self):
         """Test state updates under concurrent conditions"""
-        from lib.workers import _mark_ready, _mark_stale, get_worker_status
+        from allium.lib.workers import _mark_ready, _mark_stale, get_worker_status
         
         results = []
         
@@ -286,7 +282,7 @@ class TestStateManagement:
         with tempfile.TemporaryDirectory() as temp_dir:
             state_file = os.path.join(temp_dir, "state.json")
             
-            with patch('lib.workers.STATE_FILE', state_file):
+            with patch('allium.lib.workers.STATE_FILE', state_file):
                 # Create multiple threads
                 threads = []
                 for i in range(10):
@@ -304,7 +300,7 @@ class TestStateManagement:
     
     def test_state_error_handling(self):
         """Test state management error handling"""
-        from lib.file_io_utils import create_state_manager
+        from allium.lib.file_io_utils import create_state_manager
         
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create a state manager in a read-only location to test error handling
@@ -326,7 +322,7 @@ class TestTimestampManagement:
     
     def test_timestamp_file_operations(self):
         """Test timestamp read/write operations"""
-        from lib.file_io_utils import create_timestamp_manager
+        from allium.lib.file_io_utils import create_timestamp_manager
         
         test_timestamp = "Mon, 01 Jan 2024 12:00:00 GMT"
         
@@ -352,7 +348,7 @@ class TestTimestampManagement:
     
     def test_timestamp_format_validation(self):
         """Test various timestamp formats"""
-        from lib.workers import _write_timestamp, _read_timestamp
+        from allium.lib.workers import _write_timestamp, _read_timestamp
         
         test_cases = [
             "Mon, 01 Jan 2024 12:00:00 GMT",
@@ -362,7 +358,7 @@ class TestTimestampManagement:
         ]
         
         with tempfile.TemporaryDirectory() as temp_dir:
-            with patch('lib.workers.CACHE_DIR', temp_dir):
+            with patch('allium.lib.workers.CACHE_DIR', temp_dir):
                 for i, timestamp in enumerate(test_cases):
                     api_name = f"timestamp_test_{i}"
                     
@@ -373,7 +369,7 @@ class TestTimestampManagement:
     
     def test_timestamp_multiple_apis(self):
         """Test timestamp handling for multiple APIs"""
-        from lib.file_io_utils import create_timestamp_manager
+        from allium.lib.file_io_utils import create_timestamp_manager
         
         timestamps = {
             "onionoo_details": "Mon, 01 Jan 2024 12:00:00 GMT",
@@ -406,7 +402,7 @@ class TestDataIntegrity:
     
     def test_cache_data_consistency(self):
         """Test that cached data remains consistent across operations"""
-        from lib.workers import _save_cache, _load_cache
+        from allium.lib.workers import _save_cache, _load_cache
         
         original_data = {
             "relays": [
@@ -429,7 +425,7 @@ class TestDataIntegrity:
         }
         
         with tempfile.TemporaryDirectory() as temp_dir:
-            with patch('lib.workers.CACHE_DIR', temp_dir):
+            with patch('allium.lib.workers.CACHE_DIR', temp_dir):
                 # Save and load multiple times
                 for i in range(5):
                     _save_cache(f"consistency_{i}", original_data)
@@ -446,12 +442,12 @@ class TestDataIntegrity:
     
     def test_state_data_consistency(self):
         """Test that state data remains consistent"""
-        from lib.workers import _mark_ready, _mark_stale, get_worker_status, get_all_worker_status
+        from allium.lib.workers import _mark_ready, _mark_stale, get_worker_status, get_all_worker_status
         
         with tempfile.TemporaryDirectory() as temp_dir:
             state_file = os.path.join(temp_dir, "consistency_state.json")
             
-            with patch('lib.workers.STATE_FILE', state_file):
+            with patch('allium.lib.workers.STATE_FILE', state_file):
                 # Create complex state scenario
                 _mark_ready("api1")
                 time.sleep(0.01)  # Small delay to ensure different timestamps
@@ -484,7 +480,7 @@ class TestDataIntegrity:
     
     def test_edge_case_data_handling(self):
         """Test handling of edge case data"""
-        from lib.workers import _save_cache, _load_cache
+        from allium.lib.workers import _save_cache, _load_cache
         
         edge_cases = [
             # Empty data
@@ -515,7 +511,7 @@ class TestDataIntegrity:
         ]
         
         with tempfile.TemporaryDirectory() as temp_dir:
-            with patch('lib.workers.CACHE_DIR', temp_dir):
+            with patch('allium.lib.workers.CACHE_DIR', temp_dir):
                 for i, data in enumerate(edge_cases):
                     api_name = f"edge_case_{i}"
                     

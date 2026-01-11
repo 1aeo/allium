@@ -7,11 +7,6 @@ functionality added in the network uptime percentiles feature.
 
 import unittest
 from unittest.mock import Mock, patch
-import sys
-import os
-
-# Add the parent directory to the path so we can import allium modules
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from allium.lib.uptime_utils import (
     calculate_network_uptime_percentiles,

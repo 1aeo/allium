@@ -5,12 +5,7 @@ Tests validation that contact strings must have ciissversion:2, proof:(dns-rsa|u
 """
 
 import unittest
-import sys
-import os
-from unittest.mock import Mock, patch
-
-# Add the allium directory to Python path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from unittest.mock import patch
 
 from allium.lib.relays import Relays
 

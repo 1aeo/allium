@@ -3,12 +3,8 @@ Tests for lib/consensus/__init__.py module initialization and feature flag.
 """
 
 import os
-import sys
 import pytest
 from unittest.mock import patch
-
-# Add the allium package to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'allium'))
 
 
 class TestConsensusModule:
@@ -16,7 +12,7 @@ class TestConsensusModule:
     
     def test_module_imports(self):
         """Test that the consensus module can be imported."""
-        from lib.consensus import (
+        from allium.lib.consensus import (
             CollectorFetcher,
             AuthorityMonitor,
             format_relay_consensus_evaluation,
@@ -29,18 +25,18 @@ class TestConsensusModule:
     
     def test_is_consensus_evaluation_enabled_function(self):
         """Test that the is_consensus_evaluation_enabled() function exists and returns a boolean."""
-        from lib.consensus import is_consensus_evaluation_enabled
+        from allium.lib.consensus import is_consensus_evaluation_enabled
         result = is_consensus_evaluation_enabled()
         assert isinstance(result, bool)
     
     def test_consensus_evaluation_enabled_export(self):
         """Test that CONSENSUS_EVALUATION_ENABLED is exported."""
-        from lib.consensus import CONSENSUS_EVALUATION_ENABLED
+        from allium.lib.consensus import CONSENSUS_EVALUATION_ENABLED
         assert isinstance(CONSENSUS_EVALUATION_ENABLED, bool)
     
     def test_all_exports(self):
         """Test that __all__ contains expected exports."""
-        from lib import consensus
+        from allium.lib import consensus
         expected_exports = [
             'CollectorFetcher',
             'AuthorityMonitor', 
@@ -61,7 +57,7 @@ class TestFeatureFlag:
         # Clear any existing env var
         with patch.dict(os.environ, {}, clear=True):
             # Need to reload the module to pick up new env
-            import lib.consensus as consensus
+            import allium.lib.consensus as consensus
             # Default should be 'true' when env var not set
             # Note: This tests the module as currently loaded
             # The actual default behavior depends on implementation
@@ -70,7 +66,7 @@ class TestFeatureFlag:
     def test_feature_flag_env_var_name(self):
         """Test that the correct environment variable name is used."""
         # The env var should be ALLIUM_CONSENSUS_EVALUATION
-        from lib.consensus import CONSENSUS_EVALUATION_ENABLED
+        from allium.lib.consensus import CONSENSUS_EVALUATION_ENABLED
         env_var = os.environ.get('ALLIUM_CONSENSUS_EVALUATION')
         # If env var is set, the flag should reflect it
         if env_var is not None:
@@ -83,7 +79,7 @@ class TestModuleDocstring:
     
     def test_module_has_docstring(self):
         """Test that the consensus module has a docstring."""
-        from lib import consensus
+        from allium.lib import consensus
         # Module should have some documentation
         # This is a soft requirement
         assert hasattr(consensus, '__doc__')
@@ -94,17 +90,17 @@ class TestSubmoduleImports:
     
     def test_collector_fetcher_import(self):
         """Test importing CollectorFetcher directly."""
-        from lib.consensus.collector_fetcher import CollectorFetcher
+        from allium.lib.consensus.collector_fetcher import CollectorFetcher
         assert CollectorFetcher is not None
     
     def test_authority_monitor_import(self):
         """Test importing AuthorityMonitor directly."""
-        from lib.consensus.authority_monitor import AuthorityMonitor
+        from allium.lib.consensus.authority_monitor import AuthorityMonitor
         assert AuthorityMonitor is not None
     
     def test_consensus_evaluation_import(self):
         """Test importing from consensus_evaluation directly."""
-        from lib.consensus.consensus_evaluation import (
+        from allium.lib.consensus.consensus_evaluation import (
             format_relay_consensus_evaluation,
             format_authority_consensus_evaluation,
         )

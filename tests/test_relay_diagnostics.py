@@ -18,11 +18,7 @@ import pytest
 import time
 from datetime import datetime, timezone
 
-import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'allium'))
-
-from lib.relay_diagnostics import (
+from allium.lib.relay_diagnostics import (
     generate_relay_issues,
     generate_issues_from_consensus,
     _check_overload_issues,

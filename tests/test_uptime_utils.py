@@ -10,14 +10,9 @@ Tests cover:
 - Edge case handling and data integrity
 """
 
-import unittest
-import sys
-import os
-import time
 import statistics
-
-# Add the project root to the path so we can import our modules
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+import time
+import unittest
 
 from allium.lib.uptime_utils import (
     normalize_uptime_value,

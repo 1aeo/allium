@@ -11,14 +11,9 @@ Key thresholds tested:
 - HSDir TK: >= 10 days (864000 seconds)
 """
 
-import os
-import sys
 import pytest
 
-# Add the allium package to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'allium'))
-
-from lib.consensus.consensus_evaluation import (
+from allium.lib.consensus.consensus_evaluation import (
     format_relay_consensus_evaluation,
     format_authority_consensus_evaluation,
     _format_consensus_status,
@@ -35,7 +30,7 @@ from lib.consensus.consensus_evaluation import (
 )
 
 # Import flag threshold constants for test validation
-from lib.consensus.flag_thresholds import (
+from allium.lib.consensus.flag_thresholds import (
     GUARD_WFU_DEFAULT,
     GUARD_TK_DEFAULT,
     GUARD_BW_GUARANTEE,

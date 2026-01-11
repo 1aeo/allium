@@ -4,14 +4,10 @@ Integration tests for Phase 1 API work - testing the full integration flow
 import json
 import os
 import pytest
-import sys
 import tempfile
 import time
 import urllib.error
 from unittest.mock import patch, MagicMock
-
-# Add the allium directory to Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 # Import consolidated test utilities
 from test_utils import TestDataFactory, TestPatchingHelpers
@@ -289,7 +285,7 @@ class TestBackwardsCompatibilityIntegration:
                             os.makedirs(cache_dir, exist_ok=True)
                             
                             # Use coordinator pattern instead of old direct constructor
-                            from lib.coordinator import create_relay_set_with_coordinator
+                            from allium.lib.coordinator import create_relay_set_with_coordinator
                             relay_set = create_relay_set_with_coordinator(
                                 output_dir=output_dir,
                                 onionoo_details_url="https://test.details.url",
@@ -425,7 +421,7 @@ class TestWorkerStateManagement:
                         # Clear existing worker state for this test
                         with patch('lib.workers._worker_status', {}):
                             # Import and run multiple workers
-                            from lib.workers import fetch_onionoo_uptime, fetch_collector_data, fetch_consensus_health
+                            from allium.lib.workers import fetch_onionoo_uptime, fetch_collector_data, fetch_consensus_health
                             
                             # Run placeholder workers
                             fetch_onionoo_uptime()

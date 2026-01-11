@@ -6,13 +6,8 @@ These tests help ensure flag threshold logic matches Tor's dir-spec.
 """
 
 import pytest
-import sys
-import os
 
-# Add parent directory to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'allium', 'lib'))
-
-from consensus.flag_thresholds import (
+from allium.lib.consensus.flag_thresholds import (
     # Constants
     SECONDS_PER_DAY,
     GUARD_BW_GUARANTEE,
@@ -749,17 +744,17 @@ class TestTimeConstants:
     
     def test_seconds_per_week(self):
         """Test SECONDS_PER_WEEK is correct."""
-        from consensus.flag_thresholds import SECONDS_PER_WEEK
+        from allium.lib.consensus.flag_thresholds import SECONDS_PER_WEEK
         assert SECONDS_PER_WEEK == 7 * 24 * 60 * 60
         assert SECONDS_PER_WEEK == 604800
     
     def test_seconds_per_hour(self):
         """Test SECONDS_PER_HOUR is correct."""
-        from consensus.flag_thresholds import SECONDS_PER_HOUR
+        from allium.lib.consensus.flag_thresholds import SECONDS_PER_HOUR
         assert SECONDS_PER_HOUR == 60 * 60
         assert SECONDS_PER_HOUR == 3600
     
     def test_seconds_per_minute(self):
         """Test SECONDS_PER_MINUTE is correct."""
-        from consensus.flag_thresholds import SECONDS_PER_MINUTE
+        from allium.lib.consensus.flag_thresholds import SECONDS_PER_MINUTE
         assert SECONDS_PER_MINUTE == 60

@@ -6,15 +6,10 @@ Test suite for directory authorities functionality
 
 import json
 import os
-import sys
+import shutil
 import tempfile
 import unittest
 from unittest.mock import Mock, patch, mock_open
-import shutil
-
-# Add lib to path for imports
-parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, parent_dir)
 
 from allium.lib.relays import Relays
 

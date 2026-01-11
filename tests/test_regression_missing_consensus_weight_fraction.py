@@ -12,13 +12,8 @@ from the Onionoo API (which is OPTIONAL), the system correctly computes:
 Prevents future regressions where missing API fields cause blank or broken displays.
 """
 
-import os
-import sys
 import unittest
 from unittest.mock import Mock, MagicMock, patch
-
-# Add allium to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from allium.lib.aroileaders import _calculate_aroi_leaderboards
 

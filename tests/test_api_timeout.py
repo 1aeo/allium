@@ -8,19 +8,17 @@ This script tests that:
 3. Timestamps remain unchanged when using cached data
 """
 
+import http.server
 import json
 import os
-import sys
-import time
-import threading
-import http.server
 import socketserver
+import threading
+import time
 from datetime import datetime
 
-# Add allium to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'allium'))
+import pytest
 
-from lib.workers import (
+from allium.lib.workers import (
     _fetch_url_with_total_timeout,
     TotalTimeoutError,
     _fetch_with_cache_fallback,

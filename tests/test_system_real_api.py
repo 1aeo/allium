@@ -2,17 +2,11 @@
 Real-world integration tests for allium multi-API system
 Tests actual API calls and integration functionality
 """
-import sys
-import os
 import pytest
-import time
-import tempfile
 import shutil
+import tempfile
+import time
 
-# Add the allium directory to Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-
-# Import using allium module paths (same approach as working tests)
 from allium.lib.coordinator import Coordinator, create_relay_set_with_coordinator
 from allium.lib.workers import fetch_onionoo_details, fetch_onionoo_uptime
 

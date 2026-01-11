@@ -1,15 +1,12 @@
 #!/usr/bin/env python3
 
+import os
+import re
+import types
 import unittest
 from unittest.mock import Mock, patch
-import sys
-import os
-import types
-from jinja2 import Environment, FileSystemLoader, select_autoescape
-import re
 
-# Add the allium directory to Python path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from allium.lib.relays import Relays
 

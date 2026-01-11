@@ -5,9 +5,6 @@ Test network health dashboard calculations and metrics
 
 import unittest
 from unittest.mock import Mock, patch
-import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from allium.lib.relays import Relays, determine_ipv6_support
 

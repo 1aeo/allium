@@ -7,16 +7,12 @@ Run with -m "not slow" to skip slow tests.
 import json
 import os
 import pytest
-import sys
 import tempfile
 import time
 import urllib.error
 import urllib.request
 from pathlib import Path
 from unittest.mock import patch, mock_open, MagicMock
-
-# Add the project root to Python path
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 # Mark all tests in this file as slow - they make network calls or have complex mocking
 pytestmark = pytest.mark.slow

@@ -4,13 +4,9 @@ Unit tests for allium/lib/coordinator.py - Phase 1 API coordination system
 import json
 import os
 import pytest
-import sys
 import tempfile
 import time
 from unittest.mock import patch, MagicMock
-
-# Add the allium directory to Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from allium.lib.coordinator import Coordinator, create_relay_set_with_coordinator
 

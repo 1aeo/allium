@@ -13,13 +13,8 @@ Vote file format reference: https://spec.torproject.org/dir-spec/
 
 import pytest
 from unittest.mock import Mock, patch, MagicMock
-import sys
-import os
 
-# Add parent directory to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'allium', 'lib'))
-
-from consensus.collector_fetcher import (
+from allium.lib.consensus.collector_fetcher import (
     CollectorFetcher,
     discover_authorities,
     calculate_consensus_requirement,

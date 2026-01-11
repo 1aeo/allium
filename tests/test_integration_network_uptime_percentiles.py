@@ -5,14 +5,9 @@ Tests the complete workflow from uptime data processing through template renderi
 ensuring the network uptime percentiles feature works correctly end-to-end.
 """
 
+import hashlib
 import unittest
 from unittest.mock import Mock, patch, MagicMock
-import sys
-import os
-import hashlib
-
-# Add the parent directory to the path so we can import allium modules
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from allium.lib.relays import Relays
 

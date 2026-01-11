@@ -11,20 +11,16 @@ This module provides:
 
 import json
 import os
-import sys
 import tempfile
 import time
 import types
 from contextlib import contextmanager
 from unittest.mock import Mock, MagicMock, patch
 
-# Add the allium directory to Python path - centralized path setup
-ALLIUM_ROOT = os.path.join(os.path.dirname(__file__), '..')
-if ALLIUM_ROOT not in sys.path:
-    sys.path.insert(0, ALLIUM_ROOT)
-
-# Import after path setup
 from allium.lib.relays import Relays
+
+# For backward compatibility with any code that uses ALLIUM_ROOT
+ALLIUM_ROOT = os.path.join(os.path.dirname(__file__), '..')
 
 
 class TestDataFactory:

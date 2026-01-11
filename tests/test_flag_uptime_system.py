@@ -12,14 +12,9 @@ Tests cover:
 - Performance and edge case handling
 """
 
+import statistics
 import unittest
 from unittest.mock import patch, MagicMock
-import sys
-import os
-import statistics
-
-# Add the project root to the path so we can import our modules
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from allium.lib.relays import Relays
 from allium.lib.uptime_utils import (

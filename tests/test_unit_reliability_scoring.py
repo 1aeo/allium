@@ -3,13 +3,8 @@ Unit tests for reliability scoring system
 Tests for reliability_masters and legacy_titans categories
 """
 import pytest
-import sys
-import os
 
-# Add the allium directory to Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'allium'))
-
-from lib.aroileaders import _calculate_reliability_score
+from allium.lib.aroileaders import _calculate_reliability_score
 
 
 class TestReliabilityScoring:
