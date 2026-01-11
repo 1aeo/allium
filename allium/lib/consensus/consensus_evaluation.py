@@ -127,57 +127,91 @@ def _format_wfu_display(wfu, decimals=1, fallback='N/A'):
 
 # Empty stats result - reused constant to avoid dict recreation
 _EMPTY_DA_STATS = {
-    'majority_value': None, 'majority_count': 0,
+    'primary_value': None, 'primary_count': 0, 'has_majority': False,
     'min_value': None, 'median_value': None, 'max_value': None,
-    'majority_display': 'N/A', 'min_display': 'N/A',
+    'primary_display': 'N/A', 'min_display': 'N/A',
     'median_display': 'N/A', 'max_display': 'N/A',
-    'has_variation': False, 'total_authorities': 0,
+    'has_variation': False,
+    'voting_count': 0,      # Number of authorities that provided this value
+    'total_possible': 0,    # Total authorities that could vote
 }
 
+# Tor spec: majority = more than half = ≥5/9 authorities
+MAJORITY_THRESHOLD = 5
 
-def _compute_da_value_stats(values: list, format_func, total_authorities: int = 9) -> dict:
+
+def _compute_da_value_stats(values: list, format_func, total_possible: int = 9, threshold: float = None) -> dict:
     """
-    Compute majority, min, median, max statistics for DA-measured values.
+    Compute majority/median, min, max statistics for DA-measured values.
+    
+    Per Tor dir-spec: majority = ≥5/9 authorities agreeing on same value.
+    If no majority exists, fall back to median.
     
     Args:
         values: List of raw values (one per authority that reported)
         format_func: Function to format the value for display (e.g., _format_wfu_display)
-        total_authorities: Total number of authorities (for reference)
+        total_possible: Total number of authorities that could vote (9 for most metrics)
+        threshold: Optional threshold value - if provided, computes how many values meet it
+                   (used for time metrics where exact value agreement is rare)
     
     Returns:
-        dict with: majority_value, majority_count, min_value, median_value, max_value,
-                   and formatted versions of each
+        dict with: primary_value (majority or median), primary_count, has_majority,
+                   voting_count, total_possible, min_value, median_value, max_value,
+                   meets_threshold_count (if threshold provided)
     """
     # Filter out None values in single pass
     values = [v for v in values if v is not None]
     if not values:
-        return _EMPTY_DA_STATS
+        return {**_EMPTY_DA_STATS, 'total_possible': total_possible}
     
     # Sort once - reuse for min, max, median
     sorted_values = sorted(values)
-    n = len(sorted_values)
+    voting_count = len(sorted_values)  # How many authorities actually provided values
     min_value = sorted_values[0]
     max_value = sorted_values[-1]
     
     # Median from sorted list
-    mid = n // 2
-    median_value = (sorted_values[mid - 1] + sorted_values[mid]) / 2 if n % 2 == 0 else sorted_values[mid]
+    mid = voting_count // 2
+    median_value = (sorted_values[mid - 1] + sorted_values[mid]) / 2 if voting_count % 2 == 0 else sorted_values[mid]
     
-    # Find majority (most common value)
-    majority_value, majority_count = Counter(values).most_common(1)[0]
+    # Check for majority (≥5 per Tor spec)
+    value_counts = Counter(values)
+    most_common_value, most_common_count = value_counts.most_common(1)[0]
+    
+    # Tor majority = ≥5 authorities agreeing on same value
+    has_majority = most_common_count >= MAJORITY_THRESHOLD
+    
+    # Primary value: majority if exists, else median
+    if has_majority:
+        primary_value = most_common_value
+        primary_count = most_common_count
+    else:
+        primary_value = median_value
+        # Count how many authorities have exactly the median value
+        # (median may be calculated, so could be 0, 1, or more)
+        primary_count = value_counts.get(median_value, 0)
+    
+    # If threshold provided, count how many values meet it
+    # (useful for time metrics where exact agreement is rare but threshold comparison matters)
+    meets_threshold_count = None
+    if threshold is not None:
+        meets_threshold_count = sum(1 for v in values if v >= threshold)
     
     return {
-        'majority_value': majority_value,
-        'majority_count': majority_count,
+        'primary_value': primary_value,
+        'primary_count': primary_count,
+        'has_majority': has_majority,
         'min_value': min_value,
         'median_value': median_value,
         'max_value': max_value,
-        'majority_display': format_func(majority_value),
+        'primary_display': format_func(primary_value),
         'min_display': format_func(min_value),
         'median_display': format_func(median_value),
         'max_display': format_func(max_value),
         'has_variation': min_value != max_value,
-        'total_authorities': n,
+        'voting_count': voting_count,       # Total authorities that provided values
+        'total_possible': total_possible,   # Total authorities that could vote
+        'meets_threshold_count': meets_threshold_count,  # How many meet threshold (if provided)
     }
 
 
@@ -354,15 +388,17 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
         if relay_bw is None:
             relay_bw = vote.get('measured') or vote.get('bandwidth')
     
-    # Compute statistics for DA-measured values (majority, min, median, max)
-    wfu_stats = _compute_da_value_stats(all_wfu_values, _format_wfu_display, total_authorities)
-    tk_stats = _compute_da_value_stats(all_tk_values, _format_days, total_authorities)
-    mtbf_stats = _compute_da_value_stats(all_mtbf_values, _format_days, total_authorities)
+    # Compute WFU stats (threshold is consistent across authorities)
+    wfu_stats = _compute_da_value_stats(all_wfu_values, _format_wfu_display, total_authorities,
+                                        threshold=DEFAULT_WFU_THRESHOLD)
     
-    # Use majority value as the primary display value (instead of first-available)
-    relay_wfu = wfu_stats['majority_value']
-    relay_tk = tk_stats['majority_value']
-    relay_mtbf = mtbf_stats['majority_value']
+    # TK and MTBF stats computed after threshold collection (thresholds vary per authority)
+    # Placeholder - will be computed after threshold loop
+    tk_stats = None
+    mtbf_stats = None
+    
+    # Use WFU majority value as the primary display value
+    relay_wfu = wfu_stats['primary_value']
     
     # For Guard BW eligibility, use observed_bandwidth (from Onionoo descriptor)
     # NOT the vote's measured value (which is scaled for path selection)
@@ -421,6 +457,23 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
             else:
                 hsdir_tk_default_count += 1
     
+    # Calculate Stable MTBF typical threshold early (needed for stats computation)
+    # MTBF thresholds vary per authority; use median as representative threshold
+    stable_mtbf_typical = sorted(stable_mtbf_values)[len(stable_mtbf_values)//2] if stable_mtbf_values else 0
+    
+    # Now compute TK and MTBF stats with threshold comparison
+    # TK: Use Guard TK threshold (8 days) - what most authorities require
+    tk_stats = _compute_da_value_stats(all_tk_values, _format_days, total_authorities,
+                                       threshold=guard_tk_threshold)
+    
+    # MTBF: Use median authority threshold for comparison
+    mtbf_stats = _compute_da_value_stats(all_mtbf_values, _format_days, total_authorities,
+                                         threshold=stable_mtbf_typical if stable_mtbf_typical else None)
+    
+    # Set relay values from stats
+    relay_tk = tk_stats['primary_value']
+    relay_mtbf = mtbf_stats['primary_value']
+    
     # Calculate HSDir TK statistics for display
     # dir-spec default: 25 hours (HSDIR_TK_DEFAULT)
     # Consensus needs majority (5/9), so if 8 authorities use 25h and 1 uses 10d,
@@ -441,7 +494,7 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
     # Most authorities have similar thresholds, but moria1 may differ significantly
     stable_mtbf_min = min(stable_mtbf_values) if stable_mtbf_values else 0
     stable_mtbf_max = max(stable_mtbf_values) if stable_mtbf_values else 0
-    stable_mtbf_typical = sorted(stable_mtbf_values)[len(stable_mtbf_values)//2] if stable_mtbf_values else 0
+    # stable_mtbf_typical already computed above for threshold stats
     # Find authorities with significantly stricter MTBF requirements (>5x typical = outlier)
     stable_mtbf_strict_auths = [name for name, val in stable_mtbf_by_auth.items() if stable_mtbf_typical > 0 and val > stable_mtbf_typical * 5]
     
@@ -502,14 +555,8 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
         'wfu_display': _format_wfu_display(relay_wfu),
         'wfu_meets': relay_wfu and relay_wfu >= guard_wfu_threshold,
         'guard_wfu_threshold': guard_wfu_threshold,
-        # WFU stats for Option 6 display format
+        # WFU stats for display (full stats dict passed to formatter)
         'wfu_stats': wfu_stats,
-        'wfu_majority_display': wfu_stats['majority_display'],
-        'wfu_majority_count': wfu_stats['majority_count'],
-        'wfu_min_display': wfu_stats['min_display'],
-        'wfu_median_display': wfu_stats['median_display'],
-        'wfu_max_display': wfu_stats['max_display'],
-        'wfu_has_variation': wfu_stats['has_variation'],
         
         # Time Known values (DA-measured, with majority/min/median/max stats)
         'tk': relay_tk,
@@ -517,14 +564,8 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
         'tk_meets': relay_tk and relay_tk >= guard_tk_threshold,
         'guard_tk_threshold': guard_tk_threshold,
         'tk_days_needed': (guard_tk_threshold - (relay_tk or 0)) / SECONDS_PER_DAY if relay_tk and relay_tk < guard_tk_threshold else 0,
-        # TK stats for Option 6 display format
+        # TK stats for display (full stats dict passed to formatter)
         'tk_stats': tk_stats,
-        'tk_majority_display': tk_stats['majority_display'],
-        'tk_majority_count': tk_stats['majority_count'],
-        'tk_min_display': tk_stats['min_display'],
-        'tk_median_display': tk_stats['median_display'],
-        'tk_max_display': tk_stats['max_display'],
-        'tk_has_variation': tk_stats['has_variation'],
         
         # Guard BW values - use observed_bandwidth for eligibility (actual bandwidth, not scaled)
         # Note: relay_bw is the scaled consensus value, guard_bw_value is observed_bandwidth
@@ -547,16 +588,10 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
         'stable_mtbf_range': stable_mtbf_range,
         'stable_mtbf_meets_all': stable_meets_all,  # Same count for simplicity
         'stable_mtbf_meets_count': stable_meets_count,
-        # MTBF (DA-measured, with majority/min/median/max stats)
+        # MTBF stats for display (full stats dict passed to formatter)
         'mtbf': relay_mtbf,
         'mtbf_display': _format_days(relay_mtbf, decimals=0, suffix=' days'),
         'mtbf_stats': mtbf_stats,
-        'mtbf_majority_display': mtbf_stats['majority_display'],
-        'mtbf_majority_count': mtbf_stats['majority_count'],
-        'mtbf_min_display': mtbf_stats['min_display'],
-        'mtbf_median_display': mtbf_stats['median_display'],
-        'mtbf_max_display': mtbf_stats['max_display'],
-        'mtbf_has_variation': mtbf_stats['has_variation'],
         
         # Fast values - use observed_bandwidth like Guard
         'fast_speed': guard_bw_value,  # Use observed_bandwidth
@@ -677,6 +712,9 @@ STATUS_COLORS = {
     'below': '#dc3545',
 }
 
+# Map Bootstrap status classes to internal status keys (for get_flag_color lookup)
+_STATUS_CLASS_TO_KEY = {'success': 'meets', 'warning': 'partial'}
+
 # Flag ordering by dependency (flags requiring other flags go first)
 FLAG_ORDER = ['Exit', 'Guard', 'Stable', 'Fast', 'HSDir', 'Running', 'V2Dir', 'Valid', 'Authority', 'BadExit']
 ELIGIBLE_FLAG_ORDER = ['exit', 'guard', 'stable', 'fast', 'hsdir', 'running', 'v2dir', 'valid']
@@ -768,26 +806,77 @@ def _format_stricter_threshold(strict_auths: list, max_display: str) -> str:
     return f'<br><span style="color: #856404; font-size: 10px;">[Stricter] {", ".join(strict_auths)}: ≥{max_display}</span>'
 
 
-def _format_da_value_html(stats: dict, total_auths: int, source_label: str = 'DA') -> str:
-    """Format DA-measured value in Option 6 format from stats dict.
+# Status text lookup (avoid repeated conditionals)
+_STATUS_TEXT = {'meets': 'Meets', 'partial': 'Partial', 'below': 'Below'}
+
+
+def _get_status_text(status: str, extra: str = '') -> str:
+    """Get display text for status with optional extra info."""
+    return f'{_STATUS_TEXT.get(status, "Below")}{extra}'
+
+
+def _format_da_value_html(stats: dict, source_label: str = 'DA') -> str:
+    """Format DA-measured value from stats dict.
     
-    Format:
-        Majority: **{value}** ({count}/{total} DA)
-        Min/Med/Max: {min} / {med} / {max}  (only if variation exists)
+    Per Tor spec: majority = ≥5/9 authorities agreeing on same value.
+    
+    First row always shows count of authorities with that EXACT value.
+    Second row always shows total voting counts (voting_count/total_possible).
+    
+    Format when majority exists:
+        Majority: **{value}** ({majority_count}/{total_possible} DA)
+        Min/Med/Max: {min} / {med} / {max} ({voting_count}/{total_possible})
+    
+    Format when no majority (fall back to median):
+        Median: **{value}** ({median_match_count}/{total_possible} DA, No Majority)
+        Min/Max: {min} / {max} ({voting_count}/{total_possible})
     """
-    line1 = (f'<span style="color: #666; font-size: 10px;">Majority:</span> '
-             f'<strong>{stats["majority_display"]}</strong> '
-             f'<span style="color: #6c757d; font-size: 10px;">({stats["majority_count"]}/{total_auths} {source_label})</span>')
-    if stats.get('has_variation'):
-        line2 = (f'<br><span style="color: #666; font-size: 10px;">Min/Med/Max: '
-                 f'{stats["min_display"]} / {stats["median_display"]} / {stats["max_display"]}</span>')
-        return line1 + line2
-    return line1
+    voting_count = stats.get('voting_count', 0)
+    total_possible = stats.get('total_possible', 9)
+    primary_count = stats.get('primary_count', 0)
+    has_majority = stats.get('has_majority', False)
+    vote_ratio = f'{voting_count}/{total_possible}'
+    
+    # Second row clarification text
+    vote_clarification = f'({vote_ratio} {source_label}, Voting / Total Eligible)'
+    meets_threshold = stats.get('meets_threshold_count')
+    
+    if has_majority:
+        # Majority exists: show value with agreement count (≥5)
+        line1 = (f'<span style="color: #666; font-size: 10px;">Majority:</span> '
+                 f'<strong>{stats["primary_display"]}</strong> '
+                 f'<span style="color: #6c757d; font-size: 10px;">({primary_count}/{total_possible} {source_label})</span>')
+        # Second row: Min/Med/Max with total voting ratio and clarification
+        if stats.get('has_variation'):
+            line2 = (f'<br><span style="color: #666; font-size: 10px;">Min/Med/Max: '
+                     f'{stats["min_display"]} / {stats["median_display"]} / {stats["max_display"]} '
+                     f'{vote_clarification}</span>')
+            return line1 + line2
+        return line1
+    else:
+        # No majority: show median
+        # For time metrics with threshold, show "X/9 DA above threshold" instead of "No Majority"
+        if meets_threshold is not None:
+            threshold_text = f'{meets_threshold}/{total_possible} {source_label} above threshold'
+            line1 = (f'<span style="color: #666; font-size: 10px;">Median:</span> '
+                     f'<strong>{stats["primary_display"]}</strong> '
+                     f'<span style="color: #6c757d; font-size: 10px;">({threshold_text})</span>')
+        else:
+            line1 = (f'<span style="color: #666; font-size: 10px;">Median:</span> '
+                     f'<strong>{stats["primary_display"]}</strong> '
+                     f'<span style="color: #6c757d; font-size: 10px;">({primary_count}/{total_possible} {source_label}, No Majority)</span>')
+        # Second row: Min/Max with total voting ratio and clarification
+        if stats.get('has_variation'):
+            line2 = (f'<br><span style="color: #666; font-size: 10px;">Min/Max: '
+                     f'{stats["min_display"]} / {stats["max_display"]} '
+                     f'{vote_clarification}</span>')
+            return line1 + line2
+        return line1
 
 
-def _format_relay_value_html(value_display: str, total_auths: int, source_label: str = 'R') -> str:
-    """Format relay-reported value (same for all authorities, no variation)."""
-    return f'<strong>{value_display}</strong> <span style="color: #6c757d; font-size: 10px;">({total_auths}/{total_auths} {source_label})</span>'
+def _format_relay_value_html(value_display: str) -> str:
+    """Format relay-reported value (single source - the relay itself)."""
+    return f'<strong>{value_display}</strong> <span style="color: #6c757d; font-size: 10px;">(R)</span>'
 
 
 def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
@@ -807,7 +896,7 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
     def get_flag_color(flag_name: str) -> str:
         """Get color for flag column based on eligibility status."""
         status_class = flag_summary.get(flag_name.lower(), {}).get('status_class', 'danger')
-        return STATUS_COLORS.get({'success': 'meets', 'warning': 'partial'}.get(status_class, 'below'), STATUS_COLORS['below'])
+        return STATUS_COLORS.get(_STATUS_CLASS_TO_KEY.get(status_class, 'below'), STATUS_COLORS['below'])
     
     rows = []
     
@@ -825,12 +914,12 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
         'flag_color': guard_color,
         'metric': 'WFU',
         'metric_tooltip': METRIC_TOOLTIPS['wfu_guard'],
-        'value': _format_da_value_html(wfu_stats, total_authorities),
+        'value': _format_da_value_html(wfu_stats),
         'value_source': 'da',
         'value_source_tooltip': SOURCE_TOOLTIPS['da'],
         'threshold': '≥98% (all authorities)',
         'status': wfu_status,
-        'status_text': 'Meets' if wfu_status == 'meets' else 'Below',
+        'status_text': _get_status_text(wfu_status),
         'status_color': STATUS_COLORS[wfu_status],
         'status_tooltip': STATUS_TOOLTIPS[wfu_status],
         'rowspan': 3,
@@ -845,12 +934,12 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
         'flag_color': guard_color,
         'metric': 'Time Known',
         'metric_tooltip': METRIC_TOOLTIPS['tk_guard'],
-        'value': _format_da_value_html(tk_stats, total_authorities),
+        'value': _format_da_value_html(tk_stats),
         'value_source': 'da',
         'value_source_tooltip': SOURCE_TOOLTIPS['da'],
         'threshold': '≥8 days (all authorities)',
         'status': tk_status,
-        'status_text': f'Below{tk_extra}' if tk_status != 'meets' else 'Meets',
+        'status_text': _get_status_text(tk_status, tk_extra if tk_status != 'meets' else ''),
         'status_color': STATUS_COLORS[tk_status],
         'status_tooltip': STATUS_TOOLTIPS[tk_status],
         'rowspan': 0,
@@ -869,12 +958,12 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
         'flag_color': guard_color,
         'metric': 'Bandwidth',
         'metric_tooltip': METRIC_TOOLTIPS['bw_guard'],
-        'value': _format_relay_value_html(rv.get('observed_bw_display', 'N/A'), total_authorities),
+        'value': _format_relay_value_html(rv.get('observed_bw_display', 'N/A')),
         'value_source': 'relay',
         'value_source_tooltip': SOURCE_TOOLTIPS['relay'],
         'threshold': f"≥{rv.get('guard_bw_guarantee_display', '2 MB/s')} OR ≥{rv.get('guard_bw_range', 'top 25%')}",
         'status': bw_status,
-        'status_text': f"{'Meets' if bw_status == 'meets' else 'Partial' if bw_status == 'partial' else 'Below'}{bw_extra}",
+        'status_text': _get_status_text(bw_status, bw_extra),
         'status_color': STATUS_COLORS[bw_status],
         'status_tooltip': STATUS_TOOLTIPS[bw_status],
         'rowspan': 0,
@@ -893,12 +982,12 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
         'flag_color': stable_color,
         'metric': 'MTBF',
         'metric_tooltip': METRIC_TOOLTIPS['mtbf_stable'],
-        'value': _format_da_value_html(mtbf_stats, total_authorities),
+        'value': _format_da_value_html(mtbf_stats),
         'value_source': 'da',
         'value_source_tooltip': SOURCE_TOOLTIPS['da'],
         'threshold': mtbf_threshold,
         'status': mtbf_status,
-        'status_text': f"{'Meets' if mtbf_status == 'meets' else 'Partial' if mtbf_status == 'partial' else 'Below'}{mtbf_extra}",
+        'status_text': _get_status_text(mtbf_status, mtbf_extra),
         'status_color': STATUS_COLORS[mtbf_status],
         'status_tooltip': STATUS_TOOLTIPS[mtbf_status],
         'rowspan': 2,
@@ -922,7 +1011,7 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
         'flag_color': stable_color,
         'metric': 'Uptime',
         'metric_tooltip': METRIC_TOOLTIPS['uptime_stable'],
-        'value': _format_relay_value_html(rv.get('stable_uptime_display', 'N/A'), total_authorities),
+        'value': _format_relay_value_html(rv.get('stable_uptime_display', 'N/A')),
         'value_source': 'relay',
         'value_source_tooltip': SOURCE_TOOLTIPS['relay'],
         'threshold': uptime_threshold,
@@ -951,12 +1040,12 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
         'flag_color': fast_color,
         'metric': 'Speed',
         'metric_tooltip': METRIC_TOOLTIPS['speed_fast'],
-        'value': _format_relay_value_html(rv.get('fast_speed_display', 'N/A'), total_authorities),
+        'value': _format_relay_value_html(rv.get('fast_speed_display', 'N/A')),
         'value_source': 'relay',
         'value_source_tooltip': SOURCE_TOOLTIPS['relay'],
         'threshold': fast_threshold,
         'status': fast_status,
-        'status_text': f"{'Meets' if fast_status == 'meets' else 'Partial' if fast_status == 'partial' else 'Below'}{fast_extra}",
+        'status_text': _get_status_text(fast_status, fast_extra),
         'status_color': STATUS_COLORS[fast_status],
         'status_tooltip': STATUS_TOOLTIPS[fast_status],
         'rowspan': 1,
@@ -971,12 +1060,12 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
         'flag_color': hsdir_color,
         'metric': 'WFU',
         'metric_tooltip': METRIC_TOOLTIPS['wfu_hsdir'],
-        'value': _format_da_value_html(wfu_stats, total_authorities),
+        'value': _format_da_value_html(wfu_stats),
         'value_source': 'da',
         'value_source_tooltip': SOURCE_TOOLTIPS['da'],
         'threshold': f"≥{rv.get('hsdir_wfu_threshold', 0.98) * 100:.1f}%",
         'status': hsdir_wfu_status,
-        'status_text': 'Meets' if hsdir_wfu_status == 'meets' else 'Below',
+        'status_text': _get_status_text(hsdir_wfu_status),
         'status_color': STATUS_COLORS[hsdir_wfu_status],
         'status_tooltip': STATUS_TOOLTIPS[hsdir_wfu_status],
         'rowspan': 2,
@@ -991,12 +1080,12 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
         'flag_color': hsdir_color,
         'metric': 'Time Known',
         'metric_tooltip': METRIC_TOOLTIPS['tk_hsdir'],
-        'value': _format_da_value_html(tk_stats, total_authorities),
+        'value': _format_da_value_html(tk_stats),
         'value_source': 'da',
         'value_source_tooltip': SOURCE_TOOLTIPS['da'],
         'threshold': hsdir_tk_threshold,
         'status': hsdir_tk_status,
-        'status_text': 'Meets' if hsdir_tk_status == 'meets' else 'Below',
+        'status_text': _get_status_text(hsdir_tk_status),
         'status_color': STATUS_COLORS[hsdir_tk_status],
         'status_tooltip': STATUS_TOOLTIPS[hsdir_tk_status],
         'rowspan': 0,
