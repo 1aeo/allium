@@ -220,8 +220,9 @@ class TestAROIPaginationSystem(unittest.TestCase):
         template = self.jinja_env.get_template('aroi-leaderboards.html')
         rendered = template.render(**empty_context)
         
-        # Should display "No bandwidth data available" message
-        self.assertIn('No bandwidth data available', rendered)
+        # Should display fallback message when category has no data
+        # The template macro shows "No data available for this category."
+        self.assertIn('No data available for this category', rendered)
         
         # Should not display pagination navigation for empty category
         bandwidth_section = re.search(r'<section id="bandwidth".*?</section>', rendered, re.DOTALL)
@@ -282,9 +283,10 @@ class TestAROIPaginationSystem(unittest.TestCase):
         self.assertIn('.pagination-nav-bottom', skeleton_content)
         self.assertIn(':target', skeleton_content)
         
-        # Verify category-specific CSS exists
-        self.assertIn('#bandwidth-1-10', skeleton_content)
-        self.assertIn('#consensus_weight-1-10', skeleton_content)
+        # Verify CSS uses dynamic patterns for category-specific targeting
+        # The template generates IDs like #bandwidth-1-10, but CSS targets them
+        # using attribute selectors like [id$="-1-10"]
+        self.assertIn('[id$="-1-10"]', skeleton_content)
 
     def test_pagination_performance_structure(self):
         """Test that pagination structure is optimized for performance."""

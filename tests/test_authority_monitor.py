@@ -174,54 +174,52 @@ class TestAuthorityMonitor:
         assert alerts[0]['severity'] == 'critical'
         assert '3/4' in alerts[0]['message']
     
-    @patch('consensus.authority_monitor.urllib.request.urlopen')
-    def test_check_authority_success(self, mock_urlopen):
+    @patch('allium.lib.consensus.authority_monitor.socket.socket')
+    def test_check_authority_success(self, mock_socket_class):
         """Test successful authority check."""
         monitor = AuthorityMonitor()
         
-        # Mock successful response
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.__enter__ = Mock(return_value=mock_response)
-        mock_response.__exit__ = Mock(return_value=False)
-        mock_urlopen.return_value = mock_response
+        # Mock successful socket connection (connect_ex returns 0 for success)
+        mock_sock = MagicMock()
+        mock_sock.connect_ex.return_value = 0
+        mock_socket_class.return_value = mock_sock
         
-        result = monitor._check_authority('test', 'http://example.com')
+        result = monitor._check_authority('test', 'http://127.0.0.1:80')
         
         assert result['online'] == True
-        assert result['status_code'] == 200
+        # The implementation uses socket, not HTTP, so status_code is always None
+        assert result['status_code'] is None
         assert result['error'] is None
         assert result['latency_ms'] is not None
     
-    @patch('consensus.authority_monitor.urllib.request.urlopen')
-    def test_check_authority_http_error(self, mock_urlopen):
-        """Test authority check with HTTP error."""
-        import urllib.error
-        
+    @patch('allium.lib.consensus.authority_monitor.socket.socket')
+    def test_check_authority_http_error(self, mock_socket_class):
+        """Test authority check with connection refused."""
         monitor = AuthorityMonitor()
         
-        # Mock HTTP error
-        mock_urlopen.side_effect = urllib.error.HTTPError(
-            'http://example.com', 503, 'Service Unavailable', {}, None
-        )
+        # Mock connection refused (non-zero return from connect_ex)
+        mock_sock = MagicMock()
+        mock_sock.connect_ex.return_value = 111  # Connection refused error code
+        mock_socket_class.return_value = mock_sock
         
-        result = monitor._check_authority('test', 'http://example.com')
+        result = monitor._check_authority('test', 'http://127.0.0.1:80')
         
         assert result['online'] == False
-        assert result['status_code'] == 503
-        assert 'HTTP 503' in result['error']
+        assert 'Connection refused' in result['error']
     
-    @patch('consensus.authority_monitor.urllib.request.urlopen')
-    def test_check_authority_timeout(self, mock_urlopen):
+    @patch('allium.lib.consensus.authority_monitor.socket.socket')
+    def test_check_authority_timeout(self, mock_socket_class):
         """Test authority check with timeout."""
-        import socket
+        import socket as socket_module
         
         monitor = AuthorityMonitor()
         
-        # Mock timeout
-        mock_urlopen.side_effect = socket.timeout('Connection timed out')
+        # Mock timeout by having socket operations raise socket.timeout
+        mock_sock = MagicMock()
+        mock_sock.connect_ex.side_effect = socket_module.timeout('Connection timed out')
+        mock_socket_class.return_value = mock_sock
         
-        result = monitor._check_authority('test', 'http://example.com')
+        result = monitor._check_authority('test', 'http://127.0.0.1:80')
         
         assert result['online'] == False
         assert result['latency_ms'] is None

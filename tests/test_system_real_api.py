@@ -16,6 +16,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from allium.lib.coordinator import Coordinator, create_relay_set_with_coordinator
 from allium.lib.workers import fetch_onionoo_details, fetch_onionoo_uptime
 
+# Test constants
+TEST_BANDWIDTH_URL = "http://invalid.nonexistent.url/bandwidth"
+TEST_AROI_URL = "http://invalid.nonexistent.url/aroi"
+TEST_BANDWIDTH_CACHE_HOURS = 1
+
 
 class TestErrorHandlingWithRealAPIs:
     """Test error handling with real API endpoints"""
@@ -31,6 +36,9 @@ class TestErrorHandlingWithRealAPIs:
                 output_dir=temp_dir,
                 onionoo_details_url=invalid_details_url,
                 onionoo_uptime_url=invalid_uptime_url,
+                onionoo_bandwidth_url=TEST_BANDWIDTH_URL,
+                aroi_url=TEST_AROI_URL,
+                bandwidth_cache_hours=TEST_BANDWIDTH_CACHE_HOURS,
                 progress=False
             )
             

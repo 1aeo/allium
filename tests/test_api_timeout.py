@@ -108,6 +108,11 @@ def start_slow_server(port=None):
     return server, port
 
 
+import pytest
+
+
+@pytest.mark.slow
+@pytest.mark.timeout(120)  # Allow 2 minutes for this test
 def test_total_timeout_wrapper():
     """Test the total timeout wrapper directly."""
     print("\n" + "="*60)
@@ -157,6 +162,8 @@ def test_total_timeout_wrapper():
         return False
 
 
+@pytest.mark.slow
+@pytest.mark.timeout(120)  # Allow 2 minutes for this test
 def test_cache_fallback_on_timeout():
     """Test that cache is used when timeout occurs."""
     print("\n" + "="*60)
@@ -215,6 +222,8 @@ def test_cache_fallback_on_timeout():
         return False
 
 
+@pytest.mark.slow
+@pytest.mark.timeout(120)  # Allow 2 minutes for this test
 def test_compare_old_vs_new_timeout():
     """Compare old (socket-based) vs new (total) timeout behavior."""
     print("\n" + "="*60)

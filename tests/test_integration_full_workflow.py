@@ -20,6 +20,10 @@ from allium.lib.workers import fetch_onionoo_details, get_worker_status
 from allium.lib.relays import Relays
 
 
+# Mark all tests in this file as slow integration tests
+pytestmark = [pytest.mark.slow, pytest.mark.integration]
+
+
 class TestFullIntegrationFlow:
     """Test the complete integration flow from coordinator to workers to relays"""
     

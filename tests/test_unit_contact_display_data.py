@@ -273,32 +273,23 @@ class TestContactDisplayData(unittest.TestCase):
 
     def test_compute_contact_display_data_no_intelligence_data(self):
         """Test handling when no intelligence data is available."""
-        relays_no_intel = Relays(
-            output_dir='/tmp/test',
-            onionoo_url='https://test.example.com',
-            relay_data={'relays': [], 'sorted': {}},
-            use_bits=False,
-            progress=False
-        )
-        
-        # Mock the initialization methods to avoid actual processing
-        with patch.object(Relays, '_fix_missing_observed_bandwidth'), \
-             patch.object(Relays, '_sort_by_observed_bandwidth'), \
-             patch.object(Relays, '_trim_platform'), \
-             patch.object(Relays, '_add_hashed_contact'), \
-             patch.object(Relays, '_process_aroi_contacts'), \
-             patch.object(Relays, '_preprocess_template_data'), \
-             patch.object(Relays, '_categorize'), \
-             patch.object(Relays, '_generate_aroi_leaderboards'), \
-             patch.object(Relays, '_generate_smart_context'):
+        # Use TestPatchingHelpers for consistent patching of Relays methods
+        with TestPatchingHelpers.patch_relays_methods():
+            relays_no_intel = Relays(
+                output_dir='/tmp/test',
+                onionoo_url='https://test.example.com',
+                relay_data={'relays': [], 'sorted': {}},
+                use_bits=False,
+                progress=False
+            )
             
             relays_no_intel.json = {}  # No intelligence data
             
             result = relays_no_intel._compute_contact_display_data(
                 self.sample_relay_data, 'MB/s', self.sample_reliability, 'test_contact_hash', []
             )
-            
-                    # Should handle gracefully when no intelligence data exists
+        
+        # Should handle gracefully when no intelligence data exists
         # Version-related fields are always present even with no intelligence data
         intelligence = result['operator_intelligence']
         self.assertEqual(len(intelligence), 3)

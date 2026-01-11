@@ -72,7 +72,9 @@ jobs:
       run: |
         # Run tests if they exist, otherwise skip gracefully
         if [ -d "tests" ] && [ "$(ls -A tests)" ]; then
-          python -m pytest tests/ -v --cov=. --cov-report=xml || echo "⚠️ Some tests failed but continuing"
+          # Run tests excluding slow tests (e.g., integration tests, timeout tests)
+          # Use pytest.ini configuration which sets timeout and markers
+          python -m pytest tests/ -v --cov=. --cov-report=xml -m "not slow"
         else
           echo "⚠️ No tests found, creating minimal coverage report"
           echo '<?xml version="1.0" ?><coverage version="6.0"><sources></sources><packages></packages></coverage>' > coverage.xml

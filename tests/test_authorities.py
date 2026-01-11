@@ -587,7 +587,7 @@ class TestDirectoryAuthorities(unittest.TestCase):
             # Basic content validation
             self.assertIn("test_auth", content)
             self.assertIn("Directory Authorities", content)
-            self.assertIn("authorities currently active", content)
+            self.assertIn("authorities discovered", content)
             
         except Exception as e:
             self.fail(f"Template rendering failed: {e}")

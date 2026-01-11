@@ -30,7 +30,7 @@ class TestFetchCollectorConsensusData:
     def test_returns_data_dict(self, mock_mark_ready, mock_cache_manager):
         """Test that function returns a dict with expected structure."""
         # Mock that feature is enabled
-        with patch('lib.consensus.is_enabled', return_value=True):
+        with patch('lib.consensus.is_consensus_evaluation_enabled', return_value=True):
             # Mock the CollectorFetcher class
             with patch('lib.consensus.CollectorFetcher') as MockFetcher:
                 mock_instance = MagicMock()
@@ -66,7 +66,7 @@ class TestFetchCollectorConsensusData:
         mock_cache_manager.load_cache.return_value = cached_data
         
         with patch('lib.workers._mark_ready'):
-            with patch('lib.consensus.is_enabled', return_value=True):
+            with patch('lib.consensus.is_consensus_evaluation_enabled', return_value=True):
                 result = fetch_collector_consensus_data()
                 
                 # Should use cached data without fetching
@@ -83,7 +83,7 @@ class TestFetchConsensusHealth:
     @patch('lib.workers._mark_ready')
     def test_returns_dict_or_none(self, mock_mark_ready):
         """Test that function returns a dict with expected structure."""
-        with patch('lib.consensus.is_enabled', return_value=True):
+        with patch('lib.consensus.is_consensus_evaluation_enabled', return_value=True):
             with patch('lib.consensus.AuthorityMonitor') as MockMonitor:
                 mock_instance = MagicMock()
                 mock_instance.check_all_authorities.return_value = {
@@ -154,13 +154,13 @@ class TestFeatureFlagIntegration:
     
     def test_disabled_feature_returns_none(self):
         """Test that disabled feature returns None."""
-        with patch('lib.consensus.is_enabled', return_value=False):
+        with patch('lib.consensus.is_consensus_evaluation_enabled', return_value=False):
             result = fetch_collector_consensus_data()
             assert result is None
     
     def test_health_disabled_returns_none(self):
         """Test that disabled feature returns None for health check."""
-        with patch('lib.consensus.is_enabled', return_value=False):
+        with patch('lib.consensus.is_consensus_evaluation_enabled', return_value=False):
             result = fetch_consensus_health()
             assert result is None
 
@@ -175,7 +175,7 @@ class TestErrorHandling:
         mock_cache_manager.get_cache_age.return_value = 7200  # Force fetch
         mock_cache_manager.load_cache.return_value = None  # No fallback cache
         
-        with patch('lib.consensus.is_enabled', return_value=True):
+        with patch('lib.consensus.is_consensus_evaluation_enabled', return_value=True):
             with patch('lib.consensus.CollectorFetcher') as MockFetcher:
                 MockFetcher.side_effect = Exception('Network error')
                 
@@ -189,7 +189,7 @@ class TestErrorHandling:
     @patch('lib.workers._mark_stale')
     def test_fetch_health_handles_exception(self, mock_mark_stale):
         """Test that fetch_consensus_health handles exceptions gracefully."""
-        with patch('lib.consensus.is_enabled', return_value=True):
+        with patch('lib.consensus.is_consensus_evaluation_enabled', return_value=True):
             with patch('lib.consensus.AuthorityMonitor') as MockMonitor:
                 MockMonitor.side_effect = Exception('Network error')
                 

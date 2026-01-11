@@ -203,8 +203,13 @@ class TestPatchingHelpers:
     @staticmethod
     @contextmanager
     def patch_relays_methods():
-        """Context manager to patch all common Relays methods."""
-        with patch.object(Relays, '_fix_missing_observed_bandwidth'), \
+        """Context manager to patch all common Relays methods.
+        
+        Note: Methods patched here must exist in Relays class.
+        Previously patched _fix_missing_observed_bandwidth was removed
+        when bandwidth handling was refactored.
+        """
+        with patch.object(Relays, '_filter_and_fix_relays'), \
              patch.object(Relays, '_sort_by_observed_bandwidth'), \
              patch.object(Relays, '_trim_platform'), \
              patch.object(Relays, '_add_hashed_contact'), \

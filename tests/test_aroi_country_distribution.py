@@ -58,20 +58,21 @@ class TestAROICountryDistribution(unittest.TestCase):
         self.assertEqual(len(top_3), 3, "Should return exactly 3 countries")
         
         # Check rank 1 (Germany with 3 operators)
+        # Note: country codes are stored as provided in relay data (lowercase)
         self.assertEqual(top_3[0]['rank'], 1)
-        self.assertEqual(top_3[0]['country_code'], 'DE')
+        self.assertEqual(top_3[0]['country_code'], 'de')
         self.assertEqual(top_3[0]['count'], 3)
         self.assertAlmostEqual(top_3[0]['percentage'], 42.857, places=1)  # 3/7 = 42.857%
         
         # Check rank 2 (US with 2 operators)
         self.assertEqual(top_3[1]['rank'], 2)
-        self.assertEqual(top_3[1]['country_code'], 'US')
+        self.assertEqual(top_3[1]['country_code'], 'us')
         self.assertEqual(top_3[1]['count'], 2)
         self.assertAlmostEqual(top_3[1]['percentage'], 28.571, places=1)  # 2/7 = 28.571%
         
         # Check rank 3 (NL or FR with 1 operator - could be either)
         self.assertEqual(top_3[2]['rank'], 3)
-        self.assertIn(top_3[2]['country_code'], ['NL', 'FR'])
+        self.assertIn(top_3[2]['country_code'], ['nl', 'fr'])
         self.assertEqual(top_3[2]['count'], 1)
         self.assertAlmostEqual(top_3[2]['percentage'], 14.285, places=1)  # 1/7 = 14.285%
     
@@ -105,10 +106,10 @@ class TestAROICountryDistribution(unittest.TestCase):
         
         top_3 = metrics['top_3_aroi_countries']
         
-        # Should only count validated: DE=2, US=1
-        self.assertEqual(top_3[0]['country_code'], 'DE')
+        # Should only count validated: de=2, us=1
+        self.assertEqual(top_3[0]['country_code'], 'de')
         self.assertEqual(top_3[0]['count'], 2)
-        self.assertEqual(top_3[1]['country_code'], 'US')
+        self.assertEqual(top_3[1]['country_code'], 'us')
         self.assertEqual(top_3[1]['count'], 1)
     
     def test_top_3_countries_fewer_than_three(self):
@@ -173,9 +174,9 @@ class TestAROICountryDistribution(unittest.TestCase):
         
         top_3 = metrics['top_3_aroi_countries']
         
-        # Should only include DE (others have missing/invalid country)
+        # Should only include de (others have missing/invalid country)
         self.assertEqual(len(top_3), 1)
-        self.assertEqual(top_3[0]['country_code'], 'DE')
+        self.assertEqual(top_3[0]['country_code'], 'de')
         self.assertEqual(top_3[0]['count'], 1)
     
     def test_top_3_countries_operator_metrics_disabled(self):
@@ -237,16 +238,16 @@ class TestAROICountryDistribution(unittest.TestCase):
         
         top_3 = metrics['top_3_aroi_countries']
         
-        # DE: 5/10 = 50%
-        self.assertEqual(top_3[0]['country_code'], 'DE')
+        # de: 5/10 = 50%
+        self.assertEqual(top_3[0]['country_code'], 'de')
         self.assertAlmostEqual(top_3[0]['percentage'], 50.0, places=1)
         
-        # US: 3/10 = 30%
-        self.assertEqual(top_3[1]['country_code'], 'US')
+        # us: 3/10 = 30%
+        self.assertEqual(top_3[1]['country_code'], 'us')
         self.assertAlmostEqual(top_3[1]['percentage'], 30.0, places=1)
         
-        # NL: 2/10 = 20%
-        self.assertEqual(top_3[2]['country_code'], 'NL')
+        # nl: 2/10 = 20%
+        self.assertEqual(top_3[2]['country_code'], 'nl')
         self.assertAlmostEqual(top_3[2]['percentage'], 20.0, places=1)
 
 

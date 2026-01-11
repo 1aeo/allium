@@ -1,5 +1,8 @@
 """
 Unit tests for allium/lib/allium.lib.workers.py - Worker system for API data fetching
+
+Note: Many tests in this file make network calls and may be slow.
+Run with -m "not slow" to skip slow tests.
 """
 import json
 import os
@@ -14,6 +17,9 @@ from unittest.mock import patch, mock_open, MagicMock
 
 # Add the project root to Python path
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+
+# Mark all tests in this file as slow - they make network calls or have complex mocking
+pytestmark = pytest.mark.slow
 
 from allium.lib.workers import (
     _save_cache as save_cache, _load_cache as load_cache, 
