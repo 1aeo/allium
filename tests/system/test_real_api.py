@@ -15,6 +15,9 @@ TEST_BANDWIDTH_URL = "http://invalid.nonexistent.url/bandwidth"
 TEST_AROI_URL = "http://invalid.nonexistent.url/aroi"
 TEST_BANDWIDTH_CACHE_HOURS = 1
 
+# Mark all tests in this module as slow (real network calls)
+pytestmark = [pytest.mark.slow, pytest.mark.system]
+
 
 class TestErrorHandlingWithRealAPIs:
     """Test error handling with real API endpoints"""
