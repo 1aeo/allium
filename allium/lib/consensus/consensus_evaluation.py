@@ -10,6 +10,7 @@ OPTIMIZATION: Leverages existing utilities from the codebase:
 """
 
 from typing import Dict, List, Optional, Any
+from collections import Counter
 
 # Import flag thresholds from centralized module (DRY - single source of truth)
 try:
@@ -122,6 +123,62 @@ def _format_wfu_display(wfu, decimals=1, fallback='N/A'):
     if wfu is None:
         return fallback
     return format_percentage_from_fraction(wfu, decimals, fallback)
+
+
+# Empty stats result - reused constant to avoid dict recreation
+_EMPTY_DA_STATS = {
+    'majority_value': None, 'majority_count': 0,
+    'min_value': None, 'median_value': None, 'max_value': None,
+    'majority_display': 'N/A', 'min_display': 'N/A',
+    'median_display': 'N/A', 'max_display': 'N/A',
+    'has_variation': False, 'total_authorities': 0,
+}
+
+
+def _compute_da_value_stats(values: list, format_func, total_authorities: int = 9) -> dict:
+    """
+    Compute majority, min, median, max statistics for DA-measured values.
+    
+    Args:
+        values: List of raw values (one per authority that reported)
+        format_func: Function to format the value for display (e.g., _format_wfu_display)
+        total_authorities: Total number of authorities (for reference)
+    
+    Returns:
+        dict with: majority_value, majority_count, min_value, median_value, max_value,
+                   and formatted versions of each
+    """
+    # Filter out None values in single pass
+    values = [v for v in values if v is not None]
+    if not values:
+        return _EMPTY_DA_STATS
+    
+    # Sort once - reuse for min, max, median
+    sorted_values = sorted(values)
+    n = len(sorted_values)
+    min_value = sorted_values[0]
+    max_value = sorted_values[-1]
+    
+    # Median from sorted list
+    mid = n // 2
+    median_value = (sorted_values[mid - 1] + sorted_values[mid]) / 2 if n % 2 == 0 else sorted_values[mid]
+    
+    # Find majority (most common value)
+    majority_value, majority_count = Counter(values).most_common(1)[0]
+    
+    return {
+        'majority_value': majority_value,
+        'majority_count': majority_count,
+        'min_value': min_value,
+        'median_value': median_value,
+        'max_value': max_value,
+        'majority_display': format_func(majority_value),
+        'min_display': format_func(min_value),
+        'median_display': format_func(median_value),
+        'max_display': format_func(max_value),
+        'has_variation': min_value != max_value,
+        'total_authorities': n,
+    }
 
 
 # Canonical flag ordering for consistent display across all relay pages
@@ -280,18 +337,32 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
     total_authorities = consensus_data.get('total_authorities', get_voting_authority_count())
     majority_required = consensus_data.get('majority_required', 5)
     
-    # Extract relay's values from first available authority (single pass)
-    relay_wfu = relay_tk = relay_bw = None
+    # Collect ALL values from all authorities for DA-measured metrics
+    # This enables computing majority, min, median, max statistics
+    all_wfu_values = []
+    all_tk_values = []
+    all_mtbf_values = []
+    relay_bw = None
+    
     for vote in authority_votes:
-        if relay_wfu is None and vote.get('wfu') is not None:
-            relay_wfu = vote['wfu']
-        if relay_tk is None and vote.get('tk') is not None:
-            relay_tk = vote['tk']
+        if vote.get('wfu') is not None:
+            all_wfu_values.append(vote['wfu'])
+        if vote.get('tk') is not None:
+            all_tk_values.append(vote['tk'])
+        if vote.get('mtbf') is not None:
+            all_mtbf_values.append(vote['mtbf'])
         if relay_bw is None:
             relay_bw = vote.get('measured') or vote.get('bandwidth')
-        # Early exit if all values found
-        if relay_wfu is not None and relay_tk is not None and relay_bw is not None:
-            break
+    
+    # Compute statistics for DA-measured values (majority, min, median, max)
+    wfu_stats = _compute_da_value_stats(all_wfu_values, _format_wfu_display, total_authorities)
+    tk_stats = _compute_da_value_stats(all_tk_values, _format_days, total_authorities)
+    mtbf_stats = _compute_da_value_stats(all_mtbf_values, _format_days, total_authorities)
+    
+    # Use majority value as the primary display value (instead of first-available)
+    relay_wfu = wfu_stats['majority_value']
+    relay_tk = tk_stats['majority_value']
+    relay_mtbf = mtbf_stats['majority_value']
     
     # For Guard BW eligibility, use observed_bandwidth (from Onionoo descriptor)
     # NOT the vote's measured value (which is scaled for path selection)
@@ -426,18 +497,34 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
     ipv6_tested_count = total_authorities - len(ipv6_not_tested)
     
     return {
-        # WFU values
+        # WFU values (DA-measured, with majority/min/median/max stats)
         'wfu': relay_wfu,
         'wfu_display': _format_wfu_display(relay_wfu),
         'wfu_meets': relay_wfu and relay_wfu >= guard_wfu_threshold,
         'guard_wfu_threshold': guard_wfu_threshold,
+        # WFU stats for Option 6 display format
+        'wfu_stats': wfu_stats,
+        'wfu_majority_display': wfu_stats['majority_display'],
+        'wfu_majority_count': wfu_stats['majority_count'],
+        'wfu_min_display': wfu_stats['min_display'],
+        'wfu_median_display': wfu_stats['median_display'],
+        'wfu_max_display': wfu_stats['max_display'],
+        'wfu_has_variation': wfu_stats['has_variation'],
         
-        # Time Known values
+        # Time Known values (DA-measured, with majority/min/median/max stats)
         'tk': relay_tk,
         'tk_display': _format_days(relay_tk, suffix=' days'),
         'tk_meets': relay_tk and relay_tk >= guard_tk_threshold,
         'guard_tk_threshold': guard_tk_threshold,
         'tk_days_needed': (guard_tk_threshold - (relay_tk or 0)) / SECONDS_PER_DAY if relay_tk and relay_tk < guard_tk_threshold else 0,
+        # TK stats for Option 6 display format
+        'tk_stats': tk_stats,
+        'tk_majority_display': tk_stats['majority_display'],
+        'tk_majority_count': tk_stats['majority_count'],
+        'tk_min_display': tk_stats['min_display'],
+        'tk_median_display': tk_stats['median_display'],
+        'tk_max_display': tk_stats['max_display'],
+        'tk_has_variation': tk_stats['has_variation'],
         
         # Guard BW values - use observed_bandwidth for eligibility (actual bandwidth, not scaled)
         # Note: relay_bw is the scaled consensus value, guard_bw_value is observed_bandwidth
@@ -460,7 +547,16 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
         'stable_mtbf_range': stable_mtbf_range,
         'stable_mtbf_meets_all': stable_meets_all,  # Same count for simplicity
         'stable_mtbf_meets_count': stable_meets_count,
-        'mtbf_display': _format_days(relay_tk, decimals=0, suffix=' days'),
+        # MTBF (DA-measured, with majority/min/median/max stats)
+        'mtbf': relay_mtbf,
+        'mtbf_display': _format_days(relay_mtbf, decimals=0, suffix=' days'),
+        'mtbf_stats': mtbf_stats,
+        'mtbf_majority_display': mtbf_stats['majority_display'],
+        'mtbf_majority_count': mtbf_stats['majority_count'],
+        'mtbf_min_display': mtbf_stats['min_display'],
+        'mtbf_median_display': mtbf_stats['median_display'],
+        'mtbf_max_display': mtbf_stats['max_display'],
+        'mtbf_has_variation': mtbf_stats['has_variation'],
         
         # Fast values - use observed_bandwidth like Guard
         'fast_speed': guard_bw_value,  # Use observed_bandwidth
@@ -665,32 +761,41 @@ def _format_eligible_flags_display(diag: dict) -> dict:
     }
 
 
+def _format_stricter_threshold(strict_auths: list, max_display: str) -> str:
+    """Format stricter threshold exception HTML snippet."""
+    if not strict_auths:
+        return ''
+    return f'<br><span style="color: #856404; font-size: 10px;">[Stricter] {", ".join(strict_auths)}: ≥{max_display}</span>'
+
+
+def _format_da_value_html(stats: dict, total_auths: int, source_label: str = 'DA') -> str:
+    """Format DA-measured value in Option 6 format from stats dict.
+    
+    Format:
+        Majority: **{value}** ({count}/{total} DA)
+        Min/Med/Max: {min} / {med} / {max}  (only if variation exists)
+    """
+    line1 = (f'<span style="color: #666; font-size: 10px;">Majority:</span> '
+             f'<strong>{stats["majority_display"]}</strong> '
+             f'<span style="color: #6c757d; font-size: 10px;">({stats["majority_count"]}/{total_auths} {source_label})</span>')
+    if stats.get('has_variation'):
+        line2 = (f'<br><span style="color: #666; font-size: 10px;">Min/Med/Max: '
+                 f'{stats["min_display"]} / {stats["median_display"]} / {stats["max_display"]}</span>')
+        return line1 + line2
+    return line1
+
+
+def _format_relay_value_html(value_display: str, total_auths: int, source_label: str = 'R') -> str:
+    """Format relay-reported value (same for all authorities, no variation)."""
+    return f'<strong>{value_display}</strong> <span style="color: #6c757d; font-size: 10px;">({total_auths}/{total_auths} {source_label})</span>'
+
+
 def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
     """
     Pre-compute flag requirements table data for template efficiency.
     
     Returns a list of row dictionaries with all display values and colors pre-computed.
     This moves complex Jinja2 conditionals to Python for better performance.
-    
-    Args:
-        rv: relay_values dict from _format_relay_values()
-        diag: Full consensus evaluation dict (for majority_required, total_authorities)
-    
-    Returns:
-        List of row dicts, each containing:
-        - flag: Flag name
-        - flag_tooltip: Tooltip for flag
-        - flag_color: Color for flag column based on eligibility status
-        - metric: Metric name
-        - metric_tooltip: Tooltip for metric
-        - value: Relay value display
-        - value_source: 'da' or 'relay'
-        - threshold: Threshold display
-        - status: 'meets', 'partial', or 'below'
-        - status_text: Display text for status
-        - status_color: Hex color for status
-        - status_tooltip: Tooltip for status
-        - rowspan: Number of rows this flag spans (only set on first row of flag)
     """
     if not rv or not diag:
         return []
@@ -701,27 +806,18 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
     
     def get_flag_color(flag_name: str) -> str:
         """Get color for flag column based on eligibility status."""
-        flag_data = flag_summary.get(flag_name.lower(), {})
-        status_class = flag_data.get('status_class', 'danger')
-        if status_class == 'success':
-            return STATUS_COLORS['meets']
-        elif status_class == 'warning':
-            return STATUS_COLORS['partial']
-        else:
-            return STATUS_COLORS['below']
-    
-    def format_stricter_threshold(strict_auths: list, max_display: str) -> str:
-        """Format stricter threshold exception HTML snippet."""
-        if not strict_auths:
-            return ''
-        auths_str = ', '.join(strict_auths)
-        return f'<br><span style="color: #856404; font-size: 10px;">[Stricter] {auths_str}: ≥{max_display}</span>'
+        status_class = flag_summary.get(flag_name.lower(), {}).get('status_class', 'danger')
+        return STATUS_COLORS.get({'success': 'meets', 'warning': 'partial'}.get(status_class, 'below'), STATUS_COLORS['below'])
     
     rows = []
     
+    # Pre-fetch stats dicts for cleaner code
+    wfu_stats = rv.get('wfu_stats', _EMPTY_DA_STATS)
+    tk_stats = rv.get('tk_stats', _EMPTY_DA_STATS)
+    mtbf_stats = rv.get('mtbf_stats', _EMPTY_DA_STATS)
+    
     # Guard flag (3 rows)
     guard_color = get_flag_color('guard')
-    # Row 1: WFU
     wfu_status = 'meets' if rv.get('wfu_meets') else 'below'
     rows.append({
         'flag': 'Guard',
@@ -729,7 +825,7 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
         'flag_color': guard_color,
         'metric': 'WFU',
         'metric_tooltip': METRIC_TOOLTIPS['wfu_guard'],
-        'value': rv.get('wfu_display', 'N/A'),
+        'value': _format_da_value_html(wfu_stats, total_authorities),
         'value_source': 'da',
         'value_source_tooltip': SOURCE_TOOLTIPS['da'],
         'threshold': '≥98% (all authorities)',
@@ -742,43 +838,38 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
     
     # Row 2: Time Known
     tk_status = 'meets' if rv.get('tk_meets') else 'below'
-    tk_extra = ''
-    if not rv.get('tk_meets') and rv.get('tk_days_needed', 0) > 0:
-        tk_extra = f" (need {rv['tk_days_needed']:.1f} more days)"
+    tk_extra = f" (need {rv['tk_days_needed']:.1f} more days)" if not rv.get('tk_meets') and rv.get('tk_days_needed', 0) > 0 else ''
     rows.append({
         'flag': 'Guard',
         'flag_tooltip': FLAG_TOOLTIPS['guard'],
         'flag_color': guard_color,
         'metric': 'Time Known',
         'metric_tooltip': METRIC_TOOLTIPS['tk_guard'],
-        'value': rv.get('tk_display', 'N/A'),
+        'value': _format_da_value_html(tk_stats, total_authorities),
         'value_source': 'da',
         'value_source_tooltip': SOURCE_TOOLTIPS['da'],
         'threshold': '≥8 days (all authorities)',
         'status': tk_status,
-        'status_text': 'Meets' if tk_status == 'meets' else f'Below{tk_extra}',
+        'status_text': f'Below{tk_extra}' if tk_status != 'meets' else 'Meets',
         'status_color': STATUS_COLORS[tk_status],
         'status_tooltip': STATUS_TOOLTIPS[tk_status],
-        'rowspan': 0,  # Continuation row
+        'rowspan': 0,
     })
     
-    # Row 3: Bandwidth
+    # Row 3: Bandwidth (Relay-reported)
     if rv.get('guard_bw_meets_guarantee'):
-        bw_status = 'meets'
-        bw_extra = ' (≥2 MB/s)'
+        bw_status, bw_extra = 'meets', ' (≥2 MB/s)'
     elif rv.get('guard_bw_meets_some'):
-        bw_status = 'partial'
-        bw_extra = f" (top 25% for {rv.get('guard_bw_meets_count', 0)})"
+        bw_status, bw_extra = 'partial', f" (top 25% for {rv.get('guard_bw_meets_count', 0)})"
     else:
-        bw_status = 'below'
-        bw_extra = ''
+        bw_status, bw_extra = 'below', ''
     rows.append({
         'flag': 'Guard',
         'flag_tooltip': FLAG_TOOLTIPS['guard'],
         'flag_color': guard_color,
         'metric': 'Bandwidth',
         'metric_tooltip': METRIC_TOOLTIPS['bw_guard'],
-        'value': rv.get('observed_bw_display', 'N/A'),
+        'value': _format_relay_value_html(rv.get('observed_bw_display', 'N/A'), total_authorities),
         'value_source': 'relay',
         'value_source_tooltip': SOURCE_TOOLTIPS['relay'],
         'threshold': f"≥{rv.get('guard_bw_guarantee_display', '2 MB/s')} OR ≥{rv.get('guard_bw_range', 'top 25%')}",
@@ -791,31 +882,18 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
     
     # Stable flag (2 rows)
     stable_color = get_flag_color('stable')
-    # Row 1: MTBF
-    mtbf_meets_all = rv.get('stable_mtbf_meets_all', False)
     mtbf_meets_count = rv.get('stable_mtbf_meets_count', 0)
-    if mtbf_meets_all:
-        mtbf_status = 'meets'
-        mtbf_extra = ''
-    elif mtbf_meets_count >= majority_required:
-        mtbf_status = 'partial'
-        mtbf_extra = f" ({mtbf_meets_count}/{total_authorities})"
-    else:
-        mtbf_status = 'below'
-        mtbf_extra = ''
-    # Build MTBF threshold with stricter exceptions
-    mtbf_threshold = f"≥{rv.get('stable_mtbf_min_display', 'N/A')} - {rv.get('stable_mtbf_typical_display', 'N/A')} (varies)"
-    mtbf_threshold += format_stricter_threshold(
-        rv.get('stable_mtbf_strict_auths', []),
-        rv.get('stable_mtbf_max_display', '')
-    )
+    mtbf_status = 'meets' if rv.get('stable_mtbf_meets_all') else ('partial' if mtbf_meets_count >= majority_required else 'below')
+    mtbf_extra = f" ({mtbf_meets_count}/{total_authorities})" if mtbf_status == 'partial' else ''
+    mtbf_threshold = (f"≥{rv.get('stable_mtbf_min_display', 'N/A')} - {rv.get('stable_mtbf_typical_display', 'N/A')} (varies)"
+                      + _format_stricter_threshold(rv.get('stable_mtbf_strict_auths', []), rv.get('stable_mtbf_max_display', '')))
     rows.append({
         'flag': 'Stable',
         'flag_tooltip': FLAG_TOOLTIPS['stable'],
         'flag_color': stable_color,
         'metric': 'MTBF',
         'metric_tooltip': METRIC_TOOLTIPS['mtbf_stable'],
-        'value': rv.get('mtbf_display', 'N/A'),
+        'value': _format_da_value_html(mtbf_stats, total_authorities),
         'value_source': 'da',
         'value_source_tooltip': SOURCE_TOOLTIPS['da'],
         'threshold': mtbf_threshold,
@@ -826,35 +904,25 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
         'rowspan': 2,
     })
     
-    # Row 2: Uptime
-    uptime_meets_all = rv.get('stable_uptime_meets_all', False)
+    # Row 2: Uptime (Relay-reported)
     uptime_meets_count = rv.get('stable_uptime_meets_count', 0)
-    uptime_value = rv.get('stable_uptime')
-    if uptime_value is None:
-        uptime_status = 'below'
-        uptime_text = 'N/A'
-    elif uptime_meets_all:
-        uptime_status = 'meets'
-        uptime_text = 'Meets'
+    if rv.get('stable_uptime') is None:
+        uptime_status, uptime_text = 'below', 'N/A'
+    elif rv.get('stable_uptime_meets_all'):
+        uptime_status, uptime_text = 'meets', 'Meets'
     elif uptime_meets_count >= majority_required:
-        uptime_status = 'partial'
-        uptime_text = f"Partial ({uptime_meets_count}/{total_authorities})"
+        uptime_status, uptime_text = 'partial', f"Partial ({uptime_meets_count}/{total_authorities})"
     else:
-        uptime_status = 'below'
-        uptime_text = 'Below'
-    # Build Uptime threshold with stricter exceptions
-    uptime_threshold = f"≥{rv.get('stable_uptime_min_display', 'N/A')} - {rv.get('stable_uptime_typical_display', 'N/A')} (varies)"
-    uptime_threshold += format_stricter_threshold(
-        rv.get('stable_uptime_strict_auths', []),
-        rv.get('stable_uptime_max_display', '')
-    )
+        uptime_status, uptime_text = 'below', 'Below'
+    uptime_threshold = (f"≥{rv.get('stable_uptime_min_display', 'N/A')} - {rv.get('stable_uptime_typical_display', 'N/A')} (varies)"
+                        + _format_stricter_threshold(rv.get('stable_uptime_strict_auths', []), rv.get('stable_uptime_max_display', '')))
     rows.append({
         'flag': 'Stable',
         'flag_tooltip': FLAG_TOOLTIPS['stable'],
         'flag_color': stable_color,
         'metric': 'Uptime',
         'metric_tooltip': METRIC_TOOLTIPS['uptime_stable'],
-        'value': rv.get('stable_uptime_display', 'N/A'),
+        'value': _format_relay_value_html(rv.get('stable_uptime_display', 'N/A'), total_authorities),
         'value_source': 'relay',
         'value_source_tooltip': SOURCE_TOOLTIPS['relay'],
         'threshold': uptime_threshold,
@@ -865,33 +933,25 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
         'rowspan': 0,
     })
     
-    # Fast flag (1 row)
+    # Fast flag (1 row) - Relay-reported
     fast_color = get_flag_color('fast')
     if rv.get('fast_meets_minimum'):
-        fast_status = 'meets'
-        fast_extra = ' (≥100 KB/s)'
+        fast_status, fast_extra = 'meets', ' (≥100 KB/s)'
     elif rv.get('fast_meets_all'):
-        fast_status = 'meets'
-        fast_extra = ''
+        fast_status, fast_extra = 'meets', ''
     elif rv.get('fast_meets_count', 0) > 0:
-        fast_status = 'partial'
-        fast_extra = f" ({rv.get('fast_meets_count', 0)}/{total_authorities})"
+        fast_status, fast_extra = 'partial', f" ({rv.get('fast_meets_count', 0)}/{total_authorities})"
     else:
-        fast_status = 'below'
-        fast_extra = ''
-    # Build Fast threshold with stricter exceptions
-    fast_threshold = f"≥{rv.get('fast_minimum_display', '100 KB/s')} (guarantee) OR top 7/8"
-    fast_threshold += format_stricter_threshold(
-        rv.get('fast_speed_strict_auths', []),
-        rv.get('fast_speed_max_display', '')
-    )
+        fast_status, fast_extra = 'below', ''
+    fast_threshold = (f"≥{rv.get('fast_minimum_display', '100 KB/s')} (guarantee) OR top 7/8"
+                      + _format_stricter_threshold(rv.get('fast_speed_strict_auths', []), rv.get('fast_speed_max_display', '')))
     rows.append({
         'flag': 'Fast',
         'flag_tooltip': FLAG_TOOLTIPS['fast'],
         'flag_color': fast_color,
         'metric': 'Speed',
         'metric_tooltip': METRIC_TOOLTIPS['speed_fast'],
-        'value': rv.get('fast_speed_display', 'N/A'),
+        'value': _format_relay_value_html(rv.get('fast_speed_display', 'N/A'), total_authorities),
         'value_source': 'relay',
         'value_source_tooltip': SOURCE_TOOLTIPS['relay'],
         'threshold': fast_threshold,
@@ -902,21 +962,19 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
         'rowspan': 1,
     })
     
-    # HSDir flag (2 rows)
+    # HSDir flag (2 rows) - reuses WFU and TK stats from Guard
     hsdir_color = get_flag_color('hsdir')
-    # Row 1: WFU
     hsdir_wfu_status = 'meets' if rv.get('hsdir_wfu_meets') else 'below'
-    hsdir_wfu_threshold = rv.get('hsdir_wfu_threshold', 0.98)
     rows.append({
         'flag': 'HSDir',
         'flag_tooltip': FLAG_TOOLTIPS['hsdir'],
         'flag_color': hsdir_color,
         'metric': 'WFU',
         'metric_tooltip': METRIC_TOOLTIPS['wfu_hsdir'],
-        'value': rv.get('wfu_display', 'N/A'),
+        'value': _format_da_value_html(wfu_stats, total_authorities),
         'value_source': 'da',
         'value_source_tooltip': SOURCE_TOOLTIPS['da'],
-        'threshold': f"≥{hsdir_wfu_threshold * 100:.1f}%",
+        'threshold': f"≥{rv.get('hsdir_wfu_threshold', 0.98) * 100:.1f}%",
         'status': hsdir_wfu_status,
         'status_text': 'Meets' if hsdir_wfu_status == 'meets' else 'Below',
         'status_color': STATUS_COLORS[hsdir_wfu_status],
@@ -924,20 +982,16 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
         'rowspan': 2,
     })
     
-    # Row 2: Time Known - Build with stricter exceptions
     hsdir_tk_status = 'meets' if rv.get('hsdir_tk_meets') else 'below'
-    hsdir_tk_threshold = f"≥{rv.get('hsdir_tk_consensus_display', '25h')} (most)"
-    hsdir_tk_threshold += format_stricter_threshold(
-        rv.get('hsdir_tk_strict_auths', []),
-        rv.get('hsdir_tk_max_display', '10d')
-    )
+    hsdir_tk_threshold = (f"≥{rv.get('hsdir_tk_consensus_display', '25h')} (most)"
+                          + _format_stricter_threshold(rv.get('hsdir_tk_strict_auths', []), rv.get('hsdir_tk_max_display', '10d')))
     rows.append({
         'flag': 'HSDir',
         'flag_tooltip': FLAG_TOOLTIPS['hsdir'],
         'flag_color': hsdir_color,
         'metric': 'Time Known',
         'metric_tooltip': METRIC_TOOLTIPS['tk_hsdir'],
-        'value': rv.get('tk_display', 'N/A'),
+        'value': _format_da_value_html(tk_stats, total_authorities),
         'value_source': 'da',
         'value_source_tooltip': SOURCE_TOOLTIPS['da'],
         'threshold': hsdir_tk_threshold,
