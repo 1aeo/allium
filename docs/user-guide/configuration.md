@@ -6,8 +6,8 @@
 ## CLI Reference
 
 ```bash
-cd allium
-python3 allium.py [options]
+# From the repository root:
+python3 allium/allium.py [options]
 ```
 
 ### All Options
@@ -32,7 +32,7 @@ python3 allium.py [options]
 ### Low Memory (~400MB)
 
 ```bash
-python3 allium.py --apis details --workers 2 --progress
+python3 allium/allium.py --apis details --workers 2 --progress
 ```
 
 Disables uptime/bandwidth APIs. Reliability features unavailable.
@@ -40,7 +40,7 @@ Disables uptime/bandwidth APIs. Reliability features unavailable.
 ### Full Analytics (~2.4GB)
 
 ```bash
-python3 allium.py --apis all --progress
+python3 allium/allium.py --apis all --progress
 ```
 
 All features enabled including reliability analysis.
@@ -48,13 +48,13 @@ All features enabled including reliability analysis.
 ### Subdirectory Hosting
 
 ```bash
-python3 allium.py --base-url "/tor-metrics" --out /var/www/tor-metrics
+python3 allium/allium.py --base-url "/tor-metrics" --out /var/www/tor-metrics
 ```
 
 ### Debug Mode
 
 ```bash
-python3 allium.py --workers 0 --progress
+python3 allium/allium.py --workers 0 --progress
 ```
 
 Disables multiprocessing for easier debugging.
@@ -62,7 +62,7 @@ Disables multiprocessing for easier debugging.
 ### Production (Silent)
 
 ```bash
-python3 allium.py --out /var/www/tor-metrics
+python3 allium/allium.py --out /var/www/tor-metrics
 ```
 
 No progress output, suitable for cron.
@@ -74,19 +74,19 @@ No progress output, suitable for cron.
 ```bash
 crontab -e
 # Add:
-0 */6 * * * cd /path/to/allium && python3 allium.py --out /var/www/tor-metrics >> /var/log/allium.log 2>&1
+0 */6 * * * cd /path/to/allium && python3 allium/allium.py --out /var/www/tor-metrics >> /var/log/allium.log 2>&1
 ```
 
 ### Daily at 3 AM
 
 ```bash
-0 3 * * * cd /path/to/allium && python3 allium.py --out /var/www/tor-metrics
+0 3 * * * cd /path/to/allium && python3 allium/allium.py --out /var/www/tor-metrics
 ```
 
 ### Low Memory Cron
 
 ```bash
-0 */6 * * * cd /path/to/allium && python3 allium.py --apis details --out /var/www/tor-metrics
+0 */6 * * * cd /path/to/allium && python3 allium/allium.py --apis details --out /var/www/tor-metrics
 ```
 
 ### Cron Tips
@@ -99,17 +99,17 @@ crontab -e
 ## Virtual Environment
 
 ```bash
-cd allium
+# From the repository root:
 python3 -m venv venv
 source venv/bin/activate
 pip install -r config/requirements.txt
-python3 allium.py --progress
+python3 allium/allium.py --progress
 ```
 
 For cron with venv:
 
 ```bash
-0 */6 * * * cd /path/to/allium && source venv/bin/activate && python3 allium.py --out /var/www/tor-metrics
+0 */6 * * * cd /path/to/allium && source venv/bin/activate && python3 allium/allium.py --out /var/www/tor-metrics
 ```
 
 ## Performance Tuning

@@ -23,10 +23,10 @@ python3 -m venv venv
 source venv/bin/activate
 
 # Install development dependencies (includes all testing tools)
-pip install -r config/requirements-dev.txt
+python -m pip install -r config/requirements-dev.txt
 
 # Run allium
-cd allium && python3 allium.py --progress
+python3 allium/allium.py --progress
 ```
 
 ## 📦 Dependency Structure

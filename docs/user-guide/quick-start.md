@@ -13,6 +13,14 @@ Allium generates static HTML websites showing Tor relay statistics:
 
 ## Installation
 
+### Prerequisites
+
+- Python **3.8+**
+- `pip` (usually included with Python on most platforms)
+- Virtualenv support (`python3 -m venv`)
+  - On Debian/Ubuntu, you may need:
+    - `sudo apt-get update && sudo apt-get install -y python3-venv`
+
 ### One-Command (Recommended)
 
 ```bash
@@ -24,19 +32,29 @@ curl -sSL https://raw.githubusercontent.com/1aeo/allium/master/setup.sh | bash
 ```bash
 git clone https://github.com/1aeo/allium.git
 cd allium
-pip3 install -r config/requirements.txt
-cd allium
-python3 allium.py --progress
+python3 -m venv venv
+source venv/bin/activate
+python -m pip install -r config/requirements.txt
+
+# First run (recommended on low-memory systems)
+python3 allium/allium.py --progress --apis details
 ```
 
 ## First Run
 
 ```bash
-cd allium
-python3 allium.py --progress
+# From the repository root:
+source venv/bin/activate
+python3 allium/allium.py --progress
 ```
 
 Generation takes 2-5 minutes. Output goes to `www/`.
+
+If you run out of memory, use details-only mode:
+
+```bash
+python3 allium/allium.py --progress --apis details
+```
 
 ### View Locally
 
@@ -69,26 +87,26 @@ www/
 
 ```bash
 # Show progress
-python3 allium.py --progress
+python3 allium/allium.py --progress
 
 # Custom output directory
-python3 allium.py --out /var/www/tor-metrics
+python3 allium/allium.py --out /var/www/tor-metrics
 
 # Low memory mode (~400MB instead of ~2.4GB)
-python3 allium.py --apis details
+python3 allium/allium.py --apis details
 
 # All options
-python3 allium.py --help
+python3 allium/allium.py --help
 ```
 
 ## Quick Troubleshooting
 
 | Error | Solution |
 |-------|----------|
-| "Jinja2 not found" | `pip3 install -r config/requirements.txt` |
-| "Permission denied" | `python3 allium.py --out ~/allium-output` |
-| "No module named 'lib'" | Run from `allium/` directory: `cd allium` |
-| Out of memory | `python3 allium.py --apis details` |
+| "Jinja2 not found" | `python3 -m pip install -r config/requirements.txt` |
+| "Permission denied" | `python3 allium/allium.py --out ~/allium-output` |
+| "No module named 'lib'" | Run `python3 allium/allium.py ...` from the repository root |
+| Out of memory | `python3 allium/allium.py --apis details` |
 
 ## Next Steps
 

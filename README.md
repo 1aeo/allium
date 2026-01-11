@@ -13,13 +13,15 @@ curl -sSL https://raw.githubusercontent.com/1aeo/allium/master/setup.sh | bash
 **Manual installation**:
 ```bash
 git clone https://github.com/1aeo/allium.git && cd allium
-pip3 install -r config/requirements.txt
-cd allium && python3 allium.py --progress
+python3 -m venv venv
+source venv/bin/activate
+python -m pip install -r config/requirements.txt
+python3 allium/allium.py --progress --apis details
 cd www && python3 -m http.server 8000
 # Visit http://localhost:8000
 ```
 
-**⚡ Update data**: `cd allium && python3 allium.py --progress`
+**⚡ Update data**: `python3 allium/allium.py --progress`
 
 ## 📋 Table of Contents
 
@@ -302,7 +304,7 @@ curl -sSL https://raw.githubusercontent.com/1aeo/allium/master/setup.sh | bash -
 git clone https://github.com/1aeo/allium.git && cd allium
 python3 -m venv venv && source venv/bin/activate
 pip install -r config/requirements-dev.txt
-cd allium && python3 allium.py --progress
+python3 allium/allium.py --progress
 ```
 
 **Run tests**: `pytest` • **Lint code**: `flake8 .` • **Security scan**: `bandit -r .`

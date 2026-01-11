@@ -7,7 +7,7 @@
 
 ```bash
 # Generate site
-cd allium && python3 allium.py --out /var/www/tor-metrics --progress
+python3 allium/allium.py --out /var/www/tor-metrics --progress
 
 # Serve (development)
 cd /var/www/tor-metrics && python3 -m http.server 8000
@@ -19,7 +19,7 @@ Use `--base-url` when hosting under a subdirectory:
 
 ```bash
 # Hosting at https://example.com/tor-metrics/
-python3 allium.py --out /var/www/tor-metrics --base-url "/tor-metrics"
+python3 allium/allium.py --out /var/www/tor-metrics --base-url "/tor-metrics"
 ```
 
 This ensures all internal links use the correct path prefix.
@@ -71,13 +71,13 @@ server {
 
 ## GitHub Pages
 
-1. Generate to `docs/` or a `gh-pages` branch
+1. Generate to `docs/` (only if you don't already use `docs/` for documentation) or use a `gh-pages` branch
 2. Enable GitHub Pages in repository settings
 3. Set source to the appropriate branch/folder
 
 ```bash
 # Generate for GitHub Pages
-python3 allium.py --out ./docs --base-url "/repository-name"
+python3 allium/allium.py --out ./docs --base-url "/repository-name"
 git add docs/
 git commit -m "Update metrics"
 git push
@@ -88,7 +88,7 @@ git push
 ### Basic Setup
 
 1. Connect repository to Cloudflare Pages
-2. Set build command: `cd allium && python3 allium.py --out ../public`
+2. Set build command: `python3 allium/allium.py --out public`
 3. Set output directory: `public`
 
 ### Search Function
@@ -132,10 +132,10 @@ export async function onRequest(context) {
 
 ```bash
 # Update every 6 hours
-0 */6 * * * cd /path/to/allium && python3 allium.py --out /var/www/tor-metrics >> /var/log/allium.log 2>&1
+0 */6 * * * cd /path/to/allium && python3 allium/allium.py --out /var/www/tor-metrics >> /var/log/allium.log 2>&1
 
 # Update daily at 3 AM
-0 3 * * * cd /path/to/allium && python3 allium.py --out /var/www/tor-metrics
+0 3 * * * cd /path/to/allium && python3 allium/allium.py --out /var/www/tor-metrics
 ```
 
 ### Memory Considerations
@@ -144,7 +144,7 @@ For cron jobs on memory-constrained systems:
 
 ```bash
 # Low memory mode (~400MB)
-0 */6 * * * cd /path/to/allium && python3 allium.py --apis details --out /var/www/tor-metrics
+0 */6 * * * cd /path/to/allium && python3 allium/allium.py --apis details --out /var/www/tor-metrics
 ```
 
 ## Disk Space

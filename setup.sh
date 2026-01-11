@@ -37,6 +37,18 @@ if ! python3 -c "import sys; assert sys.version_info >= (3, 8)" 2>/dev/null; the
 fi
 echo "✅ Python version check passed"
 
+# Check venv module availability (common missing dependency on Debian/Ubuntu)
+echo "🔍 Checking Python venv support..."
+if ! python3 -c "import venv" 2>/dev/null; then
+    py_ver="$(python3 -c 'import sys; print(f\"{sys.version_info.major}.{sys.version_info.minor}\")')"
+    echo "❌ Error: Python venv support is not available (missing ensurepip/venv)."
+    echo "💡 On Debian/Ubuntu, install it with one of:"
+    echo "   sudo apt-get update && sudo apt-get install -y python3-venv"
+    echo "   sudo apt-get update && sudo apt-get install -y python${py_ver}-venv"
+    exit 1
+fi
+echo "✅ Python venv support available"
+
 # Check if we're in a git repo already or if allium.py exists in current directory
 if [ -d ".git" ] && [ -f "allium/allium.py" ]; then
     echo "📁 Running in existing allium repository root directory"
