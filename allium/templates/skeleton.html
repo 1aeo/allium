@@ -220,6 +220,34 @@
                     text-overflow: ellipsis;
                     max-width: 20vw;  /* Use viewport width for responsive sizing */
                 }
+                
+                /* Contact cell in contacts table - consistent width with CSS ellipsis */
+                .contact-cell {
+                    max-width: 220px;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+                
+                .contact-cell a {
+                    display: block;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+                
+                /* Responsive adjustments for contact cell */
+                @media (max-width: 1200px) {
+                    .contact-cell {
+                        max-width: 180px;
+                    }
+                }
+                
+                @media (max-width: 992px) {
+                    .contact-cell {
+                        max-width: 150px;
+                    }
+                }
 
                 /* Table styles */
                 .table {
