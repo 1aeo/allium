@@ -50,6 +50,10 @@ class IntelligenceEngine:
         self.guard_network_median = self._calculate_median(self.guard_relay_ratios)
         self.exit_network_median = self._calculate_median(self.exit_relay_ratios)
         
+        # Pre-calculate minority platforms (those with <50% of network consensus weight)
+        # Operators running only minority platforms contribute to network diversity
+        self.minority_platforms = self._get_minority_platforms()
+        
     def _calculate_cw_bw_ratio(self, consensus_weight, bandwidth):
         """Centralized CW/BW ratio calculation - eliminates duplication"""
         return consensus_weight / bandwidth * 1000000 if bandwidth > 0 else 0.0
@@ -94,6 +98,20 @@ class IntelligenceEngine:
         if not sorted_list:
             return 0
         return statistics.median(sorted_list)
+    
+    def _get_minority_platforms(self):
+        """
+        Identify platforms that represent less than 50% of network consensus weight.
+        Operators running only minority platforms contribute to network-level diversity
+        even without multi-platform deployments.
+        """
+        minority_platforms = set()
+        if 'platform' in self.sorted_data:
+            for platform_name, platform_data in self.sorted_data['platform'].items():
+                weight = platform_data.get('consensus_weight_fraction', 0)
+                if weight < 0.5:
+                    minority_platforms.add(platform_name)
+        return minority_platforms
     
     def _calculate_percentile_rank(self, value, sorted_ratio_list):
         """Centralized percentile calculation using unified StatisticalUtils"""
@@ -593,25 +611,34 @@ class IntelligenceEngine:
                 underutilized_percentage = round((underutilized_count / total_relays * 100)) if total_relays > 0 else 0
                 contact_underutilized_fps = [fp for fp in contact_fingerprints if fp in self.underutilized_fingerprints][:2]
                 
-                # Calculate operator CW/BW ratios using centralized function
-                total_operator_bandwidth = sum(relay.get('observed_bandwidth', 0) for relay in contact_relays)
-                total_operator_consensus_weight = sum(relay.get('consensus_weight', 0) for relay in contact_relays)
-                
-                # Calculate operator position-specific bandwidth and consensus weight
+                # Calculate operator position-specific bandwidth, consensus weight, and platform counts
+                # Single loop optimization: collect all per-relay metrics in one pass
                 operator_guard_bandwidth = operator_guard_consensus_weight = 0
                 operator_exit_bandwidth = operator_exit_consensus_weight = 0
+                total_operator_bandwidth = total_operator_consensus_weight = 0
+                platform_counts = {}
                 
                 for relay in contact_relays:
                     flags = relay.get('flags', [])
                     bandwidth = relay.get('observed_bandwidth', 0)
                     consensus_weight = relay.get('consensus_weight', 0)
                     
+                    # Accumulate totals
+                    total_operator_bandwidth += bandwidth
+                    total_operator_consensus_weight += consensus_weight
+                    
+                    # Position-specific accumulation
                     if 'Guard' in flags:
                         operator_guard_bandwidth += bandwidth
                         operator_guard_consensus_weight += consensus_weight
                     if 'Exit' in flags:
                         operator_exit_bandwidth += bandwidth
                         operator_exit_consensus_weight += consensus_weight
+                    
+                    # Platform counting (merged into existing loop - no new loop needed)
+                    platform = relay.get('platform')
+                    if platform:
+                        platform_counts[platform] = platform_counts.get(platform, 0) + 1
                 
                 # Use centralized ratio calculation
                 operator_overall_ratio = self._calculate_cw_bw_ratio(total_operator_consensus_weight, total_operator_bandwidth)
@@ -623,21 +650,37 @@ class IntelligenceEngine:
                 operator_guard_pct = self._calculate_percentile_rank(operator_guard_ratio, self.guard_relay_ratios) if operator_guard_ratio > 0 else None
                 operator_exit_pct = self._calculate_percentile_rank(operator_exit_ratio, self.exit_relay_ratios) if operator_exit_ratio > 0 else None
                 
-                # 5. Infrastructure Diversity Analysis (with consistent rating)
-                platforms = set(relay.get('platform') for relay in contact_relays if relay.get('platform'))
-                versions = set(relay.get('version') for relay in contact_relays if relay.get('version'))
-                platform_count = len(platforms)
-                version_count = len(versions)
+                # 5. Infrastructure Diversity Analysis (platform-based with distribution check)
+                # Platform diversity is the real security benefit - different OS = different vulnerabilities
+                # Requires meaningful diversity: at least 10% of relays on non-dominant platforms
+                # This prevents "token diversity" where large operators add 1-2 relays on a different OS
+                platform_count = len(platform_counts)
                 
-                # Determine infrastructure diversity rating
-                if platform_count == 1 and version_count == 1:
-                    infra_rating = "Poor"
-                elif platform_count <= 2 or version_count <= 2:
-                    infra_rating = "Okay"
+                # Determine infrastructure diversity rating using integer math (avoids float division)
+                # Poor: 1 platform that dominates the network (e.g., Linux-only)
+                # Okay: 1 minority platform (contributes to network diversity), OR 2+ platforms with <10% secondary
+                # Great: 2+ platforms with ≥10% secondary (meaningful diversity)
+                if platform_count >= 2:
+                    # Use max() O(n) instead of sorted() O(n log n) - we only need the dominant count
+                    dominant_count = max(platform_counts.values())
+                    secondary_count = total_relays - dominant_count
+                    # Integer comparison: secondary_count >= 10% of total_relays
+                    # Equivalent to: secondary_count * 10 >= total_relays (avoids float division)
+                    has_meaningful_diversity = secondary_count * 10 >= total_relays
+                    infra_rating = "Great" if has_meaningful_diversity else "Okay"
+                elif platform_count == 1:
+                    # Single platform - check if it's a network minority platform
+                    # Operators running minority platforms (e.g., FreeBSD, OpenBSD) contribute
+                    # to network-level diversity even without multi-platform deployments
+                    single_platform = next(iter(platform_counts.keys()))
+                    if single_platform in self.minority_platforms:
+                        infra_rating = "Okay"
+                    else:
+                        infra_rating = "Poor"
                 else:
-                    infra_rating = "Great"
+                    infra_rating = "Poor"
                 
-                infra_risk = f"{infra_rating}, {platform_count} platform{'s' if platform_count != 1 else ''}, {version_count} version{'s' if version_count != 1 else ''}"
+                infra_risk = f"{infra_rating}, {platform_count} platform{'s' if platform_count != 1 else ''}"
                 
                 # 6. Operational Maturity
                 first_seen_dates = [relay.get('first_seen') for relay in contact_relays if relay.get('first_seen')]
@@ -679,7 +722,6 @@ class IntelligenceEngine:
                     'performance_operator_exit_pct': operator_exit_pct if operator_exit_ratio > 0 else None,
                     'performance_relay_count': len(self.all_relay_ratios),
                     'infrastructure_platforms': platform_count,
-                    'infrastructure_versions': version_count,
                     'infrastructure_risk': infra_risk,
                     'maturity': maturity
                 }

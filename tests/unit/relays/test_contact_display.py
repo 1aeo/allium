@@ -30,7 +30,7 @@ class TestContactDisplayData(unittest.TestCase):
                         'test_contact_hash': {
                             'portfolio_diversity': 'Great, 4 networks',
                             'geographic_risk': 'Okay, 2 countries', 
-                            'infrastructure_risk': 'Poor, 1 platform, 1 version',
+                            'infrastructure_risk': 'Poor, 1 platform',
                             'measurement_status': '5/5 relays measured by authorities',
                             'performance_status': 'optimal efficiency',
                             'performance_underutilized': 0,
@@ -269,7 +269,7 @@ class TestContactDisplayData(unittest.TestCase):
         
         # Should format infrastructure diversity with color coding
         self.assertIn('infrastructure_diversity', intelligence)
-        self.assertIn('<span style="color: #c82333', intelligence['infrastructure_diversity'])  # Poor = red
+        self.assertIn('<span style="color: #c82333', intelligence['infrastructure_diversity'])  # Poor = red (1 platform)
 
     def test_compute_contact_display_data_no_intelligence_data(self):
         """Test handling when no intelligence data is available."""
