@@ -125,7 +125,7 @@
                 {% endif %}
                 
                 {% if intelligence.infrastructure_diversity %}
-                <li><strong><span title="Infrastructure diversity analyzes platform and version distribution. Ratings: Same platform/version = Poor (high synchronization risk), Limited diversity = Okay (moderate risk), Multiple platforms/versions = Great (excellent security through diversity).">Infrastructure Diversity</span>:</strong> {{ intelligence.infrastructure_diversity|safe }}</li>
+                <li><strong><span title="Infrastructure diversity measures platform (operating system) distribution. Ratings: Poor = single dominant platform (e.g., Linux-only), Okay = single minority platform (e.g., FreeBSD-only, contributes to network diversity) OR 2+ platforms with less than 10% on secondary, Great = 2+ platforms with at least 10% on secondary (meaningful diversity). Platform diversity reduces synchronization risk from OS-level vulnerabilities.">Infrastructure Diversity</span>:</strong> {{ intelligence.infrastructure_diversity|safe }}</li>
                 {% endif %}
                 
                 {% if intelligence.measurement_status %}
