@@ -86,99 +86,93 @@ cd www && python3 -m http.server 8000
 ## Key Features
 
 <details>
-<summary><strong>Core Analytics</strong></summary>
+<summary><strong>Data Processing</strong></summary>
 
-- **Complete relay metrics** with advanced sorting and filtering
-- **Geographic distribution analysis** with rare country intelligence
-- **Platform and AS diversity tracking** across the network
-- **Bandwidth and consensus weight analytics** with multiple viewing modes
-
-</details>
-
-<details>
-<summary><strong>Uptime Intelligence System ⏰</strong></summary>
-
-- **Reliability Champions Leaderboard** with "Reliability Masters" (6-month) & "Legacy Titans" (5-year) categories
-- **Comprehensive operator reliability portfolios** with multi-period analysis and network percentile positioning
-- **Flag-specific uptime tracking** with intelligent priority system (Exit > Guard > Fast > Running)
-- **Statistical outlier detection** identifying performance anomalies (≥2σ deviations)
-- **Network Health Dashboard** with real-time uptime metrics and concentration risk analysis
-- **Individual relay uptime display** with flag analysis and network context
+- Multi-threaded API fetching from 5 sources: Onionoo Details/Uptime/Bandwidth, AROI Validation, CollecTor Consensus
+- Multiprocessing page generation (CPU count workers, min 4, configurable via `--workers`)
+- Memory modes: `--apis details` (~400MB) or `--apis all` (~2.4GB)
+- Downtime filtering: excludes relays offline >7 days (configurable via `--filter-downtime`)
+- Generates ~21,700 HTML pages including relay, contact, country, AS, family, platform, and flag pages
 
 </details>
 
 <details>
-<summary><strong>Enhanced User Interface 🎨</strong></summary>
+<summary><strong>AROI Leaderboards (18 Categories)</strong></summary>
 
-- **Optimized contact pages** with streamlined reliability metrics and comprehensive analysis
-- **Enhanced family pages** with AROI and Contact navigation
-- **Country display improvements** with full country names and tooltips
-- **Responsive design** with mobile-friendly layouts
-- **JavaScript-free pagination** for AROI leaderboards with independent category navigation
+Authenticated Relay Operator Identification system ranking verified operators:
 
-</details>
+**Capacity**: Bandwidth Contributed, Consensus Weight Leaders  
+**Roles**: Exit/Guard Authority Champions, Exit/Guard Operators  
+**Reliability** (25+ relays required): Reliability Masters (6mo), Legacy Titans (5yr), Bandwidth Served Masters (6mo), Bandwidth Served Legends (5yr)  
+**Diversity**: Most Diverse, Platform Diversity (non-Linux), Non-EU Leaders, Frontier Builders (rare countries)  
+**Infrastructure**: Network Veterans (tenure), IPv4/IPv6 Address Leaders, AROI Validation Champions
 
-<details>
-<summary><strong>AROI Leaderboard System 🏆</strong></summary>
-
-- **18 specialized leaderboards** for authenticated relay operators across all performance dimensions
-- **Champion badge system** with elite performer recognition across categories
-- **Paginated rankings** with 1-10, 11-20, 21-25 views per category
-- **Independent pagination** — each category manages its own page state with CSS-only navigation
-- **Reliability scoring system** with 6-month and 5-year average uptime analysis
-- **Bandwidth served analysis** with historical performance tracking
-- **25+ relay eligibility filter** ensuring statistical significance for reliability categories
-- **Multi-dimensional scoring** across capacity, diversity, reliability, and innovation
-- **Geographic diversity scoring** with frontier country recognition and non-EU leadership
-- **Platform diversity metrics** highlighting technical leadership beyond Linux
-- **Network address diversity** with IPv4/IPv6 unique address distribution tracking
-- **Veteran recognition** with scale-weighted tenure analysis
+- Paginated rankings (Top 10, 11-20, 21-25) with CSS-only navigation
+- Champion badge system for top performers
 
 </details>
 
 <details>
-<summary><strong>Network Health Dashboard 📊</strong></summary>
+<summary><strong>Reliability System</strong></summary>
 
-- **Comprehensive network monitoring** with 10-card dashboard layout
-- **Real-time network metrics** including relay counts, bandwidth stats, uptime analysis
-- **IPv6 adoption tracking** at relay, operator, and network levels
-- **Geographic and provider diversity** with concentration risk analysis
-- **Performance analytics** with CW/BW ratio calculations and percentile rankings
-
-</details>
-
-<details>
-<summary><strong>Directory Authorities Monitoring 🏛️</strong></summary>
-
-- **Authority health tracking** with uptime statistics and Z-score outlier detection
-- **Network consensus monitoring** displaying authority status, geographic distribution, and performance metrics
+- Multi-period uptime tracking: 1-month, 6-month, 1-year, 5-year
+- Flag-specific uptime with priority: Exit > Guard > Fast > Running
+- Network percentile positioning (5th, 25th, 50th, 75th, 90th, 95th, 99th)
+- Statistical outlier detection using ≥2σ standard deviation threshold
+- Uptime normalization from Onionoo 0-999 scale to 0-100%
+- Minimum 30 data points required for valid calculations
 
 </details>
 
 <details>
-<summary><strong>Intelligence Engine 🧠</strong></summary>
+<summary><strong>Network Health Dashboard</strong></summary>
 
-- **6-layer intelligence engine** with sub-millisecond analysis performance
-- **Context analysis** with automatic relationship mapping and pattern detection
-- **Performance correlation analysis** with CW/BW ratio intelligence and network benchmarking
-- **Geographic intelligence** with concentration risk analysis and jurisdiction mapping
-- **Infrastructure intelligence** with AS concentration and provider diversity assessment
-- **Statistical intelligence** with network percentiles and outlier detection
-- **22 template integration points** across contact pages, health dashboard, and relay info
-- **Dynamic classification system** with tier-based country rankings
-- **Underutilized relay detection** identifying optimization opportunities for operators
+Real-time metrics at `network-health.html`:
+
+- Relay counts by role (exit/guard/middle) with percentages
+- Bandwidth distribution (total, by role, mean/median per category)
+- Uptime statistics (1mo mean/median by role, multi-period series)
+- AROI validation status (validated/invalid/unconfigured counts)
+- IPv4/IPv6 adoption rates
+- Flag distribution (Fast, Stable, HSDir, V2Dir, Authority)
+- New relay tracking (24h, 30d, 6mo, 1yr)
 
 </details>
 
 <details>
-<summary><strong>Security & Performance 🔒</strong></summary>
+<summary><strong>Intelligence Engine (6 Layers)</strong></summary>
 
-- **XSS-hardened templates** with comprehensive input sanitization
-- **Static generation** for maximum performance and security
-- **Memory-efficient processing** with real-time monitoring
-- **Parallel API fetching** (27s vs 31s sequential)
-- **Template optimization** with logic moved from Jinja2 to Python for better performance
-- **Pre-computed display data** reducing template rendering complexity
+Pre-computed analysis attached to contact pages:
+
+1. **Basic Relationships** — total countries, networks, operators, families, platforms
+2. **Concentration Patterns** — top-3 country/AS weight, Five Eyes percentage, no-contact percentage
+3. **Performance Correlation** — measured percentage, underutilized relay detection, CW/BW efficiency ratio
+4. **Infrastructure Dependency** — unique Tor versions, critical AS identification (>5% weight), sync risk assessment
+5. **Geographic Clustering** — Five/Fourteen Eyes influence, regional HHI concentration index
+6. **Capacity Distribution** — Gini coefficient, guard/exit capacity percentages
+
+</details>
+
+<details>
+<summary><strong>Directory Authorities</strong></summary>
+
+`misc/authorities.html` provides:
+
+- Authority uptime statistics with Z-score outlier detection
+- Version compliance tracking
+- Consensus participation monitoring
+- Geographic distribution
+
+</details>
+
+<details>
+<summary><strong>Security</strong></summary>
+
+- Jinja2 autoescape enabled globally for XSS protection
+- IP address validation via Python `ipaddress` module
+- HTML entity escaping for all user-controlled data
+- No JavaScript dependencies in generated output
+- Static HTML eliminates server-side attack surface
 
 </details>
 
@@ -261,7 +255,9 @@ Allium integrates with multiple Tor Project APIs:
 | `--bandwidth-cache-hours` | `12` | Cache time for historical bandwidth data (hours) |
 | `--display-bandwidth-units` | `bits` | Units for bandwidth display (`bits` or `bytes`) |
 | `--progress` | `false` | Show detailed progress with memory usage |
-| `--apis` | `all` | API sources to fetch (`all`, `details`, etc.) |
+| `--apis` | `all` | API sources: `all` (~2.4GB) or `details` (~400MB) |
+| `--filter-downtime` | `7` | Exclude relays offline >N days (0 to disable) |
+| `--workers` | CPU count (min 4) | Parallel workers for page generation |
 
 **Examples**:
 
