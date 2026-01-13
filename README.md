@@ -74,7 +74,6 @@ cd www && python3 -m http.server 8000
 
 - [Key Features](#key-features)
 - [Usage & Configuration](#usage--configuration)
-- [Generated Content](#generated-content)
 - [API Data Sources](#api-data-sources)
 - [Security & Performance](#security--performance)
 - [Requirements](#requirements)
@@ -196,29 +195,6 @@ Pre-computed analysis attached to contact pages:
 ./allium.py --apis details --progress
 ```
 
-## Generated Content
-
-### Main Analytics
-
-- **Index page** — Top 500 relays by consensus weight
-- **Complete relay listing** — All active relays with filtering
-- **AROI leaderboards** — 18 specialized operator categories
-- **Network Health Dashboard** — Real-time network monitoring
-
-### Categorized Views
-
-- **By Country** — Rare/frontier country analysis
-- **By Platform** — OS and version distributions
-- **By AS Number** — Autonomous system diversity
-- **By Contact** — Operator family groupings
-
-### Individual Pages
-
-- **Per-relay details** — Complete technical specifications
-- **Operator profiles** — Achievement metrics and diversity scoring
-- **Geographic summaries** — Country-level statistics
-- **Directory Authorities** — Consensus health with uptime analysis
-
 ## API Data Sources
 
 Allium integrates with multiple Tor Project APIs:
@@ -316,7 +292,6 @@ Comprehensive documentation in [`docs/`](docs/):
 
 ### For Users
 
-- **[Quick Start Guide](docs/user-guide/quick-start.md)** — Get running in 5 minutes
 - **[Configuration Guide](docs/user-guide/configuration.md)** — All options and automation setup
 - **[Deployment Guide](docs/user-guide/deployment.md)** — Web server setup
 - **[Troubleshooting](docs/user-guide/troubleshooting.md)** — Common issues and solutions
@@ -340,13 +315,9 @@ Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed instr
 
 ### Developer Setup
 
-```bash
-# Quick setup with dev dependencies
-curl -sSL https://raw.githubusercontent.com/1aeo/allium/master/setup.sh | bash -s -- --dev
+Follow [Quick Start](#quick-start), then install dev dependencies:
 
-# Or manually:
-git clone https://github.com/1aeo/allium.git && cd allium
-python3 -m venv venv && source venv/bin/activate
+```bash
 pip install -r config/requirements-dev.txt
 ```
 
