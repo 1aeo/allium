@@ -783,10 +783,13 @@ class Relays:
                 # Apply uptime percentages from consolidated processing
                 if fingerprint in relay_uptime_data:
                     relay["uptime_percentages"] = relay_uptime_data[fingerprint]['uptime_percentages']
+                    # Store datapoints for AROI leaderboard breakdown display
+                    relay["_uptime_datapoints"] = relay_uptime_data[fingerprint].get('uptime_datapoints', {})
                     # Store flag data for flag reliability analysis
                     relay["_flag_uptime_data"] = relay_uptime_data[fingerprint]['flag_data']
                 else:
                     relay["uptime_percentages"] = {'1_month': 0.0, '6_months': 0.0, '1_year': 0.0, '5_years': 0.0}
+                    relay["_uptime_datapoints"] = {}
                     relay["_flag_uptime_data"] = {}
             
             # Apply statistical coloring using consolidated network statistics
@@ -1396,6 +1399,7 @@ class Relays:
             # Basic uptime percentages without statistical analysis
             uptime_percentages = {'1_month': 0.0, '6_months': 0.0, '1_year': 0.0, '5_years': 0.0}
             relay["uptime_percentages"] = uptime_percentages
+            relay["_uptime_datapoints"] = {}
             relay["uptime_api_display"] = "0.0%/0.0%/0.0%/0.0%"
             
             # Initialize flag uptime display for fallback processing

@@ -64,9 +64,12 @@ def _calculate_generic_score(operator_relays, data, time_period, metric_type, pr
     """
     Generic function to calculate scores for different metrics (reliability, bandwidth).
     
-    OPTIMIZATION: Accepts pre-built maps for batch processing. When processing multiple
-    operators (e.g., AROI leaderboards with ~3000+ contacts), build maps once with
-    build_uptime_map() or build_bandwidth_map() and pass to each call.
+    OPTIMIZATION: For uptime, prefers already-computed per-relay `uptime_percentages`
+    that are attached by _reprocess_uptime_data(). This avoids re-scanning the raw
+    uptime API payload for each operator (major performance gain).
+    
+    For bandwidth, uses pre-built bandwidth_map when available to avoid rebuilding
+    the fingerprint->data mapping for each operator.
     
     Args:
         operator_relays (list): List of relay objects for this operator
@@ -88,20 +91,64 @@ def _calculate_generic_score(operator_relays, data, time_period, metric_type, pr
             'breakdown': {}
         }
     
-    # If no data and no prebuilt_map, return empty result
-    if not data and not prebuilt_map:
-        return {
-            'score': 0.0,
-            f'average_{metric_type}': 0.0,
-            'relay_count': len(operator_relays),
-            'weight': 1.0,
-            'valid_relays': 0,
-            'breakdown': {}
-        }
-    
     relay_count = len(operator_relays)
     
     if metric_type == 'uptime':
+        # PERFORMANCE: Prefer already-computed per-relay uptime_percentages when available.
+        # These are populated by relays._reprocess_uptime_data() and avoid re-scanning
+        # the raw uptime API payload (which is very expensive at leaderboard scale).
+        first = operator_relays[0] if operator_relays else None
+        if first and isinstance(first, dict) and first.get('uptime_percentages'):
+            uptime_values = []
+            breakdown = {}
+            
+            for relay in operator_relays:
+                percentages = relay.get('uptime_percentages') or {}
+                uptime_pct = percentages.get(time_period, 0.0) or 0.0
+                if uptime_pct > 0.0:
+                    uptime_values.append(uptime_pct)
+                    
+                    nickname = relay.get('nickname', 'Unknown')
+                    fingerprint = relay.get('fingerprint', '')
+                    # Get datapoints if available (stored by _reprocess_uptime_data)
+                    datapoints = (relay.get('_uptime_datapoints') or {}).get(time_period, 0)
+                    breakdown[nickname] = {
+                        'fingerprint': fingerprint,
+                        'uptime': uptime_pct,
+                        'data_points': datapoints
+                    }
+            
+            if not uptime_values:
+                return {
+                    'score': 0.0,
+                    'average_uptime': 0.0,
+                    'relay_count': relay_count,
+                    'weight': 1.0,
+                    'valid_relays': 0,
+                    'breakdown': {}
+                }
+            
+            average_value = sum(uptime_values) / len(uptime_values)
+            return {
+                'score': average_value,
+                'average_uptime': average_value,
+                'relay_count': relay_count,
+                'weight': 1.0,
+                'valid_relays': len(uptime_values),
+                'breakdown': breakdown
+            }
+        
+        # Fallback: If uptime_percentages not available, use raw API data with pre-built map
+        if not data and not prebuilt_map:
+            return {
+                'score': 0.0,
+                'average_uptime': 0.0,
+                'relay_count': relay_count,
+                'weight': 1.0,
+                'valid_relays': 0,
+                'breakdown': {}
+            }
+        
         from .uptime_utils import extract_relay_uptime_for_period
         period_result = extract_relay_uptime_for_period(operator_relays, data, time_period, uptime_map=prebuilt_map)
         
