@@ -24,6 +24,48 @@ def normalize_uptime_value(raw_value):
     return raw_value / 999 * 100
 
 
+def _compute_uptime_percentage_and_datapoints(uptime_values):
+    """
+    Compute uptime percentage and valid datapoint count in a single pass.
+    
+    This is the core calculation used by both relay processing and network statistics.
+    Returns both values to avoid redundant iteration through the data.
+    
+    Args:
+        uptime_values (list): List of raw uptime values (0-999 scale)
+        
+    Returns:
+        tuple: (percentage: float, datapoints: int)
+            - percentage: Average uptime as percentage (0.0-100.0), or 0.0 if invalid
+            - datapoints: Count of valid data points processed
+    """
+    if not uptime_values:
+        return 0.0, 0
+    
+    # OPTIMIZATION: Single pass - filter, count, and sum simultaneously
+    total = 0
+    count = 0
+    for v in uptime_values:
+        if v is None:
+            continue
+        if isinstance(v, (int, float)) and 0 <= v <= 999:
+            total += v
+            count += 1
+    
+    # Early exit for insufficient data
+    if count < 30:  # Need at least 30 data points (1 month of daily data)
+        return 0.0, count
+    
+    # Calculate percentage in single step (inline normalize_uptime_value)
+    percentage = (total / count) * (100.0 / 999.0)
+    
+    # Exclude essentially offline relays (≤1% uptime)
+    if percentage <= 1.0:
+        return 0.0, count
+    
+    return percentage, count
+
+
 def calculate_relay_uptime_average(uptime_values):
     """
     Calculate average uptime from a list of raw Onionoo uptime values.
@@ -37,32 +79,7 @@ def calculate_relay_uptime_average(uptime_values):
     Returns:
         float: Average uptime as percentage (0.0-100.0), or 0.0 if no valid values or uptime <= 1%
     """
-    if not uptime_values:
-        return 0.0
-    
-    # OPTIMIZATION: Single pass - filter, count, and sum simultaneously
-    # Eliminates 3 separate iterations (list comprehension, sum(), len())
-    total = 0
-    count = 0
-    for v in uptime_values:
-        if v is not None and isinstance(v, (int, float)) and 0 <= v <= 999:
-            total += v
-            count += 1
-    
-    # Early exit for insufficient data (same threshold as before)
-    if count < 30:  # Need at least 30 data points (1 month of daily data)
-        return 0.0
-    
-    # Calculate average and normalize to percentage in single step
-    avg_raw = total / count
-    percentage = avg_raw / 999 * 100  # Inline normalize_uptime_value for efficiency
-    
-    # Only include relays with minimal uptime (> 1%) to exclude completely offline relays
-    # We include all operational relays, including problem ones, as they represent the real
-    # network experience. Hiding poorly performing relays would misrepresent network reality.
-    if percentage <= 1.0:
-        return 0.0  # Will be excluded from percentile calculations
-    
+    percentage, _ = _compute_uptime_percentage_and_datapoints(uptime_values)
     return percentage
 
 
@@ -87,19 +104,44 @@ def find_relay_uptime_data(fingerprint, uptime_data):
     return None
 
 
-def extract_relay_uptime_for_period(operator_relays, uptime_data, time_period):
+def build_uptime_map(uptime_data):
+    """
+    Build fingerprint-to-uptime mapping once for reuse across multiple operators.
+    
+    PERFORMANCE: This should be called ONCE at the start of batch processing
+    (e.g., AROI leaderboard calculation) rather than per-operator to eliminate
+    redundant O(n) iterations through uptime_data.
+    
+    Args:
+        uptime_data (dict): Uptime data from Onionoo API
+        
+    Returns:
+        dict: Mapping of fingerprint -> uptime relay data
+    """
+    uptime_map = {}
+    if uptime_data and uptime_data.get('relays'):
+        for uptime_relay in uptime_data['relays']:
+            fingerprint = uptime_relay.get('fingerprint')
+            if fingerprint:
+                uptime_map[fingerprint] = uptime_relay
+    return uptime_map
+
+
+def extract_relay_uptime_for_period(operator_relays, uptime_data, time_period, uptime_map=None):
     """
     Extract uptime data for all relays in an operator for a specific time period.
     
     This is the core shared logic used by both AROI leaderboards and contact page reliability.
     
-    OPTIMIZATION: Creates fingerprint-to-uptime mapping once (O(m)) instead of 
-    repeated linear searches (O(n*m)) for massive performance improvement.
+    OPTIMIZATION: Accepts pre-built uptime_map for batch processing. When processing
+    multiple operators, build the map once with build_uptime_map() and pass it to
+    each call to avoid rebuilding the map ~3000+ times.
     
     Args:
         operator_relays (list): List of relay objects for the operator
         uptime_data (dict): Uptime data from Onionoo API
         time_period (str): Time period key (e.g., '6_months', '1_year')
+        uptime_map (dict, optional): Pre-built fingerprint->uptime mapping for batch processing
         
     Returns:
         dict: Contains uptime_values (list), relay_breakdown (dict), and valid_relays (int)
@@ -107,14 +149,9 @@ def extract_relay_uptime_for_period(operator_relays, uptime_data, time_period):
     uptime_values = []
     relay_breakdown = {}
     
-    # OPTIMIZATION: Build fingerprint-to-uptime mapping ONCE (O(m) instead of O(n*m))
-    # This eliminates the repeated linear searches through uptime_data for each operator relay
-    uptime_map = {}
-    if uptime_data and uptime_data.get('relays'):
-        for uptime_relay in uptime_data['relays']:
-            fingerprint = uptime_relay.get('fingerprint')
-            if fingerprint:
-                uptime_map[fingerprint] = uptime_relay
+    # Use pre-built map if provided, otherwise build one (backwards compatibility)
+    if uptime_map is None:
+        uptime_map = build_uptime_map(uptime_data)
     
     # Process operator relays with O(1) lookups instead of O(m) searches
     for relay in operator_relays:
@@ -510,9 +547,10 @@ def process_all_uptime_data_consolidated(all_relays, uptime_data, include_flag_a
             relay_fingerprint_map[fingerprint] = relay
     
     # Initialize data structures for consolidated processing
-    relay_uptime_data = {}  # fingerprint -> {uptime_percentages, flag_data}
+    relay_uptime_data = {}  # fingerprint -> {uptime_percentages, uptime_datapoints, flag_data}
     network_uptime_values = {'1_month': [], '6_months': [], '1_year': [], '5_years': []}
     network_flag_data = {}  # flag -> period -> [values] for network statistics
+    network_relays_with_uptime = 0  # Track count during processing (avoid re-counting later)
     
     # SINGLE PASS through uptime data - this replaces multiple separate loops
     for uptime_relay in uptime_data.get('relays', []):
@@ -525,16 +563,25 @@ def process_all_uptime_data_consolidated(all_relays, uptime_data, include_flag_a
         
         # Process regular uptime data
         uptime_percentages = {'1_month': 0.0, '6_months': 0.0, '1_year': 0.0, '5_years': 0.0}
+        uptime_datapoints = {'1_month': 0, '6_months': 0, '1_year': 0, '5_years': 0}
         uptime_section = uptime_relay.get('uptime', {})
+        has_any_uptime = False
         
         for period in ['1_month', '6_months', '1_year', '5_years']:
             period_data = uptime_section.get(period, {})
             if period_data.get('values'):
-                uptime_percentage = calculate_relay_uptime_average(period_data['values'])
+                # Use optimized single-pass calculation that returns both values
+                uptime_percentage, datapoints = _compute_uptime_percentage_and_datapoints(period_data['values'])
                 uptime_percentages[period] = uptime_percentage
+                uptime_datapoints[period] = datapoints
                 
-                # Collect for network statistics (for all relays, not just operator relays)
-                network_uptime_values[period].append(uptime_percentage)
+                # Collect for network statistics (only relays with valid uptime)
+                if uptime_percentage > 0.0:
+                    network_uptime_values[period].append(uptime_percentage)
+                    has_any_uptime = True
+        
+        if has_any_uptime:
+            network_relays_with_uptime += 1
         
         # Process flag-specific uptime data (if enabled)
         flag_data = {}
@@ -550,16 +597,13 @@ def process_all_uptime_data_consolidated(all_relays, uptime_data, include_flag_a
                 
                 for period, data in periods.items():
                     if period in ['1_month', '6_months', '1_year', '5_years'] and data.get('values'):
-                        # Flag data uses same scale as regular uptime data (0-999) 
-                        # Convert to percentages (0-100) using existing utility
-                        valid_values = [v for v in data['values'] if v is not None and 0 <= v <= 999]
-                        if valid_values:
-                            # Calculate average uptime using shared utility (handles 0-999 to 0-100% conversion)
-                            avg_uptime = calculate_relay_uptime_average(valid_values)
-                            
+                        # Use optimized single-pass calculation for flag data
+                        avg_uptime, datapoints = _compute_uptime_percentage_and_datapoints(data['values'])
+                        
+                        if avg_uptime > 0.0:
                             flag_data[flag][period] = {
                                 'uptime': avg_uptime,
-                                'data_points': len(valid_values),
+                                'data_points': datapoints,
                                 'relay_info': {
                                     'nickname': relay_obj.get('nickname', 'Unknown') if relay_obj else 'Unknown',
                                     'fingerprint': fingerprint
@@ -569,9 +613,10 @@ def process_all_uptime_data_consolidated(all_relays, uptime_data, include_flag_a
                             # Collect for network flag statistics
                             network_flag_data[flag][period].append(avg_uptime)
         
-        # Store processed data for this relay
+        # Store processed data for this relay (including datapoints for AROI leaderboard display)
         relay_uptime_data[fingerprint] = {
             'uptime_percentages': uptime_percentages,
+            'uptime_datapoints': uptime_datapoints,
             'flag_data': flag_data,
             'relay_obj': relay_obj  # Store reference for easy access
         }

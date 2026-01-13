@@ -42,8 +42,20 @@ def calculate_relay_bandwidth_average(bandwidth_values):
     
     return total / count if count >= 30 else 0.0  # Need at least 30 data points
 
-def _build_bandwidth_map(bandwidth_data):
-    """Build shared fingerprint->bandwidth mapping to eliminate redundant mapping creation."""
+def build_bandwidth_map(bandwidth_data):
+    """
+    Build fingerprint-to-bandwidth mapping once for reuse across multiple operators.
+    
+    PERFORMANCE: This should be called ONCE at the start of batch processing
+    (e.g., AROI leaderboard calculation) rather than per-operator to eliminate
+    redundant O(n) iterations through bandwidth_data (~10k+ relays).
+    
+    Args:
+        bandwidth_data (dict): Bandwidth data from Onionoo API
+        
+    Returns:
+        dict: Mapping of fingerprint -> bandwidth relay data
+    """
     bandwidth_map = {}
     if bandwidth_data and bandwidth_data.get('relays'):
         for relay in bandwidth_data['relays']:
@@ -51,6 +63,10 @@ def _build_bandwidth_map(bandwidth_data):
             if fingerprint:
                 bandwidth_map[fingerprint] = relay
     return bandwidth_map
+
+
+# Alias for backwards compatibility with internal code
+_build_bandwidth_map = build_bandwidth_map
 
 def _get_stability_category(cv, network_cv_stats):
     """Determine stability category from CV value and network thresholds."""
@@ -289,12 +305,31 @@ def calculate_bandwidth_reliability_metrics(operator_relays, bandwidth_data, per
     
     return metrics
 
-def extract_operator_daily_bandwidth_totals(operator_relays, bandwidth_data, time_period):
-    """Calculate daily total bandwidth for an operator."""
-    if not operator_relays or not bandwidth_data:
+def extract_operator_daily_bandwidth_totals(operator_relays, bandwidth_data, time_period, bandwidth_map=None):
+    """
+    Calculate daily total bandwidth for an operator.
+    
+    OPTIMIZATION: Accepts pre-built bandwidth_map for batch processing. When processing
+    multiple operators, build the map once with build_bandwidth_map() and pass it to
+    each call to avoid rebuilding the map ~3000+ times.
+    
+    Args:
+        operator_relays (list): List of relay objects for the operator
+        bandwidth_data (dict): Bandwidth data from Onionoo API (used only if bandwidth_map is None)
+        time_period (str): Time period key (e.g., '6_months', '1_year')
+        bandwidth_map (dict, optional): Pre-built fingerprint->bandwidth mapping for batch processing
+        
+    Returns:
+        dict: Contains daily_totals, average_daily_total, and valid_days
+    """
+    if not operator_relays:
         return {'daily_totals': [], 'average_daily_total': 0.0, 'valid_days': 0}
     
-    bandwidth_map = _build_bandwidth_map(bandwidth_data)
+    # Use pre-built map if provided, otherwise build one (backwards compatibility)
+    if bandwidth_map is None:
+        if not bandwidth_data:
+            return {'daily_totals': [], 'average_daily_total': 0.0, 'valid_days': 0}
+        bandwidth_map = build_bandwidth_map(bandwidth_data)
     
     # Collect relay bandwidth arrays
     relay_arrays = []
@@ -335,12 +370,29 @@ def extract_operator_daily_bandwidth_totals(operator_relays, bandwidth_data, tim
         'valid_days': len(daily_totals)
     }
 
-def extract_relay_bandwidth_for_period(operator_relays, bandwidth_data, time_period):
-    """Extract bandwidth data for all relays in an operator for a specific time period."""
+def extract_relay_bandwidth_for_period(operator_relays, bandwidth_data, time_period, bandwidth_map=None):
+    """
+    Extract bandwidth data for all relays in an operator for a specific time period.
+    
+    OPTIMIZATION: Accepts pre-built bandwidth_map for batch processing. When processing
+    multiple operators, build the map once with build_bandwidth_map() and pass it to
+    each call to avoid rebuilding the map ~3000+ times.
+    
+    Args:
+        operator_relays (list): List of relay objects for the operator
+        bandwidth_data (dict): Bandwidth data from Onionoo API (used only if bandwidth_map is None)
+        time_period (str): Time period key (e.g., '6_months', '1_year')
+        bandwidth_map (dict, optional): Pre-built fingerprint->bandwidth mapping for batch processing
+        
+    Returns:
+        dict: Contains bandwidth_values, relay_breakdown, and valid_relays
+    """
     bandwidth_values = []
     relay_breakdown = {}
     
-    bandwidth_map = _build_bandwidth_map(bandwidth_data)
+    # Use pre-built map if provided, otherwise build one (backwards compatibility)
+    if bandwidth_map is None:
+        bandwidth_map = build_bandwidth_map(bandwidth_data) if bandwidth_data else {}
     
     for relay in operator_relays:
         fingerprint = relay.get('fingerprint', '')

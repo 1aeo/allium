@@ -298,12 +298,14 @@ class Coordinator:
         setattr(relay_set, 'collector_data', self.get_collector_data())
         setattr(relay_set, 'collector_consensus_data', collector_consensus_data)
         
-        # CRITICAL FIX: Regenerate AROI leaderboards now that uptime data is available
-        # The leaderboards were calculated during __init__ before uptime_data was attached
+        # CRITICAL FIX: Process uptime data FIRST, then regenerate AROI leaderboards.
+        # This allows leaderboards to reuse per-relay `uptime_percentages` instead of
+        # repeatedly scanning the raw uptime API payload (major performance optimization).
         if uptime_data:
-            relay_set._generate_aroi_leaderboards()
-            # Reprocess uptime data for individual relays now that uptime_data is available
+            # Step 1: Process uptime data - attaches uptime_percentages to each relay
             relay_set._reprocess_uptime_data()
+            # Step 2: Generate leaderboards - can now reuse pre-computed uptime data
+            relay_set._generate_aroi_leaderboards()
             # Recalculate network health metrics now that uptime data is available
             relay_set._calculate_network_health_metrics()
         

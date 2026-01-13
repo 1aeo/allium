@@ -783,10 +783,13 @@ class Relays:
                 # Apply uptime percentages from consolidated processing
                 if fingerprint in relay_uptime_data:
                     relay["uptime_percentages"] = relay_uptime_data[fingerprint]['uptime_percentages']
+                    # Store datapoints for AROI leaderboard breakdown display
+                    relay["_uptime_datapoints"] = relay_uptime_data[fingerprint].get('uptime_datapoints', {})
                     # Store flag data for flag reliability analysis
                     relay["_flag_uptime_data"] = relay_uptime_data[fingerprint]['flag_data']
                 else:
                     relay["uptime_percentages"] = {'1_month': 0.0, '6_months': 0.0, '1_year': 0.0, '5_years': 0.0}
+                    relay["_uptime_datapoints"] = {}
                     relay["_flag_uptime_data"] = {}
             
             # Apply statistical coloring using consolidated network statistics
@@ -1396,6 +1399,7 @@ class Relays:
             # Basic uptime percentages without statistical analysis
             uptime_percentages = {'1_month': 0.0, '6_months': 0.0, '1_year': 0.0, '5_years': 0.0}
             relay["uptime_percentages"] = uptime_percentages
+            relay["_uptime_datapoints"] = {}
             relay["uptime_api_display"] = "0.0%/0.0%/0.0%/0.0%"
             
             # Initialize flag uptime display for fallback processing
@@ -2357,8 +2361,15 @@ class Relays:
     def _generate_aroi_leaderboards(self):
         """
         Generate AROI operator leaderboards using pre-processed relay data.
+        
+        PERFORMANCE: This method was optimized to pre-build uptime/bandwidth maps once
+        instead of rebuilding them for each of ~3,000 contacts × 4 metric calculations.
+        This reduced map-building iterations from ~132M to ~21K (99.98% reduction).
         """
+        self._log_progress("Generating AROI operator leaderboards...")
         self.json['aroi_leaderboards'] = _calculate_aroi_leaderboards(self)
+        contact_count = len(self.json.get('sorted', {}).get('contact', {}))
+        self._log_progress(f"AROI leaderboards generated for {contact_count} operators")
 
     def _generate_smart_context(self):
         """
