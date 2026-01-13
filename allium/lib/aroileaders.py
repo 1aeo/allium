@@ -60,6 +60,67 @@ def _format_bandwidth_with_auto_unit(bandwidth_value, bandwidth_formatter, decim
     return formatted, unit
 
 
+def _make_score_result(score, average_value, relay_count, valid_relays, breakdown, metric_type):
+    """
+    DRY helper: Create standardized score result dictionary.
+    
+    Args:
+        score (float): The calculated score value
+        average_value (float): The average metric value
+        relay_count (int): Total number of relays for this operator
+        valid_relays (int): Number of relays with valid data
+        breakdown (dict): Per-relay breakdown data
+        metric_type (str): 'uptime' or 'bandwidth' (determines average_X key name)
+        
+    Returns:
+        dict: Standardized score result with consistent structure
+    """
+    avg_key = 'average_uptime' if metric_type == 'uptime' else 'average_bandwidth'
+    return {
+        'score': score,
+        avg_key: average_value,
+        'relay_count': relay_count,
+        'weight': 1.0,  # Always 1.0 since no weighting is applied
+        'valid_relays': valid_relays,
+        'breakdown': breakdown
+    }
+
+
+def _make_empty_score_result(relay_count, metric_type):
+    """
+    DRY helper: Create empty score result when no valid data is available.
+    
+    Args:
+        relay_count (int): Total number of relays for this operator
+        metric_type (str): 'uptime' or 'bandwidth' (determines average_X key name)
+        
+    Returns:
+        dict: Empty score result with zero values
+    """
+    return _make_score_result(0.0, 0.0, relay_count, 0, {}, metric_type)
+
+
+def _convert_relay_breakdown(period_result, value_key='uptime'):
+    """
+    DRY helper: Convert relay_breakdown from fingerprint-keyed to nickname-keyed format.
+    
+    Args:
+        period_result (dict): Result from extract_relay_X_for_period function
+        value_key (str): Key name for the metric value ('uptime' or 'bandwidth')
+        
+    Returns:
+        dict: Breakdown keyed by nickname instead of fingerprint
+    """
+    breakdown = {}
+    for fingerprint, relay_data in period_result.get('relay_breakdown', {}).items():
+        breakdown[relay_data.get('nickname', 'Unknown')] = {
+            'fingerprint': fingerprint,
+            value_key: relay_data.get(value_key, 0),
+            'data_points': relay_data.get('data_points', 0)
+        }
+    return breakdown
+
+
 def _calculate_generic_score(operator_relays, data, time_period, metric_type, prebuilt_map=None):
     """
     Generic function to calculate scores for different metrics (reliability, bandwidth).
@@ -82,14 +143,7 @@ def _calculate_generic_score(operator_relays, data, time_period, metric_type, pr
         dict: Metrics including score, average value, relay count, etc.
     """
     if not operator_relays:
-        return {
-            'score': 0.0,
-            f'average_{metric_type}': 0.0,
-            'relay_count': 0,
-            'weight': 1.0,  # Always 1.0 since no weighting is applied
-            'valid_relays': 0,
-            'breakdown': {}
-        }
+        return _make_empty_score_result(0, metric_type)
     
     relay_count = len(operator_relays)
     
@@ -107,136 +161,51 @@ def _calculate_generic_score(operator_relays, data, time_period, metric_type, pr
                 uptime_pct = percentages.get(time_period, 0.0) or 0.0
                 if uptime_pct > 0.0:
                     uptime_values.append(uptime_pct)
-                    
-                    nickname = relay.get('nickname', 'Unknown')
-                    fingerprint = relay.get('fingerprint', '')
-                    # Get datapoints if available (stored by _reprocess_uptime_data)
-                    datapoints = (relay.get('_uptime_datapoints') or {}).get(time_period, 0)
-                    breakdown[nickname] = {
-                        'fingerprint': fingerprint,
+                    breakdown[relay.get('nickname', 'Unknown')] = {
+                        'fingerprint': relay.get('fingerprint', ''),
                         'uptime': uptime_pct,
-                        'data_points': datapoints
+                        'data_points': (relay.get('_uptime_datapoints') or {}).get(time_period, 0)
                     }
             
             if not uptime_values:
-                return {
-                    'score': 0.0,
-                    'average_uptime': 0.0,
-                    'relay_count': relay_count,
-                    'weight': 1.0,
-                    'valid_relays': 0,
-                    'breakdown': {}
-                }
+                return _make_empty_score_result(relay_count, 'uptime')
             
             average_value = sum(uptime_values) / len(uptime_values)
-            return {
-                'score': average_value,
-                'average_uptime': average_value,
-                'relay_count': relay_count,
-                'weight': 1.0,
-                'valid_relays': len(uptime_values),
-                'breakdown': breakdown
-            }
+            return _make_score_result(average_value, average_value, relay_count, len(uptime_values), breakdown, 'uptime')
         
         # Fallback: If uptime_percentages not available, use raw API data with pre-built map
         if not data and not prebuilt_map:
-            return {
-                'score': 0.0,
-                'average_uptime': 0.0,
-                'relay_count': relay_count,
-                'weight': 1.0,
-                'valid_relays': 0,
-                'breakdown': {}
-            }
+            return _make_empty_score_result(relay_count, 'uptime')
         
         from .uptime_utils import extract_relay_uptime_for_period
         period_result = extract_relay_uptime_for_period(operator_relays, data, time_period, uptime_map=prebuilt_map)
         
         if not period_result['uptime_values']:
-            return {
-                'score': 0.0,
-                'average_uptime': 0.0,
-                'relay_count': relay_count,
-                'weight': 1.0,
-                'valid_relays': 0,
-                'breakdown': {}
-            }
+            return _make_empty_score_result(relay_count, 'uptime')
         
-        # Calculate simple average uptime across all relays (no weighting)
         average_value = sum(period_result['uptime_values']) / len(period_result['uptime_values'])
-        score = average_value
-        valid_relays = len(period_result['uptime_values'])
-        
-        # Convert relay_breakdown format for compatibility
-        breakdown = {}
-        for fingerprint, relay_data in period_result['relay_breakdown'].items():
-            breakdown[relay_data['nickname']] = {
-                'fingerprint': fingerprint,
-                'uptime': relay_data['uptime'],
-                'data_points': relay_data.get('data_points', 0)
-            }
-        
-        return {
-            'score': score,
-            'average_uptime': average_value,
-            'relay_count': relay_count,
-            'weight': 1.0,
-            'valid_relays': valid_relays,
-            'breakdown': breakdown
-        }
+        breakdown = _convert_relay_breakdown(period_result, 'uptime')
+        return _make_score_result(average_value, average_value, relay_count, len(period_result['uptime_values']), breakdown, 'uptime')
     
     elif metric_type == 'bandwidth':
         from .bandwidth_utils import extract_operator_daily_bandwidth_totals, extract_relay_bandwidth_for_period
         
         # Calculate daily total bandwidth (sum across all relays per day, then average)
-        # Pass pre-built bandwidth_map to avoid rebuilding for each operator
         daily_totals_result = extract_operator_daily_bandwidth_totals(operator_relays, data, time_period, bandwidth_map=prebuilt_map)
         
         if not daily_totals_result['daily_totals']:
-            return {
-                'score': 0.0,
-                'average_bandwidth': 0.0,
-                'relay_count': relay_count,
-                'weight': 1.0,
-                'valid_relays': 0,
-                'breakdown': {}
-            }
+            return _make_empty_score_result(relay_count, 'bandwidth')
         
-        # Score is the average of daily totals (matches Onionoo details API logic)
-        score = daily_totals_result['average_daily_total']
         average_value = daily_totals_result['average_daily_total']
         
-        # Get relay breakdown for display purposes (reuse existing logic)
-        # Pass pre-built bandwidth_map to avoid rebuilding for each operator
+        # Get relay breakdown for display purposes
         period_result = extract_relay_bandwidth_for_period(operator_relays, data, time_period, bandwidth_map=prebuilt_map)
+        breakdown = _convert_relay_breakdown(period_result, 'bandwidth')
         
-        # Convert relay_breakdown format for compatibility
-        breakdown = {}
-        for fingerprint, relay_data in period_result['relay_breakdown'].items():
-            breakdown[relay_data['nickname']] = {
-                'fingerprint': fingerprint,
-                'bandwidth': relay_data['bandwidth'],
-                'data_points': relay_data.get('data_points', 0)
-            }
-        
-        return {
-            'score': score,
-            'average_bandwidth': average_value,
-            'relay_count': relay_count,
-            'weight': 1.0,
-            'valid_relays': len(period_result['bandwidth_values']),
-            'breakdown': breakdown
-        }
+        return _make_score_result(average_value, average_value, relay_count, len(period_result['bandwidth_values']), breakdown, 'bandwidth')
     
     # Default return for unsupported metric types
-    return {
-        'score': 0.0,
-        f'average_{metric_type}': 0.0,
-        'relay_count': relay_count,
-        'weight': 1.0,
-        'valid_relays': 0,
-        'breakdown': {}
-    }
+    return _make_empty_score_result(relay_count, metric_type)
 
 
 def _calculate_reliability_score(operator_relays, uptime_data, time_period, uptime_map=None):
