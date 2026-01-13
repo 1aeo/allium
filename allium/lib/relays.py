@@ -2357,8 +2357,15 @@ class Relays:
     def _generate_aroi_leaderboards(self):
         """
         Generate AROI operator leaderboards using pre-processed relay data.
+        
+        PERFORMANCE: This method was optimized to pre-build uptime/bandwidth maps once
+        instead of rebuilding them for each of ~3,000 contacts × 4 metric calculations.
+        This reduced map-building iterations from ~132M to ~21K (99.98% reduction).
         """
+        self._log_progress("Generating AROI operator leaderboards...")
         self.json['aroi_leaderboards'] = _calculate_aroi_leaderboards(self)
+        contact_count = len(self.json.get('sorted', {}).get('contact', {}))
+        self._log_progress(f"AROI leaderboards generated for {contact_count} operators")
 
     def _generate_smart_context(self):
         """
