@@ -71,10 +71,10 @@ cd www && python3 -m http.server 8000
 ## Table of Contents
 
 - [Key Features](#key-features)
-- [API Data Sources](#api-data-sources)
 - [Usage & Configuration](#usage--configuration)
 - [Generated Content](#generated-content)
 - [AROI Leaderboards](#aroi-leaderboards)
+- [API Data Sources](#api-data-sources)
 - [Security & Performance](#security--performance)
 - [Requirements](#requirements)
 - [Documentation](#documentation)
@@ -103,7 +103,7 @@ Authenticated Relay Operator Identification system ranking verified operators:
 
 **Capacity**: Bandwidth Contributed, Consensus Weight Leaders  
 **Roles**: Exit/Guard Authority Champions, Exit/Guard Operators  
-**Reliability** (>25 relays required): Reliability Masters (6mo), Legacy Titans (5yr), Bandwidth Served Masters (6mo), Bandwidth Served Legends (5yr)  
+**Reliability**: Reliability Masters (6mo), Legacy Titans (5yr), Bandwidth Served Masters (6mo), Bandwidth Served Legends (5yr)  
 **Diversity**: Most Diverse, Platform Diversity (non-Linux), Non-EU Leaders, Frontier Builders (rare countries)  
 **Infrastructure**: Network Veterans (tenure), IPv4/IPv6 Address Leaders, AROI Validation Champions
 
@@ -175,71 +175,6 @@ Pre-computed analysis attached to contact pages:
 - Static HTML eliminates server-side attack surface
 
 </details>
-
-## API Data Sources
-
-Allium integrates with multiple Tor Project APIs:
-
-### Onionoo Details API
-
-- **URL**: `https://onionoo.torproject.org/details`
-- **Purpose**: Core relay information (bandwidth, flags, location, technical details)
-- **Memory**: ~400MB during processing
-
-<details>
-<summary>Sample response</summary>
-
-```json
-{
-  "relays": [{
-    "fingerprint": "9695DFC35FFEB861329B9F1AB04C46397020CE31",
-    "nickname": "moria1",
-    "running": true,
-    "flags": ["Authority", "Fast", "Running", "Stable"],
-    "consensus_weight": 27,
-    "country": "us",
-    "platform": "Tor 0.4.8.7 on Linux",
-    "observed_bandwidth": 20971520
-  }]
-}
-```
-
-</details>
-
-### Onionoo Uptime API
-
-- **URL**: `https://onionoo.torproject.org/uptime`
-- **Purpose**: Historical uptime statistics and flag history for reliability analysis
-- **Memory**: ~2GB during processing (large historical dataset)
-
-<details>
-<summary>Sample response</summary>
-
-```json
-{
-  "relays": [{
-    "fingerprint": "9695DFC35FFEB861329B9F1AB04C46397020CE31",
-    "uptime": {
-      "1_month": "978",
-      "1_year": "945"
-    },
-    "flags": {
-      "Running": {"1_month": "987", "1_year": "954"},
-      "Guard": {"1_month": "974", "1_year": "943"}
-    }
-  }]
-}
-```
-
-</details>
-
-### Onionoo Bandwidth API
-
-- **URL**: `https://onionoo.torproject.org/bandwidth`
-- **Purpose**: Historical bandwidth statistics for trend analysis
-- **Cache**: Configurable (default: 12 hours)
-
-**Performance Features**: Parallel API fetching, HTTP conditional requests, graceful fallback to cached data
 
 ## Usage & Configuration
 
@@ -318,7 +253,7 @@ Eighteen specialized categories tracking authenticated operator achievements:
 </details>
 
 <details>
-<summary><strong>⏰ Reliability Excellence</strong> (25+ relays required)</summary>
+<summary><strong>⏰ Reliability Excellence</strong></summary>
 
 7. **Reliability Masters** — 6-month average uptime
 8. **Legacy Titans** — 5-year average uptime
@@ -346,6 +281,71 @@ Eighteen specialized categories tracking authenticated operator achievements:
 18. **AROI Validation Champions** — Verified identity count
 
 </details>
+
+## API Data Sources
+
+Allium integrates with multiple Tor Project APIs:
+
+### Onionoo Details API
+
+- **URL**: `https://onionoo.torproject.org/details`
+- **Purpose**: Core relay information (bandwidth, flags, location, technical details)
+- **Memory**: ~400MB during processing
+
+<details>
+<summary>Sample response</summary>
+
+```json
+{
+  "relays": [{
+    "fingerprint": "9695DFC35FFEB861329B9F1AB04C46397020CE31",
+    "nickname": "moria1",
+    "running": true,
+    "flags": ["Authority", "Fast", "Running", "Stable"],
+    "consensus_weight": 27,
+    "country": "us",
+    "platform": "Tor 0.4.8.7 on Linux",
+    "observed_bandwidth": 20971520
+  }]
+}
+```
+
+</details>
+
+### Onionoo Uptime API
+
+- **URL**: `https://onionoo.torproject.org/uptime`
+- **Purpose**: Historical uptime statistics and flag history for reliability analysis
+- **Memory**: ~2GB during processing (large historical dataset)
+
+<details>
+<summary>Sample response</summary>
+
+```json
+{
+  "relays": [{
+    "fingerprint": "9695DFC35FFEB861329B9F1AB04C46397020CE31",
+    "uptime": {
+      "1_month": "978",
+      "1_year": "945"
+    },
+    "flags": {
+      "Running": {"1_month": "987", "1_year": "954"},
+      "Guard": {"1_month": "974", "1_year": "943"}
+    }
+  }]
+}
+```
+
+</details>
+
+### Onionoo Bandwidth API
+
+- **URL**: `https://onionoo.torproject.org/bandwidth`
+- **Purpose**: Historical bandwidth statistics for trend analysis
+- **Cache**: Configurable (default: 12 hours)
+
+**Performance Features**: Parallel API fetching, HTTP conditional requests, graceful fallback to cached data
 
 ## Security & Performance
 
