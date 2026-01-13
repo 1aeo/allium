@@ -103,7 +103,7 @@ Authenticated Relay Operator Identification system ranking verified operators:
 
 **Capacity**: Bandwidth Contributed, Consensus Weight Leaders  
 **Roles**: Exit/Guard Authority Champions, Exit/Guard Operators  
-**Reliability** (25+ relays required): Reliability Masters (6mo), Legacy Titans (5yr), Bandwidth Served Masters (6mo), Bandwidth Served Legends (5yr)  
+**Reliability** (>25 relays required): Reliability Masters (6mo), Legacy Titans (5yr), Bandwidth Served Masters (6mo), Bandwidth Served Legends (5yr)  
 **Diversity**: Most Diverse, Platform Diversity (non-Linux), Non-EU Leaders, Frontier Builders (rare countries)  
 **Infrastructure**: Network Veterans (tenure), IPv4/IPv6 Address Leaders, AROI Validation Champions
 
