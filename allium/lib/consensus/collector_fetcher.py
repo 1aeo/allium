@@ -846,6 +846,9 @@ class CollectorFetcher:
             if not vote_info:
                 continue
             
+            # Get flags assigned by this authority
+            auth_flags = vote_info.get('flags', [])
+            
             # Guard flag eligibility
             guard_wfu_threshold = thresholds.get('guard-wfu', 0.98)
             guard_tk_threshold = thresholds.get('guard-tk', GUARD_TK_DEFAULT)
@@ -863,7 +866,15 @@ class CollectorFetcher:
             guard_bw_in_top25 = relay_measured_bw >= guard_bw_top25_threshold
             guard_bw_eligible = guard_bw_meets_guarantee or guard_bw_in_top25
             
+            # Guard flag prerequisites: must have Fast, Stable, and V2Dir flags from this authority
+            # Per Tor dir-spec Section 3.4.2: Guard requires Fast, Stable, and V2Dir
+            has_fast = 'Fast' in auth_flags
+            has_stable = 'Stable' in auth_flags
+            has_v2dir = 'V2Dir' in auth_flags
+            guard_prereqs_met = has_fast and has_stable and has_v2dir
+            
             guard_eligible = (
+                guard_prereqs_met and
                 relay_wfu >= guard_wfu_threshold and
                 relay_tk >= guard_tk_threshold and
                 guard_bw_eligible
@@ -875,12 +886,20 @@ class CollectorFetcher:
             eligibility['guard']['details'].append({
                 'authority': auth_name,
                 'eligible': guard_eligible,
+                # Prerequisite flags (per Tor dir-spec: Guard requires Fast, Stable, V2Dir)
+                'has_fast': has_fast,
+                'has_stable': has_stable,
+                'has_v2dir': has_v2dir,
+                'prereqs_met': guard_prereqs_met,
+                # WFU requirement
                 'wfu_threshold': guard_wfu_threshold,
                 'wfu_value': relay_wfu,
                 'wfu_met': relay_wfu >= guard_wfu_threshold,
+                # TK requirement
                 'tk_threshold': guard_tk_threshold,
                 'tk_value': relay_tk,
                 'tk_met': relay_tk >= guard_tk_threshold,
+                # BW requirement
                 'bw_guarantee': AUTH_DIR_GUARD_BW_GUARANTEE,  # 2 MB/s minimum
                 'bw_top25_threshold': guard_bw_top25_threshold,  # Top 25% cutoff
                 'bw_value': relay_measured_bw,

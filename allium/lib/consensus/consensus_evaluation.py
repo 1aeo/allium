@@ -1374,11 +1374,12 @@ def _format_flag_summary(consensus_data: dict, observed_bandwidth: int = 0) -> d
         
         # For Guard flag, recalculate based on observed_bandwidth
         if flag_name == 'guard' and guard_bw_eligible:
-            # If BW meets 2MB guarantee, check other requirements (WFU, TK)
-            # Count how many authorities the relay meets WFU+TK requirements
+            # If BW meets 2MB guarantee, check other requirements (prereqs, WFU, TK)
+            # Guard requires: Fast, Stable, V2Dir flags + WFU >= 98% + TK >= 8 days
+            # Count how many authorities the relay meets ALL requirements
             eligible_count = sum(
                 1 for detail in flag_data.get('details', [])
-                if detail.get('wfu_met') and detail.get('tk_met')
+                if detail.get('prereqs_met', True) and detail.get('wfu_met') and detail.get('tk_met')
             )
         
         # For Fast flag, recalculate based on observed_bandwidth

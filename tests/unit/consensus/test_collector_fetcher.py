@@ -1137,3 +1137,215 @@ class TestParseStatsLineEdgeCases:
         assert result['wfu'] == pytest.approx(0.999999, rel=1e-5)
         assert result['tk'] == 315360000
         assert result['mtbf'] == 315360000
+
+
+class TestGuardFlagPrerequisites:
+    """Tests for Guard flag prerequisite checking.
+    
+    Per Tor dir-spec Section 3.4.2, Guard flag requires:
+    - Fast flag
+    - Stable flag
+    - V2Dir flag
+    - WFU >= 98%
+    - TK >= 8 days
+    - Bandwidth >= 2 MB/s OR in top 25%
+    """
+    
+    def test_guard_eligible_with_all_prerequisites(self):
+        """Test relay IS Guard eligible when it has Fast, Stable, V2Dir flags."""
+        fetcher = CollectorFetcher()
+        fingerprint = 'ABC123DEF456ABC123DEF456ABC123DEF456ABC1'
+        
+        # Relay with ALL Guard prerequisites: Fast, Stable, V2Dir + good metrics
+        fetcher.relay_index = {
+            fingerprint: {
+                'fingerprint': fingerprint,
+                'nickname': 'FullGuardRelay',
+                'votes': {
+                    'moria1': {
+                        'flags': ['Fast', 'Stable', 'V2Dir', 'Running', 'Valid'],
+                        'wfu': 0.99,  # >= 98%
+                        'tk': 800000,  # > 8 days (691200 sec)
+                        'measured': 3000000,  # > 2 MB/s
+                    },
+                },
+                'bandwidth_measurements': {},
+            }
+        }
+        fetcher.flag_thresholds = {
+            'moria1': {
+                'guard-wfu': 0.98,
+                'guard-tk': 691200,  # 8 days
+                'guard-bw-inc-exits': 2000000,
+            },
+        }
+        
+        result = fetcher.get_relay_consensus_evaluation(fingerprint, authority_count=9)
+        
+        # Should be Guard eligible from moria1
+        guard_eligibility = result['flag_eligibility']['guard']
+        assert guard_eligibility['eligible_count'] == 1
+        
+        # Check details
+        detail = guard_eligibility['details'][0]
+        assert detail['eligible'] == True
+        assert detail['has_fast'] == True
+        assert detail['has_stable'] == True
+        assert detail['has_v2dir'] == True
+        assert detail['prereqs_met'] == True
+    
+    def test_guard_not_eligible_without_fast_flag(self):
+        """Test relay is NOT Guard eligible when missing Fast flag."""
+        fetcher = CollectorFetcher()
+        fingerprint = 'ABC123DEF456ABC123DEF456ABC123DEF456ABC1'
+        
+        # Relay missing Fast flag (has Stable, V2Dir, good metrics)
+        fetcher.relay_index = {
+            fingerprint: {
+                'fingerprint': fingerprint,
+                'nickname': 'MissingFastRelay',
+                'votes': {
+                    'moria1': {
+                        'flags': ['Stable', 'V2Dir', 'Running', 'Valid'],  # NO Fast!
+                        'wfu': 0.99,
+                        'tk': 800000,
+                        'measured': 3000000,
+                    },
+                },
+                'bandwidth_measurements': {},
+            }
+        }
+        fetcher.flag_thresholds = {
+            'moria1': {
+                'guard-wfu': 0.98,
+                'guard-tk': 691200,
+                'guard-bw-inc-exits': 2000000,
+            },
+        }
+        
+        result = fetcher.get_relay_consensus_evaluation(fingerprint, authority_count=9)
+        
+        guard_eligibility = result['flag_eligibility']['guard']
+        assert guard_eligibility['eligible_count'] == 0  # Should NOT be eligible
+        
+        detail = guard_eligibility['details'][0]
+        assert detail['eligible'] == False
+        assert detail['has_fast'] == False
+        assert detail['prereqs_met'] == False
+    
+    def test_guard_not_eligible_without_stable_flag(self):
+        """Test relay is NOT Guard eligible when missing Stable flag."""
+        fetcher = CollectorFetcher()
+        fingerprint = 'ABC123DEF456ABC123DEF456ABC123DEF456ABC1'
+        
+        # Relay missing Stable flag (has Fast, V2Dir, good metrics)
+        fetcher.relay_index = {
+            fingerprint: {
+                'fingerprint': fingerprint,
+                'nickname': 'MissingStableRelay',
+                'votes': {
+                    'moria1': {
+                        'flags': ['Fast', 'V2Dir', 'Running', 'Valid'],  # NO Stable!
+                        'wfu': 0.99,
+                        'tk': 800000,
+                        'measured': 3000000,
+                    },
+                },
+                'bandwidth_measurements': {},
+            }
+        }
+        fetcher.flag_thresholds = {
+            'moria1': {
+                'guard-wfu': 0.98,
+                'guard-tk': 691200,
+                'guard-bw-inc-exits': 2000000,
+            },
+        }
+        
+        result = fetcher.get_relay_consensus_evaluation(fingerprint, authority_count=9)
+        
+        guard_eligibility = result['flag_eligibility']['guard']
+        assert guard_eligibility['eligible_count'] == 0  # Should NOT be eligible
+        
+        detail = guard_eligibility['details'][0]
+        assert detail['eligible'] == False
+        assert detail['has_stable'] == False
+        assert detail['prereqs_met'] == False
+    
+    def test_guard_not_eligible_without_v2dir_flag(self):
+        """Test relay is NOT Guard eligible when missing V2Dir flag."""
+        fetcher = CollectorFetcher()
+        fingerprint = 'ABC123DEF456ABC123DEF456ABC123DEF456ABC1'
+        
+        # Relay missing V2Dir flag (has Fast, Stable, good metrics)
+        fetcher.relay_index = {
+            fingerprint: {
+                'fingerprint': fingerprint,
+                'nickname': 'MissingV2DirRelay',
+                'votes': {
+                    'moria1': {
+                        'flags': ['Fast', 'Stable', 'Running', 'Valid'],  # NO V2Dir!
+                        'wfu': 0.99,
+                        'tk': 800000,
+                        'measured': 3000000,
+                    },
+                },
+                'bandwidth_measurements': {},
+            }
+        }
+        fetcher.flag_thresholds = {
+            'moria1': {
+                'guard-wfu': 0.98,
+                'guard-tk': 691200,
+                'guard-bw-inc-exits': 2000000,
+            },
+        }
+        
+        result = fetcher.get_relay_consensus_evaluation(fingerprint, authority_count=9)
+        
+        guard_eligibility = result['flag_eligibility']['guard']
+        assert guard_eligibility['eligible_count'] == 0  # Should NOT be eligible
+        
+        detail = guard_eligibility['details'][0]
+        assert detail['eligible'] == False
+        assert detail['has_v2dir'] == False
+        assert detail['prereqs_met'] == False
+    
+    def test_guard_eligible_with_prereqs_but_low_wfu_not_eligible(self):
+        """Test relay with prereqs but low WFU is NOT Guard eligible."""
+        fetcher = CollectorFetcher()
+        fingerprint = 'ABC123DEF456ABC123DEF456ABC123DEF456ABC1'
+        
+        # Relay with Fast, Stable, V2Dir but LOW WFU
+        fetcher.relay_index = {
+            fingerprint: {
+                'fingerprint': fingerprint,
+                'nickname': 'LowWFURelay',
+                'votes': {
+                    'moria1': {
+                        'flags': ['Fast', 'Stable', 'V2Dir', 'Running', 'Valid'],
+                        'wfu': 0.95,  # < 98% threshold!
+                        'tk': 800000,
+                        'measured': 3000000,
+                    },
+                },
+                'bandwidth_measurements': {},
+            }
+        }
+        fetcher.flag_thresholds = {
+            'moria1': {
+                'guard-wfu': 0.98,
+                'guard-tk': 691200,
+                'guard-bw-inc-exits': 2000000,
+            },
+        }
+        
+        result = fetcher.get_relay_consensus_evaluation(fingerprint, authority_count=9)
+        
+        guard_eligibility = result['flag_eligibility']['guard']
+        assert guard_eligibility['eligible_count'] == 0  # NOT eligible due to low WFU
+        
+        detail = guard_eligibility['details'][0]
+        assert detail['eligible'] == False
+        assert detail['prereqs_met'] == True  # Prereqs are met
+        assert detail['wfu_met'] == False  # But WFU is not met
