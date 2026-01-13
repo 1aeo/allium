@@ -126,19 +126,15 @@
                     {% set d = v['display'] -%}
                     <td class="contact-cell">
                         {% if v['aroi_domain'] and v['aroi_domain'] != 'none' -%}
+                            {% if v.get('aroi_validation_status') == 'validated' -%}
+                            <span title="All relays validated" style="color: #28a745;">✓</span> {% elif v.get('aroi_validation_status') == 'unauthorized' -%}
+                            <span title="Unauthorized: fingerprints not in proof file" style="color: #dc3545;">🚫</span> {% elif v.get('aroi_validation_status') == 'misconfigured' -%}
+                            <span title="Misconfigured: validation errors" style="color: #ffc107;">⚠</span> {% elif v.get('aroi_validation_status') == 'incomplete' -%}
+                            <span title="Incomplete: missing AROI fields" style="color: #6c757d;">⚬</span> {% endif -%}
                             {% if base_url and v['aroi_domain'] in validated_aroi_domains -%}
                             <a href="{{ base_url }}/{{ v['aroi_domain']|lower|escape }}/" title="Contact: {{ v['contact']|escape }}" style="text-decoration: underline;">{{ d.display_name|escape }}</a>
                             {% else -%}
                             <a href="{{ page_ctx.path_prefix }}contact/{{ k|escape }}/" title="Contact: {{ v['contact']|escape }}" style="text-decoration: underline;">{{ d.display_name|escape }}</a>
-                            {% endif -%}
-                            {% if v.get('aroi_validation_status') == 'validated' -%}
-                            <span title="All relays validated" style="color: #28a745;"> ✓</span>
-                            {% elif v.get('aroi_validation_status') == 'unauthorized' -%}
-                            <span title="Unauthorized: fingerprints not in proof file" style="color: #dc3545;"> 🚫</span>
-                            {% elif v.get('aroi_validation_status') == 'misconfigured' -%}
-                            <span title="Misconfigured: validation errors" style="color: #ffc107;"> ⚠</span>
-                            {% elif v.get('aroi_validation_status') == 'incomplete' -%}
-                            <span title="Incomplete: missing AROI fields" style="color: #6c757d;"> ⚬</span>
                             {% endif -%}
                         {% elif v['contact'] and v['contact'] != '' -%}
                             <a href="{{ page_ctx.path_prefix }}contact/{{ k|escape }}/" title="Contact: {{ v['contact']|escape }}" style="text-decoration: underline;">{{ d.display_name|escape }}</a>

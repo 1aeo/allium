@@ -106,18 +106,29 @@ import re
 # =============================================================================
 
 # Email extraction patterns - ordered by specificity (most specific first)
-_RE_EMAIL_CIISS = re.compile(r'\bemail:([^\s,]+)', re.I)
+_RE_EMAIL_CIISS = re.compile(r'\bemail:\s*([^\s,]+)', re.I)
 _RE_EMAIL_MAIL = re.compile(r'\bmail:([^\s,]+)', re.I)
 _RE_EMAIL_STANDARD = re.compile(r'([\w\.\-+]+@[\w\.\-]+\.\w{2,})')
 _RE_EMAIL_BRACKETS = re.compile(r'([\w\.\-+]+)\s*\[\]\s*([\w\.\-]+\.\w{2,})')
+# CIISS with [dot] for TLD: email:user[]domain[dot]tld
+_RE_EMAIL_CIISS_DOT = re.compile(r'\bemail:\s*([\w\.\-+]+)\[\]([\w\.\-]+)\[dot\](\w{2,})', re.I)
 _RE_EMAIL_AT_NOSPAM = re.compile(
     r'([\w\.\-+]+)\s+AT\s+NOSPAM\s+([\w\.\-]+)\s+(?:DOT|dot|\.)\s*(\w{2,})', re.I)
+# Comprehensive AT/DOT style with various bracket formats
 _RE_EMAIL_AT_STYLE = re.compile(
-    r'([\w\.\-+]+)\s+(?:AT|at|\(at\)|\[at\])\s+([\w\.\-]+)\s+(?:DOT|dot|\.)\s*(\w{2,})', re.I)
+    r'([\w\.\-+]+)\s*(?:<AT>|<at>|\{AT\}|\{at\}|\(AT\)|\(at\)|\[AT\]|\[at\]|_at_|__at__|AT|at)\s*([\w\.\-]+)\s*(?:<DOT>|<dot>|\{DOT\}|\{dot\}|\(DOT\)|\(dot\)|\[DOT\]|\[dot\]|_dot_|__dot__|DOT|dot|\.)\s*(\w{2,})', re.I)
 _RE_EMAIL_UNDERSCORE = re.compile(r'([\w\.\-]+)_at_([\w\.\-]+)\s*\(dot\)\s*(\w{2,})', re.I)
 # Pattern for "user // at // domain // dot // tld" style
 _RE_EMAIL_SLASH_STYLE = re.compile(
     r'([\w\.\-+]+)\s*//\s*at\s*//\s*([\w\.\-]+)\s*//\s*dot\s*//\s*(\w{2,})', re.I)
+# Concatenated style: userATdomainDOTcom (no spaces/separators)
+_RE_EMAIL_CONCAT = re.compile(r'([\w\.\-+]+)AT([\w\.\-]+)DOT(\w{2,})(?:\s|$)', re.I)
+# {AT} or (at) with standard domain (domain.tld not obfuscated)
+_RE_EMAIL_AT_STANDARD_DOMAIN = re.compile(
+    r'([\w\.\-+]+)\s*(?:\{AT\}|\{at\}|\(at\)|\(AT\)|\[at\]|\[AT\])\s*([\w\.\-]+\.\w{2,})', re.I)
+# Angle bracket wrapped: <user AT domain DOT tld> or <user _at_ domain _dot_ tld>
+_RE_EMAIL_ANGLE_WRAPPED = re.compile(
+    r'<\s*([\w\.\-+]+)\s*(?:AT|_at_|\[at\])\s*([\w\.\-]+)\s*(?:DOT|_dot_|\[dot\])\s*(\w{2,})\s*>', re.I)
 
 # Person name pattern - matches "Name <...>" at start
 _RE_PERSON_NAME = re.compile(r'^([A-Z][a-zA-Z\s\-]+)\s*<')
@@ -125,6 +136,8 @@ _RE_PERSON_NAME = re.compile(r'^([A-Z][a-zA-Z\s\-]+)\s*<')
 # URL patterns - leading URL or URL in angle brackets
 _RE_LEADING_URL = re.compile(r'^https?://(?:www\.)?([^\s,/]+)')
 _RE_ANGLE_BRACKET_URL = re.compile(r'<\s*https?://(?:www\.)?([^\s,/>]+)')
+# Onion URL pattern - extract .onion domain from url: field or standalone
+_RE_ONION_URL = re.compile(r'(?:url:)?https?://([a-z2-7]{56}\.onion)', re.I)
 
 # Generic placeholder names to exclude
 _PLACEHOLDER_NAMES = frozenset(['random person', 'dave null', 'abuse team'])
@@ -231,10 +244,16 @@ def _extract_leading_url(contact: str) -> Optional[str]:
     Handles:
     - Leading URL: "https://example.com/..."
     - Angle bracket URL: "Name <https://example.com/>"
+    - Onion URL: "url:http://xyz...onion" or standalone
     """
     # Fast path: check for 'http' anywhere (covers both patterns)
     if 'http' not in contact:
         return None
+    
+    # Try onion URL first (higher priority for Tor network)
+    match = _RE_ONION_URL.search(contact)
+    if match:
+        return match.group(1).lower()
     
     # Try leading URL first
     if contact.startswith('http'):
@@ -252,15 +271,22 @@ def _extract_email_from_contact(contact: str) -> Optional[str]:
     Extract email address from contact string using multiple patterns.
     
     Handles various obfuscation formats:
-    - CIISS: email:user[]domain.com
+    - CIISS: email:user[]domain.com, email:user[]domain[dot]tld
     - Standard: user@domain.com
     - Brackets: user[]domain.com
-    - AT style: user AT domain DOT com
+    - AT style: user AT domain DOT com, user <AT> domain <DOT> com
     - Slash style: user // at // domain // dot // com
+    - Concatenated: userATdomainDOTcom
+    - Various bracket styles: {at}, (at), [at], _at_, __at__
     
     Uses precompiled patterns for performance.
     """
-    # Pattern 1: CIISS-style email field (most common in Tor contacts)
+    # Pattern 1a: CIISS with [dot] for TLD (email:user[]domain[dot]tld)
+    match = _RE_EMAIL_CIISS_DOT.search(contact)
+    if match:
+        return f"{match.group(1)}@{match.group(2)}.{match.group(3)}"
+    
+    # Pattern 1b: CIISS-style email field (most common in Tor contacts)
     match = _RE_EMAIL_CIISS.search(contact)
     if match:
         email = match.group(1).replace('[]', '@').replace('[@]', '@')
@@ -284,22 +310,37 @@ def _extract_email_from_contact(contact: str) -> Optional[str]:
     if match:
         return f"{match.group(1)}@{match.group(2)}"
     
-    # Pattern 5: Slash style (user // at // domain // dot // tld)
+    # Pattern 5: Angle bracket wrapped (<user AT domain DOT tld>)
+    match = _RE_EMAIL_ANGLE_WRAPPED.search(contact)
+    if match:
+        return f"{match.group(1)}@{match.group(2)}.{match.group(3)}"
+    
+    # Pattern 6: Slash style (user // at // domain // dot // tld)
     match = _RE_EMAIL_SLASH_STYLE.search(contact)
     if match:
         return f"{match.group(1)}@{match.group(2)}.{match.group(3)}"
     
-    # Pattern 6: AT NOSPAM style (user AT NOSPAM domain DOT com)
+    # Pattern 7: AT NOSPAM style (user AT NOSPAM domain DOT com)
     match = _RE_EMAIL_AT_NOSPAM.search(contact)
     if match:
         return f"{match.group(1)}@{match.group(2)}.{match.group(3)}"
     
-    # Pattern 7: AT style without NOSPAM (user AT domain DOT com)
+    # Pattern 8: Concatenated style (userATdomainDOTcom)
+    match = _RE_EMAIL_CONCAT.search(contact)
+    if match:
+        return f"{match.group(1)}@{match.group(2)}.{match.group(3)}"
+    
+    # Pattern 9: {AT} or (at) with standard domain (user {AT} domain.tld)
+    match = _RE_EMAIL_AT_STANDARD_DOMAIN.search(contact)
+    if match:
+        return f"{match.group(1)}@{match.group(2)}"
+    
+    # Pattern 10: AT style with various separators (user AT domain DOT com)
     match = _RE_EMAIL_AT_STYLE.search(contact)
     if match:
         return f"{match.group(1)}@{match.group(2)}.{match.group(3)}"
     
-    # Pattern 8: _at_ style (user_at_domain (dot) com)
+    # Pattern 11: _at_ style (user_at_domain (dot) com)
     match = _RE_EMAIL_UNDERSCORE.search(contact)
     if match:
         return f"{match.group(1)}@{match.group(2)}.{match.group(3)}"

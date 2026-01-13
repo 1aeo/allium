@@ -221,32 +221,24 @@
                     max-width: 20vw;  /* Use viewport width for responsive sizing */
                 }
                 
-                /* Contact cell in contacts table - consistent width with CSS ellipsis */
+                /* Contact cell in contacts table - dynamic width with CSS ellipsis */
                 .contact-cell {
-                    max-width: 220px;
-                    white-space: nowrap;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
+                    max-width: 25vw;
+                    display: flex;
+                    align-items: center;
+                }
+                
+                .contact-cell > span {
+                    flex-shrink: 0;
+                    margin-right: 4px;
                 }
                 
                 .contact-cell a {
-                    display: block;
+                    flex: 1;
+                    min-width: 0;
                     white-space: nowrap;
                     overflow: hidden;
                     text-overflow: ellipsis;
-                }
-                
-                /* Responsive adjustments for contact cell */
-                @media (max-width: 1200px) {
-                    .contact-cell {
-                        max-width: 180px;
-                    }
-                }
-                
-                @media (max-width: 992px) {
-                    .contact-cell {
-                        max-width: 150px;
-                    }
                 }
 
                 /* Table styles */
