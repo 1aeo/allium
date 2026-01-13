@@ -75,7 +75,6 @@ cd www && python3 -m http.server 8000
 - [Key Features](#key-features)
 - [Usage & Configuration](#usage--configuration)
 - [Generated Content](#generated-content)
-- [AROI Leaderboards](#aroi-leaderboards)
 - [API Data Sources](#api-data-sources)
 - [Security & Performance](#security--performance)
 - [Requirements](#requirements)
@@ -91,10 +90,9 @@ cd www && python3 -m http.server 8000
 <summary><strong>Data Processing</strong></summary>
 
 - Multi-threaded API fetching from 5 sources: Onionoo Details/Uptime/Bandwidth, AROI Validation, CollecTor Consensus
-- Multiprocessing page generation (CPU count workers, min 4, configurable via `--workers`)
-- Memory modes: `--apis details` (~400MB) or `--apis all` (~2.4GB)
+- Multiprocessing page generation (configurable via `--workers`)
 - Downtime filtering: excludes relays offline >7 days (configurable via `--filter-downtime`)
-- Generates ~21,700 HTML pages including relay, contact, country, AS, family, platform, and flag pages
+- Generates relay, contact, country, AS, family, platform, and flag pages
 
 </details>
 
@@ -167,17 +165,6 @@ Pre-computed analysis attached to contact pages:
 
 </details>
 
-<details>
-<summary><strong>Security</strong></summary>
-
-- Jinja2 autoescape enabled globally for XSS protection
-- IP address validation via Python `ipaddress` module
-- HTML entity escaping for all user-controlled data
-- No JavaScript dependencies in generated output
-- Static HTML eliminates server-side attack surface
-
-</details>
-
 ## Usage & Configuration
 
 ```bash
@@ -231,58 +218,6 @@ Pre-computed analysis attached to contact pages:
 - **Operator profiles** — Achievement metrics and diversity scoring
 - **Geographic summaries** — Country-level statistics
 - **Directory Authorities** — Consensus health with uptime analysis
-
-## AROI Leaderboards
-
-Eighteen specialized categories tracking authenticated operator achievements:
-
-<details>
-<summary><strong>🚀 Capacity & Performance</strong></summary>
-
-1. **Bandwidth Contributed** — Total observed bandwidth capacity
-2. **Consensus Weight Authority** — Network routing control influence
-
-</details>
-
-<details>
-<summary><strong>🛡️ Network Role Specialization</strong></summary>
-
-3. **Exit Authority Champions** — Exit consensus weight control
-4. **Guard Authority Champions** — Guard consensus weight control
-5. **Exit Operators** — Exit relay infrastructure providers
-6. **Guard Operators** — Guard relay infrastructure providers
-
-</details>
-
-<details>
-<summary><strong>⏰ Reliability Excellence</strong></summary>
-
-7. **Reliability Masters** — 6-month average uptime
-8. **Legacy Titans** — 5-year average uptime
-9. **Bandwidth Served Masters** — 6-month bandwidth performance
-10. **Bandwidth Served Legends** — 5-year bandwidth performance
-
-</details>
-
-<details>
-<summary><strong>🌍 Diversity & Geographic Leadership</strong></summary>
-
-11. **Most Diverse Operators** — Multi-factor diversity scoring
-12. **Platform Diversity Heroes** — Non-Linux operational excellence
-13. **Non-EU Leaders** — Geographic expansion beyond EU
-14. **Frontier Builders** — Operations in underrepresented countries
-
-</details>
-
-<details>
-<summary><strong>🏆 Innovation & Leadership</strong></summary>
-
-15. **Network Veterans** — Scale-weighted operational tenure
-16. **IPv4 Address Leaders** — Unique IPv4 address diversity
-17. **IPv6 Address Leaders** — Unique IPv6 address diversity
-18. **AROI Validation Champions** — Verified identity count
-
-</details>
 
 ## API Data Sources
 
