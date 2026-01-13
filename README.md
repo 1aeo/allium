@@ -68,6 +68,8 @@ cd www && python3 -m http.server 8000
 - **Time**: Full generation takes ~2-5 minutes producing ~21,700 HTML pages
 - **Disk**: Output is approximately ~500MB
 
+📖 **[Full Quick Start Guide](docs/user-guide/quick-start.md)** — detailed setup instructions, troubleshooting, and deployment options.
+
 ## Table of Contents
 
 - [Key Features](#key-features)
