@@ -220,6 +220,26 @@
                     text-overflow: ellipsis;
                     max-width: 20vw;  /* Use viewport width for responsive sizing */
                 }
+                
+                /* Contact cell in contacts table - dynamic width with CSS ellipsis */
+                .contact-cell {
+                    max-width: 25vw;
+                    display: flex;
+                    align-items: center;
+                }
+                
+                .contact-cell > span {
+                    flex-shrink: 0;
+                    margin-right: 4px;
+                }
+                
+                .contact-cell a {
+                    flex: 1;
+                    min-width: 0;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
 
                 /* Table styles */
                 .table {

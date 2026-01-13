@@ -19,7 +19,7 @@ from jinja2 import Environment, FileSystemLoader, FileSystemBytecodeCache
 from .aroileaders import _calculate_aroi_leaderboards, _safe_parse_ip_address
 from .progress import log_progress, get_memory_usage
 from .progress_logger import ProgressLogger
-from .string_utils import format_percentage_from_fraction
+from .string_utils import format_percentage_from_fraction, extract_contact_display_name
 from .bandwidth_formatter import (
     BandwidthFormatter, 
     determine_unit, 
@@ -2115,6 +2115,12 @@ class Relays:
                 # First seen date (strip time)
                 first_seen = data.get("first_seen", "")
                 
+                # Extract smart display name for contact column
+                # Priority: AROI domain > full email > person name > raw contact
+                aroi_domain = data.get("aroi_domain")
+                contact_str = data.get("contact", "")
+                display_name = extract_contact_display_name(contact_str, aroi_domain)
+                
                 data["display"] = {
                     "bandwidth_unit": unit,
                     "bandwidth_formatted": bw,
@@ -2130,6 +2136,7 @@ class Relays:
                     "count_combined": f"{g_cnt} / {m_cnt} / {e_cnt}",
                     "total_relays": len(data.get("relays", [])),
                     "first_seen_date": first_seen.split(" ", 1)[0] if first_seen else "",
+                    "display_name": display_name,  # Smart display name for contact column
                 }
 
     def _precompute_all_contact_page_data(self):
