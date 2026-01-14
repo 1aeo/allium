@@ -835,16 +835,19 @@ class CollectorFetcher:
         6. Must have V2Dir flag
         """
         eligibility = {
-            'guard': {'eligible_count': 0, 'details': []},
-            'stable': {'eligible_count': 0, 'details': []},
-            'fast': {'eligible_count': 0, 'details': []},
-            'hsdir': {'eligible_count': 0, 'details': []},
+            'guard': {'eligible_count': 0, 'assigned_count': 0, 'details': []},
+            'stable': {'eligible_count': 0, 'assigned_count': 0, 'details': []},
+            'fast': {'eligible_count': 0, 'assigned_count': 0, 'details': []},
+            'hsdir': {'eligible_count': 0, 'assigned_count': 0, 'details': []},
         }
         
         for auth_name, thresholds in self.flag_thresholds.items():
             vote_info = relay.get('votes', {}).get(auth_name, {})
             if not vote_info:
                 continue
+            
+            # Get flags assigned by this authority
+            auth_flags = vote_info.get('flags', [])
             
             # Guard flag eligibility
             guard_wfu_threshold = thresholds.get('guard-wfu', 0.98)
@@ -863,7 +866,15 @@ class CollectorFetcher:
             guard_bw_in_top25 = relay_measured_bw >= guard_bw_top25_threshold
             guard_bw_eligible = guard_bw_meets_guarantee or guard_bw_in_top25
             
+            # Guard flag prerequisites: must have Fast, Stable, and V2Dir flags from this authority
+            # Per Tor dir-spec Section 3.4.2: Guard requires Fast, Stable, and V2Dir
+            has_fast = 'Fast' in auth_flags
+            has_stable = 'Stable' in auth_flags
+            has_v2dir = 'V2Dir' in auth_flags
+            guard_prereqs_met = has_fast and has_stable and has_v2dir
+            
             guard_eligible = (
+                guard_prereqs_met and
                 relay_wfu >= guard_wfu_threshold and
                 relay_tk >= guard_tk_threshold and
                 guard_bw_eligible
@@ -872,15 +883,29 @@ class CollectorFetcher:
             if guard_eligible:
                 eligibility['guard']['eligible_count'] += 1
             
+            # Count actual Guard flag assignment by this authority
+            has_guard_flag = 'Guard' in auth_flags
+            if has_guard_flag:
+                eligibility['guard']['assigned_count'] += 1
+            
             eligibility['guard']['details'].append({
                 'authority': auth_name,
                 'eligible': guard_eligible,
+                'assigned': has_guard_flag,  # Whether authority actually assigned Guard flag
+                # Prerequisite flags (per Tor dir-spec: Guard requires Fast, Stable, V2Dir)
+                'has_fast': has_fast,
+                'has_stable': has_stable,
+                'has_v2dir': has_v2dir,
+                'prereqs_met': guard_prereqs_met,
+                # WFU requirement
                 'wfu_threshold': guard_wfu_threshold,
                 'wfu_value': relay_wfu,
                 'wfu_met': relay_wfu >= guard_wfu_threshold,
+                # TK requirement
                 'tk_threshold': guard_tk_threshold,
                 'tk_value': relay_tk,
                 'tk_met': relay_tk >= guard_tk_threshold,
+                # BW requirement
                 'bw_guarantee': AUTH_DIR_GUARD_BW_GUARANTEE,  # 2 MB/s minimum
                 'bw_top25_threshold': guard_bw_top25_threshold,  # Top 25% cutoff
                 'bw_value': relay_measured_bw,
@@ -898,9 +923,15 @@ class CollectorFetcher:
             if stable_eligible:
                 eligibility['stable']['eligible_count'] += 1
             
+            # Count actual Stable flag assignment by this authority
+            has_stable_flag = 'Stable' in auth_flags
+            if has_stable_flag:
+                eligibility['stable']['assigned_count'] += 1
+            
             eligibility['stable']['details'].append({
                 'authority': auth_name,
                 'eligible': stable_eligible,
+                'assigned': has_stable_flag,  # Whether authority actually assigned Stable flag
                 'mtbf_threshold': stable_mtbf,
                 'mtbf_value': relay_mtbf,
             })
@@ -911,9 +942,15 @@ class CollectorFetcher:
             if fast_eligible:
                 eligibility['fast']['eligible_count'] += 1
             
+            # Count actual Fast flag assignment by this authority
+            # Note: has_fast already calculated above for Guard prereq check
+            if has_fast:
+                eligibility['fast']['assigned_count'] += 1
+            
             eligibility['fast']['details'].append({
                 'authority': auth_name,
                 'eligible': fast_eligible,
+                'assigned': has_fast,  # Whether authority actually assigned Fast flag
                 'speed_threshold': fast_speed,
                 'speed_value': relay_measured_bw,
             })
@@ -926,9 +963,15 @@ class CollectorFetcher:
             if hsdir_eligible:
                 eligibility['hsdir']['eligible_count'] += 1
             
+            # Count actual HSDir flag assignment by this authority
+            has_hsdir_flag = 'HSDir' in auth_flags
+            if has_hsdir_flag:
+                eligibility['hsdir']['assigned_count'] += 1
+            
             eligibility['hsdir']['details'].append({
                 'authority': auth_name,
                 'eligible': hsdir_eligible,
+                'assigned': has_hsdir_flag,  # Whether authority actually assigned HSDir flag
                 'wfu_threshold': hsdir_wfu,
                 'tk_threshold': hsdir_tk,
             })
