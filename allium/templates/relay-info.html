@@ -479,13 +479,9 @@ Country: unknown
 {# Eligible Flags Row - Using pre-computed display data (DRY optimization) #}
 <div style="margin-bottom: 12px; padding: 10px; background: #ffffff; border-radius: 6px; border: 1px solid #e9ecef;">
     <strong title="Number of Directory Authorities that consider this relay eligible for each flag. Need majority for flag assignment.">Eligible Flags ({{ efd.eligible_count }}):</strong>
-    {# Flags with eligibility thresholds (Exit, Guard, Stable, Fast, HSDir) - pre-computed #}
+    {# All flags in order: Running → Valid → V2Dir → Fast → Stable → HSDir → Guard → Exit #}
     {% for flag in efd.flags %}
     <span style="color: {{ flag.color }}; font-weight: bold;" title="{{ flag.tooltip }} Eligible from {{ flag.count }}/{{ flag.total }} authorities.">{{ flag.name }}: {{ flag.count }}/{{ flag.total }}</span>{% if not loop.last %} | {% endif %}
-    {% endfor %}
-    {# Vote-based flags (Running, V2Dir, Valid) - pre-computed #}
-    {% for flag in efd.vote_flags %}
-     | <span style="color: {{ flag.color }}; font-weight: bold;" title="{{ flag.tooltip }}">{{ flag.name }}: {{ flag.count }}/{{ flag.total }}</span>
     {% endfor %}
     <span style="color: #6c757d; font-size: 11px; margin-left: 8px;">(need ≥{{ diag.majority_required }}/{{ diag.total_authorities }} for flag)</span>
 </div>
@@ -1000,15 +996,9 @@ Data from <a href="https://collector.torproject.org/recent/relay-descriptors/vot
         — {{ diag.vote_count }}/{{ diag.total_authorities }} authorities voted.
     </li>
     
-    {# 2. Flag Eligibility (majority required: {{ diag.majority_required }}/{{ diag.total_authorities }}) #}
+    {# 2. Flag Eligibility - Reuse pre-computed efd.flags (DRY optimization) #}
     <li><strong>Flag Eligibility</strong> <span style="color: #6c757d; font-size: 10px;">(need ≥{{ diag.majority_required }}/{{ diag.total_authorities }} for flag)</span>:
-        {% for flag_name, flag_data in diag.flag_summary.items() %}
-        {% set display_name = 'HSDir' if flag_name.lower() == 'hsdir' else flag_name|capitalize %}
-        <span style="color: {% if flag_data.status_class == 'success' %}#28a745{% elif flag_data.status_class == 'danger' %}#dc3545{% else %}#856404{% endif %}; font-weight: bold;">{{ display_name }}: {{ flag_data.eligible_count }}/{{ flag_data.total_authorities }}</span>{% if not loop.last %} | {% endif %}
-        {% endfor %}
-        | <span style="color: #28a745; font-weight: bold;">Running: {{ diag.vote_count }}/{{ diag.total_authorities }}</span>
-        | <span style="color: #28a745; font-weight: bold;">Valid: {{ diag.vote_count }}/{{ diag.total_authorities }}</span>
-        | <span style="color: #28a745; font-weight: bold;">V2Dir: {{ diag.vote_count }}/{{ diag.total_authorities }}</span>
+        {% for flag in efd.flags %}<span style="color: {{ flag.color }}; font-weight: bold;">{{ flag.name }}: {{ flag.count }}/{{ flag.total }}</span>{% if not loop.last %} | {% endif %}{% endfor %}
     </li>
     
     {# 3. Reachability #}
