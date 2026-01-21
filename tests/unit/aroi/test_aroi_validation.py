@@ -16,8 +16,7 @@ from allium.lib.aroi_validation import (
     get_contact_validation_status,
     _format_timestamp,
     _simplify_error_message,
-    _simplify_and_categorize_errors,
-    _deduplicate_uri_rsa_errors
+    _simplify_and_categorize_errors
 )
 
 
@@ -550,67 +549,6 @@ class TestAROIValidation(unittest.TestCase):
         self.assertIsInstance(result['validated_fingerprints'], set)
         self.assertIsInstance(result['unauthorized_fingerprints'], set)
         self.assertIsInstance(result['misconfigured_fingerprints'], set)
-
-
-class TestDeduplicateUriRsaErrors(unittest.TestCase):
-    """Test the URI-RSA error deduplication function."""
-    
-    def test_deduplicate_fingerprint_not_found_errors(self):
-        """Test deduplication of 'Fingerprint not found' errors."""
-        error = "Fingerprint not found in https://prsv.ch/.well-known/tor-relay/rsa-fingerprint.txt; Fingerprint not found in https://www.prsv.ch/.well-known/tor-relay/rsa-fingerprint.txt"
-        result = _deduplicate_uri_rsa_errors(error)
-        
-        self.assertEqual(
-            result,
-            "Fingerprint not found in https://prsv.ch/.well-known/tor-relay/rsa-fingerprint.txt, https://www.prsv.ch/.well-known/tor-relay/rsa-fingerprint.txt"
-        )
-    
-    def test_deduplicate_http_error_max_retries(self):
-        """Test deduplication of HTTP max retries exceeded errors."""
-        error = "URI-RSA: HTTP error connection max retries exceeded for URL: https://relayon.org/.well-known/tor-relay/rsa-fingerprint.txt; URI-RSA: HTTP error connection max retries exceeded for URL: https://www.relayon.org/.well-known/tor-relay/rsa-fingerprint.txt"
-        result = _deduplicate_uri_rsa_errors(error)
-        
-        self.assertEqual(
-            result,
-            "URI-RSA: HTTP error connection max retries exceeded for URLs: https://relayon.org/.well-known/tor-relay/rsa-fingerprint.txt, https://www.relayon.org/.well-known/tor-relay/rsa-fingerprint.txt"
-        )
-    
-    def test_deduplicate_http_error_timeout(self):
-        """Test deduplication of HTTP timeout errors."""
-        error = "URI-RSA: HTTP error connection timed out after 5s for URL: https://example.com/proof.txt; URI-RSA: HTTP error connection timed out after 5s for URL: https://www.example.com/proof.txt"
-        result = _deduplicate_uri_rsa_errors(error)
-        
-        self.assertEqual(
-            result,
-            "URI-RSA: HTTP error connection timed out after 5s for URLs: https://example.com/proof.txt, https://www.example.com/proof.txt"
-        )
-    
-    def test_no_deduplication_single_error(self):
-        """Test that single errors are returned unchanged."""
-        error = "URI-RSA: HTTP error connection max retries exceeded for URL: https://relayon.org/.well-known/tor-relay/rsa-fingerprint.txt. Used domain cache after 6 attempts."
-        result = _deduplicate_uri_rsa_errors(error)
-        
-        self.assertEqual(result, error)
-    
-    def test_no_deduplication_different_error_types(self):
-        """Test that different error types are not deduplicated."""
-        error = "URI-RSA: HTTP error 404 for URL: https://example.com/a.txt; URI-RSA: HTTP error 500 for URL: https://example.com/b.txt"
-        result = _deduplicate_uri_rsa_errors(error)
-        
-        # Different error types (404 vs 500) should not be deduplicated
-        self.assertEqual(result, error)
-    
-    def test_empty_and_none_input(self):
-        """Test handling of empty and None inputs."""
-        self.assertEqual(_deduplicate_uri_rsa_errors(""), "")
-        self.assertEqual(_deduplicate_uri_rsa_errors(None), None)
-    
-    def test_no_semicolon(self):
-        """Test that errors without semicolons are returned unchanged."""
-        error = "URI-RSA: HTTP error 404 for URL: https://example.com/proof.txt"
-        result = _deduplicate_uri_rsa_errors(error)
-        
-        self.assertEqual(result, error)
 
 
 if __name__ == '__main__':

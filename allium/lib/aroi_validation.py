@@ -152,48 +152,24 @@ def _categorize_by_missing_fields(aroi_fields: Dict[str, bool], has_contact: boo
     return 'no_aroi'
 
 
-def _deduplicate_uri_rsa_errors(error: str) -> str:
+def _deduplicate_fingerprint_not_found_error(error: str) -> str:
     """
-    Deduplicate error messages where the same URI-RSA error type occurs for multiple URLs.
-    
-    The aroivalidator tries both domain.org and www.domain.org, and concatenates both
-    error messages with ';'. This function combines them into a single message.
-    
-    Handles multiple error patterns:
-    1. "Fingerprint not found in URL1; Fingerprint not found in URL2"
-    2. "URI-RSA: HTTP error ... for URL: URL1; URI-RSA: HTTP error ... for URL: URL2"
+    Deduplicate error messages that repeat "Fingerprint not found in URL" for multiple URLs.
     
     Example input:
-        "URI-RSA: HTTP error connection max retries exceeded for URL: https://relayon.org/...; URI-RSA: HTTP error connection max retries exceeded for URL: https://www.relayon.org/..."
+        "Fingerprint not found in https://prsv.ch/.../rsa-fingerprint.txt; Fingerprint not found in https://www.prsv.ch/.../rsa-fingerprint.txt"
     
     Example output:
-        "URI-RSA: HTTP error connection max retries exceeded for URLs: https://relayon.org/..., https://www.relayon.org/..."
+        "Fingerprint not found in https://prsv.ch/.../rsa-fingerprint.txt, https://www.prsv.ch/.../rsa-fingerprint.txt"
     """
-    if not error or ';' not in error:
-        return error
+    # Pattern to match "Fingerprint not found in URL" segments separated by semicolons
+    pattern = r'Fingerprint not found in ([^;]+)'
+    matches = re.findall(pattern, error)
     
-    # Pattern 1: "Fingerprint not found in URL" errors
-    fp_pattern = r'Fingerprint not found in ([^;]+)'
-    fp_matches = re.findall(fp_pattern, error)
-    
-    if len(fp_matches) > 1:
+    if len(matches) > 1:
         # Multiple "Fingerprint not found" messages - combine the URLs
-        urls = [url.strip() for url in fp_matches]
+        urls = [url.strip() for url in matches]
         return "Fingerprint not found in " + ", ".join(urls)
-    
-    # Pattern 2: "URI-RSA: <error_type> for URL: <url>" errors
-    # Match pattern like: "URI-RSA: HTTP error connection max retries exceeded for URL: https://..."
-    uri_rsa_pattern = r'URI-RSA:\s*([^;]+?)\s+for URL:\s*([^;]+)'
-    uri_rsa_matches = re.findall(uri_rsa_pattern, error)
-    
-    if len(uri_rsa_matches) > 1:
-        # Check if all error types are the same (just different URLs)
-        error_types = [m[0].strip() for m in uri_rsa_matches]
-        urls = [m[1].strip() for m in uri_rsa_matches]
-        
-        # If all error types are the same, combine into single message
-        if len(set(error_types)) == 1:
-            return f"URI-RSA: {error_types[0]} for URLs: {', '.join(urls)}"
     
     # No deduplication needed
     return error
@@ -800,7 +776,7 @@ def get_contact_validation_status(relays: List[Dict], validation_data: Optional[
             else:
                 # Validation failed - categorize by error type
                 error = val_result.get('error', 'Unknown error')
-                error = _deduplicate_uri_rsa_errors(error)
+                error = _deduplicate_fingerprint_not_found_error(error)
                 
                 # Check if unauthorized error (fingerprint/record not found) -> unauthorized
                 # These indicate the relay is NOT in the operator's proof file
