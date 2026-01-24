@@ -181,10 +181,7 @@ def compact_family_entry(
     # Count nicknames for compact storage using Counter (O(n) single pass)
     # Store keys in LOWERCASE for efficient case-insensitive search
     # (avoids 300k+ .lower() calls per search query)
-    nickname_counts = {}
-    for name in nicknames:
-        key = name.lower()
-        nickname_counts[key] = nickname_counts.get(key, 0) + 1
+    nickname_counts = dict(Counter(name.lower() for name in nicknames))
 
     # Build base entry
     entry: Dict[str, Any] = {
