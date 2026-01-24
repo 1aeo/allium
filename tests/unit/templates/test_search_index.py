@@ -175,6 +175,12 @@ def validate_structure(index: Dict[str, Any]) -> List[str]:
         if key not in lookups:
             errors.append(f"Missing lookups key: {key}")
     
+    # validated_aroi_domains is optional for backward compatibility with v1.4 indexes
+    # but should be present in v1.5+ indexes
+    if index.get('meta', {}).get('version', '1.4') >= '1.5':
+        if 'validated_aroi_domains' not in lookups:
+            errors.append("Missing lookups key: validated_aroi_domains (required for v1.5+)")
+    
     # Validate relay entries (sample)
     relays = index.get('relays', [])
     if relays:
@@ -414,6 +420,8 @@ def main():
     print(f"     - Country names: {len(index['lookups']['country_names'])}")
     print(f"     - Platforms: {len(index['lookups']['platforms'])}")
     print(f"     - Flags: {len(index['lookups']['flags'])}")
+    validated_aroi_count = len(index['lookups'].get('validated_aroi_domains', []))
+    print(f"     - Validated AROI domains: {validated_aroi_count}")
     print()
     
     # Final verdict
