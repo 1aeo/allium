@@ -181,10 +181,7 @@ def compact_family_entry(
     # Count nicknames for compact storage using Counter (O(n) single pass)
     # Store keys in LOWERCASE for efficient case-insensitive search
     # (avoids 300k+ .lower() calls per search query)
-    nickname_counts = {}
-    for name in nicknames:
-        key = name.lower()
-        nickname_counts[key] = nickname_counts.get(key, 0) + 1
+    nickname_counts = dict(Counter(name.lower() for name in nicknames))
 
     # Build base entry
     entry: Dict[str, Any] = {
@@ -412,12 +409,16 @@ def generate_search_index(
     # PHASE 4: Assemble and write index
     # ==========================================================================
     
+    # Build validated AROI domains list for O(1) lookup in search function
+    # This enables instant validation without R2/DO Spaces checks
+    validated_aroi_list = sorted(validated_aroi_domains) if validated_aroi_domains else []
+    
     index = {
         'meta': {
             'generated_at': relays_data.get('relays_published', ''),
             'relay_count': len(relays),
             'family_count': len(valid_family_ids),
-            'version': '1.4'  # 1.1: nn->dict, 1.2: pxg sparse, 1.3: nn keys lowercase, 1.4: v (validated) field
+            'version': '1.5'  # 1.1: nn->dict, 1.2: pxg sparse, 1.3: nn keys lowercase, 1.4: v (validated) field, 1.5: validated_aroi_domains in lookups
         },
         'relays': relay_entries,
         'families': family_entries,
@@ -425,7 +426,8 @@ def generate_search_index(
             'as_names': as_names,
             'country_names': country_names,
             'platforms': sorted(platforms),
-            'flags': sorted(flags)
+            'flags': sorted(flags),
+            'validated_aroi_domains': validated_aroi_list
         }
     }
 
