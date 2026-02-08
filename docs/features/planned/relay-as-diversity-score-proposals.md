@@ -362,116 +362,253 @@ For the very small (Flokinet, Terrahost) and very large (OVH, Hetzner) AS number
 
 ---
 
-## Integration Points
+## User-Facing Locations Audit
 
-Both options integrate the same way. The only difference is which function gets called.
+A full audit of every place in the codebase where diversity or AS data appears in user-facing output. These are the locations where the new AS rarity score could be surfaced or where existing diversity calculations would change.
 
-### 1. `country_utils.py` — Add AS rarity functions
+---
 
-```python
-# Option 1: both functions
-# Option 2: only calculate_as_cw_factor
+### 1. AROI Leaderboard — "Most Diverse Operators" (existing)
 
-def calculate_as_cw_factor(as_cw_fraction):
-    ...
+**Files**: `aroileaders.py` (lines 644-650, 894-899), `aroi_macros.html`, `aroi-leaderboards.html`
 
-def calculate_as_contact_factor(unique_contact_count):  # Option 1 only
-    ...
+This is the primary diversity leaderboard today. Currently ranked by `diversity_score` which uses the **flat** formula:
 
-def calculate_as_rarity_score(...):
-    ...
-
-def assign_as_rarity_tier(rarity_score):
-    ...
+```
+diversity_score = countries * 2.0 + platforms * 1.5 + unique_as_count * 1.0
 ```
 
-### 2. `relays.py` — Pre-compute AS rarity during `_categorize()`
+The template shows:
+- Champion card: `{{ champion.diversity_score }} diversity` with tooltip "Diversity Score: Geographic (countries x 2.0) + Platform (OS types x 1.5) + Network (unique ASNs x 1.0)"
+- Table rows: `{{ entry.diversity_score }}` as primary metric, `{{ entry.country_count }} countries`, `{{ entry.unique_as_count }}` in a Unique AS column
+- Achievement titles: "Diversity Legend", "Diversity Master", "Diversity Champion"
+- Breakdown tooltip: "Diversity Score Calculation: X countries x 2.0 + Y operating systems x 1.5 + Z unique ASNs x 1.0 = score"
 
-After `sorted['as']` is built, compute rarity score for each AS in one pass:
+**Change needed**: Replace `unique_as_count * 1.0` with sum of AS rarity scores per unique AS. Update tooltip text to reflect new formula. The `unique_as_count` column stays (it's still useful info) but the score calculation changes.
 
-```python
-# In _categorize(), after AS data is assembled:
-for as_number, as_data in self.json['sorted']['as'].items():
-    as_cw = as_data.get('consensus_weight_fraction', 0)
-    unique_contacts = as_data.get('unique_contact_count', 0)
-    
-    # Option 1:
-    as_data['as_rarity_score'] = calculate_as_rarity_score(as_cw, unique_contacts)
-    # Option 2:
-    # as_data['as_rarity_score'] = calculate_as_rarity_score(as_cw)
-    
-    as_data['as_rarity_tier'] = assign_as_rarity_tier(as_data['as_rarity_score'])
-```
+---
 
-### 3. `aroileaders.py` — Operator-level scoring + new leaderboard
+### 2. AROI Leaderboard — New "AS Diversity Champions" category
 
-```python
-def calculate_operator_as_diversity_score(operator_relays, sorted_as_data):
-    """Sum of AS rarity scores across each unique AS the operator uses."""
-    seen_as = set()
-    total_score = 0
-    
-    for relay in operator_relays:
-        as_number = relay.get('as', '')
-        if not as_number or as_number in seen_as:
-            continue
-        seen_as.add(as_number)
-        
-        as_data = sorted_as_data.get(as_number, {})
-        total_score += as_data.get('as_rarity_score', 0)
-    
-    return total_score
+**Files**: `aroileaders.py`, `aroi_macros.html`, `aroi-leaderboards.html`
 
-# New leaderboard: AS Diversity Champions
-leaderboards['as_diversity'] = sorted(
-    aroi_operators.items(),
-    key=lambda x: x[1]['as_diversity_score'],
-    reverse=True
-)[:50]
-```
+**New addition**: A 19th leaderboard category ranked purely by operator-level AS diversity score (sum of AS rarity scores across each unique AS the operator uses). Separate from "Most Diverse" which combines country + platform + AS.
 
-### 4. `calculate_diversity_score()` — Replace flat AS component
-
-```python
-# Replace: unique_as_count * 1.0
-# With:    sum of rarity scores per unique AS
-if as_rarity_score is not None:
-    diversity_score += as_rarity_score
-elif unique_as_count:
-    diversity_score += unique_as_count * 1.0  # backward-compatible fallback
-```
-
-### 5. `intelligence_engine.py` — Layer 14 contact intelligence
-
-```python
-# In _layer14_contact_intelligence():
-rare_as_count = sum(
-    1 for as_num in unique_as_set
-    if sorted_as_data.get(as_num, {}).get('as_rarity_tier') in ('legendary', 'epic', 'rare')
-)
-```
-
-### 6. Templates — Display AS rarity badge
+**Nav link in** `aroi-leaderboards.html` (line 33) would add a new entry alongside the existing:
 
 ```html
-<!-- relay-info.html -->
-<td>{{ relay.as_name }}
-  <span class="badge badge-{{ relay.as_rarity_tier }}">{{ relay.as_rarity_tier }}</span>
+<a href="#most_diverse" ...>Most Diverse</a>
+<!-- NEW -->
+<a href="#as_diversity" ...>AS Diversity</a>
+```
+
+---
+
+### 3. Contact Page — Operator Intelligence: "Network Diversity"
+
+**Files**: `intelligence_engine.py` (lines 547-585), `relays.py` (lines 3644-3647), `contact.html` (lines 119-121)
+
+The Intelligence Engine Layer 14 computes `portfolio_diversity` per contact, displayed as "Network Diversity" on each contact page. Current logic:
+
+```python
+# 1 unique AS = "Poor" (unless sole operator on that AS → "Great")
+# 2-3 unique AS = "Okay"
+# 4+ unique AS = "Great"
+```
+
+Displayed as:
+```html
+<li><strong>Network Diversity:</strong> Great, 8 networks</li>
+```
+
+**Change needed**: Incorporate AS rarity into the rating. An operator with 2 AS numbers that are both rare could be rated higher than an operator with 4 AS numbers that are all OVH/Hetzner. Could show: "Great, 3 networks (2 rare, 1 common)" or include the AS rarity score.
+
+---
+
+### 4. Contact Page — Operator Intelligence: "Infrastructure Diversity"
+
+**Files**: `intelligence_engine.py` (lines 653-683), `relays.py` (lines 3654-3655), `contact.html` (lines 127-129)
+
+Currently measures **platform** diversity (OS types). Not directly AS-related, but it's a sibling metric in the same intelligence section.
+
+```html
+<li><strong>Infrastructure Diversity:</strong> Great, 2 platforms</li>
+```
+
+**No change needed** — this is platform-specific. Mentioned for context only.
+
+---
+
+### 5. Relay Info Page — AS Number & AS Name
+
+**Files**: `relay-info.html` (lines 431-446 in Section 2, lines 821-835 in legacy section)
+
+Each relay's detail page shows the AS number and AS name in two places:
+
+```html
+<!-- Section 2: Network Details -->
+<dt>AS Number</dt>
+<dd><a href="...">AS36849</a></dd>
+<dt>AS Name</dt>
+<dd>1st Amendment Encrypted Openness LLC (BGP.tools)</dd>
+
+<!-- Legacy section at bottom -->
+<a href='...' title="AS Number">AS36849</a> |
+<span title="AS Name">1st Amendment Encrypted Openness LLC</span>
+```
+
+**Change needed**: Add AS rarity tier badge next to AS name. E.g.: `1st Amendment Encrypted Openness LLC [epic]`
+
+---
+
+### 6. AS Detail Page — Per-AS Summary
+
+**Files**: `as.html`, `relay-list.html` (shared base), `macros.html` (detail_summary macro)
+
+Each AS gets its own page (e.g., `/as/AS36849/`) showing relay list and summary stats (bandwidth, consensus weight, guard/middle/exit counts, unique AROI operators, unique contacts).
+
+```html
+{% block title %}Tor Relays :: {{ as_name }} ({{ as_number }}){% endblock %}
+{{ detail_summary(bandwidth, ..., unique_contact_count=unique_contact_count, ...) }}
+```
+
+**Change needed**: Add AS rarity score and tier to the AS detail page summary. This is the most natural place to show "This AS is rated epic (score: 35)".
+
+---
+
+### 7. Browse by Network (misc-networks.html) — AS Listing Table
+
+**Files**: `misc-networks.html` (lines 42-49, 127-131)
+
+Lists all AS numbers with relay counts, bandwidth, consensus weight. Also shows intelligence context:
+
+```html
+<li><strong>Infrastructure Dependency</strong>:
+    {{ networks_top_3_percentage }}% in top 3 ASes,
+    {{ critical_as_count }} critical ({{ critical_as_list|join(', ') }})
+</li>
+```
+
+The table rows show AS number, AS name, relay count, bandwidth, CW%.
+
+**Change needed**: Add AS rarity tier column to the table. Add rarity distribution to the intelligence context (e.g., "X legendary, Y epic, Z rare, W common AS numbers").
+
+---
+
+### 8. Browse by Contact (misc-contacts.html) — Contact Table
+
+**Files**: `misc-contacts.html` (lines 106-153)
+
+Each contact row shows a "Unique AS" column:
+
+```html
+<th title="Number of different autonomous systems">Unique AS</th>
+...
+<td>{{ v['unique_as_count'] }}</td>
+```
+
+**Change needed**: Could add an "AS Diversity Score" column alongside or replace "Unique AS" count with the rarity-weighted score. Or keep both: "3 AS (score: 85)".
+
+---
+
+### 9. Network Health Dashboard — AS Concentration Metrics
+
+**Files**: `network-health-dashboard.html` (lines 498-519), `relays.py` (network health computation)
+
+Shows top-3 AS by CW, top-5 and top-10 AS concentration percentages:
+
+```html
+<span class="metric-value">{{ top_3_as_concentration }}%</span>
+<span class="metric-label">Top 3 AS CW Share</span>
+```
+
+Also shows top AS for IPv4/IPv6.
+
+**Change needed**: Could add a "Network AS Diversity" metric showing distribution of AS rarity tiers across the network (e.g., "650 common, 200 emerging, 80 rare, 20 epic, 5 legendary").
+
+---
+
+### 10. Relay List Tables — AS Name Column
+
+**Files**: `relay-list.html` (lines 131-139), `contact-relay-list.html` (lines 182-189)
+
+Every relay list table shows AS name as a clickable column:
+
+```html
+<td>
+    <a href="https://bgp.tools/{{ relay['as'] }}"
+       title="{{ relay['as_name'] }}">{{ relay['as_name']|truncate(20) }}</a>
 </td>
 ```
+
+**No change needed** unless we want to add a small rarity indicator (e.g., colored dot) inline. Low priority.
+
+---
+
+### 11. Directory Authorities Page
+
+**Files**: `misc-authorities.html` (lines 122-201)
+
+Shows AS number and AS name for each directory authority:
+
+```html
+<th>AS Number</th>
+<th>AS Name</th>
+...
+<td><a href="...">{{ authority.as }}</a></td>
+<td>{{ authority.as_name|truncate(20) }}</td>
+```
+
+**No change needed** — directory authorities are a special case, not scored for diversity.
+
+---
+
+### 12. Intelligence Engine — Layer 10: Infrastructure Dependency
+
+**Files**: `intelligence_engine.py` (lines 304-337)
+
+Identifies "critical AS" (those holding >5% of network CW):
+
+```python
+critical_as = []
+for as_number, as_data in self.sorted_data['as'].items():
+    if as_data.get('consensus_weight_fraction', 0) > 0.05:
+        critical_as.append(as_number)
+```
+
+Displayed in `misc-networks.html` as intelligence context.
+
+**Change needed**: Could complement critical AS detection with rarity data — "X critical AS (all common tier), Y rare or better AS available as alternatives".
+
+---
+
+## Summary: Recommended Changes by Priority
+
+| Priority | Location | Change | File(s) |
+|---|---|---|---|
+| **P0** | `country_utils.py` | Add `calculate_as_cw_factor`, `calculate_as_contact_factor`, `calculate_as_rarity_score`, `assign_as_rarity_tier` | `country_utils.py` |
+| **P0** | `relays.py` | Pre-compute AS rarity score and tier during `_categorize()` | `relays.py` |
+| **P1** | AROI "Most Diverse" leaderboard | Replace flat `unique_as_count * 1.0` with rarity-weighted AS score in `calculate_diversity_score()` | `country_utils.py`, `aroileaders.py` |
+| **P1** | AROI "Most Diverse" template | Update tooltip formula text, keep Unique AS column | `aroi_macros.html` |
+| **P1** | Contact Operator Intelligence | Incorporate AS rarity into "Network Diversity" rating logic | `intelligence_engine.py` |
+| **P2** | AS detail page | Show AS rarity score and tier in page summary | `as.html`, `macros.html` |
+| **P2** | Relay info page | Add AS rarity tier badge next to AS name | `relay-info.html` |
+| **P2** | New AROI leaderboard | Add 19th category "AS Diversity Champions" | `aroileaders.py`, `aroi_macros.html`, `aroi-leaderboards.html` |
+| **P3** | Browse by Network | Add rarity tier column to AS table, rarity distribution to intelligence context | `misc-networks.html` |
+| **P3** | Browse by Contact | Add AS diversity score alongside unique AS count | `misc-contacts.html` |
+| **P3** | Network Health Dashboard | Add network-wide AS rarity distribution metric | `network-health-dashboard.html`, `relays.py` |
+| **P3** | Intelligence Layer 10 | Complement critical AS detection with rarity context | `intelligence_engine.py` |
 
 ---
 
 ## Open Questions
 
-1. **Should the AS diversity score replace the flat `unique_as_count * 1.0` in the existing "Most Diverse Operators" leaderboard?** Recommended: yes, with backward-compatible fallback.
+1. **Should the contact factor weight be higher or lower than CW?** Currently both are weighted at 5. If CW is considered more important, it could be weighted at 6 vs contact at 4.
 
-2. **Should this become a 19th AROI leaderboard category?** Adding "AS Diversity Champions" would be consistent with the existing 18 categories.
+2. **How should newly appeared AS numbers be handled?** A brand-new AS with 1 relay would get maximum rarity. This is correct (it IS rare) but could be gamed. Consider requiring minimum relay uptime before scoring.
 
-3. **How should newly appeared AS numbers be handled?** A brand-new AS with 1 relay would get maximum rarity. This is correct (it IS rare) but could be gamed. Consider requiring minimum relay uptime before scoring.
-
-4. **Should the contact factor weight be higher or lower than CW?** Currently both are weighted at 5. If CW is considered more important, it could be weighted at 6 vs contact at 4.
+3. **Should the new "AS Diversity Champions" leaderboard (P2) be added in the same release as the score calculation (P0/P1)?** Could be phased separately.
 
 ---
 
-*This document proposes two implementation options for AS diversity scoring in Allium. Both follow the existing threshold-based scoring pattern from `country_utils.py`. Feedback welcome before implementation begins.*
+*This document proposes a 2-factor AS diversity scoring system (consensus weight + unique contacts) for Allium. All user-facing locations where the score could appear have been audited above. Feedback welcome before implementation begins.*
