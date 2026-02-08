@@ -409,6 +409,11 @@ The rating treats all AS numbers as equal. It cannot distinguish between 2 rare 
 
 ### Proposed Code — With AS Rarity
 
+Three tiers of rating with a clear hierarchy:
+1. **Great** — any operator with at least one rare/epic/legendary AS
+2. **Okay** — 4+ AS numbers but all common/emerging (at least they spread across providers)
+3. **Poor** — fewer than 4 AS, all common (concentrated on mainstream hosting)
+
 ```python
 unique_as_count = contact_data.get('unique_as_count', 0)
 
@@ -425,14 +430,16 @@ for relay in contact_relays:
             tier = as_info.get('as_rarity_tier', 'common')
             operator_as_scores.append((as_number, score, tier))
 
-total_as_rarity = sum(s for _, s, _ in operator_as_scores)
-rare_or_better = sum(1 for _, _, t in operator_as_scores if t in ('legendary', 'epic', 'rare'))
-avg_rarity = total_as_rarity / len(operator_as_scores) if operator_as_scores else 0
+rare_or_better = sum(1 for _, _, t in operator_as_scores
+                     if t in ('legendary', 'epic', 'rare'))
 
-# Rating based on average AS rarity score across operator's unique AS numbers
-if avg_rarity >= 30:
+# Rating hierarchy:
+#   Great  — has at least one rare/epic/legendary AS (quality choice)
+#   Okay   — 4+ AS but all common/emerging (quantity spread across providers)
+#   Poor   — <4 AS, all common (concentrated on few mainstream providers)
+if rare_or_better > 0:
     network_rating = "Great"
-elif avg_rarity >= 12:
+elif unique_as_count >= 4:
     network_rating = "Okay"
 else:
     network_rating = "Poor"
@@ -450,23 +457,26 @@ else:
 ```
 Network Diversity: Poor, 2 networks (0 rare)              (red)    — OVH + Hetzner
 Network Diversity: Great, 2 networks (2 rare)             (green)  — Flokinet + Terrahost
-Network Diversity: Poor, 4 networks (0 rare)              (red)    — 4x mainstream providers
+Network Diversity: Okay, 4 networks (0 rare)              (yellow) — 4x mainstream providers
 Network Diversity: Great, 1 network (epic)                (green)  — AS36849 sole operator
-Network Diversity: Okay, 3 networks (1 rare)              (yellow) — 1 rare + 2 common
+Network Diversity: Great, 3 networks (1 rare)             (green)  — 1 rare + 2 common
+Network Diversity: Poor, 3 networks (0 rare)              (red)    — 3x mainstream providers
 ```
 
 ### Before vs After — Side by Side
 
-| Operator | AS Numbers | BEFORE | AFTER |
-|---|---|---|---|
-| 2 AS: OVH + Hetzner | Both score 0 (common) | **Okay**, 2 networks | **Poor**, 2 networks (0 rare) |
-| 2 AS: Flokinet + Terrahost | Both score 40+ (epic) | **Okay**, 2 networks | **Great**, 2 networks (2 rare) |
-| 4 AS: all mainstream | All score 0-5 (common) | **Great**, 4 networks | **Poor**, 4 networks (0 rare) |
-| 1 AS: AS36849 (sole op) | Score 35 (epic) | **Great**, 1 AS with 1 operator | **Great**, 1 network (epic) |
-| 3 AS: 1 Flokinet + 2 OVH | Mix of 50 + 0 + 0 | **Okay**, 3 networks | **Okay**, 3 networks (1 rare) |
-| 8 AS: all rare/epic | All score 30+ | **Great**, 8 networks | **Great**, 8 networks (8 rare) |
+| Operator | AS Numbers | BEFORE | AFTER | Why |
+|---|---|---|---|---|
+| 2 AS: OVH + Hetzner | Both common | **Okay**, 2 networks | **Poor**, 2 networks (0 rare) | Worst case: few AS, all mainstream |
+| 3 AS: all mainstream | All common | **Okay**, 3 networks | **Poor**, 3 networks (0 rare) | Still <4, all common |
+| 4 AS: all mainstream | All common | **Great**, 4 networks | **Okay**, 4 networks (0 rare) | At least spread across 4 providers |
+| 5 AS: all mainstream | All common | **Great**, 5 networks | **Okay**, 5 networks (0 rare) | Spread but no rare choices |
+| 2 AS: Flokinet + Terrahost | Both epic | **Okay**, 2 networks | **Great**, 2 networks (2 rare) | Quality over quantity |
+| 1 AS: AS36849 (sole op) | Score 35 (epic) | **Great**, 1 AS with 1 operator | **Great**, 1 network (epic) | Rare AS, unique choice |
+| 3 AS: 1 Flokinet + 2 OVH | 1 rare + 2 common | **Okay**, 3 networks | **Great**, 3 networks (1 rare) | Has at least 1 rare AS |
+| 8 AS: all rare/epic | All score 30+ | **Great**, 8 networks | **Great**, 8 networks (8 rare) | Best case |
 
-The key improvement: **quality of AS choices now matters, not just quantity**. Two rare AS numbers beat four saturated ones.
+The key improvement: **quality of AS choices now matters, not just quantity**. Any operator with even one rare AS gets "Great". Operators who spread across 4+ mainstream providers get "Okay" — better than 2 on OVH+Hetzner, but not as good as choosing rare providers.
 
 ### Template Change — `contact.html`
 
@@ -529,7 +539,7 @@ Table row — last column header + cell:
 
 ### Problem: Example Rankings Under Current System
 
-Consider 3 hypothetical operators (each with 1 platform for simplicity):
+Consider 3 hypothetical operators:
 
 | Operator | Countries | Platforms | Unique AS | AS Quality | Current Score |
 |---|---|---|---|---|---|
@@ -537,7 +547,26 @@ Consider 3 hypothetical operators (each with 1 platform for simplicity):
 | Beta | 3 | 1 | 3 | All rare (Flokinet, Terrahost, etc.) | 3×2 + 1×1.5 + 3×1 = **10.5** |
 | Gamma | 4 | 2 | 2 | Both epic (AS36849, Flokinet) | 4×2 + 2×1.5 + 2×1 = **13.0** |
 
-**Alpha ranks #1** despite all 8 AS numbers being saturated mainstream providers. Beta, who deliberately chose 3 rare providers, ranks last. The flat `× 1.0` rewards quantity regardless of quality.
+**Alpha ranks #1** despite all 8 AS numbers being saturated mainstream providers. Two problems:
+1. The flat `× 1.0` rewards AS quantity regardless of quality.
+2. The weights (country=2.0, platform=1.5, AS=1.0) don't reflect the right priority. Country diversity should matter most, AS rarity should be second, platform diversity should be third.
+
+### Proposed Weights: Country > AS > Platform
+
+The new formula reorders the weights so **geographic diversity is the most important factor**, followed by AS rarity, then platform diversity:
+
+| Component | Old Weight | New Weight | Rationale |
+|---|---|---|---|
+| Country | 2.0 per country | **3.0** per country | Geographic diversity is the primary resilience factor — jurisdictional spread |
+| AS (network) | 1.0 per unique AS (flat) | **2.0** per unique AS × avg rarity | AS choice quality matters, not just count. Normalized so it doesn't dominate |
+| Platform | 1.5 per platform | **1.0** per platform | Platform matters least — most relays are Linux and that's fine |
+
+The AS component is **normalized**: the average rarity score (0-60) is divided by the max (60) to produce a 0-1 factor, then multiplied by 2.0 per unique AS. This ensures:
+- An operator with 3 rare AS (avg rarity 45) gets: 3 × (45/60) × 2.0 = **4.5 points**
+- An operator with 8 common AS (avg rarity 0) gets: 8 × (0/60) × 2.0 = **0 points**
+- An operator with 2 epic AS (avg rarity 42) gets: 2 × (42/60) × 2.0 = **2.8 points**
+
+This keeps AS contribution in the right range — more than platform (1.0 per unit) but less than country (3.0 per unit).
 
 ### Proposed Code — `country_utils.py`
 
@@ -547,30 +576,36 @@ def calculate_diversity_score(countries, platforms=None, unique_as_count=None,
     """
     Calculate standardized diversity score.
     
+    Weights: Country (3.0) > AS rarity (2.0 normalized) > Platform (1.0)
+    
     Args:
         countries (list): List of country codes
         platforms (list, optional): List of platform types
-        unique_as_count (int, optional): Number of unique ASNs (fallback)
-        as_diversity_score (float, optional): Sum of AS rarity scores (preferred)
+        unique_as_count (int, optional): Number of unique ASNs (used for AS calc + fallback)
+        as_diversity_score (float, optional): Sum of AS rarity scores across unique AS
     
     Returns:
         float: Weighted diversity score
     """
     diversity_score = 0.0
     
-    # Geographic component (countries × 2.0)
+    # Geographic component — highest weight (countries × 3.0)
     if countries:
-        diversity_score += len(countries) * 2.0
+        diversity_score += len(countries) * 3.0
     
-    # Platform component (OS types × 1.5)
-    if platforms:
-        diversity_score += len(platforms) * 1.5
-    
-    # Network component: rarity-weighted if available, flat fallback
-    if as_diversity_score is not None:
-        diversity_score += as_diversity_score
+    # Network component — middle weight (normalized AS rarity × 2.0 per AS)
+    # avg_rarity / 60 normalizes the 0-60 rarity score to 0-1
+    # Then × 2.0 per unique AS keeps it between country (3.0) and platform (1.0)
+    if as_diversity_score is not None and unique_as_count and unique_as_count > 0:
+        avg_rarity = as_diversity_score / unique_as_count  # 0-60 range
+        normalized = avg_rarity / 60.0                     # 0-1 range
+        diversity_score += unique_as_count * normalized * 2.0
     elif unique_as_count:
-        diversity_score += unique_as_count * 1.0
+        diversity_score += unique_as_count * 1.0  # flat fallback
+    
+    # Platform component — lowest weight (platforms × 1.0)
+    if platforms:
+        diversity_score += len(platforms) * 1.0
     
     return diversity_score
 ```
@@ -588,6 +623,7 @@ as_diversity_score = calculate_operator_as_diversity_score(
 diversity_score = calculate_diversity_score(
     countries=list(countries),
     platforms=list(platforms),
+    unique_as_count=unique_as_count,
     as_diversity_score=as_diversity_score
 )
 ```
@@ -598,9 +634,9 @@ diversity_score = calculate_diversity_score(
 
 ```python
 diversity_breakdown_tooltip = (
-    f"Diversity Score Calculation: {country_count} countries × 2.0 "
-    f"+ {platform_count} operating systems × 1.5 "
-    f"+ {as_count} unique ASNs (rarity-weighted) = {metrics['diversity_score']:.1f}"
+    f"Diversity Score: {country_count} countries × 3.0 "
+    f"+ {as_count} AS (rarity-weighted) × 2.0 "
+    f"+ {platform_count} platforms × 1.0 = {metrics['diversity_score']:.1f}"
 )
 ```
 
@@ -608,8 +644,8 @@ diversity_breakdown_tooltip = (
 
 Champion card — update tooltip only:
 ```html
-<span title="Diversity Score: Geographic (countries × 2.0) + Platform (OS types × 1.5)
- + Network (unique ASNs, rarity-weighted)">{{ champion.diversity_score }} diversity</span>
+<span title="Diversity Score: Geographic (countries × 3.0) + Network (AS rarity × 2.0)
+ + Platform (OS types × 1.0)">{{ champion.diversity_score }} diversity</span>
 ```
 
 Table row — Key Metric column: no change (still shows `{{ entry.diversity_score }}`).
@@ -625,27 +661,38 @@ Table row — Unique AS column: keep it, optionally add AS diversity sub-score:
 
 Using rarity scores from the proposal (OVH=0, Hetzner=0, Flokinet=50, Terrahost=40, AS36849=35):
 
-| Operator | Countries | Platforms | Unique AS | AS Rarity Sum | New Score |
-|---|---|---|---|---|---|
-| Alpha | 5 | 1 | 8 (all common, score 0 each) | 0 | 5×2 + 1×1.5 + 0 = **11.5** |
-| Beta | 3 | 1 | 3 (all rare, ~45 avg) | 135 | 3×2 + 1×1.5 + 135 = **142.5** |
-| Gamma | 4 | 2 | 2 (both epic, ~42 avg) | 85 | 4×2 + 2×1.5 + 85 = **96.0** |
-
-**Beta now ranks #1** — rewarded for deliberately choosing rare providers. Alpha drops to last because 8 saturated AS numbers contribute nothing. Gamma is solidly in the middle with 2 high-quality AS choices.
+| Operator | Countries | Platforms | Unique AS | Avg Rarity | Country Pts | AS Pts | Platform Pts | New Score |
+|---|---|---|---|---|---|---|---|---|
+| Alpha | 5 | 1 | 8 (all common) | 0 | 5×3.0 = 15 | 8×(0/60)×2 = 0 | 1×1.0 = 1 | **16.0** |
+| Beta | 3 | 1 | 3 (all rare, ~45) | 45 | 3×3.0 = 9 | 3×(45/60)×2 = 4.5 | 1×1.0 = 1 | **14.5** |
+| Gamma | 4 | 2 | 2 (both epic, ~42) | 42.5 | 4×3.0 = 12 | 2×(42.5/60)×2 = 2.8 | 2×1.0 = 2 | **16.8** |
 
 ### Before vs After — Ranking Comparison
 
 | Rank | BEFORE (flat) | Score | AFTER (rarity-weighted) | Score |
 |---|---|---|---|---|
-| #1 | Alpha (8 AS, all common) | 19.5 | **Beta** (3 AS, all rare) | **142.5** |
-| #2 | Gamma (2 AS, both epic) | 13.0 | **Gamma** (2 AS, both epic) | **96.0** |
-| #3 | Beta (3 AS, all rare) | 10.5 | **Alpha** (8 AS, all common) | **11.5** |
+| #1 | Alpha (5 ctry, 8 common AS) | 19.5 | **Gamma** (4 ctry, 2 epic AS, 2 plat) | **16.8** |
+| #2 | Gamma (4 ctry, 2 epic AS) | 13.0 | **Alpha** (5 ctry, 8 common AS) | **16.0** |
+| #3 | Beta (3 ctry, 3 rare AS) | 10.5 | **Beta** (3 ctry, 3 rare AS) | **14.5** |
 
-### Score Range Impact
+### What Changed in the Rankings
 
-Under the current flat system, the AS component contributes 1-15 points typically (1-15 unique AS × 1.0). Under the new system, the AS component can contribute 0-300+ points for large operators with many rare AS. This shifts the diversity score to be **much more influenced by AS quality**, which is the desired behavior — AS diversity is the core of what this feature is about.
+- **Gamma rises to #1** — 4 countries + 2 epic AS + 2 platforms beats Alpha's 5 countries but worthless AS choices.
+- **Alpha drops from #1 to #2** — still gets credit for 5 countries (the most important factor), but 8 common AS now contribute 0 instead of 8 points. It almost ties with Gamma because country weight (3.0) is the dominant factor.
+- **Beta stays #3** — only 3 countries holds it back. But its 3 rare AS now contribute 4.5 points instead of 3 points, narrowing the gap significantly (14.5 vs 16.0 instead of 10.5 vs 19.5).
 
-The geographic (countries × 2.0) and platform (platforms × 1.5) components remain unchanged and still contribute their points. For an operator with 10 countries and 3 platforms, that's 20 + 4.5 = 24.5 fixed points. The AS rarity component becomes the dominant differentiator, which correctly reflects that AS choice is the primary diversity signal we want to reward.
+### Weight Hierarchy in Action
+
+To verify country > AS > platform ordering, compare same-base operators:
+
+| Operator | Change | Score Impact |
+|---|---|---|
+| Base: 3 ctry, 1 plat, 2 common AS | — | 3×3 + 0 + 1 = **10.0** |
+| +1 country | +3.0 | **13.0** (+3.0) |
+| +1 epic AS (rarity 42) | +1.4 | **11.4** (+1.4) |
+| +1 platform | +1.0 | **11.0** (+1.0) |
+
+Adding a country (+3.0) is worth more than adding an epic AS (+1.4), which is worth more than adding a platform (+1.0). The hierarchy **country > AS > platform** holds at every level.
 
 ---
 
