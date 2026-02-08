@@ -15,148 +15,427 @@ The Tor network's resilience depends on relay distribution across many different
 - **Traffic correlation attacks**: An adversary controlling an AS can observe traffic entering and leaving the network.
 - **Regulatory risk**: A single jurisdiction can affect a disproportionate share of the network.
 
-Currently, Allium tracks AS-level data (relay counts, consensus weight fraction, unique contacts per AS) and has a basic `diversity_score` in `country_utils.py` that weights countries (×2.0), platforms (×1.5), and unique AS count (×1.0). However, there is **no mechanism to award bonus points to relays running on rare or underrepresented AS numbers**, nor to penalize concentration on dominant providers.
+Currently, Allium tracks AS-level data (relay counts, consensus weight fraction, unique contacts per AS) and has a basic `diversity_score` in `country_utils.py` that weights countries (x2.0), platforms (x1.5), and unique AS count (x1.0). However, there is **no mechanism to award bonus points to relays running on rare or underrepresented AS numbers**, nor to penalize concentration on dominant providers.
 
-This proposal outlines several approaches to implement an **AS Diversity Score** that rewards operators who choose less common networks.
+**Goal**: A relay on an unknown/rare AS number gets more points. A relay on OVH gets fewer points.
 
 ---
 
-## Existing Infrastructure
+## Existing Technique: Country Rarity Scoring
+
+The codebase already has a proven, simple, threshold-based rarity scoring system for **countries** in `country_utils.py`. The AS diversity proposals below are designed to follow the exact same pattern.
+
+### How Country Rarity Works Today
+
+Each country is scored across 4 factors, each returning a small integer (0-6). The factors are multiplied by weights and summed into a final rarity score.
+
+**Factor 1 — Relay Count** (`calculate_relay_count_factor`):
+
+```python
+def calculate_relay_count_factor(country_relay_count):
+    if country_relay_count == 0:
+        return 0
+    return max(7 - country_relay_count, 0)
+    # 1 relay = 6 pts, 2 relays = 5 pts, ... 7+ relays = 0 pts
+```
+
+**Factor 2 — Network Percentage** (`calculate_network_percentage_factor`):
+
+```python
+def calculate_network_percentage_factor(country_relays, total_network_relays):
+    percentage = (country_relays / total_network_relays) * 100
+    if percentage < 0.05:    return 6  # Ultra-rare
+    elif percentage < 0.1:   return 4  # Very rare
+    elif percentage < 0.2:   return 2  # Rare
+    else:                    return 0  # Common
+```
+
+**Factor 3 — Geopolitical** (`calculate_geopolitical_factor`):  
+Conflict zones / authoritarian = 3 pts, island nations / landlocked = 2 pts, developing = 1 pt, else 0.
+
+**Factor 4 — Regional** (`calculate_regional_factor`):  
+Underrepresented region = 2 pts, emerging region = 1 pt, else 0.
+
+**Weighted Combination**:
+
+```python
+rarity_score = (
+    (relay_count_factor * 4) +       # weight 4
+    (network_percentage_factor * 3) + # weight 3
+    (geopolitical_factor * 2) +       # weight 2
+    (regional_factor * 1)             # weight 1
+)
+```
+
+**Tier Assignment** (`assign_rarity_tier`):
+
+```python
+if rarity_score >= 15:   return 'legendary'
+elif rarity_score >= 10: return 'epic'
+elif rarity_score >= 6:  return 'rare'
+elif rarity_score >= 3:  return 'emerging'
+else:                    return 'common'
+```
+
+This is simple, readable, and easy to tune. The AS diversity proposals below reuse this exact structure.
+
+### Existing Diversity Score (flat)
+
+The current operator-level diversity score in `calculate_diversity_score()`:
+
+```python
+diversity_score = 0.0
+diversity_score += len(countries) * 2.0       # Geographic
+diversity_score += len(platforms) * 1.5        # Platform
+diversity_score += unique_as_count * 1.0       # Network (flat — every AS worth 1.0)
+```
+
+The problem: every AS contributes the same 1.0 regardless of whether it's an unknown hosting provider or OVH with 2,000+ relays.
 
 ### Data Already Available
-
-From Onionoo API and `relays.py` processing:
 
 | Data Point | Location | Description |
 |---|---|---|
 | `relay['as']` | Per-relay | AS number (e.g., `"AS16276"` for OVH) |
 | `relay['as_name']` | Per-relay | Human-readable AS name |
-| `sorted['as'][as_number]` | Sorted data | Per-AS aggregated data (relay count, consensus weight, bandwidth) |
-| `sorted['as'][as_number]['consensus_weight_fraction']` | Sorted data | Fraction of total network consensus weight in this AS |
-| `sorted['as'][as_number]['unique_contact_count']` | Sorted data | Number of distinct operators in this AS |
-| `contact_data['unique_as_count']` | Per-contact | Number of unique AS numbers an operator uses |
-
-### Existing Diversity Scoring (in `country_utils.py`)
-
-```python
-def calculate_diversity_score(countries, platforms=None, unique_as_count=None):
-    diversity_score = 0.0
-    diversity_score += len(countries) * 2.0       # Geographic component
-    diversity_score += len(platforms) * 1.5        # Platform component
-    diversity_score += unique_as_count * 1.0       # Network component (flat)
-    return diversity_score
-```
-
-The current AS component is **flat** — each unique AS adds 1.0 point regardless of how rare or common that AS is on the network. This is what we want to improve.
-
-### Existing Rarity Pattern (in `country_utils.py`)
-
-The country rarity system uses a multi-factor weighted scoring model:
-- **Relay count factor** — fewer relays in the country = higher score
-- **Network percentage factor** — lower network share = higher score
-- **Geopolitical factor** — conflict zones, authoritarian regimes = bonus
-- **Regional factor** — underrepresented regions = bonus
-
-This established pattern can be adapted for AS diversity scoring.
+| `sorted['as'][as_number]` | Sorted data | Per-AS aggregated data |
+| `sorted['as'][X]['consensus_weight_fraction']` | Sorted data | CW fraction of this AS |
+| `sorted['as'][X]['unique_contact_count']` | Sorted data | Distinct operators in this AS |
+| `contact_data['unique_as_count']` | Per-contact | Unique AS count for an operator |
 
 ---
 
-## Proposal A: Inverse Frequency Score (Recommended)
+## Proposal A: Threshold-Based AS Rarity Score (Recommended)
 
 ### Concept
 
-Award points inversely proportional to how common an AS is on the network. A relay on an AS with 1 relay gets maximum points; a relay on an AS with 2,000 relays gets minimum points.
+Apply the **exact same pattern** as the country rarity system. Score each AS across simple threshold-based factors, multiply by weights, sum. No log functions, no complex math — just if/elif thresholds returning small integers.
 
 ### Algorithm
 
 ```python
-def calculate_as_rarity_score(as_number, sorted_as_data, total_relays):
+# === AS RARITY SCORING SYSTEM ===
+# Mirrors the country rarity system in structure and simplicity.
+
+def calculate_as_relay_count_factor(as_relay_count):
     """
-    Calculate rarity score for a given AS number.
+    Factor 1: How many relays are on this AS?
+    Fewer relays = higher score. Simple threshold brackets.
     
-    Score = log2(total_relays / as_relay_count)
-    
-    Examples (assuming ~7,000 total relays):
-      - AS with 1 relay:     log2(7000/1)   = 12.77 points
-      - AS with 5 relays:    log2(7000/5)   = 10.45 points
-      - AS with 50 relays:   log2(7000/50)  =  7.13 points
-      - AS with 500 relays:  log2(7000/500) =  3.81 points
-      - AS with 2000 relays: log2(7000/2000)=  1.81 points
+    Returns: 0-6 points
     """
-    import math
+    if as_relay_count == 0:
+        return 0
+    elif as_relay_count <= 2:
+        return 6   # Almost unique
+    elif as_relay_count <= 5:
+        return 5   # Very rare
+    elif as_relay_count <= 10:
+        return 4   # Rare
+    elif as_relay_count <= 25:
+        return 3   # Uncommon
+    elif as_relay_count <= 100:
+        return 2   # Moderate
+    elif as_relay_count <= 500:
+        return 1   # Popular
+    else:
+        return 0   # Saturated (OVH, Hetzner, etc.)
+
+
+def calculate_as_network_percentage_factor(as_relay_count, total_network_relays):
+    """
+    Factor 2: What percentage of the network is on this AS?
+    Lower share = higher score.
     
-    as_data = sorted_as_data.get(as_number, {})
-    as_relay_count = len(as_data.get('relays', []))
+    Returns: 0-6 points
+    """
+    if total_network_relays == 0:
+        return 0
     
-    if as_relay_count == 0 or total_relays == 0:
-        return 0.0
+    percentage = (as_relay_count / total_network_relays) * 100
     
-    return math.log2(total_relays / as_relay_count)
-```
+    if percentage < 0.05:    return 6   # Ultra-rare (<0.05% of network)
+    elif percentage < 0.1:   return 5   # Very rare
+    elif percentage < 0.25:  return 4   # Rare
+    elif percentage < 0.5:   return 3   # Uncommon
+    elif percentage < 1.0:   return 2   # Moderate
+    elif percentage < 3.0:   return 1   # Popular
+    else:                    return 0   # Dominant (>3% of network)
 
-### Tier Classification
 
-| Tier | Score Range | Description | Example |
-|------|------------|-------------|---------|
-| Legendary | >= 12 | Unique or nearly unique AS | 1-2 relays in this AS |
-| Epic | >= 10 | Very rare AS | 3-7 relays |
-| Rare | >= 7 | Uncommon AS | 8-64 relays |
-| Common | >= 4 | Moderate presence | 65-500 relays |
-| Saturated | < 4 | Heavily used AS | 500+ relays (OVH, Hetzner, etc.) |
+def calculate_as_consensus_weight_factor(as_cw_fraction):
+    """
+    Factor 3: How much consensus weight does this AS hold?
+    Lower CW = higher score. Captures actual network influence.
+    
+    Returns: 0-6 points
+    """
+    cw_percentage = as_cw_fraction * 100
+    
+    if cw_percentage <= 0:
+        return 0
+    elif cw_percentage < 0.01:
+        return 6   # Negligible influence
+    elif cw_percentage < 0.05:
+        return 5   # Tiny influence
+    elif cw_percentage < 0.1:
+        return 4   # Small influence
+    elif cw_percentage < 0.5:
+        return 3   # Modest influence
+    elif cw_percentage < 1.0:
+        return 2   # Noticeable influence
+    elif cw_percentage < 5.0:
+        return 1   # Significant influence
+    else:
+        return 0   # Major AS — dominant influence
 
-### Integration Points
 
-1. **Per-relay display** (`relay-info.html`): Show AS rarity tier badge next to AS name
-2. **AROI Leaderboards** (`aroileaders.py`): New "AS Diversity Champions" category ranking operators by average AS rarity across their relays
-3. **Intelligence Engine** (`intelligence_engine.py`): Add AS rarity to contact intelligence (Layer 14)
-4. **Existing diversity_score** (`country_utils.py`): Replace flat `unique_as_count * 1.0` with sum of per-AS rarity scores
-5. **Network Health Dashboard**: Show AS concentration risk metrics
+def calculate_as_operator_factor(unique_contact_count):
+    """
+    Factor 4: How many distinct operators share this AS?
+    Fewer operators = the current operator's choice is more unique.
+    An AS with only 1 operator means that operator made a unique hosting choice.
+    
+    Returns: 0-4 points
+    """
+    if unique_contact_count <= 0:
+        return 0
+    elif unique_contact_count == 1:
+        return 4   # Sole operator — unique AS choice
+    elif unique_contact_count <= 3:
+        return 3   # Very few operators
+    elif unique_contact_count <= 10:
+        return 2   # Small community
+    elif unique_contact_count <= 50:
+        return 1   # Moderate community
+    else:
+        return 0   # Heavily shared (many operators chose same provider)
 
-### Implementation Changes
 
-**File: `allium/lib/country_utils.py`** — Add new functions:
+def calculate_as_rarity_score(as_relay_count, total_network_relays,
+                               as_cw_fraction, unique_contact_count):
+    """
+    Calculate the overall AS rarity score using weighted factors.
+    
+    Same pattern as country rarity:
+      score = (factor1 * weight1) + (factor2 * weight2) + ...
+    
+    Args:
+        as_relay_count: Number of relays on this AS
+        total_network_relays: Total relays on the network
+        as_cw_fraction: Consensus weight fraction of this AS (0.0-1.0)
+        unique_contact_count: Number of distinct operators on this AS
+    
+    Returns:
+        int: Weighted rarity score (0-100 range)
+    """
+    relay_factor = calculate_as_relay_count_factor(as_relay_count)
+    network_factor = calculate_as_network_percentage_factor(as_relay_count, total_network_relays)
+    cw_factor = calculate_as_consensus_weight_factor(as_cw_fraction)
+    operator_factor = calculate_as_operator_factor(unique_contact_count)
+    
+    return (
+        (relay_factor * 4) +       # Relay count: weight 4 (most important)
+        (network_factor * 3) +     # Network share: weight 3
+        (cw_factor * 3) +          # Consensus weight: weight 3
+        (operator_factor * 2)      # Operator uniqueness: weight 2
+    )
 
-```python
-import math
-
-def calculate_as_rarity_score(as_relay_count, total_relays):
-    """Calculate log-based rarity score for an AS."""
-    if as_relay_count <= 0 or total_relays <= 0:
-        return 0.0
-    return math.log2(total_relays / as_relay_count)
 
 def assign_as_rarity_tier(rarity_score):
-    """Assign tier classification based on AS rarity score."""
-    if rarity_score >= 12:  return 'legendary'
-    elif rarity_score >= 10: return 'epic'
-    elif rarity_score >= 7:  return 'rare'
-    elif rarity_score >= 4:  return 'common'
-    else:                    return 'saturated'
+    """
+    Assign tier classification. Same tiers as country rarity.
+    
+    Max possible score: (6*4) + (6*3) + (6*3) + (4*2) = 24+18+18+8 = 68
+    """
+    if rarity_score >= 50:   return 'legendary'    # Extremely rare AS
+    elif rarity_score >= 35: return 'epic'         # Very rare AS
+    elif rarity_score >= 20: return 'rare'         # Uncommon AS
+    elif rarity_score >= 10: return 'emerging'     # Below-average presence
+    else:                    return 'common'        # Well-known provider
+```
 
+### Worked Examples
+
+Assuming ~7,000 total relays on the network:
+
+**AS205100 (Flokinet) — 5 relays, 0.03% CW, 2 operators**:
+- Relay count: 5 relays -> 5 pts
+- Network %: 5/7000 = 0.07% -> 5 pts
+- CW: 0.03% -> 5 pts
+- Operators: 2 -> 3 pts
+- Score = (5 * 4) + (5 * 3) + (5 * 3) + (3 * 2) = 20 + 15 + 15 + 6 = **56 (legendary)**
+
+**AS24940 (Hetzner) — 800 relays, 8% CW, 200 operators**:
+- Relay count: 800 relays -> 0 pts
+- Network %: 800/7000 = 11.4% -> 0 pts
+- CW: 8% -> 0 pts
+- Operators: 200 -> 0 pts
+- Score = 0 + 0 + 0 + 0 = **0 (common)**
+
+**AS9009 (M247) — 40 relays, 0.4% CW, 15 operators**:
+- Relay count: 40 relays -> 2 pts
+- Network %: 40/7000 = 0.57% -> 2 pts
+- CW: 0.4% -> 3 pts
+- Operators: 15 -> 1 pt
+- Score = (2 * 4) + (2 * 3) + (3 * 3) + (1 * 2) = 8 + 6 + 9 + 2 = **25 (rare)**
+
+### Operator-Level Scoring
+
+```python
 def calculate_operator_as_diversity_score(operator_relays, sorted_as_data, total_relays):
     """
-    Calculate AS diversity score for an operator.
-    Sum of rarity scores across all unique AS numbers used by the operator.
-    """
-    unique_as_numbers = set(
-        relay.get('as', '') for relay in operator_relays if relay.get('as')
-    )
+    Calculate total AS diversity score for an operator.
+    Sum of rarity scores for each unique AS the operator uses.
     
-    total_score = 0.0
-    for as_number in unique_as_numbers:
+    An operator with 3 relays all on OVH scores ~0.
+    An operator with 3 relays each on a different rare AS scores ~150+.
+    """
+    seen_as = set()
+    total_score = 0
+    
+    for relay in operator_relays:
+        as_number = relay.get('as', '')
+        if not as_number or as_number in seen_as:
+            continue
+        seen_as.add(as_number)
+        
         as_data = sorted_as_data.get(as_number, {})
         as_relay_count = len(as_data.get('relays', []))
-        total_score += calculate_as_rarity_score(as_relay_count, total_relays)
+        as_cw_fraction = as_data.get('consensus_weight_fraction', 0)
+        unique_contacts = as_data.get('unique_contact_count', 0)
+        
+        total_score += calculate_as_rarity_score(
+            as_relay_count, total_relays, as_cw_fraction, unique_contacts
+        )
     
     return total_score
 ```
 
-**File: `allium/lib/country_utils.py`** — Modify `calculate_diversity_score`:
+### Pros
+
+- **Identical pattern** to existing country rarity — easy to review, test, maintain
+- **No math imports** — just if/elif and integer arithmetic
+- **All 4 factors** capture different aspects (count, share, influence, crowding)
+- **Easy to tune** — adjust any threshold or weight independently
+- **Deterministic** — same input always produces same output, no floating-point surprises
+
+### Cons
+
+- Threshold brackets are manually chosen (but same is true for country rarity)
+- Relay count and network percentage overlap somewhat (both measure AS size)
+
+---
+
+## Proposal B: Two-Factor Simplified Score
+
+### Concept
+
+If Proposal A feels like too many factors, strip it down to the **two most important dimensions**: how many relays are on the AS, and how much consensus weight it holds. Two factors, same threshold pattern.
+
+### Algorithm
+
+```python
+def calculate_as_rarity_score_simple(as_relay_count, total_network_relays, as_cw_fraction):
+    """
+    Simplified 2-factor AS rarity score.
+    
+    Factor 1: Relay count (0-6 pts, weight 5)
+    Factor 2: Consensus weight (0-6 pts, weight 5)
+    
+    Max score: (6*5) + (6*5) = 60
+    """
+    # Factor 1: Relay count
+    if as_relay_count == 0:       relay_factor = 0
+    elif as_relay_count <= 2:     relay_factor = 6
+    elif as_relay_count <= 5:     relay_factor = 5
+    elif as_relay_count <= 15:    relay_factor = 4
+    elif as_relay_count <= 50:    relay_factor = 3
+    elif as_relay_count <= 200:   relay_factor = 2
+    elif as_relay_count <= 500:   relay_factor = 1
+    else:                         relay_factor = 0
+    
+    # Factor 2: Consensus weight
+    cw_percentage = as_cw_fraction * 100
+    if cw_percentage <= 0:        cw_factor = 0
+    elif cw_percentage < 0.01:    cw_factor = 6
+    elif cw_percentage < 0.05:    cw_factor = 5
+    elif cw_percentage < 0.1:     cw_factor = 4
+    elif cw_percentage < 0.5:     cw_factor = 3
+    elif cw_percentage < 2.0:     cw_factor = 2
+    elif cw_percentage < 5.0:     cw_factor = 1
+    else:                         cw_factor = 0
+    
+    return (relay_factor * 5) + (cw_factor * 5)
+
+
+def assign_as_rarity_tier_simple(rarity_score):
+    """Tier assignment for 2-factor score. Max = 60."""
+    if rarity_score >= 45:   return 'legendary'
+    elif rarity_score >= 30: return 'epic'
+    elif rarity_score >= 18: return 'rare'
+    elif rarity_score >= 8:  return 'emerging'
+    else:                    return 'common'
+```
+
+### Worked Examples
+
+**Flokinet (5 relays, 0.03% CW)**: (5 * 5) + (5 * 5) = **50 (legendary)**  
+**Hetzner (800 relays, 8% CW)**: (0 * 5) + (0 * 5) = **0 (common)**  
+**M247 (40 relays, 0.4% CW)**: (3 * 5) + (3 * 5) = **30 (epic)**
+
+### Pros
+
+- Simplest possible meaningful implementation
+- Only 2 factors to understand and tune
+- Covers both relay count and actual network influence
+
+### Cons
+
+- Doesn't capture operator crowding (unique_contact_count)
+- Doesn't distinguish between "small AS with 1 operator" vs "small AS with 10 operators"
+
+---
+
+## Proposal C: Network-Share-Only Score
+
+### Concept
+
+The absolute simplest approach. One factor: what percentage of the network's relays are on this AS? That single number determines the score. Nothing else.
+
+### Algorithm
+
+```python
+def calculate_as_rarity_score_minimal(as_relay_count, total_network_relays):
+    """
+    Single-factor AS rarity score based on network share.
+    
+    Returns: 0-6 points (can be used directly or multiplied by a weight)
+    
+    The idea: an AS hosting <0.05% of the network is ultra-rare.
+    An AS hosting >5% of the network is saturated.
+    """
+    if total_network_relays == 0 or as_relay_count == 0:
+        return 0
+    
+    percentage = (as_relay_count / total_network_relays) * 100
+    
+    if percentage < 0.05:    return 6   # Ultra-rare
+    elif percentage < 0.1:   return 5   # Very rare
+    elif percentage < 0.25:  return 4   # Rare
+    elif percentage < 0.5:   return 3   # Uncommon
+    elif percentage < 1.0:   return 2   # Moderate
+    elif percentage < 3.0:   return 1   # Popular
+    else:                    return 0   # Saturated
+```
+
+This is literally the same function as `calculate_network_percentage_factor` for countries but applied to AS data. To use it in the operator-level diversity score:
 
 ```python
 def calculate_diversity_score(countries, platforms=None, unique_as_count=None,
-                              as_rarity_score=None):
-    """Enhanced diversity score with AS rarity weighting."""
+                              operator_relays=None, sorted_as_data=None,
+                              total_network_relays=None):
+    """Enhanced diversity score — rare AS worth more than common AS."""
     diversity_score = 0.0
     
     if countries:
@@ -164,19 +443,121 @@ def calculate_diversity_score(countries, platforms=None, unique_as_count=None,
     if platforms:
         diversity_score += len(platforms) * 1.5
     
-    # Use AS rarity score if available, otherwise fall back to flat count
-    if as_rarity_score is not None:
-        diversity_score += as_rarity_score
+    # AS component: rarity-weighted instead of flat count
+    if operator_relays and sorted_as_data and total_network_relays:
+        seen_as = set()
+        for relay in operator_relays:
+            as_number = relay.get('as', '')
+            if as_number and as_number not in seen_as:
+                seen_as.add(as_number)
+                as_data = sorted_as_data.get(as_number, {})
+                as_relay_count = len(as_data.get('relays', []))
+                rarity = calculate_as_rarity_score_minimal(as_relay_count, total_network_relays)
+                diversity_score += rarity  # 0-6 per unique AS instead of flat 1.0
     elif unique_as_count:
-        diversity_score += unique_as_count * 1.0
+        diversity_score += unique_as_count * 1.0  # Fallback to flat
     
     return diversity_score
 ```
 
-**File: `allium/lib/aroileaders.py`** — New leaderboard category:
+### Worked Examples (7,000 total relays)
+
+**Operator with 3 relays on 3 rare AS (5, 8, 3 relays each)**:
+- AS with 5 relays: 0.07% -> 5 pts
+- AS with 8 relays: 0.11% -> 4 pts
+- AS with 3 relays: 0.04% -> 6 pts
+- AS component = 15 pts (vs. 3 pts with flat scoring)
+
+**Operator with 3 relays all on OVH (2,000 relays)**:
+- AS with 2,000 relays: 28.6% -> 0 pts
+- AS component = 0 pts (vs. 1 pt with flat scoring)
+
+### Pros
+
+- **Absolute minimum complexity** — one function, one threshold table
+- Identical to existing `calculate_network_percentage_factor` — just reused for AS
+- Trivial to implement, test, and explain
+- Already proven to work for countries
+
+### Cons
+
+- Doesn't capture consensus weight — an AS with 5 relays but 10% CW scores the same as one with 5 relays and 0.01% CW
+- Doesn't capture operator crowding
+
+---
+
+## Comparison Matrix
+
+| Criterion | Proposal A (4-Factor) | Proposal B (2-Factor) | Proposal C (1-Factor) |
+|---|---|---|---|
+| **Complexity** | Moderate | Low | Very Low |
+| **Factors** | Relay count + Network % + CW + Operators | Relay count + CW | Network % only |
+| **Max Score per AS** | 68 | 60 | 6 |
+| **Captures CW** | Yes | Yes | No |
+| **Captures operator crowding** | Yes | No | No |
+| **Mirrors country rarity pattern** | Exactly | Partially | Exactly (single factor) |
+| **Implementation effort** | ~3 hours | ~2 hours | ~1 hour |
+| **Tuning complexity** | 4 threshold tables + 4 weights | 2 threshold tables + 2 weights | 1 threshold table |
+| **Explainability** | Good (familiar pattern) | Good | Excellent |
+
+---
+
+## Recommendation
+
+**Proposal A (Threshold-Based 4-Factor)** is recommended because:
+
+1. **Mirrors the proven country rarity pattern exactly** — same structure, same style, same kind of threshold tables. Anyone who understands `calculate_relay_count_factor` + `calculate_network_percentage_factor` + `calculate_geopolitical_factor` + `calculate_regional_factor` will immediately understand the AS version.
+
+2. **Captures what matters** — a rare AS is not just one with few relays. It's one with low relay count AND low consensus weight AND few other operators. Proposal A is the only one that captures all dimensions.
+
+3. **Still simple** — no log functions, no floating-point math beyond basic division, no imports. Just if/elif thresholds and integer multiplication. Same level of complexity as the existing country system.
+
+**Proposal C (1-Factor)** is a good fallback if minimal implementation time is preferred. It can be implemented in under an hour by literally reusing the existing `calculate_network_percentage_factor` function.
+
+**Proposal B (2-Factor)** is the middle ground — captures both relay count and consensus weight without the operator crowding dimension.
+
+---
+
+## Integration Points
+
+Regardless of which proposal is chosen, the integration follows the same pattern:
+
+### 1. `country_utils.py` — Add AS rarity functions
+
+New functions following the existing naming pattern:
+- `calculate_as_relay_count_factor()`
+- `calculate_as_network_percentage_factor()`
+- `calculate_as_consensus_weight_factor()` (Proposal A/B only)
+- `calculate_as_operator_factor()` (Proposal A only)
+- `calculate_as_rarity_score()`
+- `assign_as_rarity_tier()`
+
+### 2. `relays.py` — Pre-compute AS rarity during `_categorize()`
+
+After `sorted['as']` is built, compute rarity score for each AS in one pass:
 
 ```python
-# 19. AS Diversity Champions - Operators with highest AS rarity scores
+# In _categorize(), after AS data is assembled:
+total_relays = len(all_relays)
+for as_number, as_data in self.json['sorted']['as'].items():
+    as_relay_count = len(as_data.get('relays', []))
+    as_cw = as_data.get('consensus_weight_fraction', 0)
+    unique_contacts = as_data.get('unique_contact_count', 0)
+    as_data['as_rarity_score'] = calculate_as_rarity_score(
+        as_relay_count, total_relays, as_cw, unique_contacts
+    )
+    as_data['as_rarity_tier'] = assign_as_rarity_tier(as_data['as_rarity_score'])
+```
+
+### 3. `aroileaders.py` — New leaderboard + enhanced diversity score
+
+```python
+# Per-operator AS diversity score (sum of AS rarity scores for each unique AS)
+as_diversity_score = calculate_operator_as_diversity_score(
+    operator_relays, sorted_as_data, total_relays
+)
+
+# New leaderboard: AS Diversity Champions
 leaderboards['as_diversity'] = sorted(
     aroi_operators.items(),
     key=lambda x: x[1]['as_diversity_score'],
@@ -184,332 +565,35 @@ leaderboards['as_diversity'] = sorted(
 )[:50]
 ```
 
-### Pros
+### 4. `intelligence_engine.py` — Layer 14 contact intelligence
 
-- Mathematically elegant — logarithmic scaling provides smooth differentiation
-- Self-adjusting — automatically adapts as AS distribution changes
-- Follows established rarity pattern from country scoring
-- Low computational cost — single pass through AS data
-
-### Cons
-
-- Pure relay count doesn't capture consensus weight concentration
-- A "rare" AS could still have high consensus weight if it hosts high-bandwidth relays
-- Log scale may compress differences at the extreme ends
-
----
-
-## Proposal B: Consensus Weight-Based Inverse Score
-
-### Concept
-
-Instead of using relay counts, use the **consensus weight fraction** of each AS. This captures actual network influence more accurately — an AS with 10 relays holding 15% of consensus weight is more of a risk than one with 100 relays holding 0.5%.
-
-### Algorithm
+Add AS rarity assessment to contact pages:
 
 ```python
-def calculate_as_diversity_score_cw(as_number, sorted_as_data):
-    """
-    Score based on inverse of consensus weight fraction.
-    
-    Score = -log10(cw_fraction) * scaling_factor
-    
-    Examples:
-      - AS with 0.001% CW: -log10(0.00001) * 2 = 10.0 points
-      - AS with 0.1% CW:   -log10(0.001)   * 2 =  6.0 points
-      - AS with 1% CW:     -log10(0.01)    * 2 =  4.0 points
-      - AS with 5% CW:     -log10(0.05)    * 2 =  2.6 points
-      - AS with 15% CW:    -log10(0.15)    * 2 =  1.6 points
-    """
-    import math
-    
-    as_data = sorted_as_data.get(as_number, {})
-    cw_fraction = as_data.get('consensus_weight_fraction', 0)
-    
-    if cw_fraction <= 0:
-        return 0.0
-    
-    # Cap minimum fraction to avoid infinite scores
-    cw_fraction = max(cw_fraction, 1e-8)
-    
-    SCALING_FACTOR = 2.0
-    return -math.log10(cw_fraction) * SCALING_FACTOR
+# In _layer14_contact_intelligence():
+as_rarity_assessment = "Above Average"  # or "Below Average", "Excellent", etc.
+rare_as_count = sum(1 for as_num in unique_as_set
+                    if sorted_as_data.get(as_num, {}).get('as_rarity_tier') in ('legendary', 'epic', 'rare'))
 ```
 
-### Pros
+### 5. `relay-info.html` — Display AS rarity badge
 
-- Captures actual network influence rather than just relay count
-- Better security metric — consensus weight determines path selection probability
-- An AS with few but high-bandwidth relays correctly gets lower diversity score
+```html
+<td>{{ relay.as_name }}
+  <span class="badge badge-{{ relay.as_rarity_tier }}">{{ relay.as_rarity_tier }}</span>
+</td>
+```
 
-### Cons
-
-- More volatile — consensus weight fluctuates with relay bandwidth changes
-- Harder to explain to operators ("why did my score change?")
-- Newly joined relays with low consensus weight could inflate scores temporarily
-
----
-
-## Proposal C: Multi-Factor Weighted Score (Comprehensive)
-
-### Concept
-
-Combine multiple factors into a weighted score, similar to the existing country rarity system. This provides the most nuanced assessment.
-
-### Algorithm
+### 6. `calculate_diversity_score()` — Replace flat AS component
 
 ```python
-def calculate_as_diversity_multifactor(as_number, sorted_as_data, total_relays):
-    """
-    Multi-factor AS diversity score.
-    
-    Factors:
-      1. Relay count factor (weight: 4) — fewer relays = higher score
-      2. Consensus weight factor (weight: 3) — lower CW fraction = higher score
-      3. Operator diversity factor (weight: 2) — more unique operators = higher score
-      4. Geographic factor (weight: 1) — AS in underrepresented country = bonus
-    """
-    as_data = sorted_as_data.get(as_number, {})
-    as_relay_count = len(as_data.get('relays', []))
-    cw_fraction = as_data.get('consensus_weight_fraction', 0)
-    unique_contacts = as_data.get('unique_contact_count', 0)
-    
-    # Factor 1: Relay count (0-6 points)
-    if as_relay_count == 0:
-        relay_factor = 0
-    elif as_relay_count <= 2:
-        relay_factor = 6
-    elif as_relay_count <= 5:
-        relay_factor = 5
-    elif as_relay_count <= 10:
-        relay_factor = 4
-    elif as_relay_count <= 50:
-        relay_factor = 3
-    elif as_relay_count <= 200:
-        relay_factor = 2
-    elif as_relay_count <= 500:
-        relay_factor = 1
-    else:
-        relay_factor = 0
-    
-    # Factor 2: Consensus weight (0-6 points)
-    cw_percentage = cw_fraction * 100
-    if cw_percentage < 0.01:
-        cw_factor = 6
-    elif cw_percentage < 0.05:
-        cw_factor = 5
-    elif cw_percentage < 0.1:
-        cw_factor = 4
-    elif cw_percentage < 0.5:
-        cw_factor = 3
-    elif cw_percentage < 1.0:
-        cw_factor = 2
-    elif cw_percentage < 5.0:
-        cw_factor = 1
-    else:
-        cw_factor = 0  # Major AS (OVH, Hetzner)
-    
-    # Factor 3: Operator diversity (0-4 points)
-    # Single-operator AS = more risk, but also means the operator
-    # has sole presence = more diversity contribution
-    if unique_contacts == 1:
-        operator_factor = 4  # Sole operator in AS — unique contribution
-    elif unique_contacts <= 3:
-        operator_factor = 3
-    elif unique_contacts <= 10:
-        operator_factor = 2
-    elif unique_contacts <= 50:
-        operator_factor = 1
-    else:
-        operator_factor = 0  # Heavily shared AS
-    
-    # Factor 4: Network percentage (0-6 points) — reuse existing pattern
-    if total_relays > 0:
-        percentage = (as_relay_count / total_relays) * 100
-        if percentage < 0.02:
-            network_factor = 6
-        elif percentage < 0.05:
-            network_factor = 4
-        elif percentage < 0.1:
-            network_factor = 3
-        elif percentage < 0.5:
-            network_factor = 2
-        elif percentage < 1.0:
-            network_factor = 1
-        else:
-            network_factor = 0
-    else:
-        network_factor = 0
-    
-    # Weighted combination
-    score = (
-        (relay_factor * 4) +       # Relay count: weight 4
-        (cw_factor * 3) +          # Consensus weight: weight 3
-        (operator_factor * 2) +    # Operator diversity: weight 2
-        (network_factor * 1)       # Network percentage: weight 1
-    )
-    
-    return score
+# Replace: unique_as_count * 1.0
+# With:    sum of rarity scores per unique AS
+if as_rarity_score is not None:
+    diversity_score += as_rarity_score
+elif unique_as_count:
+    diversity_score += unique_as_count * 1.0  # backward-compatible fallback
 ```
-
-### Tier Classification
-
-| Tier | Score Range | Description |
-|------|------------|-------------|
-| Legendary | >= 80 | Extremely rare AS — almost no other relays |
-| Epic | >= 60 | Very rare AS — minimal network presence |
-| Rare | >= 40 | Uncommon AS — below-average relay count |
-| Emerging | >= 20 | Moderately used AS |
-| Common | >= 10 | Well-populated AS |
-| Saturated | < 10 | Major hosting provider (OVH, Hetzner, DigitalOcean) |
-
-### Pros
-
-- Most comprehensive assessment
-- Follows proven pattern from `country_utils.py` rarity scoring
-- Each factor is independently tunable
-- Captures both relay concentration and consensus weight
-
-### Cons
-
-- Most complex to implement and maintain
-- Multiple factors may be partially redundant (relay count correlates with CW fraction)
-- Harder to explain to operators
-
----
-
-## Proposal D: Percentile Rank Score (Simple & Effective)
-
-### Concept
-
-Rank all AS numbers by their relay count, then assign a percentile-based score. This is the simplest approach and is self-normalizing.
-
-### Algorithm
-
-```python
-def calculate_as_percentile_score(as_number, sorted_as_data):
-    """
-    Score = percentile rank of AS (inverted, so rare AS gets higher score).
-    
-    If there are 1,000 unique AS numbers:
-      - Rarest AS (rank 1):     score = 100.0
-      - Median AS (rank 500):   score = 50.0
-      - Most common AS (rank 1000): score = 0.0
-    """
-    # Collect all AS relay counts
-    as_relay_counts = {}
-    for as_num, as_data in sorted_as_data.items():
-        as_relay_counts[as_num] = len(as_data.get('relays', []))
-    
-    if not as_relay_counts or as_number not in as_relay_counts:
-        return 0.0
-    
-    # Sort AS numbers by relay count (ascending = rare first)
-    sorted_as = sorted(as_relay_counts.items(), key=lambda x: x[1])
-    total_as = len(sorted_as)
-    
-    # Find rank of this AS
-    for rank, (as_num, _) in enumerate(sorted_as):
-        if as_num == as_number:
-            # Invert: rank 0 (rarest) gets 100, last rank gets 0
-            return ((total_as - rank - 1) / (total_as - 1)) * 100 if total_as > 1 else 50.0
-    
-    return 0.0
-```
-
-### Optimized Implementation
-
-For batch processing (to avoid re-sorting per relay):
-
-```python
-def precompute_as_percentile_scores(sorted_as_data):
-    """Pre-compute percentile scores for all AS numbers in one pass."""
-    as_relay_counts = {
-        as_num: len(as_data.get('relays', []))
-        for as_num, as_data in sorted_as_data.items()
-    }
-    
-    sorted_as = sorted(as_relay_counts.items(), key=lambda x: x[1])
-    total_as = len(sorted_as)
-    
-    scores = {}
-    for rank, (as_num, _) in enumerate(sorted_as):
-        scores[as_num] = ((total_as - rank - 1) / (total_as - 1)) * 100 if total_as > 1 else 50.0
-    
-    return scores
-```
-
-### Pros
-
-- Simplest to implement and understand
-- Self-normalizing — always produces 0-100 range
-- No tuning parameters needed
-- Easy to explain to operators: "Your AS is in the top X% rarest"
-
-### Cons
-
-- Treats all gaps equally — the difference between rank 1 and rank 2 may be huge in absolute terms
-- Doesn't capture consensus weight
-- Equal-relay-count AS numbers get different scores based on sort order
-
----
-
-## Comparison Matrix
-
-| Criterion | Proposal A (Log) | Proposal B (CW) | Proposal C (Multi) | Proposal D (Percentile) |
-|---|---|---|---|---|
-| **Complexity** | Low | Low | High | Very Low |
-| **Accuracy** | Good | Better for security | Best | Fair |
-| **Performance** | O(1) per relay | O(1) per relay | O(1) per relay | O(n log n) precompute, O(1) per relay |
-| **Explainability** | Good | Moderate | Moderate | Excellent |
-| **Self-adjusting** | Yes | Yes | Yes | Yes |
-| **Captures CW** | No | Yes | Yes | No |
-| **Follows existing patterns** | Partially | No | Yes (mirrors country rarity) | No |
-| **Implementation effort** | ~2 hours | ~2 hours | ~4 hours | ~1 hour |
-
----
-
-## Recommendation
-
-**Proposal A (Inverse Frequency Score)** is recommended as the primary implementation for the following reasons:
-
-1. **Best balance of simplicity and accuracy** — logarithmic scaling provides meaningful differentiation without over-engineering.
-2. **Low implementation risk** — simple math, easy to test, easy to explain.
-3. **Extensible** — can later be enhanced with CW weighting (evolve toward Proposal C) if needed.
-4. **Consistent with existing patterns** — the rarity tier system (`legendary`/`epic`/`rare`/`common`) already exists for countries.
-
-**Proposal C (Multi-Factor)** is recommended as a future enhancement once Proposal A is validated in production. It provides the most comprehensive view and mirrors the proven `country_utils.py` weighted scoring system.
-
----
-
-## Integration Roadmap
-
-### Phase 1: Core Scoring (Proposal A)
-
-1. Add `calculate_as_rarity_score()` and `assign_as_rarity_tier()` to `country_utils.py`
-2. Pre-compute AS rarity scores in `relays.py` during `_categorize()` (single pass over sorted AS data)
-3. Store `as_rarity_score` and `as_rarity_tier` on each relay for template access
-4. Display AS rarity tier badge on `relay-info.html` pages
-
-### Phase 2: Operator Scoring
-
-5. Add `calculate_operator_as_diversity_score()` to `country_utils.py`
-6. Integrate into `aroileaders.py` — compute operator-level AS diversity score
-7. Enhance `calculate_diversity_score()` to use rarity-weighted AS component
-8. Add new AROI leaderboard category: "AS Diversity Champions"
-
-### Phase 3: Intelligence & Dashboard
-
-9. Add AS rarity analysis to Intelligence Engine Layer 10 (Infrastructure Dependency)
-10. Add AS concentration risk indicator to Network Health Dashboard
-11. Enhance contact intelligence (Layer 14) with per-operator AS rarity assessment
-
-### Phase 4: Enhancement to Multi-Factor (Proposal C)
-
-12. Evolve scoring to include consensus weight factor
-13. Add operator diversity factor
-14. Add network percentage factor
-15. Tune weights based on real-world data
 
 ---
 
@@ -519,40 +603,40 @@ def precompute_as_percentile_scores(sorted_as_data):
 
 ```
 AS Number: AS205100 (Flokinet Ltd)
-AS Rarity:  Epic (score: 10.8)
+AS Rarity: legendary (score: 56)
            Only 5 relays on this AS network-wide
 ```
 
 ### AROI Leaderboard — AS Diversity Champions
 
-| Rank | Operator | AS Diversity Score | Unique AS | Avg Rarity | Top Rare AS |
-|------|----------|--------------------|-----------|------------|-------------|
-| 1 | diverse-ops.org | 87.3 | 12 | Epic | AS205100, AS60729 |
-| 2 | global-tor.net | 72.1 | 8 | Rare | AS131284, AS9009 |
-| 3 | privacy-relay.io | 65.4 | 15 | Common | AS16276 (OVH) |
+| Rank | Operator | AS Diversity Score | Unique AS | Best AS Tier | Specialization |
+|------|----------|--------------------|-----------|--------------|----------------|
+| 1 | diverse-ops.org | 187 | 12 | legendary | 4 legendary, 5 epic, 3 rare |
+| 2 | global-tor.net | 142 | 8 | epic | 2 legendary, 4 epic, 2 rare |
+| 3 | privacy-relay.io | 23 | 15 | common | 0 legendary, 1 rare, 14 common |
 
 ### Intelligence Engine — Contact Page
 
 ```
 Network Diversity: Great, 8 networks
-AS Rarity Assessment: Above Average — 5 of 8 AS numbers are rare or better
-  - AS205100 (Flokinet): Epic (10.8 pts)
-  - AS60729 (Leaseweb DE): Rare (7.2 pts)
-  - AS24940 (Hetzner): Common (3.1 pts)
+AS Rarity: Above Average — 5 of 8 AS numbers are rare or better
+  - AS205100 (Flokinet): legendary (56 pts)
+  - AS60729 (Leaseweb DE): rare (25 pts)
+  - AS24940 (Hetzner): common (0 pts)
 ```
 
 ---
 
 ## Open Questions
 
-1. **Should the AS diversity score affect the existing `diversity_score` used in the "Most Diverse Operators" leaderboard?** Proposal A recommends yes — replace the flat `unique_as_count * 1.0` with the sum of rarity scores.
+1. **Should the AS diversity score replace the flat `unique_as_count * 1.0` in the existing "Most Diverse Operators" leaderboard?** Recommended: yes, with backward-compatible fallback.
 
-2. **Should we have a negative/penalty component for saturated AS?** Currently all proposals score down to 0 but never go negative. A penalty would actively discourage further relay deployment on already-saturated AS numbers.
+2. **Should there be a negative/penalty component for saturated AS?** Currently all proposals score down to 0 but never go negative. A penalty could be considered if we want to actively discourage OVH/Hetzner concentration.
 
-3. **How should newly appeared AS numbers be handled?** A brand-new AS with 1 relay would get maximum rarity score. This is technically correct (it IS rare) but could be gamed. Consider requiring minimum relay uptime before scoring.
+3. **How should newly appeared AS numbers be handled?** A new AS with 1 relay would get maximum rarity. This is correct (it IS rare) but could be gamed. Consider requiring minimum relay uptime before scoring.
 
-4. **Should consensus weight be used instead of relay count?** Proposal B argues yes. The recommended approach is to start with relay count (Proposal A) and evolve to multi-factor (Proposal C) which includes both.
+4. **Should this become a 19th AROI leaderboard category?** Adding "AS Diversity Champions" would be consistent with the existing 18 categories.
 
 ---
 
-*This document proposes implementation strategies for AS diversity scoring in Allium. Feedback and discussion are welcome before implementation begins.*
+*This document proposes implementation strategies for AS diversity scoring in Allium. All proposals follow the existing threshold-based scoring pattern from `country_utils.py`. Feedback welcome before implementation begins.*
