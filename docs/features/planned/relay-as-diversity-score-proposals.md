@@ -362,6 +362,293 @@ For the very small (Flokinet, Terrahost) and very large (OVH, Hetzner) AS number
 
 ---
 
+## Before & After: Contact Page "Network Diversity" (#3)
+
+### Current Code — `intelligence_engine.py` `_layer14_contact_intelligence()`
+
+The rating is based **only on how many unique AS numbers** the operator uses. The sole exception: if an operator has exactly 1 AS and is the only contact on that AS, it gets "Great".
+
+```python
+unique_as_count = contact_data.get('unique_as_count', 0)
+
+if unique_as_count == 1:
+    # Special case: sole operator on their AS
+    if as_data and as_data.get('unique_contact_count', 0) == 1:
+        network_rating = "Great"
+        portfolio_diversity = f"{network_rating}, 1 AS with 1 operator"
+    else:
+        network_rating = "Poor"
+        portfolio_diversity = f"{network_rating}, {unique_as_count} network"
+elif unique_as_count <= 3:
+    network_rating = "Okay"
+    portfolio_diversity = f"{network_rating}, {unique_as_count} networks"
+else:
+    network_rating = "Great"
+    portfolio_diversity = f"{network_rating}, {unique_as_count} networks"
+```
+
+Rendered on the contact page via `_format_intelligence_rating()` as:
+
+```
+Network Diversity: Poor, 1 network           (red)
+Network Diversity: Okay, 2 networks          (yellow)
+Network Diversity: Great, 8 networks         (green)
+Network Diversity: Great, 1 AS with 1 operator (green)
+```
+
+### Problems with Current Approach
+
+| Operator | AS Numbers | Current Rating | Why It's Wrong |
+|---|---|---|---|
+| Operator A | 2 AS: OVH + Hetzner | **Okay**, 2 networks | Both are saturated. Should be Poor. |
+| Operator B | 2 AS: Flokinet + Terrahost | **Okay**, 2 networks | Both are rare. Should be Great. |
+| Operator C | 4 AS: OVH + Hetzner + OVH-US + DigitalOcean | **Great**, 4 networks | All are saturated mainstream providers. Shouldn't be Great. |
+| Operator D | 1 AS: AS36849 (sole operator) | **Great**, 1 AS with 1 operator | Correct! But only by special-case logic. |
+
+The rating treats all AS numbers as equal. It cannot distinguish between 2 rare AS and 2 saturated AS.
+
+### Proposed Code — With AS Rarity
+
+```python
+unique_as_count = contact_data.get('unique_as_count', 0)
+
+# Collect AS rarity scores for this operator's unique AS numbers
+operator_as_scores = []
+seen_as = set()
+for relay in contact_relays:
+    as_number = relay.get('as', '')
+    if as_number and as_number not in seen_as:
+        seen_as.add(as_number)
+        as_info = self._lookup_as_data(as_number)  # existing helper
+        if as_info:
+            score = as_info.get('as_rarity_score', 0)
+            tier = as_info.get('as_rarity_tier', 'common')
+            operator_as_scores.append((as_number, score, tier))
+
+total_as_rarity = sum(s for _, s, _ in operator_as_scores)
+rare_or_better = sum(1 for _, _, t in operator_as_scores if t in ('legendary', 'epic', 'rare'))
+avg_rarity = total_as_rarity / len(operator_as_scores) if operator_as_scores else 0
+
+# Rating based on average AS rarity score across operator's unique AS numbers
+if avg_rarity >= 30:
+    network_rating = "Great"
+elif avg_rarity >= 12:
+    network_rating = "Okay"
+else:
+    network_rating = "Poor"
+
+# Build description string
+if unique_as_count == 1 and operator_as_scores:
+    _, score, tier = operator_as_scores[0]
+    portfolio_diversity = f"{network_rating}, 1 network ({tier})"
+else:
+    portfolio_diversity = f"{network_rating}, {unique_as_count} networks ({rare_or_better} rare)"
+```
+
+### After — What the Contact Page Shows
+
+```
+Network Diversity: Poor, 2 networks (0 rare)              (red)    — OVH + Hetzner
+Network Diversity: Great, 2 networks (2 rare)             (green)  — Flokinet + Terrahost
+Network Diversity: Poor, 4 networks (0 rare)              (red)    — 4x mainstream providers
+Network Diversity: Great, 1 network (epic)                (green)  — AS36849 sole operator
+Network Diversity: Okay, 3 networks (1 rare)              (yellow) — 1 rare + 2 common
+```
+
+### Before vs After — Side by Side
+
+| Operator | AS Numbers | BEFORE | AFTER |
+|---|---|---|---|
+| 2 AS: OVH + Hetzner | Both score 0 (common) | **Okay**, 2 networks | **Poor**, 2 networks (0 rare) |
+| 2 AS: Flokinet + Terrahost | Both score 40+ (epic) | **Okay**, 2 networks | **Great**, 2 networks (2 rare) |
+| 4 AS: all mainstream | All score 0-5 (common) | **Great**, 4 networks | **Poor**, 4 networks (0 rare) |
+| 1 AS: AS36849 (sole op) | Score 35 (epic) | **Great**, 1 AS with 1 operator | **Great**, 1 network (epic) |
+| 3 AS: 1 Flokinet + 2 OVH | Mix of 50 + 0 + 0 | **Okay**, 3 networks | **Okay**, 3 networks (1 rare) |
+| 8 AS: all rare/epic | All score 30+ | **Great**, 8 networks | **Great**, 8 networks (8 rare) |
+
+The key improvement: **quality of AS choices now matters, not just quantity**. Two rare AS numbers beat four saturated ones.
+
+### Template Change — `contact.html`
+
+The template itself does not change. The `intelligence.network_diversity` value is already rendered via `{{ intelligence.network_diversity|safe }}`. Only the backend logic in `intelligence_engine.py` changes what string gets produced. The `_format_intelligence_rating()` color-coding function ("Poor"=red, "Okay"=yellow, "Great"=green) continues to work as-is.
+
+---
+
+## Before & After: AROI "Most Diverse" Leaderboard (#1)
+
+### Current Code — `country_utils.py` `calculate_diversity_score()`
+
+```python
+def calculate_diversity_score(countries, platforms=None, unique_as_count=None):
+    diversity_score = 0.0
+    diversity_score += len(countries) * 2.0        # countries x 2.0
+    diversity_score += len(platforms) * 1.5         # platforms x 1.5
+    diversity_score += unique_as_count * 1.0        # AS count x 1.0 (flat)
+    return diversity_score
+```
+
+### Current Code — `aroileaders.py` call site
+
+```python
+diversity_score = calculate_diversity_score(
+    countries=list(countries),
+    platforms=list(platforms),
+    unique_as_count=unique_as_count
+)
+```
+
+### Current Code — `aroileaders.py` tooltip formatting
+
+```python
+diversity_breakdown_tooltip = (
+    f"Diversity Score Calculation: {country_count} countries × 2.0 "
+    f"+ {platform_count} operating systems × 1.5 "
+    f"+ {as_count} unique ASNs × 1.0 = {metrics['diversity_score']}"
+)
+```
+
+### Current Code — `aroi_macros.html` template rendering
+
+Champion card:
+```html
+<span title="Diversity Score: Geographic (countries × 2.0) + Platform (OS types × 1.5)
+ + Network (unique ASNs × 1.0)">{{ champion.diversity_score }} diversity</span>
+```
+
+Table row — Key Metric column:
+```html
+<span title="{{ entry.diversity_breakdown_tooltip }}">{{ entry.diversity_score }}</span>
+```
+
+Table row — last column header + cell:
+```html
+<th title="Number of unique Autonomous Systems (ASNs) used for network diversity">Unique AS</th>
+...
+<td>{{ entry.unique_as_count }}</td>
+```
+
+### Problem: Example Rankings Under Current System
+
+Consider 3 hypothetical operators (each with 1 platform for simplicity):
+
+| Operator | Countries | Platforms | Unique AS | AS Quality | Current Score |
+|---|---|---|---|---|---|
+| Alpha | 5 | 1 | 8 | All OVH/Hetzner (common) | 5×2 + 1×1.5 + 8×1 = **19.5** |
+| Beta | 3 | 1 | 3 | All rare (Flokinet, Terrahost, etc.) | 3×2 + 1×1.5 + 3×1 = **10.5** |
+| Gamma | 4 | 2 | 2 | Both epic (AS36849, Flokinet) | 4×2 + 2×1.5 + 2×1 = **13.0** |
+
+**Alpha ranks #1** despite all 8 AS numbers being saturated mainstream providers. Beta, who deliberately chose 3 rare providers, ranks last. The flat `× 1.0` rewards quantity regardless of quality.
+
+### Proposed Code — `country_utils.py`
+
+```python
+def calculate_diversity_score(countries, platforms=None, unique_as_count=None,
+                              as_diversity_score=None):
+    """
+    Calculate standardized diversity score.
+    
+    Args:
+        countries (list): List of country codes
+        platforms (list, optional): List of platform types
+        unique_as_count (int, optional): Number of unique ASNs (fallback)
+        as_diversity_score (float, optional): Sum of AS rarity scores (preferred)
+    
+    Returns:
+        float: Weighted diversity score
+    """
+    diversity_score = 0.0
+    
+    # Geographic component (countries × 2.0)
+    if countries:
+        diversity_score += len(countries) * 2.0
+    
+    # Platform component (OS types × 1.5)
+    if platforms:
+        diversity_score += len(platforms) * 1.5
+    
+    # Network component: rarity-weighted if available, flat fallback
+    if as_diversity_score is not None:
+        diversity_score += as_diversity_score
+    elif unique_as_count:
+        diversity_score += unique_as_count * 1.0
+    
+    return diversity_score
+```
+
+### Proposed Code — `aroileaders.py` call site
+
+```python
+# Calculate per-operator AS diversity score (sum of rarity scores per unique AS)
+from .country_utils import calculate_operator_as_diversity_score
+
+as_diversity_score = calculate_operator_as_diversity_score(
+    operator_relays, sorted_as_data
+)
+
+diversity_score = calculate_diversity_score(
+    countries=list(countries),
+    platforms=list(platforms),
+    as_diversity_score=as_diversity_score
+)
+```
+
+`calculate_operator_as_diversity_score` iterates the operator's unique AS numbers, looks up each one's pre-computed `as_rarity_score` from `sorted['as']`, and sums them.
+
+### Proposed Code — `aroileaders.py` tooltip formatting
+
+```python
+diversity_breakdown_tooltip = (
+    f"Diversity Score Calculation: {country_count} countries × 2.0 "
+    f"+ {platform_count} operating systems × 1.5 "
+    f"+ {as_count} unique ASNs (rarity-weighted) = {metrics['diversity_score']:.1f}"
+)
+```
+
+### Proposed Code — `aroi_macros.html` template changes
+
+Champion card — update tooltip only:
+```html
+<span title="Diversity Score: Geographic (countries × 2.0) + Platform (OS types × 1.5)
+ + Network (unique ASNs, rarity-weighted)">{{ champion.diversity_score }} diversity</span>
+```
+
+Table row — Key Metric column: no change (still shows `{{ entry.diversity_score }}`).
+
+Table row — Unique AS column: keep it, optionally add AS diversity sub-score:
+```html
+<th title="Unique AS count and AS diversity score (rarity-weighted)">Unique AS</th>
+...
+<td title="AS diversity score: {{ entry.as_diversity_score }}">{{ entry.unique_as_count }}</td>
+```
+
+### After: Same 3 Operators Under New System
+
+Using rarity scores from the proposal (OVH=0, Hetzner=0, Flokinet=50, Terrahost=40, AS36849=35):
+
+| Operator | Countries | Platforms | Unique AS | AS Rarity Sum | New Score |
+|---|---|---|---|---|---|
+| Alpha | 5 | 1 | 8 (all common, score 0 each) | 0 | 5×2 + 1×1.5 + 0 = **11.5** |
+| Beta | 3 | 1 | 3 (all rare, ~45 avg) | 135 | 3×2 + 1×1.5 + 135 = **142.5** |
+| Gamma | 4 | 2 | 2 (both epic, ~42 avg) | 85 | 4×2 + 2×1.5 + 85 = **96.0** |
+
+**Beta now ranks #1** — rewarded for deliberately choosing rare providers. Alpha drops to last because 8 saturated AS numbers contribute nothing. Gamma is solidly in the middle with 2 high-quality AS choices.
+
+### Before vs After — Ranking Comparison
+
+| Rank | BEFORE (flat) | Score | AFTER (rarity-weighted) | Score |
+|---|---|---|---|---|
+| #1 | Alpha (8 AS, all common) | 19.5 | **Beta** (3 AS, all rare) | **142.5** |
+| #2 | Gamma (2 AS, both epic) | 13.0 | **Gamma** (2 AS, both epic) | **96.0** |
+| #3 | Beta (3 AS, all rare) | 10.5 | **Alpha** (8 AS, all common) | **11.5** |
+
+### Score Range Impact
+
+Under the current flat system, the AS component contributes 1-15 points typically (1-15 unique AS × 1.0). Under the new system, the AS component can contribute 0-300+ points for large operators with many rare AS. This shifts the diversity score to be **much more influenced by AS quality**, which is the desired behavior — AS diversity is the core of what this feature is about.
+
+The geographic (countries × 2.0) and platform (platforms × 1.5) components remain unchanged and still contribute their points. For an operator with 10 countries and 3 platforms, that's 20 + 4.5 = 24.5 fixed points. The AS rarity component becomes the dominant differentiator, which correctly reflects that AS choice is the primary diversity signal we want to reward.
+
+---
+
 ## User-Facing Locations Audit
 
 A full audit of every place in the codebase where diversity or AS data appears in user-facing output. These are the locations where the new AS rarity score could be surfaced or where existing diversity calculations would change.
