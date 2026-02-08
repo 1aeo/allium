@@ -470,19 +470,184 @@ Adding a country (+3.0) > adding an epic AS (+1.4) > adding a platform (+1.0). T
 
 ---
 
-## Implementation Summary
+## Execution Plan
 
-### Files Changed
+### Step 1: New functions in `country_utils.py`
 
-| File | Change |
+Add 5 new functions. No existing functions are modified yet in this step. Zero risk to existing behavior.
+
+| Function | Purpose |
 |---|---|
-| `country_utils.py` | Add `calculate_as_cw_factor`, `calculate_as_contact_factor`, `calculate_as_rarity_score`, `assign_as_rarity_tier`. Modify `calculate_diversity_score` to accept `as_diversity_score` param. |
-| `relays.py` | Pre-compute `as_rarity_score` and `as_rarity_tier` per AS during `_categorize()`. |
-| `aroileaders.py` | Compute operator-level AS diversity score. Pass to `calculate_diversity_score`. Update tooltip. |
-| `intelligence_engine.py` | Use AS rarity tiers in Network Diversity rating (3-tier: Great/Okay/Poor). |
-| `aroi_macros.html` | Update tooltip text for "Most Diverse" champion card and table. |
+| `calculate_as_cw_factor(as_cw_fraction)` | Returns 0-5 based on CW% thresholds |
+| `calculate_as_contact_factor(unique_contact_count)` | Returns 0-5 based on contact count thresholds |
+| `calculate_as_rarity_score(as_cw_fraction, unique_contact_count)` | Returns sum of the two factors (0-10) |
+| `assign_as_rarity_tier(rarity_score)` | Returns tier string from score |
+| `calculate_operator_as_diversity_score(operator_relays, sorted_as_data)` | Sums AS rarity scores across operator's unique AS numbers |
 
-### Open Questions
+Also add `calculate_operator_as_diversity_score` to the import list in `aroileaders.py` (line 17).
+
+**Note**: The proposal's pseudocode references `self._lookup_as_data(as_number)` in the intelligence engine section. This helper does not exist — the existing code does inline lookups with AS prefix normalization (lines 556-571 of `intelligence_engine.py`). The implementation should reuse that same inline pattern, not invent a new helper.
+
+### Step 2: Modify `calculate_diversity_score()` in `country_utils.py`
+
+Add optional `as_diversity_score` parameter. When provided, use normalized rarity-weighted formula. When not provided, fall back to existing flat `unique_as_count * 1.0`. This makes the change backward-compatible — all existing callers continue to work unchanged.
+
+Weight changes: country 2.0 -> **3.0**, platform 1.5 -> **1.0**, AS flat 1.0 -> **normalized rarity x 2.0**.
+
+**Callers to verify**: Only one caller exists — `aroileaders.py` line 646. No other code calls this function.
+
+### Step 3: Pre-compute AS rarity in `relays.py`
+
+In `_finalize_unique_as_counts()` (line 1960), after `unique_as_count` and `unique_contact_count` are finalized for each AS, compute and store `as_rarity_score` and `as_rarity_tier` on each `sorted['as'][as_number]` entry. This is a one-pass addition to an existing loop — no new loops needed.
+
+```python
+# After existing unique_contact_count finalization in _finalize_unique_as_counts():
+if category == "as":
+    cw = data.get("consensus_weight_fraction", 0)
+    contacts = data.get("unique_contact_count", 0)
+    data["as_rarity_score"] = calculate_as_rarity_score(cw, contacts)
+    data["as_rarity_tier"] = assign_as_rarity_tier(data["as_rarity_score"])
+```
+
+Requires importing the new functions at the top of `relays.py`.
+
+### Step 4: Update `aroileaders.py` — diversity score calculation
+
+At line 646, change the `calculate_diversity_score` call to pass the new `as_diversity_score` parameter:
+
+```python
+# NEW: Calculate operator-level AS diversity score
+as_diversity_score = calculate_operator_as_diversity_score(
+    operator_relays, relays_instance.json.get('sorted', {}).get('as', {})
+)
+
+diversity_score = calculate_diversity_score(
+    countries=list(countries),
+    platforms=list(platforms),
+    unique_as_count=unique_as_count,
+    as_diversity_score=as_diversity_score
+)
+```
+
+Also update the tooltip formatting at line 1107 to reflect new weights.
+
+Store `as_diversity_score` in the operator metrics dict (line 766 area) so it's available for template rendering.
+
+### Step 5: Update `intelligence_engine.py` — Network Diversity rating
+
+Replace the existing rating logic at lines 547-585 with the new 3-tier system. The new code iterates the operator's unique AS numbers, looks up each one's `as_rarity_tier` from `sorted['as']` (using the existing AS prefix normalization pattern at lines 556-571), counts how many are rare or better, then applies:
+
+- `rare_or_better > 0` -> Great
+- `unique_as_count >= 4` -> Okay
+- else -> Poor
+
+### Step 6: Update `aroi_macros.html` — tooltip text
+
+Update 4 tooltip strings that reference the old formula "countries x 2.0 + OS types x 1.5 + unique ASNs x 1.0" to the new formula "countries x 3.0 + AS (rarity-weighted) x 2.0 + platforms x 1.0". These appear at lines 32, 139, 203, and 256 of `aroi_macros.html`.
+
+---
+
+## Test Plan
+
+### New unit tests: `tests/unit/aroi/test_as_diversity.py`
+
+Tests for the new functions in `country_utils.py`. Follows the existing test pattern from `test_aroi_country_distribution.py` (unittest-based, in `tests/unit/aroi/`).
+
+| Test | What it verifies |
+|---|---|
+| `test_as_cw_factor_dominant` | CW >= 10% returns 0 (OVH, Hetzner) |
+| `test_as_cw_factor_major` | CW 5-10% returns 1 |
+| `test_as_cw_factor_significant` | CW 2-5% returns 2 (AS36849, M247) |
+| `test_as_cw_factor_noticeable` | CW 0.5-2% returns 3 (Hurricane Electric) |
+| `test_as_cw_factor_small` | CW 0.05-0.5% returns 4 (Terrahost) |
+| `test_as_cw_factor_negligible` | CW < 0.05% returns 5 (Flokinet) |
+| `test_as_cw_factor_zero` | CW = 0 returns 0 |
+| `test_as_contact_factor_sole_operator` | 1 contact returns 5 |
+| `test_as_contact_factor_few` | 2-5 contacts returns 4 |
+| `test_as_contact_factor_small_community` | 6-15 contacts returns 3 |
+| `test_as_contact_factor_popular` | 16-50 contacts returns 2 |
+| `test_as_contact_factor_very_popular` | 51-150 contacts returns 1 |
+| `test_as_contact_factor_mainstream` | 151+ contacts returns 0 |
+| `test_as_contact_factor_zero` | 0 contacts returns 0 |
+| `test_as_rarity_score_addition` | Score = CW factor + contact factor |
+| `test_as_rarity_score_max` | Max score is 10 (5+5) |
+| `test_as_rarity_score_ovh` | OVH (12% CW, 350 contacts) = 0 |
+| `test_as_rarity_score_as36849` | AS36849 (4% CW, 1 contact) = 7 |
+| `test_as_rarity_score_flokinet` | Flokinet (0.03% CW, 3 contacts) = 9 |
+| `test_tier_legendary` | Score 8-10 -> 'legendary' |
+| `test_tier_epic` | Score 6-7 -> 'epic' |
+| `test_tier_rare` | Score 4-5 -> 'rare' |
+| `test_tier_emerging` | Score 2-3 -> 'emerging' |
+| `test_tier_common` | Score 0-1 -> 'common' |
+| `test_operator_as_diversity_score_sums_unique` | Sum across unique AS, skip duplicates |
+| `test_operator_as_diversity_score_empty` | Empty relay list returns 0 |
+| `test_diversity_score_new_weights` | countries x 3.0 + normalized AS x 2.0 + platforms x 1.0 |
+| `test_diversity_score_fallback` | Without `as_diversity_score`, falls back to flat AS count |
+| `test_diversity_score_country_beats_as` | +1 country > +1 epic AS > +1 platform |
+
+### Existing test updates
+
+| File | Change needed |
+|---|---|
+| `tests/unit/relays/test_contact_display.py` | Update mock data: `'portfolio_diversity': 'Great, 4 networks'` may need updating if the string format changes. Check line 31: currently expects `'Great, 4 networks'`. The new format would be `'Great, 4 networks (X rare)'`. **Update the mock and assertion.** |
+| `tests/integration/test_contact_template.py` | Check if any assertions match exact diversity string formatting. Update if so. |
+| `tests/conftest.py` | The `diversity_score` fixture values (line 234) are set to arbitrary numbers. These don't need changing since they're not testing the calculation itself. |
+| `tests/helpers/fixtures.py` | Same as conftest — fixture values for `diversity_score` (line 178) are arbitrary. No change needed. |
+| `tests/integration/test_aroi_pagination.py` | Same — sets `diversity_score` as arbitrary fixture values (line 61). No change needed. |
+
+### Regression tests: `tests/regression/test_as_diversity_regression.py`
+
+| Test | What it verifies |
+|---|---|
+| `test_2_common_as_rates_poor` | 2 AS (OVH + Hetzner) -> Poor |
+| `test_4_common_as_rates_okay` | 4 mainstream AS -> Okay |
+| `test_2_rare_as_rates_great` | 2 rare AS -> Great |
+| `test_1_rare_plus_2_common_rates_great` | 1 rare + 2 common -> Great |
+| `test_sole_operator_epic_as_rates_great` | AS36849 sole operator -> Great |
+| `test_diversity_score_ranking_order` | Alpha (8 common) < Beta (3 rare) < Gamma (2 epic + more countries) |
+
+---
+
+## CI Impact
+
+### Existing CI passes
+
+All 581 existing tests pass (verified). The CI pipeline runs:
+
+1. **Code Quality** — flake8 syntax check. New code must pass `E9,F63,F7,F82` (critical errors). Style warnings are non-blocking.
+2. **Unit Tests** — `pytest tests/ -m "not slow"` across Python 3.8-3.11. New tests will be picked up automatically.
+3. **Template Validation** — Jinja2 syntax check on `allium/templates/*.html`. The tooltip text changes in `aroi_macros.html` must remain valid Jinja2.
+4. **Security Scan** — bandit + safety. No new security concerns expected (no new imports, no external calls).
+5. **Integration Tests** — AROI module import check. Unchanged.
+
+### New test file location
+
+```
+tests/unit/aroi/test_as_diversity.py         # New: AS rarity scoring unit tests
+tests/regression/test_as_diversity_regression.py  # New: before/after scenario tests
+```
+
+Both will be automatically collected by pytest (matching `test_*.py` pattern in `tests/`).
+
+### Flake8 compliance
+
+New code must follow existing style: max line length 127, no critical errors. The threshold functions are simple if/elif blocks that naturally comply.
+
+---
+
+## Risk Assessment
+
+| Risk | Likelihood | Impact | Mitigation |
+|---|---|---|---|
+| `calculate_diversity_score` signature change breaks callers | Low | Medium | Only 1 caller (`aroileaders.py`). New param is optional with fallback. |
+| Network Diversity string format change breaks tests | Medium | Low | Only `test_contact_display.py` mocks this string. Update the mock. |
+| AS rarity scores change leaderboard rankings | Certain | Medium | Expected behavior — the whole point. No data loss, just re-ranking. |
+| Performance impact of pre-computing AS rarity | Very Low | Very Low | One-pass addition to existing loop. 7 thresholds + 1 addition per AS. |
+| Edge case: AS with CW=0 but contacts>0 | Low | Low | `calculate_as_cw_factor` returns 0 for CW<=0. Contact factor still contributes. Score = 0 + contact_factor. Correct behavior. |
+
+---
+
+## Open Questions
 
 1. **How should newly appeared AS numbers be handled?** A brand-new AS with 1 relay would get maximum rarity. This is correct (it IS rare) but could be gamed. Consider requiring minimum relay uptime before scoring.
 
