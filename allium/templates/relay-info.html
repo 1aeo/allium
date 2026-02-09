@@ -444,6 +444,13 @@ Country: unknown
             Unknown
         {% endif -%}
     </dd>
+    
+    <dt>AS Rarity</dt>
+    <dd>
+        {% set tier = relay.get('as_rarity_tier', 'common') -%}
+        {% set score = relay.get('as_rarity_score', 0) -%}
+        <span style="color: {% if tier == 'legendary' %}#9b59b6{% elif tier == 'epic' %}#2e7d2e{% elif tier == 'rare' %}#007bff{% elif tier == 'emerging' %}#cc9900{% else %}#6c757d{% endif %}; font-weight: bold;" title="AS rarity measures how rare this hosting choice is for the Tor network. Higher scores indicate better diversity for the network. Score combines consensus weight concentration (0-3) and operator uniqueness (0-2).">{{ tier|capitalize }}</span> (score: {{ score }}/5, {{ relay.get('as_cw_label', 'n/a') }} consensus weight, {{ relay.get('as_operator_count', 0) }} operator{{ 's' if relay.get('as_operator_count', 0) != 1 else '' }})
+    </dd>
 </dl>
 </div>
 </div>

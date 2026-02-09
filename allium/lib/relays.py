@@ -453,6 +453,7 @@ class Relays:
         self._process_aroi_contacts()  # Process AROI display info first
         self._preprocess_template_data()  # Pre-compute template optimization data
         self._categorize()  # Then build categories with processed relay objects
+        self._propagate_as_rarity()  # Copy AS rarity scores to each relay for templates
         self._generate_aroi_leaderboards()  # Generate AROI operator leaderboards
         self._generate_smart_context()  # Generate intelligence analysis (needed for CW/BW ratios)
         self._calculate_network_health_metrics()  # Calculate network health dashboard metrics (regenerated after uptime data)
@@ -2029,6 +2030,23 @@ class Relays:
                         # Cleanup sets to save memory
                         data.pop("unique_contact_set", None)
                         data.pop("unique_aroi_set", None)
+
+    def _propagate_as_rarity(self):
+        """Propagate pre-computed AS rarity data from sorted['as'] to each relay dict."""
+        as_data = self.json.get('sorted', {}).get('as', {})
+        for relay in self.json['relays']:
+            as_entry = as_data.get(relay.get('as', ''), {})
+            relay['as_rarity_score'] = as_entry.get('as_rarity_score', 0)
+            relay['as_rarity_tier'] = as_entry.get('as_rarity_tier', 'common')
+            relay['as_operator_count'] = as_entry.get('unique_contact_count', 0)
+            # Pre-format CW% label for template display
+            cw = as_entry.get('consensus_weight_fraction', 0)
+            if cw >= 0.05:
+                relay['as_cw_label'] = f"{cw * 100:.2f}%"
+            elif cw > 0:
+                relay['as_cw_label'] = f"<0.05%"
+            else:
+                relay['as_cw_label'] = "0%"
 
     def _calculate_contact_derived_data(self):
         """
