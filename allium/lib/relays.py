@@ -1962,6 +1962,7 @@ class Relays:
         Convert unique AS sets to counts for families, contacts, countries, platforms, and networks and clean up memory.
         This should be called after all family, contact, country, platform, and network data has been processed.
         """
+        from .country_utils import calculate_as_rarity_score as _as_rarity_score, assign_as_rarity_tier as _as_rarity_tier
         for category in ["family", "contact", "country", "platform", "as"]:
             if category in self.json["sorted"]:
                 for key, data in self.json["sorted"][category].items():
@@ -2017,6 +2018,13 @@ class Relays:
                         data["unique_aroi_list"] = sorted(unique_aroi_domains)
                         data["unique_contact_count"] = len(unique_contact_hashes)
                         data["unique_contact_list"] = sorted(unique_contact_hashes)
+                        
+                        # Pre-compute AS rarity scores
+                        if category == "as":
+                            cw = data.get("consensus_weight_fraction", 0)
+                            contacts = data.get("unique_contact_count", 0)
+                            data["as_rarity_score"] = _as_rarity_score(cw, contacts)
+                            data["as_rarity_tier"] = _as_rarity_tier(data["as_rarity_score"])
                         
                         # Cleanup sets to save memory
                         data.pop("unique_contact_set", None)

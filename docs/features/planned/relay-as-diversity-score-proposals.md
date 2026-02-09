@@ -271,9 +271,17 @@ for relay in contact_relays:
     as_number = relay.get('as', '')
     if as_number and as_number not in seen_as:
         seen_as.add(as_number)
-        as_info = self._lookup_as_data(as_number)  # existing helper
-        if as_info:
-            tier = as_info.get('as_rarity_tier', 'common')
+        # Inline AS lookup with prefix normalization (same pattern as lines 556-571)
+        as_data = None
+        if as_number and 'as' in self.sorted_data:
+            as_data = self.sorted_data['as'].get(as_number)
+            if not as_data:
+                if as_number.startswith('AS'):
+                    as_data = self.sorted_data['as'].get(as_number[2:])
+                else:
+                    as_data = self.sorted_data['as'].get(f"AS{as_number}")
+        if as_data:
+            tier = as_data.get('as_rarity_tier', 'common')
             operator_as_tiers.append(tier)
 
 rare_or_better = sum(1 for t in operator_as_tiers
@@ -470,26 +478,6 @@ Adding a country (+3.0) > adding an epic AS (+1.4) > adding a platform (+1.0). T
 
 ---
 
-## Gap Analysis: Proposal vs Original Request
-
-The original feature request:
-
-> "I would like to suggest a modification on diversity score : award bonus points to relays that runs with a rare AS number. For exemple, more points will be assigned to a relay on an unknown AS number, and less points will be assigned for an OVH relay."
-
-| What was asked | Proposal covers it? | Where |
-|---|---|---|
-| **"modification on diversity score"** — change existing scoring | Yes | Step 2: `calculate_diversity_score()` new weights + rarity |
-| **"award bonus points to relays"** — per-relay scoring | Yes (Step 3 computes per-AS, Step 6 propagates to relays) | Step 6: relay-info.html shows tier badge |
-| **"more points for unknown AS"** — rare AS scores high | Yes | Flokinet = 9, Terrahost = 8, AS36849 = 7 |
-| **"less points for OVH relay"** — common AS scores low | Yes | OVH = 0, Hetzner = 0 |
-| **Per-relay visibility** — user sees the score on a relay page | Yes | Step 6: tier badge next to AS name on relay-info.html |
-| **Operator-level impact** — diversity leaderboard changes | Yes | Step 4: AROI "Most Diverse" leaderboard |
-| **Contact page impact** — operator intelligence improves | Yes | Step 5: Network Diversity 3-tier rating |
-
-The proposal fully addresses the original request. The scoring (Steps 1-3) implements "bonus points for rare AS." The operator-level changes (Steps 4-5) modify the existing diversity score. The relay-level display (Step 6) ensures individual relays visibly show their AS rarity tier. Step 7 updates the template tooltips.
-
----
-
 ## Execution Plan
 
 ### Step 1: New functions in `country_utils.py`
@@ -504,9 +492,54 @@ Add 5 new functions. No existing functions are modified yet in this step. Zero r
 | `assign_as_rarity_tier(rarity_score)` | Returns tier string from score |
 | `calculate_operator_as_diversity_score(operator_relays, sorted_as_data)` | Sums AS rarity scores across operator's unique AS numbers |
 
-Also add `calculate_operator_as_diversity_score` to the import list in `aroileaders.py` (line 17).
+The `calculate_operator_as_diversity_score` function body:
 
-**Note**: The proposal's pseudocode references `self._lookup_as_data(as_number)` in the intelligence engine section. This helper does not exist — the existing code does inline lookups with AS prefix normalization (lines 556-571 of `intelligence_engine.py`). The implementation should reuse that same inline pattern, not invent a new helper.
+```python
+def calculate_operator_as_diversity_score(operator_relays, sorted_as_data):
+    """
+    Calculate the sum of AS rarity scores across an operator's unique AS numbers.
+    
+    Args:
+        operator_relays (list): List of relay dicts for one operator
+        sorted_as_data (dict): The sorted['as'] dict with pre-computed as_rarity_score
+        
+    Returns:
+        float: Sum of AS rarity scores (0 if no data)
+    """
+    if not operator_relays or not sorted_as_data:
+        return 0.0
+    
+    seen_as = set()
+    total_score = 0.0
+    
+    for relay in operator_relays:
+        as_number = relay.get('as', '')
+        if not as_number or as_number in seen_as:
+            continue
+        seen_as.add(as_number)
+        
+        # Look up pre-computed AS rarity score (keys match relay['as'] format)
+        as_entry = sorted_as_data.get(as_number)
+        if as_entry:
+            total_score += as_entry.get('as_rarity_score', 0)
+    
+    return total_score
+```
+
+**Imports to add in `aroileaders.py`** (line 17, add to existing `from .country_utils import (...)` block):
+
+```python
+from .country_utils import (
+    count_non_eu_countries, 
+    count_frontier_countries_weighted_with_existing_data,
+    calculate_diversity_score, 
+    calculate_geographic_achievement,
+    calculate_operator_as_diversity_score,  # NEW
+    EU_POLITICAL_REGION
+)
+```
+
+**Note on AS prefix normalization**: The `sorted['as']` keys use the same raw format as `relay['as']` (e.g., `"AS16276"`) because both come from `_sort(relay, idx, "as", relay.get("as"), ...)` in `relays.py` line 1722. No prefix normalization is needed in `calculate_operator_as_diversity_score`. However, `intelligence_engine.py` uses defensive prefix normalization (lines 556-571) because it accesses `self.sorted_data['as']` through a different code path — the implementation in Step 5 should reuse that same defensive pattern.
 
 ### Step 2: Modify `calculate_diversity_score()` in `country_utils.py`
 
@@ -529,7 +562,12 @@ if category == "as":
     data["as_rarity_tier"] = assign_as_rarity_tier(data["as_rarity_score"])
 ```
 
-Requires importing the new functions at the top of `relays.py`.
+**Import to add in `relays.py`**: The existing pattern in `relays.py` uses **lazy imports** for `country_utils` (see lines 4741 and 4756). Follow the same pattern — import inside `_finalize_unique_as_counts()`:
+
+```python
+# Inside _finalize_unique_as_counts(), before the loop:
+from .country_utils import calculate_as_rarity_score, assign_as_rarity_tier
+```
 
 ### Step 4: Update `aroileaders.py` — diversity score calculation
 
@@ -551,51 +589,62 @@ diversity_score = calculate_diversity_score(
 
 Also update the tooltip formatting at line 1107 to reflect new weights.
 
-Store `as_diversity_score` in the operator metrics dict (line 766 area) so it's available for template rendering.
+Store `as_diversity_score` in the operator metrics dict (after line 766 where `diversity_score` is stored):
+
+```python
+'diversity_score': diversity_score,
+'as_diversity_score': as_diversity_score,  # NEW: for tooltip/template use
+```
 
 ### Step 5: Update `intelligence_engine.py` — Network Diversity rating
 
-Replace the existing rating logic at lines 547-585 with the new 3-tier system. The new code iterates the operator's unique AS numbers, looks up each one's `as_rarity_tier` from `sorted['as']` (using the existing AS prefix normalization pattern at lines 556-571), counts how many are rare or better, then applies:
+Replace the existing rating logic at lines 547-585 with the new 3-tier system (full proposed code shown in the "Before & After: Contact Page" section above). Key implementation details:
 
-- `rare_or_better > 0` -> Great
-- `unique_as_count >= 4` -> Okay
-- else -> Poor
+1. Replace the `if unique_as_count == 1: ... elif ... else:` block (lines 550-585) entirely
+2. New code iterates `contact_relays` (available at line 541) collecting each unique AS's `as_rarity_tier`
+3. AS lookup uses defensive prefix normalization (reuse existing pattern at lines 556-571)
+4. Rating hierarchy: `rare_or_better > 0` → Great, `unique_as_count >= 4` → Okay, else → Poor
+5. New description format: `"Great, 4 networks (2 rare)"` or `"Great, 1 network (epic)"`
+6. The `_format_intelligence_rating()` function is **not modified** — it continues to color-code based on the first word (Great/Okay/Poor)
 
-### Step 6: Propagate AS rarity to individual relays in `relays.py`
+### Step 6: Update template tooltip text and scoring documentation
 
-The original feature request asks for points "assigned to a relay" — users visiting a relay page should see whether its AS is rare or mainstream. After Step 3 computes `as_rarity_score` and `as_rarity_tier` per-AS on `sorted['as']`, propagate them to each relay during `_preprocess_template_data()` so they're available in relay-level templates:
+Update all references to the old formula across **3 template files** and **1 Python file**.
 
-```python
-# In _preprocess_template_data(), after AS data is available:
-relay_as = relay.get('as', '')
-if relay_as and 'as' in self.json.get('sorted', {}):
-    as_entry = self.json['sorted']['as'].get(relay_as, {})
-    relay['as_rarity_score'] = as_entry.get('as_rarity_score', 0)
-    relay['as_rarity_tier'] = as_entry.get('as_rarity_tier', 'common')
-```
+**`aroi_macros.html`** — 4 formula tooltip strings (update old weights to new weights):
 
-Then in `relay-info.html`, display the tier next to the AS name (lines 438-446):
+| Line | Context | Old Text |
+|---|---|---|
+| 32 | Champion ribbon tooltip | `"Diversity Score: Geographic (countries × 2.0) + Platform (OS types × 1.5) + Network (unique ASNs × 1.0)"` |
+| 139 | Top-10 performance column tooltip | Same formula string |
+| 256 | Score column tooltip (main ranking table) | Same formula string (inside fallback `else` of `diversity_breakdown_tooltip`) |
+| 844 | Score column tooltip (secondary ranking table) | Same formula string (inside fallback `else` of `diversity_breakdown_tooltip`) |
 
-```html
-<dt>AS Name</dt>
-<dd>
-    {% if relay['as_name'] -%}
-        {{ relay['as_name']|escape }}
-        {% if relay.get('as_rarity_tier') and relay['as_rarity_tier'] != 'common' %}
-            <span class="badge" title="AS Rarity: {{ relay['as_rarity_score'] }}/10">{{ relay['as_rarity_tier'] }}</span>
-        {% endif %}
-        {% if relay['as'] %}(<a href="https://bgp.tools/{{ relay['as']|escape }}">BGP.tools</a>){% endif %}
-    {% else -%}
-        Unknown
-    {% endif -%}
-</dd>
-```
+New text: `"Diversity Score: Geographic (countries × 3.0) + Network (AS rarity-weighted × 2.0) + Platform (platforms × 1.0)"`
 
-This directly addresses the request: "more points will be assigned to a relay on an unknown AS number, and less points will be assigned for an OVH relay." A user viewing any relay will see `[epic]` next to a Flokinet relay's AS name, and nothing next to an OVH relay's AS name (common tier is hidden).
+**`aroi-leaderboards.html`** — 4 locations:
 
-### Step 7: Update `aroi_macros.html` — tooltip text
+| Line | Context | What to update |
+|---|---|---|
+| 33 | Nav link tooltip | `"Diversity Score: Calculated by combining geographic spread (countries × 2.0), platform variety (operating systems × 1.5), and network distribution (unique ASNs × 1.0)..."` → update weights |
+| 230 | Section h3 title | `"combined geographic, platform, and network diversity scores"` → mention AS rarity weighting |
+| 281 | Category list description | `"Geographic, platform, and network diversity score"` → mention AS rarity |
+| 365-371 | **Scoring explanation section** — full formula documentation with weights and worked example. **Critical**: contains old weights (countries × 2.0, OS × 1.5, ASNs × 1.0) and an example calculation (5 × 2.0 + 3 × 1.5 + 8 × 1.0 = 22.5) that must all be updated |
 
-Update 4 tooltip strings that reference the old formula "countries x 2.0 + OS types x 1.5 + unique ASNs x 1.0" to the new formula "countries x 3.0 + AS (rarity-weighted) x 2.0 + platforms x 1.0". These appear at lines 32, 139, 203, and 256 of `aroi_macros.html`.
+**`contact.html`** — 1 location:
+
+| Line | Context | What to update |
+|---|---|---|
+| 120 | Network Diversity tooltip | `"1 network = Poor (single point of failure), 2-3 networks = Okay (limited redundancy), 4+ networks = Great (excellent resilience)"` → update to reflect new AS rarity-based rating: "Poor = few AS, all common providers; Okay = 4+ AS but all common; Great = at least one rare/epic/legendary AS" |
+
+**`aroileaders.py`** — 2 locations (Python-generated tooltip):
+
+| Line | Context | What to update |
+|---|---|---|
+| 1100 | Short diversity breakdown | `f"{country_count} Countries, {platform_count} OS, {as_count} AS"` — consider adding rarity info |
+| 1107 | Full tooltip with formula | `f"Diversity Score Calculation: {country_count} countries × 2.0 + {platform_count} operating systems × 1.5 + {as_count} unique ASNs × 1.0 = ..."` → update to new weights |
+
+**Total**: 11 locations across 4 files.
 
 ---
 
@@ -636,19 +685,17 @@ Tests for the new functions in `country_utils.py`. Follows the existing test pat
 | `test_diversity_score_new_weights` | countries x 3.0 + normalized AS x 2.0 + platforms x 1.0 |
 | `test_diversity_score_fallback` | Without `as_diversity_score`, falls back to flat AS count |
 | `test_diversity_score_country_beats_as` | +1 country > +1 epic AS > +1 platform |
-| `test_relay_gets_as_rarity_from_sorted` | Relay inherits `as_rarity_tier` from its AS in sorted data |
-| `test_relay_common_as_gets_common_tier` | Relay on OVH gets tier 'common' |
-| `test_relay_rare_as_gets_tier` | Relay on Flokinet gets tier 'legendary' |
 
 ### Existing test updates
 
 | File | Change needed |
 |---|---|
-| `tests/unit/relays/test_contact_display.py` | Update mock data: `'portfolio_diversity': 'Great, 4 networks'` may need updating if the string format changes. Check line 31: currently expects `'Great, 4 networks'`. The new format would be `'Great, 4 networks (X rare)'`. **Update the mock and assertion.** |
-| `tests/integration/test_contact_template.py` | Check if any assertions match exact diversity string formatting. Update if so. |
-| `tests/conftest.py` | The `diversity_score` fixture values (line 234) are set to arbitrary numbers. These don't need changing since they're not testing the calculation itself. |
-| `tests/helpers/fixtures.py` | Same as conftest — fixture values for `diversity_score` (line 178) are arbitrary. No change needed. |
-| `tests/integration/test_aroi_pagination.py` | Same — sets `diversity_score` as arbitrary fixture values (line 61). No change needed. |
+| `tests/unit/relays/test_contact_display.py` | **Update required.** Line 31: mock `'portfolio_diversity': 'Great, 4 networks'` → `'Great, 4 networks (2 rare)'`. Line 100-101: `_format_intelligence_rating('Great, 4 networks')` test — update input/expected for consistency (won't break since `_format_intelligence_rating` doesn't change, but should match new format). Lines 263-264: color assertions — will still pass (checks green color, not exact string). |
+| `tests/integration/test_contact_template.py` | **Update required.** Line 87: mock `'network_diversity': '...Great</span>, 4 networks'` → add `(2 rare)`. Line 274: assertion `'Great</span>, 4 networks'` must match the updated mock at line 87. |
+| `tests/regression/test_contact_data_integrity.py` | **Optional update.** Line 298: test data `('Great, 4 networks', '#2e7d2e')` tests `_format_intelligence_rating` — won't break (function unchanged). Update input string for consistency. |
+| `tests/conftest.py` | No change needed. `diversity_score` fixture values (line 234) are arbitrary numbers not testing the calculation. |
+| `tests/helpers/fixtures.py` | No change needed. Same — fixture `diversity_score` values (line 178) are arbitrary. |
+| `tests/integration/test_aroi_pagination.py` | No change needed. Same — `diversity_score` fixture values (line 61) are arbitrary. |
 
 ### Regression tests: `tests/regression/test_as_diversity_regression.py`
 
@@ -667,7 +714,7 @@ Tests for the new functions in `country_utils.py`. Follows the existing test pat
 
 ### Existing CI passes
 
-All 581 existing tests pass (verified). The CI pipeline runs:
+All 623 existing tests pass (verified). The CI pipeline runs:
 
 1. **Code Quality** — flake8 syntax check. New code must pass `E9,F63,F7,F82` (critical errors). Style warnings are non-blocking.
 2. **Unit Tests** — `pytest tests/ -m "not slow"` across Python 3.8-3.11. New tests will be picked up automatically.
@@ -695,7 +742,7 @@ New code must follow existing style: max line length 127, no critical errors. Th
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
 | `calculate_diversity_score` signature change breaks callers | Low | Medium | Only 1 caller (`aroileaders.py`). New param is optional with fallback. |
-| Network Diversity string format change breaks tests | Medium | Low | Only `test_contact_display.py` mocks this string. Update the mock. |
+| Network Diversity string format change breaks tests | Medium | Low | `test_contact_display.py` (line 31) and `test_contact_template.py` (line 87) both hardcode the old format. Update both. |
 | AS rarity scores change leaderboard rankings | Certain | Medium | Expected behavior — the whole point. No data loss, just re-ranking. |
 | Performance impact of pre-computing AS rarity | Very Low | Very Low | One-pass addition to existing loop. 7 thresholds + 1 addition per AS. |
 | Edge case: AS with CW=0 but contacts>0 | Low | Low | `calculate_as_cw_factor` returns 0 for CW<=0. Contact factor still contributes. Score = 0 + contact_factor. Correct behavior. |
