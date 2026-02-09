@@ -470,6 +470,26 @@ Adding a country (+3.0) > adding an epic AS (+1.4) > adding a platform (+1.0). T
 
 ---
 
+## Gap Analysis: Proposal vs Original Request
+
+The original feature request:
+
+> "I would like to suggest a modification on diversity score : award bonus points to relays that runs with a rare AS number. For exemple, more points will be assigned to a relay on an unknown AS number, and less points will be assigned for an OVH relay."
+
+| What was asked | Proposal covers it? | Where |
+|---|---|---|
+| **"modification on diversity score"** — change existing scoring | Yes | Step 2: `calculate_diversity_score()` new weights + rarity |
+| **"award bonus points to relays"** — per-relay scoring | Yes (Step 3 computes per-AS, Step 6 propagates to relays) | Step 6: relay-info.html shows tier badge |
+| **"more points for unknown AS"** — rare AS scores high | Yes | Flokinet = 9, Terrahost = 8, AS36849 = 7 |
+| **"less points for OVH relay"** — common AS scores low | Yes | OVH = 0, Hetzner = 0 |
+| **Per-relay visibility** — user sees the score on a relay page | Yes | Step 6: tier badge next to AS name on relay-info.html |
+| **Operator-level impact** — diversity leaderboard changes | Yes | Step 4: AROI "Most Diverse" leaderboard |
+| **Contact page impact** — operator intelligence improves | Yes | Step 5: Network Diversity 3-tier rating |
+
+The proposal fully addresses the original request. The scoring (Steps 1-3) implements "bonus points for rare AS." The operator-level changes (Steps 4-5) modify the existing diversity score. The relay-level display (Step 6) ensures individual relays visibly show their AS rarity tier. Step 7 updates the template tooltips.
+
+---
+
 ## Execution Plan
 
 ### Step 1: New functions in `country_utils.py`
@@ -541,7 +561,39 @@ Replace the existing rating logic at lines 547-585 with the new 3-tier system. T
 - `unique_as_count >= 4` -> Okay
 - else -> Poor
 
-### Step 6: Update `aroi_macros.html` — tooltip text
+### Step 6: Propagate AS rarity to individual relays in `relays.py`
+
+The original feature request asks for points "assigned to a relay" — users visiting a relay page should see whether its AS is rare or mainstream. After Step 3 computes `as_rarity_score` and `as_rarity_tier` per-AS on `sorted['as']`, propagate them to each relay during `_preprocess_template_data()` so they're available in relay-level templates:
+
+```python
+# In _preprocess_template_data(), after AS data is available:
+relay_as = relay.get('as', '')
+if relay_as and 'as' in self.json.get('sorted', {}):
+    as_entry = self.json['sorted']['as'].get(relay_as, {})
+    relay['as_rarity_score'] = as_entry.get('as_rarity_score', 0)
+    relay['as_rarity_tier'] = as_entry.get('as_rarity_tier', 'common')
+```
+
+Then in `relay-info.html`, display the tier next to the AS name (lines 438-446):
+
+```html
+<dt>AS Name</dt>
+<dd>
+    {% if relay['as_name'] -%}
+        {{ relay['as_name']|escape }}
+        {% if relay.get('as_rarity_tier') and relay['as_rarity_tier'] != 'common' %}
+            <span class="badge" title="AS Rarity: {{ relay['as_rarity_score'] }}/10">{{ relay['as_rarity_tier'] }}</span>
+        {% endif %}
+        {% if relay['as'] %}(<a href="https://bgp.tools/{{ relay['as']|escape }}">BGP.tools</a>){% endif %}
+    {% else -%}
+        Unknown
+    {% endif -%}
+</dd>
+```
+
+This directly addresses the request: "more points will be assigned to a relay on an unknown AS number, and less points will be assigned for an OVH relay." A user viewing any relay will see `[epic]` next to a Flokinet relay's AS name, and nothing next to an OVH relay's AS name (common tier is hidden).
+
+### Step 7: Update `aroi_macros.html` — tooltip text
 
 Update 4 tooltip strings that reference the old formula "countries x 2.0 + OS types x 1.5 + unique ASNs x 1.0" to the new formula "countries x 3.0 + AS (rarity-weighted) x 2.0 + platforms x 1.0". These appear at lines 32, 139, 203, and 256 of `aroi_macros.html`.
 
@@ -584,6 +636,9 @@ Tests for the new functions in `country_utils.py`. Follows the existing test pat
 | `test_diversity_score_new_weights` | countries x 3.0 + normalized AS x 2.0 + platforms x 1.0 |
 | `test_diversity_score_fallback` | Without `as_diversity_score`, falls back to flat AS count |
 | `test_diversity_score_country_beats_as` | +1 country > +1 epic AS > +1 platform |
+| `test_relay_gets_as_rarity_from_sorted` | Relay inherits `as_rarity_tier` from its AS in sorted data |
+| `test_relay_common_as_gets_common_tier` | Relay on OVH gets tier 'common' |
+| `test_relay_rare_as_gets_tier` | Relay on Flokinet gets tier 'legendary' |
 
 ### Existing test updates
 
