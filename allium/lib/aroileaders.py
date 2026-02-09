@@ -361,6 +361,7 @@ def _calculate_aroi_leaderboards(relays_instance):
     # This eliminates O(n²) performance where rare countries were calculated 3,123 times
     # Now calculated once and reused, improving performance by ~95%
     country_data = relays_instance.json.get('sorted', {}).get('country', {})
+    as_sorted_data = relays_instance.json.get('sorted', {}).get('as', {})
     from .country_utils import get_rare_countries_weighted_with_existing_data
     all_rare_countries = get_rare_countries_weighted_with_existing_data(country_data, len(all_relays))
     valid_rare_countries = {country for country in all_rare_countries if len(country) == 2 and country.isalpha()}
@@ -645,7 +646,7 @@ def _calculate_aroi_leaderboards(relays_instance):
         
         # Diversity score (using centralized calculation with AS rarity)
         as_diversity_score = calculate_operator_as_diversity_score(
-            operator_relays, relays_instance.json.get('sorted', {}).get('as', {})
+            operator_relays, as_sorted_data
         )
         diversity_score = calculate_diversity_score(
             countries=list(countries), 

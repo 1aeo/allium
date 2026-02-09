@@ -2036,19 +2036,14 @@ class Relays:
     def _propagate_as_rarity(self):
         """Propagate pre-computed AS rarity data from sorted['as'] to each relay dict."""
         as_data = self.json.get('sorted', {}).get('as', {})
+        _empty = {}
         for relay in self.json['relays']:
-            as_entry = as_data.get(relay.get('as', ''), {})
-            relay['as_rarity_score'] = as_entry.get('as_rarity_score', 0)
-            relay['as_rarity_tier'] = as_entry.get('as_rarity_tier', 'common')
-            relay['as_operator_count'] = as_entry.get('unique_contact_count', 0)
-            # Pre-format CW% label for template display
-            cw = as_entry.get('consensus_weight_fraction', 0)
-            if cw >= 0.0005:
-                relay['as_cw_label'] = f"{cw * 100:.2f}%"
-            elif cw > 0:
-                relay['as_cw_label'] = "<0.05%"
-            else:
-                relay['as_cw_label'] = "0%"
+            e = as_data.get(relay.get('as', ''), _empty)
+            relay['as_rarity_score'] = e.get('as_rarity_score', 0)
+            relay['as_rarity_tier'] = e.get('as_rarity_tier', 'common')
+            relay['as_operator_count'] = e.get('unique_contact_count', 0)
+            cw = e.get('consensus_weight_fraction', 0)
+            relay['as_cw_label'] = f"{cw * 100:.2f}%" if cw >= 0.0005 else ("<0.05%" if cw > 0 else "0%")
 
     def _calculate_contact_derived_data(self):
         """
