@@ -271,7 +271,33 @@ def calculate_diversity_score(countries, platforms=None, unique_as_count=None,
 
 # === AS DIVERSITY SCORING ===
 
-def calculate_as_rarity_score(as_cw_fraction, unique_contact_count):
+def compute_as_cw_thresholds(sorted_as_data):
+    """
+    Compute dynamic CW percentile thresholds from the AS data.
+    
+    Returns thresholds matching: top 0.5% = dominant, top 2% = major, top 15% = moderate.
+    
+    Args:
+        sorted_as_data (dict): The sorted['as'] dict with consensus_weight_fraction
+    
+    Returns:
+        tuple: (dominant_threshold, major_threshold, moderate_threshold) as fractions
+    """
+    nonzero_cw = sorted(
+        [d.get('consensus_weight_fraction', 0) for d in sorted_as_data.values() if d.get('consensus_weight_fraction', 0) > 0],
+        reverse=True
+    )
+    if not nonzero_cw:
+        return (0.05, 0.005, 0.0005)  # fallback to hard-coded
+    n = len(nonzero_cw)
+    return (
+        nonzero_cw[min(int(n * 0.005), n - 1)],   # top 0.5% = dominant
+        nonzero_cw[min(int(n * 0.02), n - 1)],    # top 2% = major
+        nonzero_cw[min(int(n * 0.15), n - 1)],    # top 15% = moderate
+    )
+
+
+def calculate_as_rarity_score(as_cw_fraction, unique_contact_count, cw_thresholds=None):
     """
     AS rarity score: CW base (0-3) + contact bonus (0-2) = 0-5.
     
@@ -281,17 +307,22 @@ def calculate_as_rarity_score(as_cw_fraction, unique_contact_count):
     Args:
         as_cw_fraction (float): Consensus weight fraction (0.0 to 1.0)
         unique_contact_count (int): Number of distinct contacts in this AS
+        cw_thresholds (tuple, optional): (dominant, major, moderate) CW thresholds
+            from compute_as_cw_thresholds(). Falls back to hard-coded if None.
     
     Returns:
         int: 0-5 rarity score
     """
-    cw_pct = as_cw_fraction * 100
+    if cw_thresholds:
+        t_dominant, t_major, t_moderate = cw_thresholds
+    else:
+        t_dominant, t_major, t_moderate = (0.05, 0.005, 0.0005)
     # CW base (0-3)
-    if cw_pct >= 5.0:     base = 0   # Dominant (≥5% of network CW)
-    elif cw_pct >= 0.5:   base = 1   # Major (0.5% – 5%)
-    elif cw_pct >= 0.05:  base = 2   # Moderate (0.05% – 0.5%)
-    elif cw_pct > 0:      base = 3   # Small (<0.05%)
-    else:                 base = 0   # Unmeasured
+    if as_cw_fraction >= t_dominant:    base = 0   # Dominant (top 0.5%)
+    elif as_cw_fraction >= t_major:     base = 1   # Major (top 2%)
+    elif as_cw_fraction >= t_moderate:  base = 2   # Moderate (top 15%)
+    elif as_cw_fraction > 0:            base = 3   # Small
+    else:                               base = 0   # Unmeasured
     # Contact bonus (0-2)
     if unique_contact_count <= 0:    bonus = 0   # Unknown
     elif unique_contact_count == 1:  bonus = 2   # Sole operator

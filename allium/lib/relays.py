@@ -1963,7 +1963,9 @@ class Relays:
         Convert unique AS sets to counts for families, contacts, countries, platforms, and networks and clean up memory.
         This should be called after all family, contact, country, platform, and network data has been processed.
         """
-        from .country_utils import calculate_as_rarity_score as _as_rarity_score, assign_as_rarity_tier as _as_rarity_tier
+        from .country_utils import calculate_as_rarity_score as _as_rarity_score, assign_as_rarity_tier as _as_rarity_tier, compute_as_cw_thresholds
+        # Compute dynamic CW thresholds once from the AS data
+        _cw_thresholds = compute_as_cw_thresholds(self.json.get('sorted', {}).get('as', {}))
         for category in ["family", "contact", "country", "platform", "as"]:
             if category in self.json["sorted"]:
                 for key, data in self.json["sorted"][category].items():
@@ -2020,11 +2022,11 @@ class Relays:
                         data["unique_contact_count"] = len(unique_contact_hashes)
                         data["unique_contact_list"] = sorted(unique_contact_hashes)
                         
-                        # Pre-compute AS rarity scores
+                        # Pre-compute AS rarity scores using dynamic thresholds
                         if category == "as":
                             cw = data.get("consensus_weight_fraction", 0)
                             contacts = data.get("unique_contact_count", 0)
-                            data["as_rarity_score"] = _as_rarity_score(cw, contacts)
+                            data["as_rarity_score"] = _as_rarity_score(cw, contacts, _cw_thresholds)
                             data["as_rarity_tier"] = _as_rarity_tier(data["as_rarity_score"])
                         
                         # Cleanup sets to save memory
@@ -2041,10 +2043,10 @@ class Relays:
             relay['as_operator_count'] = as_entry.get('unique_contact_count', 0)
             # Pre-format CW% label for template display
             cw = as_entry.get('consensus_weight_fraction', 0)
-            if cw >= 0.05:
+            if cw >= 0.0005:
                 relay['as_cw_label'] = f"{cw * 100:.2f}%"
             elif cw > 0:
-                relay['as_cw_label'] = f"<0.05%"
+                relay['as_cw_label'] = "<0.05%"
             else:
                 relay['as_cw_label'] = "0%"
 
