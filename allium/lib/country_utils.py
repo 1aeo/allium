@@ -233,33 +233,119 @@ def calculate_geographic_achievement(countries):
     # Fallback
     return "Regional Specialist"
 
-def calculate_diversity_score(countries, platforms=None, unique_as_count=None):
+def calculate_diversity_score(countries, platforms=None, unique_as_count=None,
+                              as_diversity_score=None):
     """
     Calculate standardized diversity score.
+    
+    Weights: Country (3.0) > AS rarity (2.0 normalized) > Platform (1.0)
     
     Args:
         countries (list): List of country codes
         platforms (list, optional): List of platform types
-        unique_as_count (int, optional): Number of unique ASNs
-        
+        unique_as_count (int, optional): Number of unique ASNs (used for AS calc + fallback)
+        as_diversity_score (float, optional): Sum of AS rarity scores across unique AS
+    
     Returns:
         float: Weighted diversity score
     """
     diversity_score = 0.0
     
-    # Geographic component (countries × 2.0)
+    # Geographic component — highest weight (countries x 3.0)
     if countries:
-        diversity_score += len(countries) * 2.0
+        diversity_score += len(countries) * 3.0
     
-    # Platform component (OS types × 1.5) 
-    if platforms:
-        diversity_score += len(platforms) * 1.5
-    
-    # Network component (unique ASNs × 1.0)
-    if unique_as_count:
+    # Network component — middle weight (AS rarity / 2.5)
+    # Equivalent to: unique_as_count * (avg_rarity / 5) * 2.0 — the count cancels out
+    if as_diversity_score is not None and unique_as_count and unique_as_count > 0:
+        diversity_score += as_diversity_score / 2.5
+    elif unique_as_count:
         diversity_score += unique_as_count * 1.0
     
+    # Platform component — lowest weight (platforms x 1.0)
+    if platforms:
+        diversity_score += len(platforms) * 1.0
+    
     return diversity_score
+
+
+# === AS DIVERSITY SCORING ===
+
+def calculate_as_rarity_score(as_cw_fraction, unique_contact_count):
+    """
+    AS rarity score: CW base (0-3) + contact bonus (0-2) = 0-5.
+    
+    CW base: how much of the network's authority does this AS hold?
+    Contact bonus: how unique is the hosting choice?
+    
+    Args:
+        as_cw_fraction (float): Consensus weight fraction (0.0 to 1.0)
+        unique_contact_count (int): Number of distinct contacts in this AS
+    
+    Returns:
+        int: 0-5 rarity score
+    """
+    cw_pct = as_cw_fraction * 100
+    # CW base (0-3)
+    if cw_pct >= 5.0:     base = 0   # Dominant (≥5% of network CW)
+    elif cw_pct >= 0.5:   base = 1   # Major (0.5% – 5%)
+    elif cw_pct >= 0.05:  base = 2   # Moderate (0.05% – 0.5%)
+    elif cw_pct > 0:      base = 3   # Small (<0.05%)
+    else:                 base = 0   # Unmeasured
+    # Contact bonus (0-2)
+    if unique_contact_count <= 0:    bonus = 0   # Unknown
+    elif unique_contact_count == 1:  bonus = 2   # Sole operator
+    elif unique_contact_count <= 10: bonus = 1   # Few operators
+    else:                            bonus = 0   # Popular (10+)
+    return base + bonus
+
+
+def assign_as_rarity_tier(rarity_score):
+    """
+    Tier assignment on 0-5 scale.
+    
+    Args:
+        rarity_score (int): AS rarity score (0-5)
+    
+    Returns:
+        str: Tier name ('legendary', 'epic', 'rare', 'emerging', 'common')
+    """
+    if rarity_score >= 4:    return 'legendary'
+    elif rarity_score >= 3:  return 'epic'
+    elif rarity_score >= 2:  return 'rare'
+    elif rarity_score >= 1:  return 'emerging'
+    else:                    return 'common'
+
+
+def calculate_operator_as_diversity_score(operator_relays, sorted_as_data):
+    """
+    Calculate the sum of AS rarity scores across an operator's unique AS numbers.
+    
+    Args:
+        operator_relays (list): List of relay dicts for one operator
+        sorted_as_data (dict): The sorted['as'] dict with pre-computed as_rarity_score
+        
+    Returns:
+        float: Sum of AS rarity scores (0 if no data)
+    """
+    if not operator_relays or not sorted_as_data:
+        return 0.0
+    
+    seen_as = set()
+    total_score = 0.0
+    
+    for relay in operator_relays:
+        as_number = relay.get('as', '')
+        if not as_number or as_number in seen_as:
+            continue
+        seen_as.add(as_number)
+        
+        # Look up pre-computed AS rarity score (keys match relay['as'] format)
+        as_entry = sorted_as_data.get(as_number)
+        if as_entry:
+            total_score += as_entry.get('as_rarity_score', 0)
+    
+    return total_score
 
 def calculate_relay_count_factor(country_relay_count):
     """

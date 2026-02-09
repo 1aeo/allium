@@ -293,9 +293,9 @@ class TestContactDataIntegrityRegression(unittest.TestCase):
     def test_intelligence_rating_color_coding_consistency(self):
         """Test that intelligence rating color coding remains consistent."""
         test_cases = [
-            ('Poor, 1 network', '#c82333'),      # Red for Poor
-            ('Okay, 2 networks', '#cc9900'),     # Orange for Okay  
-            ('Great, 4 networks', '#2e7d2e'),    # Green for Great
+            ('Poor, 1 network (0 rare)', '#c82333'),      # Red for Poor
+            ('Okay, 2 networks (0 rare)', '#cc9900'),    # Orange for Okay  
+            ('Great, 4 networks (2 rare)', '#2e7d2e'),   # Green for Great
         ]
         
         for rating_text, expected_color in test_cases:

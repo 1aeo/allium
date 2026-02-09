@@ -20,6 +20,17 @@ class IntelligenceEngine:
         # Pre-calculate network-wide performance data once (major optimization)
         self._precompute_performance_data()
         
+    def _lookup_as_data(self, as_number):
+        """Look up AS data with prefix normalization (handles 'AS16276' vs '16276')."""
+        if not as_number or 'as' not in self.sorted_data:
+            return None
+        as_map = self.sorted_data['as']
+        data = as_map.get(as_number)
+        if not data:
+            alt = as_number[2:] if as_number.startswith('AS') else f"AS{as_number}"
+            data = as_map.get(alt)
+        return data
+
     def _precompute_performance_data(self):
         """Pre-calculate network performance data to eliminate duplication"""
         # Calculate network totals once (eliminates 5 loops per contact)
@@ -543,46 +554,38 @@ class IntelligenceEngine:
                 
                 # PHASE 1 FEATURES (moved from template to Python)
                 
-                # 1. Network Diversity (with consistent rating)
+                # 1. Network Diversity (with AS rarity-based rating)
                 unique_as_count = contact_data.get('unique_as_count', 0)
                 
-                # Determine network diversity rating
-                if unique_as_count == 1:
-                                        # Special case: Check if this contact is the only operator in their AS
-                    first_relay_as = contact_relays[0].get('as') if contact_relays else None
-                    
-
-                    
-                    # Robust AS format handling: try multiple format variations
-                    as_data = None
-                    if first_relay_as and 'as' in self.sorted_data:
-                        # Try original format first
-                        as_data = self.sorted_data['as'].get(first_relay_as)
-                        
-                        # If not found, try alternative formats
-                        if not as_data:
-                            # If relay AS has "AS" prefix, try without it
-                            if first_relay_as.startswith('AS'):
-                                normalized_as = first_relay_as[2:]  # Remove "AS" prefix
-                                as_data = self.sorted_data['as'].get(normalized_as)
-                            # If relay AS doesn't have "AS" prefix, try with it
-                            else:
-                                prefixed_as = f"AS{first_relay_as}"
-                                as_data = self.sorted_data['as'].get(prefixed_as)
-                    
-                    # Check if this contact is the only operator in their AS
-                    if as_data and as_data.get('unique_contact_count', 0) == 1:
-                        network_rating = "Great"
-                        portfolio_diversity = f"{network_rating}, 1 AS with 1 operator"
-                    else:
-                        network_rating = "Poor"
-                        portfolio_diversity = f"{network_rating}, {unique_as_count} network{'s' if unique_as_count != 1 else ''}"
-                elif unique_as_count <= 3:
-                    network_rating = "Okay"
-                    portfolio_diversity = f"{network_rating}, {unique_as_count} network{'s' if unique_as_count != 1 else ''}"
-                else:
+                # Collect AS rarity tiers for this operator's unique AS numbers
+                operator_as_tiers = []
+                seen_as = set()
+                for relay in contact_relays:
+                    as_number = relay.get('as', '')
+                    if as_number and as_number not in seen_as:
+                        seen_as.add(as_number)
+                        as_data = self._lookup_as_data(as_number)
+                        if as_data:
+                            operator_as_tiers.append(as_data.get('as_rarity_tier', 'common'))
+                
+                rare_or_better = sum(t in ('legendary', 'epic', 'rare') for t in operator_as_tiers)
+                
+                # Rating hierarchy:
+                #   Great  — has at least one rare/epic/legendary AS (quality choice)
+                #   Okay   — 2+ AS but all common/emerging (quantity spread)
+                #   Poor   — single AS, common (concentrated on mainstream provider)
+                if rare_or_better > 0:
                     network_rating = "Great"
-                    portfolio_diversity = f"{network_rating}, {unique_as_count} network{'s' if unique_as_count != 1 else ''}"
+                elif unique_as_count >= 2:
+                    network_rating = "Okay"
+                else:
+                    network_rating = "Poor"
+                
+                # Build description string
+                if unique_as_count == 1 and operator_as_tiers:
+                    portfolio_diversity = f"{network_rating}, 1 network ({operator_as_tiers[0]})"
+                else:
+                    portfolio_diversity = f"{network_rating}, {unique_as_count} network{'s' if unique_as_count != 1 else ''} ({rare_or_better} rare)"
                 
                 # 2. Measurement Status
                 measured_count = contact_data.get('measured_count', 0)

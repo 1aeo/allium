@@ -117,7 +117,7 @@
             
             <ul style="list-style-type: disc; padding-left: 20px; margin-bottom: 0;">
                 {% if intelligence.network_diversity %}
-                <li><strong><span title="Network diversity measures infrastructure distribution across different autonomous systems (AS). Ratings: 1 network = Poor (single point of failure), 2-3 networks = Okay (limited redundancy), 4+ networks = Great (excellent resilience). Higher diversity reduces single points of failure and improves network resilience.">Network Diversity</span>:</strong> {{ intelligence.network_diversity|safe }}</li>
+                <li><strong><span title="Network diversity measures infrastructure distribution across different autonomous systems (AS), weighted by AS rarity. Ratings: Poor = single AS, common provider; Okay = 2+ AS but all common/emerging; Great = at least one rare/epic/legendary AS. Rare AS hosting choices (low consensus weight, few operators) score higher than mainstream providers.">Network Diversity</span>:</strong> {{ intelligence.network_diversity|safe }}</li>
                 {% endif %}
                 
                 {% if intelligence.geographic_diversity %}

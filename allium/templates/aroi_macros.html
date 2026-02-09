@@ -29,7 +29,7 @@
                         {% elif category_key == "guard_operators" %}
                             <span title="Active guard relays serving as critical network entry points">{{ champion.guard_count }} guard relays</span>
                         {% elif category_key == "most_diverse" %}
-                            <span title="Diversity Score: Geographic (countries × 2.0) + Platform (OS types × 1.5) + Network (unique ASNs × 1.0)">{{ champion.diversity_score }} diversity</span>
+                            <span title="Diversity Score: Geographic (countries × 3.0) + Network (AS rarity-weighted × 2.0) + Platform (platforms × 1.0)">{{ champion.diversity_score }} diversity</span>
                         {% elif category_key == "platform_diversity" %}
                             <span title="Relays promoting OS diversity beyond Linux dominance">{{ champion.non_linux_count }} non-Linux relays</span>
                         {% elif category_key == "non_eu_leaders" %}
@@ -136,7 +136,7 @@
                             {% elif performance_type == "guard_operators" %}
                                 <span title="Number of active guard relays serving as critical network entry points">{{ entry.guard_count }} active guard relays</span>
                             {% elif performance_type == "most_diverse" %}
-                                <span title="Geographic distribution and diversity score calculation">{{ entry.country_count }} countries, <span title="Diversity Score: Geographic (countries × 2.0) + Platform (OS types × 1.5) + Network (unique ASNs × 1.0)">{{ entry.diversity_score }} diversity</span></span>
+                                <span title="Geographic distribution and diversity score calculation">{{ entry.country_count }} countries, <span title="Diversity Score: Geographic (countries × 3.0) + Network (AS rarity-weighted × 2.0) + Platform (platforms × 1.0)">{{ entry.diversity_score }} diversity</span></span>
                             {% elif performance_type == "platform_diversity" %}
                                 <span title="Non-Linux relays promoting OS diversity and total bandwidth capacity">{{ entry.non_linux_count }} non-Linux relays, {{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</span>
                             {% elif performance_type == "non_eu_leaders" %}
@@ -253,7 +253,7 @@
                         {% endif %}
                         <td>
                             <strong>
-                            {% if category_key == 'most_diverse' %}<span title="{{ entry.diversity_breakdown_tooltip if entry.diversity_breakdown_tooltip else 'Diversity Score: Geographic (countries × 2.0) + Platform (OS types × 1.5) + Network (unique ASNs × 1.0)' }}">{{ entry.diversity_score }}</span>
+                            {% if category_key == 'most_diverse' %}<span title="{{ entry.diversity_breakdown_tooltip if entry.diversity_breakdown_tooltip else 'Diversity Score: Geographic (countries × 3.0) + Network (AS rarity-weighted × 2.0) + Platform (platforms × 1.0)' }}">{{ entry.diversity_score }}</span>
                             {% elif category_key == 'platform_diversity' %}<span title="Relays promoting operating system diversity beyond Linux dominance">{{ entry.non_linux_count }}</span>
                             {% elif category_key == 'non_eu_leaders' %}<span title="Relays expanding Tor geographic reach beyond European Union concentration">{{ entry.non_eu_count_with_percentage }}</span>
                             {% elif category_key == 'frontier_builders' %}<span title="Relays in countries with strategic importance but underrepresented in Tor network">{{ entry.relays_in_rare_countries }}</span>
@@ -841,7 +841,7 @@
                     {% endif %}
                     <td>
                         <strong>
-                        {% if category_key == 'most_diverse' %}<span title="{{ entry.diversity_breakdown_tooltip if entry.diversity_breakdown_tooltip else 'Diversity Score: Geographic (countries × 2.0) + Platform (OS types × 1.5) + Network (unique ASNs × 1.0)' }}">{{ entry.diversity_score }}</span>
+                        {% if category_key == 'most_diverse' %}<span title="{{ entry.diversity_breakdown_tooltip if entry.diversity_breakdown_tooltip else 'Diversity Score: Geographic (countries × 3.0) + Network (AS rarity-weighted × 2.0) + Platform (platforms × 1.0)' }}">{{ entry.diversity_score }}</span>
                         {% elif category_key == 'platform_diversity' %}<span title="Relays promoting operating system diversity beyond Linux dominance">{{ entry.non_linux_count }}</span>
                         {% elif category_key == 'non_eu_leaders' %}<span title="Relays expanding Tor geographic reach beyond European Union concentration">{{ entry.non_eu_count_with_percentage }}</span>
                         {% elif category_key == 'frontier_builders' %}<span title="Relays in countries with strategic importance but underrepresented in Tor network">{{ entry.relays_in_rare_countries }}</span>

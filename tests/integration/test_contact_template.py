@@ -84,7 +84,7 @@ class TestContactTemplateIntegration(unittest.TestCase):
                 'bandwidth_breakdown': '50.0 MB/s guard, 25.0 MB/s middle, 75.0 MB/s exit',
                 'consensus_weight_breakdown': '1.0% guard, 0.5% middle, 1.0% exit',
                 'operator_intelligence': {
-                    'network_diversity': '<span style="color: #2e7d2e; font-weight: bold;">Great</span>, 4 networks',
+                    'network_diversity': '<span style="color: #2e7d2e; font-weight: bold;">Great</span>, 4 networks (2 rare)',
                     'geographic_diversity': '<span style="color: #cc9900; font-weight: bold;">Okay</span>, 2 countries',
                     'infrastructure_diversity': '<span style="color: #c82333; font-weight: bold;">Poor</span>, 1 platform',
                     'measurement_status': '5/5 relays measured by authorities',
@@ -271,7 +271,7 @@ class TestContactTemplateIntegration(unittest.TestCase):
         rendered = template.render(**self.template_context)
         
         # Should preserve HTML color coding from pre-computed data
-        self.assertIn('color: #2e7d2e; font-weight: bold;">Great</span>, 4 networks', rendered)
+        self.assertIn('color: #2e7d2e; font-weight: bold;">Great</span>, 4 networks (2 rare)', rendered)
         self.assertIn('color: #cc9900; font-weight: bold;">Okay</span>, 2 countries', rendered)
         self.assertIn('color: #c82333; font-weight: bold;">Poor</span>, 1 platform', rendered)
 

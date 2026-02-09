@@ -28,7 +28,7 @@ class TestContactDisplayData(unittest.TestCase):
                 'contact_intelligence': {
                     'template_optimized': {
                         'test_contact_hash': {
-                            'portfolio_diversity': 'Great, 4 networks',
+                            'portfolio_diversity': 'Great, 4 networks (2 rare)',
                             'geographic_risk': 'Okay, 2 countries', 
                             'infrastructure_risk': 'Poor, 1 platform',
                             'measurement_status': '5/5 relays measured by authorities',
@@ -97,8 +97,8 @@ class TestContactDisplayData(unittest.TestCase):
 
     def test_format_intelligence_rating_great(self):
         """Test color-coded formatting for Great intelligence ratings."""
-        result = self.relays._format_intelligence_rating('Great, 4 networks')
-        expected = '<span style="color: #2e7d2e; font-weight: bold;">Great</span>, 4 networks'
+        result = self.relays._format_intelligence_rating('Great, 4 networks (2 rare)')
+        expected = '<span style="color: #2e7d2e; font-weight: bold;">Great</span>, 4 networks (2 rare)'
         self.assertEqual(result, expected)
 
     def test_format_intelligence_rating_invalid_format(self):

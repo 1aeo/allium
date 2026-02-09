@@ -18,7 +18,8 @@ from .country_utils import (
     count_frontier_countries_weighted_with_existing_data,
     calculate_diversity_score, 
     calculate_geographic_achievement,
-    EU_POLITICAL_REGION  # Add this import
+    calculate_operator_as_diversity_score,
+    EU_POLITICAL_REGION
 )
 
 # Import HTML escaping utility
@@ -642,11 +643,15 @@ def _calculate_aroi_leaderboards(relays_instance):
         
 
         
-        # Diversity score (using centralized calculation)
+        # Diversity score (using centralized calculation with AS rarity)
+        as_diversity_score = calculate_operator_as_diversity_score(
+            operator_relays, relays_instance.json.get('sorted', {}).get('as', {})
+        )
         diversity_score = calculate_diversity_score(
             countries=list(countries), 
             platforms=list(platforms), 
-            unique_as_count=unique_as_count
+            unique_as_count=unique_as_count,
+            as_diversity_score=as_diversity_score
         )
         
         # Uptime approximation (new calculation - from running status)
@@ -1104,7 +1109,7 @@ def _calculate_aroi_leaderboards(relays_instance):
                     diversity_breakdown_details = diversity_breakdown_full
                 
                 # Create full tooltip with calculation details
-                diversity_breakdown_tooltip = f"Diversity Score Calculation: {country_count} countries × 2.0 + {platform_count} operating systems × 1.5 + {as_count} unique ASNs × 1.0 = {metrics['diversity_score']}"
+                diversity_breakdown_tooltip = f"Diversity Score: {country_count} countries x 3.0 + {as_count} AS (rarity-weighted) x 2.0 + {platform_count} platforms x 1.0 = {metrics['diversity_score']:.1f}"
             
             # Format veteran details for network_veterans category
             veteran_details_short = ""
