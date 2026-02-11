@@ -475,6 +475,7 @@ def _collect_operator_metrics(relays_instance):
         countries = set()
         platforms = set()
         non_linux_count = 0
+        non_linux_bandwidth = 0
         unique_ipv4_addresses = set()
         unique_ipv6_addresses = set()
         ipv4_relay_count = 0
@@ -523,6 +524,7 @@ def _collect_operator_metrics(relays_instance):
                 platforms.add(relay_platform)
                 if not relay_platform.startswith('Linux'):
                     non_linux_count += 1
+                    non_linux_bandwidth += relay_bandwidth
             
             has_ipv4 = False
             has_ipv6 = False
@@ -617,10 +619,15 @@ def _collect_operator_metrics(relays_instance):
         relays_in_rare_countries = sum(1 for relay in operator_relays 
                                      if relay.get('country', '') in operator_rare_countries)
         
+        # Bandwidth capacity for relays in rare countries only (matches diverse relay count)
+        rare_country_bandwidth = sum(relay.get('observed_bandwidth', 0) for relay in operator_relays
+                                     if relay.get('country', '') in operator_rare_countries)
+        
         # Calculate all country breakdowns in a single pass over operator_relays
         rare_country_breakdown = {}
         all_country_breakdown = {}
         non_eu_country_breakdown = {}
+        non_eu_bandwidth = 0
         for relay in operator_relays:
             country = relay.get('country', '')
             if country:
@@ -629,6 +636,7 @@ def _collect_operator_metrics(relays_instance):
                     rare_country_breakdown[country] = rare_country_breakdown.get(country, 0) + 1
                 if country not in EU_POLITICAL_REGION:
                     non_eu_country_breakdown[country] = non_eu_country_breakdown.get(country, 0) + 1
+                    non_eu_bandwidth += relay.get('observed_bandwidth', 0)
         
         # Sort all breakdowns by relay count (descending) then by country name
         _sort_key = lambda x: (-x[1], x[0])
@@ -759,9 +767,12 @@ def _collect_operator_metrics(relays_instance):
             'platforms': list(platforms),
             'platform_count': len(platforms),
             'non_linux_count': non_linux_count,
+            'non_linux_bandwidth': non_linux_bandwidth,
             'non_eu_count': non_eu_count,
+            'non_eu_bandwidth': non_eu_bandwidth,
             'rare_country_count': rare_country_count,
             'relays_in_rare_countries': relays_in_rare_countries,
+            'rare_country_bandwidth': rare_country_bandwidth,
             'rare_country_breakdown': sorted_rare_breakdown,
             'all_country_breakdown': sorted_all_country_breakdown,  # Reusable country breakdown
             'non_eu_country_breakdown': sorted_non_eu_country_breakdown,  # Non-EU country breakdown
@@ -914,6 +925,17 @@ def _format_leaderboard_entries(leaderboards, aroi_operators, relays_instance):
             # Format guard-specific bandwidth for guard categories (guard_authority, guard_operators)
             formatted_guard_bandwidth, guard_bandwidth_unit = _format_bandwidth_with_auto_unit(
                 metrics['guard_bandwidth'], relays_instance.bandwidth_formatter
+            )
+            
+            # Format diversity-specific bandwidth (only counts relays matching diversity criteria)
+            formatted_non_linux_bandwidth, non_linux_bandwidth_unit = _format_bandwidth_with_auto_unit(
+                metrics['non_linux_bandwidth'], relays_instance.bandwidth_formatter
+            )
+            formatted_non_eu_bandwidth, non_eu_bandwidth_unit = _format_bandwidth_with_auto_unit(
+                metrics['non_eu_bandwidth'], relays_instance.bandwidth_formatter
+            )
+            formatted_rare_country_bandwidth, rare_country_bandwidth_unit = _format_bandwidth_with_auto_unit(
+                metrics['rare_country_bandwidth'], relays_instance.bandwidth_formatter
             )
             
             # Calculate geographic achievement for non_eu_leaders category
@@ -1192,10 +1214,16 @@ def _format_leaderboard_entries(leaderboards, aroi_operators, relays_instance):
                 'platform_count': metrics['platform_count'],
                 'platforms': metrics['platforms'][:3],  # Top 3 platforms for display
                 'non_linux_count': metrics['non_linux_count'],
+                'non_linux_bandwidth': formatted_non_linux_bandwidth,
+                'non_linux_bandwidth_unit': non_linux_bandwidth_unit,
                 'non_eu_count': metrics['non_eu_count'],
+                'non_eu_bandwidth': formatted_non_eu_bandwidth,
+                'non_eu_bandwidth_unit': non_eu_bandwidth_unit,
                 'non_eu_count_with_percentage': f"{metrics['non_eu_count']} ({non_eu_percentage:.0f}%)",
                 'rare_country_count': metrics['rare_country_count'],
                 'relays_in_rare_countries': metrics['relays_in_rare_countries'],
+                'rare_country_bandwidth': formatted_rare_country_bandwidth,
+                'rare_country_bandwidth_unit': rare_country_bandwidth_unit,
                 'rare_country_details': rare_country_details,
                 'rare_country_tooltip': rare_country_tooltip,
                 'frontier_achievement_title': frontier_achievement_title,

@@ -138,7 +138,7 @@
                             {% elif performance_type == "most_diverse" %}
                                 <span title="Geographic distribution and diversity score calculation">{{ entry.country_count }} countries, <span title="Diversity Score: Geographic (countries × 3.0) + Network (AS rarity-weighted × 2.0) + Platform (platforms × 1.0)">{{ entry.diversity_score }} diversity</span></span>
                             {% elif performance_type == "platform_diversity" %}
-                                <span title="Non-Linux relays promoting OS diversity and total bandwidth capacity">{{ entry.non_linux_count }} non-Linux relays, {{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</span>
+                                <span title="Non-Linux relays promoting OS diversity and their bandwidth capacity">{{ entry.non_linux_count }} non-Linux relays, {{ entry.non_linux_bandwidth }} {{ entry.non_linux_bandwidth_unit }}</span>
                             {% elif performance_type == "non_eu_leaders" %}
                                 <span title="Non-EU relays expanding Tor network beyond European Union concentration. This is the primary ranking metric for Global Expansion Leaders.">{{ entry.non_eu_count }} non-EU relays in {{ entry.country_count }} countries</span>
                             {% elif performance_type == "frontier_builders" %}
@@ -229,7 +229,7 @@
                         {%- elif category_key == 'reliability_masters' -%}6-month reliability score: simple average uptime percentage from Onionoo API (25+ relays). Measures recent operational excellence and network reliability
                         {%- elif category_key == 'legacy_titans' -%}5-year reliability score: simple average uptime percentage from Onionoo API (25+ relays). Measures long-term operational stability and historical reliability
                                             {%- endif -%}">{% if category_key == 'platform_diversity' %}Non Linux Relays{% elif category_key == 'non_eu_leaders' %}Non-EU Relays{% elif category_key == 'frontier_builders' %}Rare Relays{% elif category_key == 'reliability_masters' %}Reliability Score{% elif category_key == 'legacy_titans' %}Legacy Score{% else %}Key Metric{% endif %}</th>
-                        <th title="Total observed bandwidth capacity in {% if use_bits %}bits per second{% else %}bytes per second{% endif %}">Bandwidth Capacity</th>
+                        <th title="{% if category_key == 'platform_diversity' %}Bandwidth capacity from non-Linux relays only (matches diverse relay count){% elif category_key == 'non_eu_leaders' %}Bandwidth capacity from non-EU relays only (matches diverse relay count){% elif category_key == 'frontier_builders' %}Bandwidth capacity from relays in rare countries only (matches diverse relay count){% else %}Total observed bandwidth capacity in {% if use_bits %}bits per second{% else %}bytes per second{% endif %}{% endif %}">Bandwidth Capacity</th>
                         {% if category_key != 'platform_diversity' %}
                         <th title="{% if category_key == 'network_veterans' %}Geographic distribution: number of countries with relay operations. Geographic diversity demonstrates network resilience and reduces single-point-of-failure risks{% elif category_key == 'reliability_masters' %}Geographic distribution: number of countries with relay operations. Geographic diversity for reliability indicates distributed operational infrastructure{% elif category_key == 'legacy_titans' %}Geographic distribution: number of countries with relay operations. Geographic diversity for long-term operators shows sustained international presence{% else %}Number of countries with relay operations{% endif %}">Countries</th>
                         {% endif %}
@@ -265,7 +265,17 @@
                             {% endif %}
                             </strong>
                         </td>
-                        <td title="Observed bandwidth capacity in {% if use_bits %}{{ entry.bandwidth_unit }} (bits per second){% else %}{{ entry.bandwidth_unit }} (bytes per second){% endif %}">{{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</td>
+                        <td title="{% if category_key == 'platform_diversity' %}Bandwidth capacity from {{ entry.non_linux_count }} non-Linux relays only{% elif category_key == 'non_eu_leaders' %}Bandwidth capacity from {{ entry.non_eu_count }} non-EU relays only{% elif category_key == 'frontier_builders' %}Bandwidth capacity from {{ entry.relays_in_rare_countries }} relays in rare countries only{% else %}Observed bandwidth capacity in {% if use_bits %}{{ entry.bandwidth_unit }} (bits per second){% else %}{{ entry.bandwidth_unit }} (bytes per second){% endif %}{% endif %}">
+                            {%- if category_key == 'platform_diversity' -%}
+                                {{ entry.non_linux_bandwidth }} {{ entry.non_linux_bandwidth_unit }}
+                            {%- elif category_key == 'non_eu_leaders' -%}
+                                {{ entry.non_eu_bandwidth }} {{ entry.non_eu_bandwidth_unit }}
+                            {%- elif category_key == 'frontier_builders' -%}
+                                {{ entry.rare_country_bandwidth }} {{ entry.rare_country_bandwidth_unit }}
+                            {%- else -%}
+                                {{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}
+                            {%- endif -%}
+                        </td>
                         {% if category_key != 'platform_diversity' %}
                         <td title="Geographic distribution of relay operations">{{ entry.country_count }}</td>
                         {% endif %}
@@ -816,7 +826,7 @@
                     {%- elif category_key == 'bandwidth_legends' -%}5-year bandwidth score: simple average bandwidth served from Onionoo API (25+ relays). Measures sustained bandwidth served capacity and long-term network contribution
                     {%- endif -%}">{% if category_key == 'platform_diversity' %}Non Linux Relays{% elif category_key == 'non_eu_leaders' %}Non-EU Relays{% elif category_key == 'frontier_builders' %}Rare Relays{% elif category_key == 'reliability_masters' %}Reliability Score{% elif category_key == 'legacy_titans' %}Legacy Score{% elif category_key == 'bandwidth_masters' %}Bandwidth Score{% elif category_key == 'bandwidth_legends' %}Bandwidth Score{% else %}Key Metric{% endif %}</th>
                     {% if category_key != 'bandwidth_masters' and category_key != 'bandwidth_legends' %}
-                    <th title="Total observed bandwidth capacity in {% if use_bits %}bits per second{% else %}bytes per second{% endif %}">Bandwidth Capacity</th>
+                    <th title="{% if category_key == 'platform_diversity' %}Bandwidth capacity from non-Linux relays only (matches diverse relay count){% elif category_key == 'non_eu_leaders' %}Bandwidth capacity from non-EU relays only (matches diverse relay count){% elif category_key == 'frontier_builders' %}Bandwidth capacity from relays in rare countries only (matches diverse relay count){% else %}Total observed bandwidth capacity in {% if use_bits %}bits per second{% else %}bytes per second{% endif %}{% endif %}">Bandwidth Capacity</th>
                     {% endif %}
                     {% if category_key != 'platform_diversity' %}
                     <th title="{% if category_key == 'network_veterans' %}Geographic distribution: number of countries with relay operations. Geographic diversity demonstrates network resilience and reduces single-point-of-failure risks{% elif category_key == 'reliability_masters' %}Geographic distribution: number of countries with relay operations. Geographic diversity for reliability indicates distributed operational infrastructure{% elif category_key == 'legacy_titans' %}Geographic distribution: number of countries with relay operations. Geographic diversity for long-term operators shows sustained international presence{% elif category_key == 'bandwidth_masters' %}Geographic distribution: number of countries with relay operations. Geographic diversity for bandwidth served operators indicates distributed service infrastructure{% elif category_key == 'bandwidth_legends' %}Geographic distribution: number of countries with relay operations. Geographic diversity for long-term bandwidth served operators shows sustained international presence{% else %}Number of countries with relay operations{% endif %}">Countries</th>
@@ -858,7 +868,17 @@
                         </strong>
                     </td>
                     {% if category_key != 'bandwidth_masters' and category_key != 'bandwidth_legends' %}
-                    <td title="Observed bandwidth capacity in {% if use_bits %}{{ entry.bandwidth_unit }} (bits per second){% else %}{{ entry.bandwidth_unit }} (bytes per second){% endif %}">{{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}</td>
+                    <td title="{% if category_key == 'platform_diversity' %}Bandwidth capacity from {{ entry.non_linux_count }} non-Linux relays only{% elif category_key == 'non_eu_leaders' %}Bandwidth capacity from {{ entry.non_eu_count }} non-EU relays only{% elif category_key == 'frontier_builders' %}Bandwidth capacity from {{ entry.relays_in_rare_countries }} relays in rare countries only{% else %}Observed bandwidth capacity in {% if use_bits %}{{ entry.bandwidth_unit }} (bits per second){% else %}{{ entry.bandwidth_unit }} (bytes per second){% endif %}{% endif %}">
+                        {%- if category_key == 'platform_diversity' -%}
+                            {{ entry.non_linux_bandwidth }} {{ entry.non_linux_bandwidth_unit }}
+                        {%- elif category_key == 'non_eu_leaders' -%}
+                            {{ entry.non_eu_bandwidth }} {{ entry.non_eu_bandwidth_unit }}
+                        {%- elif category_key == 'frontier_builders' -%}
+                            {{ entry.rare_country_bandwidth }} {{ entry.rare_country_bandwidth_unit }}
+                        {%- else -%}
+                            {{ entry.total_bandwidth }} {{ entry.bandwidth_unit }}
+                        {%- endif -%}
+                    </td>
                     {% endif %}
                     {% if category_key != 'platform_diversity' %}
                     <td title="Geographic distribution of relay operations">{{ entry.country_count }}</td>
