@@ -125,6 +125,77 @@ def _format_wfu_display(wfu, decimals=1, fallback='N/A'):
     return format_percentage_from_fraction(wfu, decimals, fallback)
 
 
+def _port_in_rules(rules: list, port: int) -> bool:
+    """Check if a port is covered by a list of exit policy rules.
+
+    Onionoo exit_policy_summary rules are strings like:
+    '80', '443', '80-443', '1-65535'
+    """
+    for rule in rules:
+        if '-' in str(rule):
+            try:
+                start, end = str(rule).split('-')
+                if int(start) <= port <= int(end):
+                    return True
+            except (ValueError, IndexError):
+                continue
+        else:
+            try:
+                if int(rule) == port:
+                    return True
+            except ValueError:
+                continue
+    return False
+
+
+def _analyze_exit_policy(exit_policy_summary: dict) -> dict:
+    """Analyze exit policy for Exit flag eligibility.
+
+    Per Tor dir-spec Section 3.4.2: Exit flag requires allowing exits to at least
+    one /8 address space on BOTH port 80 AND port 443.
+
+    Args:
+        exit_policy_summary: From Onionoo relay['exit_policy_summary']
+            Format: {'accept': ['80', '443', '6667'], 'reject': [...]}
+            or: {'reject': ['25', '119', ...]}  (implicit accept-all minus rejects)
+
+    Returns:
+        dict with: allows_80, allows_443, eligible, display
+    """
+    if not exit_policy_summary:
+        return {'allows_80': False, 'allows_443': False,
+                'eligible': False, 'display': 'No exit policy'}
+
+    accept_rules = exit_policy_summary.get('accept', [])
+    reject_rules = exit_policy_summary.get('reject', [])
+
+    # Onionoo exit_policy_summary format:
+    # - If 'accept' key exists: only listed ports are allowed
+    # - If only 'reject' key exists: all ports allowed EXCEPT listed ones
+    if accept_rules:
+        allows_80 = _port_in_rules(accept_rules, 80)
+        allows_443 = _port_in_rules(accept_rules, 443)
+    elif reject_rules:
+        allows_80 = not _port_in_rules(reject_rules, 80)
+        allows_443 = not _port_in_rules(reject_rules, 443)
+    else:
+        allows_80 = False
+        allows_443 = False
+
+    eligible = allows_80 and allows_443
+
+    p80 = 'Yes' if allows_80 else 'No'
+    p443 = 'Yes' if allows_443 else 'No'
+    display = f"Port 80: {p80} | Port 443: {p443}"
+
+    return {
+        'allows_80': allows_80,
+        'allows_443': allows_443,
+        'eligible': eligible,
+        'display': display,
+    }
+
+
 # Empty stats result - reused constant to avoid dict recreation
 _EMPTY_DA_STATS = {
     'primary_value': None, 'primary_count': 0, 'has_majority': False,
@@ -260,7 +331,7 @@ def _parse_wfu_threshold(value) -> Optional[float]:
     return float(value)
 
 
-def format_relay_consensus_evaluation(evaluation: dict, flag_thresholds: dict = None, current_flags: list = None, observed_bandwidth: int = 0, use_bits: bool = False, relay_uptime: float = None, version: str = None, recommended_version: bool = None) -> dict:
+def format_relay_consensus_evaluation(evaluation: dict, flag_thresholds: dict = None, current_flags: list = None, observed_bandwidth: int = 0, use_bits: bool = False, relay_uptime: float = None, version: str = None, recommended_version: bool = None, exit_policy_summary: dict = None) -> dict:
     """
     Format relay consensus evaluation for template display.
     
@@ -278,6 +349,8 @@ def format_relay_consensus_evaluation(evaluation: dict, flag_thresholds: dict = 
                       Used for Stable flag comparison against each authority's stable-uptime threshold.
         version: Tor version string running on the relay (from Onionoo).
         recommended_version: Whether the version is recommended (from Onionoo).
+        exit_policy_summary: Relay's exit policy summary from Onionoo (for Exit flag analysis).
+                            Format: {'accept': ['80', '443']} or {'reject': ['25', '119']}.
         
     Returns:
         dict: Formatted evaluation ready for template rendering
@@ -308,8 +381,8 @@ def format_relay_consensus_evaluation(evaluation: dict, flag_thresholds: dict = 
         # Consensus status display
         'consensus_status': _format_consensus_status(evaluation),
         
-        # Relay values summary (for Summary table) - pass observed_bandwidth, use_bits, relay_uptime
-        'relay_values': _format_relay_values(evaluation, flag_thresholds, observed_bandwidth, use_bits, relay_uptime),
+        # Relay values summary (for Summary table) - pass observed_bandwidth, use_bits, relay_uptime, exit_policy_summary
+        'relay_values': _format_relay_values(evaluation, flag_thresholds, observed_bandwidth, use_bits, relay_uptime, exit_policy_summary),
         
         # Per-authority voting details - pass observed_bandwidth, use_bits, relay_uptime
         'authority_table': _format_authority_table_enhanced(evaluation, flag_thresholds, observed_bandwidth, use_bits, relay_uptime),
@@ -352,7 +425,7 @@ def format_relay_consensus_evaluation(evaluation: dict, flag_thresholds: dict = 
     return formatted
 
 
-def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, observed_bandwidth: int = 0, use_bits: bool = False, relay_uptime: float = None) -> dict:
+def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, observed_bandwidth: int = 0, use_bits: bool = False, relay_uptime: float = None, exit_policy_summary: dict = None) -> dict:
     """
     Format relay values summary for the Summary table.
     Shows your relay's values vs consensus thresholds.
@@ -365,6 +438,7 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
         use_bits: If True, format bandwidth in bits (Mbit/s), otherwise bytes (MB/s)
         relay_uptime: Relay's current uptime in seconds (from Onionoo last_restarted).
                       Used for Stable uptime comparison.
+        exit_policy_summary: Relay's exit policy summary from Onionoo (for Exit flag analysis).
     """
     authority_votes = consensus_data.get('authority_votes', [])
     flag_eligibility = consensus_data.get('flag_eligibility', {})
@@ -564,6 +638,9 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
     ipv6_not_tested = reachability.get('ipv6_not_tested_authorities', [])
     ipv6_tested_count = total_authorities - len(ipv6_not_tested)
     
+    # Exit policy analysis (from Onionoo exit_policy_summary)
+    exit_analysis = _analyze_exit_policy(exit_policy_summary)
+    
     return {
         # WFU values (DA-measured, with majority/min/median/max stats)
         'wfu': relay_wfu,
@@ -688,6 +765,14 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
         'ipv6_tested_count': ipv6_tested_count,
         'total_authorities': total_authorities,
         'majority_required': majority_required,
+        
+        # Exit policy values (from Onionoo exit_policy_summary)
+        # Per Tor dir-spec: Exit requires allowing exits to ≥1 /8 on ports 80 AND 443
+        'exit_allows_80': exit_analysis['allows_80'],
+        'exit_allows_443': exit_analysis['allows_443'],
+        'exit_eligible': exit_analysis['eligible'],
+        'exit_policy_display': exit_analysis['display'],
+        'exit_assigned_count': flag_eligibility.get('exit', {}).get('assigned_count', 0),
     }
 
 
