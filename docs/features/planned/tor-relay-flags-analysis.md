@@ -367,16 +367,22 @@ The current implementation tracks 4 flags with detailed eligibility metrics in t
 | **Stable** | 2 | MTBF, Uptime | DA votes (mtbf) + Onionoo (last_restarted) vs CollecTor `stable-mtbf`/`stable-uptime` |
 | **HSDir** | 4 | Prereq: Stable, Prereq: Fast, WFU, TK | DA votes (wfu, tk) vs CollecTor `hsdir-wfu`/`hsdir-tk` |
 | **Guard** | 6 | Prereq: Fast, Prereq: Stable, Prereq: V2Dir, WFU, TK, BW | DA votes + relay descriptor vs multiple CollecTor thresholds |
+| **Exit** | 1 | Exit Policy (ports 80+443) | Onionoo exit_policy_summary |
 
-**Total Rows:** 13
+**Total Rows:** 14
 
 **Location:** `allium/lib/consensus/consensus_evaluation.py` → `_format_flag_requirements_table()`
 
 **Backend Pipeline:**
-1. `collector_fetcher._analyze_flag_eligibility()` → computes per-authority eligibility for guard/stable/fast/hsdir
-2. `consensus_evaluation._format_relay_values()` → aggregates DA stats (majority/median/min/max) and relay values
+1. `collector_fetcher._analyze_flag_eligibility()` → computes per-authority eligibility for guard/stable/fast/hsdir/exit
+2. `consensus_evaluation._format_relay_values()` → aggregates DA stats (majority/median/min/max), relay values, and exit policy analysis
 3. `consensus_evaluation._format_flag_requirements_table()` → builds pre-computed row dicts for template
 4. Template iterates `diag.flag_requirements_table` rows directly (no complex Jinja2 logic)
+
+**Architecture Note (2026-02-15):** `relays.py` was refactored from ~5,900 lines into 8 focused modules.
+The consensus evaluation pipeline (`collector_fetcher.py`, `consensus_evaluation.py`) was **not** affected.
+The call to `format_relay_consensus_evaluation()` (which passes `exit_policy_summary`) remains in `relays.py` (~1,100 lines).
+Extracted modules: `page_writer.py`, `network_health.py`, `operator_analysis.py`, `categorization.py`, `flag_analysis.py`, `ip_utils.py`, `time_utils.py`.
 
 ### 3.2 Eligible Flags Row (All 8 Flags Displayed)
 

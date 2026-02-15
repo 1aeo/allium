@@ -65,18 +65,38 @@ This document proposes extending the Eligibility Flag Vote Details table to prov
 
 ## 2. Current Implementation Reference
 
+> **Last Updated:** 2026-02-15
+>
+> **Architecture Note:** As of 2026-02-15, `relays.py` was refactored from a ~5,900-line
+> monolithic file into 8 focused modules. The consensus evaluation pipeline
+> (`collector_fetcher.py`, `consensus_evaluation.py`) was **not** affected — all flag
+> eligibility code remains in the same files. The call to `format_relay_consensus_evaluation()`
+> remains in `relays.py` (now ~1,100 lines). The extracted modules are:
+>
+> | Module | Lines | Purpose |
+> |--------|-------|---------|
+> | `relays.py` | ~1,100 | Core relay class, Onionoo fetch, consensus evaluation call |
+> | `page_writer.py` | ~1,020 | HTML page generation |
+> | `network_health.py` | ~1,300 | Network statistics and health metrics |
+> | `operator_analysis.py` | ~1,350 | Operator/contact analysis |
+> | `categorization.py` | ~750 | Relay categorization |
+> | `flag_analysis.py` | ~380 | Flag uptime analysis |
+> | `ip_utils.py` | ~94 | IP address utilities |
+> | `time_utils.py` | ~118 | Time formatting utilities |
+
 ### 2.1 Existing Table Structure
 
-The current Eligibility Flag Vote Details table in `relay-info.html` tracks:
+The Eligibility Flag Vote Details table in `relay-info.html` currently tracks:
 
 | Flag | Metrics | Rows |
 |------|---------|------|
-| Guard | WFU, Time Known, Bandwidth | 3 |
-| Stable | MTBF, Uptime | 2 |
 | Fast | Speed | 1 |
-| HSDir | WFU, Time Known | 2 |
+| Stable | MTBF, Uptime | 2 |
+| HSDir | Prereq: Stable, Prereq: Fast, WFU, Time Known | 4 |
+| Guard | Prereq: Fast, Prereq: Stable, Prereq: V2Dir, WFU, Time Known, Bandwidth | 6 |
+| Exit | Exit Policy (ports 80+443) | 1 |
 
-**Total Current Rows:** 8
+**Total Current Rows:** 14
 
 ### 2.2 Row Data Structure
 
