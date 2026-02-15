@@ -28,7 +28,6 @@ from .time_utils import (
     format_timestamp_gmt,
     format_time_ago,
 )
-import statistics
 from datetime import datetime, timedelta
 
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
@@ -36,7 +35,6 @@ ABS_PATH = os.path.dirname(os.path.abspath(__file__))
 
 # Page writing infrastructure imported from page_writer.py
 from .page_writer import (
-    ENV,
     _compute_network_position_safe,
     _init_precompute_worker,
     _precompute_contact_worker,
