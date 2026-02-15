@@ -22,26 +22,46 @@ from .error_handlers import handle_worker_errors, handle_calculation_errors
 class Coordinator:
     """
     Coordinator for managing API workers with threading support.
-    Phase 1: Basic threading support for onionoo with backwards compatibility.
-    Phase 2: Multiple API support with incremental rendering.
+    Orchestrates parallel API fetching and relay set creation.
+    
+    Accepts either an argparse namespace (args) or individual keyword arguments
+    for backward compatibility with tests.
     """
     
-    def __init__(self, output_dir, onionoo_details_url, onionoo_uptime_url, onionoo_bandwidth_url, aroi_url, bandwidth_cache_hours, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=53, enabled_apis='all', filter_downtime_days=7, base_url='', progress_logger=None, mp_workers=4):
-        self.output_dir = output_dir
-        self.onionoo_details_url = onionoo_details_url
-        self.onionoo_uptime_url = onionoo_uptime_url
-        self.onionoo_bandwidth_url = onionoo_bandwidth_url
-        self.aroi_url = aroi_url
-        self.bandwidth_cache_hours = bandwidth_cache_hours
-        self.use_bits = use_bits
-        self.progress = progress
-        self.start_time = start_time or time.time()
-        self.progress_step = progress_step
-        self.total_steps = total_steps
-        self.enabled_apis = enabled_apis
-        self.filter_downtime_days = filter_downtime_days
-        self.base_url = base_url
-        self.mp_workers = mp_workers
+    def __init__(self, args=None, progress_logger=None, **kwargs):
+        # Support both args namespace and keyword arguments (for tests/backward compat)
+        if args is not None:
+            # Read from argparse namespace
+            self.output_dir = args.output_dir
+            self.onionoo_details_url = args.onionoo_details_url
+            self.onionoo_uptime_url = args.onionoo_uptime_url
+            self.onionoo_bandwidth_url = args.onionoo_bandwidth_url
+            self.aroi_url = args.aroi_url
+            self.bandwidth_cache_hours = args.bandwidth_cache_hours
+            self.use_bits = args.bandwidth_units == 'bits' if hasattr(args, 'bandwidth_units') else kwargs.get('use_bits', False)
+            self.progress = args.progress
+            self.enabled_apis = args.enabled_apis
+            self.filter_downtime_days = args.filter_downtime_days
+            self.base_url = args.base_url
+            self.mp_workers = args.mp_workers
+        else:
+            # Backward-compatible keyword arguments (used by tests)
+            self.output_dir = kwargs.get('output_dir', './www')
+            self.onionoo_details_url = kwargs.get('onionoo_details_url', 'https://onionoo.torproject.org/details')
+            self.onionoo_uptime_url = kwargs.get('onionoo_uptime_url', 'https://onionoo.torproject.org/uptime')
+            self.onionoo_bandwidth_url = kwargs.get('onionoo_bandwidth_url', 'https://onionoo.torproject.org/bandwidth')
+            self.aroi_url = kwargs.get('aroi_url', 'https://aroivalidator.1aeo.com/latest.json')
+            self.bandwidth_cache_hours = kwargs.get('bandwidth_cache_hours', 12)
+            self.use_bits = kwargs.get('use_bits', False)
+            self.progress = kwargs.get('progress', False)
+            self.enabled_apis = kwargs.get('enabled_apis', 'all')
+            self.filter_downtime_days = kwargs.get('filter_downtime_days', 7)
+            self.base_url = kwargs.get('base_url', '')
+            self.mp_workers = kwargs.get('mp_workers', 4)
+        
+        self.start_time = kwargs.get('start_time') or (getattr(args, '_start_time', None) if args else None) or time.time()
+        self.progress_step = kwargs.get('progress_step', 0)
+        self.total_steps = kwargs.get('total_steps', 53)
         
         # Use injected progress logger or create new one
         if progress_logger is not None:
@@ -332,32 +352,13 @@ class Coordinator:
         }
 
 
-# For backwards compatibility, provide a simple function that mimics the original Relays constructor
-def create_relay_set_with_coordinator(output_dir, onionoo_details_url, onionoo_uptime_url, onionoo_bandwidth_url, aroi_url, bandwidth_cache_hours, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=53, enabled_apis='all', filter_downtime_days=7, base_url='', progress_logger=None, mp_workers=4):
+def create_relay_set_with_coordinator(args, progress_logger=None):
     """
     Create a relay set using the coordinator system.
-    Phase 2: Support for multiple APIs with threading.
-    """
-    if start_time is None:
-        start_time = time.time()
-        
-    coordinator = Coordinator(
-        output_dir=output_dir,
-        onionoo_details_url=onionoo_details_url,
-        onionoo_uptime_url=onionoo_uptime_url,
-        onionoo_bandwidth_url=onionoo_bandwidth_url,
-        aroi_url=aroi_url,
-        bandwidth_cache_hours=bandwidth_cache_hours,
-        use_bits=use_bits,
-        progress=progress,
-        start_time=start_time,
-        progress_step=progress_step,
-        total_steps=total_steps,
-        enabled_apis=enabled_apis,
-        filter_downtime_days=filter_downtime_days,
-        base_url=base_url,
-        progress_logger=progress_logger,
-        mp_workers=mp_workers,
-    )
     
-    return coordinator.get_relay_set() 
+    Args:
+        args: argparse namespace with all CLI arguments
+        progress_logger: Optional ProgressLogger instance for consistent progress tracking
+    """
+    coordinator = Coordinator(args=args, progress_logger=progress_logger)
+    return coordinator.get_relay_set()

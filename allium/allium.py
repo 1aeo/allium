@@ -262,24 +262,7 @@ if __name__ == "__main__":
     progress_logger.log("Initializing relay data from onionoo (using coordinator)...")
     
     try:
-        RELAY_SET = create_relay_set_with_coordinator(
-            args.output_dir,
-            args.onionoo_details_url,
-            args.onionoo_uptime_url,
-            args.onionoo_bandwidth_url,
-            args.aroi_url,
-            args.bandwidth_cache_hours,
-            args.bandwidth_units == 'bits',
-            args.progress,
-            start_time,
-            progress_logger.get_current_step(),
-            total_steps,
-            args.enabled_apis,
-            args.filter_downtime_days,
-            args.base_url,
-            progress_logger=progress_logger,
-            mp_workers=args.mp_workers,
-        )
+        RELAY_SET = create_relay_set_with_coordinator(args, progress_logger=progress_logger)
         if RELAY_SET is None or RELAY_SET.json == None:
             # Progress-style error context message (conditional on progress flag)
             progress_logger.log("No onionoo data available, exiting gracefully")
