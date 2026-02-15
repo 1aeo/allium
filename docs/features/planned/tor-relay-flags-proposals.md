@@ -34,7 +34,7 @@ This document proposes extending the Eligibility Flag Vote Details table to prov
 
 | Proposal | Flag | Status | Location | Notes |
 |----------|------|--------|----------|-------|
-| 1 | Exit | ⏳ Not Started | `consensus_evaluation.py` | **Priority 1** — Detailed Guard-parity plan below. Exit policy analysis across all 6 page layers. |
+| 1 | Exit | ✅ Implemented | `collector_fetcher.py`, `consensus_evaluation.py`, `relays.py`, `relay-info.html` | **Priority 1** — Guard-parity implementation across all 6 page layers. |
 | 2 | Running | ⏳ Not Started | `consensus_evaluation.py` | **Priority 4** — Already extensively shown in Health Status, Summary, Per-Auth tables (3+ places). Low remaining gap. |
 | 3 | Valid | ⏳ Not Started | `consensus_evaluation.py` | **Priority 5** — Already extensively shown in Health Status, Summary, Per-Auth tables (3+ places). Low remaining gap. |
 | 4 | V2Dir | ⏳ Not Started | `consensus_evaluation.py` | **Priority 3** — Currently only shown as Guard prereq row. Medium gap. |
