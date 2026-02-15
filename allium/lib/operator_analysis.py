@@ -127,7 +127,6 @@ def calculate_operator_reliability(contact_hash, operator_relays, relay_set):
         find_operator_percentile_position
     )
     from .bandwidth_utils import extract_relay_bandwidth_for_period, extract_operator_daily_bandwidth_totals
-    import statistics
     
     # Available time periods from Onionoo APIs
     uptime_periods = ['1_month', '3_months', '6_months', '1_year', '5_years']

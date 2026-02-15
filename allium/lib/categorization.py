@@ -208,14 +208,14 @@ def sort_relay(relay_set, relay, idx, k, v, cw, cw_fraction):
         relay_set.json["sorted"][k][v]["country_name"] = truncated_country_name
         relay_set.json["sorted"][k][v]["country_name_full"] = full_country_name
 
-    if k == "family" or k == "contact" or k == "country" or k == "platform" or k == "as":
+    if k in ("family", "contact", "country", "platform", "as"):
         # Families, contacts, countries, platforms, and networks benefit from additional tracking data:
         # - Contact info and MD5 hash for linking
         # - AROI domain for display purposes  
         # - Unique AS tracking for network diversity analysis
         # - First seen date tracking (oldest relay in group)
         # - For countries, platforms, and networks: also track unique contacts and families
-        if k == "country" or k == "platform" or k == "as":
+        if k in ("country", "platform", "as"):
             # Track unique contacts, families, and AROI domains for countries, platforms, and networks
             if not relay_set.json["sorted"][k][v].get("unique_contact_set"):
                 relay_set.json["sorted"][k][v]["unique_contact_set"] = set()
@@ -244,7 +244,7 @@ def sort_relay(relay_set, relay, idx, k, v, cw, cw_fraction):
                 # Use the first family member as the family identifier
                 family_id = relay["effective_family"][0]
                 relay_set.json["sorted"][k][v]["unique_family_set"].add(family_id)
-        if k == "family" or k == "contact" or k == "as":
+        if k in ("family", "contact", "as"):
             # Count measured relays
             if relay.get("measured"):
                 relay_set.json["sorted"][k][v]["measured_count"] += 1 
