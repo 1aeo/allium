@@ -1213,6 +1213,7 @@ Flags: <span style="color: #28a745; font-weight: bold;">green</span> = all autho
     <th title="Source: Onionoo | Authority nickname (relay with Authority flag) with country code">Authority</th>
     <th title="Source: CollecTor | File: vote | Field: 's' line contains 'Running' | Authority voted for this relay (could reach it via OR port)">Running</th>
     <th title="Source: CollecTor | File: vote | Field: 's' line contains 'Valid' | Relay is not blacklisted and has valid descriptor">Valid</th>
+    <th title="Source: CollecTor | File: vote | Field: 's' line contains 'Exit' | Authority assigned Exit flag based on relay's exit policy allowing ≥1 /8 on ports 80+443">Exit</th>
     <th title="Source: CollecTor | File: vote | Field: bandwidth-file-headers | Does this authority run sbws bandwidth scanner? 6 of 9 authorities measure bandwidth; 3 use relay-reported values.">BW Scan (Authority)</th>
     <th title="Source: CollecTor | File: vote | Presence of 'r' line = IPv4 reachable">v4</th>
     {% if has_ipv6 %}<th title="Source: CollecTor | File: vote | Field: 'a' line | IPv6 reachable | N/T = not tested by this authority">v6</th>{% endif %}
@@ -1256,6 +1257,18 @@ Flags: <span style="color: #28a745; font-weight: bold;">green</span> = all autho
                 <span style="color: #28a745;" title="Relay is Valid (verified, allowed in network)">Yes</span>
             {% else %}
                 <span style="color: #dc3545;" title="Relay does NOT have Valid flag">No</span>
+            {% endif %}
+        {% else %}
+            <span style="color: #6c757d;">—</span>
+        {% endif %}
+    </td>
+    {# Exit: Authority assigned Exit flag based on exit policy #}
+    <td>
+        {% if vote.voted and vote.flags %}
+            {% if 'Exit' in vote.flags %}
+                <span style="color: #28a745;" title="Authority assigned Exit flag - relay's exit policy meets requirements (≥1 /8 on ports 80+443)">Yes</span>
+            {% else %}
+                <span style="color: #6c757d;" title="Authority did not assign Exit flag - relay's exit policy does not meet Exit requirements">No</span>
             {% endif %}
         {% else %}
             <span style="color: #6c757d;">—</span>
