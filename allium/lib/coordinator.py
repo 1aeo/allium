@@ -260,6 +260,10 @@ class Coordinator:
     def create_relay_set(self, relay_data):
         """
         Create Relays instance with fetched data.
+        
+        The heavy lifting is split between Relays.__init__ (core processing from
+        details API) and Relays.enrich_with_api_data() (secondary API enrichment).
+        See enrich_with_api_data() docstring for the full pipeline overview.
         """
         if self.progress:
             self.progress_logger.start_section("Data Processing")
@@ -268,7 +272,7 @@ class Coordinator:
         relay_set = Relays(
             output_dir=self.output_dir,
             onionoo_url=self.onionoo_details_url,
-            relay_data=relay_data,  # Required parameter
+            relay_data=relay_data,
             use_bits=self.use_bits,
             progress=self.progress,
             start_time=self.start_time,
@@ -276,8 +280,8 @@ class Coordinator:
             total_steps=self.total_steps,
             filter_downtime_days=self.filter_downtime_days,
             base_url=self.base_url,
-            progress_logger=self.progress_logger,  # Pass shared progress logger
-            mp_workers=self.mp_workers  # Multiprocessing workers for parallel page generation
+            progress_logger=self.progress_logger,
+            mp_workers=self.mp_workers,
         )
         
         if relay_set.json is None:
@@ -285,65 +289,17 @@ class Coordinator:
                 self._log_progress_with_step_increment("Failed to create relay set")
             return None
         
-        # Phase 2: Attach additional API data to relay set (dynamic assignment)
-        uptime_data = self.get_uptime_data()
-        bandwidth_data = self.get_bandwidth_data()
-        aroi_validation_data = self.get_aroi_validation_data()
-        collector_consensus_data = self.get_collector_consensus_data()
+        # Enrich with secondary API data (uptime, bandwidth, AROI, collector)
+        # Processing order and dependencies are documented in enrich_with_api_data()
+        relay_set.enrich_with_api_data(
+            uptime_data=self.get_uptime_data(),
+            bandwidth_data=self.get_bandwidth_data(),
+            aroi_validation_data=self.get_aroi_validation_data(),
+            collector_consensus_data=self.get_collector_consensus_data(),
+            consensus_health_data=self.get_consensus_health_data(),
+        )
         
-        setattr(relay_set, 'uptime_data', uptime_data)
-        setattr(relay_set, 'bandwidth_data', bandwidth_data)
-        setattr(relay_set, 'aroi_validation_data', aroi_validation_data)
-        setattr(relay_set, 'consensus_health_data', self.get_consensus_health_data())
-        setattr(relay_set, 'collector_data', self.get_collector_data())
-        setattr(relay_set, 'collector_consensus_data', collector_consensus_data)
-        
-        # CRITICAL FIX: Process uptime data FIRST, then regenerate AROI leaderboards.
-        # This allows leaderboards to reuse per-relay `uptime_percentages` instead of
-        # repeatedly scanning the raw uptime API payload (major performance optimization).
-        if uptime_data:
-            # Step 1: Process uptime data - attaches uptime_percentages to each relay
-            relay_set._reprocess_uptime_data()
-            # Step 2: Generate leaderboards - can now reuse pre-computed uptime data
-            relay_set._generate_aroi_leaderboards()
-            # Recalculate network health metrics now that uptime data is available
-            relay_set._calculate_network_health_metrics()
-        
-        # BANDWIDTH PROCESSING: Process bandwidth data for contact page reliability metrics
-        # Mirror the uptime processing structure but keep separate as requested
-        if bandwidth_data and hasattr(relay_set, 'json') and relay_set.json.get('relays'):
-            try:
-                # Reprocess bandwidth data for individual relays and contact pages
-                # This also merges overload fields and computes stability for each relay
-                relay_set._reprocess_bandwidth_data()
-                # Recalculate network health metrics with complete overload data
-                # (stability_is_overloaded is now computed from all 3 overload indicators)
-                relay_set._calculate_network_health_metrics()
-            except Exception as e:
-                print(f"Warning: Bandwidth processing failed ({e}), continuing without bandwidth metrics")
-                # Continue without bandwidth metrics rather than crashing
-        
-        # COLLECTOR CONSENSUS PROCESSING: Process CollecTor data for per-relay consensus evaluation
-        # Attaches consensus troubleshooting information to each relay
-        if collector_consensus_data and hasattr(relay_set, 'json') and relay_set.json.get('relays'):
-            try:
-                relay_set._reprocess_collector_data()
-            except Exception as e:
-                print(f"Warning: Collector consensus processing failed ({e}), continuing without consensus evaluation")
-                # Continue without consensus evaluation rather than crashing
-        
-        # PERF OPTIMIZATION: Pre-compute all contact page data AFTER all data processing
-        # This must happen after uptime data, bandwidth data, and AROI leaderboards are processed
-        # because contact page calculations depend on those results.
-        # Enables ~33x speedup for contact page generation via parallelization.
-        relay_set._precompute_all_contact_page_data()
-        
-        # PERF OPTIMIZATION: Pre-compute all family page data
-        # Family pages were 6-10x slower than contact pages due to per-page validation status computation.
-        # Pre-computing this data enables similar speedup (from ~22ms/page to ~3ms/page).
-        relay_set._precompute_all_family_page_data()
-        
-        # Update the relay_set's progress_step to match our current progress
+        # Sync progress state
         relay_set.progress_step = self.progress_step
         
         if self.progress:

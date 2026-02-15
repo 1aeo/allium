@@ -625,7 +625,7 @@ class TestCoordinatorMultiAPI:
         assert result == mock_collector_data
     
     def test_create_relay_set_with_additional_apis(self):
-        """Test relay set creation with additional API data attached"""
+        """Test relay set creation with additional API data attached via enrich_with_api_data"""
         mock_details_data = {
             "relays": [{
                 "nickname": "TestRelay1", 
@@ -667,10 +667,14 @@ class TestCoordinatorMultiAPI:
             
             assert result == mock_relay_set
             
-            # Verify additional API data was attached
-            assert mock_relay_set.uptime_data == mock_uptime_data
-            assert mock_relay_set.consensus_health_data == {"health_status": {}}
-            assert mock_relay_set.collector_data == {"authorities": []}
+            # Verify enrich_with_api_data was called with the correct API data
+            mock_relay_set.enrich_with_api_data.assert_called_once_with(
+                uptime_data=mock_uptime_data,
+                bandwidth_data=None,
+                aroi_validation_data=None,
+                collector_consensus_data=None,
+                consensus_health_data={"health_status": {}},
+            )
     
     def test_fetch_onionoo_data_multiapi_compatibility(self):
         """Test that fetch_onionoo_data returns details for backward compatibility"""
@@ -753,8 +757,8 @@ class TestCoordinatorMultiAPI:
                 
                 assert result == mock_relay_set
                 
-                # Verify additional API data was attached
-                assert mock_relay_set.uptime_data == mock_uptime_data
+                # Verify enrich_with_api_data was called (API data flows through it)
+                mock_relay_set.enrich_with_api_data.assert_called_once()
     
     def test_api_workers_url_transformation(self):
         """Test that API worker URLs are correctly assigned"""
