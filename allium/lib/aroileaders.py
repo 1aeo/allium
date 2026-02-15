@@ -464,17 +464,11 @@ def _calculate_aroi_leaderboards(relays_instance):
         # Get relay data for new calculations only
         operator_relays = [all_relays[i] for i in relay_indices]
         
-        # Geographic and platform diversity (minimal calculation)
-        countries = set(relay.get('country', '') for relay in operator_relays if relay.get('country'))
-        platforms = set(relay.get('platform', '') for relay in operator_relays if relay.get('platform'))
-        
-        # Specialized platform/geographic counts (new calculations)
-        non_linux_count = sum(1 for relay in operator_relays 
-                             if relay.get('platform') and not relay.get('platform', '').startswith('Linux'))
-        
-        # === IPv4/IPv6 UNIQUE ADDRESS CALCULATIONS + VALIDATION TRACKING (MERGED) ===
-        # Extract unique IPv4 and IPv6 addresses from all operator relays
-        # Also track validation status in the same loop for efficiency
+        # === MERGED LOOP: IPv4/IPv6 + Validation + Countries + Platforms ===
+        # All per-relay metric collection in a single pass over operator_relays
+        countries = set()
+        platforms = set()
+        non_linux_count = 0
         unique_ipv4_addresses = set()
         unique_ipv6_addresses = set()
         ipv4_relay_count = 0
@@ -513,6 +507,16 @@ def _calculate_aroi_leaderboards(relays_instance):
             else:
                 relay_consensus_weight = 0.0
             relay_flags = relay.get('flags', [])
+            
+            # Collect geographic/platform diversity (merged from separate loops)
+            relay_country = relay.get('country', '')
+            if relay_country:
+                countries.add(relay_country)
+            relay_platform = relay.get('platform', '')
+            if relay_platform:
+                platforms.add(relay_platform)
+                if not relay_platform.startswith('Linux'):
+                    non_linux_count += 1
             
             has_ipv4 = False
             has_ipv6 = False
@@ -607,38 +611,24 @@ def _calculate_aroi_leaderboards(relays_instance):
         relays_in_rare_countries = sum(1 for relay in operator_relays 
                                      if relay.get('country', '') in operator_rare_countries)
         
-        # Calculate breakdown of relays per rare country for tooltips and specialization
+        # Calculate all country breakdowns in a single pass over operator_relays
         rare_country_breakdown = {}
-        for relay in operator_relays:
-            country = relay.get('country', '')
-            if country in operator_rare_countries:
-                rare_country_breakdown[country] = rare_country_breakdown.get(country, 0) + 1
-        
-        # Sort by relay count (descending) then by country name for consistent display
-        sorted_rare_breakdown = sorted(rare_country_breakdown.items(), 
-                                     key=lambda x: (-x[1], x[0]))
-        
-        # Calculate general country breakdown for reuse (all countries, not just rare ones)
         all_country_breakdown = {}
+        non_eu_country_breakdown = {}
         for relay in operator_relays:
             country = relay.get('country', '')
             if country:
                 all_country_breakdown[country] = all_country_breakdown.get(country, 0) + 1
+                if country in operator_rare_countries:
+                    rare_country_breakdown[country] = rare_country_breakdown.get(country, 0) + 1
+                if country not in EU_POLITICAL_REGION:
+                    non_eu_country_breakdown[country] = non_eu_country_breakdown.get(country, 0) + 1
         
-        # Sort by relay count (descending) then by country name for consistent display
-        sorted_all_country_breakdown = sorted(all_country_breakdown.items(), 
-                                     key=lambda x: (-x[1], x[0]))
-        
-        # Calculate non-EU country breakdown for specialization column
-        non_eu_country_breakdown = {}
-        for relay in operator_relays:
-            country = relay.get('country', '')
-            if country and country not in EU_POLITICAL_REGION:
-                non_eu_country_breakdown[country] = non_eu_country_breakdown.get(country, 0) + 1
-        
-        # Sort by relay count (descending) then by country name for consistent display
-        sorted_non_eu_country_breakdown = sorted(non_eu_country_breakdown.items(), 
-                                                key=lambda x: (-x[1], x[0]))
+        # Sort all breakdowns by relay count (descending) then by country name
+        _sort_key = lambda x: (-x[1], x[0])
+        sorted_rare_breakdown = sorted(rare_country_breakdown.items(), key=_sort_key)
+        sorted_all_country_breakdown = sorted(all_country_breakdown.items(), key=_sort_key)
+        sorted_non_eu_country_breakdown = sorted(non_eu_country_breakdown.items(), key=_sort_key)
         
 
         
