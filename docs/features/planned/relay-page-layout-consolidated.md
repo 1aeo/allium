@@ -78,13 +78,25 @@ This document proposes a redesign of the Allium relay page to prioritize operato
 
 #### Backend Components
 
+> **Architecture Note (2026-02-15):** `relays.py` was refactored from ~5,900 lines into 8 focused modules.
+> Line numbers below reference the post-refactor structure. Key modules:
+> `relays.py` (~1,100 lines — core class, overload merging, consensus eval call),
+> `page_writer.py` (~1,020 lines — HTML generation),
+> `network_health.py` (~1,300 lines — network statistics),
+> `operator_analysis.py` (~1,350 lines — operator/contact analysis),
+> `categorization.py` (~750 lines), `flag_analysis.py` (~380 lines),
+> `time_utils.py` (~118 lines), `ip_utils.py` (~94 lines).
+
 | Item | Status | Location | Notes |
 |------|--------|----------|-------|
 | stability_utils.py | ✅ Implemented | `allium/lib/stability_utils.py` | compute_relay_stability() with 72h threshold |
-| Overload Data Fetching | ✅ Implemented | `allium/lib/relays.py` lines 782-797 | Merges /details and /bandwidth overload fields |
+| Overload Data Fetching | ✅ Implemented | `allium/lib/relays.py` lines ~510-525 | Merges /details and /bandwidth overload fields in `_reprocess_bandwidth_data()` |
 | AROI Validation Backend | ✅ Implemented | `allium/lib/aroi_validation.py` | Validation status passed to templates |
 | BandwidthFormatter | ✅ Implemented | `allium/lib/bandwidth_formatter.py` | Respects --bits flag for rate formatting |
-| Consensus Evaluation | ✅ Implemented | `consensus_evaluation.py` | Per-authority data, flag thresholds, issues |
+| Consensus Evaluation | ✅ Implemented | `consensus_evaluation.py` | Per-authority data, flag thresholds, issues, exit policy |
+| Page Writer | ✅ Implemented | `allium/lib/page_writer.py` | Extracted from relays.py — HTML generation, `write_relay_info()` |
+| Network Health | ✅ Implemented | `allium/lib/network_health.py` | Extracted from relays.py — network statistics |
+| Time Utils | ✅ Implemented | `allium/lib/time_utils.py` | Extracted from relays.py — `format_time_ago()`, timestamp parsing |
 
 #### Template Sections (Dedicated `<section>` Elements)
 
@@ -1682,7 +1694,7 @@ rather than calculated in Jinja2 templates. This provides:
 | `relay['exit_probability']` | float | `relay['exit_probability']` | Probability selected as exit (0.0-1.0) |
 | `relay['measured']` | bool/None | `relay['measured']` | Whether bandwidth was measured by ≥3 authorities |
 
-**Pre-computed Display Values (from relays.py):**
+**Pre-computed Display Values (from relays.py / stability_utils.py):**
 
 | Variable | Type | Template Access | Description |
 |----------|------|-----------------|-------------|
@@ -1939,7 +1951,7 @@ rather than calculated in Jinja2 templates. This provides:
 
 #### Template Filters Used
 
-All filters are already available in `relays.py`:
+All filters are already available in `relays.py` (registered as Jinja2 filters):
 
 | Filter | Usage | Description |
 |--------|-------|-------------|
@@ -2043,7 +2055,7 @@ All filters are already available in `relays.py`:
 | **Anchor** | `#overload` |
 | **Position** | After `#uptime` (Uptime and Stability), before `#operator` (Operator and Family) |
 | **Template File** | `allium/templates/relay-info.html` |
-| **Backend Status** | ✅ Implemented (`stability_utils.py`, `relays.py`) |
+| **Backend Status** | ✅ Implemented (`stability_utils.py`, `relays.py`, `page_writer.py`) |
 | **Template Status** | ⏳ Not Started |
 
 ---
@@ -2077,11 +2089,11 @@ All filters are already available in `relays.py`:
 | Component | Status | File | Notes |
 |-----------|--------|------|-------|
 | Stability computation | ✅ Done | `stability_utils.py` | `compute_relay_stability()` with 72h threshold |
-| Overload data fetching | ✅ Done | `relays.py` lines 782-797 | Merges `/details` and `/bandwidth` fields |
+| Overload data fetching | ✅ Done | `relays.py` lines ~510-525 | Merges `/details` and `/bandwidth` fields in `_reprocess_bandwidth_data()` |
 | Pre-computed variables | ✅ Done | `relays.py` | `stability_is_overloaded`, `stability_text`, `stability_color`, `stability_tooltip` |
 | Health Status link | ✅ Done | `relay-info.html` line 175 | `<a href="#overload">` wraps stability text |
 | Template section | ⏳ TODO | `relay-info.html` | Add `<section id="overload">` |
-| Timestamp filters | ⏳ TODO | `relays.py` | Add `format_timestamp`, `format_timestamp_ago` for ms timestamps |
+| Timestamp filters | ⏳ TODO | `time_utils.py` | Add `format_timestamp`, `format_timestamp_ago` for ms timestamps |
 | CSS styling | ⏳ TODO | `relay-info.html` | Add `#overload .dl-horizontal-compact` styles |
 
 ---
@@ -2376,7 +2388,7 @@ relay descriptors keep the overload flag for 72 hours after the last overload ev
 Onionoo /details ─────────────────┐
   └─ overload_general_timestamp   │
                                   ▼
-Onionoo /bandwidth ───────────► relays.py ──► stability_utils.py ──► Template
+Onionoo /bandwidth ───────────► relays.py ──► stability_utils.py ──► page_writer.py ──► Template
   ├─ overload_ratelimits                          │
   │    ├─ rate-limit                              │
   │    ├─ burst-limit                             ▼
@@ -2388,14 +2400,14 @@ Onionoo /bandwidth ───────────► relays.py ──► stab
 ```
 
 **Files:**
-- `allium/lib/relays.py` lines 782-797 — Merges overload data during `_reprocess_bandwidth_data()`
+- `allium/lib/relays.py` lines ~510-525 — Merges overload data during `_reprocess_bandwidth_data()`
 - `allium/lib/stability_utils.py` — `compute_relay_stability()` with 72h threshold
 
 ---
 
 ##### Template Filters
 
-**Existing filters** (in `allium/lib/relays.py`):
+**Existing filters** (in `allium/lib/relays.py` and `allium/lib/time_utils.py`):
 
 | Filter | Purpose |
 |--------|---------|
@@ -2406,7 +2418,7 @@ Onionoo /bandwidth ───────────► relays.py ──► stab
 **New filters needed** (for millisecond timestamps):
 
 ```python
-# Add to allium/lib/relays.py
+# Add to allium/lib/time_utils.py (timestamp formatting) or allium/lib/relays.py (filter registration)
 
 def format_timestamp(ts_ms: int) -> str:
     """Format millisecond timestamp to readable date string."""
@@ -2700,7 +2712,7 @@ Display detailed AROI validation status for the operator, showing how many relay
 **Backend Requirement:**
 To enable AROI validation status in relay pages, `contact_validation_status` must be passed to the template.
 
-**File:** `allium/lib/relays.py` (in `write_relay_info()` method)
+**File:** `allium/lib/page_writer.py` (in `write_relay_info()` function, delegated from `relays.py`)
 
 **Add to `write_relay_info()`:**
 ```python
@@ -4223,14 +4235,14 @@ Each section header should be clickable and link to itself:
 | `relay.consensus_evaluation.reachability_summary` | dict | IPv4/IPv6 reach | `_format_reachability_summary()` |
 | `relay.consensus_evaluation.bandwidth_summary` | dict | BW statistics | `_format_bandwidth_summary()` |
 | `relay.consensus_evaluation.flag_summary` | dict | Flag eligibility | `_format_flag_summary()` |
-| `relays` | Relays | Parent relay set object | `allium/lib/relays.py` |
+| `relays` | Relays | Parent relay set object | `allium/lib/relays.py` (core class) |
 | `relays.use_bits` | bool | Display in bits or bytes | CLI flag |
 | `relays.timestamp` | str | Data freshness timestamp | Onionoo |
 | `page_ctx` | dict | Page context (path_prefix, etc.) | `page_context.py` |
 | `base_url` | str | Base URL for AROI links | Config |
 | `validated_aroi_domains` | set | Validated AROI domains | AROI validation |
 | `contact_validation_status` | dict/None | Full AROI validation status for relay's contact | `aroi_validation.py` |
-| `contact_display_data` | dict | Pre-computed contact display data | `relays.py` |
+| `contact_display_data` | dict | Pre-computed contact display data | `relays.py` (`_compute_contact_display_data()`) |
 
 **Key Relay Fields Used:**
 
