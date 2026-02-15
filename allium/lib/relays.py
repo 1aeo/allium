@@ -7,25 +7,16 @@ timestamp
 
 import functools
 import hashlib
-import json
 import multiprocessing as mp
 import os
 import re
-import sys
 import time
-import urllib.request
-from shutil import rmtree, copy2
-from jinja2 import Environment, FileSystemLoader, FileSystemBytecodeCache
 from .aroileaders import _calculate_aroi_leaderboards, _safe_parse_ip_address
-from .progress import log_progress, get_memory_usage
 from .progress_logger import ProgressLogger
-from .string_utils import format_percentage_from_fraction, extract_contact_display_name
 from .bandwidth_formatter import (
-    BandwidthFormatter, 
-    determine_unit, 
-    get_divisor_for_unit, 
+    BandwidthFormatter,
     format_bandwidth_with_unit,
-    determine_unit_filter, 
+    determine_unit_filter,
     format_bandwidth_filter
 )
 from .stability_utils import compute_relay_stability
@@ -37,7 +28,6 @@ from .time_utils import (
     format_timestamp_gmt,
     format_time_ago,
 )
-import logging
 import statistics
 from datetime import datetime, timedelta
 
