@@ -16,6 +16,18 @@ def _pct(numerator, denominator):
     return (numerator / denominator * 100) if denominator > 0 else 0.0
 
 
+def _safe_mean(values):
+    """Return statistics.mean(values) if non-empty, else 0.0."""
+    import statistics as _stats
+    return _stats.mean(values) if values else 0.0
+
+
+def _safe_median(values):
+    """Return statistics.median(values) if non-empty, else 0.0."""
+    import statistics as _stats
+    return _stats.median(values) if values else 0.0
+
+
 def preformat_network_health_template_strings(health_metrics):
     """
     OPTIMIZATION: Pre-format all template strings to eliminate Jinja2 formatting overhead.
@@ -823,10 +835,10 @@ def calculate_network_health_metrics(relay_set):
     
     # NEW: Calculate geographic CW/BW ratios (mean and median)
     health_metrics.update({
-        'eu_cw_bw_mean': int(statistics.mean(eu_cw_bw_values)) if eu_cw_bw_values else 0,
-        'eu_cw_bw_median': int(statistics.median(eu_cw_bw_values)) if eu_cw_bw_values else 0,
-        'non_eu_cw_bw_mean': int(statistics.mean(non_eu_cw_bw_values)) if non_eu_cw_bw_values else 0,
-        'non_eu_cw_bw_median': int(statistics.median(non_eu_cw_bw_values)) if non_eu_cw_bw_values else 0
+        'eu_cw_bw_mean': int(_safe_mean(eu_cw_bw_values)),
+        'eu_cw_bw_median': int(_safe_median(eu_cw_bw_values)),
+        'non_eu_cw_bw_mean': int(_safe_mean(non_eu_cw_bw_values)),
+        'non_eu_cw_bw_median': int(_safe_median(non_eu_cw_bw_values))
     })
     
     # OPTIMIZATION: Extract Top AS CW/BW values from collected data (eliminates extra loop)
@@ -851,12 +863,12 @@ def calculate_network_health_metrics(relay_set):
                 top_10_as_cw_bw_values.extend(cw_bw_ratios)
     
     health_metrics.update({
-        'top_3_as_cw_bw_mean': int(statistics.mean(top_3_as_cw_bw_values)) if top_3_as_cw_bw_values else 0,
-        'top_3_as_cw_bw_median': int(statistics.median(top_3_as_cw_bw_values)) if top_3_as_cw_bw_values else 0,
-        'top_5_as_cw_bw_mean': int(statistics.mean(top_5_as_cw_bw_values)) if top_5_as_cw_bw_values else 0,
-        'top_5_as_cw_bw_median': int(statistics.median(top_5_as_cw_bw_values)) if top_5_as_cw_bw_values else 0,
-        'top_10_as_cw_bw_mean': int(statistics.mean(top_10_as_cw_bw_values)) if top_10_as_cw_bw_values else 0,
-        'top_10_as_cw_bw_median': int(statistics.median(top_10_as_cw_bw_values)) if top_10_as_cw_bw_values else 0
+        'top_3_as_cw_bw_mean': int(_safe_mean(top_3_as_cw_bw_values)),
+        'top_3_as_cw_bw_median': int(_safe_median(top_3_as_cw_bw_values)),
+        'top_5_as_cw_bw_mean': int(_safe_mean(top_5_as_cw_bw_values)),
+        'top_5_as_cw_bw_median': int(_safe_median(top_5_as_cw_bw_values)),
+        'top_10_as_cw_bw_mean': int(_safe_mean(top_10_as_cw_bw_values)),
+        'top_10_as_cw_bw_median': int(_safe_median(top_10_as_cw_bw_values))
     })
     
     # NEW: Exit policy metrics (FIXED: use exit_count for percentage calculations)
@@ -1060,29 +1072,29 @@ def calculate_network_health_metrics(relay_set):
         'exit_cw_bw_overall': (exit_cw_sum / exit_bw_sum) if exit_bw_sum > 0 else 0.0,
         'guard_cw_bw_overall': (guard_cw_sum / guard_bw_sum) if guard_bw_sum > 0 else 0.0,
         'middle_cw_bw_overall': (middle_cw_sum / middle_bw_sum) if middle_bw_sum > 0 else 0.0,
-        'exit_cw_bw_avg': statistics.mean(exit_cw_values) if exit_cw_values else 0.0,
-        'guard_cw_bw_avg': statistics.mean(guard_cw_values) if guard_cw_values else 0.0,
-        'middle_cw_bw_avg': statistics.mean(middle_cw_values) if middle_cw_values else 0.0,
-        'exit_cw_bw_median': statistics.median(exit_cw_values) if exit_cw_values else 0.0,
-        'guard_cw_bw_median': statistics.median(guard_cw_values) if guard_cw_values else 0.0,
-        'middle_cw_bw_median': statistics.median(middle_cw_values) if middle_cw_values else 0.0,
-        'exit_bw_mean': statistics.mean(exit_bw_values) if exit_bw_values else 0.0,
-        'guard_bw_mean': statistics.mean(guard_bw_values) if guard_bw_values else 0.0,
-        'middle_bw_mean': statistics.mean(middle_bw_values) if middle_bw_values else 0.0,
-        'exit_bw_median': statistics.median(exit_bw_values) if exit_bw_values else 0.0,
-        'guard_bw_median': statistics.median(guard_bw_values) if guard_bw_values else 0.0,
-        'middle_bw_median': statistics.median(middle_bw_values) if middle_bw_values else 0.0,
-        # NEW: Flag-specific bandwidth statistics
-        'fast_bw_mean': statistics.mean(fast_bandwidth_values) if fast_bandwidth_values else 0.0,
-        'fast_bw_median': statistics.median(fast_bandwidth_values) if fast_bandwidth_values else 0.0,
-        'stable_bw_mean': statistics.mean(stable_bandwidth_values) if stable_bandwidth_values else 0.0,
-        'stable_bw_median': statistics.median(stable_bandwidth_values) if stable_bandwidth_values else 0.0,
-        'authority_bw_mean': statistics.mean(authority_bandwidth_values) if authority_bandwidth_values else 0.0,
-        'authority_bw_median': statistics.median(authority_bandwidth_values) if authority_bandwidth_values else 0.0,
-        'v2dir_bw_mean': statistics.mean(v2dir_bandwidth_values) if v2dir_bandwidth_values else 0.0,
-        'v2dir_bw_median': statistics.median(v2dir_bandwidth_values) if v2dir_bandwidth_values else 0.0,
-        'hsdir_bw_mean': statistics.mean(hsdir_bandwidth_values) if hsdir_bandwidth_values else 0.0,
-        'hsdir_bw_median': statistics.median(hsdir_bandwidth_values) if hsdir_bandwidth_values else 0.0
+        'exit_cw_bw_avg': _safe_mean(exit_cw_values),
+        'guard_cw_bw_avg': _safe_mean(guard_cw_values),
+        'middle_cw_bw_avg': _safe_mean(middle_cw_values),
+        'exit_cw_bw_median': _safe_median(exit_cw_values),
+        'guard_cw_bw_median': _safe_median(guard_cw_values),
+        'middle_cw_bw_median': _safe_median(middle_cw_values),
+        'exit_bw_mean': _safe_mean(exit_bw_values),
+        'guard_bw_mean': _safe_mean(guard_bw_values),
+        'middle_bw_mean': _safe_mean(middle_bw_values),
+        'exit_bw_median': _safe_median(exit_bw_values),
+        'guard_bw_median': _safe_median(guard_bw_values),
+        'middle_bw_median': _safe_median(middle_bw_values),
+        # Flag-specific bandwidth statistics
+        'fast_bw_mean': _safe_mean(fast_bandwidth_values),
+        'fast_bw_median': _safe_median(fast_bandwidth_values),
+        'stable_bw_mean': _safe_mean(stable_bandwidth_values),
+        'stable_bw_median': _safe_median(stable_bandwidth_values),
+        'authority_bw_mean': _safe_mean(authority_bandwidth_values),
+        'authority_bw_median': _safe_median(authority_bandwidth_values),
+        'v2dir_bw_mean': _safe_mean(v2dir_bandwidth_values),
+        'v2dir_bw_median': _safe_median(v2dir_bandwidth_values),
+        'hsdir_bw_mean': _safe_mean(hsdir_bandwidth_values),
+        'hsdir_bw_median': _safe_median(hsdir_bandwidth_values)
     })
     
     # PRE-CALCULATE BANDWIDTH MEAN/MEDIAN WITH PROPER UNITS - avoid showing 0 values

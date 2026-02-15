@@ -29,6 +29,25 @@ from .string_utils import safe_html_escape
 
 
 
+def _top_n(operators, metric, n=50, filter_fn=None):
+    """
+    Return the top-n operators sorted by a metric key, optionally pre-filtered.
+    
+    Replaces 18 repeated sorted(..., key=lambda x: x[1][metric], reverse=True)[:n] blocks.
+    
+    Args:
+        operators (dict): Operator key → metrics dict
+        metric (str): Key in the metrics dict to sort by
+        n (int): Number of top entries to return (default 50)
+        filter_fn (callable, optional): If provided, only include operators where filter_fn(v) is True
+    
+    Returns:
+        list: Top-n (operator_key, metrics) tuples sorted by metric descending
+    """
+    source = operators if filter_fn is None else {k: v for k, v in operators.items() if filter_fn(v)}
+    return sorted(source.items(), key=lambda x: x[1][metric], reverse=True)[:n]
+
+
 def normalize_contact_info(contact_info):
     """
     Normalize contact information by removing common artifacts and standardizing.
@@ -451,17 +470,11 @@ def _collect_operator_metrics(relays_instance):
         # Get relay data for new calculations only
         operator_relays = [all_relays[i] for i in relay_indices]
         
-        # Geographic and platform diversity (minimal calculation)
-        countries = set(relay.get('country', '') for relay in operator_relays if relay.get('country'))
-        platforms = set(relay.get('platform', '') for relay in operator_relays if relay.get('platform'))
-        
-        # Specialized platform/geographic counts (new calculations)
-        non_linux_count = sum(1 for relay in operator_relays 
-                             if relay.get('platform') and not relay.get('platform', '').startswith('Linux'))
-        
-        # === IPv4/IPv6 UNIQUE ADDRESS CALCULATIONS + VALIDATION TRACKING (MERGED) ===
-        # Extract unique IPv4 and IPv6 addresses from all operator relays
-        # Also track validation status in the same loop for efficiency
+        # === MERGED LOOP: IPv4/IPv6 + Validation + Countries + Platforms ===
+        # All per-relay metric collection in a single pass over operator_relays
+        countries = set()
+        platforms = set()
+        non_linux_count = 0
         unique_ipv4_addresses = set()
         unique_ipv6_addresses = set()
         ipv4_relay_count = 0
@@ -500,6 +513,16 @@ def _collect_operator_metrics(relays_instance):
             else:
                 relay_consensus_weight = 0.0
             relay_flags = relay.get('flags', [])
+            
+            # Collect geographic/platform diversity (merged from separate loops)
+            relay_country = relay.get('country', '')
+            if relay_country:
+                countries.add(relay_country)
+            relay_platform = relay.get('platform', '')
+            if relay_platform:
+                platforms.add(relay_platform)
+                if not relay_platform.startswith('Linux'):
+                    non_linux_count += 1
             
             has_ipv4 = False
             has_ipv6 = False
@@ -594,38 +617,24 @@ def _collect_operator_metrics(relays_instance):
         relays_in_rare_countries = sum(1 for relay in operator_relays 
                                      if relay.get('country', '') in operator_rare_countries)
         
-        # Calculate breakdown of relays per rare country for tooltips and specialization
+        # Calculate all country breakdowns in a single pass over operator_relays
         rare_country_breakdown = {}
-        for relay in operator_relays:
-            country = relay.get('country', '')
-            if country in operator_rare_countries:
-                rare_country_breakdown[country] = rare_country_breakdown.get(country, 0) + 1
-        
-        # Sort by relay count (descending) then by country name for consistent display
-        sorted_rare_breakdown = sorted(rare_country_breakdown.items(), 
-                                     key=lambda x: (-x[1], x[0]))
-        
-        # Calculate general country breakdown for reuse (all countries, not just rare ones)
         all_country_breakdown = {}
+        non_eu_country_breakdown = {}
         for relay in operator_relays:
             country = relay.get('country', '')
             if country:
                 all_country_breakdown[country] = all_country_breakdown.get(country, 0) + 1
+                if country in operator_rare_countries:
+                    rare_country_breakdown[country] = rare_country_breakdown.get(country, 0) + 1
+                if country not in EU_POLITICAL_REGION:
+                    non_eu_country_breakdown[country] = non_eu_country_breakdown.get(country, 0) + 1
         
-        # Sort by relay count (descending) then by country name for consistent display
-        sorted_all_country_breakdown = sorted(all_country_breakdown.items(), 
-                                     key=lambda x: (-x[1], x[0]))
-        
-        # Calculate non-EU country breakdown for specialization column
-        non_eu_country_breakdown = {}
-        for relay in operator_relays:
-            country = relay.get('country', '')
-            if country and country not in EU_POLITICAL_REGION:
-                non_eu_country_breakdown[country] = non_eu_country_breakdown.get(country, 0) + 1
-        
-        # Sort by relay count (descending) then by country name for consistent display
-        sorted_non_eu_country_breakdown = sorted(non_eu_country_breakdown.items(), 
-                                                key=lambda x: (-x[1], x[0]))
+        # Sort all breakdowns by relay count (descending) then by country name
+        _sort_key = lambda x: (-x[1], x[0])
+        sorted_rare_breakdown = sorted(rare_country_breakdown.items(), key=_sort_key)
+        sorted_all_country_breakdown = sorted(all_country_breakdown.items(), key=_sort_key)
+        sorted_non_eu_country_breakdown = sorted(non_eu_country_breakdown.items(), key=_sort_key)
         
 
         
@@ -831,144 +840,40 @@ def _rank_operators(aroi_operators):
     Sort operators into leaderboard category rankings.
     
     Each category is a sorted list of (operator_key, metrics) tuples, top 50.
-    To add a new leaderboard: add one sorted() call here.
+    Uses _top_n() helper to eliminate 18 repeated sort-and-slice blocks.
+    To add a new leaderboard: add one _top_n() call here.
     
     Returns:
         dict: category_name -> sorted list of (operator_key, metrics) tuples
     """
-    leaderboards = {}
-    
-    # 1. Bandwidth Contributed (use existing calculation)
-    leaderboards['bandwidth'] = sorted(
-        aroi_operators.items(),
-        key=lambda x: x[1]['total_bandwidth'],
-        reverse=True
-    )[:50]  # Top 50 for each category
-    
-    # 2. Consensus Weight (use existing calculation)
-    leaderboards['consensus_weight'] = sorted(
-        aroi_operators.items(),
-        key=lambda x: x[1]['total_consensus_weight'],
-        reverse=True
-    )[:50]
-    
-    # 3. Exit Authority Champions (new calculation)
-    leaderboards['exit_authority'] = sorted(
-        aroi_operators.items(),
-        key=lambda x: x[1]['exit_consensus_weight'],
-        reverse=True
-    )[:50]
-    
-    # 4. Guard Authority Champions (new calculation)
-    leaderboards['guard_authority'] = sorted(
-        aroi_operators.items(),
-        key=lambda x: x[1]['guard_consensus_weight'],
-        reverse=True
-    )[:50]
-    
-    # 5. Exit Operators (use existing calculation)
-    leaderboards['exit_operators'] = sorted(
-        aroi_operators.items(),
-        key=lambda x: x[1]['exit_count'],
-        reverse=True
-    )[:50]
-    
-    # 6. Guard Operators (use existing calculation)
-    leaderboards['guard_operators'] = sorted(
-        aroi_operators.items(),
-        key=lambda x: x[1]['guard_count'],
-        reverse=True
-    )[:50]
-    
-    # 7. ⏰ Reliability Masters - 6-Month Average Uptime (NEW) - Only operators with > 25 relays AND > 0% uptime
-    reliability_masters_filtered = {k: v for k, v in aroi_operators.items() if v['total_relays'] > 25 and v['reliability_6m_score'] > 0.0}
-    leaderboards['reliability_masters'] = sorted(
-        reliability_masters_filtered.items(),
-        key=lambda x: x[1]['reliability_6m_score'],
-        reverse=True
-    )[:50]
-    
-    # 8. 👑 Legacy Titans - 5-Year Average Uptime (NEW) - Only operators with > 25 relays AND > 0% uptime
-    legacy_titans_filtered = {k: v for k, v in aroi_operators.items() if v['total_relays'] > 25 and v['reliability_5y_score'] > 0.0}
-    leaderboards['legacy_titans'] = sorted(
-        legacy_titans_filtered.items(),
-        key=lambda x: x[1]['reliability_5y_score'],
-        reverse=True
-    )[:50]
-    
-    # 9. Most Diverse Operators (new calculation)
-    leaderboards['most_diverse'] = sorted(
-        aroi_operators.items(),
-        key=lambda x: x[1]['diversity_score'],
-        reverse=True
-    )[:50]
-    
-    # 10. Platform Diversity - Non-Linux Heroes (new calculation)
-    leaderboards['platform_diversity'] = sorted(
-        aroi_operators.items(),
-        key=lambda x: x[1]['non_linux_count'],
-        reverse=True
-    )[:50]
-    
-    # 11. Geographic Champions - Non-EU Leaders (new calculation)
-    leaderboards['non_eu_leaders'] = sorted(
-        aroi_operators.items(),
-        key=lambda x: x[1]['non_eu_count'],
-        reverse=True
-    )[:50]
-    
-    # 12. Frontier Builders - Rare Countries (new calculation)
-    leaderboards['frontier_builders'] = sorted(
-        aroi_operators.items(),
-        key=lambda x: x[1]['rare_country_count'],
-        reverse=True
-    )[:50]
-    
-    # 13. Network Veterans - Earliest First Seen + Relay Scale (new calculation)
-    leaderboards['network_veterans'] = sorted(
-        aroi_operators.items(),
-        key=lambda x: x[1]['veteran_score'],
-        reverse=True
-    )[:50]
-    
-    # 14. IPv4 Address Leaders - Unique IPv4 Addresses per Operator (new calculation)
-    leaderboards['ipv4_leaders'] = sorted(
-        aroi_operators.items(),
-        key=lambda x: x[1]['unique_ipv4_count'],
-        reverse=True
-    )[:50]
-    
-    # 15. IPv6 Address Leaders - Unique IPv6 Addresses per Operator (new calculation)
-    leaderboards['ipv6_leaders'] = sorted(
-        aroi_operators.items(),
-        key=lambda x: x[1]['unique_ipv6_count'],
-        reverse=True
-    )[:50]
-    
-    # 16. 🚀 Bandwidth Served Masters - 6-Month Average Bandwidth (NEW) - Only operators with > 25 relays AND > 0 bandwidth
-    bandwidth_masters_filtered = {k: v for k, v in aroi_operators.items() if v['total_relays'] > 25 and v['bandwidth_6m_score'] > 0.0}
-    leaderboards['bandwidth_masters'] = sorted(
-        bandwidth_masters_filtered.items(),
-        key=lambda x: x[1]['bandwidth_6m_score'],
-        reverse=True
-    )[:50]
-    
-    # 17. 🌟 Bandwidth Served Legends - 5-Year Average Bandwidth (NEW) - Only operators with > 25 relays AND > 0 bandwidth
-    bandwidth_legends_filtered = {k: v for k, v in aroi_operators.items() if v['total_relays'] > 25 and v['bandwidth_5y_score'] > 0.0}
-    leaderboards['bandwidth_legends'] = sorted(
-        bandwidth_legends_filtered.items(),
-        key=lambda x: x[1]['bandwidth_5y_score'],
-        reverse=True
-    )[:50]
-    
-    # 18. ✅ AROI Validation Champions - Most Validated Relays (NEW) - Only operators with > 0 validated relays
-    validated_relays_filtered = {k: v for k, v in aroi_operators.items() if v['validated_relay_count'] > 0}
-    leaderboards['validated_relays'] = sorted(
-        validated_relays_filtered.items(),
-        key=lambda x: x[1]['validated_relay_count'],
-        reverse=True
-    )[:50]
-    
+    # Filter lambdas for categories that require minimum thresholds
+    _reliability_filter = lambda v: v['total_relays'] > 25 and v['reliability_6m_score'] > 0.0
+    _legacy_filter = lambda v: v['total_relays'] > 25 and v['reliability_5y_score'] > 0.0
+    _bw_masters_filter = lambda v: v['total_relays'] > 25 and v['bandwidth_6m_score'] > 0.0
+    _bw_legends_filter = lambda v: v['total_relays'] > 25 and v['bandwidth_5y_score'] > 0.0
+    _validated_filter = lambda v: v['validated_relay_count'] > 0
+
+    leaderboards = {
+        'bandwidth':          _top_n(aroi_operators, 'total_bandwidth'),
+        'consensus_weight':   _top_n(aroi_operators, 'total_consensus_weight'),
+        'exit_authority':     _top_n(aroi_operators, 'exit_consensus_weight'),
+        'guard_authority':    _top_n(aroi_operators, 'guard_consensus_weight'),
+        'exit_operators':     _top_n(aroi_operators, 'exit_count'),
+        'guard_operators':    _top_n(aroi_operators, 'guard_count'),
+        'reliability_masters': _top_n(aroi_operators, 'reliability_6m_score', filter_fn=_reliability_filter),
+        'legacy_titans':      _top_n(aroi_operators, 'reliability_5y_score', filter_fn=_legacy_filter),
+        'most_diverse':       _top_n(aroi_operators, 'diversity_score'),
+        'platform_diversity': _top_n(aroi_operators, 'non_linux_count'),
+        'non_eu_leaders':     _top_n(aroi_operators, 'non_eu_count'),
+        'frontier_builders':  _top_n(aroi_operators, 'rare_country_count'),
+        'network_veterans':   _top_n(aroi_operators, 'veteran_score'),
+        'ipv4_leaders':       _top_n(aroi_operators, 'unique_ipv4_count'),
+        'ipv6_leaders':       _top_n(aroi_operators, 'unique_ipv6_count'),
+        'bandwidth_masters':  _top_n(aroi_operators, 'bandwidth_6m_score', filter_fn=_bw_masters_filter),
+        'bandwidth_legends':  _top_n(aroi_operators, 'bandwidth_5y_score', filter_fn=_bw_legends_filter),
+        'validated_relays':   _top_n(aroi_operators, 'validated_relay_count', filter_fn=_validated_filter),
+    }
+
     return leaderboards
 
 

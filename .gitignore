@@ -33,6 +33,9 @@ safety-report.json
 allium/baseline_output/
 allium/test_output/
 allium/compare_outputs.sh
+www-baseline/
+www-after/
+www/
 
 # Generated output directories
 baseline_output/

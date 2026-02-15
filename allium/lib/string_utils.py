@@ -51,6 +51,8 @@ def format_percentage(value, decimals=1, fallback=NA_FALLBACK):
     """
     Format a decimal value as a percentage with consistent decimal places.
     
+    Delegates to format_percentage_from_fraction (identical logic, single implementation).
+    
     Args:
         value: Decimal value (e.g., 0.1234 for 12.34%)
         decimals: Number of decimal places (default: 1)
@@ -59,12 +61,7 @@ def format_percentage(value, decimals=1, fallback=NA_FALLBACK):
     Returns:
         str: Formatted percentage string (e.g., "12.3%")
     """
-    if value is None:
-        return fallback
-    try:
-        return f"{float(value) * 100:.{decimals}f}%"
-    except (ValueError, TypeError):
-        return fallback
+    return format_percentage_from_fraction(value, decimals, fallback)
 
 def format_percentage_or_na(value, decimals=2):
     """
