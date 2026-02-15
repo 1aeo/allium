@@ -403,53 +403,116 @@ def format_intelligence_rating(rating_text):
     else:  # Great or other
         return f'<span style="color: #2e7d2e; font-weight: bold;">Great</span>, {details}'
 
+def _format_bandwidth_breakdown(i, bandwidth_unit, relay_set):
+    """Format bandwidth breakdown by role (guard/middle/exit) for contact pages."""
+    bw_components = []
+    for role, count_key, bw_key in [('guard', 'guard_count', 'guard_bandwidth'),
+                                     ('middle', 'middle_count', 'middle_bandwidth'),
+                                     ('exit', 'exit_count', 'exit_bandwidth')]:
+        if i[count_key] > 0 and i[bw_key] > 0:
+            formatted = relay_set.bandwidth_formatter.format_bandwidth_with_unit(i[bw_key], bandwidth_unit)
+            if formatted != '0.00':
+                bw_components.append(f"{formatted} {bandwidth_unit} {role}")
+    return ', '.join(bw_components) if bw_components else None
+
+
+def _format_cw_breakdown(i):
+    """Format consensus weight breakdown by role for contact pages."""
+    cw_components = []
+    for role, count_key, cw_key in [('guard', 'guard_count', 'guard_consensus_weight_fraction'),
+                                     ('middle', 'middle_count', 'middle_consensus_weight_fraction'),
+                                     ('exit', 'exit_count', 'exit_consensus_weight_fraction')]:
+        if i[count_key] > 0 and i[cw_key] > 0:
+            cw_components.append(f"{i[cw_key] * 100:.2f}% {role}")
+    return ', '.join(cw_components) if cw_components else None
+
+
+def _format_uptime_periods(operator_reliability):
+    """Format overall uptime with green highlighting for 100% periods."""
+    uptime_formatted = {}
+    if operator_reliability and operator_reliability.get('overall_uptime'):
+        for period, data in operator_reliability['overall_uptime'].items():
+            avg = data.get('average', 0)
+            display_name = data.get('display_name', period)
+            relay_count = data.get('relay_count', 0)
+            
+            if avg >= 99.99 or abs(avg - 100.0) < 0.01:
+                uptime_formatted[period] = {
+                    'display': f'<span style="color: #28a745; font-weight: bold;">{display_name} {avg:.1f}%</span>',
+                    'relay_count': relay_count
+                }
+            else:
+                uptime_formatted[period] = {
+                    'display': f'{display_name} {avg:.1f}%',
+                    'relay_count': relay_count
+                }
+    return uptime_formatted
+
+
+def _format_outliers_data(operator_reliability):
+    """Format statistical outlier data for contact pages."""
+    outliers_data = {}
+    if operator_reliability and operator_reliability.get('outliers'):
+        total_outliers = len(operator_reliability['outliers'].get('low_outliers', [])) + len(operator_reliability['outliers'].get('high_outliers', []))
+        total_relays = operator_reliability.get('total_relays', 1)
+        
+        if total_outliers > 0:
+            outlier_percentage = (total_outliers / total_relays * 100) if total_relays > 0 else 0
+            
+            six_month_data = operator_reliability.get('overall_uptime', {}).get('6_months', {})
+            mean_uptime = six_month_data.get('average', 0)
+            std_dev = six_month_data.get('std_dev', 0)
+            two_sigma_threshold = mean_uptime - (2 * std_dev)
+            
+            outliers_data['total_count'] = total_outliers
+            outliers_data['total_relays'] = total_relays
+            outliers_data['percentage'] = f"{outlier_percentage:.1f}"
+            outliers_data['tooltip'] = f"6mo: ≥2σ {two_sigma_threshold:.1f}% from μ {mean_uptime:.1f}%"
+            
+            low_outliers = operator_reliability['outliers'].get('low_outliers', [])
+            if low_outliers:
+                low_names = [f"{o['nickname']} ({o['uptime']:.1f}%)" for o in low_outliers]
+                outliers_data['low_count'] = len(low_outliers)
+                outliers_data['low_tooltip'] = ', '.join(low_names)
+            
+            high_outliers = operator_reliability['outliers'].get('high_outliers', [])
+            if high_outliers:
+                high_names = [f"{o['nickname']} ({o['uptime']:.1f}%)" for o in high_outliers]
+                outliers_data['high_count'] = len(high_outliers)
+                outliers_data['high_tooltip'] = ', '.join(high_names)
+        else:
+            outliers_data['none_detected'] = True
+    return outliers_data
+
+
 def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, members, relay_set):
     """
     Compute contact-specific display data for contact pages.
     
+    Composed from helper functions for readability:
+    - _format_bandwidth_breakdown: Role-based bandwidth display
+    - _format_cw_breakdown: Consensus weight by role
+    - _format_uptime_periods: Uptime with green highlighting
+    - _format_outliers_data: Statistical outlier display
+    
     Args:
-        i: The relay data for the contact
-        bandwidth_unit: The bandwidth unit for the contact
-        operator_reliability: The reliability statistics for the contact
+        i: The contact's sorted data (bandwidth, counts, fractions)
+        bandwidth_unit: The bandwidth unit for this contact
+        operator_reliability: Reliability statistics from calculate_operator_reliability
         v: The contact hash
-        members: The list of relay objects for the contact
+        members: List of relay objects for this contact
+        relay_set: The Relays instance
         
     Returns:
-        dict: Contact-specific display data
+        dict: Contact-specific display data for template rendering
     """
     display_data = {}
     
-    # 1. Bandwidth components filtering (reuse existing formatting functions)
-    bw_components = []
-    if i["guard_count"] > 0 and i["guard_bandwidth"] > 0:
-        guard_bw = relay_set.bandwidth_formatter.format_bandwidth_with_unit(i["guard_bandwidth"], bandwidth_unit)
-        if guard_bw != '0.00':
-            bw_components.append(f"{guard_bw} {bandwidth_unit} guard")
+    # 1. Bandwidth breakdown by role
+    display_data['bandwidth_breakdown'] = _format_bandwidth_breakdown(i, bandwidth_unit, relay_set)
     
-    if i["middle_count"] > 0 and i["middle_bandwidth"] > 0:
-        middle_bw = relay_set.bandwidth_formatter.format_bandwidth_with_unit(i["middle_bandwidth"], bandwidth_unit)
-        if middle_bw != '0.00':
-            bw_components.append(f"{middle_bw} {bandwidth_unit} middle")
-    
-    if i["exit_count"] > 0 and i["exit_bandwidth"] > 0:
-        exit_bw = relay_set.bandwidth_formatter.format_bandwidth_with_unit(i["exit_bandwidth"], bandwidth_unit)
-        if exit_bw != '0.00':
-            bw_components.append(f"{exit_bw} {bandwidth_unit} exit")
-    
-    display_data['bandwidth_breakdown'] = ', '.join(bw_components) if bw_components else None
-    
-    # 2. Network influence components filtering
-    cw_components = []
-    if i["guard_count"] > 0 and i["guard_consensus_weight_fraction"] > 0:
-        cw_components.append(f"{i['guard_consensus_weight_fraction'] * 100:.2f}% guard")
-    
-    if i["middle_count"] > 0 and i["middle_consensus_weight_fraction"] > 0:
-        cw_components.append(f"{i['middle_consensus_weight_fraction'] * 100:.2f}% middle")
-    
-    if i["exit_count"] > 0 and i["exit_consensus_weight_fraction"] > 0:
-        cw_components.append(f"{i['exit_consensus_weight_fraction'] * 100:.2f}% exit")
-    
-    display_data['consensus_weight_breakdown'] = ', '.join(cw_components) if cw_components else None
+    # 2. Consensus weight breakdown by role
+    display_data['consensus_weight_breakdown'] = _format_cw_breakdown(i)
     
     # 3. Operator intelligence formatting (reuse existing contact intelligence data)
     intelligence_formatted = {}
@@ -635,28 +698,8 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
     
     display_data['operator_intelligence'] = intelligence_formatted
     
-    # 5. Overall uptime formatting with green highlighting
-    uptime_formatted = {}
-    if operator_reliability and operator_reliability.get('overall_uptime'):
-        for period, data in operator_reliability['overall_uptime'].items():
-            avg = data.get('average', 0)
-            display_name = data.get('display_name', period)
-            relay_count = data.get('relay_count', 0)
-            
-            # Fix floating point comparison by using >= 99.99 instead of == 100.0
-            # Also handle cases where avg is exactly 100.0 or very close due to floating point precision
-            if avg >= 99.99 or abs(avg - 100.0) < 0.01:
-                uptime_formatted[period] = {
-                    'display': f'<span style="color: #28a745; font-weight: bold;">{display_name} {avg:.1f}%</span>',
-                    'relay_count': relay_count
-                }
-            else:
-                uptime_formatted[period] = {
-                    'display': f'{display_name} {avg:.1f}%',
-                    'relay_count': relay_count
-                }
-    
-    display_data['uptime_formatted'] = uptime_formatted
+    # 5. Overall uptime formatting
+    display_data['uptime_formatted'] = _format_uptime_periods(operator_reliability)
     
     # 5.1. Network Uptime Percentiles formatting (6-month period)
     network_percentiles_formatted = {}
@@ -694,42 +737,7 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
     display_data['network_percentiles_formatted'] = network_percentiles_formatted
     
     # 6. Outliers calculations and formatting
-    outliers_data = {}
-    if operator_reliability and operator_reliability.get('outliers'):
-        total_outliers = len(operator_reliability['outliers'].get('low_outliers', [])) + len(operator_reliability['outliers'].get('high_outliers', []))
-        total_relays = operator_reliability.get('total_relays', 1)
-        
-        if total_outliers > 0:
-            outlier_percentage = (total_outliers / total_relays * 100) if total_relays > 0 else 0
-            
-            # Get statistics for tooltip
-            six_month_data = operator_reliability.get('overall_uptime', {}).get('6_months', {})
-            mean_uptime = six_month_data.get('average', 0)
-            std_dev = six_month_data.get('std_dev', 0)
-            two_sigma_threshold = mean_uptime - (2 * std_dev)
-            
-            outliers_data['total_count'] = total_outliers
-            outliers_data['total_relays'] = total_relays
-            outliers_data['percentage'] = f"{outlier_percentage:.1f}"
-            outliers_data['tooltip'] = f"6mo: ≥2σ {two_sigma_threshold:.1f}% from μ {mean_uptime:.1f}%"
-            
-            # Format low outliers
-            low_outliers = operator_reliability['outliers'].get('low_outliers', [])
-            if low_outliers:
-                low_names = [f"{o['nickname']} ({o['uptime']:.1f}%)" for o in low_outliers]
-                outliers_data['low_count'] = len(low_outliers)
-                outliers_data['low_tooltip'] = ', '.join(low_names)
-            
-            # Format high outliers  
-            high_outliers = operator_reliability['outliers'].get('high_outliers', [])
-            if high_outliers:
-                high_names = [f"{o['nickname']} ({o['uptime']:.1f}%)" for o in high_outliers]
-                outliers_data['high_count'] = len(high_outliers)
-                outliers_data['high_tooltip'] = ', '.join(high_names)
-        else:
-            outliers_data['none_detected'] = True
-    
-    display_data['outliers'] = outliers_data
+    display_data['outliers'] = _format_outliers_data(operator_reliability)
     
     # 7. Uptime data timestamp (reuse existing uptime data)
     uptime_timestamp = None
