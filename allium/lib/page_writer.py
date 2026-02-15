@@ -15,7 +15,7 @@ from shutil import rmtree
 
 from jinja2 import Environment, FileSystemLoader, FileSystemBytecodeCache
 
-from .aroileaders import _safe_parse_ip_address
+from .ip_utils import safe_parse_ip_address as _safe_parse_ip_address
 from .bandwidth_formatter import (
     BandwidthFormatter,
     determine_unit,

@@ -11,7 +11,8 @@ import multiprocessing as mp
 import os
 import re
 import time
-from .aroileaders import _calculate_aroi_leaderboards, _safe_parse_ip_address
+from .aroileaders import _calculate_aroi_leaderboards
+from .ip_utils import safe_parse_ip_address as _safe_parse_ip_address
 from .progress_logger import ProgressLogger
 from .bandwidth_formatter import (
     BandwidthFormatter,
@@ -92,6 +93,67 @@ class Relays:
         self._generate_aroi_leaderboards()  # Generate AROI operator leaderboards
         self._generate_smart_context()  # Generate intelligence analysis (needed for CW/BW ratios)
         self._calculate_network_health_metrics()  # Calculate network health dashboard metrics (regenerated after uptime data)
+
+    def enrich_with_api_data(self, uptime_data=None, bandwidth_data=None,
+                             aroi_validation_data=None, collector_consensus_data=None,
+                             consensus_health_data=None):
+        """
+        Enrich relay data with secondary API sources.
+        Called by coordinator after threaded API fetch completes.
+
+        This is the second half of the processing pipeline (after __init__).
+        The full pipeline is:
+
+        __init__:                             enrich_with_api_data:
+          1. filter_and_fix_relays              7. Attach raw API data
+          2. sort_by_observed_bandwidth         8. Uptime processing
+          3. trim_platform                      9. Re-generate leaderboards (uses uptime)
+          4. add_hashed_contact                10. Re-calculate health metrics (uses uptime)
+          5. preprocess_template_data          11. Bandwidth processing
+          6. categorize                        12. Re-calculate health metrics (uses bandwidth)
+             propagate_as_rarity               13. Collector consensus evaluation
+             generate_aroi_leaderboards        14. Pre-compute contact page data
+             generate_smart_context            15. Pre-compute family page data
+             calculate_network_health_metrics
+
+        Processing order matters:
+        - Uptime BEFORE leaderboards (leaderboards reuse per-relay uptime_percentages)
+        - Bandwidth BEFORE health (health uses overload data from bandwidth)
+        - ALL data processing BEFORE precompute (contact/family pages depend on everything)
+        """
+        # Step 7: Attach raw API data as attributes
+        self.uptime_data = uptime_data
+        self.bandwidth_data = bandwidth_data
+        self.aroi_validation_data = aroi_validation_data
+        self.collector_consensus_data = collector_consensus_data
+        self.consensus_health_data = consensus_health_data
+        # Legacy attribute for backward compatibility
+        self.collector_data = None
+
+        # Steps 8-10: Uptime processing → regenerate leaderboards + health
+        if uptime_data:
+            self._reprocess_uptime_data()
+            self._generate_aroi_leaderboards()
+            self._calculate_network_health_metrics()
+
+        # Steps 11-12: Bandwidth processing → regenerate health
+        if bandwidth_data and self.json.get('relays'):
+            try:
+                self._reprocess_bandwidth_data()
+                self._calculate_network_health_metrics()
+            except Exception as e:
+                print(f"Warning: Bandwidth processing failed ({e}), continuing without bandwidth metrics")
+
+        # Step 13: Collector consensus evaluation
+        if collector_consensus_data and self.json.get('relays'):
+            try:
+                self._reprocess_collector_data()
+            except Exception as e:
+                print(f"Warning: Collector consensus processing failed ({e}), continuing without consensus evaluation")
+
+        # Steps 14-15: Pre-compute page data (depends on ALL above)
+        self._precompute_all_contact_page_data()
+        self._precompute_all_family_page_data()
 
     def _log_progress(self, message, increment_step=False):
         """Log progress message using shared progress utility"""

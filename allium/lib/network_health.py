@@ -5,7 +5,7 @@ Network health dashboard metrics calculation and template string pre-formatting.
 Extracted from relays.py for better modularity.
 """
 
-from .aroileaders import _safe_parse_ip_address
+from .ip_utils import safe_parse_ip_address as _safe_parse_ip_address
 from .ip_utils import is_private_ip_address, determine_ipv6_support
 from .time_utils import parse_onionoo_timestamp, create_time_thresholds
 from .string_utils import format_percentage_from_fraction
@@ -168,6 +168,146 @@ def preformat_network_health_template_strings(health_metrics):
             count_formatted = f"{health_metrics[count_key]:,}"
             pct_formatted = format_percentage_from_fraction(health_metrics[pct_key] / 100, 1, "0.0%")
             health_metrics[combined_key] = f"{count_formatted} ({pct_formatted})"
+
+def _integrate_aroi_validation(health_metrics, relay_set, total_relays_count):
+    """
+    Integrate AROI validation metrics into health dashboard.
+    
+    Calculates relay-level and operator-level AROI validation statistics,
+    IPv6 support among validated operators, and stores the validation map
+    for reuse by contact pages.
+    
+    Extracted from calculate_network_health_metrics for readability.
+    """
+    try:
+        from .aroi_validation import calculate_aroi_validation_metrics
+        
+        # Get pre-fetched validation data (attached by coordinator)
+        validation_data = getattr(relay_set, 'aroi_validation_data', None)
+        
+        # Calculate validation metrics (relay AND operator level in single pass)
+        validation_metrics = calculate_aroi_validation_metrics(
+            relay_set.json.get('relays', []), 
+            validation_data,
+            calculate_operator_metrics=True
+        )
+        
+        # Store validation_map for reuse by contact pages (avoids rebuilding 3,000+ times)
+        relay_set.validation_map = validation_metrics.pop('_validation_map', {})
+        
+        # Add validation metrics to health_metrics
+        health_metrics.update(validation_metrics)
+        
+        # Calculate total relays with AROI (validated + invalid)
+        total_relays_with_aroi = (
+            validation_metrics.get('aroi_validated_count', 0) + 
+            validation_metrics.get('aroi_unvalidated_count', 0)
+        )
+        
+        # Calculate percentages relative to AROI relays
+        if total_relays_with_aroi > 0:
+            aroi_validated_pct_of_aroi = (
+                validation_metrics['aroi_validated_count'] / total_relays_with_aroi * 100
+            )
+            aroi_invalid_pct_of_aroi = (
+                validation_metrics['aroi_unvalidated_count'] / total_relays_with_aroi * 100
+            )
+        else:
+            aroi_validated_pct_of_aroi = 0.0
+            aroi_invalid_pct_of_aroi = 0.0
+        
+        # Add derived metrics
+        health_metrics['total_relays_with_aroi'] = total_relays_with_aroi
+        health_metrics['total_relays_with_aroi_percentage'] = _pct(total_relays_with_aroi, total_relays_count)
+        health_metrics['aroi_validated_percentage_of_aroi'] = aroi_validated_pct_of_aroi
+        health_metrics['aroi_invalid_percentage_of_aroi'] = aroi_invalid_pct_of_aroi
+        
+        # Calculate relays without AROI
+        relays_without_aroi = total_relays_count - total_relays_with_aroi
+        health_metrics['relays_without_aroi'] = relays_without_aroi
+        health_metrics['relays_without_aroi_percentage'] = _pct(relays_without_aroi, total_relays_count)
+        
+        # Extract validated domain set for IPv6 calculation
+        validated_domain_set = validation_metrics.get('_validated_domain_set', set())
+        validated_aroi_domains = validation_metrics.get('validated_aroi_domains_count', 0)
+        unique_aroi_domains_count = validation_metrics.get('unique_aroi_domains_count', 0)
+        
+        # Store validated domain set for vanity URL generation later
+        relay_set.validated_aroi_domains = validated_domain_set
+        
+        # Update aroi_operators_count to use accurate AROI domain count
+        health_metrics['aroi_operators_count'] = unique_aroi_domains_count
+        
+        # Get IPv6 status dict from earlier calculation
+        operator_ipv6_status = health_metrics.pop('_temp_operator_ipv6_status', {})
+        
+        # Count IPv6 support ONLY among validated operators (mutually exclusive)
+        both_ipv4_ipv6_aroi_operators = sum(1 for domain in validated_domain_set 
+                                        if domain in operator_ipv6_status and operator_ipv6_status[domain]['has_dual_stack'])
+        ipv4_only_aroi_operators = sum(1 for domain in validated_domain_set
+                                   if domain in operator_ipv6_status and not operator_ipv6_status[domain]['has_dual_stack'] and operator_ipv6_status[domain]['has_ipv4_only'])
+        
+        health_metrics['ipv4_only_aroi_operators'] = ipv4_only_aroi_operators
+        health_metrics['both_ipv4_ipv6_aroi_operators'] = both_ipv4_ipv6_aroi_operators
+        
+        # Calculate IPv6 operator percentages based on validated operators count
+        if validated_aroi_domains > 0:
+            health_metrics['ipv4_only_aroi_operators_percentage'] = _pct(ipv4_only_aroi_operators, validated_aroi_domains)
+            health_metrics['both_ipv4_ipv6_aroi_operators_percentage'] = _pct(both_ipv4_ipv6_aroi_operators, validated_aroi_domains)
+        else:
+            health_metrics['ipv4_only_aroi_operators_percentage'] = 0.0
+            health_metrics['both_ipv4_ipv6_aroi_operators_percentage'] = 0.0
+        
+        # Calculate average relays per operator
+        aroi_operators_count = health_metrics.get('aroi_operators_count', 0)
+        if aroi_operators_count > 0:
+            health_metrics['avg_relays_per_aroi_operator'] = round(
+                total_relays_with_aroi / aroi_operators_count, 2
+            )
+        else:
+            health_metrics['avg_relays_per_aroi_operator'] = 0.0
+                
+    except Exception as e:
+        # Graceful fallback if validation data unavailable
+        if relay_set.progress:
+            print(f"⚠️  AROI Validation: Error loading data: {e}")
+        health_metrics.update({
+            'aroi_validated_count': 0,
+            'aroi_unvalidated_count': 0,
+            'aroi_no_proof_count': 0,
+            'relays_no_aroi': 0,
+            'relays_without_aroi': total_relays_count,
+            'relays_without_aroi_percentage': 100.0 if total_relays_count > 0 else 0.0,
+            'aroi_validated_percentage': 0.0,
+            'aroi_unvalidated_percentage': 0.0,
+            'aroi_no_proof_percentage': 0.0,
+            'relays_no_aroi_percentage': 0.0,
+            'aroi_validation_success_rate': 0.0,
+            'dns_rsa_success_rate': 0.0,
+            'uri_rsa_success_rate': 0.0,
+            'validation_data_available': False,
+            'total_relays_with_aroi': 0,
+            'total_relays_with_aroi_percentage': 0.0,
+            'aroi_validated_percentage_of_aroi': 0.0,
+            'aroi_invalid_percentage_of_aroi': 0.0,
+            'avg_relays_per_aroi_operator': 0.0,
+            'unique_aroi_domains_count': 0,
+            'validated_aroi_domains_count': 0,
+            'invalid_aroi_domains_count': 0,
+            'validated_aroi_domains_percentage': 0.0,
+            'invalid_aroi_domains_percentage': 0.0,
+            'relay_error_top5': [],
+            'operator_error_top5': [],
+            'dns_error_top5': [],
+            'uri_error_top5': [],
+            'no_aroi_reasons_top5': [],
+            'top_operators_text': 'No data available',
+            'ipv4_only_aroi_operators': 0,
+            'both_ipv4_ipv6_aroi_operators': 0,
+            'ipv4_only_aroi_operators_percentage': 0.0,
+            'both_ipv4_ipv6_aroi_operators_percentage': 0.0
+        })
+
 
 def calculate_network_health_metrics(relay_set):
     """
@@ -1170,140 +1310,7 @@ def calculate_network_health_metrics(relay_set):
     })
     
     # === AROI VALIDATION METRICS ===
-    # Calculate AROI validation metrics for operator participation
-    # Data was fetched in parallel by coordinator API worker
-    try:
-        from .aroi_validation import calculate_aroi_validation_metrics
-        
-        # Get pre-fetched validation data (attached by coordinator)
-        validation_data = getattr(relay_set, 'aroi_validation_data', None)
-        
-        # Calculate validation metrics (relay AND operator level in single pass)
-        validation_metrics = calculate_aroi_validation_metrics(
-            relay_set.json.get('relays', []), 
-            validation_data,
-            calculate_operator_metrics=True  # Enable operator-level metrics in same pass
-        )
-        
-        # Store validation_map for reuse by contact pages (avoids rebuilding 3,000+ times)
-        relay_set.validation_map = validation_metrics.pop('_validation_map', {})
-        
-        # Add validation metrics to health_metrics
-        health_metrics.update(validation_metrics)
-        
-        # Calculate total relays with AROI (validated + invalid)
-        total_relays_with_aroi = (
-            validation_metrics.get('aroi_validated_count', 0) + 
-            validation_metrics.get('aroi_unvalidated_count', 0)
-        )
-        
-        # Calculate percentages relative to AROI relays
-        if total_relays_with_aroi > 0:
-            aroi_validated_pct_of_aroi = (
-                validation_metrics['aroi_validated_count'] / total_relays_with_aroi * 100
-            )
-            aroi_invalid_pct_of_aroi = (
-                validation_metrics['aroi_unvalidated_count'] / total_relays_with_aroi * 100
-            )
-        else:
-            aroi_validated_pct_of_aroi = 0.0
-            aroi_invalid_pct_of_aroi = 0.0
-        
-        # Add derived metrics
-        health_metrics['total_relays_with_aroi'] = total_relays_with_aroi
-        health_metrics['total_relays_with_aroi_percentage'] = _pct(total_relays_with_aroi, total_relays_count)
-        health_metrics['aroi_validated_percentage_of_aroi'] = aroi_validated_pct_of_aroi
-        health_metrics['aroi_invalid_percentage_of_aroi'] = aroi_invalid_pct_of_aroi
-        
-        # Calculate relays without AROI (total - validated - unvalidated)
-        relays_without_aroi = total_relays_count - total_relays_with_aroi
-        health_metrics['relays_without_aroi'] = relays_without_aroi
-        health_metrics['relays_without_aroi_percentage'] = _pct(relays_without_aroi, total_relays_count)
-        
-        # Operator-level metrics calculated in aroi_validation.py (same pass as relay metrics)
-        # Extract validated domain set for IPv6 calculation
-        validated_domain_set = validation_metrics.get('_validated_domain_set', set())
-        validated_aroi_domains = validation_metrics.get('validated_aroi_domains_count', 0)
-        unique_aroi_domains_count = validation_metrics.get('unique_aroi_domains_count', 0)
-        
-        # Store validated domain set for vanity URL generation later
-        relay_set.validated_aroi_domains = validated_domain_set
-        
-        # UPDATE aroi_operators_count to use accurate AROI domain count (Option B: Global Replace)
-        health_metrics['aroi_operators_count'] = unique_aroi_domains_count
-        
-        # Get IPv6 status dict from earlier calculation
-        operator_ipv6_status = health_metrics.pop('_temp_operator_ipv6_status', {})
-        
-        # Count IPv6 support ONLY among validated operators (mutually exclusive)
-        both_ipv4_ipv6_aroi_operators = sum(1 for domain in validated_domain_set 
-                                        if domain in operator_ipv6_status and operator_ipv6_status[domain]['has_dual_stack'])
-        ipv4_only_aroi_operators = sum(1 for domain in validated_domain_set
-                                   if domain in operator_ipv6_status and not operator_ipv6_status[domain]['has_dual_stack'] and operator_ipv6_status[domain]['has_ipv4_only'])
-        
-        health_metrics['ipv4_only_aroi_operators'] = ipv4_only_aroi_operators
-        health_metrics['both_ipv4_ipv6_aroi_operators'] = both_ipv4_ipv6_aroi_operators
-        
-        # Calculate IPv6 operator percentages based on validated operators count (124)
-        if validated_aroi_domains > 0:
-            health_metrics['ipv4_only_aroi_operators_percentage'] = _pct(ipv4_only_aroi_operators, validated_aroi_domains)
-            health_metrics['both_ipv4_ipv6_aroi_operators_percentage'] = _pct(both_ipv4_ipv6_aroi_operators, validated_aroi_domains)
-        else:
-            health_metrics['ipv4_only_aroi_operators_percentage'] = 0.0
-            health_metrics['both_ipv4_ipv6_aroi_operators_percentage'] = 0.0
-        
-        # Calculate average relays per operator (now using accurate count)
-        aroi_operators_count = health_metrics.get('aroi_operators_count', 0)
-        if aroi_operators_count > 0:
-            health_metrics['avg_relays_per_aroi_operator'] = round(
-                total_relays_with_aroi / aroi_operators_count, 2
-            )
-        else:
-            health_metrics['avg_relays_per_aroi_operator'] = 0.0
-        
-        # AROI validation progress messages are now handled by coordinator API worker
-        # No need for separate progress output here since it's fetched in parallel
-                
-    except Exception as e:
-        # Graceful fallback if validation data unavailable
-        if relay_set.progress:
-            print(f"⚠️  AROI Validation: Error loading data: {e}")
-        health_metrics.update({
-            'aroi_validated_count': 0,
-            'aroi_unvalidated_count': 0,
-            'aroi_no_proof_count': 0,
-            'relays_no_aroi': 0,
-            'relays_without_aroi': total_relays_count,  # All relays have no AROI if validation fails
-            'relays_without_aroi_percentage': 100.0 if total_relays_count > 0 else 0.0,
-            'aroi_validated_percentage': 0.0,
-            'aroi_unvalidated_percentage': 0.0,
-            'aroi_no_proof_percentage': 0.0,
-            'relays_no_aroi_percentage': 0.0,
-            'aroi_validation_success_rate': 0.0,
-            'dns_rsa_success_rate': 0.0,
-            'uri_rsa_success_rate': 0.0,
-            'validation_data_available': False,
-            'total_relays_with_aroi': 0,
-            'total_relays_with_aroi_percentage': 0.0,
-            'aroi_validated_percentage_of_aroi': 0.0,
-            'aroi_invalid_percentage_of_aroi': 0.0,
-            'avg_relays_per_aroi_operator': 0.0,
-            'unique_aroi_domains_count': 0,
-            'validated_aroi_domains_count': 0,
-            'invalid_aroi_domains_count': 0,
-            'validated_aroi_domains_percentage': 0.0,
-            'invalid_aroi_domains_percentage': 0.0,
-            'relay_error_top5': [],
-            'operator_error_top5': [],
-            'dns_error_top5': [],
-            'uri_error_top5': [],
-            'no_aroi_reasons_top5': [],
-            'top_operators_text': 'No data available',
-            'ipv4_only_aroi_operators': 0,
-            'both_ipv4_ipv6_aroi_operators': 0,
-            'ipv4_only_aroi_operators_percentage': 0.0,
-            'both_ipv4_ipv6_aroi_operators_percentage': 0.0
-        })
+    _integrate_aroi_validation(health_metrics, relay_set, total_relays_count)
     
     # OPTIMIZATION: Pre-format all template strings to eliminate Jinja2 formatting overhead
     # Template formatting in Jinja2 is 3-5x slower than Python formatting
