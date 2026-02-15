@@ -78,24 +78,77 @@ class Coordinator:
         self.worker_data = {}
         self.worker_threads = []
         
-        # API workers to run (Phase 2: multiple APIs)
-        # Build API workers list based on enabled APIs
-        self.api_workers = []
-        
-        # Always include details API (required for core functionality)
-        self.api_workers.append(("onionoo_details", fetch_onionoo_details, [self.onionoo_details_url, self._log_progress]))
-        
-        # Include uptime API only if 'all' is selected (details + uptime)
-        if self.enabled_apis == 'all':
-            self.api_workers.append(("onionoo_uptime", fetch_onionoo_uptime, [self.onionoo_uptime_url, self._log_progress]))
-            self.api_workers.append(("onionoo_bandwidth", fetch_onionoo_bandwidth, [self.onionoo_bandwidth_url, self.bandwidth_cache_hours, self._log_progress]))
-            self.api_workers.append(("aroi_validation", fetch_aroi_validation, [self.aroi_url, self._log_progress]))
-            
-            # CollecTor consensus evaluation (Phase 1 feature)
-            # Note: authorities parameter will be None initially, set after Onionoo fetch completes
-            from .consensus import is_consensus_evaluation_enabled as collector_enabled
-            if collector_enabled():
-                self.api_workers.append(("collector_consensus", fetch_collector_consensus_data, [None, self._log_progress]))
+        # Build API workers list from declarative registry
+        # To add a new API: add one entry to API_WORKER_REGISTRY below
+        self.api_workers = self._build_api_workers()
+    
+    # =========================================================================
+    # API WORKER REGISTRY
+    # =========================================================================
+    # Declarative list of API workers. Each entry defines:
+    #   name:       Internal identifier for the API
+    #   fetch_fn:   Function to call (from workers.py)
+    #   group:      Which --apis mode includes this worker ('details' or 'all')
+    #   args_fn:    Lambda returning the argument list for fetch_fn
+    #   enabled_fn: Optional callable returning bool (for feature flags)
+    #
+    # To add a new API source:
+    #   1. Create a fetch function in workers.py
+    #   2. Add one entry here
+    #   3. Handle the data in Relays.enrich_with_api_data()
+    # =========================================================================
+    API_WORKER_REGISTRY = [
+        {
+            "name": "onionoo_details",
+            "fetch_fn": fetch_onionoo_details,
+            "group": "details",  # Included in both 'details' and 'all' modes
+            "args_fn": lambda self: [self.onionoo_details_url, self._log_progress],
+        },
+        {
+            "name": "onionoo_uptime",
+            "fetch_fn": fetch_onionoo_uptime,
+            "group": "all",
+            "args_fn": lambda self: [self.onionoo_uptime_url, self._log_progress],
+        },
+        {
+            "name": "onionoo_bandwidth",
+            "fetch_fn": fetch_onionoo_bandwidth,
+            "group": "all",
+            "args_fn": lambda self: [self.onionoo_bandwidth_url, self.bandwidth_cache_hours, self._log_progress],
+        },
+        {
+            "name": "aroi_validation",
+            "fetch_fn": fetch_aroi_validation,
+            "group": "all",
+            "args_fn": lambda self: [self.aroi_url, self._log_progress],
+        },
+        {
+            "name": "collector_consensus",
+            "fetch_fn": fetch_collector_consensus_data,
+            "group": "all",
+            "args_fn": lambda self: [None, self._log_progress],
+            "enabled_fn": lambda: __import__('allium.lib.consensus', fromlist=['is_consensus_evaluation_enabled']).is_consensus_evaluation_enabled(),
+        },
+    ]
+    
+    def _build_api_workers(self):
+        """Build the list of API workers based on enabled_apis mode and feature flags."""
+        workers = []
+        for entry in self.API_WORKER_REGISTRY:
+            # Include if group matches: 'details' workers run in all modes,
+            # 'all' workers only run when --apis=all
+            group = entry["group"]
+            if group == "details" or self.enabled_apis == "all":
+                # Check feature flag if present
+                enabled_fn = entry.get("enabled_fn")
+                if enabled_fn and not enabled_fn():
+                    continue
+                workers.append((
+                    entry["name"],
+                    entry["fetch_fn"],
+                    entry["args_fn"](self),
+                ))
+        return workers
         
     def _log_progress(self, message):
         """Log progress message using shared progress utility"""
