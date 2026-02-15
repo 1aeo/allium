@@ -11,16 +11,11 @@ Default output directory: ./www
 
 import argparse
 import os
-import resource
 import sys
 import time
-from shutil import copytree
-from typing import Any, Dict, Optional
-from lib.relays import Relays
 from lib.coordinator import create_relay_set_with_coordinator
-from lib.progress import log_progress
 from lib.progress_logger import create_progress_logger
-from lib.page_context import get_page_context, get_misc_page_context, StandardTemplateContexts
+from lib.site_generator import generate_site
 
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
 
@@ -279,159 +274,6 @@ if __name__ == "__main__":
         print("💡 Try running the command again, or check your internet connection")
         sys.exit(1)
     
-    # Progress logger is already synchronized via shared instance - no manual sync needed
-    # (Removing set_step() prevents backwards jump in progress counter)
-    progress_logger.log(f"Details API data loaded successfully - found {len(RELAY_SET.json.get('relays', []))} relays")
-
-    # Output directory already created early via ensure_output_directory() - skip redundant creation
-
-    # Start page generation section
-    progress_logger.start_section("Page Generation")
-
-    # AROI leaderboards as main index page, preserve top 500 relays at separate path
-    progress_logger.log("Generating index page (AROI leaderboards)...")
-    page_ctx = get_page_context('index', 'home')
-    RELAY_SET.write_misc(
-        template="aroi-leaderboards.html",
-        path="index.html",
-        page_ctx=page_ctx,
-    )
-    progress_logger.log("Generated index page with AROI leaderboards")
-
-    # Preserve top 500 relays at dedicated path
-    progress_logger.log("Generating top 500 relays page...")
-    RELAY_SET.write_misc(
-        template="index.html",
-        path="top500.html",
-        page_ctx=page_ctx,
-        is_index=True,
-    )
-    progress_logger.log("Generated top 500 relays page")
-
-    progress_logger.log("Generating all relays page...")
-    page_ctx = get_misc_page_context('All Relays')
-    RELAY_SET.write_misc(template="all.html", path="misc/all.html", page_ctx=page_ctx)
-    progress_logger.log("Generated all relays page")
-
-    # AROI leaderboards page
-    progress_logger.log("Generating AROI leaderboards page...")
-    aroi_ctx = get_misc_page_context('AROI Champions Dashboard')
-    RELAY_SET.write_misc(template="aroi-leaderboards.html", path="misc/aroi-leaderboards.html", page_ctx=aroi_ctx)
-    progress_logger.log("Generated AROI leaderboards page")
-
-    # Network Health Dashboard page
-    progress_logger.log("Generating network health dashboard...")
-    standard_contexts = StandardTemplateContexts(RELAY_SET)
-    health_ctx = standard_contexts.get_index_page_context('Network Health Dashboard', RELAY_SET.timestamp)
-    RELAY_SET.write_misc(template="network-health-dashboard.html", path="network-health.html", page_ctx=health_ctx)
-    progress_logger.log("Generated network health dashboard")
-
-    # miscellaneous page filename suffixes and sorted-by keys
-    misc_pages = {
-        "by-bandwidth": "1.bandwidth",
-        "by-overall-bandwidth": "1.bandwidth",
-        "by-guard-bandwidth": "1.guard_bandwidth",
-        "by-middle-bandwidth": "1.middle_bandwidth", 
-        "by-exit-bandwidth": "1.exit_bandwidth",
-        "by-bandwidth-mean": "1.bandwidth_mean",
-        "by-consensus-weight": "1.consensus_weight_fraction",
-        "by-guard-consensus-weight": "1.guard_consensus_weight_fraction",
-        "by-middle-consensus-weight": "1.middle_consensus_weight_fraction",
-        "by-exit-consensus-weight": "1.exit_consensus_weight_fraction",
-        "by-exit-count": "1.exit_count",
-        "by-guard-count": "1.guard_count",
-        "by-middle-count": "1.middle_count",
-        "by-unique-as-count": "1.unique_as_count",
-        "by-unique-contact-count": "1.unique_contact_count",
-        "by-unique-family-count": "1.unique_family_count",
-        "by-first-seen": "1.first_seen",
-    }
-
-    # miscellaneous-sorted (per misc_pages k/v) HTML pages
-    progress_logger.log("Generating miscellaneous sorted pages...")
-    
-    # Define page types for DRY generation
-    misc_page_types = [
-        ('families', 'Browse by Family'),
-        ('networks', 'Browse by Network'), 
-        ('contacts', 'Browse by Contact'),
-        ('countries', 'Browse by Country'),
-        ('platforms', 'Browse by Platform')
-    ]
-    
-    for k, v in misc_pages.items():
-        for page_type, page_title in misc_page_types:
-            standard_contexts = StandardTemplateContexts(RELAY_SET)
-            page_ctx = standard_contexts.get_misc_page_context(f"misc-{page_type}.html", page_title, sorted_by=v)
-            RELAY_SET.write_misc(
-                template=f"misc-{page_type}.html",
-                path=f"misc/{page_type}-{k}.html",
-                sorted_by=v,
-                page_ctx=page_ctx,
-            )
-
-    progress_logger.log("Generated 6 miscellaneous sorted pages")
-
-    # directory authorities page  
-    progress_logger.log("Generating directory authorities monitoring page...")
-    authorities_ctx = get_misc_page_context('Directory Authorities')
-    RELAY_SET.write_misc(
-        template="misc-authorities.html",
-        path="misc/authorities.html",
-        page_ctx=authorities_ctx,
-    )
-    progress_logger.log("Generated directory authorities monitoring page")
-    
-    # onionoo keys used to generate pages by unique value; e.g. AS43350
-    # Ordered with slowest pages first (family, contact have most relays per group)
-    keys = [
-        "family",
-        "contact",
-        "as",
-        "country",
-        "flag",
-        "platform",
-        "first_seen",
-    ]
-
-    # Generate pages for each unique value type
-    # Each key type increments the progress counter upon completion with detailed timing
-    # (e.g., "family page generation complete - Generated 5756 pages in 44.38s")
-    # Internal progress messages (e.g., "Processed 1000 family pages...") use
-    # log_without_increment for visibility without inflating the counter
-    for k in keys:
-        RELAY_SET.write_pages_by_key(k)
-
-    # per-relay info pages
-    progress_logger.log("Generating individual relay info pages...")
-    RELAY_SET.write_relay_info()
-    progress_logger.log(f"Generated individual pages for {len(RELAY_SET.json.get('relays', []))} relays")
-
-    # copy static directory and its contents if it doesn't exist
-    progress_logger.log("Copying static files...")
-    if not os.path.exists(os.path.join(args.output_dir, "static")):
-        copytree(
-            os.path.join(ABS_PATH, "static"),
-            os.path.join(args.output_dir, "static"),
-        )
-        progress_logger.log("Copied static files to output directory")
-    else:
-        progress_logger.log("Static files already exist, skipping copy")
-
-    # Generate search index for Cloudflare Pages Function
-    progress_logger.log("Generating search index...")
-    from lib.search_index import generate_search_index
-    search_index_path = os.path.join(args.output_dir, "search-index.json")
-    search_stats = generate_search_index(
-        RELAY_SET.json, search_index_path,
-        validated_aroi_domains=getattr(RELAY_SET, 'validated_aroi_domains', None)
-    )
-    progress_logger.log(
-        f"Generated search index: {search_stats['relay_count']} relays, "
-        f"{search_stats['family_count']} families, {search_stats['file_size_kb']} KB"
-    )
-
-    # End page generation section
-    progress_logger.end_section("Page Generation")
-
-    progress_logger.log("Allium static site generation completed successfully!")
+    # Generate the complete static site
+    # Page definitions and generation logic are in lib/site_generator.py
+    generate_site(RELAY_SET, args, progress_logger)
