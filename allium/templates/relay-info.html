@@ -1159,6 +1159,12 @@ Data from <a href="https://collector.torproject.org/recent/relay-descriptors/vot
         <td>{% if rv.fast_meets_minimum %}<span style="color: #28a745; font-weight: bold;">MEETS - ≥100 KB/s guarantee</span>{% elif rv.fast_meets_all %}<span style="color: #28a745; font-weight: bold;">MEETS - all {{ rv.total_authorities }} auths</span>{% elif rv.fast_meets_count > 0 %}<span style="color: #ffc107; font-weight: bold;">PARTIAL - {{ rv.fast_meets_count }}/{{ rv.total_authorities }}</span>{% else %}<span style="color: #dc3545; font-weight: bold;">BELOW - need ≥100 KB/s</span>{% endif %}</td>
     </tr>
     <tr>
+        <td title="Source: Onionoo | Field: exit_policy_summary | Exit flag requires allowing exits to ≥1 /8 address space on both ports 80 and 443 per Tor dir-spec Section 3.4.2.">Exit Policy <span style="color: #6c757d; font-size: 10px;">(Relay Reported)</span></td>
+        <td title="Source: Onionoo | Field: exit_policy_summary | Relay's exit policy summary showing allowed ports">{{ rv.exit_policy_display }}</td>
+        <td title="Tor dir-spec Section 3.4.2: Exit requires exits to ≥1 /8 on ports 80 AND 443">Allows ≥1 /8 on ports 80 AND 443</td>
+        <td>{% if rv.exit_eligible %}<span style="color: #28a745; font-weight: bold;">EXIT ELIGIBLE</span>{% elif rv.exit_allows_80 or rv.exit_allows_443 %}<span style="color: #ffc107; font-weight: bold;">PARTIAL - only port {% if rv.exit_allows_80 %}80{% else %}443{% endif %}</span>{% else %}<span style="color: #dc3545; font-weight: bold;">NON-EXIT (no port 80+443)</span>{% endif %}</td>
+    </tr>
+    <tr>
         <td title="Source: CollecTor | File: vote | Field: flag-thresholds hsdir-wfu=X | Weighted Fractional Uptime for HSDir flag">HSDir WFU <span style="color: #6c757d; font-size: 10px;">(Dir. Auth., wfu)</span></td>
         <td title="Source: CollecTor | File: vote | Field: stats wfu=X">{{ rv.wfu_display }}</td>
         <td title="Source: CollecTor | File: vote | Field: flag-thresholds hsdir-wfu=X">≥{{ "%.1f"|format(rv.hsdir_wfu_threshold * 100) }}% (from all auths)</td>
