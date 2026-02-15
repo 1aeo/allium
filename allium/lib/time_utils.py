@@ -7,6 +7,23 @@ timestamps used throughout the allium codebase.
 
 from datetime import datetime, timedelta, timezone
 
+# Shared period name constants (DRY: used across operator_analysis, flag_analysis, network_health)
+PERIOD_SHORT_NAMES = {
+    '1_month': '1M',
+    '3_months': '3M',
+    '6_months': '6M',
+    '1_year': '1Y',
+    '5_years': '5Y',
+}
+
+PERIOD_DISPLAY_NAMES = {
+    '1_month': '30d',
+    '3_months': '90d',
+    '6_months': '6mo',
+    '1_year': '1y',
+    '5_years': '5y',
+}
+
 
 def parse_onionoo_timestamp(timestamp_str):
     """Parse Onionoo timestamp string into datetime object"""
