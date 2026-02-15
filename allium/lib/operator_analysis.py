@@ -1242,7 +1242,7 @@ def calculate_operator_downtime_alerts(contact_hash, operator_relays, contact_da
             
             # Format last seen time using existing utility
             if last_seen and last_seen != 'Unknown':
-                last_seen_formatted = format_time_ago_fn(last_seen)
+                last_seen_formatted = format_time_ago(last_seen)
             else:
                 last_seen_formatted = 'Unknown'
             
