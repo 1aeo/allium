@@ -839,6 +839,7 @@ class CollectorFetcher:
             'stable': {'eligible_count': 0, 'assigned_count': 0, 'details': []},
             'fast': {'eligible_count': 0, 'assigned_count': 0, 'details': []},
             'hsdir': {'eligible_count': 0, 'assigned_count': 0, 'details': []},
+            'exit': {'eligible_count': 0, 'assigned_count': 0, 'details': []},
         }
         
         for auth_name, thresholds in self.flag_thresholds.items():
@@ -974,6 +975,23 @@ class CollectorFetcher:
                 'assigned': has_hsdir_flag,  # Whether authority actually assigned HSDir flag
                 'wfu_threshold': hsdir_wfu,
                 'tk_threshold': hsdir_tk,
+            })
+            
+            # Exit flag tracking
+            # Per dir-spec Section 3.4.2: Exit requires allowing exits to ≥1 /8
+            # address space on BOTH port 80 AND port 443.
+            # Unlike Guard/Stable/Fast/HSDir, Exit has no numeric thresholds in
+            # flag-thresholds. We track per-authority flag assignment since the
+            # policy check happens authority-side.
+            has_exit_flag = 'Exit' in auth_flags
+            if has_exit_flag:
+                eligibility['exit']['eligible_count'] += 1
+                eligibility['exit']['assigned_count'] += 1
+            
+            eligibility['exit']['details'].append({
+                'authority': auth_name,
+                'eligible': has_exit_flag,
+                'assigned': has_exit_flag,
             })
         
         return eligibility
