@@ -803,6 +803,7 @@ METRIC_TOOLTIPS = {
     'speed_fast': "Relay's observed bandwidth. Required >=100 KB/s (guaranteed) OR in top 7/8 of network for Fast flag. Source: Relay descriptor.",
     'wfu_hsdir': "Weighted Fractional Uptime: Required >=98% for HSDir flag to ensure reliable hidden service directory. Source: Dir. Auth. vote files.",
     'tk_hsdir': "How long authorities have tracked this relay. Most require >=25 hours; some (moria1) require ~10 days. Source: Dir. Auth. vote files.",
+    'policy_exit': "Exit policy must allow traffic to at least one /8 address space on both port 80 AND port 443 per Tor dir-spec Section 3.4.2. Source: Onionoo exit_policy_summary.",
 }
 
 SOURCE_TOOLTIPS = {
@@ -1188,6 +1189,39 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
     rows.append(_make_row('Guard', guard_tooltip, guard_color, 'Bandwidth', METRIC_TOOLTIPS['bw_guard'],
                           _format_relay_value_html(rv.get('observed_bw_display', 'N/A')), 'relay',
                           bw_threshold, bw_status, _get_status_text(bw_status, bw_extra)))
+    
+    # ========== Exit flag (1 row) ==========
+    # Per Tor dir-spec Section 3.4.2: Exit requires allowing exits to ≥1 /8
+    # address space on ports 80 AND 443. Unlike Guard (6 rows with prereqs + metrics),
+    # Exit has 1 row (policy-based, no numeric thresholds).
+    exit_color = get_flag_color('exit')
+    exit_tooltip = FLAG_TOOLTIPS['exit']
+    
+    exit_allows_80 = rv.get('exit_allows_80', False)
+    exit_allows_443 = rv.get('exit_allows_443', False)
+    exit_eligible = rv.get('exit_eligible', False)
+    
+    if exit_eligible:
+        exit_status = 'meets'
+        exit_extra = ''
+    elif exit_allows_80 or exit_allows_443:
+        exit_status = 'partial'
+        port = '80' if exit_allows_80 else '443'
+        exit_extra = f' (only port {port})'
+    else:
+        exit_status = 'below'
+        exit_extra = ''
+    
+    rows.append(_make_row(
+        'Exit', exit_tooltip, exit_color,
+        'Exit Policy', METRIC_TOOLTIPS['policy_exit'],
+        _format_relay_value_html(rv.get('exit_policy_display', 'N/A')),
+        'relay',
+        'Allows ≥1 /8 on ports 80 AND 443',
+        exit_status,
+        _get_status_text(exit_status, exit_extra),
+        rowspan=1,
+    ))
     
     return rows
 
