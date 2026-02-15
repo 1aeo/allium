@@ -32,6 +32,10 @@ from datetime import datetime, timedelta
 
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
 
+# Pre-compiled AROI parsing regexes (called ~7000 times per relay set)
+_AROI_URL_RE = re.compile(r'\burl:(?:https?://)?([^,\s]+)', re.IGNORECASE)
+_AROI_CIISS_RE = re.compile(r'\bciissversion:2\b', re.IGNORECASE)
+_AROI_PROOF_RE = re.compile(r'\bproof:(dns-rsa|uri-rsa)\b', re.IGNORECASE)
 
 # Page writing infrastructure imported from page_writer.py
 from .page_writer import (
@@ -185,10 +189,10 @@ class Relays:
             return "none"
             
         # Check if ALL required patterns are present (ciissversion, proof, and url)
-        # Use word boundaries (\b) to avoid matching "donationurl:" or similar fields
-        url_match = re.search(r'\burl:(?:https?://)?([^,\s]+)', contact, re.IGNORECASE)
-        ciiss_match = re.search(r'\bciissversion:2\b', contact, re.IGNORECASE)
-        proof_match = re.search(r'\bproof:(dns-rsa|uri-rsa)\b', contact, re.IGNORECASE)
+        # Uses pre-compiled regexes for performance (called ~7000 times)
+        url_match = _AROI_URL_RE.search(contact)
+        ciiss_match = _AROI_CIISS_RE.search(contact)
+        proof_match = _AROI_PROOF_RE.search(contact)
         
         if url_match and ciiss_match and proof_match:
             # All 3 fields present - extract domain and clean it up
@@ -212,11 +216,12 @@ class Relays:
     def _process_aroi_contacts(self):
         """
         Process all relay contacts to extract AROI domain information.
+        
+        NOTE: This is now a no-op because _add_hashed_contact() already stores
+        relay["aroi_domain"] during its loop (avoiding double regex parsing).
+        Kept for backward compatibility in case external code calls it.
         """
-        for relay in self.json["relays"]:
-            contact = relay.get("contact", "")
-            # Extract AROI domain for new display format
-            relay["aroi_domain"] = self._simple_aroi_parsing(contact)
+        pass
 
     def _add_hashed_contact(self):
         """
@@ -232,6 +237,9 @@ class Relays:
         for idx, relay in enumerate(self.json["relays"]):
             contact = relay.get("contact", "")
             aroi_domain = self._simple_aroi_parsing(contact)
+            
+            # Store AROI domain on relay now to avoid re-parsing in _process_aroi_contacts
+            relay["aroi_domain"] = aroi_domain
             
             # Use AROI domain as key if available, otherwise use contact hash as key
             if aroi_domain and aroi_domain != "none" and contact.strip():

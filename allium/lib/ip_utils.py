@@ -5,6 +5,8 @@ IP address utility functions for validation, classification, and IPv6 support
 detection used throughout the allium codebase.
 """
 
+import ipaddress
+
 from .aroileaders import _safe_parse_ip_address
 
 
@@ -45,8 +47,6 @@ def is_private_ip_address(ip_str):
     if not parsed_ip:
         return False  # Invalid IP address, assume public
     
-    # Import ipaddress module for proper range checking
-    import ipaddress
     try:
         ip_obj = ipaddress.ip_address(parsed_ip)
         

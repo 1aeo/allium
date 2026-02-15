@@ -10,6 +10,9 @@ import re
 
 from .string_utils import extract_contact_display_name
 
+# Pre-compiled regex for sort key validation (called ~49K times per run)
+_VALID_KEY_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+
 
 def calculate_network_totals(relay_set):
     """
@@ -140,7 +143,7 @@ def sort_relay(relay_set, relay, idx, k, v, cw, cw_fraction):
         cw:    consensus weight for this relay (passed to avoid repeated extraction)
         cw_fraction: consensus weight fraction (API value preferred, computed fallback)
     """
-    if not v or not re.match(r"^[A-Za-z0-9_-]+$", v):
+    if not v or not _VALID_KEY_RE.match(v):
         return
 
     if not k in relay_set.json["sorted"]:
