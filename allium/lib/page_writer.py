@@ -132,98 +132,113 @@ def _init_precompute_worker(relay_set):
     _precompute_relay_set = relay_set
 
 
+def _compute_contact_predata(relay_set, contact_hash, aroi_validation_timestamp, validated_aroi_domains):
+    """Core contact precomputation logic shared by sequential and parallel paths.
+    
+    DRY: Extracted from both _precompute_single_contact (relays.py) and
+    _precompute_contact_worker (page_writer.py) which contained identical logic.
+    
+    Args:
+        relay_set: The Relays object (self or forked global)
+        contact_hash: The contact hash to precompute for
+        aroi_validation_timestamp: Cached validation timestamp
+        validated_aroi_domains: Set of validated AROI domains
+        
+    Returns:
+        dict of precomputed values or None if no members
+    """
+    contact_data = relay_set.json["sorted"]["contact"][contact_hash]
+    
+    members = [relay_set.json["relays"][idx] for idx in contact_data.get("relays", [])]
+    if not members:
+        return None
+    
+    bandwidth_unit = relay_set.bandwidth_formatter.determine_unit(contact_data.get("bandwidth", 0))
+    
+    contact_rankings = relay_set._generate_contact_rankings(contact_hash)
+    operator_reliability = relay_set._calculate_operator_reliability(contact_hash, members)
+    contact_display_data = relay_set._compute_contact_display_data(
+        contact_data, bandwidth_unit, operator_reliability, contact_hash, members)
+    
+    if "aroi_validation_full" in contact_data:
+        contact_validation_status = contact_data["aroi_validation_full"]
+    else:
+        contact_validation_status = relay_set._get_contact_validation_status(members)
+    
+    aroi_domain = members[0].get("aroi_domain") if members else None
+    is_validated_aroi = (aroi_domain and aroi_domain != "none" and
+                        aroi_domain in validated_aroi_domains)
+    
+    return {
+        "contact_rankings": contact_rankings,
+        "operator_reliability": operator_reliability,
+        "contact_display_data": contact_display_data,
+        "contact_validation_status": contact_validation_status,
+        "aroi_validation_timestamp": aroi_validation_timestamp,
+        "is_validated_aroi": is_validated_aroi,
+        "precomputed_bandwidth_unit": bandwidth_unit,
+        "aroi_domain": aroi_domain,
+    }
+
+
 def _precompute_contact_worker(args):
     """Precompute data for a single contact in worker process.
     
-    Returns a flat dict of precomputed values to store directly on contact_data
-    (Sonnet-style simple access) using parallel computation (Opus-style performance).
+    Thin wrapper around _compute_contact_predata using forked global relay_set.
     """
     contact_hash, aroi_validation_timestamp, validated_aroi_domains = args
     
     try:
-        contact_data = _precompute_relay_set.json["sorted"]["contact"][contact_hash]
-        
-        # Get member relays for this contact
-        members = [_precompute_relay_set.json["relays"][idx] 
-                   for idx in contact_data.get("relays", [])]
-        if not members:
-            return (contact_hash, None)
-        
-        # Determine bandwidth unit for this contact
-        bandwidth_unit = _precompute_relay_set.bandwidth_formatter.determine_unit(
-            contact_data.get("bandwidth", 0))
-        
-        # Pre-compute contact rankings
-        contact_rankings = _precompute_relay_set._generate_contact_rankings(contact_hash)
-        
-        # Pre-compute operator reliability statistics
-        operator_reliability = _precompute_relay_set._calculate_operator_reliability(
-            contact_hash, members)
-        
-        # Pre-compute contact display data
-        contact_display_data = _precompute_relay_set._compute_contact_display_data(
-            contact_data, bandwidth_unit, operator_reliability, contact_hash, members)
-        
-        # Pre-compute AROI validation status
-        if "aroi_validation_full" in contact_data:
-            contact_validation_status = contact_data["aroi_validation_full"]
-        else:
-            contact_validation_status = _precompute_relay_set._get_contact_validation_status(members)
-        
-        # Check if this contact has a validated AROI domain
-        aroi_domain = members[0].get("aroi_domain") if members else None
-        is_validated_aroi = (aroi_domain and aroi_domain != "none" and 
-                            aroi_domain in validated_aroi_domains)
-        
-        # Return flat dict for direct storage on contact_data (simpler access pattern)
-        return (contact_hash, {
-            "contact_rankings": contact_rankings,
-            "operator_reliability": operator_reliability,
-            "contact_display_data": contact_display_data,
-            "contact_validation_status": contact_validation_status,
-            "aroi_validation_timestamp": aroi_validation_timestamp,
-            "is_validated_aroi": is_validated_aroi,
-            "precomputed_bandwidth_unit": bandwidth_unit,
-            "aroi_domain": aroi_domain,  # Store for vanity URL generation (avoids re-fetching members)
-        })
+        result = _compute_contact_predata(
+            _precompute_relay_set, contact_hash, aroi_validation_timestamp, validated_aroi_domains)
+        return (contact_hash, result)
     except Exception as e:
-        # Return None on error, sequential fallback will handle it
         return (contact_hash, None)
+
+
+def _compute_family_predata(relay_set, family_hash):
+    """Core family precomputation logic shared by sequential and parallel paths.
+    
+    DRY: Extracted from both _precompute_single_family (relays.py) and
+    _precompute_family_worker (page_writer.py) which contained identical logic.
+    
+    Args:
+        relay_set: The Relays object (self or forked global)
+        family_hash: The family hash to precompute for
+        
+    Returns:
+        dict of precomputed values or None if no members
+    """
+    family_data = relay_set.json["sorted"]["family"][family_hash]
+    
+    members = [relay_set.json["relays"][idx] for idx in family_data.get("relays", [])]
+    if not members:
+        return None
+    
+    contact_validation_status = (family_data.get("aroi_validation_full") or
+                                 relay_set._get_contact_validation_status(members))
+    
+    network_position = _compute_network_position_safe(
+        family_data["guard_count"], family_data["middle_count"],
+        family_data["exit_count"], len(members))
+    
+    return {
+        "contact_validation_status": contact_validation_status,
+        "network_position": network_position,
+    }
 
 
 def _precompute_family_worker(args):
     """Precompute data for a single family in worker process.
     
-    Returns a flat dict of precomputed values to store directly on family_data.
-    Mirrors _precompute_contact_worker pattern for consistency.
+    Thin wrapper around _compute_family_predata using forked global relay_set.
     """
     family_hash, = args
     
     try:
-        family_data = _precompute_relay_set.json["sorted"]["family"][family_hash]
-        
-        # Get member relays for this family
-        members = [_precompute_relay_set.json["relays"][idx] 
-                   for idx in family_data.get("relays", [])]
-        if not members:
-            return (family_hash, None)
-        
-        # Pre-compute AROI validation status (use cached if available)
-        contact_validation_status = (family_data.get("aroi_validation_full") or 
-                                     _precompute_relay_set._get_contact_validation_status(members))
-        
-        # Pre-compute network position using DRY helper
-        network_position = _compute_network_position_safe(
-            family_data["guard_count"], family_data["middle_count"], 
-            family_data["exit_count"], len(members))
-        
-        # Return flat dict for direct storage on family_data
-        return (family_hash, {
-            "contact_validation_status": contact_validation_status,
-            "network_position": network_position,
-        })
+        result = _compute_family_predata(_precompute_relay_set, family_hash)
+        return (family_hash, result)
     except Exception as e:
-        # Return None on error, sequential fallback will handle it
         return (family_hash, None)
 
 

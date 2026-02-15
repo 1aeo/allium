@@ -40,6 +40,8 @@ _AROI_PROOF_RE = re.compile(r'\bproof:(dns-rsa|uri-rsa)\b', re.IGNORECASE)
 # Page writing infrastructure imported from page_writer.py
 from .page_writer import (
     _compute_network_position_safe,
+    _compute_contact_predata,
+    _compute_family_predata,
     _init_precompute_worker,
     _precompute_contact_worker,
     _precompute_family_worker,
@@ -810,48 +812,15 @@ class Relays:
                                             validated_aroi_domains)
     
     def _precompute_single_contact(self, contact_hash, aroi_validation_timestamp, validated_aroi_domains):
-        """Precompute data for a single contact (used by both sequential and parallel paths).
+        """Precompute data for a single contact (sequential path).
         
-        Stores precomputed values directly on contact_data for simple access (Sonnet-style).
+        Uses shared _compute_contact_predata() for DRY with the parallel worker.
         """
-        contact_data = self.json["sorted"]["contact"][contact_hash]
-        
-        # Get member relays for this contact
-        members = [self.json["relays"][idx] for idx in contact_data.get("relays", [])]
-        if not members:
-            return
-        
-        # Determine bandwidth unit for this contact
-        bandwidth_unit = self.bandwidth_formatter.determine_unit(contact_data.get("bandwidth", 0))
-        
-        # Pre-compute contact rankings
-        contact_data["contact_rankings"] = self._generate_contact_rankings(contact_hash)
-        
-        # Pre-compute operator reliability statistics
-        contact_data["operator_reliability"] = self._calculate_operator_reliability(contact_hash, members)
-        
-        # Pre-compute contact display data
-        contact_data["contact_display_data"] = self._compute_contact_display_data(
-            contact_data, bandwidth_unit, contact_data["operator_reliability"], contact_hash, members
-        )
-        
-        # Pre-compute AROI validation status
-        if "aroi_validation_full" in contact_data:
-            contact_data["contact_validation_status"] = contact_data["aroi_validation_full"]
-        else:
-            contact_data["contact_validation_status"] = self._get_contact_validation_status(members)
-        
-        # Store AROI validation timestamp and is_validated flag
-        contact_data["aroi_validation_timestamp"] = aroi_validation_timestamp
-        
-        # Check if this contact has a validated AROI domain
-        aroi_domain = members[0].get("aroi_domain") if members else None
-        contact_data["is_validated_aroi"] = (aroi_domain and aroi_domain != "none" and 
-                                              aroi_domain in validated_aroi_domains)
-        contact_data["aroi_domain"] = aroi_domain  # Store for vanity URL generation
-        
-        # Store bandwidth unit for template use
-        contact_data["precomputed_bandwidth_unit"] = bandwidth_unit
+        precomputed = _compute_contact_predata(self, contact_hash, aroi_validation_timestamp, validated_aroi_domains)
+        if precomputed:
+            contact_data = self.json["sorted"]["contact"][contact_hash]
+            for key, value in precomputed.items():
+                contact_data[key] = value
     
     def _precompute_contacts_parallel(self, contact_hashes, aroi_validation_timestamp, validated_aroi_domains):
         """Parallel precomputation using fork() with imap_unordered for better memory and progress.
@@ -926,25 +895,15 @@ class Relays:
             self._precompute_single_family(family_hash)
     
     def _precompute_single_family(self, family_hash):
-        """Precompute data for a single family (used by both sequential and parallel paths).
+        """Precompute data for a single family (sequential path).
         
-        Stores precomputed values directly on family_data for simple access.
+        Uses shared _compute_family_predata() for DRY with the parallel worker.
         """
-        family_data = self.json["sorted"]["family"][family_hash]
-        
-        # Get member relays for this family
-        members = [self.json["relays"][idx] for idx in family_data.get("relays", [])]
-        if not members:
-            return
-        
-        # Pre-compute AROI validation status (use cached if available)
-        family_data["contact_validation_status"] = (family_data.get("aroi_validation_full") or 
-                                                     self._get_contact_validation_status(members))
-        
-        # Pre-compute network position using DRY helper
-        family_data["network_position"] = _compute_network_position_safe(
-            family_data["guard_count"], family_data["middle_count"], 
-            family_data["exit_count"], len(members))
+        precomputed = _compute_family_predata(self, family_hash)
+        if precomputed:
+            family_data = self.json["sorted"]["family"][family_hash]
+            for key, value in precomputed.items():
+                family_data[key] = value
     
     def _precompute_families_parallel(self, family_hashes):
         """Parallel family precomputation using fork() with imap_unordered.
