@@ -14,7 +14,7 @@ This document outlines the plan to restructure Allium to support multiple API so
 ### Current State
 - **Single API**: Only onionoo details (~1 minute)
 - **Synchronous**: Sequential execution, waits for completion
-- **Monolithic**: All logic in `lib/relays.py` (588 lines)
+- **Modular**: Core logic in `lib/relays.py` (~1,100 lines) with extracted modules: `page_writer.py`, `network_health.py`, `operator_analysis.py`, `categorization.py`, `flag_analysis.py`, `time_utils.py`, `ip_utils.py` (refactored 2026-02-15 from monolithic ~5,900 line file)
 
 ### Target State
 - **5 APIs** running in parallel with different completion times
@@ -73,7 +73,14 @@ This document outlines the plan to restructure Allium to support multiple API so
 allium/
 ├── allium.py              # MODIFIED (add threading coordination)
 ├── lib/
-│   ├── relays.py         # MODIFIED (thread-safe data processing)
+│   ├── relays.py         # MODIFIED (thread-safe data processing) ~1,100 lines
+│   ├── page_writer.py    # HTML generation (extracted from relays.py)
+│   ├── network_health.py # Network statistics (extracted from relays.py)
+│   ├── operator_analysis.py # Operator/contact analysis (extracted from relays.py)
+│   ├── categorization.py # Relay categorization (extracted from relays.py)
+│   ├── flag_analysis.py  # Flag uptime analysis (extracted from relays.py)
+│   ├── time_utils.py     # Time formatting (extracted from relays.py)
+│   ├── ip_utils.py       # IP utilities (extracted from relays.py)
 │   └── workers.py        # NEW (simple API worker functions)
 ├── data/cache/           # NEW (individual API cache files)
 └── templates/            # UNCHANGED
@@ -136,7 +143,7 @@ def main():
   - [x] Replace direct `Relays()` call with `create_relay_set_with_coordinator()`
   - [x] Maintain full backwards compatibility
 
-- [x] **Modify `lib/relays.py`** (minimal changes)
+- [x] **Modify `lib/relays.py`** (minimal changes — now ~1,100 lines after modular extraction)
   - [x] Make data processing thread-safe
   - [x] Accept data as input rather than fetching internally (`relay_data` parameter)
   - [x] Support both old and new initialization patterns
@@ -161,7 +168,7 @@ def main():
 |------|-------------|----------------|-------------|
 | `lib/workers.py` | +100 | 0 | New worker functions |
 | `allium.py` | +20 | 5 | Threading coordination |
-| `lib/relays.py` | +10 | 20 | Thread-safe modifications |
+| `lib/relays.py` | +10 | ~1,100 | Thread-safe modifications (post-refactor, was ~5,900) |
 
 ---
 
@@ -293,7 +300,7 @@ def monitor_and_render():
             update_pages_for_api(api_name)
             mark_api_processed(api_name)
 
-# lib/relays.py - Make thread-safe
+# lib/relays.py - Make thread-safe (note: relays.py is now ~1,100 lines after modular extraction)
 class RelayProcessor:
     """Renamed from Relays, focused on data processing only"""
     def __init__(self, relay_data):
