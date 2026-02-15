@@ -492,38 +492,42 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
             intelligence_formatted['performance_relay_count'] = contact_intel.get('performance_relay_count', 0)
             intelligence_formatted['maturity'] = contact_intel.get('maturity', '')
     
-    # 4. Version compliance and version status counting (reuse existing relay counting patterns)
-    # Count version compliance: recommended_version=true for compliant, =false for non-compliant, not set/empty for unknown
-    version_compliant = sum(1 for relay in members if relay.get('recommended_version') is True)
-    version_not_compliant = sum(1 for relay in members if relay.get('recommended_version') is False)
-    version_unknown = sum(1 for relay in members if relay.get('recommended_version') is None)
-    
-    # Count version status: recommended, experimental, obsolete, new in series, unrecommended
+    # 4. Version compliance, status counts, and version strings — single pass over members
+    version_compliant = 0
+    version_not_compliant = 0
+    version_unknown = 0
     version_status_counts = {
-        'recommended': sum(1 for relay in members if relay.get('version_status') == 'recommended'),
-        'experimental': sum(1 for relay in members if relay.get('version_status') == 'experimental'),
-        'obsolete': sum(1 for relay in members if relay.get('version_status') == 'obsolete'),
-        'new_in_series': sum(1 for relay in members if relay.get('version_status') == 'new in series'),
-        'unrecommended': sum(1 for relay in members if relay.get('version_status') == 'unrecommended')
+        'recommended': 0, 'experimental': 0, 'obsolete': 0,
+        'new_in_series': 0, 'unrecommended': 0
     }
-    
-    # Collect actual Tor versions for each status category (for tooltips)
     version_status_versions = {
-        'recommended': set(),
-        'experimental': set(),
-        'obsolete': set(),
-        'new_in_series': set(),
-        'unrecommended': set()
+        'recommended': set(), 'experimental': set(), 'obsolete': set(),
+        'new_in_series': set(), 'unrecommended': set()
     }
-    
+    # Map version_status strings to dict keys (handles "new in series" → "new_in_series")
+    _STATUS_KEY_MAP = {
+        'recommended': 'recommended', 'experimental': 'experimental',
+        'obsolete': 'obsolete', 'new in series': 'new_in_series',
+        'unrecommended': 'unrecommended'
+    }
     for relay in members:
+        # Version compliance
+        rec = relay.get('recommended_version')
+        if rec is True:
+            version_compliant += 1
+        elif rec is False:
+            version_not_compliant += 1
+        else:
+            version_unknown += 1
+        # Version status count + version string collection
         status = relay.get('version_status')
-        version = relay.get('version')
-        if status and version:
-            if status == 'new in series':
-                version_status_versions['new_in_series'].add(version)
-            elif status in version_status_versions:
-                version_status_versions[status].add(version)
+        if status:
+            status_key = _STATUS_KEY_MAP.get(status)
+            if status_key:
+                version_status_counts[status_key] += 1
+                version = relay.get('version')
+                if version:
+                    version_status_versions[status_key].add(version)
     
     # Format version compliance display (only show non-zero values for not compliant and unknown)
     # Add status indicators based on compliance ratio
