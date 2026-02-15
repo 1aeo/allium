@@ -424,11 +424,20 @@ def calculate_and_cache_family_statistics(relay_set, total_guard_cw, total_middl
     effective_only_relays = 0
     mixed_relays = 0
     
-    # Analyze each relay's family relationship state
+    # Also accumulate declaration counts in the same loop (merged from separate loop)
+    total_alleged_count = 0
+    total_effective_count = 0
+    
+    # SINGLE PASS: Analyze family relationships AND count declarations
     for relay in relay_set.json['relays']:
-        # Effective family should exclude the relay's own fingerprint and be 2+ members for actual family
         effective_family = relay.get('effective_family', [])
         alleged_family = relay.get('alleged_family', [])
+        
+        # Accumulate declaration counts (previously a separate loop)
+        if alleged_family:
+            total_alleged_count += len(alleged_family)
+        if effective_family:
+            total_effective_count += len(effective_family)
         
         # Remove self-reference from effective family and check if there are other members
         relay_fingerprint = relay.get('fingerprint', '')
@@ -460,22 +469,9 @@ def calculate_and_cache_family_statistics(relay_set, total_guard_cw, total_middl
         standalone_percentage = alleged_only_percentage = effective_only_percentage = mixed_percentage = effective_total_percentage = "0.0"
         effective_total_relays = 0
     
-    # Calculate configuration health metrics
+    # Calculate configuration health metrics using counts accumulated in the single loop above
     total_family_declared = alleged_only_relays + effective_only_relays + mixed_relays
     if total_family_declared > 0:
-        # Count allegations (from alleged_only + mixed relays)
-        total_alleged_count = 0
-        total_effective_count = 0
-        
-        for relay in relay_set.json['relays']:
-            alleged_family = relay.get('alleged_family', [])
-            effective_family = relay.get('effective_family', [])
-            
-            if alleged_family:
-                total_alleged_count += len(alleged_family)
-            if effective_family:
-                total_effective_count += len(effective_family)
-        
         total_family_declarations = total_alleged_count + total_effective_count
         if total_family_declarations > 0:
             misconfigured_percentage = f"{(total_alleged_count / total_family_declarations) * 100:.1f}"
