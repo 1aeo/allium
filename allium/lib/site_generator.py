@@ -106,7 +106,8 @@ def generate_site(relay_set, args, progress_logger):
         args: argparse namespace with output_dir, progress, etc.
         progress_logger: ProgressLogger instance for consistent progress tracking
     """
-    abs_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # Path to the allium package directory (where static/ and templates/ live)
+    allium_pkg_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     
     progress_logger.log(f"Details API data loaded successfully - found {len(relay_set.json.get('relays', []))} relays")
 
@@ -152,7 +153,7 @@ def generate_site(relay_set, args, progress_logger):
 
     # --- Static files ---
     progress_logger.log("Copying static files...")
-    static_src = os.path.join(abs_path, "allium", "static")
+    static_src = os.path.join(allium_pkg_dir, "static")
     static_dst = os.path.join(args.output_dir, "static")
     if not os.path.exists(static_dst):
         copytree(static_src, static_dst)

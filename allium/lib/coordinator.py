@@ -127,12 +127,19 @@ class Coordinator:
             "fetch_fn": fetch_collector_consensus_data,
             "group": "all",
             "args_fn": lambda self: [None, self._log_progress],
-            "enabled_fn": lambda: __import__('allium.lib.consensus', fromlist=['is_consensus_evaluation_enabled']).is_consensus_evaluation_enabled(),
+            "enabled_fn": None,  # Checked dynamically in _build_api_workers
         },
     ]
     
     def _build_api_workers(self):
         """Build the list of API workers based on enabled_apis mode and feature flags."""
+        from .consensus import is_consensus_evaluation_enabled
+        
+        # Feature flag checks by worker name (avoids import issues in class-level lambdas)
+        feature_flags = {
+            "collector_consensus": is_consensus_evaluation_enabled,
+        }
+        
         workers = []
         for entry in self.API_WORKER_REGISTRY:
             # Include if group matches: 'details' workers run in all modes,
@@ -140,8 +147,8 @@ class Coordinator:
             group = entry["group"]
             if group == "details" or self.enabled_apis == "all":
                 # Check feature flag if present
-                enabled_fn = entry.get("enabled_fn")
-                if enabled_fn and not enabled_fn():
+                flag_fn = feature_flags.get(entry["name"])
+                if flag_fn and not flag_fn():
                     continue
                 workers.append((
                     entry["name"],

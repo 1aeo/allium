@@ -1,0 +1,3944 @@
+    <!DOCTYPE html>
+    <html lang="en">
+        <head>
+            <title>
+Tor Relays :: Comcast Cable Communications, LLC (AS7922)            </title>
+            <meta name="description"
+                  content="Javascript-free Tor metrics generated from a 30 minute API request.">
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <link rel="stylesheet" href="../../static/css/bootstrap.min.css">
+            <!--source: metrics.torproject.org-->
+            <style>
+                /* 1AEO Brand Design Tokens */
+                :root {
+                    --aeo-green: #00ff7f;
+                    --aeo-green-dim: #00cc66;
+                    --aeo-green-hover: #009955;  /* Darker green for hover on light backgrounds */
+                    --aeo-green-dark: #004d26;
+                    --aeo-dark-bg: #121212;
+                    --aeo-dark-surface: #1e1e1e;
+                    --aeo-dark-border: rgba(0, 255, 127, 0.2);
+                    --aeo-text: #ffffff;
+                    --aeo-text-muted: #cccccc;
+                    --aeo-text-dim: #888888;
+                }
+
+                /* 1AEO Cross-Site Navigation Bar */
+                .aeo-cross-nav {
+                    background-color: var(--aeo-dark-surface);
+                    padding: 10px 0;
+                    border-bottom: 1px solid var(--aeo-dark-border);
+                    margin-bottom: 0;
+                }
+                
+                .aeo-cross-nav .aeo-nav-container {
+                    max-width: 95%;
+                    margin: 0 auto;
+                    padding: 0 15px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    flex-wrap: wrap;
+                    gap: 10px;
+                }
+                
+                .aeo-cross-nav .aeo-nav-brand {
+                    color: var(--aeo-green);
+                    text-decoration: none;
+                    font-weight: bold;
+                    font-size: 16px;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+                
+                .aeo-cross-nav .aeo-nav-brand:hover {
+                    color: var(--aeo-green);
+                    text-decoration: none;
+                }
+                
+                .aeo-cross-nav .aeo-nav-links {
+                    display: flex;
+                    gap: 20px;
+                    flex-wrap: wrap;
+                    font-size: 14px;
+                }
+                
+                .aeo-cross-nav .aeo-nav-links a {
+                    color: var(--aeo-text-muted);
+                    text-decoration: none;
+                    transition: color 0.2s ease;
+                }
+                
+                .aeo-cross-nav .aeo-nav-links a:hover {
+                    color: var(--aeo-green);
+                    text-decoration: none;
+                }
+                
+                .aeo-cross-nav .aeo-nav-links a.active {
+                    color: var(--aeo-green);
+                    font-weight: 500;
+                }
+                
+                @media (max-width: 480px) {
+                    .aeo-cross-nav .aeo-nav-container {
+                        justify-content: center;
+                        text-align: center;
+                    }
+                    .aeo-cross-nav .aeo-nav-links {
+                        justify-content: center;
+                        gap: 12px;
+                    }
+                }
+
+                /* Breadcrumb links - no underline */
+                .breadcrumb a {
+                    text-decoration: none;
+                }
+                
+                /* 1AEO Footer */
+                .aeo-footer {
+                    background-color: var(--aeo-dark-surface);
+                    color: var(--aeo-text-muted);
+                    padding: 25px 20px;
+                    margin-top: 40px;
+                    text-align: center;
+                    border-top: 1px solid var(--aeo-dark-border);
+                }
+                
+                .aeo-footer a {
+                    color: var(--aeo-green);
+                    text-decoration: none;
+                }
+                
+                .aeo-footer a:hover {
+                    color: var(--aeo-green);
+                    text-decoration: underline;
+                }
+                
+                .aeo-footer-links {
+                    display: flex;
+                    justify-content: center;
+                    gap: 25px;
+                    margin-bottom: 15px;
+                    flex-wrap: wrap;
+                }
+                
+                .aeo-footer-brand {
+                    font-size: 14px;
+                    margin: 0;
+                }
+                
+                .aeo-footer-legal {
+                    font-size: 12px;
+                    color: var(--aeo-text-dim);
+                    margin-top: 10px;
+                }
+                .circle {
+                    display: inline-block;
+                    vertical-align: middle;
+                    background: #999999;
+                    width: 7px;
+                    height: 7px;
+                    -moz-border-radius: 50%;
+                    -webkit-border-radius: 50%;
+                    border-radius: 50%;
+                }
+
+                .circle-online {
+                    background: #25d918;
+                }
+
+                .circle-offline {
+                    background: #ff1515;
+                }
+
+                .verified-hostname {
+                    color: #FE9F30;
+                }
+
+                .verified-hostname {
+                    color: #68b030;
+                }
+
+                .unverified-hostname {
+                    color: #FE9F30;
+                }
+
+                /* DRY Status Classes - reusable across templates */
+                .status-success { color: #28a745; font-weight: bold; }
+                .status-danger { color: #dc3545; font-weight: bold; }
+                .status-warning { color: #ffc107; font-weight: bold; }
+                .status-muted { color: #6c757d; font-weight: bold; }
+
+                /* Section box - gray background container for major sections */
+                .section-box {
+                    margin: 20px 0;
+                    padding: 15px;
+                    background: #f8f9fa;
+                    border-radius: 8px;
+                }
+
+                /* Subsection cards - visual containers for Level 2 content */
+                .subsection-card {
+                    background: #ffffff;
+                    border-radius: 6px;
+                    padding: 12px;
+                    margin-bottom: 12px;
+                }
+                .subsection-card dl {
+                    margin-bottom: 0;
+                }
+
+                /* Subsection headers - Level 2 in information hierarchy */
+                .subsection-header {
+                    margin-top: 0;
+                    margin-bottom: 10px;
+                    padding-bottom: 6px;
+                    font-weight: 600;
+                    font-size: 15px;
+                    color: #495057;
+                    border-bottom: 2px solid #dee2e6;
+                }
+
+                /* Status note - small muted text for additional context */
+                .status-note {
+                    font-size: 11px;
+                    font-weight: normal;
+                    color: #6c757d;
+                }
+
+                /* Dynamic text truncation for contact information */
+                .contact-text {
+                    display: inline-block;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    max-width: 20vw;  /* Use viewport width for responsive sizing */
+                }
+                
+                /* Contact cell in contacts table - dynamic width with CSS ellipsis */
+                .contact-cell {
+                    max-width: 25vw;
+                    display: flex;
+                    align-items: center;
+                }
+                
+                .contact-cell > span {
+                    flex-shrink: 0;
+                    margin-right: 4px;
+                }
+                
+                .contact-cell a {
+                    flex: 1;
+                    min-width: 0;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+
+                /* Table styles */
+                .table {
+                    width: 100%;
+                    margin-bottom: 1rem;
+                }
+
+                /* Precise alignment for multi-value columns using monospace */
+                .bw-header, .cw-header, .rc-header, /* rc = relay count */
+                .bw-data, .cw-data, .rc-data {
+                    font-family: Consolas, "Courier New", monospace;
+                    white-space: nowrap;
+                    text-align: center;
+                    letter-spacing: 0.05em; /* Slight spacing for readability */
+                }
+
+                /* Container breakpoint */
+                @media (min-width: 1400px) {
+                    .container {
+                        width: 95%;
+                        max-width: none;
+                        padding-right: 15px;
+                        padding-left: 15px;
+                        margin-right: auto;
+                        margin-left: auto;
+                    }
+                }
+
+                /* Fix two-column layout overflow in contact/operator pages */
+                .row > .col-md-7,
+                .row > .col-md-5 {
+                    overflow-wrap: break-word;
+                    word-wrap: break-word;
+                    word-break: break-word;
+                    min-width: 0; /* Allow flex/grid children to shrink below content size */
+                }
+                
+                /* Ensure nested content doesn't overflow columns */
+                .col-md-7 ul,
+                .col-md-7 li,
+                .col-md-5 ul,
+                .col-md-5 li {
+                    overflow-wrap: break-word;
+                    word-wrap: break-word;
+                }
+
+                /* AROI Leaderboards - Consolidated CSS Components */
+                
+                /* Section Spacing */
+                .aroi-section {
+                    margin-bottom: 40px;
+                    scroll-margin-top: 20px; /* Offset anchor links to show space above title */
+                }
+                
+                .aroi-subsection {
+                    margin-bottom: 30px;
+                }
+                
+                .aroi-champion-badge {
+                    margin-bottom: 20px;
+                }
+                
+                /* Top 3 Summary Tables */
+                .aroi-top3-table thead th:nth-child(1) {
+                    width: 30%;
+                }
+                
+                .aroi-top3-table thead th:nth-child(2) {
+                    width: 25%;
+                }
+                
+                .aroi-top3-table thead th:nth-child(3) {
+                    width: 45%;
+                }
+                
+                /* Complete Rankings Tables - Common patterns */
+                .aroi-rankings-table thead th:nth-child(1) {
+                    width: 5%;  /* Rank */
+                }
+                
+                .aroi-rankings-table thead th:nth-child(2) {
+                    width: 25%; /* Operator */
+                }
+                
+                /* Standard bandwidth/consensus table layout */
+                .aroi-standard-table thead th:nth-child(3) {
+                    width: 12%;  /* Relays - increased from 8% */
+                }
+                
+                .aroi-standard-table thead th:nth-child(4) {
+                    width: 11%; /* Bandwidth - decreased from 15% */
+                }
+                
+                .aroi-standard-table thead th:nth-child(5) {
+                    width: 12%; /* Consensus Weight */
+                }
+                
+                .aroi-standard-table thead th:nth-child(6) {
+                    width: 15%; /* Guard/Exit Count */
+                }
+                
+                .aroi-standard-table thead th:nth-child(7) {
+                    width: 10%; /* Countries */
+                }
+                
+                .aroi-standard-table thead th:nth-child(8) {
+                    width: 10%; /* Platforms/Efficiency/Other */
+                }
+                
+                /* Specialized table for Exit/Guard operators */
+                .aroi-specialized-table thead th:nth-child(3) {
+                    width: 10%; /* Specific Relays (Exit/Guard) */
+                }
+                
+                .aroi-specialized-table thead th:nth-child(4) {
+                    width: 8%;  /* Total Relays */
+                }
+                
+                .aroi-specialized-table thead th:nth-child(5) {
+                    width: 15%; /* Bandwidth */
+                }
+                
+                .aroi-specialized-table thead th:nth-child(6) {
+                    width: 12%; /* Consensus Weight */
+                }
+                
+                .aroi-specialized-table thead th:nth-child(7) {
+                    width: 10%; /* Countries */
+                }
+                
+                .aroi-specialized-table thead th:nth-child(8) {
+                    width: 15%; /* Cross Reference (Guard/Exit Count) */
+                }
+                
+                /* Diversity/Category table layout - Generic defaults */
+                .aroi-category-table thead th:nth-child(3) {
+                    width: 8%;  /* Relays */
+                }
+                
+                .aroi-category-table thead th:nth-child(4) {
+                    width: 15%; /* Key Metric */
+                }
+                
+                .aroi-category-table thead th:nth-child(5) {
+                    width: 12%; /* Bandwidth */
+                }
+                
+                .aroi-category-table thead th:nth-child(6) {
+                    width: 10%; /* Countries */
+                }
+                
+                .aroi-category-table thead th:nth-child(7) {
+                    width: 10%; /* Platforms */
+                }
+                
+                .aroi-category-table thead th:nth-child(8) {
+                    width: 15%; /* Specialization */
+                }
+                
+                /* Geographic Champions (Non-EU Leaders) specific layout */
+                .aroi-geographic-table thead th:nth-child(3) {
+                    width: 15%; /* Non-EU Relays */
+                }
+                
+                .aroi-geographic-table thead th:nth-child(4) {
+                    width: 10%; /* Bandwidth */
+                }
+                
+                .aroi-geographic-table thead th:nth-child(5) {
+                    width: 8%; /* Countries */
+                }
+                
+                .aroi-geographic-table thead th:nth-child(6) {
+                    width: 25%; /* Specialization - Much wider for geographic breakdown details */
+                }
+                
+                /* Frontier Builders (Rare Countries) specific layout */
+                .aroi-frontier-table thead th:nth-child(3) {
+                    width: 10%; /* Rare Relays - Reduced from 15% */
+                }
+                
+                .aroi-frontier-table thead th:nth-child(4) {
+                    width: 12%; /* Bandwidth */
+                }
+                
+                .aroi-frontier-table thead th:nth-child(5) {
+                    width: 10%; /* Countries */
+                }
+                
+                .aroi-frontier-table thead th:nth-child(6) {
+                    width: 23%; /* Specialization - Increased from 18% (+5% from Rare Relays column) */
+                }
+                
+                /* Platform Diversity (Non-Linux Heroes) specific layout */
+                .aroi-platform-table thead th:nth-child(3) {
+                    width: 10%; /* Non Linux Relays - Reduced from 15% */
+                }
+                
+                .aroi-platform-table thead th:nth-child(4) {
+                    width: 8%; /* Bandwidth - Reduced from 12% */
+                }
+                
+                .aroi-platform-table thead th:nth-child(5) {
+                    width: 22%; /* Specialization - Increased from 15% (+7% from reductions) */
+                }
+
+                /* AROI Champion Badge Styles - Harmonized Color Tier System */
+                
+                /* Authority/Network Control (Gold/Orange spectrum) */
+                .aroi-champion-platinum {
+                    background: linear-gradient(45deg, #FFD700, #FFA500);
+                    color: #000;
+                    box-shadow: 0 2px 6px rgba(255, 215, 0, 0.25);
+                }
+                
+                .aroi-champion-network {
+                    background: linear-gradient(45deg, #FFB300, #FF8C00);
+                    color: #000;
+                    box-shadow: 0 2px 6px rgba(255, 179, 0, 0.25);
+                }
+                
+                .aroi-champion-exit-authority {
+                    background: linear-gradient(45deg, #FFAA00, #FF9500);
+                    color: #000;
+                    box-shadow: 0 2px 6px rgba(255, 170, 0, 0.25);
+                }
+                
+                .aroi-champion-guard-authority {
+                    background: linear-gradient(45deg, #FF6B35, #F7931E);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(255, 107, 53, 0.25);
+                }
+                
+                .aroi-champion-guard {
+                    background: linear-gradient(45deg, #E67E22, #D35400);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(230, 126, 34, 0.25);
+                }
+                
+                .aroi-champion-exit {
+                    background: linear-gradient(45deg, #FF8C42, #FF7315);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(255, 140, 66, 0.25);
+                }
+                
+                /* Innovation & Technology (Purple/Blue spectrum) */
+                .aroi-champion-platform {
+                    background: linear-gradient(45deg, #a29bfe, #6c5ce7);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(162, 155, 254, 0.25);
+                }
+                
+                .aroi-champion-ipv4 {
+                    background: linear-gradient(45deg, #0984e3, #74b9ff);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(9, 132, 227, 0.25);
+                }
+                
+                .aroi-champion-ipv6 {
+                    background: linear-gradient(45deg, #6c5ce7, #a29bfe);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(108, 92, 231, 0.25);
+                }
+                
+
+                
+                /* Diversity & Growth (Green spectrum) */
+                .aroi-champion-diversity {
+                    background: linear-gradient(45deg, #00b894, #55a3ff);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(0, 184, 148, 0.25);
+                }
+                
+                .aroi-champion-global {
+                    background: linear-gradient(45deg, #00cec9, #55efc4);
+                    color: #000;
+                    box-shadow: 0 2px 6px rgba(0, 206, 201, 0.25);
+                }
+                
+                .aroi-champion-frontier {
+                    background: linear-gradient(45deg, #27ae60, #2ecc71);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(39, 174, 96, 0.25);
+                }
+                
+                /* Reliability & Legacy (Earth tones) */
+                .aroi-champion-reliability {
+                    background: linear-gradient(45deg, #8b7355, #a0845c);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(139, 115, 85, 0.25);
+                }
+                
+                .aroi-champion-veteran {
+                    background: linear-gradient(45deg, #cd7f32, #b8860b);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(205, 127, 50, 0.25);
+                }
+                
+                /* Legacy compatibility class */
+                .aroi-champion-legacy {
+                    background: linear-gradient(45deg, #8b4513, #a0522d);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(139, 69, 19, 0.25);
+                }
+                
+                /* Bandwidth categories */
+                .aroi-champion-bandwidth {
+                    background: linear-gradient(45deg, #00b894, #55a3ff);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(0, 184, 148, 0.25);
+                }
+                
+                .aroi-champion-bandwidth-legend {
+                    background: linear-gradient(45deg, #FFB300, #FF8C00);
+                    color: #000;
+                    box-shadow: 0 2px 6px rgba(255, 179, 0, 0.25);
+                }
+                
+
+                
+                /* Enhanced hover effects for all badges */
+                .aroi-champion-badge .panel-body {
+                    transition: transform 0.2s ease, box-shadow 0.2s ease;
+                }
+                
+                .aroi-champion-badge .panel-body:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+                }
+
+                /* AROI Ranking Badge Styles */
+                .aroi-rank-gold {
+                    background-color: #FFD700;
+                }
+                
+                .aroi-rank-silver {
+                    background-color: #C0C0C0;
+                }
+                
+                .aroi-rank-bronze {
+                    background-color: #CD7F32;
+                }
+
+                /* AROI Link Styles */
+                .aroi-underline-link {
+                    text-decoration: underline;
+                    color: inherit;
+                }
+                
+                .aroi-contact-link {
+                    text-decoration: underline;
+                }
+
+                /* AROI Layout Styles */
+                .aroi-center-text {
+                    text-align: center;
+                }
+                
+                .aroi-flex-nav {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 10px;
+                }
+                
+                .aroi-nav-spacing {
+                    margin-bottom: 20px;
+                }
+                
+                .aroi-nav-spacing h4 {
+                    margin-top: 5px;
+                }
+                
+                .aroi-primary-nav {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 15px;
+                    margin-bottom: 15px;
+                    justify-content: center;
+                }
+                
+                .aroi-category-nav {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 8px;
+                    padding-top: 15px;
+                    border-top: 1px solid #ddd;
+                    justify-content: center;
+                }
+
+                /* Compact Navigation Styles */
+                .aroi-compact-nav {
+                    margin-bottom: 15px;
+                    padding: 10px 15px;
+                }
+                
+                .aroi-compact-nav-row {
+                    display: flex;
+                    flex-wrap: wrap;
+                    align-items: center;
+                    gap: 15px;
+                    font-size: 14px;
+                }
+                
+                .aroi-nav-label {
+                    font-weight: bold;
+                    color: #333;
+                    white-space: nowrap;
+                }
+                
+                .aroi-primary-nav-centered {
+                    display: flex;
+                    justify-content: center;
+                    gap: 8px;
+                    margin-bottom: 10px;
+                    flex-wrap: wrap;
+                }
+                
+                .aroi-category-links-row {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 12px;
+                    justify-content: center;
+                }
+                
+                .aroi-nav-link {
+                    color: #337ab7;
+                    text-decoration: none;
+                    padding: 2px 6px;
+                    border-radius: 3px;
+                    font-size: 13px;
+                    white-space: nowrap;
+                }
+                
+                .aroi-nav-link:hover {
+                    color: #23527c;
+                    background-color: #f5f5f5;
+                    text-decoration: none;
+                }
+
+                /* Responsive adjustments for compact nav */
+                @media (max-width: 768px) {
+                    .aroi-primary-nav-centered {
+                        flex-direction: column;
+                        align-items: center;
+                        gap: 8px;
+                    }
+                    
+                    .aroi-category-links-row {
+                        justify-content: center;
+                    }
+                    
+                    .aroi-nav-link {
+                        font-size: 12px;
+                    }
+                }
+                
+                .aroi-nav-separator {
+                    border-top: 1px solid #ddd;
+                    margin: 15px 0;
+                }
+                
+                .aroi-top-margin {
+                    margin-top: 10px;
+                }
+                
+                .aroi-compact-summary {
+                    margin-bottom: 8px;
+                    padding: 8px 12px;
+                }
+                
+                .aroi-compact-summary h5 {
+                    margin-top: 0;
+                    margin-bottom: 4px;
+                    font-size: 15px;
+                    line-height: 1.2;
+                }
+                
+                .aroi-compact-summary .row {
+                    margin-bottom: 2px;
+                }
+                
+                .aroi-compact-summary .col-md-3 {
+                    padding-top: 2px;
+                    padding-bottom: 2px;
+                }
+                
+                .aroi-compact-footer {
+                    margin-top: 4px;
+                    padding-top: 3px;
+                    border-top: 1px solid rgba(255,255,255,0.3);
+                }
+                
+                .aroi-compact-footer small {
+                    font-size: 11px;
+                    line-height: 1.3;
+                }
+                
+                .aroi-header-spacing {
+                    margin-top: 0;
+                }
+                
+                .aroi-fixed-nav {
+                    position: fixed;
+                    bottom: 20px;
+                    right: 20px;
+                    z-index: 1000;
+                }
+                
+                .aroi-footer-section {
+                    margin-top: 50px;
+                    border-top: 2px solid #ccc;
+                    padding-top: 30px;
+                }
+
+                /* AROI Pagination Styles using :target selector */
+                .pagination-section {
+                    display: none; /* Hidden by default */
+                }
+                
+                /* Show first page (1-10) by default for all categories - uses CSS attribute selector for pattern matching */
+                [id$="-1-10"].pagination-section {
+                    display: block;
+                }
+                
+                /* Show any targeted pagination section */
+                .pagination-section:target {
+                    display: block;
+                }
+                
+                /* When a section is targeted, hide other sections in same category - uses :has() for scoped hiding */
+                .aroi-section:has(.pagination-section:target) .pagination-section:not(:target) {
+                    display: none !important;
+                }
+
+                /* Improved pagination positioning and table spacing */
+                .pagination-section {
+                    scroll-margin-top: 80px; /* Modern CSS property for scroll positioning without layout gaps */
+                }
+                
+                .pagination-section:target {
+                    /* Using scroll-margin-top instead of padding/margin for clean scroll behavior */
+                }
+
+                .pagination-section h4 {
+                    margin-top: 20px;
+                    margin-bottom: 15px;
+                }
+
+                /* Compact table styling to match other tables */
+                .aroi-rankings-table.aroi-standard-table td,
+                .aroi-rankings-table.aroi-standard-table th {
+                    padding: 6px 8px; /* Reduced from default Bootstrap padding */
+                    vertical-align: middle;
+                }
+
+                .aroi-rankings-table.aroi-standard-table {
+                    margin-bottom: 10px; /* Reduce bottom margin */
+                }
+
+                /* Move pagination nav below tables */
+                .pagination-nav-bottom {
+                    margin: 0 0 30px 0; /* Remove top margin to sit right below table */
+                    text-align: center;
+                    border: 1px solid #ddd;
+                    border-radius: 5px;
+                    padding: 4px; /* Reduced padding to match table row height */
+                    background-color: #f9f9f9;
+                }
+
+                .pagination-nav-bottom a {
+                    display: inline-block;
+                    padding: 4px 8px; /* Smaller padding to match table text size */
+                    margin: 0 2px; /* Reduced margin */
+                    border: 1px solid #337ab7;
+                    border-radius: 3px;
+                    color: #337ab7;
+                    text-decoration: none;
+                    background-color: white;
+                    font-size: 14px; /* Match table text size */
+                    line-height: 1.2; /* Match table row height */
+                }
+
+                .pagination-nav-bottom a:hover {
+                    background-color: #337ab7;
+                    color: white;
+                }
+
+                .pagination-nav-bottom a.active {
+                    background-color: #337ab7;
+                    color: white;
+                }
+
+                /* AROI Panel Background Colors for Champion Badges */
+                .panel-danger .panel-body {
+                    background-color: #f2dede;
+                    border-color: #ebccd1;
+                }
+                
+                .panel-warning .panel-body {
+                    background-color: #fcf8e3;
+                    border-color: #faebcc;
+                }
+                
+                .panel-info .panel-body {
+                    background-color: #d9edf7;
+                    border-color: #bce8f1;
+                }
+                
+                .panel-success .panel-body {
+                    background-color: #dff0d8;
+                    border-color: #d6e9c6;
+                }
+                
+                .panel-primary {
+                    border-color: #bce8f1;
+                }
+                
+                .panel-primary .panel-body {
+                    background-color: #d9edf7;
+                }
+
+                /* Mobile-friendly tooltips - CSS-only solution */
+                /* Base tooltip styling for elements with title attributes */
+                [title] {
+                    position: relative;
+                    cursor: help;
+                }
+
+                /* Create tooltip content using title attribute */
+                [title]:before {
+                    content: attr(title);
+                    position: absolute;
+                    background: rgba(0, 0, 0, 0.9);
+                    color: white;
+                    padding: 8px 12px;
+                    border-radius: 6px;
+                    font-size: 13px;
+                    line-height: 1.3;
+                    white-space: nowrap;
+                    max-width: 300px;
+                    word-wrap: break-word;
+                    white-space: normal;
+                    z-index: 1000;
+                    pointer-events: none;
+                    opacity: 0;
+                    visibility: hidden;
+                    transition: opacity 0.3s, visibility 0.3s;
+                    
+                    /* Position above the element by default */
+                    bottom: 100%;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    margin-bottom: 8px;
+                }
+
+                /* Tooltip arrow */
+                [title]:after {
+                    content: '';
+                    position: absolute;
+                    border: 6px solid transparent;
+                    border-top-color: rgba(0, 0, 0, 0.9);
+                    z-index: 1001;
+                    pointer-events: none;
+                    opacity: 0;
+                    visibility: hidden;
+                    transition: opacity 0.3s, visibility 0.3s;
+                    
+                    /* Position arrow */
+                    bottom: 100%;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    margin-bottom: 2px;
+                }
+
+                /* Show tooltip on hover (desktop) and focus/active (mobile) */
+                [title]:hover:before,
+                [title]:focus:before,
+                [title]:active:before,
+                [title]:hover:after,
+                [title]:focus:after,
+                [title]:active:after {
+                    opacity: 1;
+                    visibility: visible;
+                }
+
+                /* Make elements focusable on mobile for tooltip interaction */
+                @media (max-width: 767px) {
+                    [title] {
+                        -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+                        outline: none;
+                    }
+                    
+                    /* Add subtle visual feedback for tapped tooltips on mobile */
+                    [title]:active {
+                        background-color: rgba(0, 0, 0, 0.05);
+                        border-radius: 3px;
+                    }
+                    
+                    /* Ensure tooltip fits on mobile screens */
+                    [title]:before {
+                        max-width: 280px;
+                        left: 0;
+                        right: 0;
+                        transform: none;
+                        margin-left: auto;
+                        margin-right: auto;
+                    }
+                    
+                    [title]:after {
+                        left: 50%;
+                        transform: translateX(-50%);
+                    }
+                }
+
+                /* Special positioning for table cells and small elements */
+                td[title]:before,
+                th[title]:before {
+                    bottom: 100%;       /* position tooltip above cell */
+                    top: auto;
+                    margin-bottom: 8px; /* spacing between cell and tooltip */
+                    margin-top: 0;
+                }
+
+                td[title]:after,
+                th[title]:after {
+                    bottom: 100%;
+                    top: auto;
+                    border-top-color: rgba(0, 0, 0, 0.9); /* arrow points down */
+                    border-bottom-color: transparent;
+                    margin-bottom: 2px;
+                    margin-top: 0;
+                }
+
+                /* CSS-only navbar collapse using checkbox hack */
+                .navbar-toggle {
+                    display: none;
+                    background-color: transparent;
+                    background-image: none;
+                    border: 1px solid #ddd;
+                    border-radius: 4px;
+                    padding: 9px 10px;
+                    margin-top: 8px;
+                    margin-right: 15px;
+                    margin-bottom: 8px;
+                    cursor: pointer;
+                    float: right;
+                }
+
+                .navbar-toggle:hover,
+                .navbar-toggle:focus {
+                    background-color: #ddd;
+                }
+
+                .navbar-toggle .icon-bar {
+                    display: block;
+                    width: 22px;
+                    height: 2px;
+                    background-color: #888;
+                    border-radius: 1px;
+                    margin: 4px 0;
+                }
+
+                .navbar-brand {
+                    float: left;
+                    height: 50px;
+                    padding: 15px;
+                    font-size: 18px;
+                    line-height: 20px;
+                    font-weight: bold;
+                }
+
+                /* Desktop: show navigation horizontally */
+                @media (min-width: 768px) {
+                    .navbar-collapse {
+                        display: block !important;
+                        height: auto !important;
+                        overflow: visible !important;
+                    }
+                    
+                    .nav.navbar-nav {
+                        float: left;
+                        margin: 0;
+                    }
+                    
+                    .nav.navbar-nav > li {
+                        float: left;
+                    }
+                    
+                    .nav.navbar-nav > li > a {
+                        padding-top: 15px;
+                        padding-bottom: 15px;
+                        color: #777;
+                        text-decoration: none;
+                        padding-left: 15px;
+                        padding-right: 15px;
+                    }
+                    
+                    .nav.navbar-nav > li.active > a,
+                    .nav.navbar-nav > li > a:hover,
+                    .nav.navbar-nav > li > a:focus {
+                        color: #333;
+                        background-color: #e7e7e7;
+                    }
+                    
+                    .navbar-brand {
+                        display: none;
+                    }
+                }
+
+                /* Mobile: hide navigation by default, show hamburger */
+                @media (max-width: 767px) {
+                    .navbar-toggle {
+                        display: block;
+                    }
+                    
+                    .navbar-collapse {
+                        display: none;
+                        clear: both;
+                        width: 100%;
+                        margin-top: 50px;
+                        border-top: 1px solid #e7e7e7;
+                        padding-top: 10px;
+                    }
+                    
+                    /* When checkbox is checked, show the menu */
+                    .navbar-toggle-checkbox:checked ~ .navbar-header + .navbar-collapse {
+                        display: block;
+                    }
+                    
+                    .nav.navbar-nav > li {
+                        float: none;
+                    }
+                    
+                    .nav.navbar-nav > li > a {
+                        display: block;
+                        padding: 12px 20px;
+                        color: #777;
+                        text-decoration: none;
+                        border-bottom: 1px solid #e7e7e7;
+                    }
+                    
+                    .nav.navbar-nav > li:last-child > a {
+                        border-bottom: none;
+                    }
+                    
+                    .nav.navbar-nav > li.active > a,
+                    .nav.navbar-nav > li > a:hover,
+                    .nav.navbar-nav > li > a:focus {
+                        color: #333;
+                        background-color: #f5f5f5;
+                    }
+                }
+
+                /* Network Health Ribbon Styles */
+                .network-health-ribbon {
+                    max-width: 1400px;
+                    margin: 0 auto;
+                    padding: 7px;
+                }
+
+                .ribbon-row {
+                    display: grid;
+                    grid-template-columns: repeat(3, 1fr);
+                    gap: 7px;
+                    margin-bottom: 7px;
+                }
+
+                .ribbon-card {
+                    background: white;
+                    border-radius: 6px;
+                    padding: 10px;
+                    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+                    border: 1px solid #e1e8ed;
+                    transition: all 0.3s ease;
+                    min-height: 90px;
+                }
+
+                .ribbon-card:hover {
+                    transform: translateY(-1px);
+                    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+                }
+
+                .ribbon-card .card-header {
+                    margin-bottom: 7px;
+                    padding-bottom: 5px;
+                    border-bottom: 1px solid #f0f4f8;
+                }
+
+                .ribbon-card .card-header h4 {
+                    margin: 0;
+                    font-size: 1.65rem;
+                    color: #2c3e50;
+                    font-weight: 600;
+                }
+
+                .card-metrics {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 6px;
+                }
+
+                .metric-item.primary {
+                    text-align: center;
+                    padding-bottom: 5px;
+                    border-bottom: 1px solid #f8fafc;
+                    margin-bottom: 4px;
+                }
+
+                .metric-item.primary .metric-value {
+                    display: block;
+                    font-size: 3.3rem;
+                    font-weight: bold;
+                    color: #2c3e50;
+                    line-height: 1.0;
+                }
+
+                .metric-item.primary .metric-label {
+                    display: block;
+                    font-size: 1.5rem;
+                    color: #64748b;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                    margin-top: 2px;
+                    font-weight: 500;
+                }
+
+                .metric-grid {
+                    display: grid;
+                    grid-template-columns: repeat(4, 1fr);
+                    gap: 5px;
+                }
+
+                .metric-grid .metric-item {
+                    text-align: center;
+                    padding: 4px;
+                    background: #f8fafc;
+                    border-radius: 3px;
+                }
+
+                .metric-grid .metric-value {
+                    display: block;
+                    font-size: 1.65rem;
+                    font-weight: 600;
+                    color: #374151;
+                    line-height: 1.0;
+                }
+
+                .metric-grid .metric-label {
+                    display: block;
+                    font-size: 1.275rem;
+                    color: #6b7280;
+                    margin-top: 1px;
+                    font-weight: 500;
+                }
+
+                /* Card-specific colors and styling - All primary metrics now black */
+                .ribbon-card.relay-counts .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                .ribbon-card.bandwidth-counts .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                .ribbon-card.relay-uptime .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                .ribbon-card.operator-participation .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                .ribbon-card.geographic-participation .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                .ribbon-card.provider-participation .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                .ribbon-card.platform-counts .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                .ribbon-card.bandwidth-utilization .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                .ribbon-card.version-compliance .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                .ribbon-card.exit-policies .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                /* Tooltip styles for network health metrics */
+                .metric-item[title] {
+                    position: relative;
+                    cursor: help;
+                }
+
+                .metric-item[title]:hover::after {
+                    content: attr(title);
+                    position: absolute;
+                    bottom: 100%;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background: #1f2937;
+                    color: white;
+                    padding: 8px 12px;
+                    border-radius: 6px;
+                    font-size: 0.85rem;
+                    white-space: normal;
+                    max-width: 300px;
+                    width: max-content;
+                    z-index: 1000;
+                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                    line-height: 1.4;
+                    text-align: left;
+                    font-weight: normal;
+                    margin-bottom: 8px;
+                }
+
+                .metric-item[title]:hover::before {
+                    content: '';
+                    position: absolute;
+                    bottom: 100%;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    border: 6px solid transparent;
+                    border-top-color: #1f2937;
+                    z-index: 1000;
+                    margin-bottom: 2px;
+                }
+
+                .ribbon-footer {
+                    text-align: center;
+                    margin-top: 15px;
+                    padding-top: 12px;
+                    border-top: 1px solid #e5e7eb;
+                }
+
+                .ribbon-footer .last-updated {
+                    font-size: 0.9rem;
+                    color: #9ca3af;
+                    margin: 0;
+                }
+
+                /* Responsive adjustments for ribbon */
+                @media (max-width: 1200px) {
+                    .ribbon-row {
+                        grid-template-columns: repeat(2, 1fr);
+                    }
+                    
+                    .metric-grid {
+                        grid-template-columns: repeat(3, 1fr);
+                    }
+                }
+
+                @media (max-width: 768px) {
+                    .ribbon-row {
+                        grid-template-columns: 1fr;
+                        gap: 6px;
+                    }
+                    
+                    .network-health-ribbon {
+                        padding: 6px;
+                    }
+
+                    .ribbon-card {
+                        padding: 8px;
+                        min-height: 80px;
+                    }
+
+                    .ribbon-card .card-header h4 {
+                        font-size: 1.35rem;
+                    }
+
+                    .metric-item.primary .metric-value {
+                        font-size: 2.7rem;
+                    }
+
+                    .metric-item.primary .metric-label {
+                        font-size: 1.2rem;
+                    }
+
+                    .metric-grid {
+                        grid-template-columns: repeat(2, 1fr);
+                        gap: 4px;
+                    }
+
+                    .metric-grid .metric-value {
+                        font-size: 1.35rem;
+                    }
+
+                    .metric-grid .metric-label {
+                        font-size: 1.05rem;
+                    }
+                }
+
+                @media (max-width: 480px) {
+                    .ribbon-card .card-header h4 {
+                        font-size: 1.2rem;
+                    }
+
+                    .metric-item.primary .metric-value {
+                        font-size: 3.2rem;
+                    }
+
+                    .metric-item.primary .metric-label {
+                        font-size: 1.4rem;
+                    }
+
+                    .metric-grid .metric-value {
+                        font-size: 1.6rem;
+                    }
+
+                    .metric-grid .metric-label {
+                        font-size: 1.2rem;
+                    }
+                }
+
+                /* Allium Search Form Styles */
+                .navbar-form.navbar-right {
+                    margin-left: 15px;
+                    padding-top: 8px;
+                    padding-bottom: 8px;
+                }
+
+                .navbar-form .input-group {
+                    display: inline-table;
+                    vertical-align: middle;
+                }
+
+                .navbar-form .form-control {
+                    border-radius: 3px 0 0 3px;
+                }
+
+                .navbar-form .btn {
+                    border-radius: 0 3px 3px 0;
+                }
+
+                .allium-mobile-search {
+                    background: #f8f9fa;
+                    padding: 8px 15px;
+                    margin-top: -20px; /* Pull up to sit flush with navbar */
+                    margin-bottom: 15px;
+                    border-radius: 0 0 4px 4px; /* Only round bottom corners */
+                    border: 1px solid #e7e7e7;
+                    border-top: none;
+                }
+
+                .allium-mobile-search .form-control {
+                    font-size: 15px; /* Smaller than nav (18px) but larger than body (14px) */
+                    padding: 6px 10px;
+                    height: auto;
+                }
+
+                .allium-mobile-search .btn {
+                    font-size: 14px;
+                    padding: 6px 12px;
+                }
+
+                /* 
+                 * Search bar responsive behavior:
+                 * - Below 1600px: Always show full-width search bar below navbar
+                 * - At 1600px+: Show compact search in navbar (enough room for all nav items + search)
+                 */
+                
+                /* Default: show full-width search, hide navbar search */
+                .allium-mobile-search {
+                    display: block !important;
+                }
+                
+                .navbar-form.navbar-right {
+                    display: none !important;
+                }
+
+                /* Extra large desktop (≥1600px): enough room for inline search */
+                @media (min-width: 1600px) {
+                    .allium-mobile-search {
+                        display: none !important;
+                    }
+                    .navbar-form.navbar-right {
+                        display: block !important;
+                    }
+                }
+            </style>
+        </head>
+    <body>
+        <!-- 1AEO Cross-Site Navigation -->
+        <nav class="aeo-cross-nav">
+            <div class="aeo-nav-container">
+                <a href="https://www.1aeo.com" class="aeo-nav-brand">
+                    <span>1AEO</span>
+                </a>
+                <div class="aeo-nav-links">
+                    <a href="https://www.1aeo.com">Home</a>
+                    <a href="https://metrics.1aeo.com" class="active">Metrics</a>
+                    <a href="https://aroivalidator.1aeo.com">AROI Validator</a>
+                    <a href="https://routefluxmap.1aeo.com">RouteFluxMap</a>
+                </div>
+            </div>
+        </nav>
+        
+        <div class="container">
+<h2>
+View AS7922 Comcast Cable Communications, LLC Details</h2>
+
+        <nav aria-label="breadcrumb" style="margin-bottom: 10px;">
+    <ol class="breadcrumb" style="background: none; padding: 0; margin: 0; font-size: 0.9em; list-style: none;">
+        <li style="display: inline;"><a href="../../index.html">Home</a></li>
+            <li style="display: inline;"> > <a href="../../misc/networks-by-bandwidth.html">Browse by Network</a></li>
+            <li style="display: inline; color: #777;"> > AS7922</li>
+    </ol>
+</nav>
+    <nav class="navbar navbar-default" style="margin-bottom: 20px;">
+        <div class="container-fluid">
+            <!-- CSS-only hamburger toggle using checkbox hack -->
+            <input type="checkbox" id="navbar-toggle" class="navbar-toggle-checkbox" style="display: none;">
+            
+            <div class="navbar-header">
+                <label for="navbar-toggle" class="navbar-toggle" role="button" aria-label="Toggle navigation">
+                    <span class="sr-only">Toggle navigation</span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </label>
+                <span class="navbar-brand visible-xs">Browse Categories</span>
+            </div>
+            
+            <div class="navbar-collapse" id="main-navbar">
+                <ul class="nav navbar-nav">
+                    <li class="">
+                        <a href="../../network-health.html">Network Health</a>
+                    </li>
+                    <li class="">
+                        <a href="../../index.html">Operator Champions</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/contacts-by-bandwidth.html">By Operator / Contact</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/families-by-bandwidth.html">By Family</a>
+                    </li>
+                    <li class="active">
+                        <a href="../../misc/networks-by-bandwidth.html">By Network</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/countries-by-bandwidth.html">By Country</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/platforms-by-bandwidth.html">By Platform</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/authorities.html">Directory Authorities</a>
+                    </li>
+                    <li class="">
+                        <a href="../../top500.html">Top 500 Relays</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/all.html">All Relays</a>
+                    </li>
+                </ul>
+                
+                <!-- Desktop: Search in navbar (hidden on mobile via CSS) -->
+                <form action="../../search" method="GET" 
+                      class="navbar-form navbar-right hidden-xs hidden-sm"
+                      style="margin-right: 0;">
+                    <div class="input-group" style="width: 220px;">
+                        <input type="text" 
+       name="q" 
+       class="form-control input-sm" 
+       placeholder="Search relays..."
+       title="Search by fingerprint, nickname, AROI, IP, AS number, family, or country"
+       maxlength="100"
+       pattern="[A-Za-z0-9\s\-_.@:]+"
+       autocomplete="off"
+       autocapitalize="off"
+       spellcheck="false">
+<span class="input-group-btn">
+    <button type="submit" class="btn btn-sm btn-default"><span class="glyphicon glyphicon-search" aria-hidden="true"></span></button>
+</span>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- Mobile: Search bar below navbar (hidden on desktop via CSS) -->
+    <div class="allium-mobile-search visible-xs visible-sm">
+        <form action="../../search" method="GET">
+            <div class="input-group">
+                <input type="text" 
+       name="q" 
+       class="form-control" 
+       placeholder="Search: fingerprint, nickname, AROI, IP, AS number, family, country..."
+       title="Search by fingerprint, nickname, AROI, IP, AS number, family, or country"
+       maxlength="100"
+       pattern="[A-Za-z0-9\s\-_.@:]+"
+       autocomplete="off"
+       autocapitalize="off"
+       spellcheck="false">
+<span class="input-group-btn">
+    <button type="submit" class="btn btn-primary">Search</button>
+</span>
+            </div>
+        </form>
+    </div>
+<div>
+AS7922 Comcast Cable Communications, LLC network summary:
+<ul style="list-style-type: disc; padding-left: 20px; margin-bottom: 15px;">
+    <li><strong><span title="Observed bandwidth capacity represents the estimated maximum throughput this group can handle, combining total, guard, middle, and exit bandwidth contributions">Bandwidth Capacity</span>:</strong> ~992.69 Mbit/s 
+        (<span title="Bandwidth capacity dedicated to guard relay operations">421.73 Mbit/s guard capacity</span>, <span title="Bandwidth capacity dedicated to middle relay operations">533.07 Mbit/s middle capacity</span>, <span title="Bandwidth capacity dedicated to exit relay operations">37.89 Mbit/s exit capacity</span>)</li>
+    <li><strong><span title="Network influence represents the percentage of overall consensus weight, indicating relative importance in the Tor network across guard, middle, and exit positions">Network Influence</span>:</strong> 0.02% of overall consensus weight 
+        (<span title="Percentage of guard consensus weight for entry position selection">0.02% guard</span>, <span title="Percentage of middle consensus weight for routing position selection">0.09% middle</span>, and <span title="Percentage of exit consensus weight for exit position selection">0.00% exit</span>)</li>
+    <li><strong><span title="Network position indicates the strategic role distribution of relays. Labels: Guard-focused (>60% guard), Exit-focused (>40% exit), Multi-role (both guard and exit >20%), Balanced (mixed roles), Guard-only (100% guard), Exit-only (100% exit), Middle-only (100% middle)">Network Position</span>:</strong> Balanced (57 total relays, 12 guards, 41 middles, 4 exits)</li>    <li><strong><span title="Unique AROI operators and contact information for this network">Unique AROI Operators and Contact Information</span>:</strong> 39, <a href="../../contact/c69d0981154388cc08f998fcfe8a6001/">defcon.org</a>, <a href="../../contact/11aa0da44f4107b5ca36cf555901f0ec/">11aa0da4</a>, <a href="../../contact/142130b251d75d68f2f3d68ebe5fa956/">142130b2</a>, <a href="../../contact/15d3d9b0224c4381f2e8a57683a9ccd7/">15d3d9b0</a>, <a href="../../contact/163ac15cabe2346fe22c074b76b3fbeb/">163ac15c</a>, <a href="../../contact/17b25032ebe4ebcef754f91018b1cbd0/">17b25032</a>, <a href="../../contact/1c79d288f190752160539411a3720087/">1c79d288</a>, <a href="../../contact/21e60434ce1cf487f78fe6afa355311f/">21e60434</a>, <a href="../../contact/2a369a52fe9bce22d5a939100d218b59/">2a369a52</a>, <a href="../../contact/2c0eff7232f9fa931e5443092eb7ea09/">2c0eff72</a>, <a href="../../contact/2f3f15fdaf2154bbc9a068d480601c77/">2f3f15fd</a>, <a href="../../contact/319576cd345509bb0f8b844aeb4ea785/">319576cd</a>, <a href="../../contact/32cb0861adc94fe7853fb21328e94596/">32cb0861</a>, <a href="../../contact/522a47f6faf17361dd6c165e7b813b97/">522a47f6</a>, <a href="../../contact/60a6c20d49f49bc210ac98d7e47c74a0/">60a6c20d</a>, <a href="../../contact/6c1a9069e9236d2ed65327836911cfdc/">6c1a9069</a>, <a href="../../contact/6d8fad9ad10667ed03e4584004f6dd32/">6d8fad9a</a>, <a href="../../contact/6f376c764eeac4c90e660e3a88cb6730/">6f376c76</a>, <a href="../../contact/77cdebaa42fcef9d9cdba68d10013e70/">77cdebaa</a>, <a href="../../contact/841af73da3b68fcaa834992d8eab3f79/">841af73d</a>, <a href="../../contact/89dc6604bd0d0a13189272e726f55fcf/">89dc6604</a>, <a href="../../contact/89e92f52205eded9199db24254f5d0f6/">89e92f52</a>, <a href="../../contact/9125d7b05b6d725f96b05720c8aeb684/">9125d7b0</a>, <a href="../../contact/954eb12ebd5b720afef361c682cfd9fb/">954eb12e</a>, <a href="../../contact/a031f60392fcc26a962e3186f9a96f3c/">a031f603</a>, <a href="../../contact/a6b9a614f26fbfb14f2e075a0c4f6559/">a6b9a614</a>, <a href="../../contact/b2837c8a23c518f8d26149dbfd44fc16/">b2837c8a</a>, <a href="../../contact/b5c79b3fea0614076ffa820a5584e99e/">b5c79b3f</a>, <a href="../../contact/b6e39b1460e0e826595cb8e179c3a905/">b6e39b14</a>, <a href="../../contact/be974153084ecb27166820dae60c8954/">be974153</a>, <a href="../../contact/c2987c438d3cf03610c35c305e206e48/">c2987c43</a>, <a href="../../contact/ceb95c6baf4c8ee37f92d942458998d1/">ceb95c6b</a>, <a href="../../contact/d41d8cd98f00b204e9800998ecf8427e/">d41d8cd9</a>, <a href="../../contact/e6ebc9b6b305b8d6743888c02eaa5a79/">e6ebc9b6</a>, <a href="../../contact/e7a1092fd28d9a11072bd609b97dca2a/">e7a1092f</a>, <a href="../../contact/ec0e61890e1e240170813383206152e8/">ec0e6189</a>, <a href="../../contact/f50ee259f8fcd2c1651bf9b2bf04d8b8/">f50ee259</a>, <a href="../../contact/f519f64912a0b8d538947ba92674adb5/">f519f649</a>, <a href="../../contact/fcf7d69fb77ef347366a069c7a7b1c3b/">fcf7d69f</a></li></ul></div>
+
+<p class="text-muted" style="margin-bottom: 15px;">
+<small>Last updated: Sun, 15 Feb 2026 19:03:11 GMT. Refreshed every 30 minutes from the Tor directory authorities via <a href="https://onionoo.torproject.org/">Tor Project's onionoo API</a>.</small>
+</p>
+
+<table class="table table-condensed">
+<tr>
+    <th></th>
+    <th>Nickname</th>
+    <th><a href="https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/" target="_blank" title="Autonomous Relay Operator Identifier - unverified">AROI</a></th>
+    <th>Contact</th>
+    <th>BW</th>
+<th title="Bandwidth capacity measured by >=3 bandwidth authorities">BW Cap Measured</th>
+<th class="visible-md visible-lg">IP Address</th>
+    <th>AS Number</th>
+    <th>AS Name</th>
+    <th>Country</th>
+    <th>Platform</th>
+    <th class="visible-md visible-lg">Flags</th>
+    <th class="visible-md visible-lg">First Seen</th>
+<th class="visible-md visible-lg">Last Restarted</th>
+</tr>
+<tbody>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="ANiceRelay">
+			<a href="../../relay/7157A5CF69E36EF3B9C4B579168EF5DBEABD5163/">ANiceRelay</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/2f3f15fdaf2154bbc9a068d480601c77/" 
+				title="Anonymous &amp;lt;anon AT nowhere dot com&amp;gt;" class="contact-text">Anonymous &amp;lt;anon AT nowhere dot com&amp;gt;</a>
+			</td>
+<td>91.39 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/73.170.126.220">73.170.126.220</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/guard/"><img src="../../static/images/flags/guard.png" title="Guard" alt="Guard"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-04-27/">2024-04-27</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-02-14">
+		        1d 17h 52m ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="thecornersporerelay">
+			<a href="../../relay/E37122D7DB50EFB0C499DF433324E616E4C43B1C/">thecornersporerelay</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/163ac15cabe2346fe22c074b76b3fbeb/" 
+				title="sasha@thecornerspore.dev" class="contact-text">sasha@thecornerspore.dev</a>
+			</td>
+<td>52.42 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/69.243.58.246">69.243.58.246</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/FreeBSD/">FreeBSD</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-08-08/">2025-08-08</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-02-12">
+		        3d 3h 41m ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="cheesehead">
+		    <a href="../../relay/2A522B22235CE7F8D0F6BADA526F3FE4AFF4D9C9/">cheesehead</a> (<a href="../../family/2A522B22235CE7F8D0F6BADA526F3FE4AFF4D9C9/">2</a>)
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/e6ebc9b6b305b8d6743888c02eaa5a79/" 
+				title="packergundo at gmail dot com" class="contact-text">packergundo at gmail dot com</a>
+			</td>
+<td>47.00 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/75.145.166.70">75.145.166.70</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/guard/"><img src="../../static/images/flags/guard.png" title="Guard" alt="Guard"></a><a href="../../flag/hsdir/"><img src="../../static/images/flags/hsdir.png" title="HSDir" alt="HSDir"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-05-03/">2024-05-03</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-02-10">
+		        5d 1h 33m ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="GusNet">
+			<a href="../../relay/707B80C8EB47FFEDF0B1DA6EDAA60F81C3ED00A6/">GusNet</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/a031f60392fcc26a962e3186f9a96f3c/" 
+				title="legumes.96.piston@icloud.com" class="contact-text">legumes.96.piston@icloud.com</a>
+			</td>
+<td>44.06 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/73.98.247.181">73.98.247.181</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/guard/"><img src="../../static/images/flags/guard.png" title="Guard" alt="Guard"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-08-29/">2025-08-29</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-02-15">
+		        12h 32m 17s ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="mammoth">
+			<a href="../../relay/EB044ED4110BA4A6D546992B457DFD13C52B96E5/">mammoth</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/be974153084ecb27166820dae60c8954/" 
+				title="nothuman@duck.com" class="contact-text">nothuman@duck.com</a>
+			</td>
+<td>36.47 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/24.125.17.222">24.125.17.222</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/guard/"><img src="../../static/images/flags/guard.png" title="Guard" alt="Guard"></a><a href="../../flag/hsdir/"><img src="../../static/images/flags/hsdir.png" title="HSDir" alt="HSDir"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-01-30/">2024-01-30</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-02-10">
+		        5d 12h 58m ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="blackcat13relay">
+			<a href="../../relay/82A6024DFC1111C795776EC060387504C71222B5/">blackcat13relay</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/b5c79b3fea0614076ffa820a5584e99e/" 
+				title="admin@blackcat.vip" class="contact-text">admin@blackcat.vip</a>
+			</td>
+<td>34.82 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/67.168.20.17">67.168.20.17</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/FreeBSD/">FreeBSD</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/guard/"><img src="../../static/images/flags/guard.png" title="Guard" alt="Guard"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-11-04/">2024-11-04</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-02-15">
+		        14h 38m 57s ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="RussianHackerPi">
+			<a href="../../relay/2A1D0809B44E80E01C03E4BAFC532EE59D06FCA4/">RussianHackerPi</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/fcf7d69fb77ef347366a069c7a7b1c3b/" 
+				title="tyrlanguage@gmail.com" class="contact-text">tyrlanguage@gmail.com</a>
+			</td>
+<td>32.47 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/73.99.144.175">73.99.144.175</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/hsdir/"><img src="../../static/images/flags/hsdir.png" title="HSDir" alt="HSDir"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2026-01-01/">2026-01-01</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-01-24">
+		        3w 1d 13h ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="swisshead">
+		    <a href="../../relay/29711824A49ECE595B9B29594759FD7CDF5B1BA8/">swisshead</a> (<a href="../../family/29711824A49ECE595B9B29594759FD7CDF5B1BA8/">2</a>)
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/e6ebc9b6b305b8d6743888c02eaa5a79/" 
+				title="packergundo at gmail dot com" class="contact-text">packergundo at gmail dot com</a>
+			</td>
+<td>30.01 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/75.145.166.75">75.145.166.75</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/guard/"><img src="../../static/images/flags/guard.png" title="Guard" alt="Guard"></a><a href="../../flag/hsdir/"><img src="../../static/images/flags/hsdir.png" title="HSDir" alt="HSDir"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-04-19/">2025-04-19</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-02-10">
+		        5d 2h 30s ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="BebeAndZen">
+		    <a href="../../relay/0DCA867D07E37539DCB60CDD48B45556DF4D7014/">BebeAndZen</a> (<a href="../../family/0DCA867D07E37539DCB60CDD48B45556DF4D7014/">5</a>)
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/2c0eff7232f9fa931e5443092eb7ea09/" 
+				title="admin@juchatz.com" class="contact-text">admin@juchatz.com</a>
+			</td>
+<td>29.11 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/73.185.110.40">73.185.110.40</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/FreeBSD/">FreeBSD</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/guard/"><img src="../../static/images/flags/guard.png" title="Guard" alt="Guard"></a><a href="../../flag/hsdir/"><img src="../../static/images/flags/hsdir.png" title="HSDir" alt="HSDir"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-06-07/">2025-06-07</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-02-02">
+		        1w 5d 19h ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="starfire">
+			<a href="../../relay/9C1D0C09D73152A30901E5F479F391C3D71325EF/">starfire</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/15d3d9b0224c4381f2e8a57683a9ccd7/" 
+				title="fttor2@protonmail.com" class="contact-text">fttor2@protonmail.com</a>
+			</td>
+<td>28.96 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/73.133.105.83">73.133.105.83</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2026-02-14/">2026-02-14</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-02-14">
+		        22h 27m 57s ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="defconrelay18">
+		    <a href="../../relay/C3181A0E851E5A72B21DB40469BE1CD1CA77634F/">defconrelay18</a> (<a href="../../family/C3181A0E851E5A72B21DB40469BE1CD1CA77634F/">8</a>)
+		    </td>
+<td>
+<a href="../../contact/c69d0981154388cc08f998fcfe8a6001/" title="defcon.org">defcon.org</a>
+</td>
+<td>
+			    <a href="../../contact/c69d0981154388cc08f998fcfe8a6001/" 
+				title="email:info[]defcon.org url:https://www.defcon.org/ proof:uri-rsa abuse:info[]defcon.org pgp:BC5BCD9AC6091B6BCD819636D7C6E96CFE66156A twitter:defcon os:FreeBSD ciissversion:2" class="contact-text">email:info[]defcon.org url:https://www.defcon.org/ proof:uri-rsa abuse:info[]defcon.org pgp:BC5BCD9AC6091B6BCD819636D7C6E96CFE66156A twitter:defcon os:FreeBSD ciissversion:2</a>
+			</td>
+<td>26.75 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/50.230.231.84">50.230.231.84</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/FreeBSD/">FreeBSD</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/hsdir/"><img src="../../static/images/flags/hsdir.png" title="HSDir" alt="HSDir"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-05-15/">2025-05-15</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-01-29">
+		        2w 3d 5h ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="stellaranomaly">
+			<a href="../../relay/51374C8DA459C67329FFD5C7502CCAE4194910CC/">stellaranomaly</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/89dc6604bd0d0a13189272e726f55fcf/" 
+				title="Admin ray@tritonbase.com" class="contact-text">Admin ray@tritonbase.com</a>
+			</td>
+<td>26.46 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/96.65.68.193">96.65.68.193</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/guard/"><img src="../../static/images/flags/guard.png" title="Guard" alt="Guard"></a><a href="../../flag/hsdir/"><img src="../../static/images/flags/hsdir.png" title="HSDir" alt="HSDir"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2019-02-18/">2019-02-18</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-02-09">
+		        6d 16h 42m ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="JAJTorBits3">
+			<a href="../../relay/EF97A17973B7072C0E3CB2013A3EBAC42346FE42/">JAJTorBits3</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/17b25032ebe4ebcef754f91018b1cbd0/" 
+				title="jajtor@comcast.net" class="contact-text">jajtor@comcast.net</a>
+			</td>
+<td>24.96 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/73.117.138.122">73.117.138.122</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Windows/">Windows</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-03-26/">2024-03-26</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-02-13">
+		        1d 22h 59m ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="a1347">
+			<a href="../../relay/F24276BDD14A51781202EEB77970F5FF3D00359D/">a1347</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/ceb95c6baf4c8ee37f92d942458998d1/" 
+				title="corgi93_helpers@icloud.com" class="contact-text">corgi93_helpers@icloud.com</a>
+			</td>
+<td>24.07 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/73.22.212.189">73.22.212.189</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-12-20/">2025-12-20</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-02-15">
+		        6h 33m 58s ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="HotFartCakes">
+			<a href="../../relay/5BB7F02CBED04DE0E13797EFBA3E43D0C08C864C/">HotFartCakes</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/954eb12ebd5b720afef361c682cfd9fb/" 
+				title="Steven Glasford steven@glasford.io" class="contact-text">Steven Glasford steven@glasford.io</a>
+			</td>
+<td>23.93 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/174.53.171.141">174.53.171.141</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/guard/"><img src="../../static/images/flags/guard.png" title="Guard" alt="Guard"></a><a href="../../flag/hsdir/"><img src="../../static/images/flags/hsdir.png" title="HSDir" alt="HSDir"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-11-18/">2025-11-18</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2025-11-18">
+		        2mo 4w 1d ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="MalfunctioningEddy">
+			<a href="../../relay/B8DC4EAEA984626DCD52DA1EBD03BEF135AB2BC6/">MalfunctioningEddy</a>
+		    </td>
+<td>none</td>
+<td title="none">
+			    none
+			</td>
+<td>22.38 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/66.31.227.172">66.31.227.172</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2022-08-01/">2022-08-01</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-02-11">
+		        3d 23h 4m ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="BigBob123">
+			<a href="../../relay/BE236646C85A3C3FBC36735034C0706994FA6B39/">BigBob123</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/b6e39b1460e0e826595cb8e179c3a905/" 
+				title="biggggbob123@proton.me" class="contact-text">biggggbob123@proton.me</a>
+			</td>
+<td>22.38 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/73.179.68.113">73.179.68.113</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/guard/"><img src="../../static/images/flags/guard.png" title="Guard" alt="Guard"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2026-01-04/">2026-01-04</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-02-14">
+		        1d 14h 31m ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="wizardfumes">
+			<a href="../../relay/9C9BE9596776490707B903C1743F6AF97E14FAD1/">wizardfumes</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/f519f64912a0b8d538947ba92674adb5/" 
+				title="barrypmail@protonmail.com" class="contact-text">barrypmail@protonmail.com</a>
+			</td>
+<td>20.09 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/107.5.181.144">107.5.181.144</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-10-11/">2025-10-11</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-02-13">
+		        2d 7h 18m ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="TLCOnion">
+			<a href="../../relay/03A33C3454FC0F9AC6966F12FA486999F5A22896/">TLCOnion</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/77cdebaa42fcef9d9cdba68d10013e70/" 
+				title="tor@centerfortlc.com [tor-relay.co] 14kmchJcCVVEor1MVSXzfYUL8VQ5JqR9VM" class="contact-text">tor@centerfortlc.com [tor-relay.co] 14kmchJcCVVEor1MVSXzfYUL8VQ5JqR9VM</a>
+			</td>
+<td>19.50 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/96.66.15.152">96.66.15.152</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/badexit/"><img src="../../static/images/flags/badexit.png" title="BadExit" alt="BadExit"></a><a href="../../flag/exit/"><img src="../../static/images/flags/exit.png" title="Exit" alt="Exit"></a><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/guard/"><img src="../../static/images/flags/guard.png" title="Guard" alt="Guard"></a><a href="../../flag/hsdir/"><img src="../../static/images/flags/hsdir.png" title="HSDir" alt="HSDir"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2018-01-05/">2018-01-05</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2025-12-06">
+		        2mo 1w 4d ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="FreedomFirst">
+			<a href="../../relay/8AE1FECC388F38FE3DE64CD0E63988054E8A9048/">FreedomFirst</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/b2837c8a23c518f8d26149dbfd44fc16/" 
+				title="freedomfirst999999999@proton.me" class="contact-text">freedomfirst999999999@proton.me</a>
+			</td>
+<td>18.46 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/98.217.182.244">98.217.182.244</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/guard/"><img src="../../static/images/flags/guard.png" title="Guard" alt="Guard"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-09-13/">2025-09-13</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-02-15">
+		        12h 28m 45s ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="bruv">
+			<a href="../../relay/9B804E3BC42216F37DAD99E4B522A40CB0858891/">bruv</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/c2987c438d3cf03610c35c305e206e48/" 
+				title="your@e-mail" class="contact-text">your@e-mail</a>
+			</td>
+<td>18.43 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/73.133.41.56">73.133.41.56</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-03-15/">2025-03-15</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-02-14">
+		        1d 8h 1m ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="TouchMyData">
+			<a href="../../relay/19E10AF1511609165E19330AC49CCFECE6018E48/">TouchMyData</a>
+		    </td>
+<td>none</td>
+<td title="none">
+			    none
+			</td>
+<td>18.26 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/71.57.199.145">71.57.199.145</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2019-02-18/">2019-02-18</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-02-09">
+		        5d 22h 43m ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="Unnamed">
+			<a href="../../relay/DD7E5FC9561BC339328B687C5D6087B8CAC90268/">Unnamed</a>
+		    </td>
+<td>none</td>
+<td title="none">
+			    none
+			</td>
+<td>17.62 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/67.173.21.91">67.173.21.91</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/guard/"><img src="../../static/images/flags/guard.png" title="Guard" alt="Guard"></a><a href="../../flag/hsdir/"><img src="../../static/images/flags/hsdir.png" title="HSDir" alt="HSDir"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-06-25/">2025-06-25</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-01-05">
+		        1mo 1w 3d ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="defconorg">
+		    <a href="../../relay/B956A82A9559D482E1ACFEABD898FDC3F2991005/">defconorg</a> (<a href="../../family/B956A82A9559D482E1ACFEABD898FDC3F2991005/">8</a>)
+		    </td>
+<td>
+<a href="../../contact/c69d0981154388cc08f998fcfe8a6001/" title="defcon.org">defcon.org</a>
+</td>
+<td>
+			    <a href="../../contact/c69d0981154388cc08f998fcfe8a6001/" 
+				title="email:info[]defcon.org url:https://www.defcon.org/ proof:uri-rsa abuse:info[]defcon.org pgp:BC5BCD9AC6091B6BCD819636D7C6E96CFE66156A twitter:defcon os:FreeBSD ciissversion:2" class="contact-text">email:info[]defcon.org url:https://www.defcon.org/ proof:uri-rsa abuse:info[]defcon.org pgp:BC5BCD9AC6091B6BCD819636D7C6E96CFE66156A twitter:defcon os:FreeBSD ciissversion:2</a>
+			</td>
+<td>17.60 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/50.230.231.84">50.230.231.84</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/FreeBSD/">FreeBSD</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/hsdir/"><img src="../../static/images/flags/hsdir.png" title="HSDir" alt="HSDir"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2020-12-29/">2020-12-29</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-01-29">
+		        2w 3d 5h ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="defconrelay14">
+		    <a href="../../relay/D0531883E43E00CDE3F52102F1D933ACB0D94D9B/">defconrelay14</a> (<a href="../../family/D0531883E43E00CDE3F52102F1D933ACB0D94D9B/">8</a>)
+		    </td>
+<td>
+<a href="../../contact/c69d0981154388cc08f998fcfe8a6001/" title="defcon.org">defcon.org</a>
+</td>
+<td>
+			    <a href="../../contact/c69d0981154388cc08f998fcfe8a6001/" 
+				title="email:info[]defcon.org url:https://www.defcon.org/ proof:uri-rsa abuse:info[]defcon.org pgp:BC5BCD9AC6091B6BCD819636D7C6E96CFE66156A twitter:defcon os:FreeBSD ciissversion:2" class="contact-text">email:info[]defcon.org url:https://www.defcon.org/ proof:uri-rsa abuse:info[]defcon.org pgp:BC5BCD9AC6091B6BCD819636D7C6E96CFE66156A twitter:defcon os:FreeBSD ciissversion:2</a>
+			</td>
+<td>17.41 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/50.230.231.84">50.230.231.84</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/FreeBSD/">FreeBSD</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/hsdir/"><img src="../../static/images/flags/hsdir.png" title="HSDir" alt="HSDir"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-05-14/">2024-05-14</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-01-29">
+		        2w 3d 5h ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="hopetohelpdoods">
+			<a href="../../relay/70740F1F1620557BC54C7E0FC994B4346EEDCE26/">hopetohelpdoods</a>
+		    </td>
+<td>none</td>
+<td title="none">
+			    none
+			</td>
+<td>16.52 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/24.99.80.216">24.99.80.216</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/hsdir/"><img src="../../static/images/flags/hsdir.png" title="HSDir" alt="HSDir"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2022-07-22/">2022-07-22</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-02-06">
+		        1w 2d 1h ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="defconrelay12">
+		    <a href="../../relay/BD815C93E9D87FFB32206C3540BD8559003D3325/">defconrelay12</a> (<a href="../../family/BD815C93E9D87FFB32206C3540BD8559003D3325/">8</a>)
+		    </td>
+<td>
+<a href="../../contact/c69d0981154388cc08f998fcfe8a6001/" title="defcon.org">defcon.org</a>
+</td>
+<td>
+			    <a href="../../contact/c69d0981154388cc08f998fcfe8a6001/" 
+				title="email:info[]defcon.org url:https://www.defcon.org/ proof:uri-rsa abuse:info[]defcon.org pgp:BC5BCD9AC6091B6BCD819636D7C6E96CFE66156A twitter:defcon os:FreeBSD ciissversion:2" class="contact-text">email:info[]defcon.org url:https://www.defcon.org/ proof:uri-rsa abuse:info[]defcon.org pgp:BC5BCD9AC6091B6BCD819636D7C6E96CFE66156A twitter:defcon os:FreeBSD ciissversion:2</a>
+			</td>
+<td>16.37 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/50.230.231.84">50.230.231.84</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/FreeBSD/">FreeBSD</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/hsdir/"><img src="../../static/images/flags/hsdir.png" title="HSDir" alt="HSDir"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-10-05/">2021-10-05</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-01-29">
+		        2w 3d 5h ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="BoulderRelay">
+			<a href="../../relay/AB7D1D61C3F8C8CC2662A297C7CC41ED4B8300FB/">BoulderRelay</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/522a47f6faf17361dd6c165e7b813b97/" 
+				title="Fuck You &amp;lt;nice.try@fbi.lol&amp;gt;" class="contact-text">Fuck You &amp;lt;nice.try@fbi.lol&amp;gt;</a>
+			</td>
+<td>15.12 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/24.128.78.132">24.128.78.132</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-12-19/">2025-12-19</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-02-14">
+		        23h 38m 13s ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="closedsource">
+			<a href="../../relay/E87DCB2B8CA9E62B45F8189C8AD21F62B84E09DB/">closedsource</a>
+		    </td>
+<td>none</td>
+<td title="none">
+			    none
+			</td>
+<td>14.81 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/73.220.180.127">73.220.180.127</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/hsdir/"><img src="../../static/images/flags/hsdir.png" title="HSDir" alt="HSDir"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-01-29/">2024-01-29</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-02-06">
+		        1w 2d 16h ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="NIGGAANONYMIZER9000">
+			<a href="../../relay/607CAE3991F3C817F55F4B3E75A338A9A5A0DC34/">NIGGAANONYMIZER9000</a>
+		    </td>
+<td>none</td>
+<td title="none">
+			    none
+			</td>
+<td>14.25 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/98.237.239.43">98.237.239.43</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/hsdir/"><img src="../../static/images/flags/hsdir.png" title="HSDir" alt="HSDir"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2026-01-18/">2026-01-18</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-02-08">
+		        1w 4h 13m ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="AlliumAdPortum">
+			<a href="../../relay/8D7159CAB26F26A81A8A06A3BF5897576965E35E/">AlliumAdPortum</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/89e92f52205eded9199db24254f5d0f6/" 
+				title="Allistair Allium  &amp;lt;AlliumAdPortum AT protonmail ]dot[ com&amp;gt;" class="contact-text">Allistair Allium  &amp;lt;AlliumAdPortum AT protonmail ]dot[ com&amp;gt;</a>
+			</td>
+<td>14.03 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/174.160.2.27">174.160.2.27</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-08-16/">2025-08-16</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-02-14">
+		        1d 4h 5m ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="libr3relay">
+			<a href="../../relay/FCCAA80A21F7574314D2A434C86769D4F86132AA/">libr3relay</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/319576cd345509bb0f8b844aeb4ea785/" 
+				title="libr3relay1@tuta.com" class="contact-text">libr3relay1@tuta.com</a>
+			</td>
+<td>13.72 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/73.254.53.16">73.254.53.16</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-07-19/">2025-07-19</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-02-11">
+		        4d 12h 49m ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="uglycat">
+			<a href="../../relay/887D750C69ED81D14B42B73D6529D98C3C25A572/">uglycat</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/f50ee259f8fcd2c1651bf9b2bf04d8b8/" 
+				title="Nick Weaver &amp;lt;nweaver@icsi.berkeley.edu&amp;gt;" class="contact-text">Nick Weaver &amp;lt;nweaver@icsi.berkeley.edu&amp;gt;</a>
+			</td>
+<td>12.32 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/67.187.251.70">67.187.251.70</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2022-09-20/">2022-09-20</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-02-05">
+		        1w 3d 12h ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="littleBroomstick">
+			<a href="../../relay/31091AF87A47CF85A5A9C5B96AC3A5BCBF5A49B2/">littleBroomstick</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/6d8fad9ad10667ed03e4584004f6dd32/" 
+				title="littleBroomstick[]iCloud.com" class="contact-text">littleBroomstick[]iCloud.com</a>
+			</td>
+<td>11.06 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/73.162.179.95">73.162.179.95</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Darwin/">Darwin</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-02-01/">2024-02-01</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-02-12">
+		        2d 23h 8m ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="cherrypi">
+			<a href="../../relay/EE582623DBC808E5D8CBB8D2E9DB5ED8348DB1CF/">cherrypi</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/142130b251d75d68f2f3d68ebe5fa956/" 
+				title="John Doe &amp;lt;mrkamco5@proton.me&amp;gt;" class="contact-text">John Doe &amp;lt;mrkamco5@proton.me&amp;gt;</a>
+			</td>
+<td>10.79 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/174.179.160.159">174.179.160.159</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-03-05/">2025-03-05</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-02-14">
+		        1d 10h 23m ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="2mpdhack">
+		    <a href="../../relay/CDB2605D2BD28DA31CC91956E8BAD147B7DF8AF9/">2mpdhack</a> (<a href="../../family/CDB2605D2BD28DA31CC91956E8BAD147B7DF8AF9/">3</a>)
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/11aa0da44f4107b5ca36cf555901f0ec/" 
+				title="DoNotDisturb AT NoContact NoWarnings" class="contact-text">DoNotDisturb AT NoContact NoWarnings</a>
+			</td>
+<td>9.96 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/73.68.62.87">73.68.62.87</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/hsdir/"><img src="../../static/images/flags/hsdir.png" title="HSDir" alt="HSDir"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2019-02-18/">2019-02-18</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-01-12">
+		        1mo 4d 15h ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="TV7813">
+			<a href="../../relay/A326B3DFE0D76F3111614AD1B644748D94833CED/">TV7813</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/32cb0861adc94fe7853fb21328e94596/" 
+				title="printerexpert@mail2tor.com" class="contact-text">printerexpert@mail2tor.com</a>
+			</td>
+<td>9.38 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+No</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/69.244.247.242">69.244.247.242</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/exit/"><img src="../../static/images/flags/exit.png" title="Exit" alt="Exit"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2026-02-13/">2026-02-13</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-02-14">
+		        19h 3m 18s ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="duckconfit">
+			<a href="../../relay/A2DFB35319313D6FF98AA9C2A373E6704E8ADDCC/">duckconfit</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/1c79d288f190752160539411a3720087/" 
+				title="johndoe54322@gmail.com" class="contact-text">johndoe54322@gmail.com</a>
+			</td>
+<td>9.27 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/67.190.126.198">67.190.126.198</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2026-02-04/">2026-02-04</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-02-12">
+		        3d 9h 6m ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="TV4975">
+			<a href="../../relay/45CB81B9CD8A6BFCCEAF487B67252542DBDEC6D8/">TV4975</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/32cb0861adc94fe7853fb21328e94596/" 
+				title="printerexpert@mail2tor.com" class="contact-text">printerexpert@mail2tor.com</a>
+			</td>
+<td>8.30 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/73.189.118.142">73.189.118.142</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/exit/"><img src="../../static/images/flags/exit.png" title="Exit" alt="Exit"></a><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2026-02-09/">2026-02-09</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-02-08">
+		        6d 21h 40m ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="wilton">
+			<a href="../../relay/98F0C974F75B9491CB2AAF42129915151FE88984/">wilton</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/e7a1092fd28d9a11072bd609b97dca2a/" 
+				title="0xBC85ED11 Wilton Gorske &amp;lt;wilton@riseup.net&amp;gt;" class="contact-text">0xBC85ED11 Wilton Gorske &amp;lt;wilton@riseup.net&amp;gt;</a>
+			</td>
+<td>8.23 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/98.45.205.157">98.45.205.157</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/hsdir/"><img src="../../static/images/flags/hsdir.png" title="HSDir" alt="HSDir"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2026-01-26/">2026-01-26</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-01-25">
+		        2w 6d 20h ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="Unnamed">
+			<a href="../../relay/A9FBAFBF39FBCB762B55BD244BFC7BBCF5B4077C/">Unnamed</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/2a369a52fe9bce22d5a939100d218b59/" 
+				title="yancm@freeshell.org" class="contact-text">yancm@freeshell.org</a>
+			</td>
+<td>8.22 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/73.103.64.250">73.103.64.250</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/NetBSD/">NetBSD</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-09-22/">2025-09-22</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-02-14">
+		        1d 1h 49m ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="HelloWorldItsMe">
+			<a href="../../relay/D63212CEBF795C51262A89B6895F340681AF1516/">HelloWorldItsMe</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/60a6c20d49f49bc210ac98d7e47c74a0/" 
+				title="myemail@example.com" class="contact-text">myemail@example.com</a>
+			</td>
+<td>8.09 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/67.183.182.120">67.183.182.120</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-05-01/">2025-05-01</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-02-15">
+		        8h 52s ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="Sylvia">
+		    <a href="../../relay/A1C002CF048980C9B12A14E6A73981E0C86CDBCB/">Sylvia</a> (<a href="../../family/A1C002CF048980C9B12A14E6A73981E0C86CDBCB/">5</a>)
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/2c0eff7232f9fa931e5443092eb7ea09/" 
+				title="admin@juchatz.com" class="contact-text">admin@juchatz.com</a>
+			</td>
+<td>7.18 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/67.181.221.9">67.181.221.9</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/FreeBSD/">FreeBSD</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-07-20/">2025-07-20</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-02-15">
+		        7h 1m 14s ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="Chrysophylax">
+			<a href="../../relay/1FFDC7F90DBCDE587C3524FB3FBB50B818565357/">Chrysophylax</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/6c1a9069e9236d2ed65327836911cfdc/" 
+				title="security@neverast.com" class="contact-text">security@neverast.com</a>
+			</td>
+<td>7.09 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/73.119.68.240">73.119.68.240</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/hsdir/"><img src="../../static/images/flags/hsdir.png" title="HSDir" alt="HSDir"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2023-03-21/">2023-03-21</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-02-08">
+		        6d 21h 9m ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="defconrelay17">
+		    <a href="../../relay/7C929E2FA316D28BC88206F48D3884881CFAD21D/">defconrelay17</a> (<a href="../../family/7C929E2FA316D28BC88206F48D3884881CFAD21D/">8</a>)
+		    </td>
+<td>
+<a href="../../contact/c69d0981154388cc08f998fcfe8a6001/" title="defcon.org">defcon.org</a>
+</td>
+<td>
+			    <a href="../../contact/c69d0981154388cc08f998fcfe8a6001/" 
+				title="email:info[]defcon.org url:https://www.defcon.org/ proof:uri-rsa abuse:info[]defcon.org pgp:BC5BCD9AC6091B6BCD819636D7C6E96CFE66156A twitter:defcon os:FreeBSD ciissversion:2" class="contact-text">email:info[]defcon.org url:https://www.defcon.org/ proof:uri-rsa abuse:info[]defcon.org pgp:BC5BCD9AC6091B6BCD819636D7C6E96CFE66156A twitter:defcon os:FreeBSD ciissversion:2</a>
+			</td>
+<td>6.45 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/50.230.231.84">50.230.231.84</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/FreeBSD/">FreeBSD</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-05-15/">2025-05-15</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-01-29">
+		        2w 3d 5h ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="dodson">
+			<a href="../../relay/EF2F26DD9D24DCEB00AA4C2EA146EAA3A6C7BA14/">dodson</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/841af73da3b68fcaa834992d8eab3f79/" 
+				title="email:tor[]adodson.e4ward.com virtualization:baremetal os:freebsd/13.2 autoupdate:y confmgmt:manual ciissversion:2" class="contact-text">email:tor[]adodson.e4ward.com virtualization:baremetal os:freebsd/13.2 autoupdate:y confmgmt:manual ciissversion:2</a>
+			</td>
+<td>5.32 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/24.18.246.236">24.18.246.236</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/FreeBSD/">FreeBSD</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2021-11-04/">2021-11-04</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-02-15">
+		        10h 59m 30s ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="DonTheMessenger">
+			<a href="../../relay/FBAA734E2179ABA734985558E6687B951F8D559E/">DonTheMessenger</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/ec0e61890e1e240170813383206152e8/" 
+				title="u/Simply_Convoluted" class="contact-text">u/Simply_Convoluted</a>
+			</td>
+<td>5.11 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/68.49.145.203">68.49.145.203</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/hsdir/"><img src="../../static/images/flags/hsdir.png" title="HSDir" alt="HSDir"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2022-10-30/">2022-10-30</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-02-04">
+		        1w 4d 9h ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="defconrelay13">
+		    <a href="../../relay/C02037907D83C9710E3D039ADB4830E1E1F0B980/">defconrelay13</a> (<a href="../../family/C02037907D83C9710E3D039ADB4830E1E1F0B980/">8</a>)
+		    </td>
+<td>
+<a href="../../contact/c69d0981154388cc08f998fcfe8a6001/" title="defcon.org">defcon.org</a>
+</td>
+<td>
+			    <a href="../../contact/c69d0981154388cc08f998fcfe8a6001/" 
+				title="email:info[]defcon.org url:https://www.defcon.org/ proof:uri-rsa abuse:info[]defcon.org pgp:BC5BCD9AC6091B6BCD819636D7C6E96CFE66156A twitter:defcon os:FreeBSD ciissversion:2" class="contact-text">email:info[]defcon.org url:https://www.defcon.org/ proof:uri-rsa abuse:info[]defcon.org pgp:BC5BCD9AC6091B6BCD819636D7C6E96CFE66156A twitter:defcon os:FreeBSD ciissversion:2</a>
+			</td>
+<td>4.32 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/50.230.231.84">50.230.231.84</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/FreeBSD/">FreeBSD</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2022-10-30/">2022-10-30</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-01-29">
+		        2w 3d 5h ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="OnionPie">
+			<a href="../../relay/4F52BAD15EE62B5B741FEBBC494771473854991C/">OnionPie</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/a6b9a614f26fbfb14f2e075a0c4f6559/" 
+				title="Onioncierge &amp;lt;tor.relay@activist.com&amp;gt;" class="contact-text">Onioncierge &amp;lt;tor.relay@activist.com&amp;gt;</a>
+			</td>
+<td>4.10 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/98.206.28.99">98.206.28.99</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2026-01-15/">2026-01-15</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-01-26">
+		        2w 6d 11h ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="defconrelay15">
+		    <a href="../../relay/BE6C4BF12F3DC0A2EF3AFBB32DB9AAD682AF3165/">defconrelay15</a> (<a href="../../family/BE6C4BF12F3DC0A2EF3AFBB32DB9AAD682AF3165/">8</a>)
+		    </td>
+<td>
+<a href="../../contact/c69d0981154388cc08f998fcfe8a6001/" title="defcon.org">defcon.org</a>
+</td>
+<td>
+			    <a href="../../contact/c69d0981154388cc08f998fcfe8a6001/" 
+				title="email:info[]defcon.org url:https://www.defcon.org/ proof:uri-rsa abuse:info[]defcon.org pgp:BC5BCD9AC6091B6BCD819636D7C6E96CFE66156A twitter:defcon os:FreeBSD ciissversion:2" class="contact-text">email:info[]defcon.org url:https://www.defcon.org/ proof:uri-rsa abuse:info[]defcon.org pgp:BC5BCD9AC6091B6BCD819636D7C6E96CFE66156A twitter:defcon os:FreeBSD ciissversion:2</a>
+			</td>
+<td>2.22 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/50.230.231.84">50.230.231.84</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/FreeBSD/">FreeBSD</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-05-15/">2025-05-15</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-01-29">
+		        2w 3d 5h ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="anothertorrelay2">
+			<a href="../../relay/37AB4583FF0E2F49BA8155CC89FEED2A2064C0D9/">anothertorrelay2</a>
+		    </td>
+<td>none</td>
+<td title="none">
+			    none
+			</td>
+<td>1.85 Mbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/68.84.4.83">68.84.4.83</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-05-15/">2024-05-15</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-02-06">
+		        1w 2d 3h ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="PPSStudios">
+			<a href="../../relay/FBCD5D8428C342B02D94156F52358B02B3F2E519/">PPSStudios</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/21e60434ce1cf487f78fe6afa355311f/" 
+				title="0x928E 1CCC A4E9 63B3 712E  0AE2 7F97 DE74 DEDB 2088" class="contact-text">0x928E 1CCC A4E9 63B3 712E  0AE2 7F97 DE74 DEDB 2088</a>
+			</td>
+<td>993.14 Kbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/71.24.145.6">71.24.145.6</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-08-23/">2024-08-23</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-01-22">
+		        3w 2d 23h ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="defconrelay16">
+		    <a href="../../relay/69D6A985B13F0F7C5FFDED2F744B74BD62B76C5F/">defconrelay16</a> (<a href="../../family/69D6A985B13F0F7C5FFDED2F744B74BD62B76C5F/">8</a>)
+		    </td>
+<td>
+<a href="../../contact/c69d0981154388cc08f998fcfe8a6001/" title="defcon.org">defcon.org</a>
+</td>
+<td>
+			    <a href="../../contact/c69d0981154388cc08f998fcfe8a6001/" 
+				title="email:info[]defcon.org url:https://www.defcon.org/ proof:uri-rsa abuse:info[]defcon.org pgp:BC5BCD9AC6091B6BCD819636D7C6E96CFE66156A twitter:defcon os:FreeBSD ciissversion:2" class="contact-text">email:info[]defcon.org url:https://www.defcon.org/ proof:uri-rsa abuse:info[]defcon.org pgp:BC5BCD9AC6091B6BCD819636D7C6E96CFE66156A twitter:defcon os:FreeBSD ciissversion:2</a>
+			</td>
+<td>990.26 Kbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/50.230.231.84">50.230.231.84</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/FreeBSD/">FreeBSD</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2025-05-15/">2025-05-15</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-01-29">
+		        2w 3d 5h ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-online" title="This relay is online"></span>
+		</td>
+<td title="coffeeaddict">
+			<a href="../../relay/73FBB350073889147BFD38A6517575709CC7D93C/">coffeeaddict</a>
+		    </td>
+<td>none</td>
+<td title="none">
+			    none
+			</td>
+<td>896.83 Kbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/98.232.88.235">98.232.88.235</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-11-26/">2024-11-26</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-02-03">
+		        1w 5d 16h ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="TV4067">
+			<a href="../../relay/7906C7B3F0A9473DF569050FD5FFAB0367F4FA83/">TV4067</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/32cb0861adc94fe7853fb21328e94596/" 
+				title="printerexpert@mail2tor.com" class="contact-text">printerexpert@mail2tor.com</a>
+			</td>
+<td>704.51 Kbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+No</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/76.102.118.125">76.102.118.125</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/exit/"><img src="../../static/images/flags/exit.png" title="Exit" alt="Exit"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2026-02-14/">2026-02-14</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-02-15">
+		        5h 42m 56s ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="TORPi">
+			<a href="../../relay/FFDC0E2EA1D56C555978920C6D26EBA6AFF248FE/">TORPi</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/9125d7b05b6d725f96b05720c8aeb684/" 
+				title="fi2posTEfAkltig583Wa@outlook.com" class="contact-text">fi2posTEfAkltig583Wa@outlook.com</a>
+			</td>
+<td>1.43 Kbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+Yes</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/76.141.211.65">76.141.211.65</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2024-01-22/">2024-01-22</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2025-11-28">
+		        2mo 2w 5d ago
+		    </td>
+</tr>
+<tr>
+<td>
+		    <span class="circle circle-offline" title="This relay is offline"></span>
+		</td>
+<td title="TriangleRelay">
+			<a href="../../relay/FCE9F0E46977F08AC4317BF5C27473251CEED452/">TriangleRelay</a>
+		    </td>
+<td>none</td>
+<td>
+			    <a href="../../contact/6f376c764eeac4c90e660e3a88cb6730/" 
+				title="placeholder@gmail.com" class="contact-text">placeholder@gmail.com</a>
+			</td>
+<td>0.00 Kbit/s</td>
+<td title=">=3 bandwidth authorities have measured bandwidth capacity">
+No</td>
+		<td class="visible-md visible-lg">
+		    <a href="https://bgp.tools/prefix/73.211.86.21">73.211.86.21</a>
+		</td>
+<td>AS7922</td>
+<td>
+			<a href="https://bgp.tools/AS7922"
+			   title="Comcast Cable Communications, LLC">Comcast Cable...</a>
+		    </td>
+<td>
+			    <a href="../../country/US/">
+				<img src="../../static/images/cc/us.png"
+				     title="United States of America"
+				     alt="United States of America">
+			    </a>
+			</td>
+<td>
+			<a href="../../platform/Linux/">Linux</a>
+		    </td>
+		<td class="visible-md visible-lg"><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td class="visible-md visible-lg">
+			<a href="../../first_seen/2026-02-12/">2026-02-12</a>
+		    </td>
+		    <td class="visible-md visible-lg" title="2026-02-12">
+		        3d 9h 43m ago
+		    </td>
+</tr>
+</tbody>
+</table>
+        </div>
+    </body>
+        <footer class="aeo-footer">
+            <div class="aeo-footer-links">
+                <a href="https://metrics.1aeo.com">Metrics</a>
+                <a href="https://aroivalidator.1aeo.com">AROI Validator</a>
+                <a href="https://routefluxmap.1aeo.com">RouteFluxMap</a>
+                <a href="https://github.com/1aeo">GitHub</a>
+            </div>
+            <p class="aeo-footer-brand">
+                Part of <a href="https://www.1aeo.com" style="font-weight: bold;">1st Amendment Encrypted Openness LLC</a>
+            </p>
+            <p class="aeo-footer-legal">
+                Generated by a <a href="https://github.com/1aeo/allium">1aeo modified fork of allium</a>, based on original <a href="https://git.jordan.im/allium/">allium</a>, on Sun, 15 Feb 2026 19:03:11 GMT. Source data from <a href="https://onionoo.torproject.org/">Tor Project onionoo</a>.
+            </p>
+        </footer>
+    </html>
