@@ -43,7 +43,7 @@ This document provides a comprehensive reference for all Tor relay flags defined
 | **Stable** | ✅ 2 rows (MTBF, Uptime) | Summary table, Per-Auth table | Full coverage |
 | **Fast** | ✅ 1 row (Speed) | Summary table, Per-Auth table | Full coverage |
 | **HSDir** | ✅ 4 rows (2 prereqs + WFU, TK) | Summary table, Per-Auth table | Full coverage |
-| **Exit** | ❌ None | Flags list, Exit Policy section (dt/dd) | **Biggest gap**: exit operators have no eligibility breakdown |
+| **Exit** | ✅ 1 row (Exit Policy) | Flags list, Exit Policy section, Summary table, Per-Auth column | Full Guard-parity: eligibility table + Summary + Per-Auth column |
 | **Running** | ❌ None | ✅ Health Status, Summary table, Per-Auth column | Extensively shown elsewhere; low priority for eligibility table |
 | **Valid** | ❌ None | ✅ Health Status, Summary table, Per-Auth column | Extensively shown elsewhere; low priority for eligibility table |
 | **V2Dir** | 🔶 Guard prereq row only | Eligible Flags row (vote count) | Shown as Guard dependency; no standalone eligibility section |
@@ -447,7 +447,7 @@ The "Per-Authority Details" table shows per-authority breakdown:
 
 | Flag | Current Presence | Gap Size | Priority |
 |------|-----------------|----------|----------|
-| **Exit** | Flags list + exit policy section (dt/dd) | **Large** — No eligibility table rows, no Summary row, no Per-Auth column | **High** |
+| **Exit** | ✅ Eligibility table + Summary table + Per-Auth column | **Resolved** — Full Guard-parity implementation | **Done** |
 | **MiddleOnly** | Zero presence anywhere in codebase | **Large** — Operators have no way to discover restrictions | **High** |
 | **V2Dir** | Guard prereq row + Eligible Flags vote count | **Medium** — No standalone eligibility breakdown | **Medium** |
 | **Running** | Health Status + Summary + Per-Auth + Eligible Flags | **Small** — Extensively covered, just not in eligibility table | **Low** |
@@ -465,10 +465,10 @@ The "Per-Authority Details" table shows per-authority breakdown:
 
 ### 4.1 High Priority Gaps
 
-| Gap | Impact | Existing Coverage | Recommendation |
-|-----|--------|-------------------|----------------|
-| **Exit policy eligibility** | Exit operators have no eligibility breakdown — the most impactful missing feature | Exit shown in flags list and exit policy section (dt/dd format), but no structured eligibility analysis | Add Exit rows to eligibility table + Summary table + Per-Auth column (follow Guard pattern) |
-| **MiddleOnly detection** | Restricted operators have zero visibility — this flag is not tracked anywhere in the codebase | None — `grep` for MiddleOnly returns zero results in Python files | Add MiddleOnly detection and display |
+| Gap | Impact | Existing Coverage | Status |
+|-----|--------|-------------------|--------|
+| **Exit policy eligibility** | Exit operators have no eligibility breakdown — the most impactful missing feature | ✅ **RESOLVED** — Exit now has full Guard-parity: eligibility table row, Summary table row, Per-Auth column | ✅ Implemented (2026-02-15) |
+| **MiddleOnly detection** | Restricted operators have zero visibility — this flag is not tracked anywhere in the codebase | None — `grep` for MiddleOnly returns zero results in Python files | ⏳ Not Started |
 
 ### 4.2 Medium Priority Gaps
 
@@ -489,13 +489,13 @@ See [Tor Relay Flags Proposals](tor-relay-flags-proposals.md) for detailed imple
 
 **Updated priority order (by gap size, not theoretical value):**
 
-| Priority | Flag | Gap Size | Proposal |
-|----------|------|----------|----------|
-| 1 | **Exit** | Large — no eligibility breakdown | Proposal 1: Detailed Guard-parity plan with code for all 6 layers |
-| 2 | **MiddleOnly** | Large — zero presence | Proposal 5: Security restriction detection |
-| 3 | **V2Dir** | Medium — only as prereq | Proposal 4: Standalone eligibility info |
-| 4 | **Running** | Small — already in 3+ places | Proposal 2: IPv4/IPv6 reachability (optional) |
-| 5 | **Valid** | Small — already in 3+ places | Proposal 3: Version check (optional) |
+| Priority | Flag | Gap Size | Proposal | Status |
+|----------|------|----------|----------|--------|
+| ~~1~~ | ~~**Exit**~~ | ~~Large~~ | ~~Proposal 1~~ | ✅ Implemented (2026-02-15) |
+| 1 | **MiddleOnly** | Large — zero presence | Proposal 5: Security restriction detection | ⏳ Not Started |
+| 2 | **V2Dir** | Medium — only as prereq | Proposal 4: Standalone eligibility info | ⏳ Not Started |
+| 3 | **Running** | Small — already in 3+ places | Proposal 2: IPv4/IPv6 reachability (optional) | ⏳ Not Started |
+| 4 | **Valid** | Small — already in 3+ places | Proposal 3: Version check (optional) | ⏳ Not Started |
 
 ---
 
