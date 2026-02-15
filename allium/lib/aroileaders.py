@@ -10,7 +10,9 @@ import hashlib
 from collections import defaultdict
 import re
 import html
-import ipaddress
+
+# Import centralized IP parsing from ip_utils (canonical home)
+from .ip_utils import safe_parse_ip_address as _safe_parse_ip_address
 
 # Import centralized country utilities
 from .country_utils import (
@@ -245,45 +247,6 @@ def _calculate_bandwidth_score(operator_relays, bandwidth_data, time_period, ban
     return _calculate_generic_score(operator_relays, bandwidth_data, time_period, 'bandwidth', prebuilt_map=bandwidth_map)
 
 
-def _safe_parse_ip_address(address_string):
-    """
-    Safely parse IP address from or_addresses string with validation.
-    Returns tuple (ip_address, ip_version) or (None, None) if invalid.
-    
-    Security: Validates all input against Python's ipaddress module to prevent
-    injection attacks through malformed address strings.
-    """
-    if not address_string or not isinstance(address_string, str):
-        return None, None
-    
-    try:
-        # Handle IPv6 with brackets like [2001:db8::1]:9001
-        if address_string.startswith('[') and ']:' in address_string:
-            ip_part = address_string.split(']:')[0][1:]  # Remove brackets and port
-            parsed_ip = ipaddress.ip_address(ip_part)
-            return str(parsed_ip), 6 if isinstance(parsed_ip, ipaddress.IPv6Address) else 4
-        
-        # Handle addresses with colons (could be IPv4:port or IPv6)
-        elif ':' in address_string:
-            # Try parsing as IPv6 first (since IPv6 has multiple colons)
-            try:
-                parsed_ip = ipaddress.ip_address(address_string)
-                return str(parsed_ip), 6 if isinstance(parsed_ip, ipaddress.IPv6Address) else 4
-            except (ValueError, ipaddress.AddressValueError):
-                # Not a bare IPv6, try as IPv4:port
-                ip_part = address_string.split(':')[0]
-                parsed_ip = ipaddress.ip_address(ip_part)
-                return str(parsed_ip), 6 if isinstance(parsed_ip, ipaddress.IPv6Address) else 4
-        
-        # Handle bare IP address without port
-        else:
-            parsed_ip = ipaddress.ip_address(address_string)
-            return str(parsed_ip), 6 if isinstance(parsed_ip, ipaddress.IPv6Address) else 4
-            
-    except (ValueError, ipaddress.AddressValueError):
-        # Invalid IP address format - silently skip
-        return None, None
-
 def _format_breakdown_details(breakdown_items, max_chars, formatter_func=None):
     """
     Reusable helper function to format country/item breakdowns with truncation.
@@ -337,26 +300,50 @@ def _calculate_aroi_leaderboards(relays_instance):
     """
     Calculate AROI operator leaderboards using current live relay data.
     
-    Leverages existing contact-based aggregations from relays.py to minimize
-    duplicate calculations. Only computes new metrics not already available.
+    Composed from 3 sub-functions for readability and extensibility:
+    1. _collect_operator_metrics: Gather per-operator data from contacts
+    2. _rank_operators: Sort operators into leaderboard categories
+    3. _format_leaderboard_entries: Format entries for template rendering
     
-    Args:
-        relays_instance: Relays object with processed json data including sorted contacts
-        
-    Returns:
-        dict: Leaderboard data optimized for template rendering
+    To add a new leaderboard category:
+    - Add metric collection in _collect_operator_metrics (if new data needed)
+    - Add one sorted() call in _rank_operators
+    - Add formatting in _format_leaderboard_entries
     """
-    
     if not relays_instance.json or 'sorted' not in relays_instance.json:
         return {}
     
-    # Get existing contact-based aggregations (already calculated)
     contacts = relays_instance.json.get('sorted', {}).get('contact', {})
     all_relays = relays_instance.json.get('relays', [])
     
     if not contacts or not all_relays:
         return {}
     
+    # Step 1: Collect per-operator metrics from contact data
+    aroi_operators = _collect_operator_metrics(relays_instance)
+    if not aroi_operators:
+        return {}
+    
+    # Step 2: Sort operators into leaderboard category rankings
+    leaderboards = _rank_operators(aroi_operators)
+    
+    # Step 3: Format for template rendering and generate summary
+    return _format_leaderboard_entries(leaderboards, aroi_operators, relays_instance)
+
+
+def _collect_operator_metrics(relays_instance):
+    """
+    Collect per-operator metrics from contact-based aggregations.
+    
+    Iterates through all contacts, gathering existing metrics from categorization
+    and computing new metrics (diversity, reliability, bandwidth scores, etc.)
+    
+    Returns:
+        dict: operator_key -> metrics dict for all qualifying operators
+    """
+    contacts = relays_instance.json.get('sorted', {}).get('contact', {})
+    all_relays = relays_instance.json.get('relays', [])
+
     # PERFORMANCE OPTIMIZATION: Pre-calculate rare countries once instead of per-operator
     # This eliminates O(n²) performance where rare countries were calculated 3,123 times
     # Now calculated once and reused, improving performance by ~95%
@@ -836,7 +823,19 @@ def _calculate_aroi_leaderboards(relays_instance):
             'relays': operator_relays
         }
     
-    # Generate 17 core leaderboard categories (complete AROI leaderboard system)
+    return aroi_operators
+
+
+def _rank_operators(aroi_operators):
+    """
+    Sort operators into leaderboard category rankings.
+    
+    Each category is a sorted list of (operator_key, metrics) tuples, top 50.
+    To add a new leaderboard: add one sorted() call here.
+    
+    Returns:
+        dict: category_name -> sorted list of (operator_key, metrics) tuples
+    """
     leaderboards = {}
     
     # 1. Bandwidth Contributed (use existing calculation)
@@ -970,6 +969,19 @@ def _calculate_aroi_leaderboards(relays_instance):
         reverse=True
     )[:50]
     
+    return leaderboards
+
+
+def _format_leaderboard_entries(leaderboards, aroi_operators, relays_instance):
+    """
+    Format leaderboard entries for Jinja2 template rendering.
+    
+    Converts raw operator metrics into display-ready strings with units,
+    percentages, achievement badges, and tooltips.
+    
+    Returns:
+        dict with 'leaderboards' (formatted), 'summary' (stats), 'raw_operators'
+    """
     # Format data for template rendering with bandwidth units (reuse existing formatters)
     formatted_leaderboards = {}
     for category, data in leaderboards.items():

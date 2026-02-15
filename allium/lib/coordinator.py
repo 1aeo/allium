@@ -22,26 +22,46 @@ from .error_handlers import handle_worker_errors, handle_calculation_errors
 class Coordinator:
     """
     Coordinator for managing API workers with threading support.
-    Phase 1: Basic threading support for onionoo with backwards compatibility.
-    Phase 2: Multiple API support with incremental rendering.
+    Orchestrates parallel API fetching and relay set creation.
+    
+    Accepts either an argparse namespace (args) or individual keyword arguments
+    for backward compatibility with tests.
     """
     
-    def __init__(self, output_dir, onionoo_details_url, onionoo_uptime_url, onionoo_bandwidth_url, aroi_url, bandwidth_cache_hours, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=53, enabled_apis='all', filter_downtime_days=7, base_url='', progress_logger=None, mp_workers=4):
-        self.output_dir = output_dir
-        self.onionoo_details_url = onionoo_details_url
-        self.onionoo_uptime_url = onionoo_uptime_url
-        self.onionoo_bandwidth_url = onionoo_bandwidth_url
-        self.aroi_url = aroi_url
-        self.bandwidth_cache_hours = bandwidth_cache_hours
-        self.use_bits = use_bits
-        self.progress = progress
-        self.start_time = start_time or time.time()
-        self.progress_step = progress_step
-        self.total_steps = total_steps
-        self.enabled_apis = enabled_apis
-        self.filter_downtime_days = filter_downtime_days
-        self.base_url = base_url
-        self.mp_workers = mp_workers
+    def __init__(self, args=None, progress_logger=None, **kwargs):
+        # Support both args namespace and keyword arguments (for tests/backward compat)
+        if args is not None:
+            # Read from argparse namespace
+            self.output_dir = args.output_dir
+            self.onionoo_details_url = args.onionoo_details_url
+            self.onionoo_uptime_url = args.onionoo_uptime_url
+            self.onionoo_bandwidth_url = args.onionoo_bandwidth_url
+            self.aroi_url = args.aroi_url
+            self.bandwidth_cache_hours = args.bandwidth_cache_hours
+            self.use_bits = args.bandwidth_units == 'bits' if hasattr(args, 'bandwidth_units') else kwargs.get('use_bits', False)
+            self.progress = args.progress
+            self.enabled_apis = args.enabled_apis
+            self.filter_downtime_days = args.filter_downtime_days
+            self.base_url = args.base_url
+            self.mp_workers = args.mp_workers
+        else:
+            # Backward-compatible keyword arguments (used by tests)
+            self.output_dir = kwargs.get('output_dir', './www')
+            self.onionoo_details_url = kwargs.get('onionoo_details_url', 'https://onionoo.torproject.org/details')
+            self.onionoo_uptime_url = kwargs.get('onionoo_uptime_url', 'https://onionoo.torproject.org/uptime')
+            self.onionoo_bandwidth_url = kwargs.get('onionoo_bandwidth_url', 'https://onionoo.torproject.org/bandwidth')
+            self.aroi_url = kwargs.get('aroi_url', 'https://aroivalidator.1aeo.com/latest.json')
+            self.bandwidth_cache_hours = kwargs.get('bandwidth_cache_hours', 12)
+            self.use_bits = kwargs.get('use_bits', False)
+            self.progress = kwargs.get('progress', False)
+            self.enabled_apis = kwargs.get('enabled_apis', 'all')
+            self.filter_downtime_days = kwargs.get('filter_downtime_days', 7)
+            self.base_url = kwargs.get('base_url', '')
+            self.mp_workers = kwargs.get('mp_workers', 4)
+        
+        self.start_time = kwargs.get('start_time') or (getattr(args, '_start_time', None) if args else None) or time.time()
+        self.progress_step = kwargs.get('progress_step', 0)
+        self.total_steps = kwargs.get('total_steps', 53)
         
         # Use injected progress logger or create new one
         if progress_logger is not None:
@@ -58,24 +78,84 @@ class Coordinator:
         self.worker_data = {}
         self.worker_threads = []
         
-        # API workers to run (Phase 2: multiple APIs)
-        # Build API workers list based on enabled APIs
-        self.api_workers = []
+        # Build API workers list from declarative registry
+        # To add a new API: add one entry to API_WORKER_REGISTRY below
+        self.api_workers = self._build_api_workers()
+    
+    # =========================================================================
+    # API WORKER REGISTRY
+    # =========================================================================
+    # Declarative list of API workers. Each entry defines:
+    #   name:       Internal identifier for the API
+    #   fetch_fn:   Function to call (from workers.py)
+    #   group:      Which --apis mode includes this worker ('details' or 'all')
+    #   args_fn:    Lambda returning the argument list for fetch_fn
+    #   enabled_fn: Optional callable returning bool (for feature flags)
+    #
+    # To add a new API source:
+    #   1. Create a fetch function in workers.py
+    #   2. Add one entry here
+    #   3. Handle the data in Relays.enrich_with_api_data()
+    # =========================================================================
+    API_WORKER_REGISTRY = [
+        {
+            "name": "onionoo_details",
+            "fetch_fn": fetch_onionoo_details,
+            "group": "details",  # Included in both 'details' and 'all' modes
+            "args_fn": lambda self: [self.onionoo_details_url, self._log_progress],
+        },
+        {
+            "name": "onionoo_uptime",
+            "fetch_fn": fetch_onionoo_uptime,
+            "group": "all",
+            "args_fn": lambda self: [self.onionoo_uptime_url, self._log_progress],
+        },
+        {
+            "name": "onionoo_bandwidth",
+            "fetch_fn": fetch_onionoo_bandwidth,
+            "group": "all",
+            "args_fn": lambda self: [self.onionoo_bandwidth_url, self.bandwidth_cache_hours, self._log_progress],
+        },
+        {
+            "name": "aroi_validation",
+            "fetch_fn": fetch_aroi_validation,
+            "group": "all",
+            "args_fn": lambda self: [self.aroi_url, self._log_progress],
+        },
+        {
+            "name": "collector_consensus",
+            "fetch_fn": fetch_collector_consensus_data,
+            "group": "all",
+            "args_fn": lambda self: [None, self._log_progress],
+            "enabled_fn": None,  # Checked dynamically in _build_api_workers
+        },
+    ]
+    
+    def _build_api_workers(self):
+        """Build the list of API workers based on enabled_apis mode and feature flags."""
+        from .consensus import is_consensus_evaluation_enabled
         
-        # Always include details API (required for core functionality)
-        self.api_workers.append(("onionoo_details", fetch_onionoo_details, [self.onionoo_details_url, self._log_progress]))
+        # Feature flag checks by worker name (avoids import issues in class-level lambdas)
+        feature_flags = {
+            "collector_consensus": is_consensus_evaluation_enabled,
+        }
         
-        # Include uptime API only if 'all' is selected (details + uptime)
-        if self.enabled_apis == 'all':
-            self.api_workers.append(("onionoo_uptime", fetch_onionoo_uptime, [self.onionoo_uptime_url, self._log_progress]))
-            self.api_workers.append(("onionoo_bandwidth", fetch_onionoo_bandwidth, [self.onionoo_bandwidth_url, self.bandwidth_cache_hours, self._log_progress]))
-            self.api_workers.append(("aroi_validation", fetch_aroi_validation, [self.aroi_url, self._log_progress]))
-            
-            # CollecTor consensus evaluation (Phase 1 feature)
-            # Note: authorities parameter will be None initially, set after Onionoo fetch completes
-            from .consensus import is_consensus_evaluation_enabled as collector_enabled
-            if collector_enabled():
-                self.api_workers.append(("collector_consensus", fetch_collector_consensus_data, [None, self._log_progress]))
+        workers = []
+        for entry in self.API_WORKER_REGISTRY:
+            # Include if group matches: 'details' workers run in all modes,
+            # 'all' workers only run when --apis=all
+            group = entry["group"]
+            if group == "details" or self.enabled_apis == "all":
+                # Check feature flag if present
+                flag_fn = feature_flags.get(entry["name"])
+                if flag_fn and not flag_fn():
+                    continue
+                workers.append((
+                    entry["name"],
+                    entry["fetch_fn"],
+                    entry["args_fn"](self),
+                ))
+        return workers
         
     def _log_progress(self, message):
         """Log progress message using shared progress utility"""
@@ -260,6 +340,10 @@ class Coordinator:
     def create_relay_set(self, relay_data):
         """
         Create Relays instance with fetched data.
+        
+        The heavy lifting is split between Relays.__init__ (core processing from
+        details API) and Relays.enrich_with_api_data() (secondary API enrichment).
+        See enrich_with_api_data() docstring for the full pipeline overview.
         """
         if self.progress:
             self.progress_logger.start_section("Data Processing")
@@ -268,7 +352,7 @@ class Coordinator:
         relay_set = Relays(
             output_dir=self.output_dir,
             onionoo_url=self.onionoo_details_url,
-            relay_data=relay_data,  # Required parameter
+            relay_data=relay_data,
             use_bits=self.use_bits,
             progress=self.progress,
             start_time=self.start_time,
@@ -276,8 +360,8 @@ class Coordinator:
             total_steps=self.total_steps,
             filter_downtime_days=self.filter_downtime_days,
             base_url=self.base_url,
-            progress_logger=self.progress_logger,  # Pass shared progress logger
-            mp_workers=self.mp_workers  # Multiprocessing workers for parallel page generation
+            progress_logger=self.progress_logger,
+            mp_workers=self.mp_workers,
         )
         
         if relay_set.json is None:
@@ -285,65 +369,17 @@ class Coordinator:
                 self._log_progress_with_step_increment("Failed to create relay set")
             return None
         
-        # Phase 2: Attach additional API data to relay set (dynamic assignment)
-        uptime_data = self.get_uptime_data()
-        bandwidth_data = self.get_bandwidth_data()
-        aroi_validation_data = self.get_aroi_validation_data()
-        collector_consensus_data = self.get_collector_consensus_data()
+        # Enrich with secondary API data (uptime, bandwidth, AROI, collector)
+        # Processing order and dependencies are documented in enrich_with_api_data()
+        relay_set.enrich_with_api_data(
+            uptime_data=self.get_uptime_data(),
+            bandwidth_data=self.get_bandwidth_data(),
+            aroi_validation_data=self.get_aroi_validation_data(),
+            collector_consensus_data=self.get_collector_consensus_data(),
+            consensus_health_data=self.get_consensus_health_data(),
+        )
         
-        setattr(relay_set, 'uptime_data', uptime_data)
-        setattr(relay_set, 'bandwidth_data', bandwidth_data)
-        setattr(relay_set, 'aroi_validation_data', aroi_validation_data)
-        setattr(relay_set, 'consensus_health_data', self.get_consensus_health_data())
-        setattr(relay_set, 'collector_data', self.get_collector_data())
-        setattr(relay_set, 'collector_consensus_data', collector_consensus_data)
-        
-        # CRITICAL FIX: Process uptime data FIRST, then regenerate AROI leaderboards.
-        # This allows leaderboards to reuse per-relay `uptime_percentages` instead of
-        # repeatedly scanning the raw uptime API payload (major performance optimization).
-        if uptime_data:
-            # Step 1: Process uptime data - attaches uptime_percentages to each relay
-            relay_set._reprocess_uptime_data()
-            # Step 2: Generate leaderboards - can now reuse pre-computed uptime data
-            relay_set._generate_aroi_leaderboards()
-            # Recalculate network health metrics now that uptime data is available
-            relay_set._calculate_network_health_metrics()
-        
-        # BANDWIDTH PROCESSING: Process bandwidth data for contact page reliability metrics
-        # Mirror the uptime processing structure but keep separate as requested
-        if bandwidth_data and hasattr(relay_set, 'json') and relay_set.json.get('relays'):
-            try:
-                # Reprocess bandwidth data for individual relays and contact pages
-                # This also merges overload fields and computes stability for each relay
-                relay_set._reprocess_bandwidth_data()
-                # Recalculate network health metrics with complete overload data
-                # (stability_is_overloaded is now computed from all 3 overload indicators)
-                relay_set._calculate_network_health_metrics()
-            except Exception as e:
-                print(f"Warning: Bandwidth processing failed ({e}), continuing without bandwidth metrics")
-                # Continue without bandwidth metrics rather than crashing
-        
-        # COLLECTOR CONSENSUS PROCESSING: Process CollecTor data for per-relay consensus evaluation
-        # Attaches consensus troubleshooting information to each relay
-        if collector_consensus_data and hasattr(relay_set, 'json') and relay_set.json.get('relays'):
-            try:
-                relay_set._reprocess_collector_data()
-            except Exception as e:
-                print(f"Warning: Collector consensus processing failed ({e}), continuing without consensus evaluation")
-                # Continue without consensus evaluation rather than crashing
-        
-        # PERF OPTIMIZATION: Pre-compute all contact page data AFTER all data processing
-        # This must happen after uptime data, bandwidth data, and AROI leaderboards are processed
-        # because contact page calculations depend on those results.
-        # Enables ~33x speedup for contact page generation via parallelization.
-        relay_set._precompute_all_contact_page_data()
-        
-        # PERF OPTIMIZATION: Pre-compute all family page data
-        # Family pages were 6-10x slower than contact pages due to per-page validation status computation.
-        # Pre-computing this data enables similar speedup (from ~22ms/page to ~3ms/page).
-        relay_set._precompute_all_family_page_data()
-        
-        # Update the relay_set's progress_step to match our current progress
+        # Sync progress state
         relay_set.progress_step = self.progress_step
         
         if self.progress:
@@ -376,32 +412,13 @@ class Coordinator:
         }
 
 
-# For backwards compatibility, provide a simple function that mimics the original Relays constructor
-def create_relay_set_with_coordinator(output_dir, onionoo_details_url, onionoo_uptime_url, onionoo_bandwidth_url, aroi_url, bandwidth_cache_hours, use_bits=False, progress=False, start_time=None, progress_step=0, total_steps=53, enabled_apis='all', filter_downtime_days=7, base_url='', progress_logger=None, mp_workers=4):
+def create_relay_set_with_coordinator(args, progress_logger=None):
     """
     Create a relay set using the coordinator system.
-    Phase 2: Support for multiple APIs with threading.
-    """
-    if start_time is None:
-        start_time = time.time()
-        
-    coordinator = Coordinator(
-        output_dir=output_dir,
-        onionoo_details_url=onionoo_details_url,
-        onionoo_uptime_url=onionoo_uptime_url,
-        onionoo_bandwidth_url=onionoo_bandwidth_url,
-        aroi_url=aroi_url,
-        bandwidth_cache_hours=bandwidth_cache_hours,
-        use_bits=use_bits,
-        progress=progress,
-        start_time=start_time,
-        progress_step=progress_step,
-        total_steps=total_steps,
-        enabled_apis=enabled_apis,
-        filter_downtime_days=filter_downtime_days,
-        base_url=base_url,
-        progress_logger=progress_logger,
-        mp_workers=mp_workers,
-    )
     
-    return coordinator.get_relay_set() 
+    Args:
+        args: argparse namespace with all CLI arguments
+        progress_logger: Optional ProgressLogger instance for consistent progress tracking
+    """
+    coordinator = Coordinator(args=args, progress_logger=progress_logger)
+    return coordinator.get_relay_set()

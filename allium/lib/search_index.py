@@ -18,7 +18,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 # Import existing utilities (DRY - avoid reimplementing)
-from .aroileaders import _safe_parse_ip_address
+from .ip_utils import safe_parse_ip_address as _safe_parse_ip_address
 from .string_utils import is_valid_aroi
 
 

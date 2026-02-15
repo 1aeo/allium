@@ -1,11 +1,12 @@
 """
-Unit tests for allium/lib/coordinator.py - Phase 1 API coordination system
+Unit tests for allium/lib/coordinator.py - API coordination system
 """
 import json
 import os
 import pytest
 import tempfile
 import time
+from types import SimpleNamespace
 from unittest.mock import patch, MagicMock
 
 from allium.lib.coordinator import Coordinator, create_relay_set_with_coordinator
@@ -30,6 +31,26 @@ def make_coordinator(output_dir="./output", details_url=None, uptime_url=None,
         bandwidth_cache_hours=bandwidth_cache_hours if bandwidth_cache_hours is not None else TEST_BANDWIDTH_CACHE_HOURS,
         **kwargs
     )
+
+
+def make_test_args(**overrides):
+    """Helper to create an argparse-like namespace for testing create_relay_set_with_coordinator."""
+    defaults = {
+        'output_dir': './output',
+        'onionoo_details_url': TEST_DETAILS_URL,
+        'onionoo_uptime_url': TEST_UPTIME_URL,
+        'onionoo_bandwidth_url': TEST_BANDWIDTH_URL,
+        'aroi_url': TEST_AROI_URL,
+        'bandwidth_cache_hours': TEST_BANDWIDTH_CACHE_HOURS,
+        'bandwidth_units': 'bytes',
+        'progress': False,
+        'enabled_apis': 'all',
+        'filter_downtime_days': 7,
+        'base_url': '',
+        'mp_workers': 4,
+    }
+    defaults.update(overrides)
+    return SimpleNamespace(**defaults)
 
 
 class TestCoordinator:
@@ -268,83 +289,62 @@ class TestCoordinator:
 
 
 class TestBackwardsCompatibility:
-    """Test backwards compatibility functions"""
+    """Test create_relay_set_with_coordinator function"""
     
     def test_create_relay_set_with_coordinator_success(self):
-        """Test the backwards compatibility function"""
+        """Test the convenience function passes args to Coordinator"""
         mock_relay_set = MagicMock()
         mock_coordinator = MagicMock()
         mock_coordinator.get_relay_set.return_value = mock_relay_set
         
+        test_args = make_test_args(
+            output_dir="./test_output",
+            onionoo_details_url="https://test.details.url",
+            onionoo_uptime_url="https://test.uptime.url",
+            bandwidth_units='bits',
+            progress=True,
+        )
+        
         with patch('allium.lib.coordinator.Coordinator', return_value=mock_coordinator) as mock_coordinator_class:
-            result = create_relay_set_with_coordinator(
-                output_dir="./test_output",
-                onionoo_details_url="https://test.details.url",
-                onionoo_uptime_url="https://test.uptime.url",
-                onionoo_bandwidth_url=TEST_BANDWIDTH_URL,
-                aroi_url=TEST_AROI_URL,
-                bandwidth_cache_hours=TEST_BANDWIDTH_CACHE_HOURS,
-                use_bits=True,
-                progress=True
-            )
+            result = create_relay_set_with_coordinator(test_args)
             
             assert result == mock_relay_set
             
-            # Check that Coordinator was instantiated once
+            # Check that Coordinator was instantiated with args
             mock_coordinator_class.assert_called_once()
-            
-            # Verify core parameters
             call_kwargs = mock_coordinator_class.call_args.kwargs
-            assert call_kwargs['output_dir'] == "./test_output"
-            assert call_kwargs['onionoo_details_url'] == "https://test.details.url"
-            assert call_kwargs['onionoo_uptime_url'] == "https://test.uptime.url"
-            assert call_kwargs['onionoo_bandwidth_url'] == TEST_BANDWIDTH_URL
-            assert call_kwargs['aroi_url'] == TEST_AROI_URL
-            assert call_kwargs['bandwidth_cache_hours'] == TEST_BANDWIDTH_CACHE_HOURS
-            assert call_kwargs['use_bits'] == True
-            assert call_kwargs['progress'] == True
-            assert call_kwargs['progress_step'] == 0
-            assert call_kwargs['total_steps'] == 53
-            assert call_kwargs['enabled_apis'] == 'all'
+            assert call_kwargs['args'] is test_args
             
             mock_coordinator.get_relay_set.assert_called_once()
     
     def test_create_relay_set_with_coordinator_failure(self):
-        """Test backwards compatibility function with failure"""
+        """Test convenience function with failure"""
         mock_coordinator = MagicMock()
         mock_coordinator.get_relay_set.return_value = None
         
+        test_args = make_test_args()
+        
         with patch('allium.lib.coordinator.Coordinator', return_value=mock_coordinator):
-            result = create_relay_set_with_coordinator(
-                "./output", "https://test.details.url", "https://test.uptime.url",
-                TEST_BANDWIDTH_URL, TEST_AROI_URL, TEST_BANDWIDTH_CACHE_HOURS
-            )
+            result = create_relay_set_with_coordinator(test_args)
             
             assert result is None
     
     def test_create_relay_set_with_coordinator_default_params(self):
-        """Test backwards compatibility function with default parameters"""
+        """Test convenience function reads params from args namespace"""
         mock_relay_set = MagicMock()
         mock_coordinator = MagicMock()
         mock_coordinator.get_relay_set.return_value = mock_relay_set
         
+        test_args = make_test_args()
+        
         with patch('allium.lib.coordinator.Coordinator', return_value=mock_coordinator) as mock_coordinator_class:
-            result = create_relay_set_with_coordinator(
-                "./output", "https://test.details.url", "https://test.uptime.url",
-                TEST_BANDWIDTH_URL, TEST_AROI_URL, TEST_BANDWIDTH_CACHE_HOURS
-            )
+            result = create_relay_set_with_coordinator(test_args)
             
             assert result == mock_relay_set
             
-            # Check default parameters
-            call_args = mock_coordinator_class.call_args
-            if call_args and len(call_args) > 1:
-                kwargs = call_args[1]
-                assert kwargs['use_bits'] is False
-                assert kwargs['progress'] is False
-                assert kwargs['progress_step'] == 0
-                assert kwargs['total_steps'] == 53
-                assert isinstance(kwargs['start_time'], float)
+            # Verify args was passed through
+            call_kwargs = mock_coordinator_class.call_args.kwargs
+            assert call_kwargs['args'] is test_args
 
 
 @pytest.mark.slow
@@ -462,8 +462,12 @@ class TestCoordinatorEdgeCases:
     
     def test_coordinator_with_invalid_parameters(self):
         """Test coordinator with edge case parameters"""
-        # Test with empty strings
-        coordinator = Coordinator("", "", "", "", "", 0, progress_step=-1, total_steps=0)
+        # Test with empty strings using keyword arguments
+        coordinator = Coordinator(
+            output_dir="", onionoo_details_url="", onionoo_uptime_url="",
+            onionoo_bandwidth_url="", aroi_url="", bandwidth_cache_hours=0,
+            progress_step=-1, total_steps=0
+        )
         
         assert coordinator.output_dir == ""
         assert coordinator.onionoo_details_url == ""
@@ -625,7 +629,7 @@ class TestCoordinatorMultiAPI:
         assert result == mock_collector_data
     
     def test_create_relay_set_with_additional_apis(self):
-        """Test relay set creation with additional API data attached"""
+        """Test relay set creation with additional API data attached via enrich_with_api_data"""
         mock_details_data = {
             "relays": [{
                 "nickname": "TestRelay1", 
@@ -667,10 +671,14 @@ class TestCoordinatorMultiAPI:
             
             assert result == mock_relay_set
             
-            # Verify additional API data was attached
-            assert mock_relay_set.uptime_data == mock_uptime_data
-            assert mock_relay_set.consensus_health_data == {"health_status": {}}
-            assert mock_relay_set.collector_data == {"authorities": []}
+            # Verify enrich_with_api_data was called with the correct API data
+            mock_relay_set.enrich_with_api_data.assert_called_once_with(
+                uptime_data=mock_uptime_data,
+                bandwidth_data=None,
+                aroi_validation_data=None,
+                collector_consensus_data=None,
+                consensus_health_data={"health_status": {}},
+            )
     
     def test_fetch_onionoo_data_multiapi_compatibility(self):
         """Test that fetch_onionoo_data returns details for backward compatibility"""
@@ -753,8 +761,8 @@ class TestCoordinatorMultiAPI:
                 
                 assert result == mock_relay_set
                 
-                # Verify additional API data was attached
-                assert mock_relay_set.uptime_data == mock_uptime_data
+                # Verify enrich_with_api_data was called (API data flows through it)
+                mock_relay_set.enrich_with_api_data.assert_called_once()
     
     def test_api_workers_url_transformation(self):
         """Test that API worker URLs are correctly assigned"""
