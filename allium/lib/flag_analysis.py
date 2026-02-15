@@ -7,7 +7,16 @@ Extracted from relays.py for better modularity.
 """
 
 from .operator_analysis import calculate_uptime_display
-from .time_utils import format_time_ago
+from .time_utils import format_time_ago, PERIOD_SHORT_NAMES
+
+# Shared flag constants (DRY: used by both process_flag_bandwidth_display and process_flag_uptime_display)
+FLAG_PRIORITY = {'Exit': 1, 'Guard': 2, 'Fast': 3, 'Running': 4}
+FLAG_DISPLAY_NAMES = {
+    'Exit': 'Exit Node',
+    'Guard': 'Entry Guard',
+    'Fast': 'Fast Relay',
+    'Running': 'Running Operation'
+}
 
 
 def calculate_network_bandwidth_percentiles(bandwidth_data, relay_set):
@@ -117,15 +126,6 @@ def process_flag_bandwidth_display(relays, network_flag_statistics, bandwidth_fo
     Args:
         network_flag_statistics (dict): Network-wide flag statistics for comparison
     """
-    # Flag priority mapping (Exit > Guard > Fast > Running)
-    flag_priority = {'Exit': 1, 'Guard': 2, 'Fast': 3, 'Running': 4}
-    flag_display_names = {
-        'Exit': 'Exit Node',
-        'Guard': 'Entry Guard', 
-        'Fast': 'Fast Relay',
-        'Running': 'Running Operation'
-    }
-    
     for relay in relays:
         # Get actual flags this relay has
         relay_flags = set(relay.get('flags', []))
@@ -142,9 +142,9 @@ def process_flag_bandwidth_display(relays, network_flag_statistics, bandwidth_fo
         
         for flag in flag_data.keys():
             # Only consider flags the relay actually has
-            if flag in flag_priority and flag in relay_flags and flag_priority[flag] < best_priority:
+            if flag in FLAG_PRIORITY and flag in relay_flags and FLAG_PRIORITY[flag] < best_priority:
                 selected_flag = flag
-                best_priority = flag_priority[flag]
+                best_priority = FLAG_PRIORITY[flag]
         
         if not selected_flag or selected_flag not in flag_data:
             relay["flag_bandwidth_display"] = "N/A"
@@ -154,11 +154,11 @@ def process_flag_bandwidth_display(relays, network_flag_statistics, bandwidth_fo
         # Build display string with formatting
         display_parts = []
         tooltip_parts = []
-        flag_display = flag_display_names[selected_flag]
+        flag_display = FLAG_DISPLAY_NAMES[selected_flag]
         
         for period in ['6_months', '1_year', '5_years']:
             # Map to short period names for tooltip
-            period_short = {'6_months': '6M', '1_year': '1Y', '5_years': '5Y'}[period]
+            period_short = PERIOD_SHORT_NAMES[period]
             
             if period in flag_data[selected_flag] and flag_data[selected_flag][period] > 0:
                 bandwidth_val = flag_data[selected_flag][period]
@@ -223,15 +223,6 @@ def process_flag_uptime_display(relays, network_flag_statistics):
     Args:
         network_flag_statistics (dict): Network-wide flag statistics for comparison
     """
-    # Flag priority mapping (Exit > Guard > Fast > Running)
-    flag_priority = {'Exit': 1, 'Guard': 2, 'Fast': 3, 'Running': 4}
-    flag_display_names = {
-        'Exit': 'Exit Node',
-        'Guard': 'Entry Guard', 
-        'Fast': 'Fast Relay',
-        'Running': 'Running Operation'
-    }
-    
     for relay in relays:
         # Get actual flags this relay has
         relay_flags = set(relay.get('flags', []))
@@ -248,9 +239,9 @@ def process_flag_uptime_display(relays, network_flag_statistics):
         
         for flag in flag_data.keys():
             # Only consider flags the relay actually has
-            if flag in flag_priority and flag in relay_flags and flag_priority[flag] < best_priority:
+            if flag in FLAG_PRIORITY and flag in relay_flags and FLAG_PRIORITY[flag] < best_priority:
                 selected_flag = flag
-                best_priority = flag_priority[flag]
+                best_priority = FLAG_PRIORITY[flag]
         
         if not selected_flag or selected_flag not in flag_data:
             relay["flag_uptime_display"] = "N/A"
@@ -260,14 +251,14 @@ def process_flag_uptime_display(relays, network_flag_statistics):
         # Build display string with color coding and prefix
         display_parts = []
         tooltip_parts = []
-        flag_display = flag_display_names[selected_flag]
+        flag_display = FLAG_DISPLAY_NAMES[selected_flag]
         
         # Get regular uptime percentages for comparison
         regular_uptime = relay.get("uptime_percentages", {})
         
         for period in ['1_month', '6_months', '1_year', '5_years']:
             # Map to short period names for tooltip
-            period_short = {'1_month': '1M', '6_months': '6M', '1_year': '1Y', '5_years': '5Y'}[period]
+            period_short = PERIOD_SHORT_NAMES[period]
             
             if period in flag_data[selected_flag]:
                 uptime_val = flag_data[selected_flag][period]['uptime']

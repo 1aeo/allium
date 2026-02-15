@@ -11,6 +11,11 @@ from .time_utils import parse_onionoo_timestamp, create_time_thresholds
 from .string_utils import format_percentage_from_fraction
 
 
+def _pct(numerator, denominator):
+    """Safe percentage calculation: (numerator / denominator * 100) or 0.0 if denominator is 0."""
+    return (numerator / denominator * 100) if denominator > 0 else 0.0
+
+
 def preformat_network_health_template_strings(health_metrics):
     """
     OPTIMIZATION: Pre-format all template strings to eliminate Jinja2 formatting overhead.
@@ -184,9 +189,9 @@ def calculate_network_health_metrics(relay_set):
         'countries_count': len(sorted_data.get('country', {})),
         'unique_as_count': len(sorted_data.get('as', {})),
         # Add percentages for relay counts
-        'guard_percentage': (network_totals['guard_count'] / total_relays_count * 100) if total_relays_count > 0 else 0.0,
-        'middle_percentage': (network_totals['middle_count'] / total_relays_count * 100) if total_relays_count > 0 else 0.0,
-        'exit_percentage': (network_totals['exit_count'] / total_relays_count * 100) if total_relays_count > 0 else 0.0
+        'guard_percentage': _pct(network_totals['guard_count'], total_relays_count),
+        'middle_percentage': _pct(network_totals['middle_count'], total_relays_count),
+        'exit_percentage': _pct(network_totals['exit_count'], total_relays_count)
     }
     
     # OPTIMIZED: Reuse cached unique families count from _calculate_and_cache_family_statistics()
@@ -724,15 +729,15 @@ def calculate_network_health_metrics(relay_set):
         'ip_unrestricted_exits': ip_unrestricted_exits,
         'ip_restricted_exits': ip_restricted_exits,
         'unrestricted_and_no_ip_restrictions': no_port_restrictions_and_no_ip_restrictions,  # NEW: Combined metric
-        # FIXED: Port restriction percentages use total_relays_count (applies to all relays)
-        'unrestricted_exits_percentage': (port_unrestricted_exits / exit_count * 100) if exit_count > 0 else 0.0,
-        'restricted_exits_percentage': (port_restricted_exits / exit_count * 100) if exit_count > 0 else 0.0,
-        'web_traffic_exits_percentage': (web_traffic_exits / exit_count * 100) if exit_count > 0 else 0.0,
-        'guard_exit_percentage': (guard_exit_count / total_relays_count * 100) if total_relays_count > 0 else 0.0,
+        # FIXED: Port restriction percentages use exit_count (applies to exit relays)
+        'unrestricted_exits_percentage': _pct(port_unrestricted_exits, exit_count),
+        'restricted_exits_percentage': _pct(port_restricted_exits, exit_count),
+        'web_traffic_exits_percentage': _pct(web_traffic_exits, exit_count),
+        'guard_exit_percentage': _pct(guard_exit_count, total_relays_count),
         # FIXED: IP restriction percentages use exit_count (applies only to exit relays)
-        'ip_unrestricted_exits_percentage': (ip_unrestricted_exits / exit_count * 100) if exit_count > 0 else 0.0,
-        'ip_restricted_exits_percentage': (ip_restricted_exits / exit_count * 100) if exit_count > 0 else 0.0,
-        'unrestricted_and_no_ip_restrictions_percentage': (no_port_restrictions_and_no_ip_restrictions / exit_count * 100) if exit_count > 0 else 0.0
+        'ip_unrestricted_exits_percentage': _pct(ip_unrestricted_exits, exit_count),
+        'ip_restricted_exits_percentage': _pct(ip_restricted_exits, exit_count),
+        'unrestricted_and_no_ip_restrictions_percentage': _pct(no_port_restrictions_and_no_ip_restrictions, exit_count)
     })
     
     # STORE CALCULATED METRICS
@@ -762,16 +767,16 @@ def calculate_network_health_metrics(relay_set):
         'eu_relays_count': eu_relays,
         'non_eu_relays_count': non_eu_relays,
         'rare_countries_relays': rare_countries_relays,
-        'eu_relays_percentage': (eu_relays / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
-        'non_eu_relays_percentage': (non_eu_relays / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
-        'rare_countries_relays_percentage': (rare_countries_relays / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
+        'eu_relays_percentage': _pct(eu_relays, total_relays_count),
+        'non_eu_relays_percentage': _pct(non_eu_relays, total_relays_count),
+        'rare_countries_relays_percentage': _pct(rare_countries_relays, total_relays_count),
         # Geographic consensus weight metrics
         'eu_consensus_weight': eu_consensus_weight,
         'non_eu_consensus_weight': non_eu_consensus_weight,
         'rare_countries_consensus_weight': rare_countries_consensus_weight,
-        'eu_consensus_weight_percentage': (eu_consensus_weight / total_consensus_weight * 100) if total_consensus_weight > 0 else 0.0,
-        'non_eu_consensus_weight_percentage': (non_eu_consensus_weight / total_consensus_weight * 100) if total_consensus_weight > 0 else 0.0,
-        'rare_countries_consensus_weight_percentage': (rare_countries_consensus_weight / total_consensus_weight * 100) if total_consensus_weight > 0 else 0.0,
+        'eu_consensus_weight_percentage': _pct(eu_consensus_weight, total_consensus_weight),
+        'non_eu_consensus_weight_percentage': _pct(non_eu_consensus_weight, total_consensus_weight),
+        'rare_countries_consensus_weight_percentage': _pct(rare_countries_consensus_weight, total_consensus_weight),
         # Geographic analysis metrics from intelligence engine
         'geographic_diversity_top3': relay_set.json.get('smart_context', {}).get('concentration_patterns', {}).get('template_optimized', {}).get('countries_top_3_percentage', '0.0'),
         'geographic_diversity_significant_count': relay_set.json.get('smart_context', {}).get('concentration_patterns', {}).get('template_optimized', {}).get('countries_significant_count', 0),
@@ -782,38 +787,37 @@ def calculate_network_health_metrics(relay_set):
         'regional_hhi': relay_set.json.get('smart_context', {}).get('geographic_clustering', {}).get('template_optimized', {}).get('regional_hhi', '0.000'),
         'regional_top_3_breakdown': relay_set.json.get('smart_context', {}).get('geographic_clustering', {}).get('template_optimized', {}).get('top_3_regions', 'Insufficient data'),
         # Add percentages for other relay counts
-        'authorities_percentage': (authority_count / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
-        'bad_exits_percentage': (bad_exit_count / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
-        # NEW: Additional flag percentages
-        'fast_percentage': (fast_count / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
-        'stable_percentage': (stable_count / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
-        'v2dir_percentage': (v2dir_count / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
-        'hsdir_percentage': (hsdir_count / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
-        'stabledesc_percentage': (stabledesc_count / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
-        'sybil_percentage': (sybil_count / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
-        'offline_relays_percentage': (offline_relays / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
-        'overloaded_relays_percentage': (overloaded_relays / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
-        # REMOVED: 'hibernating_relays_percentage': (hibernating_relays / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
-        'new_relays_24h_percentage': (new_relays_24h / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
-        'new_relays_30d_percentage': (new_relays_30d / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
-        'new_relays_1y_percentage': (new_relays_1y / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0,
-        'new_relays_6m_percentage': (new_relays_6m / health_metrics['relays_total'] * 100) if health_metrics['relays_total'] > 0 else 0.0
+        'authorities_percentage': _pct(authority_count, total_relays_count),
+        'bad_exits_percentage': _pct(bad_exit_count, total_relays_count),
+        # Additional flag percentages
+        'fast_percentage': _pct(fast_count, total_relays_count),
+        'stable_percentage': _pct(stable_count, total_relays_count),
+        'v2dir_percentage': _pct(v2dir_count, total_relays_count),
+        'hsdir_percentage': _pct(hsdir_count, total_relays_count),
+        'stabledesc_percentage': _pct(stabledesc_count, total_relays_count),
+        'sybil_percentage': _pct(sybil_count, total_relays_count),
+        'offline_relays_percentage': _pct(offline_relays, total_relays_count),
+        'overloaded_relays_percentage': _pct(overloaded_relays, total_relays_count),
+        'new_relays_24h_percentage': _pct(new_relays_24h, total_relays_count),
+        'new_relays_30d_percentage': _pct(new_relays_30d, total_relays_count),
+        'new_relays_1y_percentage': _pct(new_relays_1y, total_relays_count),
+        'new_relays_6m_percentage': _pct(new_relays_6m, total_relays_count)
     })
     
     # NEW: IPv6 support metrics - relay-level statistics
     health_metrics.update({
         'ipv4_only_relays': ipv4_only_relays,
         'both_ipv4_ipv6_relays': both_ipv4_ipv6_relays,
-        'ipv4_only_relays_percentage': (ipv4_only_relays / total_relays_count * 100) if total_relays_count > 0 else 0.0,
-        'both_ipv4_ipv6_relays_percentage': (both_ipv4_ipv6_relays / total_relays_count * 100) if total_relays_count > 0 else 0.0
+        'ipv4_only_relays_percentage': _pct(ipv4_only_relays, total_relays_count),
+        'both_ipv4_ipv6_relays_percentage': _pct(both_ipv4_ipv6_relays, total_relays_count)
     })
     
     # NEW: IPv6 support metrics - bandwidth-level statistics
     health_metrics.update({
         'ipv4_only_bandwidth': ipv4_only_bandwidth,
         'both_ipv4_ipv6_bandwidth': both_ipv4_ipv6_bandwidth,
-        'ipv4_only_bandwidth_percentage': (ipv4_only_bandwidth / total_bandwidth * 100) if total_bandwidth > 0 else 0.0,
-        'both_ipv4_ipv6_bandwidth_percentage': (both_ipv4_ipv6_bandwidth / total_bandwidth * 100) if total_bandwidth > 0 else 0.0
+        'ipv4_only_bandwidth_percentage': _pct(ipv4_only_bandwidth, total_bandwidth),
+        'both_ipv4_ipv6_bandwidth_percentage': _pct(both_ipv4_ipv6_bandwidth, total_bandwidth)
     })
     
     # NEW: IPv6 support metrics - operator-level statistics (counts only, percentages calculated later)
@@ -829,10 +833,10 @@ def calculate_network_health_metrics(relay_set):
     health_metrics.update({
         'top_ipv4_only_country': top_ipv4_only_country[0],
         'top_ipv4_only_country_count': top_ipv4_only_country[1],
-        'top_ipv4_only_country_percentage': (top_ipv4_only_country[1] / total_relays_count * 100) if total_relays_count > 0 else 0.0,
+        'top_ipv4_only_country_percentage': _pct(top_ipv4_only_country[1], total_relays_count),
         'top_both_ipv4_ipv6_country': top_both_country[0],
         'top_both_ipv4_ipv6_country_count': top_both_country[1],
-        'top_both_ipv4_ipv6_country_percentage': (top_both_country[1] / total_relays_count * 100) if total_relays_count > 0 else 0.0
+        'top_both_ipv4_ipv6_country_percentage': _pct(top_both_country[1], total_relays_count)
     })
     
     # NEW: IPv6 support metrics - top AS analysis
@@ -850,11 +854,11 @@ def calculate_network_health_metrics(relay_set):
         'top_ipv4_only_as_number': top_ipv4_only_as[0],
         'top_ipv4_only_as_name': as_names.get(top_ipv4_only_as[0], 'Unknown') if top_ipv4_only_as[0] else 'N/A',
         'top_ipv4_only_as_count': top_ipv4_only_as[1],
-        'top_ipv4_only_as_percentage': (top_ipv4_only_as[1] / total_relays_count * 100) if total_relays_count > 0 else 0.0,
+        'top_ipv4_only_as_percentage': _pct(top_ipv4_only_as[1], total_relays_count),
         'top_both_ipv4_ipv6_as_number': top_both_as[0],
         'top_both_ipv4_ipv6_as_name': as_names.get(top_both_as[0], 'Unknown') if top_both_as[0] else 'N/A',
         'top_both_ipv4_ipv6_as_count': top_both_as[1],
-        'top_both_ipv4_ipv6_as_percentage': (top_both_as[1] / total_relays_count * 100) if total_relays_count > 0 else 0.0
+        'top_both_ipv4_ipv6_as_percentage': _pct(top_both_as[1], total_relays_count)
     })
     
     # Platform metrics with percentages
@@ -865,29 +869,26 @@ def calculate_network_health_metrics(relay_set):
     
     top_platforms_with_pct = []
     for platform, count in top_platforms:
-        percentage = (count / total_relays * 100) if total_relays > 0 else 0.0
+        percentage = _pct(count, total_relays)
         top_platforms_with_pct.append((platform, count, percentage))
     
     health_metrics['platform_top3'] = top_platforms_with_pct
     health_metrics['platform_others'] = others_count
-    health_metrics['platform_others_percentage'] = (others_count / total_relays * 100) if total_relays > 0 else 0.0
+    health_metrics['platform_others_percentage'] = _pct(others_count, total_relays)
     
     # Version compliance with percentages
     total_with_version_info = recommended_version_count + not_recommended_count
     health_metrics.update({
-        'recommended_version_percentage': (
-            (recommended_version_count / total_with_version_info * 100) 
-            if total_with_version_info > 0 else 0.0
-        ),
+        'recommended_version_percentage': _pct(recommended_version_count, total_with_version_info),
         'recommended_version_count': recommended_version_count,
         'not_recommended_count': not_recommended_count,
         'experimental_count': experimental_count,
         'obsolete_count': obsolete_count,
         'outdated_count': outdated_count,
-        'not_recommended_percentage': (not_recommended_count / total_relays * 100) if total_relays > 0 else 0.0,
-        'experimental_percentage': (experimental_count / total_relays * 100) if total_relays > 0 else 0.0,
-        'obsolete_percentage': (obsolete_count / total_relays * 100) if total_relays > 0 else 0.0,
-        'outdated_percentage': (outdated_count / total_relays * 100) if total_relays > 0 else 0.0
+        'not_recommended_percentage': _pct(not_recommended_count, total_relays),
+        'experimental_percentage': _pct(experimental_count, total_relays),
+        'obsolete_percentage': _pct(obsolete_count, total_relays),
+        'outdated_percentage': _pct(outdated_count, total_relays)
     })
     
     # Bandwidth utilization metrics - calculate mean and median for Obs to Adv Diff
@@ -900,16 +901,14 @@ def calculate_network_health_metrics(relay_set):
         if observed_advertised_diff_values else 0
     )
     
-    if relay_set.use_bits:
-        obs_adv_unit = relay_set.bandwidth_formatter.determine_unit(avg_obs_adv_diff_bytes * 8)
-        avg_formatted = relay_set.bandwidth_formatter.format_bandwidth_with_unit(avg_obs_adv_diff_bytes * 8, obs_adv_unit, decimal_places=0) + f" {obs_adv_unit}"
-        median_formatted = relay_set.bandwidth_formatter.format_bandwidth_with_unit(median_obs_adv_diff_bytes * 8, obs_adv_unit, decimal_places=0) + f" {obs_adv_unit}"
-        health_metrics['avg_observed_advertised_diff_formatted'] = f"{avg_formatted} | {median_formatted}"
-    else:
-        obs_adv_unit = relay_set.bandwidth_formatter.determine_unit(avg_obs_adv_diff_bytes)
-        avg_formatted = relay_set.bandwidth_formatter.format_bandwidth_with_unit(avg_obs_adv_diff_bytes, obs_adv_unit, decimal_places=0) + f" {obs_adv_unit}"
-        median_formatted = relay_set.bandwidth_formatter.format_bandwidth_with_unit(median_obs_adv_diff_bytes, obs_adv_unit, decimal_places=0) + f" {obs_adv_unit}"
-        health_metrics['avg_observed_advertised_diff_formatted'] = f"{avg_formatted} | {median_formatted}"
+    # DRY: Use multiplier to avoid duplicating bits/bytes code paths
+    bw_mult = 8 if relay_set.use_bits else 1
+    bw_fmt = relay_set.bandwidth_formatter
+    
+    obs_adv_unit = bw_fmt.determine_unit(avg_obs_adv_diff_bytes * bw_mult)
+    avg_formatted = bw_fmt.format_bandwidth_with_unit(avg_obs_adv_diff_bytes * bw_mult, obs_adv_unit, decimal_places=0) + f" {obs_adv_unit}"
+    median_formatted = bw_fmt.format_bandwidth_with_unit(median_obs_adv_diff_bytes * bw_mult, obs_adv_unit, decimal_places=0) + f" {obs_adv_unit}"
+    health_metrics['avg_observed_advertised_diff_formatted'] = f"{avg_formatted} | {median_formatted}"
     
     health_metrics['consensus_weight_bandwidth_ratio'] = (
         (total_consensus_weight / total_bandwidth) 
@@ -947,129 +946,37 @@ def calculate_network_health_metrics(relay_set):
     })
     
     # PRE-CALCULATE BANDWIDTH MEAN/MEDIAN WITH PROPER UNITS - avoid showing 0 values
-    # Check if any mean/median would show as 0 with the main unit, if so use smaller unit for all
-    if relay_set.use_bits:
-        # For bits, check if any value would round to 0 with Gbit/s
-        base_unit = relay_set.bandwidth_formatter.determine_unit(total_bandwidth * 8)
-        test_values = [
-            health_metrics['exit_bw_mean'] * 8,
-            health_metrics['exit_bw_median'] * 8,
-            health_metrics['guard_bw_mean'] * 8,
-            health_metrics['guard_bw_median'] * 8,
-            health_metrics['middle_bw_mean'] * 8,
-            health_metrics['middle_bw_median'] * 8
-        ]
-        
-        # Check if any would format to 0 with the base unit
-        use_smaller_unit = False
-        for value in test_values:
-            if value > 0:  # Only check non-zero values
-                formatted_val = relay_set.bandwidth_formatter.format_bandwidth_with_unit(value, base_unit, decimal_places=0)
-                if float(formatted_val) == 0:
-                    use_smaller_unit = True
-                    break
-        
-        # Use Mbit/s if any would show as 0 Gbit/s
-        unit = 'Mbit/s' if (use_smaller_unit and base_unit == 'Gbit/s') else base_unit
-        
-        exit_mean_formatted = relay_set.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['exit_bw_mean'] * 8, unit, decimal_places=0) + f" {unit}"
-        exit_median_formatted = relay_set.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['exit_bw_median'] * 8, unit, decimal_places=0) + f" {unit}"
-        guard_mean_formatted = relay_set.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['guard_bw_mean'] * 8, unit, decimal_places=0) + f" {unit}"
-        guard_median_formatted = relay_set.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['guard_bw_median'] * 8, unit, decimal_places=0) + f" {unit}"
-        middle_mean_formatted = relay_set.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['middle_bw_mean'] * 8, unit, decimal_places=0) + f" {unit}"
-        middle_median_formatted = relay_set.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['middle_bw_median'] * 8, unit, decimal_places=0) + f" {unit}"
-        # NEW: Additional flag-specific bandwidth formatting
-        fast_mean_formatted = relay_set.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['fast_bw_mean'] * 8, unit, decimal_places=0) + f" {unit}"
-        fast_median_formatted = relay_set.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['fast_bw_median'] * 8, unit, decimal_places=0) + f" {unit}"
-        stable_mean_formatted = relay_set.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['stable_bw_mean'] * 8, unit, decimal_places=0) + f" {unit}"
-        stable_median_formatted = relay_set.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['stable_bw_median'] * 8, unit, decimal_places=0) + f" {unit}"
-        authority_mean_formatted = relay_set.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['authority_bw_mean'] * 8, unit, decimal_places=0) + f" {unit}"
-        authority_median_formatted = relay_set.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['authority_bw_median'] * 8, unit, decimal_places=0) + f" {unit}"
-        v2dir_mean_formatted = relay_set.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['v2dir_bw_mean'] * 8, unit, decimal_places=0) + f" {unit}"
-        v2dir_median_formatted = relay_set.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['v2dir_bw_median'] * 8, unit, decimal_places=0) + f" {unit}"
-        hsdir_mean_formatted = relay_set.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['hsdir_bw_mean'] * 8, unit, decimal_places=0) + f" {unit}"
-        hsdir_median_formatted = relay_set.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['hsdir_bw_median'] * 8, unit, decimal_places=0) + f" {unit}"
-    else:
-        # For bytes, check if any value would round to 0 with GB/s
-        base_unit = relay_set.bandwidth_formatter.determine_unit(total_bandwidth)
-        test_values = [
-            health_metrics['exit_bw_mean'],
-            health_metrics['exit_bw_median'],
-            health_metrics['guard_bw_mean'],
-            health_metrics['guard_bw_median'],
-            health_metrics['middle_bw_mean'],
-            health_metrics['middle_bw_median']
-        ]
-        
-        # Check if any would format to 0 with the base unit
-        use_smaller_unit = False
-        for value in test_values:
-            if value > 0:  # Only check non-zero values
-                formatted_val = relay_set.bandwidth_formatter.format_bandwidth_with_unit(value, base_unit, decimal_places=0)
-                if float(formatted_val) == 0:
-                    use_smaller_unit = True
-                    break
-        
-        # Use MB/s if any would show as 0 GB/s
-        unit = 'MB/s' if (use_smaller_unit and base_unit == 'GB/s') else base_unit
-        
-        exit_mean_formatted = relay_set.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['exit_bw_mean'], unit, decimal_places=0) + f" {unit}"
-        exit_median_formatted = relay_set.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['exit_bw_median'], unit, decimal_places=0) + f" {unit}"
-        guard_mean_formatted = relay_set.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['guard_bw_mean'], unit, decimal_places=0) + f" {unit}"
-        guard_median_formatted = relay_set.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['guard_bw_median'], unit, decimal_places=0) + f" {unit}"
-        middle_mean_formatted = relay_set.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['middle_bw_mean'], unit, decimal_places=0) + f" {unit}"
-        middle_median_formatted = relay_set.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['middle_bw_median'], unit, decimal_places=0) + f" {unit}"
-        # NEW: Additional flag-specific bandwidth formatting (bytes)
-        fast_mean_formatted = relay_set.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['fast_bw_mean'], unit, decimal_places=0) + f" {unit}"
-        fast_median_formatted = relay_set.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['fast_bw_median'], unit, decimal_places=0) + f" {unit}"
-        stable_mean_formatted = relay_set.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['stable_bw_mean'], unit, decimal_places=0) + f" {unit}"
-        stable_median_formatted = relay_set.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['stable_bw_median'], unit, decimal_places=0) + f" {unit}"
-        authority_mean_formatted = relay_set.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['authority_bw_mean'], unit, decimal_places=0) + f" {unit}"
-        authority_median_formatted = relay_set.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['authority_bw_median'], unit, decimal_places=0) + f" {unit}"
-        v2dir_mean_formatted = relay_set.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['v2dir_bw_mean'], unit, decimal_places=0) + f" {unit}"
-        v2dir_median_formatted = relay_set.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['v2dir_bw_median'], unit, decimal_places=0) + f" {unit}"
-        hsdir_mean_formatted = relay_set.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['hsdir_bw_mean'], unit, decimal_places=0) + f" {unit}"
-        hsdir_median_formatted = relay_set.bandwidth_formatter.format_bandwidth_with_unit(health_metrics['hsdir_bw_median'], unit, decimal_places=0) + f" {unit}"
+    # DRY: bw_mult already set above (8 for bits, 1 for bytes)
+    def _fmt_bw(value, unit):
+        """Helper: format bandwidth value with unit suffix."""
+        return bw_fmt.format_bandwidth_with_unit(value * bw_mult, unit, decimal_places=0) + f" {unit}"
     
-    health_metrics.update({
-        'exit_bw_mean_formatted': exit_mean_formatted,
-        'exit_bw_median_formatted': exit_median_formatted,
-        'guard_bw_mean_formatted': guard_mean_formatted,
-        'guard_bw_median_formatted': guard_median_formatted,
-        'middle_bw_mean_formatted': middle_mean_formatted,
-        'middle_bw_median_formatted': middle_median_formatted,
-        # NEW: Additional flag-specific bandwidth formatted values
-        'fast_bw_mean_formatted': fast_mean_formatted,
-        'fast_bw_median_formatted': fast_median_formatted,
-        'stable_bw_mean_formatted': stable_mean_formatted,
-        'stable_bw_median_formatted': stable_median_formatted,
-        'authority_bw_mean_formatted': authority_mean_formatted,
-        'authority_bw_median_formatted': authority_median_formatted,
-        'v2dir_bw_mean_formatted': v2dir_mean_formatted,
-        'v2dir_bw_median_formatted': v2dir_median_formatted,
-        'hsdir_bw_mean_formatted': hsdir_mean_formatted,
-        'hsdir_bw_median_formatted': hsdir_median_formatted
-    })
+    # Determine appropriate unit for role-specific mean/median values
+    base_unit = bw_fmt.determine_unit(total_bandwidth * bw_mult)
+    test_values = [health_metrics[k] * bw_mult for k in 
+                   ('exit_bw_mean', 'exit_bw_median', 'guard_bw_mean',
+                    'guard_bw_median', 'middle_bw_mean', 'middle_bw_median')]
     
-    # Bandwidth formatting with proper units
-    if relay_set.use_bits:
-        unit = relay_set.bandwidth_formatter.determine_unit(total_bandwidth * 8)
-        health_metrics['total_bandwidth_formatted'] = relay_set.bandwidth_formatter.format_bandwidth_with_unit(total_bandwidth * 8, unit, decimal_places=0) + f" {unit}"
-        health_metrics['guard_bandwidth_formatted'] = relay_set.bandwidth_formatter.format_bandwidth_with_unit(guard_bandwidth * 8, unit, decimal_places=0) + f" {unit}"
-        health_metrics['exit_bandwidth_formatted'] = relay_set.bandwidth_formatter.format_bandwidth_with_unit(exit_bandwidth * 8, unit, decimal_places=0) + f" {unit}"
-        health_metrics['middle_bandwidth_formatted'] = relay_set.bandwidth_formatter.format_bandwidth_with_unit(middle_bandwidth * 8, unit, decimal_places=0) + f" {unit}"
-        # NEW: IPv6 bandwidth formatting (bits)
-        health_metrics['ipv4_only_bandwidth_formatted'] = relay_set.bandwidth_formatter.format_bandwidth_with_unit(ipv4_only_bandwidth * 8, unit, decimal_places=0) + f" {unit}"
-        health_metrics['both_ipv4_ipv6_bandwidth_formatted'] = relay_set.bandwidth_formatter.format_bandwidth_with_unit(both_ipv4_ipv6_bandwidth * 8, unit, decimal_places=0) + f" {unit}"
-    else:
-        unit = relay_set.bandwidth_formatter.determine_unit(total_bandwidth)
-        health_metrics['total_bandwidth_formatted'] = relay_set.bandwidth_formatter.format_bandwidth_with_unit(total_bandwidth, unit, decimal_places=0) + f" {unit}"
-        health_metrics['guard_bandwidth_formatted'] = relay_set.bandwidth_formatter.format_bandwidth_with_unit(guard_bandwidth, unit, decimal_places=0) + f" {unit}"
-        health_metrics['exit_bandwidth_formatted'] = relay_set.bandwidth_formatter.format_bandwidth_with_unit(exit_bandwidth, unit, decimal_places=0) + f" {unit}"
-        health_metrics['middle_bandwidth_formatted'] = relay_set.bandwidth_formatter.format_bandwidth_with_unit(middle_bandwidth, unit, decimal_places=0) + f" {unit}"
-        # NEW: IPv6 bandwidth formatting (bytes)
-        health_metrics['ipv4_only_bandwidth_formatted'] = relay_set.bandwidth_formatter.format_bandwidth_with_unit(ipv4_only_bandwidth, unit, decimal_places=0) + f" {unit}"
-        health_metrics['both_ipv4_ipv6_bandwidth_formatted'] = relay_set.bandwidth_formatter.format_bandwidth_with_unit(both_ipv4_ipv6_bandwidth, unit, decimal_places=0) + f" {unit}"
+    # Check if any would format to 0 with the base unit; if so, use smaller unit
+    use_smaller_unit = any(
+        v > 0 and float(bw_fmt.format_bandwidth_with_unit(v, base_unit, decimal_places=0)) == 0
+        for v in test_values
+    )
+    smaller_unit = 'Mbit/s' if relay_set.use_bits else 'MB/s'
+    larger_unit = 'Gbit/s' if relay_set.use_bits else 'GB/s'
+    unit = smaller_unit if (use_smaller_unit and base_unit == larger_unit) else base_unit
+    
+    # Format all role/flag-specific bandwidth mean/median in a single pass
+    for role in ('exit', 'guard', 'middle', 'fast', 'stable', 'authority', 'v2dir', 'hsdir'):
+        health_metrics[f'{role}_bw_mean_formatted'] = _fmt_bw(health_metrics[f'{role}_bw_mean'], unit)
+        health_metrics[f'{role}_bw_median_formatted'] = _fmt_bw(health_metrics[f'{role}_bw_median'], unit)
+    
+    # Bandwidth formatting with proper units for totals
+    total_unit = bw_fmt.determine_unit(total_bandwidth * bw_mult)
+    for key, value in [('total_bandwidth', total_bandwidth), ('guard_bandwidth', guard_bandwidth),
+                       ('exit_bandwidth', exit_bandwidth), ('middle_bandwidth', middle_bandwidth),
+                       ('ipv4_only_bandwidth', ipv4_only_bandwidth), ('both_ipv4_ipv6_bandwidth', both_ipv4_ipv6_bandwidth)]:
+        health_metrics[f'{key}_formatted'] = _fmt_bw(value, total_unit)
     
     # Uptime metrics - reuse existing consolidated uptime calculations for efficiency
     if hasattr(relay_set, '_consolidated_uptime_results') and relay_set._consolidated_uptime_results:
@@ -1190,10 +1097,10 @@ def calculate_network_health_metrics(relay_set):
     
     # Percentage calculations for participation metrics
     health_metrics.update({
-        'relays_with_family_percentage': (relays_with_family / total_relays * 100) if total_relays > 0 else 0.0,
-        'relays_without_family_percentage': (relays_without_family / total_relays * 100) if total_relays > 0 else 0.0,
-        'relays_with_contact_percentage': (relays_with_contact / total_relays * 100) if total_relays > 0 else 0.0,
-        'relays_without_contact_percentage': (relays_without_contact / total_relays * 100) if total_relays > 0 else 0.0
+        'relays_with_family_percentage': _pct(relays_with_family, total_relays),
+        'relays_without_family_percentage': _pct(relays_without_family, total_relays),
+        'relays_with_contact_percentage': _pct(relays_with_contact, total_relays),
+        'relays_without_contact_percentage': _pct(relays_without_contact, total_relays)
     })
     
     # Final calculations - reuse existing data
@@ -1292,20 +1199,14 @@ def calculate_network_health_metrics(relay_set):
         
         # Add derived metrics
         health_metrics['total_relays_with_aroi'] = total_relays_with_aroi
-        health_metrics['total_relays_with_aroi_percentage'] = (
-            (total_relays_with_aroi / total_relays_count * 100) 
-            if total_relays_count > 0 else 0.0
-        )
+        health_metrics['total_relays_with_aroi_percentage'] = _pct(total_relays_with_aroi, total_relays_count)
         health_metrics['aroi_validated_percentage_of_aroi'] = aroi_validated_pct_of_aroi
         health_metrics['aroi_invalid_percentage_of_aroi'] = aroi_invalid_pct_of_aroi
         
         # Calculate relays without AROI (total - validated - unvalidated)
         relays_without_aroi = total_relays_count - total_relays_with_aroi
         health_metrics['relays_without_aroi'] = relays_without_aroi
-        health_metrics['relays_without_aroi_percentage'] = (
-            (relays_without_aroi / total_relays_count * 100)
-            if total_relays_count > 0 else 0.0
-        )
+        health_metrics['relays_without_aroi_percentage'] = _pct(relays_without_aroi, total_relays_count)
         
         # Operator-level metrics calculated in aroi_validation.py (same pass as relay metrics)
         # Extract validated domain set for IPv6 calculation
@@ -1333,8 +1234,8 @@ def calculate_network_health_metrics(relay_set):
         
         # Calculate IPv6 operator percentages based on validated operators count (124)
         if validated_aroi_domains > 0:
-            health_metrics['ipv4_only_aroi_operators_percentage'] = (ipv4_only_aroi_operators / validated_aroi_domains * 100)
-            health_metrics['both_ipv4_ipv6_aroi_operators_percentage'] = (both_ipv4_ipv6_aroi_operators / validated_aroi_domains * 100)
+            health_metrics['ipv4_only_aroi_operators_percentage'] = _pct(ipv4_only_aroi_operators, validated_aroi_domains)
+            health_metrics['both_ipv4_ipv6_aroi_operators_percentage'] = _pct(both_ipv4_ipv6_aroi_operators, validated_aroi_domains)
         else:
             health_metrics['ipv4_only_aroi_operators_percentage'] = 0.0
             health_metrics['both_ipv4_ipv6_aroi_operators_percentage'] = 0.0

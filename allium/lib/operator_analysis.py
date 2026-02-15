@@ -8,7 +8,7 @@ Extracted from relays.py for better modularity.
 
 import statistics
 
-from .time_utils import format_time_ago
+from .time_utils import format_time_ago, PERIOD_SHORT_NAMES, PERIOD_DISPLAY_NAMES
 from .uptime_utils import (
     extract_relay_uptime_for_period,
     calculate_statistical_outliers,
@@ -131,13 +131,6 @@ def calculate_operator_reliability(contact_hash, operator_relays, relay_set):
     # Available time periods from Onionoo APIs
     uptime_periods = ['1_month', '3_months', '6_months', '1_year', '5_years']
     bandwidth_periods = ['6_months', '1_year', '5_years']  # Bandwidth has different available periods
-    period_display_names = {
-        '1_month': '30d',
-        '3_months': '90d', 
-        '6_months': '6mo',
-        '1_year': '1y',
-        '5_years': '5y'
-    }
     
     reliability_stats = {
         # === UPTIME METRICS (existing) ===
@@ -188,7 +181,7 @@ def calculate_operator_reliability(contact_hash, operator_relays, relay_set):
                 reliability_stats['overall_uptime'][period] = {
                     'average': mean_uptime,
                     'std_dev': std_dev,
-                    'display_name': period_display_names[period],
+                    'display_name': PERIOD_DISPLAY_NAMES[period],
                     'relay_count': len(period_result['uptime_values'])
                 }
                 
@@ -249,7 +242,7 @@ def calculate_operator_reliability(contact_hash, operator_relays, relay_set):
                     'average': mean_bandwidth,
                     'average_formatted': f"{formatted_bandwidth} {unit}",
                     'std_dev': std_dev,
-                    'display_name': period_display_names[period],
+                    'display_name': PERIOD_DISPLAY_NAMES[period],
                     'relay_count': len(period_result['bandwidth_values'])
                 }
                 
@@ -358,7 +351,7 @@ def calculate_operator_reliability(contact_hash, operator_relays, relay_set):
                     'average_daily_total': avg_daily_total,
                     'average_daily_total_formatted': f"{formatted_total} {unit}",
                     'valid_days': daily_totals_result['valid_days'],
-                    'display_name': period_display_names[period]
+                    'display_name': PERIOD_DISPLAY_NAMES[period]
                 }
     
     # Set relay uptimes and valid relays count
@@ -960,15 +953,7 @@ def process_operator_flag_bandwidth_reliability(operator_flag_data, network_flag
         }
         
         for period in ['6_months', '1_year', '5_years']:
-            # Map to short period names for display
-            if period == '6_months':
-                period_short = '6M'
-            elif period == '1_year':
-                period_short = '1Y'
-            elif period == '5_years':
-                period_short = '5Y'
-            else:
-                period_short = period  # fallback
+            period_short = PERIOD_SHORT_NAMES.get(period, period)
             
             if period in periods and periods[period]:
                 # Calculate average bandwidth for operator relays with this flag
@@ -1085,17 +1070,7 @@ def process_operator_flag_reliability(operator_flag_data, network_flag_statistic
         }
         
         for period in ['1_month', '6_months', '1_year', '5_years']:
-            # Fixed period mapping - handle months before month to avoid conflict
-            if period == '1_month':
-                period_short = '1M'
-            elif period == '6_months':
-                period_short = '6M'
-            elif period == '1_year':
-                period_short = '1Y'
-            elif period == '5_years':
-                period_short = '5Y'
-            else:
-                period_short = period  # fallback
+            period_short = PERIOD_SHORT_NAMES.get(period, period)
             
             if period in periods and periods[period]:
                 # Calculate average uptime for operator relays with this flag
