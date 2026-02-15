@@ -1131,7 +1131,7 @@ class Relays:
     def _calculate_uptime_display(self, relay):
         """Calculate uptime/downtime display for a single relay."""
         from .operator_analysis import calculate_uptime_display
-        return calculate_uptime_display(relay, self._format_time_ago)
+        return calculate_uptime_display(relay)
 
     def _preformat_network_health_template_strings(self, health_metrics):
         """Pre-format all template strings to eliminate Jinja2 formatting overhead."""

@@ -1332,7 +1332,7 @@ def calculate_operator_downtime_alerts(contact_hash, operator_relays, contact_da
     
     return downtime_alerts
 
-def calculate_uptime_display(relay, format_time_ago_fn):
+def calculate_uptime_display(relay, _format_time_ago_fn=None):
     """
     Calculate uptime/downtime display for a single relay.
     
@@ -1342,6 +1342,7 @@ def calculate_uptime_display(relay, format_time_ago_fn):
     
     Args:
         relay (dict): Relay data dictionary
+        _format_time_ago_fn: Deprecated parameter, ignored. Uses module-level format_time_ago.
         
     Returns:
         str: Formatted uptime display (e.g., "UP 2d 5h ago", "DOWN 3h 45m ago", "Unknown")
@@ -1353,7 +1354,7 @@ def calculate_uptime_display(relay, format_time_ago_fn):
     
     if is_running:
         # For running relays, show uptime from last_restarted
-        time_since_restart = format_time_ago_fn(relay['last_restarted'])
+        time_since_restart = format_time_ago(relay['last_restarted'])
         if time_since_restart and time_since_restart != "unknown":
             return f"UP {time_since_restart}"
         else:
@@ -1362,7 +1363,7 @@ def calculate_uptime_display(relay, format_time_ago_fn):
         # For offline relays, show downtime from last_seen (when it was last observed online)
         # This avoids showing incorrect long downtimes based on old last_restarted timestamps
         if relay.get('last_seen'):
-            time_since_last_seen = format_time_ago_fn(relay['last_seen'])
+            time_since_last_seen = format_time_ago(relay['last_seen'])
             if time_since_last_seen and time_since_last_seen != "unknown":
                 return f"DOWN {time_since_last_seen}"
             else:
