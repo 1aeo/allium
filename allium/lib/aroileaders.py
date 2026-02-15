@@ -300,26 +300,50 @@ def _calculate_aroi_leaderboards(relays_instance):
     """
     Calculate AROI operator leaderboards using current live relay data.
     
-    Leverages existing contact-based aggregations from relays.py to minimize
-    duplicate calculations. Only computes new metrics not already available.
+    Composed from 3 sub-functions for readability and extensibility:
+    1. _collect_operator_metrics: Gather per-operator data from contacts
+    2. _rank_operators: Sort operators into leaderboard categories
+    3. _format_leaderboard_entries: Format entries for template rendering
     
-    Args:
-        relays_instance: Relays object with processed json data including sorted contacts
-        
-    Returns:
-        dict: Leaderboard data optimized for template rendering
+    To add a new leaderboard category:
+    - Add metric collection in _collect_operator_metrics (if new data needed)
+    - Add one sorted() call in _rank_operators
+    - Add formatting in _format_leaderboard_entries
     """
-    
     if not relays_instance.json or 'sorted' not in relays_instance.json:
         return {}
     
-    # Get existing contact-based aggregations (already calculated)
     contacts = relays_instance.json.get('sorted', {}).get('contact', {})
     all_relays = relays_instance.json.get('relays', [])
     
     if not contacts or not all_relays:
         return {}
     
+    # Step 1: Collect per-operator metrics from contact data
+    aroi_operators = _collect_operator_metrics(relays_instance)
+    if not aroi_operators:
+        return {}
+    
+    # Step 2: Sort operators into leaderboard category rankings
+    leaderboards = _rank_operators(aroi_operators)
+    
+    # Step 3: Format for template rendering and generate summary
+    return _format_leaderboard_entries(leaderboards, aroi_operators, relays_instance)
+
+
+def _collect_operator_metrics(relays_instance):
+    """
+    Collect per-operator metrics from contact-based aggregations.
+    
+    Iterates through all contacts, gathering existing metrics from categorization
+    and computing new metrics (diversity, reliability, bandwidth scores, etc.)
+    
+    Returns:
+        dict: operator_key -> metrics dict for all qualifying operators
+    """
+    contacts = relays_instance.json.get('sorted', {}).get('contact', {})
+    all_relays = relays_instance.json.get('relays', [])
+
     # PERFORMANCE OPTIMIZATION: Pre-calculate rare countries once instead of per-operator
     # This eliminates O(n²) performance where rare countries were calculated 3,123 times
     # Now calculated once and reused, improving performance by ~95%
@@ -799,7 +823,19 @@ def _calculate_aroi_leaderboards(relays_instance):
             'relays': operator_relays
         }
     
-    # Generate 17 core leaderboard categories (complete AROI leaderboard system)
+    return aroi_operators
+
+
+def _rank_operators(aroi_operators):
+    """
+    Sort operators into leaderboard category rankings.
+    
+    Each category is a sorted list of (operator_key, metrics) tuples, top 50.
+    To add a new leaderboard: add one sorted() call here.
+    
+    Returns:
+        dict: category_name -> sorted list of (operator_key, metrics) tuples
+    """
     leaderboards = {}
     
     # 1. Bandwidth Contributed (use existing calculation)
@@ -933,6 +969,19 @@ def _calculate_aroi_leaderboards(relays_instance):
         reverse=True
     )[:50]
     
+    return leaderboards
+
+
+def _format_leaderboard_entries(leaderboards, aroi_operators, relays_instance):
+    """
+    Format leaderboard entries for Jinja2 template rendering.
+    
+    Converts raw operator metrics into display-ready strings with units,
+    percentages, achievement badges, and tooltips.
+    
+    Returns:
+        dict with 'leaderboards' (formatted), 'summary' (stats), 'raw_operators'
+    """
     # Format data for template rendering with bandwidth units (reuse existing formatters)
     formatted_leaderboards = {}
     for category, data in leaderboards.items():
