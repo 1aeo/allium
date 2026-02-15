@@ -23,7 +23,7 @@ This document proposes extending the Eligibility Flag Vote Details table to prov
 
 ### 1.2 Implementation Status Tracker
 
-> **Last Updated:** 2026-01-25
+> **Last Updated:** 2026-02-15
 
 #### Legend
 - ✅ **Fully Implemented** - Code complete and deployed
@@ -34,23 +34,32 @@ This document proposes extending the Eligibility Flag Vote Details table to prov
 
 | Proposal | Flag | Status | Location | Notes |
 |----------|------|--------|----------|-------|
-| 1 | Exit | ⏳ Not Started | `consensus_evaluation.py` | Exit policy analysis |
-| 2 | Running | ⏳ Not Started | `consensus_evaluation.py` | IPv4/IPv6 reachability |
-| 3 | Valid | ⏳ Not Started | `consensus_evaluation.py` | Version + blacklist |
-| 4 | V2Dir | ⏳ Not Started | `consensus_evaluation.py` | DirPort/tunnelled |
-| 5 | MiddleOnly | ⏳ Not Started | `consensus_evaluation.py` | Security restriction |
+| 1 | Exit | ⏳ Not Started | `consensus_evaluation.py` | **Priority 1** — Detailed Guard-parity plan below. Exit policy analysis across all 6 page layers. |
+| 2 | Running | ⏳ Not Started | `consensus_evaluation.py` | **Priority 4** — Already extensively shown in Health Status, Summary, Per-Auth tables (3+ places). Low remaining gap. |
+| 3 | Valid | ⏳ Not Started | `consensus_evaluation.py` | **Priority 5** — Already extensively shown in Health Status, Summary, Per-Auth tables (3+ places). Low remaining gap. |
+| 4 | V2Dir | ⏳ Not Started | `consensus_evaluation.py` | **Priority 3** — Currently only shown as Guard prereq row. Medium gap. |
+| 5 | MiddleOnly | ⏳ Not Started | `consensus_evaluation.py` | **Priority 2** — Zero presence in codebase. High gap for affected operators. |
 
 ---
 
-### 1.3 Implementation Priority
+### 1.3 Implementation Priority (Revised 2026-02-15)
 
-| Priority | Proposal | Effort | Value | Rationale |
-|----------|----------|--------|-------|-----------|
-| 1 | **Proposal 2: Running** | Low | High | Core diagnostic info for reachability issues |
-| 2 | **Proposal 1: Exit** | Medium | High | Important for exit operators, policy validation |
-| 3 | **Proposal 3: Valid** | Low | Medium | Version issues are common troubleshooting topic |
-| 4 | **Proposal 4: V2Dir** | Low | Medium | Guard prerequisite explanation |
-| 5 | **Proposal 5: MiddleOnly** | Low | Low | Newer flag, rare occurrence |
+> **Priority Revision Note:** The original priority (Running first) was based on theoretical operator value. Since then, the relay page has been significantly enhanced with Health Status grid, Summary table, and Per-Authority Details table — all of which already show Running, Valid, and V2Dir extensively. The revised priority is based on **actual remaining gap size** rather than theoretical value.
+
+| Priority | Proposal | Flag | Effort | Gap Size | Rationale |
+|----------|----------|------|--------|----------|-----------|
+| **1** | **Proposal 1: Exit** | Exit | Medium | **Large** | **Biggest gap**: exit operators have no eligibility breakdown anywhere on the page. Exit policy shown in dt/dd section but not integrated into the eligibility table, Summary table, or Per-Auth table. Detailed Guard-parity plan below. |
+| **2** | **Proposal 5: MiddleOnly** | MiddleOnly | Low | **Large** | **Zero presence**: restricted operators have no way to discover that their relay has MiddleOnly flag. `grep` for MiddleOnly returns zero results in Python files. |
+| **3** | **Proposal 4: V2Dir** | V2Dir | Low | **Medium** | Only shown as Guard prerequisite row in eligibility table + vote count in Eligible Flags row. No standalone eligibility information with DirPort/tunnelled-dir-server details. |
+| **4** | **Proposal 2: Running** | Running | Low | **Small** | Already shown in Health Status (consensus + vote count), Summary table (Running row with IPv4 details), and Per-Authority Details (Running + v4/v6 columns). Adding to eligibility table would be redundant but consistent. |
+| **5** | **Proposal 3: Valid** | Valid | Low | **Small** | Already shown in Health Status (version + recommended status), Summary table (Valid row), and Per-Authority Details (Valid column + version info). Adding to eligibility table would be redundant but consistent. |
+
+**What Changed (2026-01-25 → 2026-02-15):**
+- Running dropped from Priority 1 → 4 (now extensively covered in 3+ page sections)
+- Valid dropped from Priority 3 → 5 (same reason)
+- Exit rose from Priority 2 → 1 (biggest remaining gap for operators)
+- MiddleOnly rose from Priority 5 → 2 (zero presence is worse than partial coverage)
+- V2Dir stayed at Priority 3 (medium gap, only shown as Guard prereq)
 
 ---
 
@@ -108,11 +117,23 @@ STATUS_COLORS = {
 
 ---
 
-## 3. Proposal 1: Exit Flag Eligibility
+## 3. Proposal 1: Exit Flag Eligibility (Guard-Parity Implementation)
+
+> **Priority:** 1 (Highest)
+> **Status:** ⏳ Not Started
+> **Last Updated:** 2026-02-15
+> **Effort:** Medium (6 layers of changes following established Guard pattern)
 
 ### 3.1 Rationale
 
-Exit is one of the most important flags but currently has no eligibility breakdown in the details table. Exit operators need to verify their exit policy meets requirements.
+Exit is one of the most important flags but currently has **the largest gap** of any flag on the relay page:
+- No eligibility breakdown in the Eligibility Flag Vote Details table
+- No row in the Summary table
+- No dedicated column in the Per-Authority Details table
+- `_analyze_flag_eligibility()` in collector_fetcher doesn't track Exit
+- `_format_flag_summary()` doesn't process Exit (so the "Eligible Flags" row shows incorrect data)
+
+Exit operators rely on the Exit flag for their relay's purpose. They need clear, structured eligibility information matching the quality of Guard/Stable/Fast/HSDir tracking.
 
 ### 3.2 Requirements (from dir-spec)
 
@@ -122,108 +143,432 @@ Exit flag requires:
 - Allows exits to at least one /8 address space on port 443
 ```
 
+**Historical Note:** Before Tor 0.3.2, required exits to at least 2 of: 80, 443, 6667.
+
 ### 3.3 Data Sources
 
-| Data | Source | Onionoo Field |
-|------|--------|---------------|
-| Exit policy summary | Onionoo | `exit_policy_summary` |
-| Exit addresses | Onionoo | `exit_addresses` |
-| Exit probability | Onionoo | `exit_probability` |
+| Data | Source | Field | Usage |
+|------|--------|-------|-------|
+| Exit policy summary | Onionoo | `exit_policy_summary` | Port 80/443 check |
+| Exit policy (full) | Onionoo | `exit_policy` | Detailed rule analysis |
+| IPv6 exit policy | Onionoo | `exit_policy_v6_summary` | IPv6 exit info |
+| Exit flag per authority | CollecTor votes | `'Exit' in auth_flags` | Per-authority assignment |
+| Exit addresses | Onionoo | `exit_addresses` | Display |
+| Exit probability | Onionoo | `exit_probability` | Display |
 
-### 3.4 Implementation
+**Key Difference from Guard:** Guard has numeric thresholds (WFU, TK, BW) from `flag-thresholds` in each CollecTor vote. Exit has **no numeric thresholds** — it's purely policy-based (ports 80+443 with ≥1 /8). So Exit tracking is simpler per-authority (flag assigned yes/no) but needs relay-side policy analysis.
 
-Add to `_format_flag_requirements_table()` in `consensus_evaluation.py`:
+### 3.4 Guard Pattern Reference (What We're Following)
+
+The Guard flag is tracked across 6 layers of the relay page. Exit must follow the same pattern:
+
+| Layer | Guard Implementation | Exit Equivalent |
+|-------|---------------------|-----------------|
+| **1. collector_fetcher** | `eligibility['guard']` with eligible_count, assigned_count, per-auth details (WFU/TK/BW comparisons) | `eligibility['exit']` with eligible_count, assigned_count, per-auth details (flag assigned yes/no) |
+| **2. _format_flag_summary** | Processes `flag_eligibility['guard']` → `summary['guard']` with status_class | Process `flag_eligibility['exit']` → `summary['exit']` with status_class |
+| **3. _format_relay_values** | `guard_bw_*`, `guard_prereq_*_count`, `wfu_*`, `tk_*` | `exit_allows_80/443`, `exit_eligible`, `exit_policy_display`, `exit_assigned_count` |
+| **4. _format_flag_requirements_table** | 6 rows (3 prereqs + WFU + TK + BW) | 1 row (Exit Policy) |
+| **5. Summary table** | 3 rows (Guard WFU, Guard TK, Guard BW) | 1 row (Exit Policy) |
+| **6. Per-Auth table** | 3 columns (Guard BW, Guard WFU, Guard TK) | 1 column (Exit flag yes/no per authority) |
+
+### 3.5 Implementation: Layer 1 — collector_fetcher._analyze_flag_eligibility()
+
+**File:** `allium/lib/consensus/collector_fetcher.py`
+
+**What to change:** Add `exit` to the eligibility dict and track per-authority Exit flag assignment.
 
 ```python
-def _add_exit_flag_rows(self, rows, relay, rv):
-    """Add Exit flag eligibility row to the table."""
-    
-    exit_color = self._get_flag_color('exit', relay.get('flags', []))
-    
-    # Analyze exit policy from Onionoo data
-    exit_policy = relay.get('exit_policy_summary', {})
-    accept = exit_policy.get('accept', [])
-    reject = exit_policy.get('reject', [])
-    
-    # Check if relay allows exits on required ports
-    # Simplified check - in practice, need to verify /8 coverage
-    allows_80 = self._policy_allows_port(accept, reject, 80)
-    allows_443 = self._policy_allows_port(accept, reject, 443)
-    exit_eligible = allows_80 and allows_443
-    
-    # Format display value
-    port_80_status = 'Yes' if allows_80 else 'No'
-    port_443_status = 'Yes' if allows_443 else 'No'
-    value = f"Port 80: {port_80_status} | Port 443: {port_443_status}"
-    
-    status = 'meets' if exit_eligible else 'below'
-    status_text = 'Exit Eligible' if exit_eligible else 'Non-Exit'
-    
-    rows.append({
-        'flag': 'Exit',
-        'flag_tooltip': "Exit node: Allows traffic to regular internet. "
-                       "Requires allowing exits to ≥1 /8 on both ports 80 and 443.",
-        'flag_color': exit_color,
-        'metric': 'Exit Policy',
-        'metric_tooltip': "Relay's exit policy must allow exits to at least "
-                         "one /8 address space on both port 80 AND port 443.",
-        'value': value,
-        'value_source': 'relay',
-        'threshold': 'Allows ≥1 /8 on ports 80 AND 443',
-        'status': status,
-        'status_text': status_text,
-        'status_color': STATUS_COLORS[status],
-        'status_tooltip': EXIT_STATUS_TOOLTIPS[status],
-        'rowspan': 1,
-    })
+# In _analyze_flag_eligibility(), add to eligibility dict initialization:
+eligibility = {
+    'guard': {'eligible_count': 0, 'assigned_count': 0, 'details': []},
+    'stable': {'eligible_count': 0, 'assigned_count': 0, 'details': []},
+    'fast': {'eligible_count': 0, 'assigned_count': 0, 'details': []},
+    'hsdir': {'eligible_count': 0, 'assigned_count': 0, 'details': []},
+    'exit': {'eligible_count': 0, 'assigned_count': 0, 'details': []},  # NEW
+}
 
+# In the per-authority loop, after HSDir processing, add:
 
-def _policy_allows_port(self, accept_rules, reject_rules, port):
-    """Check if exit policy allows traffic on a specific port.
-    
-    Simplified implementation - full implementation would need to
-    verify coverage of at least one /8 address space.
-    """
-    # Check accept rules for port
-    for rule in accept_rules:
-        if self._rule_matches_port(rule, port):
-            return True
-    
-    # If we have reject rules that cover this port everywhere, it's blocked
-    for rule in reject_rules:
-        if rule == f'{port}' or rule == f'*:{port}':
-            return False
-    
-    return False
+# Exit flag tracking
+# Per dir-spec: Exit requires allowing exits to ≥1 /8 on ports 80 AND 443
+# Unlike Guard/Stable/Fast/HSDir, Exit has no numeric thresholds in flag-thresholds.
+# We track per-authority flag assignment since the policy check happens authority-side.
+has_exit_flag = 'Exit' in auth_flags
+if has_exit_flag:
+    eligibility['exit']['eligible_count'] += 1
+    eligibility['exit']['assigned_count'] += 1
 
-
-def _rule_matches_port(self, rule, port):
-    """Check if a policy rule matches a specific port."""
-    # Handle formats like "80", "80-443", "*:80", "0.0.0.0/0:80"
-    if ':' in rule:
-        port_part = rule.split(':')[-1]
-    else:
-        port_part = rule
-    
-    if '-' in port_part:
-        start, end = port_part.split('-')
-        return int(start) <= port <= int(end)
-    
-    return port_part == str(port) or port_part == '*'
+eligibility['exit']['details'].append({
+    'authority': auth_name,
+    'eligible': has_exit_flag,
+    'assigned': has_exit_flag,
+})
 ```
 
-### 3.5 Table Row Preview
+### 3.6 Implementation: Layer 2 — consensus_evaluation._format_flag_summary()
+
+**File:** `allium/lib/consensus/consensus_evaluation.py`
+
+**What to change:** Add `'exit'` to the flag iteration list so `flag_summary.exit` is populated.
+
+```python
+# Change:
+for flag_name in ['fast', 'stable', 'hsdir', 'guard']:
+# To:
+for flag_name in ['fast', 'stable', 'hsdir', 'guard', 'exit']:
+```
+
+**Impact:** This fixes the "Eligible Flags" row which currently calls `add_eligibility_flag('exit')` but gets `None` because `flag_summary.exit` doesn't exist. After this change, Exit will show the correct authority count in the Eligible Flags display.
+
+### 3.7 Implementation: Layer 3 — consensus_evaluation._format_relay_values()
+
+**File:** `allium/lib/consensus/consensus_evaluation.py`
+
+**What to change:** Add `exit_policy_summary` parameter and compute exit-specific relay values.
+
+**Step 1:** Update function signature for `format_relay_consensus_evaluation()`:
+
+```python
+def format_relay_consensus_evaluation(
+    evaluation, flag_thresholds=None, current_flags=None,
+    observed_bandwidth=0, use_bits=False, relay_uptime=None,
+    version=None, recommended_version=None,
+    exit_policy_summary=None,  # NEW: Onionoo exit policy data
+):
+```
+
+**Step 2:** Pass `exit_policy_summary` into `_format_relay_values()`:
+
+```python
+'relay_values': _format_relay_values(
+    evaluation, flag_thresholds, observed_bandwidth, use_bits, relay_uptime,
+    exit_policy_summary=exit_policy_summary,  # NEW
+),
+```
+
+**Step 3:** Add exit policy analysis to `_format_relay_values()`:
+
+```python
+def _format_relay_values(consensus_data, flag_thresholds=None,
+                         observed_bandwidth=0, use_bits=False,
+                         relay_uptime=None, exit_policy_summary=None):
+    # ... existing code ...
+    
+    # Exit policy analysis (from Onionoo exit_policy_summary)
+    exit_analysis = _analyze_exit_policy(exit_policy_summary)
+    
+    return {
+        # ... existing keys ...
+        
+        # Exit policy values (NEW)
+        'exit_allows_80': exit_analysis['allows_80'],
+        'exit_allows_443': exit_analysis['allows_443'],
+        'exit_eligible': exit_analysis['eligible'],
+        'exit_policy_display': exit_analysis['display'],
+        'exit_assigned_count': flag_eligibility.get('exit', {}).get('assigned_count', 0),
+    }
+```
+
+**Step 4:** Add exit policy analysis helper function:
+
+```python
+def _analyze_exit_policy(exit_policy_summary: dict) -> dict:
+    """Analyze exit policy for Exit flag eligibility.
+    
+    Per Tor dir-spec Section 3.4.2: Exit flag requires allowing exits to at least
+    one /8 address space on BOTH port 80 AND port 443.
+    
+    Args:
+        exit_policy_summary: From Onionoo relay['exit_policy_summary']
+            Format: {'accept': ['80', '443', '6667'], 'reject': [...]}
+            or: {'reject': ['25', '119', ...]}  (implicit accept-all minus rejects)
+    
+    Returns:
+        dict with: allows_80, allows_443, eligible, display
+    """
+    if not exit_policy_summary:
+        return {'allows_80': False, 'allows_443': False,
+                'eligible': False, 'display': 'No exit policy'}
+    
+    accept_rules = exit_policy_summary.get('accept', [])
+    reject_rules = exit_policy_summary.get('reject', [])
+    
+    # Onionoo exit_policy_summary format:
+    # - If 'accept' key exists: only listed ports are allowed
+    # - If only 'reject' key exists: all ports allowed EXCEPT listed ones
+    if accept_rules:
+        allows_80 = _port_in_rules(accept_rules, 80)
+        allows_443 = _port_in_rules(accept_rules, 443)
+    elif reject_rules:
+        allows_80 = not _port_in_rules(reject_rules, 80)
+        allows_443 = not _port_in_rules(reject_rules, 443)
+    else:
+        allows_80 = False
+        allows_443 = False
+    
+    eligible = allows_80 and allows_443
+    
+    p80 = 'Yes' if allows_80 else 'No'
+    p443 = 'Yes' if allows_443 else 'No'
+    display = f"Port 80: {p80} | Port 443: {p443}"
+    
+    return {
+        'allows_80': allows_80,
+        'allows_443': allows_443,
+        'eligible': eligible,
+        'display': display,
+    }
+
+
+def _port_in_rules(rules: list, port: int) -> bool:
+    """Check if a port is covered by a list of exit policy rules.
+    
+    Onionoo exit_policy_summary rules are strings like:
+    '80', '443', '80-443', '1-65535'
+    """
+    for rule in rules:
+        if '-' in str(rule):
+            try:
+                start, end = str(rule).split('-')
+                if int(start) <= port <= int(end):
+                    return True
+            except (ValueError, IndexError):
+                continue
+        else:
+            try:
+                if int(rule) == port:
+                    return True
+            except ValueError:
+                continue
+    return False
+```
+
+### 3.8 Implementation: Layer 4 — consensus_evaluation._format_flag_requirements_table()
+
+**File:** `allium/lib/consensus/consensus_evaluation.py`
+
+**What to change:** Add Exit row after the Guard rows, before `return rows`.
+
+```python
+# ========== Exit flag (1 row) ==========
+# Per Tor dir-spec: Exit requires allowing exits to ≥1 /8 on ports 80 AND 443
+# Unlike Guard (6 rows with prereqs + metrics), Exit has 1 row (policy-based)
+exit_color = get_flag_color('exit')
+exit_tooltip = FLAG_TOOLTIPS['exit']
+
+exit_allows_80 = rv.get('exit_allows_80', False)
+exit_allows_443 = rv.get('exit_allows_443', False)
+exit_eligible = rv.get('exit_eligible', False)
+
+if exit_eligible:
+    exit_status = 'meets'
+    exit_extra = ''
+elif exit_allows_80 or exit_allows_443:
+    exit_status = 'partial'
+    port = '80' if exit_allows_80 else '443'
+    exit_extra = f' (only port {port})'
+else:
+    exit_status = 'below'
+    exit_extra = ''
+
+rows.append(_make_row(
+    'Exit', exit_tooltip, exit_color,
+    'Exit Policy', METRIC_TOOLTIPS['policy_exit'],
+    _format_relay_value_html(rv.get('exit_policy_display', 'N/A')),
+    'relay',
+    'Allows ≥1 /8 on ports 80 AND 443',
+    exit_status,
+    _get_status_text(exit_status, exit_extra),
+    rowspan=1,
+))
+```
+
+**Add to METRIC_TOOLTIPS dict:**
+```python
+'policy_exit': "Exit policy must allow traffic to at least one /8 address space "
+               "on both port 80 AND port 443. Source: Onionoo exit_policy_summary.",
+```
+
+**Resulting table row:**
 
 | Flag | Metric | Status | Relay Value | Threshold Required |
 |------|--------|--------|-------------|-------------------|
-| **Exit** | Exit Policy | Meets | Port 80: Yes \| Port 443: Yes (R) | Allows ≥1 /8 on ports 80 AND 443 |
+| **Exit** | Exit Policy | Meets | **Port 80: Yes \| Port 443: Yes** (R) | Allows ≥1 /8 on ports 80 AND 443 |
 
-### 3.6 Files to Modify
+### 3.9 Implementation: Layer 5 — Summary Table (relay-info.html)
 
-| File | Changes |
-|------|---------|
-| `allium/lib/consensus/consensus_evaluation.py` | Add `_add_exit_flag_rows()` method |
-| `allium/templates/relay-info.html` | No changes (uses existing table structure) |
+**File:** `allium/templates/relay-info.html`
+
+**What to change:** Add Exit Policy row to the Summary table. Place it after the "Fast Speed" row and before the "HSDir WFU" row (matching the flag order: Fast → Stable → HSDir → Guard → Exit).
+
+**Placement rationale:** The Summary table currently follows this order:
+1. In Consensus
+2. Running
+3. Valid
+4. Consensus Weight
+5. Guard WFU / Guard TK / Guard BW
+6. Stable Uptime / Stable MTBF
+7. Fast Speed
+8. HSDir WFU / HSDir TK
+9. IPv6 Reachable (conditional)
+
+Exit should be inserted at position 8 (before HSDir), or at the end before IPv6:
+
+```html
+<tr>
+    <td title="Source: Onionoo | Field: exit_policy_summary | Exit flag requires allowing exits to ≥1 /8 address space on both ports 80 and 443.">
+        Exit Policy <span style="color: #6c757d; font-size: 10px;">(Relay Reported)</span>
+    </td>
+    <td title="Source: Onionoo | Field: exit_policy_summary | Relay's exit policy summary">
+        {{ rv.exit_policy_display }}
+    </td>
+    <td title="Tor dir-spec Section 3.4.2: Exit requires exits to ≥1 /8 on ports 80 AND 443">
+        Allows ≥1 /8 on ports 80 AND 443
+    </td>
+    <td>
+        {% if rv.exit_eligible %}
+            <span style="color: #28a745; font-weight: bold;">EXIT ELIGIBLE</span>
+        {% elif rv.exit_allows_80 or rv.exit_allows_443 %}
+            <span style="color: #ffc107; font-weight: bold;">
+                PARTIAL - only port {% if rv.exit_allows_80 %}80{% else %}443{% endif %}
+            </span>
+        {% else %}
+            <span style="color: #dc3545; font-weight: bold;">NON-EXIT (no port 80+443)</span>
+        {% endif %}
+    </td>
+</tr>
+```
+
+### 3.10 Implementation: Layer 6 — Per-Authority Details Table (relay-info.html)
+
+**File:** `allium/templates/relay-info.html`
+
+**What to change:** Add a dedicated "Exit" column to the Per-Authority Details table. Place it after the "Valid" column (group all flag-assignment columns together: Running, Valid, **Exit**).
+
+**Column header:**
+```html
+<th title="Source: CollecTor | File: vote | Field: 's' line contains 'Exit' | Authority assigned Exit flag based on relay's exit policy allowing ≥1 /8 on ports 80+443">Exit</th>
+```
+
+**Column body (per-authority row):**
+```html
+<td>
+    {% if vote.voted and vote.flags %}
+        {% if 'Exit' in vote.flags %}
+            <span style="color: #28a745;" title="Authority assigned Exit flag - relay's exit policy meets requirements">Yes</span>
+        {% else %}
+            <span style="color: #6c757d;" title="Authority did not assign Exit flag - relay's exit policy does not meet Exit requirements (need ≥1 /8 on ports 80+443)">No</span>
+        {% endif %}
+    {% else %}
+        <span style="color: #6c757d;">—</span>
+    {% endif %}
+</td>
+```
+
+### 3.11 Implementation: Caller Changes (relays.py)
+
+**File:** `allium/lib/relays.py`
+
+**What to change:** Pass `exit_policy_summary` to `format_relay_consensus_evaluation()`.
+
+```python
+# In the relay processing loop where format_relay_consensus_evaluation is called:
+exit_policy_summary = relay.get('exit_policy_summary', {})
+formatted_consensus_evaluation = format_relay_consensus_evaluation(
+    raw_consensus_evaluation, flag_thresholds, current_flags, observed_bandwidth,
+    use_bits=self.use_bits,
+    relay_uptime=relay_uptime,
+    version=version,
+    recommended_version=recommended_version,
+    exit_policy_summary=exit_policy_summary,  # NEW: pass exit policy for Exit flag analysis
+)
+```
+
+### 3.12 Complete Data Flow (Exit vs Guard Comparison)
+
+```
+Guard Data Flow:
+  CollecTor vote files
+    → collector_fetcher._analyze_flag_eligibility() → eligibility['guard'] (wfu/tk/bw details)
+    → consensus_evaluation._format_relay_values() → guard_bw_*, guard_prereq_*, wfu_*, tk_*
+    → consensus_evaluation._format_flag_requirements_table() → 6 table rows
+    → relay-info.html: Eligible Flags row + Eligibility table + Summary table + Per-Auth table
+
+Exit Data Flow (NEW):
+  Onionoo API (exit_policy_summary) + CollecTor vote files
+    → relays.py passes exit_policy_summary to format_relay_consensus_evaluation()
+    → collector_fetcher._analyze_flag_eligibility() → eligibility['exit'] (assigned flag tracking)
+    → consensus_evaluation._format_relay_values() → exit_allows_80/443, exit_eligible, exit_policy_display
+    → consensus_evaluation._format_flag_requirements_table() → 1 table row
+    → relay-info.html: Eligible Flags row + Eligibility table + Summary table + Per-Auth table
+```
+
+### 3.13 Complete Table Structure After Implementation
+
+After implementing Exit, the Eligibility Flag Vote Details table will have:
+
+```
+╔═══════════════╤════════════════════╤════════╤══════════════════════════╤═════════════════════════════╗
+║ Flag          │ Metric             │ Status │ Relay Value              │ Threshold Required          ║
+╠═══════════════╪════════════════════╪════════╪══════════════════════════╪═════════════════════════════╣
+║ Fast          │ Speed              │ Meets  │ 15.2 MB/s (R)            │ ≥100 KB/s OR top 7/8        ║
+╟───────────────┼────────────────────┼────────┼──────────────────────────┼─────────────────────────────╢
+║ Stable        │ MTBF               │ Meets  │ 28.5 days (DA)           │ ≥19-30d (varies)            ║
+║               │ Uptime             │ Meets  │ 45.3 days (R)            │ ≥19-30d (varies)            ║
+╟───────────────┼────────────────────┼────────┼──────────────────────────┼─────────────────────────────╢
+║ HSDir         │ Prereq: Stable     │ Meets  │ 9/9 authorities          │ ≥5/9 authorities            ║
+║               │ Prereq: Fast       │ Meets  │ 9/9 authorities          │ ≥5/9 authorities            ║
+║               │ WFU                │ Meets  │ 99.2% (DA)               │ ≥98%                        ║
+║               │ Time Known         │ Meets  │ 45.3 days (DA)           │ ≥25h (most)                 ║
+╟───────────────┼────────────────────┼────────┼──────────────────────────┼─────────────────────────────╢
+║ Guard         │ Prereq: Fast       │ Meets  │ 9/9 authorities          │ ≥5/9 authorities            ║
+║               │ Prereq: Stable     │ Meets  │ 9/9 authorities          │ ≥5/9 authorities            ║
+║               │ Prereq: V2Dir      │ Meets  │ 9/9 authorities          │ ≥5/9 authorities            ║
+║               │ WFU                │ Meets  │ 99.2% (DA)               │ ≥98% (all authorities)      ║
+║               │ Time Known         │ Meets  │ 45.3 days (DA)           │ ≥8 days (all authorities)   ║
+║               │ Bandwidth          │ Meets  │ 15.2 MB/s (R)            │ ≥2 MB/s OR top 25%          ║
+╟───────────────┼────────────────────┼────────┼──────────────────────────┼─────────────────────────────╢
+║ Exit          │ Exit Policy        │ Meets  │ Port 80: Yes | 443: Yes  │ Allows ≥1 /8 on 80+443     ║  ← NEW
+╚═══════════════╧════════════════════╧════════╧══════════════════════════╧═════════════════════════════╝
+```
+
+**Row count:** 13 → 14 (adding 1 Exit row)
+
+### 3.14 Files to Modify (Complete List)
+
+| File | Layer | Changes |
+|------|-------|---------|
+| `allium/lib/consensus/collector_fetcher.py` | 1 (Backend) | Add `eligibility['exit']` with assigned_count tracking in `_analyze_flag_eligibility()` |
+| `allium/lib/consensus/consensus_evaluation.py` | 2 (Backend) | Add `'exit'` to flag iteration in `_format_flag_summary()` |
+| `allium/lib/consensus/consensus_evaluation.py` | 3 (Backend) | Add `exit_policy_summary` param + `_analyze_exit_policy()` + exit relay_values in `_format_relay_values()` |
+| `allium/lib/consensus/consensus_evaluation.py` | 4 (Backend) | Add Exit row in `_format_flag_requirements_table()` + `METRIC_TOOLTIPS['policy_exit']` |
+| `allium/lib/relays.py` | Caller | Pass `exit_policy_summary` to `format_relay_consensus_evaluation()` |
+| `allium/templates/relay-info.html` | 5 (Template) | Add Exit Policy row to Summary table |
+| `allium/templates/relay-info.html` | 6 (Template) | Add Exit column to Per-Authority Details table (header + body) |
+
+### 3.15 Testing Checklist
+
+#### Exit Relay (has Exit flag)
+- [ ] Eligible Flags row shows correct Exit count (X/9) with green color
+- [ ] Eligibility table shows Exit row with "Port 80: Yes | Port 443: Yes" and green "Meets"
+- [ ] Summary table shows Exit Policy row with green "EXIT ELIGIBLE"
+- [ ] Per-Auth table shows Exit column with green "Yes" for authorities that assigned Exit
+
+#### Non-Exit Relay (no Exit flag)
+- [ ] Eligible Flags row shows Exit count (0/9) with red color
+- [ ] Eligibility table shows Exit row with "Port 80: No | Port 443: No" and red "Below"
+- [ ] Summary table shows Exit Policy row with red "NON-EXIT"
+- [ ] Per-Auth table shows Exit column with grey "No" for all authorities
+
+#### Partial Exit (allows 80 but not 443, or vice versa)
+- [ ] Eligibility table shows yellow "Partial" status with port details
+- [ ] Summary table shows yellow "PARTIAL" status
+
+#### Edge Cases
+- [ ] Relay with `exit_policy_summary: {}` (empty) — shows "No exit policy"
+- [ ] Relay with `exit_policy_summary: {'reject': ['25', '119']}` — correctly detects 80+443 as allowed
+- [ ] Relay with `exit_policy_summary: {'accept': ['80-443']}` — correctly detects range coverage
+- [ ] Relay with `exit_policy_summary: {'accept': ['1-65535']}` — correctly detects full coverage
 
 ---
 
@@ -638,63 +983,77 @@ After implementing all 5 proposals, the Eligibility Flag Vote Details table will
 ╔═══════════════╤════════════════════╤════════╤══════════════════════════╤═════════════════════════════╗
 ║ Flag          │ Metric             │ Status │ Relay Value              │ Threshold Required          ║
 ╠═══════════════╪════════════════════╪════════╪══════════════════════════╪═════════════════════════════╣
-║ Guard         │ WFU                │ Meets  │ 99.2% (DA)               │ ≥98% (all authorities)      ║
-║               │ Time Known         │ Meets  │ 45.3 days (DA)           │ ≥8 days (all auth)          ║
-║               │ Bandwidth          │ Meets  │ 15.2 MB/s (R)            │ ≥2 MB/s OR top 25%          ║
+║ Fast          │ Speed              │ Meets  │ 15.2 MB/s (R)            │ ≥100 KB/s OR top 7/8        ║
 ╟───────────────┼────────────────────┼────────┼──────────────────────────┼─────────────────────────────╢
 ║ Stable        │ MTBF               │ Meets  │ 28.5 days (DA)           │ ≥19-30d (varies)            ║
 ║               │ Uptime             │ Meets  │ 45.3 days (R)            │ ≥19-30d (varies)            ║
 ╟───────────────┼────────────────────┼────────┼──────────────────────────┼─────────────────────────────╢
-║ Fast          │ Speed              │ Meets  │ 15.2 MB/s (R)            │ ≥100 KB/s OR top 7/8        ║
-╟───────────────┼────────────────────┼────────┼──────────────────────────┼─────────────────────────────╢
-║ HSDir         │ WFU                │ Meets  │ 99.2% (DA)               │ ≥98%                        ║
+║ HSDir         │ Prereq: Stable     │ Meets  │ 9/9 authorities          │ ≥5/9 authorities            ║
+║               │ Prereq: Fast       │ Meets  │ 9/9 authorities          │ ≥5/9 authorities            ║
+║               │ WFU                │ Meets  │ 99.2% (DA)               │ ≥98%                        ║
 ║               │ Time Known         │ Meets  │ 45.3 days (DA)           │ ≥25h-10d (varies)           ║
 ╟───────────────┼────────────────────┼────────┼──────────────────────────┼─────────────────────────────╢
-║ Exit          │ Exit Policy        │ Meets  │ 80: Yes | 443: Yes (R)   │ Allows ≥1 /8 on 80+443      ║  ← NEW
+║ Guard         │ Prereq: Fast       │ Meets  │ 9/9 authorities          │ ≥5/9 authorities            ║
+║               │ Prereq: Stable     │ Meets  │ 9/9 authorities          │ ≥5/9 authorities            ║
+║               │ Prereq: V2Dir      │ Meets  │ 9/9 authorities          │ ≥5/9 authorities            ║
+║               │ WFU                │ Meets  │ 99.2% (DA)               │ ≥98% (all authorities)      ║
+║               │ Time Known         │ Meets  │ 45.3 days (DA)           │ ≥8 days (all authorities)   ║
+║               │ Bandwidth          │ Meets  │ 15.2 MB/s (R)            │ ≥2 MB/s OR top 25%          ║
 ╟───────────────┼────────────────────┼────────┼──────────────────────────┼─────────────────────────────╢
-║ Running       │ IPv4 Reachability  │ Meets  │ 9/9 reached (DA)         │ ≥5/9 majority               ║  ← NEW
-║               │ IPv6 Reachability  │ Meets  │ 7/7 reached (DA)         │ Optional                    ║  ← NEW
+║ Exit          │ Exit Policy        │ Meets  │ 80: Yes | 443: Yes (R)   │ Allows ≥1 /8 on 80+443      ║  ← P1 (Priority 1)
 ╟───────────────┼────────────────────┼────────┼──────────────────────────┼─────────────────────────────╢
-║ Valid         │ Tor Version        │ Meets  │ 0.4.8.12 (R)             │ Not in broken list          ║  ← NEW
-║               │ Blacklist Status   │ Meets  │ Not Blacklisted (DA)     │ Not blacklisted             ║  ← NEW
+║ Running*      │ IPv4 Reachability  │ Meets  │ 9/9 reached (DA)         │ ≥5/9 majority               ║  ← P2 (Priority 4)
+║               │ IPv6 Reachability  │ Meets  │ 7/7 reached (DA)         │ Optional                    ║
 ╟───────────────┼────────────────────┼────────┼──────────────────────────┼─────────────────────────────╢
-║ V2Dir         │ Dir Capability     │ Meets  │ DirPort: 9030 (R)        │ DirPort OR tunnelled        ║  ← NEW
+║ Valid*        │ Tor Version        │ Meets  │ 0.4.8.12 (R)             │ Not in broken list          ║  ← P3 (Priority 5)
+║               │ Blacklist Status   │ Meets  │ Not Blacklisted (DA)     │ Not blacklisted             ║
 ╟───────────────┼────────────────────┼────────┼──────────────────────────┼─────────────────────────────╢
-║ MiddleOnly*   │ Security Status    │ Meets  │ Not Restricted (DA)      │ Not flagged                 ║  ← NEW*
+║ V2Dir         │ Dir Capability     │ Meets  │ DirPort: 9030 (R)        │ DirPort OR tunnelled        ║  ← P4 (Priority 3)
+╟───────────────┼────────────────────┼────────┼──────────────────────────┼─────────────────────────────╢
+║ MiddleOnly**  │ Security Status    │ Meets  │ Not Restricted (DA)      │ Not flagged                 ║  ← P5 (Priority 2)
 ╚═══════════════╧════════════════════╧════════╧══════════════════════════╧═════════════════════════════╝
 ```
 
-\* MiddleOnly row only shown if relay is flagged or if "show all flags" option is enabled.
+\* Running and Valid already shown extensively in Health Status, Summary, and Per-Auth tables — adding to eligibility table is optional/low priority.
+\*\* MiddleOnly row only shown if relay is flagged or if "show all flags" option is enabled.
 
 ### 8.2 Row Count Summary
 
-| Category | Current | After Proposals |
-|----------|---------|-----------------|
-| Existing flags (Guard, Stable, Fast, HSDir) | 8 rows | 8 rows |
-| New flags (Exit, Running, Valid, V2Dir, MiddleOnly) | 0 rows | 7-8 rows |
-| **Total** | **8 rows** | **15-16 rows** |
+| Category | Current (2026-02-15) | After All Proposals |
+|----------|---------------------|---------------------|
+| Fast | 1 row | 1 row |
+| Stable | 2 rows | 2 rows |
+| HSDir (2 prereqs + 2 metrics) | 4 rows | 4 rows |
+| Guard (3 prereqs + 3 metrics) | 6 rows | 6 rows |
+| **Subtotal (existing)** | **13 rows** | **13 rows** |
+| Exit (P1, Priority 1) | 0 rows | 1 row |
+| MiddleOnly (P5, Priority 2) | 0 rows | 0-1 rows (conditional) |
+| V2Dir (P4, Priority 3) | 0 rows | 1 row |
+| Running (P2, Priority 4) | 0 rows | 1-2 rows |
+| Valid (P3, Priority 5) | 0 rows | 2 rows |
+| **Total** | **13 rows** | **18-20 rows** |
 
 ### 8.3 Integration with Existing Code
 
-Add a master function to integrate all flag rows:
+The current `_format_flag_requirements_table()` function uses a flat structure (not per-flag methods). New flags should follow the same pattern — add code blocks inline in the function, using `_make_row()` and `_make_prereq_row()` helper functions.
 
 ```python
-def _format_flag_requirements_table(self, relay, rv, authority_data):
-    """Format the complete flag requirements table with all flags."""
+def _format_flag_requirements_table(rv, diag):
+    """Format the complete flag requirements table with all display values pre-computed."""
     rows = []
     
-    # Existing flag rows
-    self._add_guard_flag_rows(rows, relay, rv)
-    self._add_stable_flag_rows(rows, relay, rv)
-    self._add_fast_flag_rows(rows, relay, rv)
-    self._add_hsdir_flag_rows(rows, relay, rv)
+    # Existing: Fast (1 row), Stable (2 rows), HSDir (4 rows), Guard (6 rows)
+    # ... existing code for Fast, Stable, HSDir, Guard ...
     
-    # New flag rows (Proposals 1-5)
-    self._add_exit_flag_rows(rows, relay, rv)
-    self._add_running_flag_rows(rows, relay, rv, authority_data)
-    self._add_valid_flag_rows(rows, relay, rv)
-    self._add_v2dir_flag_rows(rows, relay, rv)
-    self._add_middleonly_flag_rows(rows, relay, rv, show_all=False)
+    # NEW: Exit (1 row) — Priority 1
+    # Per Tor dir-spec: Exit requires allowing exits to ≥1 /8 on ports 80 AND 443
+    exit_color = get_flag_color('exit')
+    # ... Exit row using _make_row() ...
+    
+    # FUTURE: MiddleOnly (0-1 rows) — Priority 2
+    # FUTURE: V2Dir (1 row) — Priority 3
+    # FUTURE: Running (1-2 rows) — Priority 4 (already shown in 3+ places)
+    # FUTURE: Valid (2 rows) — Priority 5 (already shown in 3+ places)
     
     return rows
 ```
@@ -703,40 +1062,66 @@ def _format_flag_requirements_table(self, relay, rv, authority_data):
 
 ## 9. Testing Checklist
 
-### 9.1 Per-Proposal Testing
+### 9.1 Proposal 1: Exit Flag (Priority 1 — Guard-Parity Testing)
 
-#### Proposal 1: Exit Flag
-- [ ] Exit relay shows "Port 80: Yes | Port 443: Yes"
-- [ ] Non-exit relay shows "Port 80: No | Port 443: No" (or partial)
-- [ ] Status correctly shows "Exit Eligible" or "Non-Exit"
+See Section 3.15 for the complete Exit-specific testing checklist. Summary:
 
-#### Proposal 2: Running Flag
+#### Layer-by-Layer Verification
+- [ ] **Layer 1 (collector_fetcher):** `eligibility['exit']` populated with correct assigned_count per authority
+- [ ] **Layer 2 (_format_flag_summary):** `flag_summary.exit` has correct eligible_count and status_class
+- [ ] **Layer 3 (_format_relay_values):** `exit_allows_80`, `exit_allows_443`, `exit_eligible`, `exit_policy_display` all correct
+- [ ] **Layer 4 (_format_flag_requirements_table):** Exit row appears after Guard rows with correct status/color
+- [ ] **Layer 5 (Summary table):** Exit Policy row shows correct relay value and status
+- [ ] **Layer 6 (Per-Auth table):** Exit column shows correct Yes/No per authority
+
+#### Exit Relay (has Exit flag)
+- [ ] All 6 layers show green "Meets" / "Yes" / "EXIT ELIGIBLE"
+- [ ] Eligible Flags row shows correct Exit count (should be > 0)
+
+#### Non-Exit Relay (no Exit flag)
+- [ ] All 6 layers show red "Below" / "No" / "NON-EXIT"
+- [ ] Eligible Flags row shows Exit: 0/9
+
+#### Partial Exit (80 but not 443)
+- [ ] Eligibility table shows yellow "Partial" with port detail
+- [ ] Summary table shows yellow "PARTIAL"
+
+#### Edge Cases
+- [ ] Empty exit_policy_summary → "No exit policy"
+- [ ] Reject-only policy → correctly infers allowed ports
+- [ ] Range rules like "80-443" → correctly matches both ports
+- [ ] Full range "1-65535" → correctly matches all ports
+
+### 9.2 Per-Proposal Testing (Proposals 2-5)
+
+#### Proposal 2: Running Flag (Priority 4)
 - [ ] IPv4 reachability shows correct vote count
 - [ ] IPv6 row appears only for relays with IPv6 addresses
 - [ ] IPv6 shows correct tested/reached counts
 
-#### Proposal 3: Valid Flag
+#### Proposal 3: Valid Flag (Priority 5)
 - [ ] Version displays with status (Recommended/Obsolete)
 - [ ] Blacklist status shows "Not Blacklisted" for valid relays
 - [ ] Relays without Valid flag show appropriate status
 
-#### Proposal 4: V2Dir Flag
+#### Proposal 4: V2Dir Flag (Priority 3)
 - [ ] DirPort shown when available
 - [ ] "Tunnelled: Yes" shown when no DirPort but has V2Dir
 - [ ] Status correctly reflects V2Dir eligibility
 
-#### Proposal 5: MiddleOnly Flag
+#### Proposal 5: MiddleOnly Flag (Priority 2)
 - [ ] Row hidden for normal relays (by default)
 - [ ] Row appears with red status for restricted relays
 - [ ] Tooltip explains implications
 
-### 9.2 Integration Testing
+### 9.3 Integration Testing
 
-- [ ] All rows render in correct order
-- [ ] Table width/layout handles all columns
+- [ ] All rows render in correct order (Fast → Stable → HSDir → Guard → Exit)
+- [ ] Table width/layout handles the additional Exit row
+- [ ] Per-Auth table width handles the additional Exit column
 - [ ] Rowspan works correctly for multi-row flags
 - [ ] Colors and tooltips display properly
-- [ ] Mobile responsive layout works
+- [ ] Mobile responsive layout works with wider Per-Auth table
 
 ---
 
