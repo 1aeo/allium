@@ -1380,7 +1380,8 @@ def _format_flag_summary(consensus_data: dict, observed_bandwidth: int = 0) -> d
     summary = {}
     
     # Process flags in order: simple/common → complex/rare
-    for flag_name in ['fast', 'stable', 'hsdir', 'guard']:
+    # Exit added to match collector_fetcher._analyze_flag_eligibility() which now tracks it
+    for flag_name in ['fast', 'stable', 'hsdir', 'guard', 'exit']:
         flag_data = flag_eligibility.get(flag_name, {})
         
         # Use assigned_count (actual flag assignments) instead of eligible_count (calculated)
