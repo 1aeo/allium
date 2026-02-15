@@ -1,0 +1,1722 @@
+    <!DOCTYPE html>
+    <html lang="en">
+        <head>
+            <title>
+Tor Relays :: Contact 6b50ed1bba34242c8076aa9105d504cc            </title>
+            <meta name="description"
+                  content="Javascript-free Tor metrics generated from a 30 minute API request.">
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <link rel="stylesheet" href="../../static/css/bootstrap.min.css">
+            <!--source: metrics.torproject.org-->
+            <style>
+                /* 1AEO Brand Design Tokens */
+                :root {
+                    --aeo-green: #00ff7f;
+                    --aeo-green-dim: #00cc66;
+                    --aeo-green-hover: #009955;  /* Darker green for hover on light backgrounds */
+                    --aeo-green-dark: #004d26;
+                    --aeo-dark-bg: #121212;
+                    --aeo-dark-surface: #1e1e1e;
+                    --aeo-dark-border: rgba(0, 255, 127, 0.2);
+                    --aeo-text: #ffffff;
+                    --aeo-text-muted: #cccccc;
+                    --aeo-text-dim: #888888;
+                }
+
+                /* 1AEO Cross-Site Navigation Bar */
+                .aeo-cross-nav {
+                    background-color: var(--aeo-dark-surface);
+                    padding: 10px 0;
+                    border-bottom: 1px solid var(--aeo-dark-border);
+                    margin-bottom: 0;
+                }
+                
+                .aeo-cross-nav .aeo-nav-container {
+                    max-width: 95%;
+                    margin: 0 auto;
+                    padding: 0 15px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    flex-wrap: wrap;
+                    gap: 10px;
+                }
+                
+                .aeo-cross-nav .aeo-nav-brand {
+                    color: var(--aeo-green);
+                    text-decoration: none;
+                    font-weight: bold;
+                    font-size: 16px;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+                
+                .aeo-cross-nav .aeo-nav-brand:hover {
+                    color: var(--aeo-green);
+                    text-decoration: none;
+                }
+                
+                .aeo-cross-nav .aeo-nav-links {
+                    display: flex;
+                    gap: 20px;
+                    flex-wrap: wrap;
+                    font-size: 14px;
+                }
+                
+                .aeo-cross-nav .aeo-nav-links a {
+                    color: var(--aeo-text-muted);
+                    text-decoration: none;
+                    transition: color 0.2s ease;
+                }
+                
+                .aeo-cross-nav .aeo-nav-links a:hover {
+                    color: var(--aeo-green);
+                    text-decoration: none;
+                }
+                
+                .aeo-cross-nav .aeo-nav-links a.active {
+                    color: var(--aeo-green);
+                    font-weight: 500;
+                }
+                
+                @media (max-width: 480px) {
+                    .aeo-cross-nav .aeo-nav-container {
+                        justify-content: center;
+                        text-align: center;
+                    }
+                    .aeo-cross-nav .aeo-nav-links {
+                        justify-content: center;
+                        gap: 12px;
+                    }
+                }
+
+                /* Breadcrumb links - no underline */
+                .breadcrumb a {
+                    text-decoration: none;
+                }
+                
+                /* 1AEO Footer */
+                .aeo-footer {
+                    background-color: var(--aeo-dark-surface);
+                    color: var(--aeo-text-muted);
+                    padding: 25px 20px;
+                    margin-top: 40px;
+                    text-align: center;
+                    border-top: 1px solid var(--aeo-dark-border);
+                }
+                
+                .aeo-footer a {
+                    color: var(--aeo-green);
+                    text-decoration: none;
+                }
+                
+                .aeo-footer a:hover {
+                    color: var(--aeo-green);
+                    text-decoration: underline;
+                }
+                
+                .aeo-footer-links {
+                    display: flex;
+                    justify-content: center;
+                    gap: 25px;
+                    margin-bottom: 15px;
+                    flex-wrap: wrap;
+                }
+                
+                .aeo-footer-brand {
+                    font-size: 14px;
+                    margin: 0;
+                }
+                
+                .aeo-footer-legal {
+                    font-size: 12px;
+                    color: var(--aeo-text-dim);
+                    margin-top: 10px;
+                }
+                .circle {
+                    display: inline-block;
+                    vertical-align: middle;
+                    background: #999999;
+                    width: 7px;
+                    height: 7px;
+                    -moz-border-radius: 50%;
+                    -webkit-border-radius: 50%;
+                    border-radius: 50%;
+                }
+
+                .circle-online {
+                    background: #25d918;
+                }
+
+                .circle-offline {
+                    background: #ff1515;
+                }
+
+                .verified-hostname {
+                    color: #FE9F30;
+                }
+
+                .verified-hostname {
+                    color: #68b030;
+                }
+
+                .unverified-hostname {
+                    color: #FE9F30;
+                }
+
+                /* DRY Status Classes - reusable across templates */
+                .status-success { color: #28a745; font-weight: bold; }
+                .status-danger { color: #dc3545; font-weight: bold; }
+                .status-warning { color: #ffc107; font-weight: bold; }
+                .status-muted { color: #6c757d; font-weight: bold; }
+
+                /* Section box - gray background container for major sections */
+                .section-box {
+                    margin: 20px 0;
+                    padding: 15px;
+                    background: #f8f9fa;
+                    border-radius: 8px;
+                }
+
+                /* Subsection cards - visual containers for Level 2 content */
+                .subsection-card {
+                    background: #ffffff;
+                    border-radius: 6px;
+                    padding: 12px;
+                    margin-bottom: 12px;
+                }
+                .subsection-card dl {
+                    margin-bottom: 0;
+                }
+
+                /* Subsection headers - Level 2 in information hierarchy */
+                .subsection-header {
+                    margin-top: 0;
+                    margin-bottom: 10px;
+                    padding-bottom: 6px;
+                    font-weight: 600;
+                    font-size: 15px;
+                    color: #495057;
+                    border-bottom: 2px solid #dee2e6;
+                }
+
+                /* Status note - small muted text for additional context */
+                .status-note {
+                    font-size: 11px;
+                    font-weight: normal;
+                    color: #6c757d;
+                }
+
+                /* Dynamic text truncation for contact information */
+                .contact-text {
+                    display: inline-block;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    max-width: 20vw;  /* Use viewport width for responsive sizing */
+                }
+                
+                /* Contact cell in contacts table - dynamic width with CSS ellipsis */
+                .contact-cell {
+                    max-width: 25vw;
+                    display: flex;
+                    align-items: center;
+                }
+                
+                .contact-cell > span {
+                    flex-shrink: 0;
+                    margin-right: 4px;
+                }
+                
+                .contact-cell a {
+                    flex: 1;
+                    min-width: 0;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+
+                /* Table styles */
+                .table {
+                    width: 100%;
+                    margin-bottom: 1rem;
+                }
+
+                /* Precise alignment for multi-value columns using monospace */
+                .bw-header, .cw-header, .rc-header, /* rc = relay count */
+                .bw-data, .cw-data, .rc-data {
+                    font-family: Consolas, "Courier New", monospace;
+                    white-space: nowrap;
+                    text-align: center;
+                    letter-spacing: 0.05em; /* Slight spacing for readability */
+                }
+
+                /* Container breakpoint */
+                @media (min-width: 1400px) {
+                    .container {
+                        width: 95%;
+                        max-width: none;
+                        padding-right: 15px;
+                        padding-left: 15px;
+                        margin-right: auto;
+                        margin-left: auto;
+                    }
+                }
+
+                /* Fix two-column layout overflow in contact/operator pages */
+                .row > .col-md-7,
+                .row > .col-md-5 {
+                    overflow-wrap: break-word;
+                    word-wrap: break-word;
+                    word-break: break-word;
+                    min-width: 0; /* Allow flex/grid children to shrink below content size */
+                }
+                
+                /* Ensure nested content doesn't overflow columns */
+                .col-md-7 ul,
+                .col-md-7 li,
+                .col-md-5 ul,
+                .col-md-5 li {
+                    overflow-wrap: break-word;
+                    word-wrap: break-word;
+                }
+
+                /* AROI Leaderboards - Consolidated CSS Components */
+                
+                /* Section Spacing */
+                .aroi-section {
+                    margin-bottom: 40px;
+                    scroll-margin-top: 20px; /* Offset anchor links to show space above title */
+                }
+                
+                .aroi-subsection {
+                    margin-bottom: 30px;
+                }
+                
+                .aroi-champion-badge {
+                    margin-bottom: 20px;
+                }
+                
+                /* Top 3 Summary Tables */
+                .aroi-top3-table thead th:nth-child(1) {
+                    width: 30%;
+                }
+                
+                .aroi-top3-table thead th:nth-child(2) {
+                    width: 25%;
+                }
+                
+                .aroi-top3-table thead th:nth-child(3) {
+                    width: 45%;
+                }
+                
+                /* Complete Rankings Tables - Common patterns */
+                .aroi-rankings-table thead th:nth-child(1) {
+                    width: 5%;  /* Rank */
+                }
+                
+                .aroi-rankings-table thead th:nth-child(2) {
+                    width: 25%; /* Operator */
+                }
+                
+                /* Standard bandwidth/consensus table layout */
+                .aroi-standard-table thead th:nth-child(3) {
+                    width: 12%;  /* Relays - increased from 8% */
+                }
+                
+                .aroi-standard-table thead th:nth-child(4) {
+                    width: 11%; /* Bandwidth - decreased from 15% */
+                }
+                
+                .aroi-standard-table thead th:nth-child(5) {
+                    width: 12%; /* Consensus Weight */
+                }
+                
+                .aroi-standard-table thead th:nth-child(6) {
+                    width: 15%; /* Guard/Exit Count */
+                }
+                
+                .aroi-standard-table thead th:nth-child(7) {
+                    width: 10%; /* Countries */
+                }
+                
+                .aroi-standard-table thead th:nth-child(8) {
+                    width: 10%; /* Platforms/Efficiency/Other */
+                }
+                
+                /* Specialized table for Exit/Guard operators */
+                .aroi-specialized-table thead th:nth-child(3) {
+                    width: 10%; /* Specific Relays (Exit/Guard) */
+                }
+                
+                .aroi-specialized-table thead th:nth-child(4) {
+                    width: 8%;  /* Total Relays */
+                }
+                
+                .aroi-specialized-table thead th:nth-child(5) {
+                    width: 15%; /* Bandwidth */
+                }
+                
+                .aroi-specialized-table thead th:nth-child(6) {
+                    width: 12%; /* Consensus Weight */
+                }
+                
+                .aroi-specialized-table thead th:nth-child(7) {
+                    width: 10%; /* Countries */
+                }
+                
+                .aroi-specialized-table thead th:nth-child(8) {
+                    width: 15%; /* Cross Reference (Guard/Exit Count) */
+                }
+                
+                /* Diversity/Category table layout - Generic defaults */
+                .aroi-category-table thead th:nth-child(3) {
+                    width: 8%;  /* Relays */
+                }
+                
+                .aroi-category-table thead th:nth-child(4) {
+                    width: 15%; /* Key Metric */
+                }
+                
+                .aroi-category-table thead th:nth-child(5) {
+                    width: 12%; /* Bandwidth */
+                }
+                
+                .aroi-category-table thead th:nth-child(6) {
+                    width: 10%; /* Countries */
+                }
+                
+                .aroi-category-table thead th:nth-child(7) {
+                    width: 10%; /* Platforms */
+                }
+                
+                .aroi-category-table thead th:nth-child(8) {
+                    width: 15%; /* Specialization */
+                }
+                
+                /* Geographic Champions (Non-EU Leaders) specific layout */
+                .aroi-geographic-table thead th:nth-child(3) {
+                    width: 15%; /* Non-EU Relays */
+                }
+                
+                .aroi-geographic-table thead th:nth-child(4) {
+                    width: 10%; /* Bandwidth */
+                }
+                
+                .aroi-geographic-table thead th:nth-child(5) {
+                    width: 8%; /* Countries */
+                }
+                
+                .aroi-geographic-table thead th:nth-child(6) {
+                    width: 25%; /* Specialization - Much wider for geographic breakdown details */
+                }
+                
+                /* Frontier Builders (Rare Countries) specific layout */
+                .aroi-frontier-table thead th:nth-child(3) {
+                    width: 10%; /* Rare Relays - Reduced from 15% */
+                }
+                
+                .aroi-frontier-table thead th:nth-child(4) {
+                    width: 12%; /* Bandwidth */
+                }
+                
+                .aroi-frontier-table thead th:nth-child(5) {
+                    width: 10%; /* Countries */
+                }
+                
+                .aroi-frontier-table thead th:nth-child(6) {
+                    width: 23%; /* Specialization - Increased from 18% (+5% from Rare Relays column) */
+                }
+                
+                /* Platform Diversity (Non-Linux Heroes) specific layout */
+                .aroi-platform-table thead th:nth-child(3) {
+                    width: 10%; /* Non Linux Relays - Reduced from 15% */
+                }
+                
+                .aroi-platform-table thead th:nth-child(4) {
+                    width: 8%; /* Bandwidth - Reduced from 12% */
+                }
+                
+                .aroi-platform-table thead th:nth-child(5) {
+                    width: 22%; /* Specialization - Increased from 15% (+7% from reductions) */
+                }
+
+                /* AROI Champion Badge Styles - Harmonized Color Tier System */
+                
+                /* Authority/Network Control (Gold/Orange spectrum) */
+                .aroi-champion-platinum {
+                    background: linear-gradient(45deg, #FFD700, #FFA500);
+                    color: #000;
+                    box-shadow: 0 2px 6px rgba(255, 215, 0, 0.25);
+                }
+                
+                .aroi-champion-network {
+                    background: linear-gradient(45deg, #FFB300, #FF8C00);
+                    color: #000;
+                    box-shadow: 0 2px 6px rgba(255, 179, 0, 0.25);
+                }
+                
+                .aroi-champion-exit-authority {
+                    background: linear-gradient(45deg, #FFAA00, #FF9500);
+                    color: #000;
+                    box-shadow: 0 2px 6px rgba(255, 170, 0, 0.25);
+                }
+                
+                .aroi-champion-guard-authority {
+                    background: linear-gradient(45deg, #FF6B35, #F7931E);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(255, 107, 53, 0.25);
+                }
+                
+                .aroi-champion-guard {
+                    background: linear-gradient(45deg, #E67E22, #D35400);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(230, 126, 34, 0.25);
+                }
+                
+                .aroi-champion-exit {
+                    background: linear-gradient(45deg, #FF8C42, #FF7315);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(255, 140, 66, 0.25);
+                }
+                
+                /* Innovation & Technology (Purple/Blue spectrum) */
+                .aroi-champion-platform {
+                    background: linear-gradient(45deg, #a29bfe, #6c5ce7);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(162, 155, 254, 0.25);
+                }
+                
+                .aroi-champion-ipv4 {
+                    background: linear-gradient(45deg, #0984e3, #74b9ff);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(9, 132, 227, 0.25);
+                }
+                
+                .aroi-champion-ipv6 {
+                    background: linear-gradient(45deg, #6c5ce7, #a29bfe);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(108, 92, 231, 0.25);
+                }
+                
+
+                
+                /* Diversity & Growth (Green spectrum) */
+                .aroi-champion-diversity {
+                    background: linear-gradient(45deg, #00b894, #55a3ff);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(0, 184, 148, 0.25);
+                }
+                
+                .aroi-champion-global {
+                    background: linear-gradient(45deg, #00cec9, #55efc4);
+                    color: #000;
+                    box-shadow: 0 2px 6px rgba(0, 206, 201, 0.25);
+                }
+                
+                .aroi-champion-frontier {
+                    background: linear-gradient(45deg, #27ae60, #2ecc71);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(39, 174, 96, 0.25);
+                }
+                
+                /* Reliability & Legacy (Earth tones) */
+                .aroi-champion-reliability {
+                    background: linear-gradient(45deg, #8b7355, #a0845c);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(139, 115, 85, 0.25);
+                }
+                
+                .aroi-champion-veteran {
+                    background: linear-gradient(45deg, #cd7f32, #b8860b);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(205, 127, 50, 0.25);
+                }
+                
+                /* Legacy compatibility class */
+                .aroi-champion-legacy {
+                    background: linear-gradient(45deg, #8b4513, #a0522d);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(139, 69, 19, 0.25);
+                }
+                
+                /* Bandwidth categories */
+                .aroi-champion-bandwidth {
+                    background: linear-gradient(45deg, #00b894, #55a3ff);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(0, 184, 148, 0.25);
+                }
+                
+                .aroi-champion-bandwidth-legend {
+                    background: linear-gradient(45deg, #FFB300, #FF8C00);
+                    color: #000;
+                    box-shadow: 0 2px 6px rgba(255, 179, 0, 0.25);
+                }
+                
+
+                
+                /* Enhanced hover effects for all badges */
+                .aroi-champion-badge .panel-body {
+                    transition: transform 0.2s ease, box-shadow 0.2s ease;
+                }
+                
+                .aroi-champion-badge .panel-body:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+                }
+
+                /* AROI Ranking Badge Styles */
+                .aroi-rank-gold {
+                    background-color: #FFD700;
+                }
+                
+                .aroi-rank-silver {
+                    background-color: #C0C0C0;
+                }
+                
+                .aroi-rank-bronze {
+                    background-color: #CD7F32;
+                }
+
+                /* AROI Link Styles */
+                .aroi-underline-link {
+                    text-decoration: underline;
+                    color: inherit;
+                }
+                
+                .aroi-contact-link {
+                    text-decoration: underline;
+                }
+
+                /* AROI Layout Styles */
+                .aroi-center-text {
+                    text-align: center;
+                }
+                
+                .aroi-flex-nav {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 10px;
+                }
+                
+                .aroi-nav-spacing {
+                    margin-bottom: 20px;
+                }
+                
+                .aroi-nav-spacing h4 {
+                    margin-top: 5px;
+                }
+                
+                .aroi-primary-nav {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 15px;
+                    margin-bottom: 15px;
+                    justify-content: center;
+                }
+                
+                .aroi-category-nav {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 8px;
+                    padding-top: 15px;
+                    border-top: 1px solid #ddd;
+                    justify-content: center;
+                }
+
+                /* Compact Navigation Styles */
+                .aroi-compact-nav {
+                    margin-bottom: 15px;
+                    padding: 10px 15px;
+                }
+                
+                .aroi-compact-nav-row {
+                    display: flex;
+                    flex-wrap: wrap;
+                    align-items: center;
+                    gap: 15px;
+                    font-size: 14px;
+                }
+                
+                .aroi-nav-label {
+                    font-weight: bold;
+                    color: #333;
+                    white-space: nowrap;
+                }
+                
+                .aroi-primary-nav-centered {
+                    display: flex;
+                    justify-content: center;
+                    gap: 8px;
+                    margin-bottom: 10px;
+                    flex-wrap: wrap;
+                }
+                
+                .aroi-category-links-row {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 12px;
+                    justify-content: center;
+                }
+                
+                .aroi-nav-link {
+                    color: #337ab7;
+                    text-decoration: none;
+                    padding: 2px 6px;
+                    border-radius: 3px;
+                    font-size: 13px;
+                    white-space: nowrap;
+                }
+                
+                .aroi-nav-link:hover {
+                    color: #23527c;
+                    background-color: #f5f5f5;
+                    text-decoration: none;
+                }
+
+                /* Responsive adjustments for compact nav */
+                @media (max-width: 768px) {
+                    .aroi-primary-nav-centered {
+                        flex-direction: column;
+                        align-items: center;
+                        gap: 8px;
+                    }
+                    
+                    .aroi-category-links-row {
+                        justify-content: center;
+                    }
+                    
+                    .aroi-nav-link {
+                        font-size: 12px;
+                    }
+                }
+                
+                .aroi-nav-separator {
+                    border-top: 1px solid #ddd;
+                    margin: 15px 0;
+                }
+                
+                .aroi-top-margin {
+                    margin-top: 10px;
+                }
+                
+                .aroi-compact-summary {
+                    margin-bottom: 8px;
+                    padding: 8px 12px;
+                }
+                
+                .aroi-compact-summary h5 {
+                    margin-top: 0;
+                    margin-bottom: 4px;
+                    font-size: 15px;
+                    line-height: 1.2;
+                }
+                
+                .aroi-compact-summary .row {
+                    margin-bottom: 2px;
+                }
+                
+                .aroi-compact-summary .col-md-3 {
+                    padding-top: 2px;
+                    padding-bottom: 2px;
+                }
+                
+                .aroi-compact-footer {
+                    margin-top: 4px;
+                    padding-top: 3px;
+                    border-top: 1px solid rgba(255,255,255,0.3);
+                }
+                
+                .aroi-compact-footer small {
+                    font-size: 11px;
+                    line-height: 1.3;
+                }
+                
+                .aroi-header-spacing {
+                    margin-top: 0;
+                }
+                
+                .aroi-fixed-nav {
+                    position: fixed;
+                    bottom: 20px;
+                    right: 20px;
+                    z-index: 1000;
+                }
+                
+                .aroi-footer-section {
+                    margin-top: 50px;
+                    border-top: 2px solid #ccc;
+                    padding-top: 30px;
+                }
+
+                /* AROI Pagination Styles using :target selector */
+                .pagination-section {
+                    display: none; /* Hidden by default */
+                }
+                
+                /* Show first page (1-10) by default for all categories - uses CSS attribute selector for pattern matching */
+                [id$="-1-10"].pagination-section {
+                    display: block;
+                }
+                
+                /* Show any targeted pagination section */
+                .pagination-section:target {
+                    display: block;
+                }
+                
+                /* When a section is targeted, hide other sections in same category - uses :has() for scoped hiding */
+                .aroi-section:has(.pagination-section:target) .pagination-section:not(:target) {
+                    display: none !important;
+                }
+
+                /* Improved pagination positioning and table spacing */
+                .pagination-section {
+                    scroll-margin-top: 80px; /* Modern CSS property for scroll positioning without layout gaps */
+                }
+                
+                .pagination-section:target {
+                    /* Using scroll-margin-top instead of padding/margin for clean scroll behavior */
+                }
+
+                .pagination-section h4 {
+                    margin-top: 20px;
+                    margin-bottom: 15px;
+                }
+
+                /* Compact table styling to match other tables */
+                .aroi-rankings-table.aroi-standard-table td,
+                .aroi-rankings-table.aroi-standard-table th {
+                    padding: 6px 8px; /* Reduced from default Bootstrap padding */
+                    vertical-align: middle;
+                }
+
+                .aroi-rankings-table.aroi-standard-table {
+                    margin-bottom: 10px; /* Reduce bottom margin */
+                }
+
+                /* Move pagination nav below tables */
+                .pagination-nav-bottom {
+                    margin: 0 0 30px 0; /* Remove top margin to sit right below table */
+                    text-align: center;
+                    border: 1px solid #ddd;
+                    border-radius: 5px;
+                    padding: 4px; /* Reduced padding to match table row height */
+                    background-color: #f9f9f9;
+                }
+
+                .pagination-nav-bottom a {
+                    display: inline-block;
+                    padding: 4px 8px; /* Smaller padding to match table text size */
+                    margin: 0 2px; /* Reduced margin */
+                    border: 1px solid #337ab7;
+                    border-radius: 3px;
+                    color: #337ab7;
+                    text-decoration: none;
+                    background-color: white;
+                    font-size: 14px; /* Match table text size */
+                    line-height: 1.2; /* Match table row height */
+                }
+
+                .pagination-nav-bottom a:hover {
+                    background-color: #337ab7;
+                    color: white;
+                }
+
+                .pagination-nav-bottom a.active {
+                    background-color: #337ab7;
+                    color: white;
+                }
+
+                /* AROI Panel Background Colors for Champion Badges */
+                .panel-danger .panel-body {
+                    background-color: #f2dede;
+                    border-color: #ebccd1;
+                }
+                
+                .panel-warning .panel-body {
+                    background-color: #fcf8e3;
+                    border-color: #faebcc;
+                }
+                
+                .panel-info .panel-body {
+                    background-color: #d9edf7;
+                    border-color: #bce8f1;
+                }
+                
+                .panel-success .panel-body {
+                    background-color: #dff0d8;
+                    border-color: #d6e9c6;
+                }
+                
+                .panel-primary {
+                    border-color: #bce8f1;
+                }
+                
+                .panel-primary .panel-body {
+                    background-color: #d9edf7;
+                }
+
+                /* Mobile-friendly tooltips - CSS-only solution */
+                /* Base tooltip styling for elements with title attributes */
+                [title] {
+                    position: relative;
+                    cursor: help;
+                }
+
+                /* Create tooltip content using title attribute */
+                [title]:before {
+                    content: attr(title);
+                    position: absolute;
+                    background: rgba(0, 0, 0, 0.9);
+                    color: white;
+                    padding: 8px 12px;
+                    border-radius: 6px;
+                    font-size: 13px;
+                    line-height: 1.3;
+                    white-space: nowrap;
+                    max-width: 300px;
+                    word-wrap: break-word;
+                    white-space: normal;
+                    z-index: 1000;
+                    pointer-events: none;
+                    opacity: 0;
+                    visibility: hidden;
+                    transition: opacity 0.3s, visibility 0.3s;
+                    
+                    /* Position above the element by default */
+                    bottom: 100%;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    margin-bottom: 8px;
+                }
+
+                /* Tooltip arrow */
+                [title]:after {
+                    content: '';
+                    position: absolute;
+                    border: 6px solid transparent;
+                    border-top-color: rgba(0, 0, 0, 0.9);
+                    z-index: 1001;
+                    pointer-events: none;
+                    opacity: 0;
+                    visibility: hidden;
+                    transition: opacity 0.3s, visibility 0.3s;
+                    
+                    /* Position arrow */
+                    bottom: 100%;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    margin-bottom: 2px;
+                }
+
+                /* Show tooltip on hover (desktop) and focus/active (mobile) */
+                [title]:hover:before,
+                [title]:focus:before,
+                [title]:active:before,
+                [title]:hover:after,
+                [title]:focus:after,
+                [title]:active:after {
+                    opacity: 1;
+                    visibility: visible;
+                }
+
+                /* Make elements focusable on mobile for tooltip interaction */
+                @media (max-width: 767px) {
+                    [title] {
+                        -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+                        outline: none;
+                    }
+                    
+                    /* Add subtle visual feedback for tapped tooltips on mobile */
+                    [title]:active {
+                        background-color: rgba(0, 0, 0, 0.05);
+                        border-radius: 3px;
+                    }
+                    
+                    /* Ensure tooltip fits on mobile screens */
+                    [title]:before {
+                        max-width: 280px;
+                        left: 0;
+                        right: 0;
+                        transform: none;
+                        margin-left: auto;
+                        margin-right: auto;
+                    }
+                    
+                    [title]:after {
+                        left: 50%;
+                        transform: translateX(-50%);
+                    }
+                }
+
+                /* Special positioning for table cells and small elements */
+                td[title]:before,
+                th[title]:before {
+                    bottom: 100%;       /* position tooltip above cell */
+                    top: auto;
+                    margin-bottom: 8px; /* spacing between cell and tooltip */
+                    margin-top: 0;
+                }
+
+                td[title]:after,
+                th[title]:after {
+                    bottom: 100%;
+                    top: auto;
+                    border-top-color: rgba(0, 0, 0, 0.9); /* arrow points down */
+                    border-bottom-color: transparent;
+                    margin-bottom: 2px;
+                    margin-top: 0;
+                }
+
+                /* CSS-only navbar collapse using checkbox hack */
+                .navbar-toggle {
+                    display: none;
+                    background-color: transparent;
+                    background-image: none;
+                    border: 1px solid #ddd;
+                    border-radius: 4px;
+                    padding: 9px 10px;
+                    margin-top: 8px;
+                    margin-right: 15px;
+                    margin-bottom: 8px;
+                    cursor: pointer;
+                    float: right;
+                }
+
+                .navbar-toggle:hover,
+                .navbar-toggle:focus {
+                    background-color: #ddd;
+                }
+
+                .navbar-toggle .icon-bar {
+                    display: block;
+                    width: 22px;
+                    height: 2px;
+                    background-color: #888;
+                    border-radius: 1px;
+                    margin: 4px 0;
+                }
+
+                .navbar-brand {
+                    float: left;
+                    height: 50px;
+                    padding: 15px;
+                    font-size: 18px;
+                    line-height: 20px;
+                    font-weight: bold;
+                }
+
+                /* Desktop: show navigation horizontally */
+                @media (min-width: 768px) {
+                    .navbar-collapse {
+                        display: block !important;
+                        height: auto !important;
+                        overflow: visible !important;
+                    }
+                    
+                    .nav.navbar-nav {
+                        float: left;
+                        margin: 0;
+                    }
+                    
+                    .nav.navbar-nav > li {
+                        float: left;
+                    }
+                    
+                    .nav.navbar-nav > li > a {
+                        padding-top: 15px;
+                        padding-bottom: 15px;
+                        color: #777;
+                        text-decoration: none;
+                        padding-left: 15px;
+                        padding-right: 15px;
+                    }
+                    
+                    .nav.navbar-nav > li.active > a,
+                    .nav.navbar-nav > li > a:hover,
+                    .nav.navbar-nav > li > a:focus {
+                        color: #333;
+                        background-color: #e7e7e7;
+                    }
+                    
+                    .navbar-brand {
+                        display: none;
+                    }
+                }
+
+                /* Mobile: hide navigation by default, show hamburger */
+                @media (max-width: 767px) {
+                    .navbar-toggle {
+                        display: block;
+                    }
+                    
+                    .navbar-collapse {
+                        display: none;
+                        clear: both;
+                        width: 100%;
+                        margin-top: 50px;
+                        border-top: 1px solid #e7e7e7;
+                        padding-top: 10px;
+                    }
+                    
+                    /* When checkbox is checked, show the menu */
+                    .navbar-toggle-checkbox:checked ~ .navbar-header + .navbar-collapse {
+                        display: block;
+                    }
+                    
+                    .nav.navbar-nav > li {
+                        float: none;
+                    }
+                    
+                    .nav.navbar-nav > li > a {
+                        display: block;
+                        padding: 12px 20px;
+                        color: #777;
+                        text-decoration: none;
+                        border-bottom: 1px solid #e7e7e7;
+                    }
+                    
+                    .nav.navbar-nav > li:last-child > a {
+                        border-bottom: none;
+                    }
+                    
+                    .nav.navbar-nav > li.active > a,
+                    .nav.navbar-nav > li > a:hover,
+                    .nav.navbar-nav > li > a:focus {
+                        color: #333;
+                        background-color: #f5f5f5;
+                    }
+                }
+
+                /* Network Health Ribbon Styles */
+                .network-health-ribbon {
+                    max-width: 1400px;
+                    margin: 0 auto;
+                    padding: 7px;
+                }
+
+                .ribbon-row {
+                    display: grid;
+                    grid-template-columns: repeat(3, 1fr);
+                    gap: 7px;
+                    margin-bottom: 7px;
+                }
+
+                .ribbon-card {
+                    background: white;
+                    border-radius: 6px;
+                    padding: 10px;
+                    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+                    border: 1px solid #e1e8ed;
+                    transition: all 0.3s ease;
+                    min-height: 90px;
+                }
+
+                .ribbon-card:hover {
+                    transform: translateY(-1px);
+                    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+                }
+
+                .ribbon-card .card-header {
+                    margin-bottom: 7px;
+                    padding-bottom: 5px;
+                    border-bottom: 1px solid #f0f4f8;
+                }
+
+                .ribbon-card .card-header h4 {
+                    margin: 0;
+                    font-size: 1.65rem;
+                    color: #2c3e50;
+                    font-weight: 600;
+                }
+
+                .card-metrics {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 6px;
+                }
+
+                .metric-item.primary {
+                    text-align: center;
+                    padding-bottom: 5px;
+                    border-bottom: 1px solid #f8fafc;
+                    margin-bottom: 4px;
+                }
+
+                .metric-item.primary .metric-value {
+                    display: block;
+                    font-size: 3.3rem;
+                    font-weight: bold;
+                    color: #2c3e50;
+                    line-height: 1.0;
+                }
+
+                .metric-item.primary .metric-label {
+                    display: block;
+                    font-size: 1.5rem;
+                    color: #64748b;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                    margin-top: 2px;
+                    font-weight: 500;
+                }
+
+                .metric-grid {
+                    display: grid;
+                    grid-template-columns: repeat(4, 1fr);
+                    gap: 5px;
+                }
+
+                .metric-grid .metric-item {
+                    text-align: center;
+                    padding: 4px;
+                    background: #f8fafc;
+                    border-radius: 3px;
+                }
+
+                .metric-grid .metric-value {
+                    display: block;
+                    font-size: 1.65rem;
+                    font-weight: 600;
+                    color: #374151;
+                    line-height: 1.0;
+                }
+
+                .metric-grid .metric-label {
+                    display: block;
+                    font-size: 1.275rem;
+                    color: #6b7280;
+                    margin-top: 1px;
+                    font-weight: 500;
+                }
+
+                /* Card-specific colors and styling - All primary metrics now black */
+                .ribbon-card.relay-counts .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                .ribbon-card.bandwidth-counts .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                .ribbon-card.relay-uptime .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                .ribbon-card.operator-participation .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                .ribbon-card.geographic-participation .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                .ribbon-card.provider-participation .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                .ribbon-card.platform-counts .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                .ribbon-card.bandwidth-utilization .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                .ribbon-card.version-compliance .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                .ribbon-card.exit-policies .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                /* Tooltip styles for network health metrics */
+                .metric-item[title] {
+                    position: relative;
+                    cursor: help;
+                }
+
+                .metric-item[title]:hover::after {
+                    content: attr(title);
+                    position: absolute;
+                    bottom: 100%;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background: #1f2937;
+                    color: white;
+                    padding: 8px 12px;
+                    border-radius: 6px;
+                    font-size: 0.85rem;
+                    white-space: normal;
+                    max-width: 300px;
+                    width: max-content;
+                    z-index: 1000;
+                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                    line-height: 1.4;
+                    text-align: left;
+                    font-weight: normal;
+                    margin-bottom: 8px;
+                }
+
+                .metric-item[title]:hover::before {
+                    content: '';
+                    position: absolute;
+                    bottom: 100%;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    border: 6px solid transparent;
+                    border-top-color: #1f2937;
+                    z-index: 1000;
+                    margin-bottom: 2px;
+                }
+
+                .ribbon-footer {
+                    text-align: center;
+                    margin-top: 15px;
+                    padding-top: 12px;
+                    border-top: 1px solid #e5e7eb;
+                }
+
+                .ribbon-footer .last-updated {
+                    font-size: 0.9rem;
+                    color: #9ca3af;
+                    margin: 0;
+                }
+
+                /* Responsive adjustments for ribbon */
+                @media (max-width: 1200px) {
+                    .ribbon-row {
+                        grid-template-columns: repeat(2, 1fr);
+                    }
+                    
+                    .metric-grid {
+                        grid-template-columns: repeat(3, 1fr);
+                    }
+                }
+
+                @media (max-width: 768px) {
+                    .ribbon-row {
+                        grid-template-columns: 1fr;
+                        gap: 6px;
+                    }
+                    
+                    .network-health-ribbon {
+                        padding: 6px;
+                    }
+
+                    .ribbon-card {
+                        padding: 8px;
+                        min-height: 80px;
+                    }
+
+                    .ribbon-card .card-header h4 {
+                        font-size: 1.35rem;
+                    }
+
+                    .metric-item.primary .metric-value {
+                        font-size: 2.7rem;
+                    }
+
+                    .metric-item.primary .metric-label {
+                        font-size: 1.2rem;
+                    }
+
+                    .metric-grid {
+                        grid-template-columns: repeat(2, 1fr);
+                        gap: 4px;
+                    }
+
+                    .metric-grid .metric-value {
+                        font-size: 1.35rem;
+                    }
+
+                    .metric-grid .metric-label {
+                        font-size: 1.05rem;
+                    }
+                }
+
+                @media (max-width: 480px) {
+                    .ribbon-card .card-header h4 {
+                        font-size: 1.2rem;
+                    }
+
+                    .metric-item.primary .metric-value {
+                        font-size: 3.2rem;
+                    }
+
+                    .metric-item.primary .metric-label {
+                        font-size: 1.4rem;
+                    }
+
+                    .metric-grid .metric-value {
+                        font-size: 1.6rem;
+                    }
+
+                    .metric-grid .metric-label {
+                        font-size: 1.2rem;
+                    }
+                }
+
+                /* Allium Search Form Styles */
+                .navbar-form.navbar-right {
+                    margin-left: 15px;
+                    padding-top: 8px;
+                    padding-bottom: 8px;
+                }
+
+                .navbar-form .input-group {
+                    display: inline-table;
+                    vertical-align: middle;
+                }
+
+                .navbar-form .form-control {
+                    border-radius: 3px 0 0 3px;
+                }
+
+                .navbar-form .btn {
+                    border-radius: 0 3px 3px 0;
+                }
+
+                .allium-mobile-search {
+                    background: #f8f9fa;
+                    padding: 8px 15px;
+                    margin-top: -20px; /* Pull up to sit flush with navbar */
+                    margin-bottom: 15px;
+                    border-radius: 0 0 4px 4px; /* Only round bottom corners */
+                    border: 1px solid #e7e7e7;
+                    border-top: none;
+                }
+
+                .allium-mobile-search .form-control {
+                    font-size: 15px; /* Smaller than nav (18px) but larger than body (14px) */
+                    padding: 6px 10px;
+                    height: auto;
+                }
+
+                .allium-mobile-search .btn {
+                    font-size: 14px;
+                    padding: 6px 12px;
+                }
+
+                /* 
+                 * Search bar responsive behavior:
+                 * - Below 1600px: Always show full-width search bar below navbar
+                 * - At 1600px+: Show compact search in navbar (enough room for all nav items + search)
+                 */
+                
+                /* Default: show full-width search, hide navbar search */
+                .allium-mobile-search {
+                    display: block !important;
+                }
+                
+                .navbar-form.navbar-right {
+                    display: none !important;
+                }
+
+                /* Extra large desktop (≥1600px): enough room for inline search */
+                @media (min-width: 1600px) {
+                    .allium-mobile-search {
+                        display: none !important;
+                    }
+                    .navbar-form.navbar-right {
+                        display: block !important;
+                    }
+                }
+            </style>
+        </head>
+    <body>
+        <!-- 1AEO Cross-Site Navigation -->
+        <nav class="aeo-cross-nav">
+            <div class="aeo-nav-container">
+                <a href="https://www.1aeo.com" class="aeo-nav-brand">
+                    <span>1AEO</span>
+                </a>
+                <div class="aeo-nav-links">
+                    <a href="https://www.1aeo.com">Home</a>
+                    <a href="https://metrics.1aeo.com" class="active">Metrics</a>
+                    <a href="https://aroivalidator.1aeo.com">AROI Validator</a>
+                    <a href="https://routefluxmap.1aeo.com">RouteFluxMap</a>
+                </div>
+            </div>
+        </nav>
+        
+        <div class="container">
+<h2>
+View Contact remove all _ in: co_mmun_ity.torproj_ect.flypap_e_r419@pa__ssmail.net Details
+</h2>
+
+        <nav aria-label="breadcrumb" style="margin-bottom: 10px;">
+    <ol class="breadcrumb" style="background: none; padding: 0; margin: 0; font-size: 0.9em; list-style: none;">
+        <li style="display: inline;"><a href="../../index.html">Home</a></li>
+            <li style="display: inline;"> > <a href="../../misc/contacts-by-bandwidth.html">Browse by Contact</a></li>
+            <li style="display: inline; color: #777;"> > 6b50ed1b</li>
+    </ol>
+</nav>
+    <nav class="navbar navbar-default" style="margin-bottom: 20px;">
+        <div class="container-fluid">
+            <!-- CSS-only hamburger toggle using checkbox hack -->
+            <input type="checkbox" id="navbar-toggle" class="navbar-toggle-checkbox" style="display: none;">
+            
+            <div class="navbar-header">
+                <label for="navbar-toggle" class="navbar-toggle" role="button" aria-label="Toggle navigation">
+                    <span class="sr-only">Toggle navigation</span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </label>
+                <span class="navbar-brand visible-xs">Browse Categories</span>
+            </div>
+            
+            <div class="navbar-collapse" id="main-navbar">
+                <ul class="nav navbar-nav">
+                    <li class="">
+                        <a href="../../network-health.html">Network Health</a>
+                    </li>
+                    <li class="">
+                        <a href="../../index.html">Operator Champions</a>
+                    </li>
+                    <li class="active">
+                        <a href="../../misc/contacts-by-bandwidth.html">By Operator / Contact</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/families-by-bandwidth.html">By Family</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/networks-by-bandwidth.html">By Network</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/countries-by-bandwidth.html">By Country</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/platforms-by-bandwidth.html">By Platform</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/authorities.html">Directory Authorities</a>
+                    </li>
+                    <li class="">
+                        <a href="../../top500.html">Top 500 Relays</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/all.html">All Relays</a>
+                    </li>
+                </ul>
+                
+                <!-- Desktop: Search in navbar (hidden on mobile via CSS) -->
+                <form action="../../search" method="GET" 
+                      class="navbar-form navbar-right hidden-xs hidden-sm"
+                      style="margin-right: 0;">
+                    <div class="input-group" style="width: 220px;">
+                        <input type="text" 
+       name="q" 
+       class="form-control input-sm" 
+       placeholder="Search relays..."
+       title="Search by fingerprint, nickname, AROI, IP, AS number, family, or country"
+       maxlength="100"
+       pattern="[A-Za-z0-9\s\-_.@:]+"
+       autocomplete="off"
+       autocapitalize="off"
+       spellcheck="false">
+<span class="input-group-btn">
+    <button type="submit" class="btn btn-sm btn-default"><span class="glyphicon glyphicon-search" aria-hidden="true"></span></button>
+</span>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- Mobile: Search bar below navbar (hidden on desktop via CSS) -->
+    <div class="allium-mobile-search visible-xs visible-sm">
+        <form action="../../search" method="GET">
+            <div class="input-group">
+                <input type="text" 
+       name="q" 
+       class="form-control" 
+       placeholder="Search: fingerprint, nickname, AROI, IP, AS number, family, country..."
+       title="Search by fingerprint, nickname, AROI, IP, AS number, family, or country"
+       maxlength="100"
+       pattern="[A-Za-z0-9\s\-_.@:]+"
+       autocomplete="off"
+       autocapitalize="off"
+       spellcheck="false">
+<span class="input-group-btn">
+    <button type="submit" class="btn btn-primary">Search</button>
+</span>
+            </div>
+        </form>
+    </div>
+<div>
+<div class="row" style="margin-bottom: 20px;">
+    <div class="col-md-7" style="padding-right: 20px; overflow-wrap: break-word; word-wrap: break-word;">
+        <div style="padding: 15px; background-color: #f8f9fa; border-left: 4px solid #007bff; margin-bottom: 20px;">
+            <h4 style="margin-top: 0; color: #495057;">📋 Contact & Network Overview</h4>
+            
+            <div style="margin-bottom: 15px;">
+                <ul style="list-style-type: disc; padding-left: 20px; margin-bottom: 0;">
+                    <li><strong>Contact:</strong> remove all _ in: co_mmun_ity.torproj_ect.flypap_e_r419@pa__ssmail.net</li>
+                    <li><strong>Hash:</strong> 6b50ed1bba34242c8076aa9105d504cc</li>
+                    <li><strong>Countries:</strong> 
+                            <a href="../../country/BE/" style="text-decoration: none;">
+                                <img src="../../static/images/cc/be.png" 
+                                     title="All 1 relays in Belgium" 
+                                     alt="Belgium" 
+                                     style="width: 16px; height: 12px; margin-right: 5px; vertical-align: middle;">
+                                Belgium (1)
+                            </a>                    </li>
+                </ul>
+            </div>
+            
+            <div>
+                <strong>Network Summary:</strong>
+                <ul style="list-style-type: disc; padding-left: 20px; margin-bottom: 15px;">
+                    <li><strong><span title="Observed bandwidth capacity represents the estimated maximum throughput this group can handle, combining total, guard, middle, and exit bandwidth contributions">Bandwidth Capacity</span>:</strong> ~4.25 Mbit/s
+                            (<span title="Bandwidth capacity breakdown by relay type">4.25 Mbit/s middle</span>)
+                    </li>
+                    
+                    <li><strong><span title="Network influence represents the percentage of overall consensus weight, indicating relative importance in the Tor network across guard, middle, and exit positions">Network Influence</span>:</strong> 0.00% of overall consensus weight
+                            (<span title="Consensus weight breakdown by position">0.00% middle</span>)
+                    </li>
+                    
+                    <li><strong><span title="Network position indicates the strategic role distribution of relays. Labels: Guard-focused (>60% guard), Exit-focused (>40% exit), Multi-role (both guard and exit >20%), Balanced (mixed roles), Guard-only (100% guard), Exit-only (100% exit), Middle-only (100% middle)">Network Position</span>:</strong> Middle-only (1 total relay, 1 middle)</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="intelligence-section" style="padding: 15px; background-color: #f8f9fa; border-left: 4px solid #007bff;">
+            <h4 style="margin-top: 0; color: #495057;">📊 Operator Intelligence</h4>
+            
+            <ul style="list-style-type: disc; padding-left: 20px; margin-bottom: 0;">
+                <li><strong><span title="Network diversity measures infrastructure distribution across different autonomous systems (AS), weighted by AS rarity. Ratings: Poor = single AS, common provider; Okay = 2+ AS but all common/emerging; Great = at least one rare/epic/legendary AS. Rare AS hosting choices (low consensus weight, few operators) score higher than mainstream providers.">Network Diversity</span>:</strong> <span style="color: #2e7d2e; font-weight: bold;">Great</span>, 1 network (legendary)</li>
+                
+                <li><strong><span title="Geographic diversity assesses legal and censorship risk based on country distribution. Ratings: 1 country = Poor (high legal/censorship risk), 2-3 countries = Okay (limited jurisdictional diversity), 4+ countries = Great (excellent jurisdictional protection). Diversification across countries protects against coordinated legal action and censorship.">Geographic Diversity</span>:</strong> <span style="color: #c82333; font-weight: bold;">Poor</span>, 1 country</li>
+                
+                <li><strong><span title="Infrastructure diversity measures platform (operating system) distribution. Ratings: Poor = single dominant platform (e.g., Linux-only), Okay = single minority platform (e.g., FreeBSD-only, contributes to network diversity) OR 2+ platforms with less than 10% on secondary, Great = 2+ platforms with at least 10% on secondary (meaningful diversity). Platform diversity reduces synchronization risk from OS-level vulnerabilities.">Infrastructure Diversity</span>:</strong> <span style="color: #c82333; font-weight: bold;">Poor</span>, 1 platform</li>
+                
+                <li><strong><span title="Bandwidth capacity measurements show how many relays are measured by directory authorities for consensus weight calculation. Measured relays contribute more effectively to the network.">Bandwidth Capacity Measurements</span>:</strong> 1/1 relays measured by authorities</li>
+                
+                <li><strong><span title="Network efficiency analysis comparing operator performance to network averages. CW/BW ratio = Consensus Weight ÷ Bandwidth Capacity × 1,000,000. Higher ratios indicate better network utilization per bandwidth capacity contributed.">Performance Insights</span>:</strong> Overall CW/BW: <span style="color: #cc9900; font-weight: bold;">245</span>. -82% lower than 1348 network average. 12th percentile with 941 median.
+                    <ul style="list-style-type: disc; padding-left: 20px; margin-top: 0px; margin-bottom: 0;">
+                    </ul>
+                </li>
+                
+                <li><strong><span title="Operational maturity tracks deployment timeline and expansion patterns. Shows operator experience and growth strategy over time.">Operational Maturity</span>:</strong> Operating since 2025-01-21 (all deployed together)</li>
+                
+                <li><strong><span title="Version compliance shows how many relays are running recommended versions. Compliant relays run directory authority recommended versions (recommended_version=true), non-compliant run unrecommended versions (recommended_version=false), unknown have no version recommendation data available.">Version Compliance</span>:</strong> <span style="color: #c82333; font-weight: bold;">Poor</span>, 0 (0%) compliant, 1 (100%) not compliant
+                    <ul style="list-style-type: disc; padding-left: 20px; margin-top: 0px; margin-bottom: 0;">
+                        <li><strong><span title="Version status breakdown shows the distribution of Tor software versions. Recommended versions are approved by directory authorities, experimental are newer than recommended, obsolete are older than recommended, new in series are newer within the same version series, unrecommended don't meet any of the above criteria.">Version Status</span>:</strong> <span style="color: #c82333; font-weight: bold;">Poor</span>, <span title="Recommended versions" style="cursor: help;">0 (0%) recommended</span>, <span title="Obsolete versions: 0.4.8.9" style="cursor: help;">1 (100%) obsolete</span></li>
+                    </ul>
+                </li>
+            </ul>
+        </div>
+        
+        
+    </div>
+    
+    <div class="col-md-5" style="overflow-wrap: break-word; word-wrap: break-word;">
+        
+        
+        
+    </div>
+</div>
+</div>
+
+<p class="text-muted" style="margin-bottom: 15px;">
+<small>Last updated: Sun, 15 Feb 2026 08:02:39 GMT. Refreshed every 30 minutes from the Tor directory authorities via <a href="https://onionoo.torproject.org/">Tor Project's onionoo API</a>.</small>
+</p>
+
+
+
+
+<table class="table table-condensed">
+<tr>
+    <th></th>
+    <th>Nickname</th>
+    <th title="Observed bandwidth capacity: An estimate of the capacity this relay can handle. The relay remembers the max bandwidth sustained output over any ten second period in the past 5 days, and another sustained input. The observed value is the lesser of these two numbers.">BW Cap (4.25 Mbit/s)</th>
+    <th>Uptime/Downtime</th>
+    <th title="Statistical outliers: ≥2σ from average">Uptime (1M/6M/1Y/5Y)</th>
+    <th title="Flag-specific uptime percentages showing the reliability of this relay when operating in its primary network role. Priority: Exit > Guard > Fast > Running flags.">Flag Uptime (1M/6M/1Y/5Y)</th>
+    <th>IPv4</th>
+    <th>Flags</th>
+    <th>Country</th>
+    <th>AS Number</th>
+    <th>AS Name</th>
+    <th>Platform</th>
+    <th>First Seen</th>
+    <th>Last Restarted</th>
+</tr>
+<tbody>
+<tr>
+<td>
+<span class="circle circle-online" title="This relay is online"></span>
+
+</td>
+<td title="Unnamed">
+            <a href="../../relay/A975613110AB41484022E18D51E007AB55D0802E/">Unnamed</a></td>
+<td>
+        4.25 Mbit/s
+&nbsp;&nbsp;<span style="color: #28a745; font-weight: bold;" title="Bandwidth measured by ≥3 bandwidth authorities">✓</span>
+</td>
+    <td>
+UP 1d 10h 47m ago
+</td>
+    <td>
+0.0%/0.0%/0.0%/0.0%
+</td>
+    <td>
+N/A
+</td>
+    <td>
+<a href="https://bgp.tools/prefix/213.219.166.93">213.219.166.93</a>
+</td>
+    <td><a href="../../flag/fast/"><img src="../../static/images/flags/fast.png" title="Fast" alt="Fast"></a><a href="../../flag/running/"><img src="../../static/images/flags/running.png" title="Running" alt="Running"></a><a href="../../flag/stable/"><img src="../../static/images/flags/stable.png" title="Stable" alt="Stable"></a><a href="../../flag/v2dir/"><img src="../../static/images/flags/v2dir.png" title="V2Dir" alt="V2Dir"></a><a href="../../flag/valid/"><img src="../../static/images/flags/valid.png" title="Valid" alt="Valid"></a></td>
+<td>
+                <a href="../../country/BE/">
+                    <img src="../../static/images/cc/be.png"
+                         title="Belgium"
+                         alt="Belgium">
+                BE
+                </a>
+            </td>
+<td>
+                <a href="../../as/AS9031/">AS9031</a>
+            </td>
+<td>
+            <a href="https://bgp.tools/AS9031"
+               title="EDPNET Belgium BV">EDPNET Belgium BV</a>
+        </td>
+<td>
+            <a href="../../platform/Linux/">Linux</a>
+        </td>
+<td>
+            <a href="../../first_seen/2025-01-21/" title="2025-01-21">
+1y 3w 3d ago
+</a>
+        </td>
+<td title="2026-02-13">
+1d 10h 47m ago
+</td>
+</tr>
+</tbody>
+</table>
+
+
+        </div>
+    </body>
+        <footer class="aeo-footer">
+            <div class="aeo-footer-links">
+                <a href="https://metrics.1aeo.com">Metrics</a>
+                <a href="https://aroivalidator.1aeo.com">AROI Validator</a>
+                <a href="https://routefluxmap.1aeo.com">RouteFluxMap</a>
+                <a href="https://github.com/1aeo">GitHub</a>
+            </div>
+            <p class="aeo-footer-brand">
+                Part of <a href="https://www.1aeo.com" style="font-weight: bold;">1st Amendment Encrypted Openness LLC</a>
+            </p>
+            <p class="aeo-footer-legal">
+                Generated by a <a href="https://github.com/1aeo/allium">1aeo modified fork of allium</a>, based on original <a href="https://git.jordan.im/allium/">allium</a>, on Sun, 15 Feb 2026 08:02:39 GMT. Source data from <a href="https://onionoo.torproject.org/">Tor Project onionoo</a>.
+            </p>
+        </footer>
+    </html>

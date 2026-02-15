@@ -367,7 +367,7 @@ def basic_uptime_processing(relays):
     """
     for relay in relays:
         # Basic uptime/downtime display
-        relay["uptime_display"] = calculate_uptime_display(relay)
+        relay["uptime_display"] = calculate_uptime_display(relay, format_time_ago)
         
         # Basic uptime percentages without statistical analysis
         uptime_percentages = {'1_month': 0.0, '6_months': 0.0, '1_year': 0.0, '5_years': 0.0}
