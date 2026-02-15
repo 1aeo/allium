@@ -11,7 +11,8 @@ import multiprocessing as mp
 import os
 import re
 import time
-from .aroileaders import _calculate_aroi_leaderboards, _safe_parse_ip_address
+from .aroileaders import _calculate_aroi_leaderboards
+from .ip_utils import safe_parse_ip_address as _safe_parse_ip_address
 from .progress_logger import ProgressLogger
 from .bandwidth_formatter import (
     BandwidthFormatter,

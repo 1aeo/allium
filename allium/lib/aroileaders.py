@@ -10,7 +10,9 @@ import hashlib
 from collections import defaultdict
 import re
 import html
-import ipaddress
+
+# Import centralized IP parsing from ip_utils (canonical home)
+from .ip_utils import safe_parse_ip_address as _safe_parse_ip_address
 
 # Import centralized country utilities
 from .country_utils import (
@@ -244,45 +246,6 @@ def _calculate_bandwidth_score(operator_relays, bandwidth_data, time_period, ban
     """
     return _calculate_generic_score(operator_relays, bandwidth_data, time_period, 'bandwidth', prebuilt_map=bandwidth_map)
 
-
-def _safe_parse_ip_address(address_string):
-    """
-    Safely parse IP address from or_addresses string with validation.
-    Returns tuple (ip_address, ip_version) or (None, None) if invalid.
-    
-    Security: Validates all input against Python's ipaddress module to prevent
-    injection attacks through malformed address strings.
-    """
-    if not address_string or not isinstance(address_string, str):
-        return None, None
-    
-    try:
-        # Handle IPv6 with brackets like [2001:db8::1]:9001
-        if address_string.startswith('[') and ']:' in address_string:
-            ip_part = address_string.split(']:')[0][1:]  # Remove brackets and port
-            parsed_ip = ipaddress.ip_address(ip_part)
-            return str(parsed_ip), 6 if isinstance(parsed_ip, ipaddress.IPv6Address) else 4
-        
-        # Handle addresses with colons (could be IPv4:port or IPv6)
-        elif ':' in address_string:
-            # Try parsing as IPv6 first (since IPv6 has multiple colons)
-            try:
-                parsed_ip = ipaddress.ip_address(address_string)
-                return str(parsed_ip), 6 if isinstance(parsed_ip, ipaddress.IPv6Address) else 4
-            except (ValueError, ipaddress.AddressValueError):
-                # Not a bare IPv6, try as IPv4:port
-                ip_part = address_string.split(':')[0]
-                parsed_ip = ipaddress.ip_address(ip_part)
-                return str(parsed_ip), 6 if isinstance(parsed_ip, ipaddress.IPv6Address) else 4
-        
-        # Handle bare IP address without port
-        else:
-            parsed_ip = ipaddress.ip_address(address_string)
-            return str(parsed_ip), 6 if isinstance(parsed_ip, ipaddress.IPv6Address) else 4
-            
-    except (ValueError, ipaddress.AddressValueError):
-        # Invalid IP address format - silently skip
-        return None, None
 
 def _format_breakdown_details(breakdown_items, max_chars, formatter_func=None):
     """

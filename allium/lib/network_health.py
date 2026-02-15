@@ -5,7 +5,7 @@ Network health dashboard metrics calculation and template string pre-formatting.
 Extracted from relays.py for better modularity.
 """
 
-from .aroileaders import _safe_parse_ip_address
+from .ip_utils import safe_parse_ip_address as _safe_parse_ip_address
 from .ip_utils import is_private_ip_address, determine_ipv6_support
 from .time_utils import parse_onionoo_timestamp, create_time_thresholds
 from .string_utils import format_percentage_from_fraction

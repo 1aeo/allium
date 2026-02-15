@@ -3,11 +3,55 @@ File: ip_utils.py
 
 IP address utility functions for validation, classification, and IPv6 support
 detection used throughout the allium codebase.
+
+This is the canonical home for safe_parse_ip_address (formerly in aroileaders.py).
 """
 
 import ipaddress
 
-from .aroileaders import _safe_parse_ip_address
+
+def safe_parse_ip_address(address_string):
+    """
+    Safely parse IP address from or_addresses string with validation.
+    Returns tuple (ip_address, ip_version) or (None, None) if invalid.
+
+    Security: Validates all input against Python's ipaddress module to prevent
+    injection attacks through malformed address strings.
+    """
+    if not address_string or not isinstance(address_string, str):
+        return None, None
+
+    try:
+        # Handle IPv6 with brackets like [2001:db8::1]:9001
+        if address_string.startswith('[') and ']:' in address_string:
+            ip_part = address_string.split(']:')[0][1:]  # Remove brackets and port
+            parsed_ip = ipaddress.ip_address(ip_part)
+            return str(parsed_ip), 6 if isinstance(parsed_ip, ipaddress.IPv6Address) else 4
+
+        # Handle addresses with colons (could be IPv4:port or IPv6)
+        elif ':' in address_string:
+            # Try parsing as IPv6 first (since IPv6 has multiple colons)
+            try:
+                parsed_ip = ipaddress.ip_address(address_string)
+                return str(parsed_ip), 6 if isinstance(parsed_ip, ipaddress.IPv6Address) else 4
+            except (ValueError, ipaddress.AddressValueError):
+                # Not a bare IPv6, try as IPv4:port
+                ip_part = address_string.split(':')[0]
+                parsed_ip = ipaddress.ip_address(ip_part)
+                return str(parsed_ip), 6 if isinstance(parsed_ip, ipaddress.IPv6Address) else 4
+
+        # Handle bare IP address without port
+        else:
+            parsed_ip = ipaddress.ip_address(address_string)
+            return str(parsed_ip), 6 if isinstance(parsed_ip, ipaddress.IPv6Address) else 4
+
+    except (ValueError, ipaddress.AddressValueError):
+        # Invalid IP address format - silently skip
+        return None, None
+
+
+# Backward-compatible alias (old name used by some callers)
+_safe_parse_ip_address = safe_parse_ip_address
 
 
 def is_private_ip_address(ip_str):
@@ -42,7 +86,7 @@ def is_private_ip_address(ip_str):
     ip_clean = ip_str.split('/')[0].strip()
     
     # Use safe IP parsing for validation and version detection
-    parsed_ip, ip_version = _safe_parse_ip_address(ip_clean)
+    parsed_ip, ip_version = safe_parse_ip_address(ip_clean)
     
     if not parsed_ip:
         return False  # Invalid IP address, assume public
@@ -76,7 +120,7 @@ def determine_ipv6_support(or_addresses):
     
     for address in or_addresses:
         # Use safe IP parsing for validation and IP version detection
-        parsed_ip, ip_version = _safe_parse_ip_address(address)
+        parsed_ip, ip_version = safe_parse_ip_address(address)
         
         if parsed_ip:  # Valid IP address parsed
             if ip_version == 4:
