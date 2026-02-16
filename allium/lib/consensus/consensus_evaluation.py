@@ -814,6 +814,11 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
         'middleonly_flagged': flag_eligibility.get('middleonly', {}).get('assigned_count', 0) > 0,
         'middleonly_count': flag_eligibility.get('middleonly', {}).get('assigned_count', 0),
         
+        # BadExit detection (from CollecTor vote flags)
+        # BadExit marks misbehaving exit nodes; also added when MiddleOnly is assigned.
+        'badexit_flagged': flag_eligibility.get('badexit', {}).get('assigned_count', 0) > 0,
+        'badexit_count': flag_eligibility.get('badexit', {}).get('assigned_count', 0),
+        
         # Running flag values (from reachability data, already computed above)
         # Running = authority could reach relay's ORPort within last 45 minutes
         'running_ipv4_count': ipv4_reachable_count,
@@ -866,6 +871,7 @@ METRIC_TOOLTIPS = {
     'tk_hsdir': "How long authorities have tracked this relay. Most require >=25 hours; some (moria1) require ~10 days. Source: Dir. Auth. vote files.",
     'policy_exit': "Exit policy must allow traffic to at least one /8 address space on both port 80 AND port 443 per Tor dir-spec Section 3.4.2. Source: Onionoo exit_policy_summary.",
     'middleonly': "Security restriction assigned by Directory Authorities. MiddleOnly relays cannot serve as Guard, Exit, or HSDir. Removes Exit, Guard, HSDir, V2Dir flags and adds BadExit. Source: CollecTor vote files.",
+    'badexit': "Misbehaving exit node flagged by Directory Authorities. Traffic manipulation, SSL stripping, content injection, or DNS manipulation detected. Also assigned automatically with MiddleOnly. Source: CollecTor vote files.",
     'running_ipv4': "IPv4 reachability: Directory Authority must successfully connect to relay's IPv4 ORPort within 45 minutes. Source: CollecTor vote files (presence of relay in vote = reachable).",
     'running_ipv6': "IPv6 reachability: Tested by authorities with AuthDirHasIPv6Connectivity enabled. Not all authorities test IPv6. Source: CollecTor vote files ('a' line).",
     'version_valid': "Tor version must not be known to be broken. Outdated versions may lose Valid flag and be rejected from the network. Source: Onionoo relay descriptor.",
@@ -1162,9 +1168,100 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
     tk_stats = rv.get('tk_stats', _EMPTY_DA_STATS)
     mtbf_stats = rv.get('mtbf_stats', _EMPTY_DA_STATS)
     
-    # ========== FLAG ORDER: Fast → Stable → HSDir → Guard ==========
-    # Order by dependency chain: prerequisites first, then dependent flags
-    # Fast/Stable have no flag deps, HSDir needs 2, Guard needs 3
+    # ========== FLAG ORDER: Running → Valid → V2Dir → Fast → Stable → HSDir → Guard → Exit ==========
+    # Matches Eligible Flags horizontal row order.
+    # Most common/basic flags first, then performance, then flags with dependencies.
+    
+    # ========== Running flag (1-2 rows) ==========
+    # Per dir-spec: Running = authority successfully connected within last 45 minutes.
+    # Row 1 (always): IPv4 reachability
+    # Row 2 (conditional): IPv6 reachability (only if relay has IPv6)
+    running_tooltip = FLAG_TOOLTIPS['running']
+    running_ipv4 = rv.get('running_ipv4_count', 0)
+    running_has_ipv6 = rv.get('running_has_ipv6', False)
+    running_ipv6 = rv.get('running_ipv6_count', 0)
+    running_ipv6_tested = rv.get('running_ipv6_tested', 0)
+    
+    running_rowspan = 2 if running_has_ipv6 else 1
+    ipv4_status = _majority_status(running_ipv4, majority_required)
+    running_color = STATUS_COLORS[ipv4_status]
+    
+    rows.append(_make_row(
+        'Running', running_tooltip, running_color,
+        'IPv4 Reachability', METRIC_TOOLTIPS.get('running_ipv4', ''),
+        f'{running_ipv4}/{total_authorities} authorities reached relay',
+        'da',
+        _vote_threshold(f'≥{majority_required}/{total_authorities} (majority)', majority_required, total_authorities),
+        ipv4_status,
+        _get_status_text(ipv4_status, da_count=running_ipv4, da_total=total_authorities),
+        rowspan=running_rowspan,
+    ))
+    
+    if running_has_ipv6:
+        ipv6_majority = (running_ipv6_tested // 2) + 1 if running_ipv6_tested > 0 else 1
+        ipv6_status = 'meets' if running_ipv6 >= ipv6_majority else ('partial' if running_ipv6 > 0 else 'below')
+        ipv6_threshold = f'≥{ipv6_majority}/{running_ipv6_tested} tested (majority)' if running_ipv6_tested > 0 else 'No authorities test IPv6'
+        rows.append(_make_row(
+            'Running', running_tooltip, running_color,
+            'IPv6 Reachability', METRIC_TOOLTIPS.get('running_ipv6', ''),
+            f'{running_ipv6}/{running_ipv6_tested} tested authorities reached relay',
+            'da',
+            _vote_threshold(ipv6_threshold, ipv6_majority if running_ipv6_tested > 0 else 0, running_ipv6_tested),
+            ipv6_status,
+            _get_status_text(ipv6_status, da_count=running_ipv6, da_total=running_ipv6_tested),
+        ))
+    
+    # ========== Valid flag (1 row) ==========
+    # Per dir-spec: Valid = not blacklisted + valid descriptor + non-broken Tor version.
+    # We display the version check (the actionable part for operators).
+    valid_tooltip = FLAG_TOOLTIPS['valid']
+    valid_recommended = rv.get('valid_recommended')
+    valid_display = rv.get('valid_version_display', 'Unknown')
+    valid_da_count = diag.get('vote_count', 0)
+    
+    if valid_recommended is True:
+        valid_status = 'meets'
+        valid_extra = ''
+    elif valid_recommended is False:
+        valid_status = 'below'
+        valid_extra = ' (not recommended)'
+    else:
+        valid_status = 'partial'
+        valid_extra = ' (unknown)'
+    valid_color = STATUS_COLORS[valid_status]
+    
+    rows.append(_make_row(
+        'Valid', valid_tooltip, valid_color,
+        'Tor Version', METRIC_TOOLTIPS.get('version_valid', ''),
+        _format_relay_value_html(valid_display),
+        'relay',
+        _vote_threshold('Version approved by Directory Authorities', majority_required, total_authorities),
+        valid_status,
+        _get_status_text(valid_status, valid_extra, da_count=valid_da_count, da_total=total_authorities),
+        rowspan=1,
+    ))
+    
+    # ========== V2Dir flag (1 row) ==========
+    # Per dir-spec: V2Dir = DirPort OR tunnelled-dir-server.
+    # Required for Guard flag. Most modern relays have V2Dir automatically.
+    v2dir_tooltip = FLAG_TOOLTIPS['v2dir']
+    v2dir_has_flag = rv.get('v2dir_has_flag', False)
+    v2dir_display = rv.get('v2dir_display', 'Unknown')
+    
+    v2dir_status = 'meets' if v2dir_has_flag else 'below'
+    v2dir_color = STATUS_COLORS[v2dir_status]
+    v2dir_da_count = rv.get('guard_prereq_v2dir_count', 0)
+    
+    rows.append(_make_row(
+        'V2Dir', v2dir_tooltip, v2dir_color,
+        'Dir Capability', METRIC_TOOLTIPS.get('v2dir_capability', ''),
+        _format_relay_value_html(v2dir_display),
+        'relay',
+        _vote_threshold('Tunnelled directory via ORPort or DirPort', majority_required, total_authorities),
+        v2dir_status,
+        _get_status_text(v2dir_status, da_count=v2dir_da_count, da_total=total_authorities),
+        rowspan=1,
+    ))
     
     # Fast flag (1 row) - using DRY helper
     fast_color = get_flag_color('fast')
@@ -1177,10 +1274,8 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
         fast_status, fast_extra = 'partial', ''
     else:
         fast_status, fast_extra = 'below', ''
-    fast_threshold = _vote_threshold(
-        f"≥{rv.get('fast_minimum_display', '100 KB/s')} (guarantee) OR top 7/8"
-        + _format_stricter_threshold(rv.get('fast_speed_strict_auths', []), rv.get('fast_speed_max_display', '')),
-        majority_required, total_authorities)
+    fast_threshold = (_vote_threshold(f"≥{rv.get('fast_minimum_display', '100 KB/s')} (guarantee) OR top 7/8", majority_required, total_authorities)
+        + _format_stricter_threshold(rv.get('fast_speed_strict_auths', []), rv.get('fast_speed_max_display', '')))
     rows.append(_make_row('Fast', FLAG_TOOLTIPS['fast'], fast_color, 'Speed', METRIC_TOOLTIPS['speed_fast'],
                           _format_relay_value_html(rv.get('fast_speed_display', 'N/A')), 'relay',
                           fast_threshold, fast_status,
@@ -1192,10 +1287,8 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
     stable_tooltip = FLAG_TOOLTIPS['stable']
     mtbf_meets_count = rv.get('stable_mtbf_meets_count', 0)
     mtbf_status = 'meets' if rv.get('stable_mtbf_meets_all') else ('partial' if mtbf_meets_count >= majority_required else 'below')
-    mtbf_threshold = _vote_threshold(
-        f"≥{rv.get('stable_mtbf_min_display', 'N/A')} - {rv.get('stable_mtbf_typical_display', 'N/A')} (varies)"
-        + _format_stricter_threshold(rv.get('stable_mtbf_strict_auths', []), rv.get('stable_mtbf_max_display', '')),
-        majority_required, total_authorities)
+    mtbf_threshold = (_vote_threshold(f"≥{rv.get('stable_mtbf_min_display', 'N/A')} - {rv.get('stable_mtbf_typical_display', 'N/A')} (varies)", majority_required, total_authorities)
+        + _format_stricter_threshold(rv.get('stable_mtbf_strict_auths', []), rv.get('stable_mtbf_max_display', '')))
     rows.append(_make_row('Stable', stable_tooltip, stable_color, 'MTBF', METRIC_TOOLTIPS['mtbf_stable'],
                           _format_da_value_html(mtbf_stats), 'da', mtbf_threshold, mtbf_status,
                           _get_status_text(mtbf_status, da_count=mtbf_meets_count, da_total=total_authorities),
@@ -1211,10 +1304,8 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
         uptime_status = 'partial'
     else:
         uptime_status = 'below'
-    uptime_threshold = _vote_threshold(
-        f"≥{rv.get('stable_uptime_min_display', 'N/A')} - {rv.get('stable_uptime_typical_display', 'N/A')} (varies)"
-        + _format_stricter_threshold(rv.get('stable_uptime_strict_auths', []), rv.get('stable_uptime_max_display', '')),
-        majority_required, total_authorities)
+    uptime_threshold = (_vote_threshold(f"≥{rv.get('stable_uptime_min_display', 'N/A')} - {rv.get('stable_uptime_typical_display', 'N/A')} (varies)", majority_required, total_authorities)
+        + _format_stricter_threshold(rv.get('stable_uptime_strict_auths', []), rv.get('stable_uptime_max_display', '')))
     rows.append(_make_row('Stable', stable_tooltip, stable_color, 'Uptime', METRIC_TOOLTIPS['uptime_stable'],
                           _format_relay_value_html(rv.get('stable_uptime_display', 'N/A')), 'relay',
                           uptime_threshold, uptime_status,
@@ -1245,10 +1336,8 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
     # Row 4: Time Known (using DRY helper)
     hsdir_tk_status = 'meets' if rv.get('hsdir_tk_meets') else 'below'
     hsdir_tk_da_count = tk_stats.get('meets_threshold_count', 0) or 0
-    hsdir_tk_threshold = _vote_threshold(
-        f"≥{rv.get('hsdir_tk_consensus_display', '25h')} (most)"
-        + _format_stricter_threshold(rv.get('hsdir_tk_strict_auths', []), rv.get('hsdir_tk_max_display', '10d')),
-        majority_required, total_authorities)
+    hsdir_tk_threshold = (_vote_threshold(f"≥{rv.get('hsdir_tk_consensus_display', '25h')} (most)", majority_required, total_authorities)
+        + _format_stricter_threshold(rv.get('hsdir_tk_strict_auths', []), rv.get('hsdir_tk_max_display', '10d')))
     rows.append(_make_row('HSDir', hsdir_tooltip, hsdir_color, 'Time Known', METRIC_TOOLTIPS['tk_hsdir'],
                           _format_da_value_html(tk_stats), 'da', hsdir_tk_threshold, hsdir_tk_status,
                           _get_status_text(hsdir_tk_status, da_count=hsdir_tk_da_count, da_total=total_authorities)))
@@ -1305,98 +1394,6 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
                           bw_threshold, bw_status,
                           _get_status_text(bw_status, bw_extra, da_count=guard_bw_da_count, da_total=total_authorities)))
     
-    # ========== Running flag (1-2 rows) ==========
-    # Per dir-spec: Running = authority successfully connected within last 45 minutes.
-    # Row 1 (always): IPv4 reachability
-    # Row 2 (conditional): IPv6 reachability (only if relay has IPv6)
-    running_color = get_flag_color('running')
-    running_tooltip = FLAG_TOOLTIPS['running']
-    running_ipv4 = rv.get('running_ipv4_count', 0)
-    running_has_ipv6 = rv.get('running_has_ipv6', False)
-    running_ipv6 = rv.get('running_ipv6_count', 0)
-    running_ipv6_tested = rv.get('running_ipv6_tested', 0)
-    
-    running_rowspan = 2 if running_has_ipv6 else 1
-    ipv4_status = _majority_status(running_ipv4, majority_required)
-    
-    rows.append(_make_row(
-        'Running', running_tooltip, running_color,
-        'IPv4 Reachability', METRIC_TOOLTIPS.get('running_ipv4', ''),
-        f'{running_ipv4}/{total_authorities} authorities reached relay',
-        'da',
-        _vote_threshold(f'≥{majority_required}/{total_authorities} (majority)', majority_required, total_authorities),
-        ipv4_status,
-        _get_status_text(ipv4_status, da_count=running_ipv4, da_total=total_authorities),
-        rowspan=running_rowspan,
-    ))
-    
-    if running_has_ipv6:
-        ipv6_majority = (running_ipv6_tested // 2) + 1 if running_ipv6_tested > 0 else 1
-        ipv6_status = 'meets' if running_ipv6 >= ipv6_majority else ('partial' if running_ipv6 > 0 else 'below')
-        ipv6_threshold = f'≥{ipv6_majority}/{running_ipv6_tested} tested (majority)' if running_ipv6_tested > 0 else 'No authorities test IPv6'
-        rows.append(_make_row(
-            'Running', running_tooltip, running_color,
-            'IPv6 Reachability', METRIC_TOOLTIPS.get('running_ipv6', ''),
-            f'{running_ipv6}/{running_ipv6_tested} tested authorities reached relay',
-            'da',
-            _vote_threshold(ipv6_threshold, ipv6_majority if running_ipv6_tested > 0 else 0, running_ipv6_tested),
-            ipv6_status,
-            _get_status_text(ipv6_status, da_count=running_ipv6, da_total=running_ipv6_tested),
-        ))
-    
-    # ========== Valid flag (1 row) ==========
-    # Per dir-spec: Valid = not blacklisted + valid descriptor + non-broken Tor version.
-    # We display the version check (the actionable part for operators).
-    valid_color = get_flag_color('valid')
-    valid_tooltip = FLAG_TOOLTIPS['valid']
-    valid_recommended = rv.get('valid_recommended')
-    valid_display = rv.get('valid_version_display', 'Unknown')
-    
-    # Valid is vote-based: if relay is in consensus with Valid flag, all voting authorities agree
-    valid_da_count = diag.get('vote_count', 0)
-    if valid_recommended is True:
-        valid_status = 'meets'
-        valid_extra = ''
-    elif valid_recommended is False:
-        valid_status = 'below'
-        valid_extra = ' (not recommended)'
-    else:
-        valid_status = 'partial'
-        valid_extra = ' (unknown)'
-    
-    rows.append(_make_row(
-        'Valid', valid_tooltip, valid_color,
-        'Tor Version', METRIC_TOOLTIPS.get('version_valid', ''),
-        _format_relay_value_html(valid_display),
-        'relay',
-        _vote_threshold('Not in broken versions list', majority_required, total_authorities),
-        valid_status,
-        _get_status_text(valid_status, valid_extra, da_count=valid_da_count, da_total=total_authorities),
-        rowspan=1,
-    ))
-    
-    # ========== V2Dir flag (1 row) ==========
-    # Per dir-spec: V2Dir = DirPort OR tunnelled-dir-server.
-    # Required for Guard flag. Most modern relays have V2Dir automatically.
-    v2dir_color = get_flag_color('v2dir')
-    v2dir_tooltip = FLAG_TOOLTIPS['v2dir']
-    v2dir_has_flag = rv.get('v2dir_has_flag', False)
-    v2dir_display = rv.get('v2dir_display', 'Unknown')
-    
-    v2dir_status = 'meets' if v2dir_has_flag else 'below'
-    v2dir_da_count = rv.get('guard_prereq_v2dir_count', 0)
-    
-    rows.append(_make_row(
-        'V2Dir', v2dir_tooltip, v2dir_color,
-        'Dir Capability', METRIC_TOOLTIPS.get('v2dir_capability', ''),
-        _format_relay_value_html(v2dir_display),
-        'relay',
-        _vote_threshold('DirPort > 0 OR tunnelled-dir-server', majority_required, total_authorities),
-        v2dir_status,
-        _get_status_text(v2dir_status, da_count=v2dir_da_count, da_total=total_authorities),
-        rowspan=1,
-    ))
-    
     # ========== Exit flag (1 row) ==========
     # Per Tor dir-spec Section 3.4.2: Exit requires allowing exits to ≥1 /8
     # address space on ports 80 AND 443. Unlike Guard (6 rows with prereqs + metrics),
@@ -1409,8 +1406,11 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
     exit_eligible = rv.get('exit_eligible', False)
     
     exit_da_count = rv.get('exit_assigned_count', 0)
-    if exit_eligible:
+    if exit_eligible and exit_da_count >= majority_required:
         exit_status = 'meets'
+        exit_extra = ''
+    elif exit_eligible and exit_da_count > 0:
+        exit_status = 'partial'
         exit_extra = ''
     elif exit_allows_80 or exit_allows_443:
         exit_status = 'partial'
@@ -1441,12 +1441,31 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
     if middleonly_flagged:
         rows.append(_make_row(
             'MiddleOnly', FLAG_TOOLTIPS['middleonly'], STATUS_COLORS['below'],
-            'Security Status', METRIC_TOOLTIPS['middleonly'],
-            f'<strong>RESTRICTED</strong> <span style="color: #6c757d; font-size: 10px;">({middleonly_count}/{total_authorities} DA)</span>',
+            'Restriction (by DA)', METRIC_TOOLTIPS['middleonly'],
+            f'{middleonly_count}/{total_authorities} authorities assigned MiddleOnly',
             'da',
-            _vote_threshold('Not flagged by authorities', majority_required, total_authorities),
+            'Suspicious behavior, Sybil risk, or policy violation',
             'below',
-            _get_status_text('below', da_count=middleonly_count, da_total=total_authorities),
+            f'Flagged ({middleonly_count}/{total_authorities} DA)',
+            rowspan=1,
+        ))
+    
+    # ========== BadExit flag (0-1 rows, conditional) ==========
+    # Per dir-spec: BadExit marks misbehaving exit nodes.
+    # Also assigned automatically when MiddleOnly is set.
+    # Only shown when relay is flagged — hidden for most relays.
+    badexit_flagged = rv.get('badexit_flagged', False)
+    badexit_count = rv.get('badexit_count', 0)
+    
+    if badexit_flagged:
+        rows.append(_make_row(
+            'BadExit', FLAG_TOOLTIPS['badexit'], STATUS_COLORS['below'],
+            'Exit Blacklist (by DA)', METRIC_TOOLTIPS['badexit'],
+            f'{badexit_count}/{total_authorities} authorities assigned BadExit',
+            'da',
+            'Traffic manipulation, SSL stripping, or policy violation',
+            'below',
+            f'Flagged ({badexit_count}/{total_authorities} DA)',
             rowspan=1,
         ))
     
@@ -1727,7 +1746,7 @@ def _format_flag_summary(consensus_data: dict, observed_bandwidth: int = 0) -> d
     
     # Process flags in order: simple/common → complex/rare
     # Exit and MiddleOnly added to match collector_fetcher._analyze_flag_eligibility()
-    for flag_name in ['fast', 'stable', 'hsdir', 'guard', 'exit', 'middleonly']:
+    for flag_name in ['fast', 'stable', 'hsdir', 'guard', 'exit', 'middleonly', 'badexit']:
         flag_data = flag_eligibility.get(flag_name, {})
         
         # Use assigned_count (actual flag assignments) instead of eligible_count (calculated)

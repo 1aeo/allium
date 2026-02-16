@@ -1446,9 +1446,10 @@ class TestMiddleOnlyFlag:
         assert len(middleonly_rows) == 1
         
         row = middleonly_rows[0]
-        assert row['metric'] == 'Security Status'
+        assert row['metric'] == 'Restriction (by DA)'
         assert row['status'] == 'below'
-        assert '7/9 DA' in row['status_text']  # DA agreement count
+        assert 'Flagged' in row['status_text']
+        assert '7/9 DA' in row['status_text']
         assert '7/9' in row['value']
     
     def test_normal_relay_no_middleonly_row(self):
@@ -1759,7 +1760,7 @@ class TestRunningValidV2DirFlags:
         assert 'DirPort: 9030' in rv['v2dir_display']
     
     def test_row_order_preserved(self):
-        """Test that new rows are in correct order within the table."""
+        """Test that table order matches Eligible Flags row: Running → Valid → V2Dir → Fast → ... → Guard → Exit."""
         result = format_relay_consensus_evaluation(
             self.FULL_RELAY,
             current_flags=['Running', 'Valid', 'V2Dir'],
@@ -1771,14 +1772,15 @@ class TestRunningValidV2DirFlags:
         frt = result['flag_requirements_table']
         flags_in_order = [r['flag'] for r in frt]
         
-        # Running should come after Guard and before Valid
-        guard_idx = max(i for i, f in enumerate(flags_in_order) if f == 'Guard')
+        # Order: Running → Valid → V2Dir → Fast → Stable → HSDir → Guard → Exit
         running_idx = flags_in_order.index('Running')
         valid_idx = flags_in_order.index('Valid')
         v2dir_idx = flags_in_order.index('V2Dir')
+        fast_idx = flags_in_order.index('Fast')
+        guard_idx = max(i for i, f in enumerate(flags_in_order) if f == 'Guard')
         exit_idx = flags_in_order.index('Exit')
         
-        assert guard_idx < running_idx < valid_idx < v2dir_idx < exit_idx
+        assert running_idx < valid_idx < v2dir_idx < fast_idx < guard_idx < exit_idx
     
     def test_da_count_in_status_text(self):
         """Test that every row has DA agreement count in status_text."""

@@ -841,6 +841,7 @@ class CollectorFetcher:
             'hsdir': {'eligible_count': 0, 'assigned_count': 0, 'details': []},
             'exit': {'eligible_count': 0, 'assigned_count': 0, 'details': []},
             'middleonly': {'eligible_count': 0, 'assigned_count': 0, 'details': []},
+            'badexit': {'eligible_count': 0, 'assigned_count': 0, 'details': []},
         }
         
         for auth_name, thresholds in self.flag_thresholds.items():
@@ -1009,6 +1010,20 @@ class CollectorFetcher:
                 'authority': auth_name,
                 'eligible': has_middleonly_flag,
                 'assigned': has_middleonly_flag,
+            })
+            
+            # BadExit flag tracking
+            # Per dir-spec: BadExit marks misbehaving exit nodes.
+            # Also added automatically when MiddleOnly is assigned.
+            has_badexit_flag = 'BadExit' in auth_flags
+            if has_badexit_flag:
+                eligibility['badexit']['eligible_count'] += 1
+                eligibility['badexit']['assigned_count'] += 1
+            
+            eligibility['badexit']['details'].append({
+                'authority': auth_name,
+                'eligible': has_badexit_flag,
+                'assigned': has_badexit_flag,
             })
         
         return eligibility
