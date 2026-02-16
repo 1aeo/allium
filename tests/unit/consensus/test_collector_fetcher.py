@@ -1137,3 +1137,112 @@ class TestParseStatsLineEdgeCases:
         assert result['wfu'] == pytest.approx(0.999999, rel=1e-5)
         assert result['tk'] == 315360000
         assert result['mtbf'] == 315360000
+
+
+class TestMiddleOnlyFlagTracking:
+    """Tests for MiddleOnly flag tracking in _analyze_flag_eligibility."""
+    
+    def test_middleonly_tracked_in_eligibility(self):
+        """Test that _analyze_flag_eligibility includes middleonly key."""
+        fetcher = CollectorFetcher()
+        fetcher.flag_thresholds = {
+            'auth1': {
+                'guard-wfu': 0.98,
+                'guard-tk': 691200,
+                'guard-bw-inc-exits': 10000000,
+                'stable-mtbf': 1000000,
+                'fast-speed': 100000,
+                'hsdir-wfu': 0.98,
+                'hsdir-tk': 864000,
+            },
+        }
+        
+        relay = {
+            'votes': {
+                'auth1': {
+                    'flags': ['Running', 'Valid', 'MiddleOnly', 'BadExit'],
+                    'wfu': 0.99,
+                    'tk': 1000000,
+                    'bandwidth': 5000000,
+                    'measured': 4000000,
+                    'mtbf': 2000000,
+                },
+            },
+        }
+        
+        eligibility = fetcher._analyze_flag_eligibility(relay)
+        
+        assert 'middleonly' in eligibility
+        assert eligibility['middleonly']['assigned_count'] == 1
+        assert eligibility['middleonly']['eligible_count'] == 1
+        assert len(eligibility['middleonly']['details']) == 1
+        assert eligibility['middleonly']['details'][0]['assigned'] is True
+    
+    def test_normal_relay_no_middleonly(self):
+        """Test that normal relay has zero MiddleOnly count."""
+        fetcher = CollectorFetcher()
+        fetcher.flag_thresholds = {
+            'auth1': {
+                'guard-wfu': 0.98,
+                'guard-tk': 691200,
+                'guard-bw-inc-exits': 10000000,
+                'stable-mtbf': 1000000,
+                'fast-speed': 100000,
+                'hsdir-wfu': 0.98,
+                'hsdir-tk': 864000,
+            },
+        }
+        
+        relay = {
+            'votes': {
+                'auth1': {
+                    'flags': ['Running', 'Valid', 'Fast', 'Stable', 'Guard', 'HSDir', 'V2Dir'],
+                    'wfu': 0.99,
+                    'tk': 1000000,
+                    'bandwidth': 5000000,
+                    'measured': 4000000,
+                    'mtbf': 2000000,
+                },
+            },
+        }
+        
+        eligibility = fetcher._analyze_flag_eligibility(relay)
+        
+        assert 'middleonly' in eligibility
+        assert eligibility['middleonly']['assigned_count'] == 0
+        assert eligibility['middleonly']['eligible_count'] == 0
+        assert len(eligibility['middleonly']['details']) == 1
+        assert eligibility['middleonly']['details'][0]['assigned'] is False
+    
+    def test_middleonly_partial_authorities(self):
+        """Test MiddleOnly flagged by some but not all authorities."""
+        fetcher = CollectorFetcher()
+        fetcher.flag_thresholds = {
+            'auth1': {'guard-wfu': 0.98, 'guard-tk': 691200, 'guard-bw-inc-exits': 10000000,
+                      'stable-mtbf': 1000000, 'fast-speed': 100000, 'hsdir-wfu': 0.98, 'hsdir-tk': 864000},
+            'auth2': {'guard-wfu': 0.98, 'guard-tk': 691200, 'guard-bw-inc-exits': 10000000,
+                      'stable-mtbf': 1000000, 'fast-speed': 100000, 'hsdir-wfu': 0.98, 'hsdir-tk': 864000},
+        }
+        
+        relay = {
+            'votes': {
+                'auth1': {
+                    'flags': ['Running', 'Valid', 'MiddleOnly', 'BadExit'],
+                    'wfu': 0.99, 'tk': 1000000, 'bandwidth': 5000000, 'measured': 4000000, 'mtbf': 2000000,
+                },
+                'auth2': {
+                    'flags': ['Running', 'Valid', 'Fast', 'Stable'],
+                    'wfu': 0.99, 'tk': 1000000, 'bandwidth': 5000000, 'measured': 4000000, 'mtbf': 2000000,
+                },
+            },
+        }
+        
+        eligibility = fetcher._analyze_flag_eligibility(relay)
+        
+        assert eligibility['middleonly']['assigned_count'] == 1
+        assert eligibility['middleonly']['eligible_count'] == 1
+        assert len(eligibility['middleonly']['details']) == 2
+        # auth1 has it, auth2 doesn't
+        details_by_auth = {d['authority']: d for d in eligibility['middleonly']['details']}
+        assert details_by_auth['auth1']['assigned'] is True
+        assert details_by_auth['auth2']['assigned'] is False
