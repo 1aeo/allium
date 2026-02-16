@@ -46,9 +46,9 @@ Consolidated reference for all Tor relay flags: dir-spec requirements, current A
 | **HSDir** | ✅ 4 rows (2 prereqs + WFU, TK) | ✅ 2 rows | ✅ 2 columns | — | ✅ Complete |
 | **Exit** | ✅ 1 row (Exit Policy) | ✅ 1 row | ✅ 1 column | — | ✅ Implemented 2026-02-15 |
 | **MiddleOnly** | ✅ Conditional row (when flagged) | ✅ Conditional row | ✅ 1 column | ✅ Warning + diagnostics | ✅ Implemented 2026-02-16 |
-| **Running** | ❌ None | ✅ Running row | ✅ Running column | ✅ Health Status | Low priority (already in 3+ places) |
-| **Valid** | ❌ None | ✅ Valid row | ✅ Valid column | ✅ Health Status | Low priority (already in 3+ places) |
-| **V2Dir** | 🔶 Guard prereq row only | — | — | — | ⏳ Medium priority |
+| **Running** | ✅ 1-2 rows (IPv4 + conditional IPv6) | ✅ Running row | ✅ Running column | ✅ Health Status | ✅ Implemented 2026-02-16 |
+| **Valid** | ✅ 1 row (Tor Version) | ✅ Valid row | ✅ Valid column | ✅ Health Status | ✅ Implemented 2026-02-16 |
+| **V2Dir** | ✅ 1 row (Dir Capability) + Guard prereq | ✅ V2Dir row | — | — | ✅ Implemented 2026-02-16 |
 | **Authority** | N/A | — | — | ✅ Flags list | Display-only |
 | **BadExit** | N/A | — | — | ✅ Flags list + diagnostics | Display-only |
 | **StaleDesc** | N/A | — | — | ✅ Warning + Per-Auth Desc Published | Warning display |
@@ -61,9 +61,9 @@ Consolidated reference for all Tor relay flags: dir-spec requirements, current A
 |----------|------|----------|--------|
 | ~~1~~ | ~~**Exit**~~ | ~~Large~~ | ✅ Implemented (2026-02-15) |
 | ~~2~~ | ~~**MiddleOnly**~~ | ~~Large — zero presence~~ | ✅ Implemented (2026-02-16) |
-| 3 | **V2Dir** | Medium — only as Guard prereq | ⏳ Not Started |
-| 4 | **Running** | Small — already in 3+ places | ⏳ Not Started |
-| 5 | **Valid** | Small — already in 3+ places | ⏳ Not Started |
+| ~~3~~ | ~~**V2Dir**~~ | ~~Medium — only as Guard prereq~~ | ✅ Implemented (2026-02-16) |
+| ~~4~~ | ~~**Running**~~ | ~~Small — already in 3+ places~~ | ✅ Implemented (2026-02-16) |
+| ~~5~~ | ~~**Valid**~~ | ~~Small — already in 3+ places~~ | ✅ Implemented (2026-02-16) |
 
 ### 2.3 Architecture Overview
 
@@ -291,10 +291,13 @@ The table uses `_format_flag_requirements_table()` to pre-compute all row data i
 | **Stable** | 2 | MTBF, Uptime | DA votes + Onionoo vs CollecTor thresholds |
 | **HSDir** | 4 | Prereq: Stable, Prereq: Fast, WFU, TK | DA votes vs CollecTor thresholds |
 | **Guard** | 6 | Prereq: Fast, Prereq: Stable, Prereq: V2Dir, WFU, TK, BW | DA votes + relay descriptor vs CollecTor thresholds |
+| **Running** | 1-2 | IPv4 Reachability, IPv6 Reachability (conditional) | CollecTor vote presence, 'a' line |
+| **Valid** | 1 | Tor Version (recommended status) | Onionoo version, recommended_version |
+| **V2Dir** | 1 | Dir Capability (DirPort/tunnelled) | Onionoo dir_address, V2Dir flag |
 | **Exit** | 1 | Exit Policy (ports 80+443) | Onionoo exit_policy_summary |
 | **MiddleOnly** | 0-1 | Security Status (conditional) | CollecTor vote flags |
 
-**Total Rows:** 14 (base) + 0-1 (conditional MiddleOnly)
+**Total Rows:** 17-18 (base, depending on IPv6) + 0-1 (conditional MiddleOnly)
 
 ### 4.2 Row Data Structure
 
@@ -393,27 +396,19 @@ Onionoo (exit_policy_summary) + CollecTor (vote flags)
 
 ---
 
-## 6. Future Flag Proposals
+## 6. Implementation Complete
 
-### 6.1 V2Dir (Priority 3)
+All 5 operator-relevant flags are now fully implemented in the eligibility table:
 
-Add standalone V2Dir eligibility info beyond the current Guard prereq row.
+| Priority | Flag | Implemented | Rows |
+|----------|------|-------------|------|
+| 1 | Exit | 2026-02-15 | 1 row (Exit Policy) |
+| 2 | MiddleOnly | 2026-02-16 | 0-1 rows (conditional) |
+| 3 | V2Dir | 2026-02-16 | 1 row (Dir Capability) |
+| 4 | Running | 2026-02-16 | 1-2 rows (IPv4 + conditional IPv6) |
+| 5 | Valid | 2026-02-16 | 1 row (Tor Version) |
 
-**Data:** DirPort from Onionoo `dir_address`, V2Dir flag presence.
-
-**Display:** 1 row showing DirPort number or "Tunnelled: Yes" inference.
-
-### 6.2 Running (Priority 4 — Low)
-
-Already extensively shown in Health Status, Summary, and Per-Auth tables. Adding to eligibility table would be redundant but consistent.
-
-**Display:** 1-2 rows (IPv4 reachability, optional IPv6).
-
-### 6.3 Valid (Priority 5 — Low)
-
-Already extensively shown. Adding to eligibility table would show version check and blacklist status.
-
-**Display:** 2 rows (Tor Version, Blacklist Status).
+Remaining flags (Authority, BadExit, StaleDesc, Sybil, NoEdConsensus) are display-only or internal flags that don't benefit from eligibility table rows.
 
 ---
 
