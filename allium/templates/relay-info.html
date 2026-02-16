@@ -150,7 +150,14 @@ Country: unknown
         <div class="health-row">
             <dt title="Capabilities assigned by Dir. Auth. based on performance.">Flags</dt>
             <dd>
-                {% set flag_list = relay['flags']|reject('equalto', 'StaleDesc')|list -%}
+                {% set flag_list_unsorted = relay['flags']|reject('equalto', 'StaleDesc')|list -%}
+                {% if diag and diag.eligible_flags_display -%}
+                {% set flag_list = [] -%}
+                {% for f in diag.eligible_flags_display.flag_order %}{% if f in flag_list_unsorted %}{% set _ = flag_list.append(f) %}{% endif %}{% endfor -%}
+                {% for f in flag_list_unsorted %}{% if f not in diag.eligible_flags_display.flag_order %}{% set _ = flag_list.append(f) %}{% endif %}{% endfor -%}
+                {% else -%}
+                {% set flag_list = flag_list_unsorted -%}
+                {% endif -%}
                 {% set flag_count = flag_list|length -%}
                 <span title="Guard=entry point, Exit=exit node, Stable=long-lived connections, Fast=high bandwidth, Valid=properly configured, Running=currently reachable.">{% for flag in flag_list -%}
                     <a href="{{ page_ctx.path_prefix }}flag/{{ flag.lower()|escape }}/">{{ flag|escape }}</a>{% if not loop.last %}, {% endif %}
@@ -478,9 +485,7 @@ Country: unknown
     {% for flag in flag_list -%}
         <a href="{{ page_ctx.path_prefix }}flag/{{ flag.lower()|escape }}/" title="{{ diag.tooltips.flags[flag.lower()]|default(flag ~ ' flag') }}">{{ flag|escape }}</a>{% if not loop.last %}, {% endif %}
     {% endfor -%}
-    {% if 'StaleDesc' in relay['flags'] -%}
-        <span style="color: #dc3545; font-size: 12px; margin-left: 8px;" title="Relay's descriptor is outdated. May indicate connectivity issues.">[Warning] StaleDesc</span>
-    {% endif -%}
+
 </div>
 
 {# Eligible Flags Row - Using pre-computed display data (DRY optimization) #}
@@ -1159,6 +1164,26 @@ Data from <a href="https://collector.torproject.org/recent/relay-descriptors/vot
         <td>{% if rv.fast_meets_minimum %}<span style="color: #28a745; font-weight: bold;">MEETS - ≥100 KB/s guarantee</span>{% elif rv.fast_meets_all %}<span style="color: #28a745; font-weight: bold;">MEETS - all {{ rv.total_authorities }} auths</span>{% elif rv.fast_meets_count > 0 %}<span style="color: #ffc107; font-weight: bold;">PARTIAL - {{ rv.fast_meets_count }}/{{ rv.total_authorities }}</span>{% else %}<span style="color: #dc3545; font-weight: bold;">BELOW - need ≥100 KB/s</span>{% endif %}</td>
     </tr>
     <tr>
+        <td title="Source: Onionoo | Field: dir_address | V2Dir requires DirPort or tunnelled-dir-server. Required for Guard flag.">V2Dir <span style="color: #6c757d; font-size: 10px;">(Relay Reported)</span></td>
+        <td title="Source: Onionoo | Field: dir_address | Relay's directory serving capability">{{ rv.v2dir_display }}</td>
+        <td title="V2Dir requires open DirPort or tunnelled-dir-server line in descriptor">DirPort > 0 OR tunnelled-dir-server</td>
+        <td>{% if rv.v2dir_has_flag %}<span style="color: #28a745; font-weight: bold;">V2DIR CAPABLE</span>{% else %}<span style="color: #dc3545; font-weight: bold;">NO V2DIR</span>{% endif %}</td>
+    </tr>
+    <tr>
+        <td title="Source: Onionoo | Field: exit_policy_summary | Exit flag requires allowing exits to ≥1 /8 address space on both ports 80 and 443 per Tor dir-spec Section 3.4.2.">Exit Policy <span style="color: #6c757d; font-size: 10px;">(Relay Reported)</span></td>
+        <td title="Source: Onionoo | Field: exit_policy_summary | Relay's exit policy summary showing allowed ports">{{ rv.exit_policy_display }}</td>
+        <td title="Tor dir-spec Section 3.4.2: Exit requires exits to ≥1 /8 on ports 80 AND 443">Allows ≥1 /8 on ports 80 AND 443</td>
+        <td>{% if rv.exit_eligible %}<span style="color: #28a745; font-weight: bold;">EXIT ELIGIBLE</span>{% elif rv.exit_allows_80 or rv.exit_allows_443 %}<span style="color: #ffc107; font-weight: bold;">PARTIAL - only port {% if rv.exit_allows_80 %}80{% else %}443{% endif %}</span>{% else %}<span style="color: #dc3545; font-weight: bold;">NON-EXIT (no port 80+443)</span>{% endif %}</td>
+    </tr>
+    {% if rv.middleonly_flagged %}
+    <tr>
+        <td title="Source: CollecTor | File: vote | Field: 's' line contains 'MiddleOnly' | Relay restricted to middle position only. Removes Exit, Guard, HSDir, V2Dir flags. Added in Tor 0.4.7.2+.">MiddleOnly <span style="color: #dc3545; font-size: 10px;">(Dir. Auth.)</span></td>
+        <td title="Source: CollecTor | File: vote | Count of authorities assigning MiddleOnly flag">{{ rv.middleonly_count }}/{{ diag.total_authorities }} authorities assigned MiddleOnly</td>
+        <td title="Assigned by authorities for suspicious behavior, Sybil risk, or policy violations">Suspicious behavior, Sybil risk, or policy violation</td>
+        <td><span style="color: #dc3545; font-weight: bold;">Assigned by {{ rv.middleonly_count }}/{{ diag.total_authorities }} authorities</span></td>
+    </tr>
+    {% endif %}
+    <tr>
         <td title="Source: CollecTor | File: vote | Field: flag-thresholds hsdir-wfu=X | Weighted Fractional Uptime for HSDir flag">HSDir WFU <span style="color: #6c757d; font-size: 10px;">(Dir. Auth., wfu)</span></td>
         <td title="Source: CollecTor | File: vote | Field: stats wfu=X">{{ rv.wfu_display }}</td>
         <td title="Source: CollecTor | File: vote | Field: flag-thresholds hsdir-wfu=X">≥{{ "%.1f"|format(rv.hsdir_wfu_threshold * 100) }}% (from all auths)</td>
@@ -1207,6 +1232,8 @@ Flags: <span style="color: #28a745; font-weight: bold;">green</span> = all autho
     <th title="Source: Onionoo | Authority nickname (relay with Authority flag) with country code">Authority</th>
     <th title="Source: CollecTor | File: vote | Field: 's' line contains 'Running' | Authority voted for this relay (could reach it via OR port)">Running</th>
     <th title="Source: CollecTor | File: vote | Field: 's' line contains 'Valid' | Relay is not blacklisted and has valid descriptor">Valid</th>
+    <th title="Source: CollecTor | File: vote | Field: 's' line contains 'Exit' | Authority assigned Exit flag based on relay's exit policy allowing ≥1 /8 on ports 80+443">Exit</th>
+    <th title="Source: CollecTor | File: vote | Field: 's' line contains 'MiddleOnly' | Relay restricted to middle position only. Removes Exit, Guard, HSDir, V2Dir flags. Assigned for suspicious behavior or Sybil risk.">MiddleOnly</th>
     <th title="Source: CollecTor | File: vote | Field: bandwidth-file-headers | Does this authority run sbws bandwidth scanner? 6 of 9 authorities measure bandwidth; 3 use relay-reported values.">BW Scan (Authority)</th>
     <th title="Source: CollecTor | File: vote | Presence of 'r' line = IPv4 reachable">v4</th>
     {% if has_ipv6 %}<th title="Source: CollecTor | File: vote | Field: 'a' line | IPv6 reachable | N/T = not tested by this authority">v6</th>{% endif %}
@@ -1250,6 +1277,30 @@ Flags: <span style="color: #28a745; font-weight: bold;">green</span> = all autho
                 <span style="color: #28a745;" title="Relay is Valid (verified, allowed in network)">Yes</span>
             {% else %}
                 <span style="color: #dc3545;" title="Relay does NOT have Valid flag">No</span>
+            {% endif %}
+        {% else %}
+            <span style="color: #6c757d;">—</span>
+        {% endif %}
+    </td>
+    {# Exit: Authority assigned Exit flag based on exit policy #}
+    <td>
+        {% if vote.voted and vote.flags %}
+            {% if 'Exit' in vote.flags %}
+                <span style="color: #28a745;" title="Authority assigned Exit flag - relay's exit policy meets requirements (≥1 /8 on ports 80+443)">Yes</span>
+            {% else %}
+                <span style="color: #6c757d;" title="Authority did not assign Exit flag - relay's exit policy does not meet Exit requirements">No</span>
+            {% endif %}
+        {% else %}
+            <span style="color: #6c757d;">—</span>
+        {% endif %}
+    </td>
+    {# MiddleOnly: Authority assigned MiddleOnly flag (restricts to middle position) #}
+    <td>
+        {% if vote.voted and vote.flags %}
+            {% if 'MiddleOnly' in vote.flags %}
+                <span style="color: #dc3545;" title="Authority assigned MiddleOnly flag - relay restricted to middle position only. Removes Exit, Guard, HSDir, V2Dir flags.">Yes</span>
+            {% else %}
+                <span style="color: #6c757d;">—</span>
             {% endif %}
         {% else %}
             <span style="color: #6c757d;">—</span>

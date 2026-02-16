@@ -35,7 +35,6 @@ allium/test_output/
 allium/compare_outputs.sh
 www-baseline/
 www-after/
-www/
 
 # Generated output directories
 baseline_output/

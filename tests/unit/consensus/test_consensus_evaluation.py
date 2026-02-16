@@ -1316,3 +1316,523 @@ class TestBandwidthFormatting:
         """Test formatting at MB boundary."""
         result = _format_bandwidth_value(1024 * 1024)
         assert 'MB/s' in result or 'KB/s' in result
+
+
+class TestMiddleOnlyFlag:
+    """Tests for MiddleOnly flag detection and display.
+    
+    MiddleOnly restricts suspicious relays to middle position only.
+    Effects: removes Exit, Guard, HSDir, V2Dir; adds BadExit.
+    Added in Tor 0.4.7.2-alpha.
+    """
+    
+    # Shared test data for MiddleOnly relay
+    MIDDLEONLY_EVALUATION = {
+        'fingerprint': 'AAAA' * 10,
+        'in_consensus': True,
+        'vote_count': 9,
+        'total_authorities': 9,
+        'majority_required': 5,
+        'authority_votes': [
+            {
+                'authority': f'auth{i}',
+                'voted': True,
+                'flags': (['Running', 'Valid', 'MiddleOnly', 'BadExit'] if i < 7
+                          else ['Running', 'Valid']),
+                'wfu': 0.99,
+                'tk': 1000000,
+                'bandwidth': 5000000,
+                'measured': 4000000,
+                'mtbf': 2000000,
+            }
+            for i in range(9)
+        ],
+        'flag_eligibility': {
+            'guard': {'eligible_count': 0, 'assigned_count': 0, 'details': []},
+            'stable': {'eligible_count': 9, 'assigned_count': 9, 'details': []},
+            'fast': {'eligible_count': 9, 'assigned_count': 9, 'details': []},
+            'hsdir': {'eligible_count': 0, 'assigned_count': 0, 'details': []},
+            'exit': {'eligible_count': 0, 'assigned_count': 0, 'details': []},
+            'middleonly': {'eligible_count': 7, 'assigned_count': 7, 'details': []},
+        },
+        'reachability': {
+            'ipv4_reachable_count': 9,
+            'ipv6_reachable_count': 0,
+            'ipv6_not_tested_authorities': [],
+            'total_authorities': 9,
+        },
+        'bandwidth': {
+            'median': 4000000, 'average': 4000000, 'min': 3000000,
+            'max': 5000000, 'deviation': 2000000, 'measurement_count': 9,
+            'bw_auth_measured_count': 6, 'bw_auth_total': 6,
+        },
+    }
+    
+    # Shared test data for normal relay (no MiddleOnly)
+    NORMAL_EVALUATION = {
+        'fingerprint': 'BBBB' * 10,
+        'in_consensus': True,
+        'vote_count': 9,
+        'total_authorities': 9,
+        'majority_required': 5,
+        'authority_votes': [
+            {
+                'authority': f'auth{i}',
+                'voted': True,
+                'flags': ['Running', 'Valid', 'Fast', 'Stable', 'Guard', 'HSDir', 'V2Dir'],
+                'wfu': 0.99,
+                'tk': 1000000,
+                'bandwidth': 5000000,
+                'measured': 4000000,
+                'mtbf': 2000000,
+            }
+            for i in range(9)
+        ],
+        'flag_eligibility': {
+            'guard': {'eligible_count': 9, 'assigned_count': 9, 'details': []},
+            'stable': {'eligible_count': 9, 'assigned_count': 9, 'details': []},
+            'fast': {'eligible_count': 9, 'assigned_count': 9, 'details': []},
+            'hsdir': {'eligible_count': 9, 'assigned_count': 9, 'details': []},
+            'exit': {'eligible_count': 0, 'assigned_count': 0, 'details': []},
+            'middleonly': {'eligible_count': 0, 'assigned_count': 0, 'details': []},
+        },
+        'reachability': {
+            'ipv4_reachable_count': 9,
+            'ipv6_reachable_count': 0,
+            'ipv6_not_tested_authorities': [],
+            'total_authorities': 9,
+        },
+        'bandwidth': {
+            'median': 4000000, 'average': 4000000, 'min': 3000000,
+            'max': 5000000, 'deviation': 2000000, 'measurement_count': 9,
+            'bw_auth_measured_count': 6, 'bw_auth_total': 6,
+        },
+    }
+    
+    def test_middleonly_in_flag_summary(self):
+        """Test that MiddleOnly relay has middleonly in flag_summary."""
+        result = format_relay_consensus_evaluation(
+            self.MIDDLEONLY_EVALUATION,
+            current_flags=['Running', 'Valid', 'MiddleOnly', 'BadExit'],
+            observed_bandwidth=5000000,
+        )
+        
+        fs = result['flag_summary']
+        assert 'middleonly' in fs
+        assert fs['middleonly']['eligible_count'] == 7
+    
+    def test_middleonly_relay_values(self):
+        """Test that MiddleOnly relay has correct relay_values."""
+        result = format_relay_consensus_evaluation(
+            self.MIDDLEONLY_EVALUATION,
+            current_flags=['Running', 'Valid', 'MiddleOnly', 'BadExit'],
+            observed_bandwidth=5000000,
+        )
+        
+        rv = result['relay_values']
+        assert rv['middleonly_flagged'] is True
+        assert rv['middleonly_count'] == 7
+    
+    def test_middleonly_in_flag_requirements_table(self):
+        """Test that MiddleOnly relay shows MiddleOnly row in requirements table."""
+        result = format_relay_consensus_evaluation(
+            self.MIDDLEONLY_EVALUATION,
+            current_flags=['Running', 'Valid', 'MiddleOnly', 'BadExit'],
+            observed_bandwidth=5000000,
+        )
+        
+        frt = result['flag_requirements_table']
+        middleonly_rows = [r for r in frt if r['flag'] == 'MiddleOnly']
+        assert len(middleonly_rows) == 1
+        
+        row = middleonly_rows[0]
+        assert row['metric'] == 'Restriction (by DA)'
+        assert row['status'] == 'below'
+        assert 'Flagged' in row['status_text']
+        assert '7/9 DA' in row['status_text']
+        assert '7/9' in row['value']
+    
+    def test_normal_relay_no_middleonly_row(self):
+        """Test that normal relay has NO MiddleOnly row in requirements table."""
+        result = format_relay_consensus_evaluation(
+            self.NORMAL_EVALUATION,
+            current_flags=['Running', 'Valid', 'Fast', 'Stable', 'Guard', 'HSDir', 'V2Dir'],
+            observed_bandwidth=5000000,
+        )
+        
+        frt = result['flag_requirements_table']
+        middleonly_rows = [r for r in frt if r['flag'] == 'MiddleOnly']
+        assert len(middleonly_rows) == 0
+    
+    def test_normal_relay_row_count(self):
+        """Test that normal relay has correct row count (no MiddleOnly).
+        
+        Rows: Fast:1 + Stable:2 + HSDir:4 + Guard:6 + Running:2 (IPv4+IPv6) +
+              Valid:1 + V2Dir:1 + Exit:1 = 18
+        """
+        result = format_relay_consensus_evaluation(
+            self.NORMAL_EVALUATION,
+            current_flags=['Running', 'Valid', 'Fast', 'Stable', 'Guard', 'HSDir', 'V2Dir'],
+            observed_bandwidth=5000000,
+        )
+        
+        frt = result['flag_requirements_table']
+        # Count should include Running (with IPv6 since test data has ipv6_tested > 0), Valid, V2Dir
+        flags_present = set(r['flag'] for r in frt)
+        assert 'Running' in flags_present
+        assert 'Valid' in flags_present
+        assert 'V2Dir' in flags_present
+        assert 'MiddleOnly' not in flags_present
+        assert len(frt) == 18  # 14 original + Running:2 + Valid:1 + V2Dir:1
+    
+    def test_middleonly_relay_row_count(self):
+        """Test that MiddleOnly relay has correct row count (base + MiddleOnly).
+        
+        Rows: Fast:1 + Stable:2 + HSDir:4 + Guard:6 + Running:2 (IPv4+IPv6) +
+              Valid:1 + V2Dir:1 + Exit:1 + MiddleOnly:1 = 19
+        """
+        result = format_relay_consensus_evaluation(
+            self.MIDDLEONLY_EVALUATION,
+            current_flags=['Running', 'Valid', 'MiddleOnly', 'BadExit'],
+            observed_bandwidth=5000000,
+        )
+        
+        frt = result['flag_requirements_table']
+        assert len(frt) == 19  # 18 base + 1 MiddleOnly
+    
+    def test_middleonly_row_color_is_red(self):
+        """Test that MiddleOnly row uses red (below) color."""
+        result = format_relay_consensus_evaluation(
+            self.MIDDLEONLY_EVALUATION,
+            current_flags=['Running', 'Valid', 'MiddleOnly', 'BadExit'],
+            observed_bandwidth=5000000,
+        )
+        
+        frt = result['flag_requirements_table']
+        middleonly_rows = [r for r in frt if r['flag'] == 'MiddleOnly']
+        assert len(middleonly_rows) == 1
+        assert middleonly_rows[0]['status_color'] == '#dc3545'  # Red
+        assert middleonly_rows[0]['flag_color'] == '#dc3545'  # Red flag color
+    
+    def test_middleonly_issue_detection(self):
+        """Test that MiddleOnly flag generates error-severity issue."""
+        diagnostics = {
+            'in_consensus': True,
+            'vote_count': 9,
+            'total_authorities': 9,
+            'reachability': {
+                'ipv4_reachable_count': 9,
+                'ipv6_reachable_count': 0,
+                'ipv6_not_tested_authorities': [],
+            },
+            'flag_eligibility': {},
+            'authority_votes': [],
+        }
+        
+        issues = _identify_issues(
+            diagnostics,
+            current_flags=['Running', 'Valid', 'MiddleOnly', 'BadExit'],
+            observed_bandwidth=3_000_000,
+        )
+        
+        middleonly_issues = [i for i in issues if 'MiddleOnly' in i.get('title', '')]
+        assert len(middleonly_issues) >= 1
+        assert middleonly_issues[0]['severity'] == 'error'
+        assert 'restricted' in middleonly_issues[0]['description'].lower()
+    
+    def test_no_middleonly_issue_for_normal_relay(self):
+        """Test that normal relay has no MiddleOnly issue."""
+        diagnostics = {
+            'in_consensus': True,
+            'vote_count': 9,
+            'total_authorities': 9,
+            'reachability': {
+                'ipv4_reachable_count': 9,
+                'ipv6_reachable_count': 0,
+                'ipv6_not_tested_authorities': [],
+            },
+            'flag_eligibility': {},
+            'authority_votes': [],
+            'bandwidth': {'deviation': 1000, 'median': 50000},
+        }
+        
+        issues = _identify_issues(
+            diagnostics,
+            current_flags=['Running', 'Valid', 'Fast', 'Stable', 'Guard'],
+            observed_bandwidth=3_000_000,
+        )
+        
+        middleonly_issues = [i for i in issues if 'MiddleOnly' in i.get('title', '')]
+        assert len(middleonly_issues) == 0
+    
+    def test_normal_relay_middleonly_not_flagged(self):
+        """Test that normal relay has middleonly_flagged=False."""
+        result = format_relay_consensus_evaluation(
+            self.NORMAL_EVALUATION,
+            current_flags=['Running', 'Valid'],
+            observed_bandwidth=5000000,
+        )
+        
+        rv = result['relay_values']
+        assert rv['middleonly_flagged'] is False
+        assert rv['middleonly_count'] == 0
+
+
+class TestRunningValidV2DirFlags:
+    """Tests for Running, Valid, and V2Dir flag eligibility rows."""
+    
+    # Shared evaluation data
+    FULL_RELAY = {
+        'fingerprint': 'CCCC' * 10,
+        'in_consensus': True,
+        'vote_count': 9,
+        'total_authorities': 9,
+        'majority_required': 5,
+        'authority_votes': [
+            {
+                'authority': f'auth{i}',
+                'voted': True,
+                'flags': ['Running', 'Valid', 'Fast', 'Stable', 'Guard', 'HSDir', 'V2Dir'],
+                'wfu': 0.99, 'tk': 1000000, 'bandwidth': 5000000,
+                'measured': 4000000, 'mtbf': 2000000,
+            }
+            for i in range(9)
+        ],
+        'flag_eligibility': {
+            'guard': {'eligible_count': 9, 'assigned_count': 9, 'details': [
+                {'has_fast': True, 'has_stable': True, 'has_v2dir': True} for _ in range(9)
+            ]},
+            'stable': {'eligible_count': 9, 'assigned_count': 9, 'details': []},
+            'fast': {'eligible_count': 9, 'assigned_count': 9, 'details': []},
+            'hsdir': {'eligible_count': 9, 'assigned_count': 9, 'details': []},
+            'exit': {'eligible_count': 0, 'assigned_count': 0, 'details': []},
+            'middleonly': {'eligible_count': 0, 'assigned_count': 0, 'details': []},
+        },
+        'reachability': {
+            'ipv4_reachable_count': 9,
+            'ipv6_reachable_count': 7,
+            'ipv6_not_tested_authorities': ['dizum', 'faravahar'],
+            'total_authorities': 9,
+        },
+        'bandwidth': {
+            'median': 4000000, 'average': 4000000, 'min': 3000000,
+            'max': 5000000, 'deviation': 2000000, 'measurement_count': 9,
+            'bw_auth_measured_count': 6, 'bw_auth_total': 6,
+        },
+    }
+    
+    def test_running_ipv4_row_present(self):
+        """Test Running IPv4 row exists in requirements table."""
+        result = format_relay_consensus_evaluation(
+            self.FULL_RELAY,
+            current_flags=['Running', 'Valid', 'V2Dir'],
+            observed_bandwidth=5000000,
+        )
+        frt = result['flag_requirements_table']
+        running_rows = [r for r in frt if r['flag'] == 'Running']
+        assert len(running_rows) >= 1
+        assert running_rows[0]['metric'] == 'IPv4 Reachability'
+        assert running_rows[0]['status'] == 'meets'
+    
+    def test_running_ipv6_row_present_when_ipv6(self):
+        """Test Running IPv6 row when relay has IPv6."""
+        result = format_relay_consensus_evaluation(
+            self.FULL_RELAY,
+            current_flags=['Running', 'Valid', 'V2Dir'],
+            observed_bandwidth=5000000,
+        )
+        frt = result['flag_requirements_table']
+        running_rows = [r for r in frt if r['flag'] == 'Running']
+        # Should have 2 rows (IPv4 + IPv6) since test data has ipv6_tested > 0
+        assert len(running_rows) == 2
+        assert running_rows[1]['metric'] == 'IPv6 Reachability'
+    
+    def test_running_ipv4_relay_values(self):
+        """Test Running relay values are populated."""
+        result = format_relay_consensus_evaluation(
+            self.FULL_RELAY,
+            current_flags=['Running', 'Valid'],
+            observed_bandwidth=5000000,
+        )
+        rv = result['relay_values']
+        assert rv['running_ipv4_count'] == 9
+        assert rv['running_ipv6_count'] == 7
+        assert rv['running_has_ipv6'] is True
+    
+    def test_valid_row_recommended_version(self):
+        """Test Valid row with recommended version."""
+        result = format_relay_consensus_evaluation(
+            self.FULL_RELAY,
+            current_flags=['Running', 'Valid'],
+            observed_bandwidth=5000000,
+            version='0.4.8.12',
+            recommended_version=True,
+        )
+        frt = result['flag_requirements_table']
+        valid_rows = [r for r in frt if r['flag'] == 'Valid']
+        assert len(valid_rows) == 1
+        assert valid_rows[0]['metric'] == 'Tor Version'
+        assert valid_rows[0]['status'] == 'meets'
+        assert '0.4.8.12' in valid_rows[0]['value']
+    
+    def test_valid_row_not_recommended(self):
+        """Test Valid row with not-recommended version shows below."""
+        result = format_relay_consensus_evaluation(
+            self.FULL_RELAY,
+            current_flags=['Running', 'Valid'],
+            observed_bandwidth=5000000,
+            version='0.4.7.1',
+            recommended_version=False,
+        )
+        frt = result['flag_requirements_table']
+        valid_rows = [r for r in frt if r['flag'] == 'Valid']
+        assert len(valid_rows) == 1
+        assert valid_rows[0]['status'] == 'below'
+        assert 'not recommended' in valid_rows[0]['status_text'].lower()
+    
+    def test_valid_relay_values(self):
+        """Test Valid relay values are populated."""
+        result = format_relay_consensus_evaluation(
+            self.FULL_RELAY,
+            current_flags=['Running', 'Valid'],
+            observed_bandwidth=5000000,
+            version='0.4.8.12',
+            recommended_version=True,
+        )
+        rv = result['relay_values']
+        assert rv['valid_version'] == '0.4.8.12'
+        assert rv['valid_recommended'] is True
+        assert 'Recommended' in rv['valid_version_display']
+    
+    def test_v2dir_row_with_dirport(self):
+        """Test V2Dir row with DirPort."""
+        result = format_relay_consensus_evaluation(
+            self.FULL_RELAY,
+            current_flags=['Running', 'Valid', 'V2Dir'],
+            observed_bandwidth=5000000,
+            dir_address='1.2.3.4:9030',
+        )
+        frt = result['flag_requirements_table']
+        v2dir_rows = [r for r in frt if r['flag'] == 'V2Dir']
+        assert len(v2dir_rows) == 1
+        assert v2dir_rows[0]['metric'] == 'Dir Capability'
+        assert v2dir_rows[0]['status'] == 'meets'
+        assert '9030' in v2dir_rows[0]['value']
+    
+    def test_v2dir_row_tunnelled(self):
+        """Test V2Dir row with tunnelled-dir-server (no DirPort)."""
+        result = format_relay_consensus_evaluation(
+            self.FULL_RELAY,
+            current_flags=['Running', 'Valid', 'V2Dir'],
+            observed_bandwidth=5000000,
+            dir_address='',
+        )
+        frt = result['flag_requirements_table']
+        v2dir_rows = [r for r in frt if r['flag'] == 'V2Dir']
+        assert len(v2dir_rows) == 1
+        assert v2dir_rows[0]['status'] == 'meets'
+        assert 'Tunnelled' in v2dir_rows[0]['value']
+    
+    def test_v2dir_row_no_v2dir(self):
+        """Test V2Dir row when relay has no V2Dir flag."""
+        result = format_relay_consensus_evaluation(
+            self.FULL_RELAY,
+            current_flags=['Running', 'Valid'],  # No V2Dir
+            observed_bandwidth=5000000,
+            dir_address='',
+        )
+        frt = result['flag_requirements_table']
+        v2dir_rows = [r for r in frt if r['flag'] == 'V2Dir']
+        assert len(v2dir_rows) == 1
+        assert v2dir_rows[0]['status'] == 'below'
+    
+    def test_v2dir_relay_values(self):
+        """Test V2Dir relay values are populated."""
+        result = format_relay_consensus_evaluation(
+            self.FULL_RELAY,
+            current_flags=['Running', 'Valid', 'V2Dir'],
+            observed_bandwidth=5000000,
+            dir_address='1.2.3.4:9030',
+        )
+        rv = result['relay_values']
+        assert rv['v2dir_has_flag'] is True
+        assert rv['v2dir_has_dirport'] is True
+        assert 'DirPort: 9030' in rv['v2dir_display']
+    
+    def test_row_order_preserved(self):
+        """Test that table order matches Eligible Flags row: Running → Valid → V2Dir → Fast → ... → Guard → Exit."""
+        result = format_relay_consensus_evaluation(
+            self.FULL_RELAY,
+            current_flags=['Running', 'Valid', 'V2Dir'],
+            observed_bandwidth=5000000,
+            version='0.4.8.12',
+            recommended_version=True,
+            dir_address='1.2.3.4:9030',
+        )
+        frt = result['flag_requirements_table']
+        flags_in_order = [r['flag'] for r in frt]
+        
+        # Order: Running → Valid → V2Dir → Fast → Stable → HSDir → Guard → Exit
+        running_idx = flags_in_order.index('Running')
+        valid_idx = flags_in_order.index('Valid')
+        v2dir_idx = flags_in_order.index('V2Dir')
+        fast_idx = flags_in_order.index('Fast')
+        guard_idx = max(i for i, f in enumerate(flags_in_order) if f == 'Guard')
+        exit_idx = flags_in_order.index('Exit')
+        
+        assert running_idx < valid_idx < v2dir_idx < fast_idx < guard_idx < exit_idx
+    
+    def test_da_count_in_status_text(self):
+        """Test that every row has DA agreement count in status_text."""
+        result = format_relay_consensus_evaluation(
+            self.FULL_RELAY,
+            current_flags=['Running', 'Valid', 'Fast', 'Stable', 'Guard', 'HSDir', 'V2Dir'],
+            observed_bandwidth=5000000,
+            version='0.4.8.12',
+            recommended_version=True,
+            dir_address='1.2.3.4:9030',
+        )
+        frt = result['flag_requirements_table']
+        
+        for row in frt:
+            assert 'DA)' in row['status_text'], (
+                f"Row [{row['flag']}] {row['metric']} missing DA count: {row['status_text']}"
+            )
+    
+    def test_vote_threshold_in_threshold_text(self):
+        """Test that every row has vote threshold (≥M/T DA) in threshold."""
+        result = format_relay_consensus_evaluation(
+            self.FULL_RELAY,
+            current_flags=['Running', 'Valid', 'Fast', 'Stable', 'Guard', 'HSDir', 'V2Dir'],
+            observed_bandwidth=5000000,
+            version='0.4.8.12',
+            recommended_version=True,
+            dir_address='1.2.3.4:9030',
+        )
+        frt = result['flag_requirements_table']
+        
+        for row in frt:
+            assert 'DA)' in row['threshold'], (
+                f"Row [{row['flag']}] {row['metric']} missing vote threshold: {row['threshold']}"
+            )
+    
+    def test_da_counts_are_dynamic(self):
+        """Test that DA counts use dynamic total_authorities, not hardcoded 9."""
+        # Use evaluation with custom authority count
+        eval_custom = dict(self.FULL_RELAY)
+        eval_custom['total_authorities'] = 7
+        eval_custom['majority_required'] = 4
+        eval_custom['vote_count'] = 7
+        
+        result = format_relay_consensus_evaluation(
+            eval_custom,
+            current_flags=['Running', 'Valid', 'V2Dir'],
+            observed_bandwidth=5000000,
+            version='0.4.8.12',
+            recommended_version=True,
+        )
+        frt = result['flag_requirements_table']
+        
+        # Check that threshold shows ≥4/7 DA (not ≥5/9)
+        fast_row = frt[0]  # First row is Fast
+        assert '≥4/7 DA' in fast_row['threshold'], f"Expected ≥4/7 DA, got: {fast_row['threshold']}"
