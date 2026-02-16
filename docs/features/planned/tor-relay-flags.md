@@ -45,7 +45,7 @@ Consolidated reference for all Tor relay flags: dir-spec requirements, current A
 | **Fast** | ✅ 1 row (Speed) | ✅ 1 row | ✅ 1 column | — | ✅ Complete |
 | **HSDir** | ✅ 4 rows (2 prereqs + WFU, TK) | ✅ 2 rows | ✅ 2 columns | — | ✅ Complete |
 | **Exit** | ✅ 1 row (Exit Policy) | ✅ 1 row | ✅ 1 column | — | ✅ Implemented 2026-02-15 |
-| **MiddleOnly** | ✅ Conditional row (when flagged) | ✅ Conditional row | ✅ 1 column | ✅ Warning display | ✅ Implemented 2026-02-16 |
+| **MiddleOnly** | ✅ Conditional row (when flagged) | ✅ Conditional row | ✅ 1 column | ✅ Warning + diagnostics | ✅ Implemented 2026-02-16 |
 | **Running** | ❌ None | ✅ Running row | ✅ Running column | ✅ Health Status | Low priority (already in 3+ places) |
 | **Valid** | ❌ None | ✅ Valid row | ✅ Valid column | ✅ Health Status | Low priority (already in 3+ places) |
 | **V2Dir** | 🔶 Guard prereq row only | — | — | — | ⏳ Medium priority |
