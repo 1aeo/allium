@@ -1448,7 +1448,7 @@ class TestMiddleOnlyFlag:
         row = middleonly_rows[0]
         assert row['metric'] == 'Security Status'
         assert row['status'] == 'below'
-        assert 'Restricted' in row['status_text']
+        assert '7/9 DA' in row['status_text']  # DA agreement count
         assert '7/9' in row['value']
     
     def test_normal_relay_no_middleonly_row(self):
@@ -1779,3 +1779,58 @@ class TestRunningValidV2DirFlags:
         exit_idx = flags_in_order.index('Exit')
         
         assert guard_idx < running_idx < valid_idx < v2dir_idx < exit_idx
+    
+    def test_da_count_in_status_text(self):
+        """Test that every row has DA agreement count in status_text."""
+        result = format_relay_consensus_evaluation(
+            self.FULL_RELAY,
+            current_flags=['Running', 'Valid', 'Fast', 'Stable', 'Guard', 'HSDir', 'V2Dir'],
+            observed_bandwidth=5000000,
+            version='0.4.8.12',
+            recommended_version=True,
+            dir_address='1.2.3.4:9030',
+        )
+        frt = result['flag_requirements_table']
+        
+        for row in frt:
+            assert 'DA)' in row['status_text'], (
+                f"Row [{row['flag']}] {row['metric']} missing DA count: {row['status_text']}"
+            )
+    
+    def test_vote_threshold_in_threshold_text(self):
+        """Test that every row has vote threshold (≥M/T DA) in threshold."""
+        result = format_relay_consensus_evaluation(
+            self.FULL_RELAY,
+            current_flags=['Running', 'Valid', 'Fast', 'Stable', 'Guard', 'HSDir', 'V2Dir'],
+            observed_bandwidth=5000000,
+            version='0.4.8.12',
+            recommended_version=True,
+            dir_address='1.2.3.4:9030',
+        )
+        frt = result['flag_requirements_table']
+        
+        for row in frt:
+            assert 'DA)' in row['threshold'], (
+                f"Row [{row['flag']}] {row['metric']} missing vote threshold: {row['threshold']}"
+            )
+    
+    def test_da_counts_are_dynamic(self):
+        """Test that DA counts use dynamic total_authorities, not hardcoded 9."""
+        # Use evaluation with custom authority count
+        eval_custom = dict(self.FULL_RELAY)
+        eval_custom['total_authorities'] = 7
+        eval_custom['majority_required'] = 4
+        eval_custom['vote_count'] = 7
+        
+        result = format_relay_consensus_evaluation(
+            eval_custom,
+            current_flags=['Running', 'Valid', 'V2Dir'],
+            observed_bandwidth=5000000,
+            version='0.4.8.12',
+            recommended_version=True,
+        )
+        frt = result['flag_requirements_table']
+        
+        # Check that threshold shows ≥4/7 DA (not ≥5/9)
+        fast_row = frt[0]  # First row is Fast
+        assert '≥4/7 DA' in fast_row['threshold'], f"Expected ≥4/7 DA, got: {fast_row['threshold']}"
