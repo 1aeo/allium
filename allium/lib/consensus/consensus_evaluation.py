@@ -148,6 +148,32 @@ def _port_in_rules(rules: list, port: int) -> bool:
     return False
 
 
+def _format_valid_version_display(version: str, recommended_version: bool) -> str:
+    """Format Valid flag version display string."""
+    if not version:
+        return 'Unknown'
+    if recommended_version is True:
+        return f'{version} (Recommended)'
+    elif recommended_version is False:
+        return f'{version} (Not Recommended)'
+    return version
+
+
+def _format_v2dir_display(dir_address: str, has_v2dir_flag: bool) -> str:
+    """Format V2Dir flag display string.
+    
+    V2Dir requires DirPort OR tunnelled-dir-server.
+    If relay has V2Dir flag but no DirPort, it must have tunnelled-dir-server.
+    """
+    if dir_address:
+        port = dir_address.split(':')[-1] if ':' in dir_address else dir_address
+        return f'DirPort: {port}'
+    elif has_v2dir_flag:
+        return 'Tunnelled: Yes (no DirPort)'
+    else:
+        return 'No DirPort, no tunnelled-dir-server'
+
+
 def _analyze_exit_policy(exit_policy_summary: dict) -> dict:
     """Analyze exit policy for Exit flag eligibility.
 
@@ -332,7 +358,7 @@ def _parse_wfu_threshold(value) -> Optional[float]:
     return float(value)
 
 
-def format_relay_consensus_evaluation(evaluation: dict, flag_thresholds: dict = None, current_flags: list = None, observed_bandwidth: int = 0, use_bits: bool = False, relay_uptime: float = None, version: str = None, recommended_version: bool = None, exit_policy_summary: dict = None) -> dict:
+def format_relay_consensus_evaluation(evaluation: dict, flag_thresholds: dict = None, current_flags: list = None, observed_bandwidth: int = 0, use_bits: bool = False, relay_uptime: float = None, version: str = None, recommended_version: bool = None, exit_policy_summary: dict = None, dir_address: str = None) -> dict:
     """
     Format relay consensus evaluation for template display.
     
@@ -352,6 +378,8 @@ def format_relay_consensus_evaluation(evaluation: dict, flag_thresholds: dict = 
         recommended_version: Whether the version is recommended (from Onionoo).
         exit_policy_summary: Relay's exit policy summary from Onionoo (for Exit flag analysis).
                             Format: {'accept': ['80', '443']} or {'reject': ['25', '119']}.
+        dir_address: Relay's directory address from Onionoo (for V2Dir flag analysis).
+                    Format: "IP:Port" string or None.
         
     Returns:
         dict: Formatted evaluation ready for template rendering
@@ -383,7 +411,7 @@ def format_relay_consensus_evaluation(evaluation: dict, flag_thresholds: dict = 
         'consensus_status': _format_consensus_status(evaluation),
         
         # Relay values summary (for Summary table) - pass observed_bandwidth, use_bits, relay_uptime, exit_policy_summary
-        'relay_values': _format_relay_values(evaluation, flag_thresholds, observed_bandwidth, use_bits, relay_uptime, exit_policy_summary),
+        'relay_values': _format_relay_values(evaluation, flag_thresholds, observed_bandwidth, use_bits, relay_uptime, exit_policy_summary, current_flags=current_flags, version=version, recommended_version=recommended_version, dir_address=dir_address),
         
         # Per-authority voting details - pass observed_bandwidth, use_bits, relay_uptime
         'authority_table': _format_authority_table_enhanced(evaluation, flag_thresholds, observed_bandwidth, use_bits, relay_uptime),
@@ -426,7 +454,7 @@ def format_relay_consensus_evaluation(evaluation: dict, flag_thresholds: dict = 
     return formatted
 
 
-def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, observed_bandwidth: int = 0, use_bits: bool = False, relay_uptime: float = None, exit_policy_summary: dict = None) -> dict:
+def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, observed_bandwidth: int = 0, use_bits: bool = False, relay_uptime: float = None, exit_policy_summary: dict = None, current_flags: list = None, version: str = None, recommended_version: bool = None, dir_address: str = None) -> dict:
     """
     Format relay values summary for the Summary table.
     Shows your relay's values vs consensus thresholds.
@@ -440,7 +468,12 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
         relay_uptime: Relay's current uptime in seconds (from Onionoo last_restarted).
                       Used for Stable uptime comparison.
         exit_policy_summary: Relay's exit policy summary from Onionoo (for Exit flag analysis).
+        current_flags: Relay's current flags from Onionoo (for V2Dir/Running/Valid display).
+        version: Tor version string from Onionoo (for Valid flag display).
+        recommended_version: Whether version is recommended from Onionoo (for Valid flag display).
+        dir_address: Relay's directory address from Onionoo (for V2Dir flag display).
     """
+    current_flags = current_flags or []
     authority_votes = consensus_data.get('authority_votes', [])
     flag_eligibility = consensus_data.get('flag_eligibility', {})
     reachability = consensus_data.get('reachability', {})
@@ -780,6 +813,26 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
         # Conditional display: only shown when relay is flagged.
         'middleonly_flagged': flag_eligibility.get('middleonly', {}).get('assigned_count', 0) > 0,
         'middleonly_count': flag_eligibility.get('middleonly', {}).get('assigned_count', 0),
+        
+        # Running flag values (from reachability data, already computed above)
+        # Running = authority could reach relay's ORPort within last 45 minutes
+        'running_ipv4_count': ipv4_reachable_count,
+        'running_ipv6_count': ipv6_reachable_count,
+        'running_ipv6_tested': ipv6_tested_count,
+        'running_has_ipv6': ipv6_tested_count > 0,
+        
+        # Valid flag values (version check)
+        # Valid = not blacklisted + valid descriptor + non-broken Tor version
+        'valid_version': version,
+        'valid_recommended': recommended_version,
+        'valid_version_display': _format_valid_version_display(version, recommended_version),
+        
+        # V2Dir flag values (DirPort or tunnelled-dir-server)
+        # V2Dir = has DirPort OR tunnelled-dir-server; required for Guard
+        'v2dir_has_flag': 'V2Dir' in current_flags,
+        'v2dir_dir_address': dir_address or '',
+        'v2dir_has_dirport': bool(dir_address),
+        'v2dir_display': _format_v2dir_display(dir_address, 'V2Dir' in current_flags),
     }
 
 
@@ -813,6 +866,10 @@ METRIC_TOOLTIPS = {
     'tk_hsdir': "How long authorities have tracked this relay. Most require >=25 hours; some (moria1) require ~10 days. Source: Dir. Auth. vote files.",
     'policy_exit': "Exit policy must allow traffic to at least one /8 address space on both port 80 AND port 443 per Tor dir-spec Section 3.4.2. Source: Onionoo exit_policy_summary.",
     'middleonly': "Security restriction assigned by Directory Authorities. MiddleOnly relays cannot serve as Guard, Exit, or HSDir. Removes Exit, Guard, HSDir, V2Dir flags and adds BadExit. Source: CollecTor vote files.",
+    'running_ipv4': "IPv4 reachability: Directory Authority must successfully connect to relay's IPv4 ORPort within 45 minutes. Source: CollecTor vote files (presence of relay in vote = reachable).",
+    'running_ipv6': "IPv6 reachability: Tested by authorities with AuthDirHasIPv6Connectivity enabled. Not all authorities test IPv6. Source: CollecTor vote files ('a' line).",
+    'version_valid': "Tor version must not be known to be broken. Outdated versions may lose Valid flag and be rejected from the network. Source: Onionoo relay descriptor.",
+    'v2dir_capability': "Relay needs open DirPort OR tunnelled-dir-server line in descriptor, and DirCache not disabled. Required for Guard flag. Source: Onionoo dir_address / relay descriptor.",
 }
 
 SOURCE_TOOLTIPS = {
@@ -1198,6 +1255,94 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
     rows.append(_make_row('Guard', guard_tooltip, guard_color, 'Bandwidth', METRIC_TOOLTIPS['bw_guard'],
                           _format_relay_value_html(rv.get('observed_bw_display', 'N/A')), 'relay',
                           bw_threshold, bw_status, _get_status_text(bw_status, bw_extra)))
+    
+    # ========== Running flag (1-2 rows) ==========
+    # Per dir-spec: Running = authority successfully connected within last 45 minutes.
+    # Row 1 (always): IPv4 reachability
+    # Row 2 (conditional): IPv6 reachability (only if relay has IPv6)
+    running_color = get_flag_color('running')
+    running_tooltip = FLAG_TOOLTIPS['running']
+    running_ipv4 = rv.get('running_ipv4_count', 0)
+    running_has_ipv6 = rv.get('running_has_ipv6', False)
+    running_ipv6 = rv.get('running_ipv6_count', 0)
+    running_ipv6_tested = rv.get('running_ipv6_tested', 0)
+    
+    running_rowspan = 2 if running_has_ipv6 else 1
+    ipv4_status = _majority_status(running_ipv4, majority_required)
+    
+    rows.append(_make_row(
+        'Running', running_tooltip, running_color,
+        'IPv4 Reachability', METRIC_TOOLTIPS.get('running_ipv4', ''),
+        f'{running_ipv4}/{total_authorities} authorities reached relay',
+        'da',
+        f'≥{majority_required}/{total_authorities} (majority)',
+        ipv4_status,
+        _get_status_text(ipv4_status),
+        rowspan=running_rowspan,
+    ))
+    
+    if running_has_ipv6:
+        ipv6_majority = (running_ipv6_tested // 2) + 1 if running_ipv6_tested > 0 else 1
+        ipv6_status = 'meets' if running_ipv6 >= ipv6_majority else ('partial' if running_ipv6 > 0 else 'below')
+        rows.append(_make_row(
+            'Running', running_tooltip, running_color,
+            'IPv6 Reachability', METRIC_TOOLTIPS.get('running_ipv6', ''),
+            f'{running_ipv6}/{running_ipv6_tested} tested authorities reached relay',
+            'da',
+            f'≥{ipv6_majority}/{running_ipv6_tested} tested (majority)' if running_ipv6_tested > 0 else 'No authorities test IPv6',
+            ipv6_status,
+            _get_status_text(ipv6_status),
+        ))
+    
+    # ========== Valid flag (1 row) ==========
+    # Per dir-spec: Valid = not blacklisted + valid descriptor + non-broken Tor version.
+    # We display the version check (the actionable part for operators).
+    valid_color = get_flag_color('valid')
+    valid_tooltip = FLAG_TOOLTIPS['valid']
+    valid_recommended = rv.get('valid_recommended')
+    valid_display = rv.get('valid_version_display', 'Unknown')
+    
+    if valid_recommended is True:
+        valid_status = 'meets'
+        valid_extra = ''
+    elif valid_recommended is False:
+        valid_status = 'below'
+        valid_extra = ' (not recommended)'
+    else:
+        valid_status = 'partial'
+        valid_extra = ' (unknown)'
+    
+    rows.append(_make_row(
+        'Valid', valid_tooltip, valid_color,
+        'Tor Version', METRIC_TOOLTIPS.get('version_valid', ''),
+        _format_relay_value_html(valid_display),
+        'relay',
+        'Not in broken versions list',
+        valid_status,
+        _get_status_text(valid_status, valid_extra),
+        rowspan=1,
+    ))
+    
+    # ========== V2Dir flag (1 row) ==========
+    # Per dir-spec: V2Dir = DirPort OR tunnelled-dir-server.
+    # Required for Guard flag. Most modern relays have V2Dir automatically.
+    v2dir_color = get_flag_color('v2dir')
+    v2dir_tooltip = FLAG_TOOLTIPS['v2dir']
+    v2dir_has_flag = rv.get('v2dir_has_flag', False)
+    v2dir_display = rv.get('v2dir_display', 'Unknown')
+    
+    v2dir_status = 'meets' if v2dir_has_flag else 'below'
+    
+    rows.append(_make_row(
+        'V2Dir', v2dir_tooltip, v2dir_color,
+        'Dir Capability', METRIC_TOOLTIPS.get('v2dir_capability', ''),
+        _format_relay_value_html(v2dir_display),
+        'relay',
+        'DirPort > 0 OR tunnelled-dir-server',
+        v2dir_status,
+        _get_status_text(v2dir_status),
+        rowspan=1,
+    ))
     
     # ========== Exit flag (1 row) ==========
     # Per Tor dir-spec Section 3.4.2: Exit requires allowing exits to ≥1 /8

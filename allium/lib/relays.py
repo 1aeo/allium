@@ -707,6 +707,7 @@ class Relays:
                 version = relay.get('version')
                 recommended_version = relay.get('recommended_version')
                 exit_policy_summary = relay.get('exit_policy_summary', {})
+                dir_address = relay.get('dir_address', '')
                 formatted_consensus_evaluation = format_relay_consensus_evaluation(
                     raw_consensus_evaluation, flag_thresholds, current_flags, observed_bandwidth,
                     use_bits=self.use_bits,  # Pass use_bits for consistent bandwidth formatting
@@ -714,6 +715,7 @@ class Relays:
                     version=version,  # Pass version for outdated version detection
                     recommended_version=recommended_version,  # Pass recommended status
                     exit_policy_summary=exit_policy_summary,  # Pass exit policy for Exit flag analysis
+                    dir_address=dir_address,  # Pass dir address for V2Dir flag analysis
                 )
                 
                 # Attach to relay

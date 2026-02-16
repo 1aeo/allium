@@ -1165,6 +1165,12 @@ Data from <a href="https://collector.torproject.org/recent/relay-descriptors/vot
         <td>{% if rv.fast_meets_minimum %}<span style="color: #28a745; font-weight: bold;">MEETS - ≥100 KB/s guarantee</span>{% elif rv.fast_meets_all %}<span style="color: #28a745; font-weight: bold;">MEETS - all {{ rv.total_authorities }} auths</span>{% elif rv.fast_meets_count > 0 %}<span style="color: #ffc107; font-weight: bold;">PARTIAL - {{ rv.fast_meets_count }}/{{ rv.total_authorities }}</span>{% else %}<span style="color: #dc3545; font-weight: bold;">BELOW - need ≥100 KB/s</span>{% endif %}</td>
     </tr>
     <tr>
+        <td title="Source: Onionoo | Field: dir_address | V2Dir requires DirPort or tunnelled-dir-server. Required for Guard flag.">V2Dir <span style="color: #6c757d; font-size: 10px;">(Relay Reported)</span></td>
+        <td title="Source: Onionoo | Field: dir_address | Relay's directory serving capability">{{ rv.v2dir_display }}</td>
+        <td title="V2Dir requires open DirPort or tunnelled-dir-server line in descriptor">DirPort > 0 OR tunnelled-dir-server</td>
+        <td>{% if rv.v2dir_has_flag %}<span style="color: #28a745; font-weight: bold;">V2DIR CAPABLE</span>{% else %}<span style="color: #dc3545; font-weight: bold;">NO V2DIR</span>{% endif %}</td>
+    </tr>
+    <tr>
         <td title="Source: Onionoo | Field: exit_policy_summary | Exit flag requires allowing exits to ≥1 /8 address space on both ports 80 and 443 per Tor dir-spec Section 3.4.2.">Exit Policy <span style="color: #6c757d; font-size: 10px;">(Relay Reported)</span></td>
         <td title="Source: Onionoo | Field: exit_policy_summary | Relay's exit policy summary showing allowed ports">{{ rv.exit_policy_display }}</td>
         <td title="Tor dir-spec Section 3.4.2: Exit requires exits to ≥1 /8 on ports 80 AND 443">Allows ≥1 /8 on ports 80 AND 443</td>
