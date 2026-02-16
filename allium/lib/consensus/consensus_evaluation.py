@@ -675,6 +675,10 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
     # Exit policy analysis (from Onionoo exit_policy_summary)
     exit_analysis = _analyze_exit_policy(exit_policy_summary)
     
+    # Pre-extract flag counts to avoid duplicate .get() chains in the return dict
+    _middleonly_count = flag_eligibility.get('middleonly', {}).get('assigned_count', 0)
+    _badexit_count = flag_eligibility.get('badexit', {}).get('assigned_count', 0)
+    
     return {
         # WFU values (DA-measured, with majority/min/median/max stats)
         'wfu': relay_wfu,
@@ -811,13 +815,13 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
         # MiddleOnly detection (from CollecTor vote flags)
         # MiddleOnly is a negative flag — restricts relay to middle position only.
         # Conditional display: only shown when relay is flagged.
-        'middleonly_flagged': flag_eligibility.get('middleonly', {}).get('assigned_count', 0) > 0,
-        'middleonly_count': flag_eligibility.get('middleonly', {}).get('assigned_count', 0),
+        'middleonly_flagged': _middleonly_count > 0,
+        'middleonly_count': _middleonly_count,
         
         # BadExit detection (from CollecTor vote flags)
         # BadExit marks misbehaving exit nodes; also added when MiddleOnly is assigned.
-        'badexit_flagged': flag_eligibility.get('badexit', {}).get('assigned_count', 0) > 0,
-        'badexit_count': flag_eligibility.get('badexit', {}).get('assigned_count', 0),
+        'badexit_flagged': _badexit_count > 0,
+        'badexit_count': _badexit_count,
         
         # Running flag values (from reachability data, already computed above)
         # Running = authority could reach relay's ORPort within last 45 minutes
@@ -1263,23 +1267,16 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
         rowspan=1,
     ))
     
-    # Fast flag (1 row) - using DRY helper
+    # Fast flag (1 row)
     fast_color = get_flag_color('fast')
     fast_da_count = rv.get('fast_meets_count', 0)
-    if rv.get('fast_meets_minimum'):
-        fast_status, fast_extra = 'meets', ''
-    elif rv.get('fast_meets_all'):
-        fast_status, fast_extra = 'meets', ''
-    elif fast_da_count > 0:
-        fast_status, fast_extra = 'partial', ''
-    else:
-        fast_status, fast_extra = 'below', ''
+    fast_status = 'meets' if rv.get('fast_meets_minimum') or rv.get('fast_meets_all') else ('partial' if fast_da_count > 0 else 'below')
     fast_threshold = (_vote_threshold(f"≥{rv.get('fast_minimum_display', '100 KB/s')} (guarantee) OR top 7/8", majority_required, total_authorities)
         + _format_stricter_threshold(rv.get('fast_speed_strict_auths', []), rv.get('fast_speed_max_display', '')))
     rows.append(_make_row('Fast', FLAG_TOOLTIPS['fast'], fast_color, 'Speed', METRIC_TOOLTIPS['speed_fast'],
                           _format_relay_value_html(rv.get('fast_speed_display', 'N/A')), 'relay',
                           fast_threshold, fast_status,
-                          _get_status_text(fast_status, fast_extra, da_count=fast_da_count, da_total=total_authorities),
+                          _get_status_text(fast_status, da_count=fast_da_count, da_total=total_authorities),
                           rowspan=1))
     
     # Stable flag (2 rows) - using DRY helper

@@ -979,52 +979,20 @@ class CollectorFetcher:
                 'tk_threshold': hsdir_tk,
             })
             
-            # Exit flag tracking
-            # Per dir-spec Section 3.4.2: Exit requires allowing exits to ≥1 /8
-            # address space on BOTH port 80 AND port 443.
-            # Unlike Guard/Stable/Fast/HSDir, Exit has no numeric thresholds in
-            # flag-thresholds. We track per-authority flag assignment since the
-            # policy check happens authority-side.
-            has_exit_flag = 'Exit' in auth_flags
-            if has_exit_flag:
-                eligibility['exit']['eligible_count'] += 1
-                eligibility['exit']['assigned_count'] += 1
-            
-            eligibility['exit']['details'].append({
-                'authority': auth_name,
-                'eligible': has_exit_flag,
-                'assigned': has_exit_flag,
-            })
-            
-            # MiddleOnly flag tracking
-            # Per dir-spec: MiddleOnly restricts relay to middle position only.
-            # Effects: removes Exit, Guard, HSDir, V2Dir; adds BadExit.
-            # Like Exit, MiddleOnly has no numeric thresholds — assigned by
-            # authority discretion based on suspicious behavior or Sybil risk.
-            has_middleonly_flag = 'MiddleOnly' in auth_flags
-            if has_middleonly_flag:
-                eligibility['middleonly']['eligible_count'] += 1
-                eligibility['middleonly']['assigned_count'] += 1
-            
-            eligibility['middleonly']['details'].append({
-                'authority': auth_name,
-                'eligible': has_middleonly_flag,
-                'assigned': has_middleonly_flag,
-            })
-            
-            # BadExit flag tracking
-            # Per dir-spec: BadExit marks misbehaving exit nodes.
-            # Also added automatically when MiddleOnly is assigned.
-            has_badexit_flag = 'BadExit' in auth_flags
-            if has_badexit_flag:
-                eligibility['badexit']['eligible_count'] += 1
-                eligibility['badexit']['assigned_count'] += 1
-            
-            eligibility['badexit']['details'].append({
-                'authority': auth_name,
-                'eligible': has_badexit_flag,
-                'assigned': has_badexit_flag,
-            })
+            # Simple flag tracking: Exit, MiddleOnly, BadExit
+            # These flags have no numeric thresholds — purely presence-based.
+            # Exit: policy-based (ports 80+443); MiddleOnly: authority discretion;
+            # BadExit: misbehavior detection (also auto-added with MiddleOnly).
+            for flag_consensus, flag_key in (('Exit', 'exit'), ('MiddleOnly', 'middleonly'), ('BadExit', 'badexit')):
+                has_flag = flag_consensus in auth_flags
+                if has_flag:
+                    eligibility[flag_key]['eligible_count'] += 1
+                    eligibility[flag_key]['assigned_count'] += 1
+                eligibility[flag_key]['details'].append({
+                    'authority': auth_name,
+                    'eligible': has_flag,
+                    'assigned': has_flag,
+                })
         
         return eligibility
     
