@@ -840,6 +840,7 @@ class CollectorFetcher:
             'fast': {'eligible_count': 0, 'assigned_count': 0, 'details': []},
             'hsdir': {'eligible_count': 0, 'assigned_count': 0, 'details': []},
             'exit': {'eligible_count': 0, 'assigned_count': 0, 'details': []},
+            'middleonly': {'eligible_count': 0, 'assigned_count': 0, 'details': []},
         }
         
         for auth_name, thresholds in self.flag_thresholds.items():
@@ -992,6 +993,22 @@ class CollectorFetcher:
                 'authority': auth_name,
                 'eligible': has_exit_flag,
                 'assigned': has_exit_flag,
+            })
+            
+            # MiddleOnly flag tracking
+            # Per dir-spec: MiddleOnly restricts relay to middle position only.
+            # Effects: removes Exit, Guard, HSDir, V2Dir; adds BadExit.
+            # Like Exit, MiddleOnly has no numeric thresholds — assigned by
+            # authority discretion based on suspicious behavior or Sybil risk.
+            has_middleonly_flag = 'MiddleOnly' in auth_flags
+            if has_middleonly_flag:
+                eligibility['middleonly']['eligible_count'] += 1
+                eligibility['middleonly']['assigned_count'] += 1
+            
+            eligibility['middleonly']['details'].append({
+                'authority': auth_name,
+                'eligible': has_middleonly_flag,
+                'assigned': has_middleonly_flag,
             })
         
         return eligibility

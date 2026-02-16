@@ -406,6 +406,7 @@ FLAG_ORDER = [
     'Fast',       # Bandwidth in top 7/8ths or >= 100 KB/s
     'Guard',      # Can be used as guard node
     'HSDir',      # Hidden service directory
+    'MiddleOnly', # Restricted to middle position only (negative flag)
     'Running',    # Relay is reachable
     'Stable',     # Sufficient uptime/MTBF
     'StaleDesc',  # Descriptor is old

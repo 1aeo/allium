@@ -299,6 +299,7 @@ FLAG_ORDER = [
     'Guard',      # Can be used as entry guard (requires Fast+Stable+V2Dir)
     'Exit',       # Can be used as exit node (policy-based)
     'Authority',  # Special: directory authority
+    'MiddleOnly', # Restricted to middle position only (negative flag)
     'BadExit',    # Flagged as misbehaving exit
     'NoEdConsensus',  # Doesn't support ed25519
     'StaleDesc',  # Descriptor is old
@@ -773,6 +774,12 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
         'exit_eligible': exit_analysis['eligible'],
         'exit_policy_display': exit_analysis['display'],
         'exit_assigned_count': flag_eligibility.get('exit', {}).get('assigned_count', 0),
+        
+        # MiddleOnly detection (from CollecTor vote flags)
+        # MiddleOnly is a negative flag — restricts relay to middle position only.
+        # Conditional display: only shown when relay is flagged.
+        'middleonly_flagged': flag_eligibility.get('middleonly', {}).get('assigned_count', 0) > 0,
+        'middleonly_count': flag_eligibility.get('middleonly', {}).get('assigned_count', 0),
     }
 
 
@@ -791,6 +798,7 @@ FLAG_TOOLTIPS = {
     'v2dir': "Supports directory protocol v2+: Can serve directory information to clients.",
     'exit': "Exit node: Can relay traffic to the regular internet.",
     'authority': "Directory Authority: Votes on network consensus.",
+    'middleonly': "MiddleOnly: Relay restricted to middle position only. Removes Exit, Guard, HSDir, V2Dir flags and adds BadExit. Assigned by authorities for suspicious behavior, Sybil risk, or policy violations. (Tor 0.4.7.2+)",
     'badexit': "Flagged as misbehaving exit node.",
 }
 
@@ -804,6 +812,7 @@ METRIC_TOOLTIPS = {
     'wfu_hsdir': "Weighted Fractional Uptime: Required >=98% for HSDir flag to ensure reliable hidden service directory. Source: Dir. Auth. vote files.",
     'tk_hsdir': "How long authorities have tracked this relay. Most require >=25 hours; some (moria1) require ~10 days. Source: Dir. Auth. vote files.",
     'policy_exit': "Exit policy must allow traffic to at least one /8 address space on both port 80 AND port 443 per Tor dir-spec Section 3.4.2. Source: Onionoo exit_policy_summary.",
+    'middleonly': "Security restriction assigned by Directory Authorities. MiddleOnly relays cannot serve as Guard, Exit, or HSDir. Removes Exit, Guard, HSDir, V2Dir flags and adds BadExit. Source: CollecTor vote files.",
 }
 
 SOURCE_TOOLTIPS = {
@@ -1223,6 +1232,25 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
         rowspan=1,
     ))
     
+    # ========== MiddleOnly flag (0-1 rows, conditional) ==========
+    # Per dir-spec: MiddleOnly restricts relay to middle position only.
+    # Effects: removes Exit, Guard, HSDir, V2Dir; adds BadExit.
+    # Only shown when relay is flagged — hidden for 99.9% of relays.
+    middleonly_flagged = rv.get('middleonly_flagged', False)
+    middleonly_count = rv.get('middleonly_count', 0)
+    
+    if middleonly_flagged:
+        rows.append(_make_row(
+            'MiddleOnly', FLAG_TOOLTIPS['middleonly'], STATUS_COLORS['below'],
+            'Security Status', METRIC_TOOLTIPS['middleonly'],
+            f'<strong>RESTRICTED</strong> <span style="color: #6c757d; font-size: 10px;">({middleonly_count}/{total_authorities} DA)</span>',
+            'da',
+            'Not flagged by authorities',
+            'below',
+            'Restricted to Middle Only',
+            rowspan=1,
+        ))
+    
     return rows
 
 
@@ -1499,8 +1527,8 @@ def _format_flag_summary(consensus_data: dict, observed_bandwidth: int = 0) -> d
     summary = {}
     
     # Process flags in order: simple/common → complex/rare
-    # Exit added to match collector_fetcher._analyze_flag_eligibility() which now tracks it
-    for flag_name in ['fast', 'stable', 'hsdir', 'guard', 'exit']:
+    # Exit and MiddleOnly added to match collector_fetcher._analyze_flag_eligibility()
+    for flag_name in ['fast', 'stable', 'hsdir', 'guard', 'exit', 'middleonly']:
         flag_data = flag_eligibility.get(flag_name, {})
         
         # Use assigned_count (actual flag assignments) instead of eligible_count (calculated)

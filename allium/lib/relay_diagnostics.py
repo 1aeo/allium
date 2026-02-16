@@ -426,6 +426,19 @@ def generate_issues_from_consensus(
         })
     
     # =========================================================================
+    # MIDDLEONLY FLAG (1 issue type)
+    # =========================================================================
+    if 'MiddleOnly' in current_flags:
+        issues.append({
+            'severity': 'error',
+            'category': 'flags',
+            'title': 'MiddleOnly restriction active',
+            'description': 'This relay has been restricted to middle position only by directory authorities. MiddleOnly removes Guard, Exit, HSDir, and V2Dir flags, and adds BadExit. This significantly limits the relay\'s role in the network.',
+            'suggestion': 'This may indicate suspicious behavior patterns, Sybil risk indicators, or policy violations. Contact <a href="mailto:bad-relays@lists.torproject.org">bad-relays@lists.torproject.org</a> for more information.',
+            'doc_ref': 'https://spec.torproject.org/dir-spec/',
+        })
+    
+    # =========================================================================
     # VERSION ISSUES (1 issue type)
     # =========================================================================
     if recommended_version is False and version:
