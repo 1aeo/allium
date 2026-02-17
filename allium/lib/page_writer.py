@@ -1007,6 +1007,7 @@ def write_relay_info(relay_set):
         rendered = template.render(
             relay=relay, page_ctx=page_ctx, relays=relay_set, contact_display_data=contact_display_data,
             contact_validation_status=contact_validation_status,
+            aroi_validation_timestamp=relay_set._aroi_validation_timestamp,
             validated_aroi_domains=validated_aroi_domains,
             base_url=relay_set.base_url
         )
