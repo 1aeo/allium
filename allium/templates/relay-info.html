@@ -901,6 +901,123 @@ Country: unknown
 
 </section>
 
+{# ============== SECTION 6: OPERATOR AND FAMILY (#operator) ============== #}
+<section id="operator" class="section-box" style="margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+<h4 style="margin-top: 0; margin-bottom: 12px;">
+    <div class="section-header">
+        <a href="#operator" class="anchor-link">Operator and Family</a>
+    </div>
+</h4>
+
+<div class="row">
+{# Left Column: Operator (AROI) #}
+<div class="col-md-6">
+<h5 class="subsection-header">Operator Identity</h5>
+<dl>
+    <dt>AROI Domain</dt>
+    <dd>
+        {% if relay['aroi_domain'] and relay['aroi_domain'] != 'none' -%}
+            {% if base_url and relay['aroi_domain'] in validated_aroi_domains -%}
+                <a href="{{ base_url }}/{{ relay['aroi_domain']|lower|escape }}/">{{ relay['aroi_domain']|escape }}</a>
+            {% else -%}
+                <a href="{{ page_ctx.path_prefix }}contact/{{ relay['contact_md5'] }}/">{{ relay['aroi_domain']|escape }}</a>
+            {% endif -%}
+        {% else -%}
+            Not specified
+        {% endif -%}
+    </dd>
+    
+    {% if contact_validation_status and contact_validation_status.validation_summary -%}
+    <dt>Operator Validation</dt>
+    <dd>
+        {% set vs = contact_validation_status.validation_summary -%}
+        {% set cvs_status = contact_validation_status.validation_status -%}
+        {% if cvs_status == 'validated' -%}
+            <span style="color: #28a745;" title="All {{ vs.validated_count }} relays have valid AROI proof">
+                Validated ({{ vs.validated_count }}/{{ vs.total_relays }} relays)</span>
+        {% elif cvs_status == 'partially_validated' -%}
+            <span style="color: #ffc107;" title="{{ vs.validated_count }} of {{ vs.total_relays }} relays have valid proof">
+                Partially Validated ({{ vs.validated_count }}/{{ vs.total_relays }} relays)</span>
+        {% else -%}
+            <span style="color: #dc3545;" title="No relays have AROI validation proof">Unvalidated</span>
+        {% endif -%}
+    </dd>
+    
+    <dt>This Relay</dt>
+    <dd>
+        {% set this_fp = relay['fingerprint'] -%}
+        {% if this_fp in contact_validation_status.validated_fingerprints -%}
+            <span style="color: #28a745;" title="This relay's fingerprint found in AROI proof">Validated</span>
+            {% for vr in contact_validation_status.validated_relays if vr.fingerprint == this_fp -%}
+                <span style="font-size: 11px; color: #666;">({{ vr.proof_type }})</span>
+            {% endfor -%}
+        {% elif relay['aroi_domain'] and relay['aroi_domain'] != 'none' -%}
+            <span style="color: #dc3545;" title="AROI configured but fingerprint not in proof">Unvalidated</span>
+            {% for ur in contact_validation_status.unvalidated_relays if ur.fingerprint == this_fp -%}
+                <span style="font-size: 11px; color: #856404;">({{ ur.error }})</span>
+            {% endfor -%}
+        {% else -%}
+            <span style="color: #6c757d;">N/A (no AROI configured)</span>
+        {% endif -%}
+    </dd>
+    {% endif -%}
+    
+    <dt>Contact</dt>
+    <dd style="word-wrap: break-word; word-break: break-all; max-width: 100%;">
+        {% if relay['contact'] -%}
+            <a href="{{ page_ctx.path_prefix }}contact/{{ relay['contact_md5'] }}/">{{ relay['contact']|escape }}</a>
+        {% else -%}
+            <a href="{{ page_ctx.path_prefix }}contact/{{ relay['contact_md5'] }}/">none</a>
+        {% endif -%}
+    </dd>
+</dl>
+</div>
+
+{# Right Column: Family (fingerprint-based) #}
+<div class="col-md-6">
+<h5 class="subsection-header">Family Configuration</h5>
+<dl>
+    <dt>Effective Family</dt>
+    <dd>
+        {{ relay['effective_family']|length }} relay{% if relay['effective_family']|length != 1 %}s{% endif %}
+        {% if relay['effective_family']|length > 1 %}
+            (<a href="{{ page_ctx.path_prefix }}family/{{ relay['fingerprint']|escape }}/">View Family Page</a>)
+        {% endif %}
+        <pre class="pre-scrollable" style="max-height: 100px; font-size: 11px; margin-top: 5px;">{% for fp in relay['effective_family'] -%}
+{% if relay['effective_family']|length > 1 and fp != relay['fingerprint'] -%}
+<a href="../{{ fp|escape }}/">{{ fp|escape }}</a>
+{% else -%}
+{{ fp|escape }}{% if fp == relay['fingerprint'] %} (this relay){% endif %}
+{% endif -%}
+{% endfor -%}</pre>
+    </dd>
+    
+    <dt>Alleged Family</dt>
+    <dd>
+        {{ relay['alleged_family']|length if relay['alleged_family'] else 0 }} relay{% if not relay['alleged_family'] or relay['alleged_family']|length != 1 %}s{% endif %}
+        {% if relay['alleged_family'] %}
+        <span style="color: #856404; font-size: 11px;">(they don't list you back)</span>
+        <pre class="pre-scrollable" style="max-height: 60px; font-size: 11px; margin-top: 5px;">{% for fp in relay['alleged_family'] -%}
+<a href="../{{ fp|escape }}/">{{ fp|escape }}</a>
+{% endfor -%}</pre>
+        {% endif %}
+    </dd>
+    
+    <dt>Indirect Family</dt>
+    <dd>
+        {{ relay['indirect_family']|length if relay['indirect_family'] else 0 }} relay{% if not relay['indirect_family'] or relay['indirect_family']|length != 1 %}s{% endif %}
+        {% if relay['indirect_family'] %}
+        <span style="color: #856404; font-size: 11px;">(they list you, you don't list them)</span>
+        <pre class="pre-scrollable" style="max-height: 60px; font-size: 11px; margin-top: 5px;">{% for fp in relay['indirect_family'] -%}
+<a href="../{{ fp|escape }}/">{{ fp|escape }}</a>
+{% endfor -%}</pre>
+        {% endif %}
+    </dd>
+</dl>
+</div>
+</div>
+</section>
+
 <p>Last fetch was at {{ relays.timestamp }}.</p>
 <div class="row">
 <div class="col-md-6">
