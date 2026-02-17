@@ -538,6 +538,244 @@ Country: unknown
 </section>
 {% endif %}
 
+{# ============== SECTION 5: UPTIME, STABILITY & OVERLOAD (#uptime) ============== #}
+<section id="uptime" class="section-box" style="margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+<h4 style="margin-top: 0; margin-bottom: 12px;">
+    <div class="section-header">
+        <a href="#uptime" class="anchor-link">Uptime and Stability</a>
+    </div>
+</h4>
+
+<div class="row">
+    {# Left Column: Uptime Metrics #}
+    <div class="col-md-6">
+        <h5 class="subsection-header">Uptime Metrics</h5>
+        <dl>
+            <dt title="Current uptime or downtime duration based on relay's running status and last_restarted timestamp.">Current Status</dt>
+            <dd>
+                {% if relay.get('uptime_display') -%}
+                    {% if relay['uptime_display'].startswith('DOWN') -%}
+                        <span style="color: #dc3545; font-weight: bold;">{{ relay['uptime_display']|escape }}</span>
+                    {% else -%}
+                        <span style="color: #28a745;">{{ relay['uptime_display']|escape }}</span>
+                    {% endif -%}
+                {% else -%}
+                    <span style="color: #6c757d;">Unknown</span>
+                {% endif -%}
+            </dd>
+
+            <dt title="{% if contact_display_data and contact_display_data.outliers and contact_display_data.outliers.tooltip %}{{ contact_display_data.outliers.tooltip }}{% else %}Percentage of time relay had Running flag over 1 Month / 6 Months / 1 Year / 5 Years. Source: Onionoo uptime API.{% endif %}">Overall Uptime (1M/6M/1Y/5Y)</dt>
+            <dd>
+                {% if relay.get('uptime_api_display') -%}
+                    {{ relay['uptime_api_display']|safe }}
+                {% else -%}
+                    N/A
+                {% endif -%}
+            </dd>
+
+            <dt title="{{ relay.get('flag_uptime_tooltip', 'Flag-specific uptime percentages showing reliability in primary network role.')|escape }}">Flag Uptime (1M/6M/1Y/5Y)</dt>
+            <dd>
+                {% if relay.get('flag_uptime_display') and relay['flag_uptime_display'] != 'N/A' -%}
+                    {% if relay['flag_uptime_display'] == 'Match' -%}
+                        <span title="{{ relay['flag_uptime_tooltip']|escape }}">Matches Overall Uptime</span>
+                    {% else -%}
+                        <span title="{{ relay['flag_uptime_tooltip']|escape }}">{{ relay['flag_uptime_display']|safe }}</span>
+                    {% endif -%}
+                {% else -%}
+                    N/A
+                {% endif -%}
+            </dd>
+
+            <dt title="Whether relay indicated it is hibernating in its last known server descriptor. Hibernation typically means the relay reached its accounting limit.">Hibernating</dt>
+            <dd>
+                {% if relay['hibernating'] is not none -%}
+                    {% if relay['hibernating'] -%}
+                        <span style="color: #856404; font-weight: bold;">Yes</span>
+                        <span style="font-size: 11px; color: #666;">(relay reached accounting limit)</span>
+                    {% else -%}
+                        No
+                    {% endif -%}
+                {% else -%}
+                    <span style="color: #6c757d;">Unknown</span>
+                {% endif -%}
+            </dd>
+        </dl>
+    </div>
+
+    {# Right Column: Timestamps #}
+    <div class="col-md-6">
+        <h5 class="subsection-header">Timestamps</h5>
+        <dl>
+            <dt title="Date relay first appeared in network consensus. Newer relays have restrictions (Guard flag requires ~8 days).">First Seen</dt>
+            <dd>
+                {% if relay['first_seen'] -%}
+                    <a href="{{ page_ctx.path_prefix }}first_seen/{{ relay['first_seen'].split(' ', 1)[0]|escape }}/">{{ relay['first_seen']|format_time_ago }}</a>
+                    <span style="font-size: 11px; color: #666;">({{ relay['first_seen']|escape }})</span>
+                {% else -%}
+                    <span style="color: #6c757d;">Unknown</span>
+                {% endif -%}
+            </dd>
+
+            <dt title="Most recent time this relay was seen in the network consensus.">Last Seen</dt>
+            <dd>
+                {% if relay['last_seen'] -%}
+                    {{ relay['last_seen']|format_time_ago }}
+                    <span style="font-size: 11px; color: #666;">({{ relay['last_seen']|escape }})</span>
+                {% else -%}
+                    <span style="color: #6c757d;">Unknown</span>
+                {% endif -%}
+            </dd>
+
+            <dt title="UTC timestamp when this relay was last (re-)started. Missing if router descriptor containing this information cannot be found.">Last Restarted</dt>
+            <dd>
+                {% if relay['last_restarted'] -%}
+                    {{ relay['last_restarted']|format_time_ago }}
+                    <span style="font-size: 11px; color: #666;">({{ relay['last_restarted']|escape }})</span>
+                {% else -%}
+                    <span style="color: #6c757d;">Unknown</span>
+                {% endif -%}
+            </dd>
+
+            <dt title="UTC timestamp when this relay last stopped announcing an IPv4/IPv6 address or TCP port. Can indicate relay stability as a fallback directory.">Last Changed Address</dt>
+            <dd>
+                {% if relay['last_changed_address_or_port'] -%}
+                    {{ relay['last_changed_address_or_port']|escape }}
+                {% else -%}
+                    <span style="color: #6c757d;">Unknown</span>
+                {% endif -%}
+            </dd>
+        </dl>
+    </div>
+</div>
+
+{# ---- Overload Status Subsection (anchor target for Health Status Stability row) ---- #}
+{# Health Status "Stability" row links here via <a href="#overload"> (line 194) #}
+<span id="overload"></span>
+
+{% set is_overloaded = relay.get('stability_is_overloaded', false) %}
+{% set general_ts = relay.get('overload_general_timestamp') %}
+{% set ratelimits = relay.get('overload_ratelimits') %}
+{% set fd_exhausted = relay.get('overload_fd_exhausted') %}
+
+{% if not is_overloaded %}
+{# Not overloaded: compact single line #}
+<div style="margin-top: 12px; padding: 10px; background: #d4edda; border-radius: 4px; border-left: 3px solid #28a745;">
+    <strong style="color: #155724;">Overload Status:</strong>
+    <span style="color: #155724;">Not Overloaded — No overload conditions reported.</span>
+    {% if relay.get('stability_tooltip') and 'Last general overload' in relay.get('stability_tooltip', '') %}
+    <span style="color: #155724; font-size: 12px;"> ({{ relay['stability_tooltip'] }})</span>
+    {% endif %}
+</div>
+
+{% else %}
+{# Overloaded: expanded detail view with all 3 fields + recommendations #}
+<div style="margin-top: 12px; padding: 15px; background: #fff3cd; border-radius: 8px; border-left: 4px solid #ffc107;">
+    <div style="margin-bottom: 12px;">
+        <strong style="color: #856404; font-size: 15px;">[Warning] OVERLOADED</strong>
+        <span style="color: #856404; font-size: 13px;"> — {{ relay.get('stability_tooltip', '') }}</span>
+    </div>
+    
+    <div class="row">
+        {# Left: General Overload + File Descriptors #}
+        <div class="col-md-6">
+            <h5 style="margin-top: 0; font-size: 13px; font-weight: bold;">General Overload <small style="color: #6c757d;">(from /details)</small></h5>
+            <dl>
+                <dt>Status</dt>
+                <dd>
+                    {% if general_ts %}
+                        <span style="color: #dc3545; font-weight: bold;">Reported</span>
+                    {% else %}
+                        <span style="color: #28a745;">Not Reported</span>
+                    {% endif %}
+                </dd>
+                {% if general_ts %}
+                <dt>When</dt>
+                <dd>{{ general_ts|format_timestamp }} UTC ({{ general_ts|format_timestamp_ago }})</dd>
+                {% endif %}
+            </dl>
+            <p style="font-size: 11px; color: #6c757d; margin-top: 3px;">
+                OOM killer, onionskin queue saturation, or TCP port exhaustion.
+                Flag remains 72h after last event (Tor spec 328).
+            </p>
+            
+            <h5 style="font-size: 13px; font-weight: bold;">File Descriptor Exhaustion <small style="color: #6c757d;">(from /bandwidth)</small></h5>
+            <dl>
+                <dt>Status</dt>
+                <dd>
+                    {% if fd_exhausted %}
+                        <span style="color: #dc3545; font-weight: bold;">Reported</span>
+                        {% if fd_exhausted.get('timestamp') %}
+                         — {{ fd_exhausted['timestamp']|format_timestamp }} UTC ({{ fd_exhausted['timestamp']|format_timestamp_ago }})
+                        {% endif %}
+                    {% else %}
+                        <span style="color: #28a745;">Not Reported</span>
+                    {% endif %}
+                </dd>
+            </dl>
+        </div>
+        
+        {# Right: Rate Limits + Recommendations #}
+        <div class="col-md-6">
+            <h5 style="margin-top: 0; font-size: 13px; font-weight: bold;">Rate Limits <small style="color: #6c757d;">(from /bandwidth)</small></h5>
+            {% if ratelimits %}
+            <dl>
+                <dt>Rate Limit</dt>
+                <dd>
+                    {% set rate_unit = ratelimits.get('rate-limit', 0)|determine_unit(relays.use_bits) %}
+                    {{ ratelimits.get('rate-limit', 0)|format_bandwidth_with_unit(rate_unit) }} {{ rate_unit }}
+                </dd>
+                <dt>Burst Limit</dt>
+                <dd>
+                    {% set burst_unit = ratelimits.get('burst-limit', 0)|determine_unit(relays.use_bits) %}
+                    {{ ratelimits.get('burst-limit', 0)|format_bandwidth_with_unit(burst_unit) }} {{ burst_unit }}
+                </dd>
+                <dt>Write Limit Hit</dt>
+                <dd>
+                    {% if ratelimits.get('write-count', 0) > 0 %}
+                        <span style="color: #dc3545; font-weight: bold;">{{ "{:,}".format(ratelimits.get('write-count', 0)) }} times</span>
+                    {% else %}
+                        <span style="color: #28a745;">0 times</span>
+                    {% endif %}
+                </dd>
+                <dt>Read Limit Hit</dt>
+                <dd>
+                    {% if ratelimits.get('read-count', 0) > 0 %}
+                        <span style="color: #dc3545; font-weight: bold;">{{ "{:,}".format(ratelimits.get('read-count', 0)) }} times</span>
+                    {% else %}
+                        <span style="color: #28a745;">0 times</span>
+                    {% endif %}
+                </dd>
+                {% if ratelimits.get('timestamp') %}
+                <dt>Last Reported</dt>
+                <dd>{{ ratelimits['timestamp']|format_timestamp_ago }}</dd>
+                {% endif %}
+            </dl>
+            {% else %}
+            <p style="color: #6c757d;">No rate limit data from /bandwidth endpoint.</p>
+            {% endif %}
+            
+            <h5 style="font-size: 13px; font-weight: bold;">Recommendations</h5>
+            <ul style="margin: 0; padding-left: 20px; font-size: 12px;">
+                {% if general_ts %}
+                <li>Check CPU/memory: <code>htop</code></li>
+                <li>Review <code>MaxMemInQueues</code> in torrc</li>
+                {% endif %}
+                {% if ratelimits and (ratelimits.get('write-count', 0) > 0 or ratelimits.get('read-count', 0) > 0) %}
+                <li>Consider increasing <code>RelayBandwidthRate</code></li>
+                <li>Check if ISP is throttling traffic</li>
+                {% endif %}
+                {% if fd_exhausted %}
+                <li>Increase FD limit: <code>ulimit -n 65535</code></li>
+                <li>systemd: <code>LimitNOFILE=65535</code> in [Service]</li>
+                {% endif %}
+            </ul>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+</section>
+
 <p>Last fetch was at {{ relays.timestamp }}.</p>
 <div class="row">
 <div class="col-md-6">

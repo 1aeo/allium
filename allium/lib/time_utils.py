@@ -116,3 +116,55 @@ def format_time_ago(timestamp_str):
 
     except (ValueError, TypeError):
         return "unknown"
+
+
+def format_timestamp(ts_ms):
+    """
+    Format Onionoo millisecond timestamp to readable 'YYYY-MM-DD HH:MM' string.
+
+    Used as a Jinja2 filter for overload timestamp display.
+    Onionoo overload fields (overload_general_timestamp, overload_ratelimits.timestamp,
+    overload_fd_exhausted.timestamp) use millisecond Unix timestamps.
+
+    Args:
+        ts_ms: Unix timestamp in milliseconds (int), or None/0
+
+    Returns:
+        str: Formatted date string, or "N/A" if input is falsy
+    """
+    if not ts_ms:
+        return "N/A"
+    try:
+        dt = datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc)
+        return dt.strftime('%Y-%m-%d %H:%M')
+    except (ValueError, TypeError, OSError):
+        return "N/A"
+
+
+def format_timestamp_ago(ts_ms):
+    """
+    Format Onionoo millisecond timestamp to relative 'X hours/days ago' string.
+
+    Used as a Jinja2 filter for overload timestamp display.
+
+    Args:
+        ts_ms: Unix timestamp in milliseconds (int), or None/0
+
+    Returns:
+        str: Relative time string like "3 hours ago", or "N/A" if input is falsy
+    """
+    if not ts_ms:
+        return "N/A"
+    try:
+        import time
+        age_seconds = time.time() - (ts_ms / 1000)
+        if age_seconds < 0:
+            return "in the future"
+        elif age_seconds < 3600:
+            return f"{int(age_seconds / 60)} minutes ago"
+        elif age_seconds < 86400:
+            return f"{int(age_seconds / 3600)} hours ago"
+        else:
+            return f"{int(age_seconds / 86400)} days ago"
+    except (ValueError, TypeError):
+        return "N/A"

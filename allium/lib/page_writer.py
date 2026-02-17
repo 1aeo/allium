@@ -53,6 +53,11 @@ ENV.filters['format_bandwidth'] = format_bandwidth_filter
 ENV.filters['format_time_ago'] = format_time_ago
 ENV.filters['split'] = lambda s, sep='/': s.split(sep) if s else []
 
+# Overload section filters for millisecond timestamps (Onionoo overload fields)
+from .time_utils import format_timestamp, format_timestamp_ago
+ENV.filters['format_timestamp'] = format_timestamp
+ENV.filters['format_timestamp_ago'] = format_timestamp_ago
+
 # Multiprocessing globals (initialized via fork for copy-on-write memory sharing)
 _mp_relay_set = None
 _mp_template = None
