@@ -366,6 +366,16 @@ Country: unknown
     <dt>Dir Address</dt>
     <dd><a href="http://{{ relay['dir_address']|escape }}">{{ relay['dir_address']|escape }}</a></dd>
     {% endif %}
+    
+    {% if relay.get('unreachable_or_addresses') %}
+    <dt style="color: #dc3545;" title="OR addresses declared in relay descriptor but found unreachable by the directory authorities. May indicate firewall issues, misconfigured bindings, or stale descriptor data.">Unreachable Addresses</dt>
+    <dd>
+        <span style="color: #dc3545; font-size: 12px;">[Warning] Declared but unreachable:</span><br>
+        {% for addr in relay['unreachable_or_addresses'] -%}
+            <span style="color: #dc3545;">{{ addr|escape }}</span>{% if not loop.last %}<br>{% endif %}
+        {% endfor %}
+    </dd>
+    {% endif %}
 </dl>
 </div>
 
