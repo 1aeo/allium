@@ -1018,6 +1018,100 @@ Country: unknown
 </div>
 </section>
 
+{# ============== SECTION 7: SOFTWARE AND VERSION (#software) ============== #}
+<section id="software" class="section-box" style="margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+<h4 style="margin-top: 0; margin-bottom: 12px;">
+    <div class="section-header">
+        <a href="#software" class="anchor-link">Software and Version</a>
+    </div>
+</h4>
+
+<dl>
+    <dt title="Simplified platform identifier for categorization">Platform</dt>
+    <dd>
+        <a href="{{ page_ctx.path_prefix }}platform/{{ relay['platform']|escape }}/" title="View all relays on this platform">{{ relay['platform']|escape }}</a>
+        {% if relay['platform_raw'] and relay['platform_raw'] != relay['platform'] -%}
+            <span style="font-size: 12px; color: #666;"> — {{ relay['platform_raw']|escape }}</span>
+        {% endif -%}
+    </dd>
+
+    <dt title="Tor software version. Outdated versions may have security vulnerabilities and could be rejected by the network.">Version</dt>
+    <dd>
+        {% if relay['version'] -%}
+            <span>{{ relay['version']|escape }}</span>
+            {% if relay['recommended_version'] is not none -%}
+                {% if relay['recommended_version'] -%}
+                    — <span style="color: #28a745; font-weight: bold;" title="This Tor version is on the recommended list.">Recommended</span>
+                {% else -%}
+                    — <span style="color: #dc3545; font-weight: bold;" title="This Tor version is NOT recommended. Update to the latest stable version.">Not Recommended</span>
+                {% endif -%}
+            {% endif -%}
+        {% else -%}
+            <span style="color: #6c757d;">Unknown</span>
+        {% endif -%}
+    </dd>
+
+    {% if relay['version_status'] %}
+    <dt title="Version status as determined by directory authorities: recommended, experimental, obsolete, new in series, unrecommended">Version Status</dt>
+    <dd>
+        {% if relay['version_status'] == 'recommended' -%}
+            <span style="color: #28a745;">{{ relay['version_status']|escape }}</span>
+        {% elif relay['version_status'] == 'obsolete' -%}
+            <span style="color: #dc3545; font-weight: bold;">{{ relay['version_status']|escape }}</span>
+            <span style="font-size: 11px; color: #666;"> — Update urgently. See <a href="https://www.torproject.org/download/tor/" target="_blank" rel="noopener">torproject.org/download</a></span>
+        {% elif relay['version_status'] == 'experimental' -%}
+            <span style="color: #856404;">{{ relay['version_status']|escape }}</span>
+        {% else -%}
+            <span style="color: #6c757d;">{{ relay['version_status']|escape }}</span>
+        {% endif -%}
+    </dd>
+    {% endif %}
+</dl>
+</section>
+
+{# ============== SECTION 8: EXIT POLICY (#exit-policy) ============== #}
+<section id="exit-policy" class="section-box" style="margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+<h4 style="margin-top: 0; margin-bottom: 12px;">
+    <div class="section-header">
+        <a href="#exit-policy" class="anchor-link">Exit Policy</a>
+    </div>
+</h4>
+
+<div class="row">
+    {# IPv4 Exit Policy Summary #}
+    <div class="col-md-6">
+        <h5 class="subsection-header">IPv4 Exit Policy Summary</h5>
+        {% if relay['exit_policy_summary'] -%}
+            <pre class="pre-scrollable" style="max-height: 150px; font-size: 12px;">{% for k, v in relay['exit_policy_summary'].items() -%}
+{{ k|escape }}: {{ '\n  ' + v|join('\n  ')|escape }}
+{% endfor -%}</pre>
+        {% else -%}
+            <span style="color: #6c757d;">None</span>
+        {% endif -%}
+    </div>
+
+    {# IPv6 Exit Policy Summary #}
+    <div class="col-md-6">
+        <h5 class="subsection-header">IPv6 Exit Policy Summary</h5>
+        {% if relay['exit_policy_v6_summary'] -%}
+            <pre class="pre-scrollable" style="max-height: 150px; font-size: 12px;">{% for k, v in relay['exit_policy_v6_summary'].items() -%}
+{{ k|escape }}: {{ '\n  ' + v|join('\n  ')|escape }}
+{% endfor -%}</pre>
+        {% else -%}
+            <span style="color: #6c757d;">None</span>
+        {% endif -%}
+    </div>
+</div>
+
+{# Full Exit Policy #}
+<div style="margin-top: 10px;">
+    <h5 class="subsection-header">Full Exit Policy</h5>
+    <pre class="pre-scrollable" style="max-height: 200px; font-size: 12px;">{% for policy in relay['exit_policy'] -%}
+{{ policy|escape }}
+{% endfor -%}</pre>
+</div>
+</section>
+
 <p>Last fetch was at {{ relays.timestamp }}.</p>
 <div class="row">
 <div class="col-md-6">
