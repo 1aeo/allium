@@ -27,7 +27,7 @@ This document proposes a redesign of the Allium relay page to prioritize operato
 
 ### 1.2 Implementation Status Tracker
 
-> **Last Updated:** 2026-02-16
+> **Last Updated:** 2026-02-17
 
 #### Legend
 - ✅ **Fully Implemented** - Code complete and deployed
@@ -42,7 +42,7 @@ This document proposes a redesign of the Allium relay page to prioritize operato
 |------|--------|----------|-------|
 | 0.1 Single Column Width on Desktop | ⏳ Not Started | `relay-info.html` CSS | Max-width 1400px, fluid layout |
 | 0.2 Relay Identity in Page Header | ✅ Implemented | `relay-info.html` lines 70-100 | Nickname, Contact, AROI, Family, AS, Country, Platform |
-| 0.3 Section List (9 sections) | 🔶 Partial | `relay-info.html` | 4 done (#status, #connectivity, #flags, #authority-votes); 5 remaining in dt/dd format |
+| 0.3 Section List (9 sections) | ✅ Implemented | `relay-info.html` | All 9 sections implemented as dedicated elements |
 
 #### Section 1: Health Status Summary at Page Top
 
@@ -60,11 +60,11 @@ This document proposes a redesign of the Allium relay page to prioritize operato
 | 2.2 Connectivity and Location Section | ✅ Implemented | `relay-info.html` #connectivity | Addresses, Reachability, Location, AS in 2-column layout |
 | 2.2.1 Overload in Stability Row | ✅ Implemented | `stability_utils.py`, `relay-info.html` | 72h threshold per Tor spec 328 |
 | 2.2.2 Overload Issues in Health Section | ✅ Implemented | `relay_diagnostics.py` | All 6 overload issue types (general, FD exhaustion, rate limits) |
-| 2.3 Operator and Family Section | ⏳ Not Started | — | Merge AROI + Family into dedicated #operator section |
+| 2.3 Operator and Family Section | ✅ Implemented | `relay-info.html` #operator | AROI + Family in dedicated section |
 | 2.4 CSS Fluid-Width Single Column | ⏳ Not Started | `relay-info.html` CSS | Max-width, responsive design |
 | 2.5 Fingerprint in Header (Selectable) | 🔶 Partial | `relay-info.html` | Shown but not full/selectable design |
-| 2.6 Overload Subsection (within #uptime) | ⏳ Not Started | — | Merged into #uptime section as subsection with `#overload` anchor alias |
-| 2.7 Template Section Reordering | 🔶 Partial | `relay-info.html` | New sections exist, old content in dt/dd format |
+| 2.6 Overload Subsection (within #uptime) | ✅ Implemented | `relay-info.html` #uptime | `<span id="overload">` anchor alias within #uptime section |
+| 2.7 Template Section Reordering | ✅ Implemented | `relay-info.html` | All 9 sections + old dt/dd content removed |
 
 #### Section 3: Flag Eligibility and Issues
 
@@ -72,7 +72,7 @@ This document proposes a redesign of the Allium relay page to prioritize operato
 |------|--------|----------|-------|
 | 3.1 Flag Eligibility Table | ✅ Implemented | `relay-info.html` lines 453-530 | Full `<section id="flags">` with Current Flags, Eligible Flags, and Eligibility Details table |
 | 3.2 Issues/Warnings with Actionable Advice | ✅ Implemented | `relay_diagnostics.py` | `generate_relay_issues()` — 16 consensus + 6 overload issue types |
-| 3.3 Remove "Summary: Your Relay vs Consensus" | ⏳ Not Started | `relay-info.html` | Old table still present |
+| 3.3 Remove "Summary: Your Relay vs Consensus" | ✅ Implemented | `relay-info.html` | Old table removed (all metrics in #flags eligibility table) |
 | 3.4 Data Source Comparison Table | ⏳ Not Started | — | Onionoo vs CollecTor comparison |
 | 3.5 Backward-Compatible Anchor Aliases | ⏳ Not Started | `relay-info.html` | Hidden anchors for old URLs |
 
@@ -114,11 +114,11 @@ This document proposes a redesign of the Allium relay page to prioritize operato
 | Health Status | ✅ Implemented | `#status` | Grid layout, 14 metrics in 8 cells |
 | Connectivity | ✅ Implemented | `#connectivity` | 2-column layout, addresses/location/AS |
 | Flags & Eligibility | ✅ Implemented | `#flags` | Current/Eligible flags + eligibility table |
-| Bandwidth | 📋 Documented | `#bandwidth` | Spec in 3.4, code pending |
-| Uptime, Stability & Overload | ⏳ Not Started | `#uptime` + `#overload` | Merged section: uptime data + overload subsection. **FIXES** broken `#overload` anchor. Spec in 3.5 |
-| Operator & Family | ⏳ Not Started | `#operator` | AROI/Family in dt/dd, needs consolidation |
-| Software & Version | ⏳ Not Started | `#software` | Platform in dt/dd, needs consolidation |
-| Exit Policy | ⏳ Not Started | `#exit-policy` | IPv4/IPv6 summary in dt/dd, needs consolidation |
+| Bandwidth | ✅ Implemented | `#bandwidth` | 2-column: capacity + authority measurement, network participation |
+| Uptime, Stability & Overload | ✅ Implemented | `#uptime` + `#overload` | Merged section with `#overload` anchor alias. **FIXED** broken anchor. |
+| Operator & Family | ✅ Implemented | `#operator` | AROI validation + effective/alleged/indirect family |
+| Software & Version | ✅ Implemented | `#software` | Platform + version with recommended/obsolete status |
+| Exit Policy | ✅ Implemented | `#exit-policy` | IPv4/IPv6 summaries + full policy (scrollable) |
 | Per-Authority Details | ✅ Implemented | `#authority-votes` | Full per-authority voting table |
 
 ---
