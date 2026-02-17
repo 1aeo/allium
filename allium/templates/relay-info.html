@@ -538,6 +538,131 @@ Country: unknown
 </section>
 {% endif %}
 
+{# ============== SECTION 4: BANDWIDTH METRICS (#bandwidth) ============== #}
+{% set bw_diag = relay.consensus_evaluation if relay.consensus_evaluation and relay.consensus_evaluation.available else none %}
+
+<section id="bandwidth" class="section-box" style="margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+<h4 style="margin-top: 0; margin-bottom: 12px;">
+    <div class="section-header">
+        <a href="#bandwidth" class="anchor-link">Bandwidth Metrics</a>
+    </div>
+</h4>
+
+<div class="row">
+    {# Left Column: Relay-Reported Capacity #}
+    <div class="col-md-6">
+        <h5 class="subsection-header">Capacity (Relay-Reported)</h5>
+        <dl>
+            <dt title="Bandwidth capacity your relay measured and reported in its descriptor">Observed Bandwidth</dt>
+            <dd>
+                {% set obs_unit = relay['observed_bandwidth']|determine_unit(relays.use_bits) %}
+                {{ relay['observed_bandwidth']|format_bandwidth_with_unit(obs_unit) }} {{ obs_unit }}
+            </dd>
+            
+            <dt title="min(Observed, Rate, Burst) - what your relay advertises to the network">Advertised Bandwidth</dt>
+            <dd>
+                {% if relay['advertised_bandwidth'] %}
+                    {% set adv_unit = relay['advertised_bandwidth']|determine_unit(relays.use_bits) %}
+                    {{ relay['advertised_bandwidth']|format_bandwidth_with_unit(adv_unit) }} {{ adv_unit }}
+                {% else %}
+                    <span style="color: #6c757d;">Unknown</span>
+                {% endif %}
+            </dd>
+            
+            <dt title="RelayBandwidthRate setting in torrc">Rate Limit</dt>
+            <dd>
+                {% if relay['bandwidth_rate'] %}
+                    {% set rate_unit = relay['bandwidth_rate']|determine_unit(relays.use_bits) %}
+                    {{ relay['bandwidth_rate']|format_bandwidth_with_unit(rate_unit) }} {{ rate_unit }}
+                {% else %}
+                    <span style="color: #6c757d;">Not set</span>
+                {% endif %}
+            </dd>
+            
+            <dt title="RelayBandwidthBurst setting in torrc">Burst Limit</dt>
+            <dd>
+                {% if relay['bandwidth_burst'] %}
+                    {% set burst_unit = relay['bandwidth_burst']|determine_unit(relays.use_bits) %}
+                    {{ relay['bandwidth_burst']|format_bandwidth_with_unit(burst_unit) }} {{ burst_unit }}
+                {% else %}
+                    <span style="color: #6c757d;">Not set</span>
+                {% endif %}
+            </dd>
+        </dl>
+    </div>
+    
+    {# Right Column: Authority-Measured #}
+    <div class="col-md-6">
+        <h5 class="subsection-header">Measurement (Authority-Verified)</h5>
+        <dl>
+            <dt title="How many bandwidth authorities measured this relay">Measured By</dt>
+            <dd>
+                {% if bw_diag and bw_diag.bandwidth_summary %}
+                    <span style="color: {{ bw_diag.bandwidth_summary.bw_auth_color }}; font-weight: bold;">
+                        {{ bw_diag.bandwidth_summary.bw_auth_measured_count }}/{{ bw_diag.bandwidth_summary.bw_auth_total }}
+                    </span> BW Authorities
+                {% elif relay['measured'] is not none %}
+                    {% if relay['measured'] %}
+                        <span style="color: #28a745; font-weight: bold;">Yes</span> (≥3 authorities)
+                    {% else %}
+                        <span style="color: #856404;">Not Yet Measured</span>
+                    {% endif %}
+                {% else %}
+                    <span style="color: #6c757d;">Unknown</span>
+                {% endif %}
+            </dd>
+            
+            {% if bw_diag and bw_diag.bandwidth_summary and bw_diag.bandwidth_summary.median_display %}
+            <dt title="Median of measurements from bandwidth authorities">Median Measurement</dt>
+            <dd>{{ bw_diag.bandwidth_summary.median_display }}</dd>
+            
+            <dt title="Range of measurements across authorities">Min / Max</dt>
+            <dd>
+                {{ bw_diag.bandwidth_summary.min_display|default('N/A') }} / {{ bw_diag.bandwidth_summary.max_display|default('N/A') }}
+            </dd>
+            
+            {% if bw_diag.bandwidth_summary.deviation_class == 'warning' %}
+            <dt title="Large variation in measurements across authorities">Deviation</dt>
+            <dd>
+                <span style="color: #856404;">{{ bw_diag.bandwidth_summary.deviation_display }}</span>
+                <small style="color: #856404;">[Warning] High variation</small>
+            </dd>
+            {% endif %}
+            {% endif %}
+        </dl>
+    </div>
+</div>
+
+{# Network Participation - Full width #}
+<div style="margin-top: 12px; padding: 10px; background: #ffffff; border-radius: 4px; border: 1px solid #e9ecef;">
+    <strong>Network Participation:</strong>
+    <span title="Fraction of total network consensus weight.">
+        Consensus Weight:
+        {% if relay['consensus_weight_fraction'] %}
+            {{ "%.4f"|format(relay['consensus_weight_fraction'] * 100) }}% of network
+            {% if relay['consensus_weight'] %}
+                <span style="color: #6c757d;">({{ "{:,}".format(relay['consensus_weight']) }})</span>
+            {% endif %}
+        {% else %}
+            <span style="color: #6c757d;">N/A</span>
+        {% endif %}
+    </span>
+    |
+    <span title="Probability of being selected as guard">Guard: 
+        {% if relay['guard_probability'] %}{{ "%.4f"|format(relay['guard_probability'] * 100) }}%{% else %}N/A{% endif %}</span> |
+    <span title="Probability of being selected as middle">Middle: 
+        {% if relay['middle_probability'] %}{{ "%.4f"|format(relay['middle_probability'] * 100) }}%{% else %}N/A{% endif %}</span> |
+    <span title="Probability of being selected as exit">Exit: 
+        {% if relay['exit_probability'] %}{{ "%.4f"|format(relay['exit_probability'] * 100) }}%{% else %}N/A{% endif %}</span>
+    
+    {% if relay['fingerprint'] in relays.json.smart_context.performance_correlation.template_optimized.underutilized_fingerprints %}
+    <div style="margin-top: 8px; color: #856404;">
+        <strong>[Warning] Underutilized:</strong> High bandwidth capacity but low consensus weight.
+    </div>
+    {% endif %}
+</div>
+</section>
+
 {# ============== SECTION 5: UPTIME, STABILITY & OVERLOAD (#uptime) ============== #}
 <section id="uptime" class="section-box" style="margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
 <h4 style="margin-top: 0; margin-bottom: 12px;">
