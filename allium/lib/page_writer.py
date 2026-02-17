@@ -53,6 +53,11 @@ ENV.filters['format_bandwidth'] = format_bandwidth_filter
 ENV.filters['format_time_ago'] = format_time_ago
 ENV.filters['split'] = lambda s, sep='/': s.split(sep) if s else []
 
+# Overload section filters for millisecond timestamps (Onionoo overload fields)
+from .time_utils import format_timestamp, format_timestamp_ago
+ENV.filters['format_timestamp'] = format_timestamp
+ENV.filters['format_timestamp_ago'] = format_timestamp_ago
+
 # Multiprocessing globals (initialized via fork for copy-on-write memory sharing)
 _mp_relay_set = None
 _mp_template = None
@@ -979,8 +984,10 @@ def write_relay_info(relay_set):
     # Safely get contact map - avoiding 3-level .get() in loop
     contact_map = relay_set.json.get("sorted", {}).get("contact", {})
     
-    # Optimization: Cache validated domains set
+    # Optimization: Cache frequently-accessed properties before 10K relay loop
     validated_aroi_domains = getattr(relay_set, 'validated_aroi_domains', set())
+    aroi_validation_timestamp = relay_set._aroi_validation_timestamp
+    base_url = relay_set.base_url
 
     for relay in relay_list:
         if not relay["fingerprint"].isalnum():
@@ -1002,8 +1009,9 @@ def write_relay_info(relay_set):
         rendered = template.render(
             relay=relay, page_ctx=page_ctx, relays=relay_set, contact_display_data=contact_display_data,
             contact_validation_status=contact_validation_status,
+            aroi_validation_timestamp=aroi_validation_timestamp,
             validated_aroi_domains=validated_aroi_domains,
-            base_url=relay_set.base_url
+            base_url=base_url
         )
         
         # Create directory structure: relay/FINGERPRINT/index.html (depth 2)

@@ -856,7 +856,7 @@ FLAG_TOOLTIPS = {
     'fast': "High bandwidth relay. Requires >=100 KB/s or in top 7/8 of network bandwidth.",
     'hsdir': "Hidden Service Directory: Stores and serves hidden service descriptors. Requires high uptime (WFU>=98%) and sufficient age.",
     'running': "Relay is reachable: Directory Authority successfully connected to relay's OR port.",
-    'valid': "Relay is verified: Not blacklisted, has valid descriptor, and properly configured.",
+    'valid': "Relay is verified: Not blacklisted, has valid descriptor, and properly configured. Does not require a recommended Tor version.",
     'v2dir': "Supports directory protocol v2+: Can serve directory information to clients.",
     'exit': "Exit node: Can relay traffic to the regular internet.",
     'authority': "Directory Authority: Votes on network consensus.",
@@ -878,7 +878,7 @@ METRIC_TOOLTIPS = {
     'badexit': "Misbehaving exit node flagged by Directory Authorities. Traffic manipulation, SSL stripping, content injection, or DNS manipulation detected. Also assigned automatically with MiddleOnly. Source: CollecTor vote files.",
     'running_ipv4': "IPv4 reachability: Directory Authority must successfully connect to relay's IPv4 ORPort within 45 minutes. Source: CollecTor vote files (presence of relay in vote = reachable).",
     'running_ipv6': "IPv6 reachability: Tested by authorities with AuthDirHasIPv6Connectivity enabled. Not all authorities test IPv6. Source: CollecTor vote files ('a' line).",
-    'version_valid': "Tor version must not be known to be broken. Outdated versions may lose Valid flag and be rejected from the network. Source: Onionoo relay descriptor.",
+    'version_valid': "Valid = not blacklisted, has valid descriptor, and properly configured. Assigned by Directory Authorities. Does not require a recommended Tor version per dir-spec. Source: CollecTor vote files.",
     'v2dir_capability': "Relay needs open DirPort OR tunnelled-dir-server line in descriptor, and DirCache not disabled. Required for Guard flag. Source: Onionoo dir_address / relay descriptor.",
 }
 
@@ -1216,32 +1216,28 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
         ))
     
     # ========== Valid flag (1 row) ==========
-    # Per dir-spec: Valid = not blacklisted + valid descriptor + non-broken Tor version.
-    # We display the version check (the actionable part for operators).
+    # Per dir-spec: Valid = not blacklisted + valid descriptor + properly configured.
+    # Version is NOT a requirement for Valid. A relay can have Valid while running
+    # a non-recommended version. We show DA vote count like other flags.
     valid_tooltip = FLAG_TOOLTIPS['valid']
-    valid_recommended = rv.get('valid_recommended')
-    valid_display = rv.get('valid_version_display', 'Unknown')
     valid_da_count = diag.get('vote_count', 0)
     
-    if valid_recommended is True:
+    if valid_da_count >= majority_required:
         valid_status = 'meets'
-        valid_extra = ''
-    elif valid_recommended is False:
-        valid_status = 'below'
-        valid_extra = ' (not recommended)'
-    else:
+    elif valid_da_count > 0:
         valid_status = 'partial'
-        valid_extra = ' (unknown)'
+    else:
+        valid_status = 'below'
     valid_color = STATUS_COLORS[valid_status]
     
     rows.append(_make_row(
         'Valid', valid_tooltip, valid_color,
-        'Tor Version', METRIC_TOOLTIPS.get('version_valid', ''),
-        _format_relay_value_html(valid_display),
-        'relay',
-        _vote_threshold('Version approved by Directory Authorities', majority_required, total_authorities),
+        'Descriptor', 'Not blacklisted, has valid descriptor, properly configured relay. Assigned by Directory Authorities. Does not require a recommended Tor version. Source: CollecTor vote files.',
+        f'{valid_da_count}/{total_authorities} authorities assigned Valid',
+        'da',
+        _vote_threshold(f'Not blacklisted + valid descriptor', majority_required, total_authorities),
         valid_status,
-        _get_status_text(valid_status, valid_extra, da_count=valid_da_count, da_total=total_authorities),
+        _get_status_text(valid_status, da_count=valid_da_count, da_total=total_authorities),
         rowspan=1,
     ))
     
@@ -1258,7 +1254,7 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
     
     rows.append(_make_row(
         'V2Dir', v2dir_tooltip, v2dir_color,
-        'Dir Capability', METRIC_TOOLTIPS.get('v2dir_capability', ''),
+        'DirPort Available', METRIC_TOOLTIPS.get('v2dir_capability', ''),
         _format_relay_value_html(v2dir_display),
         'relay',
         _vote_threshold('Tunnelled directory via ORPort or DirPort', majority_required, total_authorities),
@@ -1457,10 +1453,10 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
     if badexit_flagged:
         rows.append(_make_row(
             'BadExit', FLAG_TOOLTIPS['badexit'], STATUS_COLORS['below'],
-            'Exit Blacklist (by DA)', METRIC_TOOLTIPS['badexit'],
+            'Restriction (by DA)', METRIC_TOOLTIPS['badexit'],
             f'{badexit_count}/{total_authorities} authorities assigned BadExit',
             'da',
-            'Traffic manipulation, SSL stripping, or policy violation',
+            'Exit traffic manipulation, SSL stripping, or policy violation',
             'below',
             f'Flagged ({badexit_count}/{total_authorities} DA)',
             rowspan=1,
@@ -1869,6 +1865,7 @@ def _format_bandwidth_summary(consensus_data: dict, use_bits: bool = False) -> d
         'bw_auth_total': bw_auth_total,
         'bw_auth_majority': bw_auth_majority,  # Pre-computed for template
         'bw_auth_color': bw_auth_color,        # Pre-computed for template
+        'bw_auth_not_measured_names': bandwidth.get('bw_auth_not_measured_names', []),
     }
 
 

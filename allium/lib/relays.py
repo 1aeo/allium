@@ -5,6 +5,7 @@ Relays class object consisting of relays (list of dict) and onionoo fetch
 timestamp
 """
 
+import bisect
 import functools
 import hashlib
 import multiprocessing as mp
@@ -354,6 +355,11 @@ class Relays:
             relay.get('consensus_weight', 0) for relay in self.json["relays"]
         )
         
+        # Pre-compute consensus weight percentiles for all relays
+        # Sorted ascending so we can use bisect for O(log n) lookups
+        cw_sorted = sorted(relay.get('consensus_weight', 0) for relay in self.json["relays"] if relay.get('consensus_weight'))
+        cw_count = len(cw_sorted)
+        
         for relay in self.json["relays"]:
             # Use centralized bulk escaping for all HTML escape patterns
             bulk_escaper.escape_all_relay_fields(relay)
@@ -376,6 +382,14 @@ class Relays:
                 relay["consensus_weight_percentage"] = f"{computed_fraction * 100:.2f}%"
             else:
                 relay["consensus_weight_percentage"] = NA_FALLBACK
+            
+            # Compute consensus weight percentile rank (what % of relays have lower CW)
+            cw = relay.get('consensus_weight', 0)
+            if cw and cw_count > 0:
+                rank = bisect.bisect_left(cw_sorted, cw)
+                relay['cw_percentile'] = round(rank / cw_count * 100, 1)
+            else:
+                relay['cw_percentile'] = None
                 
             if relay.get("guard_probability") is not None:
                 relay["guard_probability_percentage"] = f"{relay['guard_probability'] * 100:.2f}%"

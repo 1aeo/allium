@@ -27,7 +27,7 @@ This document proposes a redesign of the Allium relay page to prioritize operato
 
 ### 1.2 Implementation Status Tracker
 
-> **Last Updated:** 2026-01-04
+> **Last Updated:** 2026-02-17
 
 #### Legend
 - ✅ **Fully Implemented** - Code complete and deployed
@@ -42,7 +42,7 @@ This document proposes a redesign of the Allium relay page to prioritize operato
 |------|--------|----------|-------|
 | 0.1 Single Column Width on Desktop | ⏳ Not Started | `relay-info.html` CSS | Max-width 1400px, fluid layout |
 | 0.2 Relay Identity in Page Header | ✅ Implemented | `relay-info.html` lines 70-100 | Nickname, Contact, AROI, Family, AS, Country, Platform |
-| 0.3 Section List (10 sections) | 🔶 Partial | `relay-info.html` | Health Status (#status), Connectivity (#connectivity) done; others still dt/dd format |
+| 0.3 Section List (9 sections) | ✅ Implemented | `relay-info.html` | All 9 sections implemented as dedicated elements |
 
 #### Section 1: Health Status Summary at Page Top
 
@@ -59,44 +59,53 @@ This document proposes a redesign of the Allium relay page to prioritize operato
 | 2.1 Health Status Section | ✅ Implemented | `relay-info.html` #status | Full grid layout with 14 metrics in 8 cells |
 | 2.2 Connectivity and Location Section | ✅ Implemented | `relay-info.html` #connectivity | Addresses, Reachability, Location, AS in 2-column layout |
 | 2.2.1 Overload in Stability Row | ✅ Implemented | `stability_utils.py`, `relay-info.html` | 72h threshold per Tor spec 328 |
-| 2.2.2 Overload Issues in Health Section | 🔶 Partial | `consensus_evaluation.py` | Basic issues, needs all 5 Onionoo fields |
-| 2.3 Operator and Family Section | ⏳ Not Started | — | Merge AROI + Family into dedicated #operator section |
+| 2.2.2 Overload Issues in Health Section | ✅ Implemented | `relay_diagnostics.py` | All 6 overload issue types (general, FD exhaustion, rate limits) |
+| 2.3 Operator and Family Section | ✅ Implemented | `relay-info.html` #operator | AROI + Family in dedicated section |
 | 2.4 CSS Fluid-Width Single Column | ⏳ Not Started | `relay-info.html` CSS | Max-width, responsive design |
 | 2.5 Fingerprint in Header (Selectable) | 🔶 Partial | `relay-info.html` | Shown but not full/selectable design |
-| 2.6 Dedicated Overload Section (#overload) | ⏳ Not Started | — | Section 6 after #uptime, shows 3 fields + sub-fields |
-| 2.7 Template Section Reordering | 🔶 Partial | `relay-info.html` | New sections exist, old content in dt/dd format |
+| 2.6 Overload Subsection (within #uptime) | ✅ Implemented | `relay-info.html` #uptime | `<span id="overload">` anchor alias within #uptime section |
+| 2.7 Template Section Reordering | ✅ Implemented | `relay-info.html` | All 9 sections + old dt/dd content removed |
 
 #### Section 3: Flag Eligibility and Issues
 
 | Item | Status | Location | Notes |
 |------|--------|----------|-------|
 | 3.1 Flag Eligibility Table | ✅ Implemented | `relay-info.html` lines 453-530 | Full `<section id="flags">` with Current Flags, Eligible Flags, and Eligibility Details table |
-| 3.2 Issues/Warnings with Actionable Advice | ✅ Implemented | `consensus_evaluation.py` | Suggestions included for each issue type |
-| 3.3 Remove "Summary: Your Relay vs Consensus" | ⏳ Not Started | `relay-info.html` | Old table still present |
+| 3.2 Issues/Warnings with Actionable Advice | ✅ Implemented | `relay_diagnostics.py` | `generate_relay_issues()` — 16 consensus + 6 overload issue types |
+| 3.3 Remove "Summary: Your Relay vs Consensus" | ✅ Implemented | `relay-info.html` | Old table removed (all metrics in #flags eligibility table) |
 | 3.4 Data Source Comparison Table | ⏳ Not Started | — | Onionoo vs CollecTor comparison |
 | 3.5 Backward-Compatible Anchor Aliases | ⏳ Not Started | `relay-info.html` | Hidden anchors for old URLs |
 
 #### Backend Components
 
-> **Architecture Note (2026-02-15):** `relays.py` was refactored from ~5,900 lines into 8 focused modules.
+> **Architecture Note (2026-02-16):** `relays.py` was refactored from ~5,900 lines into focused modules.
 > Line numbers below reference the post-refactor structure. Key modules:
-> `relays.py` (~1,100 lines — core class, overload merging, consensus eval call),
-> `page_writer.py` (~1,020 lines — HTML generation),
-> `network_health.py` (~1,300 lines — network statistics),
-> `operator_analysis.py` (~1,350 lines — operator/contact analysis),
-> `categorization.py` (~750 lines), `flag_analysis.py` (~380 lines),
-> `time_utils.py` (~118 lines), `ip_utils.py` (~94 lines).
+> `relays.py` (~1,175 lines — core class, overload merging, consensus eval call),
+> `page_writer.py` (~1,020 lines — HTML generation, Jinja2 filter registration),
+> `network_health.py` (~1,321 lines — network statistics),
+> `operator_analysis.py` (~1,360 lines — operator/contact analysis),
+> `categorization.py` (~750 lines), `flag_analysis.py` (~382 lines),
+> `time_utils.py` (~118 lines), `ip_utils.py` (~138 lines),
+> `relay_diagnostics.py` (~630 lines — issue generation including overload),
+> `bandwidth_utils.py` (~510 lines — bandwidth data processing),
+> `stability_utils.py` (~128 lines — overload/stability computation),
+> `bandwidth_formatter.py` (~175 lines — bandwidth formatting + Jinja2 filter functions),
+> `intelligence_engine.py` (~731 lines — smart context, underutilized detection).
+> Template: `relay-info.html` (~1,514 lines).
 
 | Item | Status | Location | Notes |
 |------|--------|----------|-------|
-| stability_utils.py | ✅ Implemented | `allium/lib/stability_utils.py` | compute_relay_stability() with 72h threshold |
-| Overload Data Fetching | ✅ Implemented | `allium/lib/relays.py` lines ~510-525 | Merges /details and /bandwidth overload fields in `_reprocess_bandwidth_data()` |
-| AROI Validation Backend | ✅ Implemented | `allium/lib/aroi_validation.py` | Validation status passed to templates |
-| BandwidthFormatter | ✅ Implemented | `allium/lib/bandwidth_formatter.py` | Respects --bits flag for rate formatting |
-| Consensus Evaluation | ✅ Implemented | `consensus_evaluation.py` | Per-authority data, flag thresholds, issues, exit policy |
-| Page Writer | ✅ Implemented | `allium/lib/page_writer.py` | Extracted from relays.py — HTML generation, `write_relay_info()` |
-| Network Health | ✅ Implemented | `allium/lib/network_health.py` | Extracted from relays.py — network statistics |
-| Time Utils | ✅ Implemented | `allium/lib/time_utils.py` | Extracted from relays.py — `format_time_ago()`, timestamp parsing |
+| stability_utils.py | ✅ Implemented | `allium/lib/stability_utils.py` (~128 lines) | `compute_relay_stability()` with 72h threshold |
+| Overload Data Fetching | ✅ Implemented | `allium/lib/relays.py` lines ~570-587 | Merges /details and /bandwidth overload fields in `_reprocess_bandwidth_data()` |
+| Relay Diagnostics | ✅ Implemented | `allium/lib/relay_diagnostics.py` (~630 lines) | `generate_relay_issues()` — 16 consensus + 6 overload issue types |
+| AROI Validation Backend | ✅ Implemented | `allium/lib/aroi_validation.py` | `get_contact_validation_status()` passed to templates |
+| BandwidthFormatter | ✅ Implemented | `allium/lib/bandwidth_formatter.py` (~175 lines) | Respects --bits flag, provides Jinja2 filter functions |
+| Bandwidth Utils | ✅ Implemented | `allium/lib/bandwidth_utils.py` (~510 lines) | Consolidated bandwidth processing, overload field extraction |
+| Consensus Evaluation | ✅ Implemented | `allium/lib/consensus/consensus_evaluation.py` | Per-authority data, flag thresholds, issues, exit policy |
+| Page Writer | ✅ Implemented | `allium/lib/page_writer.py` (~1,020 lines) | HTML generation, `write_relay_info()`, Jinja2 filter registration (lines 50-54) |
+| Network Health | ✅ Implemented | `allium/lib/network_health.py` (~1,321 lines) | Network statistics |
+| Time Utils | ✅ Implemented | `allium/lib/time_utils.py` (~118 lines) | `format_time_ago()`, timestamp parsing |
+| Intelligence Engine | ✅ Implemented | `allium/lib/intelligence_engine.py` (~731 lines) | Smart context, underutilized relay detection |
 
 #### Template Sections (Dedicated `<section>` Elements)
 
@@ -105,25 +114,26 @@ This document proposes a redesign of the Allium relay page to prioritize operato
 | Health Status | ✅ Implemented | `#status` | Grid layout, 14 metrics in 8 cells |
 | Connectivity | ✅ Implemented | `#connectivity` | 2-column layout, addresses/location/AS |
 | Flags & Eligibility | ✅ Implemented | `#flags` | Current/Eligible flags + eligibility table |
-| Bandwidth | 📋 Documented | `#bandwidth` | Spec in 3.4, code pending |
-| Uptime & Stability | ⏳ Not Started | `#uptime` | Data in dt/dd format, needs consolidation |
-| Overload | ⏳ Not Started | `#overload` | **BROKEN**: Stability row links to non-existent section |
-| Operator & Family | ⏳ Not Started | `#operator` | AROI/Family in dt/dd, needs consolidation |
-| Software & Version | ⏳ Not Started | `#software` | Platform in dt/dd, needs consolidation |
-| Exit Policy | ⏳ Not Started | `#exit-policy` | IPv4/IPv6 summary in dt/dd, needs consolidation |
+| Bandwidth | ✅ Implemented | `#bandwidth` | 2-column: capacity + authority measurement, network participation |
+| Uptime, Stability & Overload | ✅ Implemented | `#uptime` + `#overload` | Merged section with `#overload` anchor alias. **FIXED** broken anchor. |
+| Operator & Family | ✅ Implemented | `#operator` | AROI validation + effective/alleged/indirect family |
+| Software & Version | ✅ Implemented | `#software` | Platform + version with recommended/obsolete status |
+| Exit Policy | ✅ Implemented | `#exit-policy` | IPv4/IPv6 summaries + full policy (scrollable) |
 | Per-Authority Details | ✅ Implemented | `#authority-votes` | Full per-authority voting table |
 
 ---
 
 #### Implementation Priority (Recommended Order)
 
-1. **🚨 URGENT: Dedicated Overload Section (#overload)** - Stability row links to non-existent `#overload` anchor
-2. **Dedicated Bandwidth Section (#bandwidth)** - Spec complete in section 3.4, ready to implement
-3. **Operator and Family Section (#operator)** - Consolidate AROI + Family from dt/dd
-4. **Remaining dedicated sections** - #uptime, #software, #exit-policy
-5. **CSS Fluid-Width** - Better desktop layout
-6. **Remove old dt/dd content** - Clean up after sections migrated
-7. **Anchor aliases** - Backward compatibility for old URLs
+> See section 5.5 for complete execution plan with data flow verification.
+
+1. **🚨 URGENT: #uptime + #overload section** — Fix broken `<a href="#overload">` anchor (line 194) by creating `#uptime` section with `#overload` subsection. Register 2 new Jinja2 filters for ms timestamps. (Section 3.5)
+2. **#bandwidth section** — Spec complete in section 3.4 with full Jinja2 template. All data available, no backend changes.
+3. **#operator section** — Consolidate AROI + Family from 5+ dt/dd items. Spec in section 3.7.
+4. **#software section** — Consolidate platform/version from 2 dt/dd items. Spec in section 3.8.
+5. **#exit-policy section** — Consolidate exit policies from 3 dt/dd items. Spec in section 3.9.
+6. **Remove old dt/dd content + Summary table** — Clean up after migration. See section 5.5.8.
+7. **Deferred:** CSS Fluid-Width, backward-compatible anchor aliases, Data Source Comparison Table
 
 ---
 
@@ -161,17 +171,20 @@ This section provides the visual reference for the proposed layout. All subseque
 | 2 | Connectivity and Location | `#connectivity` |
 | 3 | Flags and Eligibility | `#flags` |
 | 4 | Bandwidth Metrics | `#bandwidth` |
-| 5 | Uptime and Stability | `#uptime` |
-| 6 | Overload Status | `#overload` |
-| 7 | Operator and Family | `#operator` |
-| 8 | Software and Version | `#software` |
-| 9 | Exit Policy | `#exit-policy` |
-| 10 | Per-Authority Vote Details | `#authority-votes` |
+| 5 | Uptime, Stability & Overload | `#uptime` (with `#overload` alias) |
+| 6 | Operator and Family | `#operator` |
+| 7 | Software and Version | `#software` |
+| 8 | Exit Policy | `#exit-policy` |
+| 9 | Per-Authority Vote Details | `#authority-votes` |
 
 
 ---
 
 ### 2.2 Desktop Wireframe (max-width: 1400px)
+
+> **Note:** These wireframes are from the original 10-section proposal. Overload Status
+> has since been merged into the Uptime & Stability section (see section 3.5).
+> Updated mockups for the merged section are in section 3.5.
 
 Two columns inside each section to maximize information density on wide screens.
 
@@ -1694,7 +1707,7 @@ rather than calculated in Jinja2 templates. This provides:
 | `relay['exit_probability']` | float | `relay['exit_probability']` | Probability selected as exit (0.0-1.0) |
 | `relay['measured']` | bool/None | `relay['measured']` | Whether bandwidth was measured by ≥3 authorities |
 
-**Pre-computed Display Values (from relays.py / stability_utils.py):**
+**Pre-computed Display Values (from relays.py `_preprocess_template_data()` lines ~394-402):**
 
 | Variable | Type | Template Access | Description |
 |----------|------|-----------------|-------------|
@@ -1951,12 +1964,14 @@ rather than calculated in Jinja2 templates. This provides:
 
 #### Template Filters Used
 
-All filters are already available in `relays.py` (registered as Jinja2 filters):
+All filters are registered in `page_writer.py` (lines 50-54), functions defined in `bandwidth_formatter.py`:
 
 | Filter | Usage | Description |
 |--------|-------|-------------|
 | `determine_unit(bytes, use_bits)` | `relay['observed_bandwidth']|determine_unit(relays.use_bits)` | Returns "Mbit/s" or "MB/s" etc. |
 | `format_bandwidth_with_unit(bytes, unit)` | `relay['observed_bandwidth']|format_bandwidth_with_unit(obs_unit)` | Formats value with appropriate decimals |
+| `format_bandwidth(bytes, unit, use_bits)` | General purpose bandwidth formatting | Combined determine+format |
+| `format_time_ago(timestamp_str)` | `relay['first_seen']|format_time_ago` | ISO timestamp → "2y 3mo 2w ago" |
 
 ---
 
@@ -2020,30 +2035,20 @@ All filters are already available in `relays.py` (registered as Jinja2 filters):
 
 ---
 
-### 3.5 Uptime and Stability (#uptime)
+### 3.5 Uptime, Stability & Overload (#uptime)
 
-**Status:** ⏳ Not Started - Needs dedicated section implementation
+#### Merged Section: Uptime + Overload Data
 
-#### Data Fields (from Complete Item Mapping)
-
-#### Section 5: Uptime and Stability (`#uptime`)
-
-| Current Location | Item | Notes |
-|------------------|------|-------|
-| Right column | Flag Uptime (1M/6M/1Y/5Y) | Role-specific uptime |
-| Right column | Uptime (1M/6M/1Y/5Y) | Overall uptime |
-| Right column | Uptime/Downtime | Current UP/DOWN + duration |
-| Right column | First Seen | With link to date page |
-| Right column | Last Seen | Timestamp |
-| Right column | Last Restarted | Timestamp |
-| Right column | Hibernating | Yes/No |
-
-
----
-
-### 3.6 Overload Status (#overload)
-
-#### Add Dedicated Overload Status Section
+> **Design Decision (2026-02-16):** Overload data is merged into this section rather than
+> having its own standalone `#overload` section. Rationale:
+> - The Health Status "Stability" row already presents overload + uptime as one concept
+> - Overload (OOM, rate limits, FD exhaustion) is fundamentally a *stability* concern
+> - Only ~2% of relays have overload data — for 98% it's just "Not Overloaded" (one line)
+> - Hibernating (accounting limit reached) is already here — another resource constraint
+> - This reduces the section count from 10 to 9, keeping the page tighter
+>
+> The `<a href="#overload">` link in Health Status targets a `<span id="overload">` anchor
+> within this section, so the Stability row click scrolls directly to the overload subsection.
 
 ---
 
@@ -2051,12 +2056,520 @@ All filters are already available in `relays.py` (registered as Jinja2 filters):
 
 | Attribute | Value |
 |-----------|-------|
-| **Section Number** | 6 |
-| **Anchor** | `#overload` |
-| **Position** | After `#uptime` (Uptime and Stability), before `#operator` (Operator and Family) |
+| **Section Number** | 5 |
+| **Primary Anchor** | `#uptime` |
+| **Overload Anchor** | `#overload` (alias within this section — fixes broken link) |
+| **Position** | After `#bandwidth`, before `#operator` |
 | **Template File** | `allium/templates/relay-info.html` |
-| **Backend Status** | ✅ Implemented (`stability_utils.py`, `relays.py`, `page_writer.py`) |
-| **Template Status** | ⏳ Not Started |
+| **Backend Status** | ✅ All data available (no new data gathering needed) |
+| **Template Status** | ⏳ Not Started (uptime data in dt/dd lines 867-950; overload anchor missing) |
+
+---
+
+##### Rationale
+
+- Uptime/stability is a key troubleshooting metric for operators
+- Data is currently scattered across 7 separate dt/dd items in the right column
+- Overload is a stability concern — fits naturally here alongside hibernating (another resource constraint)
+- The Health Status "Stability" row already merges overload + uptime into one display
+- Consolidating into a dedicated section provides better visual hierarchy
+- Flag-specific uptime is important for understanding role-based reliability
+- **FIXES**: Broken `<a href="#overload">` link on every relay page (line 194)
+
+---
+
+##### Data Flow
+
+```
+Onionoo /details ─────────────────┐
+  ├─ first_seen                   │
+  ├─ last_seen                    │
+  ├─ last_restarted               │
+  ├─ last_changed_address_or_port │
+  ├─ hibernating                  │
+  └─ overload_general_timestamp   │   ← overload from /details
+                                  ▼
+Onionoo /uptime ──────────────► relays.py                    ──► page_writer.py ──► Template
+  └─ uptime history data    _reprocess_uptime_data()              write_relay_info()
+                            (lines ~470-501)                      (lines 962-1020)
+                                  │
+Onionoo /bandwidth ───────────► relays.py
+  ├─ overload_ratelimits     _reprocess_bandwidth_data()
+  └─ overload_fd_exhausted   (lines ~570-587)
+                                  │
+                                  ▼
+                            stability_utils.py                flag_analysis.py
+                            compute_relay_stability()         process_flag_uptime_display()
+                            (128 lines)                       (lines 215-352)
+                                  │                                │
+                                  ▼                                ▼
+                            Pre-computed fields per relay:
+                            UPTIME:                           OVERLOAD:
+                            • uptime_display (str)            • stability_is_overloaded (bool)
+                            • uptime_api_display (str)        • stability_text (str)
+                            • uptime_percentages (dict)       • stability_color (str)
+                            • flag_uptime_display (str)       • stability_tooltip (str)
+                            • flag_uptime_tooltip (str)       RAW (for detail display):
+                            • first_seen_ago (str)            • overload_general_timestamp (int ms)
+                            • last_seen_ago (str)             • overload_ratelimits (dict)
+                            • last_restarted_ago (str)        • overload_fd_exhausted (dict)
+```
+
+---
+
+##### Data Fields
+
+**Uptime — From Onionoo /details (already in relay dict):**
+
+| Variable | Type | Template Access | Description |
+|----------|------|-----------------|-------------|
+| `relay['first_seen']` | str | `relay['first_seen']` | ISO timestamp of first consensus appearance |
+| `relay['last_seen']` | str | `relay['last_seen']` | ISO timestamp of last consensus appearance |
+| `relay['last_restarted']` | str | `relay['last_restarted']` | ISO timestamp of last relay restart |
+| `relay['last_changed_address_or_port']` | str | `relay['last_changed_address_or_port']` | ISO timestamp of last address/port change |
+| `relay['hibernating']` | bool/None | `relay['hibernating']` | Whether relay is hibernating |
+
+**Uptime — Pre-computed Display Values (from relays.py `_preprocess_template_data()` lines ~404-435):**
+
+| Variable | Type | Template Access | Description |
+|----------|------|-----------------|-------------|
+| `relay['uptime_display']` | str | `relay['uptime_display']` | "UP for 5d 3h" or "DOWN since 2h ago" |
+| `relay['uptime_api_display']` | str | `relay['uptime_api_display']` | "99.5%/98.2%/97.0%/95.0%" (1M/6M/1Y/5Y) |
+| `relay['uptime_percentages']` | dict | `relay['uptime_percentages']` | `{1_month: 99.5, 6_months: 98.2, ...}` |
+| `relay['flag_uptime_display']` | str | `relay['flag_uptime_display']` | Flag-specific uptime or "Match" or "N/A" |
+| `relay['flag_uptime_tooltip']` | str | `relay['flag_uptime_tooltip']` | Tooltip with flag name and period details |
+| `relay['first_seen_ago']` | str | `relay['first_seen_ago']` | Pre-formatted "2y 3mo ago" |
+| `relay['last_seen_ago']` | str | `relay['last_seen_ago']` | Pre-formatted "5m ago" |
+| `relay['last_restarted_ago']` | str | `relay['last_restarted_ago']` | Pre-formatted "5d 3h ago" |
+
+**Overload — Pre-computed Stability (from stability_utils.py via relays.py line ~587):**
+
+| Variable | Type | Template Access | Description |
+|----------|------|-----------------|-------------|
+| `relay['stability_is_overloaded']` | bool | `relay.get('stability_is_overloaded', false)` | Any overload condition active (72h threshold) |
+| `relay['stability_text']` | str | `relay['stability_text']` | "Overloaded" or "Not Overloaded" |
+| `relay['stability_color']` | str | `relay['stability_color']` | Hex color (#dc3545 red or #28a745 green) |
+| `relay['stability_tooltip']` | str | `relay['stability_tooltip']` | Summary: "Rate limits hit W:981 R:6284 (limit: 105 KB/s)" |
+
+**Overload — Raw Onionoo Fields (for detailed display when overloaded):**
+
+| Variable | Type | Template Access | Description |
+|----------|------|-----------------|-------------|
+| `relay['overload_general_timestamp']` | int (ms)/None | `relay.get('overload_general_timestamp')` | UTC ms when relay last reported general overload |
+| `relay['overload_ratelimits']` | dict/None | `relay.get('overload_ratelimits')` | `{rate-limit, burst-limit, write-count, read-count, timestamp}` |
+| `relay['overload_fd_exhausted']` | dict/None | `relay.get('overload_fd_exhausted')` | `{timestamp}` — file descriptor exhaustion |
+
+**From contact_display_data (passed to template via page_writer.py):**
+
+| Variable | Type | Template Access | Description |
+|----------|------|-----------------|-------------|
+| `contact_display_data.outliers` | dict | `contact_display_data.outliers` | Statistical outlier info for uptime tooltip |
+
+---
+
+##### Jinja2 Filters Used
+
+| Filter | Usage | Registered In | Status |
+|--------|-------|---------------|--------|
+| `format_time_ago` | `relay['first_seen']|format_time_ago` | `page_writer.py` line 53 | ✅ Exists |
+| `determine_unit` | `ratelimits.get('rate-limit', 0)|determine_unit(relays.use_bits)` | `page_writer.py` line 50 | ✅ Exists |
+| `format_bandwidth_with_unit` | `ratelimits.get('rate-limit', 0)|format_bandwidth_with_unit(rate_unit)` | `page_writer.py` line 51 | ✅ Exists |
+| `format_timestamp` | `general_ts|format_timestamp` | `page_writer.py` | ⏳ **TODO** — ms→"YYYY-MM-DD HH:MM" |
+| `format_timestamp_ago` | `general_ts|format_timestamp_ago` | `page_writer.py` | ⏳ **TODO** — ms→"X hours/days ago" |
+
+---
+
+##### Mockups
+
+**Desktop Wireframe (Not Overloaded — 98% of relays):**
+
+```
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Uptime and Stability                                                     [#uptime]     ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Uptime Metrics                                  ┃ Timestamps                           ┃
+┃                                                 ┃                                      ┃
+┃   Current Status:    UP for 5d 3h 12m           ┃   First Seen: 2y 3mo 2w ago          ┃
+┃   Overall Uptime:    99.5%/98.2%/97.0%/95.0%    ┃     (2024-01-15 12:00:00)            ┃
+┃                      (1M / 6M / 1Y / 5Y)       ┃   Last Seen: 5m ago                  ┃
+┃   Flag Uptime:       Guard: 98.0%/97.5%/96.0%  ┃     (2026-02-16 10:55:00)            ┃
+┃                      (1M / 6M / 1Y)            ┃   Last Restarted: 5d 3h ago          ┃
+┃   Hibernating:       No                         ┃     (2026-02-11 07:00:00)            ┃
+┃                                                 ┃   Last Changed Address: unknown      ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ [#overload]                                                                            ┃
+┃ Overload Status: Not Overloaded — No overload conditions reported.                     ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+```
+
+**Desktop Wireframe (Overloaded — ~2% of relays):**
+
+```
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Uptime and Stability                                                     [#uptime]     ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Uptime Metrics                                  ┃ Timestamps                           ┃
+┃   (same as above)                               ┃   (same as above)                    ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ [#overload] [Warning] OVERLOADED                                                       ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ General Overload (from /details)                ┃ Rate Limits (from /bandwidth)        ┃
+┃   Status: Reported                              ┃   Rate Limit: 105 KB/s               ┃
+┃   Timestamp: 2026-01-04 06:00 UTC               ┃   Burst Limit: 1.0 GB                ┃
+┃   (2 hours ago)                                 ┃   Write Limit Hit: 981 times         ┃
+┃                                                 ┃   Read Limit Hit: 6,284 times        ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╋━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ File Descriptor Exhaustion (from /bandwidth)    ┃ Recommendations                      ┃
+┃   Status: Not Reported                          ┃   • Check CPU/memory with htop       ┃
+┃                                                 ┃   • Consider increasing rate limit   ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+```
+
+**Mobile Wireframe (Not Overloaded):**
+
+```
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Uptime and Stability     [#uptime]    ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Current: UP for 5d 3h 12m             ┃
+┃ Overall: 99.5%/98.2%/97.0%/95.0%     ┃
+┃ Flag:    Guard 98.0%/97.5%/96.0%     ┃
+┃ Hibernating: No                       ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ First Seen: 2y 3mo 2w ago            ┃
+┃ Last Seen: 5m ago                     ┃
+┃ Last Restarted: 5d 3h ago            ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Overload: Not Overloaded              ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+```
+
+---
+
+##### Jinja2 Template
+
+```jinja2
+{# ============== SECTION 5: UPTIME, STABILITY & OVERLOAD (#uptime) ============== #}
+<section id="uptime" class="section-box" style="margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+<h4 style="margin-top: 0; margin-bottom: 12px;">
+    <div class="section-header">
+        <a href="#uptime" class="anchor-link">Uptime and Stability</a>
+    </div>
+</h4>
+
+<div class="row">
+    {# Left Column: Uptime Metrics #}
+    <div class="col-md-6">
+        <h5 class="subsection-header">Uptime Metrics</h5>
+        <dl>
+            <dt title="Current uptime or downtime duration based on relay's running status and last_restarted timestamp.">Current Status</dt>
+            <dd>
+                {% if relay.get('uptime_display') -%}
+                    {% if relay['uptime_display'].startswith('DOWN') -%}
+                        <span style="color: #dc3545; font-weight: bold;">{{ relay['uptime_display']|escape }}</span>
+                    {% else -%}
+                        <span style="color: #28a745;">{{ relay['uptime_display']|escape }}</span>
+                    {% endif -%}
+                {% else -%}
+                    <span style="color: #6c757d;">Unknown</span>
+                {% endif -%}
+            </dd>
+
+            <dt title="{% if contact_display_data and contact_display_data.outliers and contact_display_data.outliers.tooltip %}{{ contact_display_data.outliers.tooltip }}{% else %}Percentage of time relay had Running flag over 1 Month / 6 Months / 1 Year / 5 Years. Source: Onionoo uptime API.{% endif %}">Overall Uptime (1M/6M/1Y/5Y)</dt>
+            <dd>
+                {% if relay.get('uptime_api_display') -%}
+                    {{ relay['uptime_api_display']|safe }}
+                {% else -%}
+                    N/A
+                {% endif -%}
+            </dd>
+
+            <dt title="{{ relay.get('flag_uptime_tooltip', 'Flag-specific uptime percentages showing reliability in primary network role.')|escape }}">Flag Uptime (1M/6M/1Y/5Y)</dt>
+            <dd>
+                {% if relay.get('flag_uptime_display') and relay['flag_uptime_display'] != 'N/A' -%}
+                    {% if relay['flag_uptime_display'] == 'Match' -%}
+                        <span title="{{ relay['flag_uptime_tooltip']|escape }}">Matches Overall Uptime</span>
+                    {% else -%}
+                        <span title="{{ relay['flag_uptime_tooltip']|escape }}">{{ relay['flag_uptime_display']|safe }}</span>
+                    {% endif -%}
+                {% else -%}
+                    N/A
+                {% endif -%}
+            </dd>
+
+            <dt title="Whether relay indicated it is hibernating in its last known server descriptor. Hibernation typically means the relay reached its accounting limit.">Hibernating</dt>
+            <dd>
+                {% if relay['hibernating'] is not none -%}
+                    {% if relay['hibernating'] -%}
+                        <span style="color: #856404; font-weight: bold;">Yes</span>
+                        <span style="font-size: 11px; color: #666;">(relay reached accounting limit)</span>
+                    {% else -%}
+                        No
+                    {% endif -%}
+                {% else -%}
+                    <span style="color: #6c757d;">Unknown</span>
+                {% endif -%}
+            </dd>
+        </dl>
+    </div>
+
+    {# Right Column: Timestamps #}
+    <div class="col-md-6">
+        <h5 class="subsection-header">Timestamps</h5>
+        <dl>
+            <dt title="Date relay first appeared in network consensus. Newer relays have restrictions (Guard flag requires ~8 days).">First Seen</dt>
+            <dd>
+                {% if relay['first_seen'] -%}
+                    <a href="{{ page_ctx.path_prefix }}first_seen/{{ relay['first_seen'].split(' ', 1)[0]|escape }}/">{{ relay['first_seen']|format_time_ago }}</a>
+                    <span style="font-size: 11px; color: #666;">({{ relay['first_seen']|escape }})</span>
+                {% else -%}
+                    <span style="color: #6c757d;">Unknown</span>
+                {% endif -%}
+            </dd>
+
+            <dt title="Most recent time this relay was seen in the network consensus.">Last Seen</dt>
+            <dd>
+                {% if relay['last_seen'] -%}
+                    {{ relay['last_seen']|format_time_ago }}
+                    <span style="font-size: 11px; color: #666;">({{ relay['last_seen']|escape }})</span>
+                {% else -%}
+                    <span style="color: #6c757d;">Unknown</span>
+                {% endif -%}
+            </dd>
+
+            <dt title="UTC timestamp when this relay was last (re-)started. Missing if router descriptor containing this information cannot be found.">Last Restarted</dt>
+            <dd>
+                {% if relay['last_restarted'] -%}
+                    {{ relay['last_restarted']|format_time_ago }}
+                    <span style="font-size: 11px; color: #666;">({{ relay['last_restarted']|escape }})</span>
+                {% else -%}
+                    <span style="color: #6c757d;">Unknown</span>
+                {% endif -%}
+            </dd>
+
+            <dt title="UTC timestamp when this relay last stopped announcing an IPv4/IPv6 address or TCP port. Can indicate relay stability as a fallback directory.">Last Changed Address</dt>
+            <dd>
+                {% if relay['last_changed_address_or_port'] -%}
+                    {{ relay['last_changed_address_or_port']|escape }}
+                {% else -%}
+                    <span style="color: #6c757d;">Unknown</span>
+                {% endif -%}
+            </dd>
+        </dl>
+    </div>
+</div>
+
+{# ---- Overload Status Subsection (anchor target for Health Status Stability row) ---- #}
+{# Hidden anchor: Health Status "Stability" row links here via <a href="#overload"> #}
+<span id="overload"></span>
+
+{% set is_overloaded = relay.get('stability_is_overloaded', false) %}
+{% set general_ts = relay.get('overload_general_timestamp') %}
+{% set ratelimits = relay.get('overload_ratelimits') %}
+{% set fd_exhausted = relay.get('overload_fd_exhausted') %}
+
+{% if not is_overloaded %}
+{# Not overloaded: compact single line #}
+<div style="margin-top: 12px; padding: 10px; background: #d4edda; border-radius: 4px; border-left: 3px solid #28a745;">
+    <strong style="color: #155724;">Overload Status:</strong>
+    <span style="color: #155724;">Not Overloaded — No overload conditions reported.</span>
+    {% if relay.get('stability_tooltip') and 'Last general overload' in relay.get('stability_tooltip', '') %}
+    <span style="color: #155724; font-size: 12px;"> ({{ relay['stability_tooltip'] }})</span>
+    {% endif %}
+</div>
+
+{% else %}
+{# Overloaded: expanded detail view with all 3 fields + recommendations #}
+<div style="margin-top: 12px; padding: 15px; background: #fff3cd; border-radius: 8px; border-left: 4px solid #ffc107;">
+    <div style="margin-bottom: 12px;">
+        <strong style="color: #856404; font-size: 15px;">[Warning] OVERLOADED</strong>
+        <span style="color: #856404; font-size: 13px;"> — {{ relay.get('stability_tooltip', '') }}</span>
+    </div>
+    
+    <div class="row">
+        {# Left: General Overload + File Descriptors #}
+        <div class="col-md-6">
+            <h5 style="margin-top: 0; font-size: 13px; font-weight: bold;">General Overload <small style="color: #6c757d;">(from /details)</small></h5>
+            <dl>
+                <dt>Status</dt>
+                <dd>
+                    {% if general_ts %}
+                        <span style="color: #dc3545; font-weight: bold;">Reported</span>
+                    {% else %}
+                        <span style="color: #28a745;">Not Reported</span>
+                    {% endif %}
+                </dd>
+                {% if general_ts %}
+                <dt>When</dt>
+                <dd>{{ general_ts|format_timestamp }} UTC ({{ general_ts|format_timestamp_ago }})</dd>
+                {% endif %}
+            </dl>
+            <p style="font-size: 11px; color: #6c757d; margin-top: 3px;">
+                OOM killer, onionskin queue saturation, or TCP port exhaustion.
+                Flag remains 72h after last event (Tor spec 328).
+            </p>
+            
+            <h5 style="font-size: 13px; font-weight: bold;">File Descriptor Exhaustion <small style="color: #6c757d;">(from /bandwidth)</small></h5>
+            <dl>
+                <dt>Status</dt>
+                <dd>
+                    {% if fd_exhausted %}
+                        <span style="color: #dc3545; font-weight: bold;">Reported</span>
+                        {% if fd_exhausted.get('timestamp') %}
+                         — {{ fd_exhausted['timestamp']|format_timestamp }} UTC ({{ fd_exhausted['timestamp']|format_timestamp_ago }})
+                        {% endif %}
+                    {% else %}
+                        <span style="color: #28a745;">Not Reported</span>
+                    {% endif %}
+                </dd>
+            </dl>
+        </div>
+        
+        {# Right: Rate Limits + Recommendations #}
+        <div class="col-md-6">
+            <h5 style="margin-top: 0; font-size: 13px; font-weight: bold;">Rate Limits <small style="color: #6c757d;">(from /bandwidth)</small></h5>
+            {% if ratelimits %}
+            <dl>
+                <dt>Rate Limit</dt>
+                <dd>
+                    {% set rate_unit = ratelimits.get('rate-limit', 0)|determine_unit(relays.use_bits) %}
+                    {{ ratelimits.get('rate-limit', 0)|format_bandwidth_with_unit(rate_unit) }} {{ rate_unit }}
+                </dd>
+                <dt>Burst Limit</dt>
+                <dd>
+                    {% set burst_unit = ratelimits.get('burst-limit', 0)|determine_unit(relays.use_bits) %}
+                    {{ ratelimits.get('burst-limit', 0)|format_bandwidth_with_unit(burst_unit) }} {{ burst_unit }}
+                </dd>
+                <dt>Write Limit Hit</dt>
+                <dd>
+                    {% if ratelimits.get('write-count', 0) > 0 %}
+                        <span style="color: #dc3545; font-weight: bold;">{{ "{:,}".format(ratelimits.get('write-count', 0)) }} times</span>
+                    {% else %}
+                        <span style="color: #28a745;">0 times</span>
+                    {% endif %}
+                </dd>
+                <dt>Read Limit Hit</dt>
+                <dd>
+                    {% if ratelimits.get('read-count', 0) > 0 %}
+                        <span style="color: #dc3545; font-weight: bold;">{{ "{:,}".format(ratelimits.get('read-count', 0)) }} times</span>
+                    {% else %}
+                        <span style="color: #28a745;">0 times</span>
+                    {% endif %}
+                </dd>
+                {% if ratelimits.get('timestamp') %}
+                <dt>Last Reported</dt>
+                <dd>{{ ratelimits['timestamp']|format_timestamp_ago }}</dd>
+                {% endif %}
+            </dl>
+            {% else %}
+            <p style="color: #6c757d;">No rate limit data from /bandwidth endpoint.</p>
+            {% endif %}
+            
+            <h5 style="font-size: 13px; font-weight: bold;">Recommendations</h5>
+            <ul style="margin: 0; padding-left: 20px; font-size: 12px;">
+                {% if general_ts %}
+                <li>Check CPU/memory: <code>htop</code></li>
+                <li>Review <code>MaxMemInQueues</code> in torrc</li>
+                {% endif %}
+                {% if ratelimits and (ratelimits.get('write-count', 0) > 0 or ratelimits.get('read-count', 0) > 0) %}
+                <li>Consider increasing <code>RelayBandwidthRate</code></li>
+                <li>Check if ISP is throttling traffic</li>
+                {% endif %}
+                {% if fd_exhausted %}
+                <li>Increase FD limit: <code>ulimit -n 65535</code></li>
+                <li>systemd: <code>LimitNOFILE=65535</code> in [Service]</li>
+                {% endif %}
+            </ul>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+</section>
+```
+
+---
+
+##### Old dt/dd Items Replaced by This Section
+
+| Old dt id | Old Line | Disposition |
+|-----------|----------|-------------|
+| `flag-uptime` | 867 | → Left column "Flag Uptime" |
+| `uptime-history` | 883 | → Left column "Overall Uptime" |
+| `uptime-downtime` | 895 | → Left column "Current Status" |
+| `first-last-seen` | 911 | → Right column "First Seen" + "Last Seen" (split into 2 items) |
+| `last-restarted` | 919 | → Right column "Last Restarted" |
+| `hibernating` | 943 | → Left column "Hibernating" |
+| *(no old dt)* | — | Overload subsection is NEW (was previously just a broken anchor link) |
+
+---
+
+##### CSS Additions
+
+```css
+/* Overload subsection within #uptime — compact styling for detail view */
+#uptime .overload-detail dl dt { width: 120px; font-weight: bold; color: #495057; }
+#uptime .overload-detail dl dd { margin-left: 130px; margin-bottom: 4px; }
+
+/* Responsive: stack overload columns on mobile */
+@media (max-width: 767px) {
+    #uptime .overload-detail .row > div { margin-bottom: 15px; }
+}
+```
+
+---
+
+##### Testing Checklist
+
+**Uptime portion:**
+- [ ] Section appears at position 5 (after #bandwidth, before #operator)
+- [ ] `#uptime` anchor navigates correctly
+- [ ] Current Status shows green "UP for X" or red "DOWN since X"
+- [ ] Overall Uptime shows 4 percentage values (1M/6M/1Y/5Y)
+- [ ] Flag Uptime shows role-specific percentages or "Matches Overall Uptime"
+- [ ] Hibernating shows Yes (with explanation) / No / Unknown
+- [ ] First Seen shows relative time + absolute date, with link to first_seen page
+- [ ] Last Seen and Last Restarted show relative + absolute times
+- [ ] Last Changed Address shows timestamp or "Unknown"
+
+**Overload portion:**
+- [ ] `#overload` anchor within section navigates correctly (fixes broken link)
+- [ ] Health Status Stability row click scrolls to overload subsection
+- [ ] Not overloaded: green compact "Not Overloaded" bar
+- [ ] Not overloaded with stale data: shows "Last general overload: X days ago"
+- [ ] Overloaded: yellow warning with General Overload, Rate Limits, FD sub-sections
+- [ ] Rate Limit/Burst Limit formatted via BandwidthFormatter (respects --bits)
+- [ ] Write/Read counts show thousands separators
+- [ ] `format_timestamp` and `format_timestamp_ago` filters work for ms timestamps
+- [ ] Mobile layout stacks overload detail columns vertically
+
+---
+
+### 3.6 ~~Overload Status (#overload)~~ — MERGED into Section 3.5
+
+> **Merged (2026-02-16):** Overload data is now part of section 3.5 "Uptime, Stability & Overload"
+> rather than a standalone section. See section 3.5 for the complete spec including overload
+> subsection template, data flow, and testing checklist.
+>
+> The `#overload` anchor is implemented as a `<span id="overload">` within the #uptime section,
+> so the Health Status Stability row link (`<a href="#overload">`) scrolls directly to the
+> overload subsection. This fixes the broken anchor link without creating a separate section.
+>
+> **Rationale:** Overload is a stability concern (OOM, rate limits, FD exhaustion) — same domain
+> as uptime, hibernating, and restart history. Only ~2% of relays have overload data, so a
+> standalone section would show just "Not Overloaded" for 98% of pages.
+
+The remaining content below is **preserved as reference** for the Onionoo API field documentation
+and backend implementation details. The **template and mockups** are now in section 3.5.
+
+---
+
+##### Backend Implementation Reference (✅ Already Done)
+
+| Attribute | Value |
+|-----------|-------|
+| **Anchor** | `#overload` (alias within `#uptime` section) |
+| **Backend Status** | ✅ Implemented (`stability_utils.py`, `relay_diagnostics.py`, `relays.py`, `page_writer.py`) |
 
 ---
 
@@ -2088,12 +2601,13 @@ All filters are already available in `relays.py` (registered as Jinja2 filters):
 
 | Component | Status | File | Notes |
 |-----------|--------|------|-------|
-| Stability computation | ✅ Done | `stability_utils.py` | `compute_relay_stability()` with 72h threshold |
-| Overload data fetching | ✅ Done | `relays.py` lines ~510-525 | Merges `/details` and `/bandwidth` fields in `_reprocess_bandwidth_data()` |
-| Pre-computed variables | ✅ Done | `relays.py` | `stability_is_overloaded`, `stability_text`, `stability_color`, `stability_tooltip` |
-| Health Status link | ✅ Done | `relay-info.html` line 175 | `<a href="#overload">` wraps stability text |
-| Template section | ⏳ TODO | `relay-info.html` | Add `<section id="overload">` |
-| Timestamp filters | ⏳ TODO | `time_utils.py` | Add `format_timestamp`, `format_timestamp_ago` for ms timestamps |
+| Stability computation | ✅ Done | `stability_utils.py` (~128 lines) | `compute_relay_stability()` with 72h threshold |
+| Overload data fetching | ✅ Done | `relays.py` lines ~570-587 | Merges `/details` and `/bandwidth` fields in `_reprocess_bandwidth_data()` |
+| Overload issue generation | ✅ Done | `relay_diagnostics.py` lines ~458-630 | `_check_overload_issues()` — 6 issue types from 7 scenarios |
+| Pre-computed variables | ✅ Done | `relays.py` line ~587 | `stability_is_overloaded`, `stability_text`, `stability_color`, `stability_tooltip` |
+| Health Status link | ✅ Done | `relay-info.html` line 194 | `<a href="#overload">` wraps stability text |
+| Template section | ⏳ TODO | `relay-info.html` | Add `<section id="overload">` — **BROKEN LINK** |
+| Timestamp filters | ⏳ TODO | `page_writer.py` | Register `format_timestamp`, `format_timestamp_ago` for ms timestamps |
 | CSS styling | ⏳ TODO | `relay-info.html` | Add `#overload .dl-horizontal-compact` styles |
 
 ---
@@ -2400,7 +2914,7 @@ Onionoo /bandwidth ───────────► relays.py ──► stab
 ```
 
 **Files:**
-- `allium/lib/relays.py` lines ~510-525 — Merges overload data during `_reprocess_bandwidth_data()`
+- `allium/lib/relays.py` lines ~570-587 — Merges overload data during `_reprocess_bandwidth_data()`
 - `allium/lib/stability_utils.py` — `compute_relay_stability()` with 72h threshold
 
 ---
@@ -2418,7 +2932,7 @@ Onionoo /bandwidth ───────────► relays.py ──► stab
 **New filters needed** (for millisecond timestamps):
 
 ```python
-# Add to allium/lib/time_utils.py (timestamp formatting) or allium/lib/relays.py (filter registration)
+# Add functions to allium/lib/time_utils.py, register as filters in allium/lib/page_writer.py (lines 50-54)
 
 def format_timestamp(ts_ms: int) -> str:
     """Format millisecond timestamp to readable date string."""
@@ -2442,9 +2956,9 @@ def format_timestamp_ago(ts_ms: int) -> str:
     else:
         return f"{int(age_seconds / 86400)} days ago"
 
-# Register filters
-ENV.filters['format_timestamp'] = format_timestamp
-ENV.filters['format_timestamp_ago'] = format_timestamp_ago
+# Register in page_writer.py alongside existing filters (lines 50-54):
+# ENV.filters['format_timestamp'] = format_timestamp
+# ENV.filters['format_timestamp_ago'] = format_timestamp_ago
 ```
 
 ---
@@ -2712,65 +3226,33 @@ Display detailed AROI validation status for the operator, showing how many relay
 **Backend Requirement:**
 To enable AROI validation status in relay pages, `contact_validation_status` must be passed to the template.
 
-**File:** `allium/lib/page_writer.py` (in `write_relay_info()` function, delegated from `relays.py`)
+**Backend Status:** ✅ Already implemented. `contact_validation_status` is passed to relay pages.
 
-**Add to `write_relay_info()`:**
+**File:** `allium/lib/page_writer.py` — `write_relay_info()` (lines 986-1006)
+
 ```python
-def write_relay_info(self):
-    """..."""
-    relay_list = self.json["relays"]
-    template = ENV.get_template("relay-info.html")
-    output_path = os.path.join(self.output_dir, "relay")
-    # ... existing setup code ...
+# Current implementation (already in place):
+contact_hash = relay.get('contact_md5')
+contact_validation_status = None
+if contact_hash and contact_hash in contact_map:
+    contact_data = contact_map[contact_hash]
+    contact_display_data = contact_data.get('contact_display_data', {})
+    contact_validation_status = contact_data.get('contact_validation_status')
 
-    for relay in relay_list:
-        if not relay["fingerprint"].isalnum():
-            continue
-        
-        # ... existing code for contact_display_data and standard_contexts ...
-        
-        # NEW: Get AROI validation status for this relay's contact
-        contact_validation_status = self._get_contact_validation_status_for_relay(relay)
-        
-        rendered = template.render(
-            relay=relay, 
-            page_ctx=page_ctx, 
-            relays=self, 
-            contact_display_data=contact_display_data,
-            contact_validation_status=contact_validation_status,  # NEW
-            validated_aroi_domains=self.validated_aroi_domains if hasattr(self, 'validated_aroi_domains') else set(),
-            base_url=self.base_url
-        )
-        # ... rest of method ...
-
-def _get_contact_validation_status_for_relay(self, relay):
-    """
-    Get AROI validation status for a single relay's contact.
-    
-    Returns dict with:
-    - validation_status: 'validated', 'partially_validated', 'unvalidated'
-    - validation_summary: {validated_count, unvalidated_count, total_relays, validation_rate}
-    - validated_relays: list of {fingerprint, nickname, proof_type}
-    - unvalidated_relays: list of {fingerprint, nickname, error}
-    """
-    contact_hash = relay.get('contact_md5')
-    if not contact_hash:
-        return None
-    
-    # Check if validation status was already computed for this contact
-    contact_data = self.json.get("sorted", {}).get("contact", {}).get(contact_hash)
-    if contact_data and 'contact_validation_status' in contact_data:
-        return contact_data['contact_validation_status']
-    
-    # Compute on-demand (fallback for edge cases)
-    relay_indices = contact_data.get("relays", []) if contact_data else []
-    members = [self.json["relays"][idx] for idx in relay_indices] if relay_indices else [relay]
-    return self._get_contact_validation_status(members)
+rendered = template.render(
+    relay=relay, page_ctx=page_ctx, relays=relay_set,
+    contact_display_data=contact_display_data,
+    contact_validation_status=contact_validation_status,
+    validated_aroi_domains=validated_aroi_domains,
+    base_url=relay_set.base_url
+)
 ```
 
-**Template Enhancement:**
+**Validation status computed via:** `relays.py` `_get_contact_validation_status()` (line 1075) → `aroi_validation.py` `get_contact_validation_status()` (line 653)
 
-**File:** `allium/templates/relay-info.html` (in Operator and Family section)
+**Template Change Needed:**
+
+**File:** `allium/templates/relay-info.html` — Add `<section id="operator">`
 
 **Enhanced AROI Validation Display:**
 ```jinja2
@@ -2975,37 +3457,349 @@ The `_simplify_error_message()` function in `aroi_validation.py` (lines 178-231)
 
 ### 3.8 Software and Version (#software)
 
-**Status:** ⏳ Not Started - Needs dedicated section implementation
+#### Add Dedicated Software and Version Section
 
-#### Data Fields (from Complete Item Mapping)
+---
 
-#### Section 7: Software and Version (`#software`)
+##### Overview
 
-| Current Location | Item | Notes |
-|------------------|------|-------|
-| Right column | Platform (Short) | Link to platform page |
-| Right column | Platform (Long/Raw) | Full platform string |
-| Right column | Version | Running version |
-| Right column | Recommended | Yes/No |
-| Right column | Version Status | recommended/obsolete/etc |
-| Right column | Last Changed Address or Port | Timestamp |
+| Attribute | Value |
+|-----------|-------|
+| **Section Number** | 7 |
+| **Anchor** | `#software` |
+| **Position** | After `#operator`, before `#exit-policy` |
+| **Template File** | `allium/templates/relay-info.html` |
+| **Backend Status** | ✅ All data available (no new data gathering needed) |
+| **Template Status** | ⏳ Not Started (data in dt/dd format, lines 931-980) |
 
+---
+
+##### Rationale
+
+- Version status is critical for security — outdated versions may be rejected by the network
+- Platform helps operators compare their setup with network norms
+- Consolidating platform + version into a single section improves readability
+- Last Changed Address is related to infrastructure configuration, fits with software
+
+---
+
+##### Data Flow
+
+```
+Onionoo /details ─────────────────┐
+  ├─ platform                     │
+  ├─ version                      │
+  ├─ recommended_version          │
+  └─ version_status               │
+                                  ▼
+                            relays.py
+                            _trim_platform() (lines ~164-190)
+                            _preprocess_template_data() (lines ~337-435)
+                                  │
+                                  ▼
+                            Pre-computed fields per relay:
+                            • platform (str) — trimmed to OS name
+                            • platform_raw (str) — original "Tor X.X.X on Platform"
+                            • version (str)
+                            • recommended_version (bool/None)
+                            • version_status (str)
+```
+
+---
+
+##### Data Fields
+
+**From Onionoo /details (processed in relays.py):**
+
+| Variable | Type | Template Access | Description |
+|----------|------|-----------------|-------------|
+| `relay['platform']` | str | `relay['platform']` | Trimmed platform name (e.g., "Linux") |
+| `relay['platform_raw']` | str | `relay['platform_raw']` | Original platform string (e.g., "Tor 0.4.8.10 on Linux") |
+| `relay['version']` | str | `relay['version']` | Tor version number (e.g., "0.4.8.10") |
+| `relay['recommended_version']` | bool/None | `relay['recommended_version']` | Whether version is on recommended list |
+| `relay['version_status']` | str | `relay['version_status']` | "recommended", "obsolete", "experimental", "new in series", "unrecommended" |
+
+No pre-computed display values needed — all values are simple strings.
+
+> **Note:** `last_changed_address_or_port` was originally in the old dt/dd software area but is rendered
+> in the #uptime section (3.5) alongside other timestamps. It is NOT in this section's template.
+
+---
+
+##### Existing Jinja2 Filters Used
+
+None — all values are simple strings rendered directly.
+
+---
+
+##### Mockups
+
+**Desktop Wireframe:**
+
+```
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Software and Version                                                   [#software]     ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃   Platform:    Linux                                                                   ┃
+┃   Full:        Tor 0.4.8.10 on Linux                                                   ┃
+┃   Version:     0.4.8.10 — Recommended                                                  ┃
+┃   Status:      recommended                                                             ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+```
+
+---
+
+##### Jinja2 Template
+
+```jinja2
+{# ============== SECTION 8: SOFTWARE AND VERSION (#software) ============== #}
+<section id="software" class="section-box" style="margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+<h4 style="margin-top: 0; margin-bottom: 12px;">
+    <div class="section-header">
+        <a href="#software" class="anchor-link">Software and Version</a>
+    </div>
+</h4>
+
+<dl>
+    <dt title="Simplified platform identifier for categorization">Platform</dt>
+    <dd>
+        <a href="{{ page_ctx.path_prefix }}platform/{{ relay['platform']|escape }}/" title="View all relays on this platform">{{ relay['platform']|escape }}</a>
+        {% if relay['platform_raw'] and relay['platform_raw'] != relay['platform'] -%}
+            <span style="font-size: 12px; color: #666;"> — {{ relay['platform_raw']|escape }}</span>
+        {% endif -%}
+    </dd>
+
+    <dt title="Tor software version. Outdated versions may have security vulnerabilities and could be rejected by the network.">Version</dt>
+    <dd>
+        {% if relay['version'] -%}
+            <span>{{ relay['version']|escape }}</span>
+            {% if relay['recommended_version'] is not none -%}
+                {% if relay['recommended_version'] -%}
+                    — <span style="color: #28a745; font-weight: bold;" title="This Tor version is on the recommended list.">Recommended</span>
+                {% else -%}
+                    — <span style="color: #dc3545; font-weight: bold;" title="This Tor version is NOT recommended. Update to the latest stable version.">Not Recommended</span>
+                {% endif -%}
+            {% endif -%}
+        {% else -%}
+            <span style="color: #6c757d;">Unknown</span>
+        {% endif -%}
+    </dd>
+
+    {% if relay['version_status'] %}
+    <dt title="Version status as determined by directory authorities: recommended, experimental, obsolete, new in series, unrecommended">Version Status</dt>
+    <dd>
+        {% if relay['version_status'] == 'recommended' -%}
+            <span style="color: #28a745;">{{ relay['version_status']|escape }}</span>
+        {% elif relay['version_status'] == 'obsolete' -%}
+            <span style="color: #dc3545; font-weight: bold;">{{ relay['version_status']|escape }}</span>
+            <span style="font-size: 11px; color: #666;"> — Update urgently. See <a href="https://www.torproject.org/download/tor/" target="_blank" rel="noopener">torproject.org/download</a></span>
+        {% elif relay['version_status'] == 'experimental' -%}
+            <span style="color: #856404;">{{ relay['version_status']|escape }}</span>
+        {% else -%}
+            <span style="color: #6c757d;">{{ relay['version_status']|escape }}</span>
+        {% endif -%}
+    </dd>
+    {% endif %}
+</dl>
+</section>
+```
+
+---
+
+##### Old dt/dd Items Replaced by This Section
+
+| Old dt id | Old Line | Disposition |
+|-----------|----------|-------------|
+| `platform` | 955 | → "Platform" row (short + long combined) |
+| `version` | 963 | → "Version" + "Version Status" rows |
+| `last-changed-address` | 931 | → Moved to #uptime section (better fit with timestamps) |
+
+---
+
+##### Testing Checklist
+
+- [ ] Section appears at position 7 (after #operator, before #exit-policy)
+- [ ] `#software` anchor navigates correctly
+- [ ] Platform links to platform page
+- [ ] Full platform string shown in smaller text if different from trimmed
+- [ ] Version shows recommended (green) or not recommended (red)
+- [ ] Version status shows color-coded status text
+- [ ] Obsolete version shows update link to torproject.org
+- [ ] Values match what was shown in old dt/dd format
 
 ---
 
 ### 3.9 Exit Policy (#exit-policy)
 
-**Status:** ⏳ Not Started - Needs dedicated section implementation
+#### Add Dedicated Exit Policy Section
 
-#### Data Fields (from Complete Item Mapping)
+---
 
-#### Section 8: Exit Policy (`#exit-policy`)
+##### Overview
 
-| Current Location | Item | Notes |
-|------------------|------|-------|
-| Left column | IPv4 Exit Policy Summary | accept/reject summary |
-| Left column | IPv6 Exit Policy Summary | accept/reject summary |
-| Left column | Exit Policy (full) | Complete policy list |
+| Attribute | Value |
+|-----------|-------|
+| **Section Number** | 8 |
+| **Anchor** | `#exit-policy` |
+| **Position** | After `#software`, before `#authority-votes` |
+| **Template File** | `allium/templates/relay-info.html` |
+| **Backend Status** | ✅ All data available (no new data gathering needed) |
+| **Template Status** | ⏳ Not Started (data in dt/dd format, lines 596-638) |
+
+---
+
+##### Rationale
+
+- Exit policy determines whether relay can be an exit node
+- Separate section makes it easy to find and reference (important for operators configuring exit policies)
+- IPv4 and IPv6 summaries side by side helps operators verify both address families
+- Full policy in collapsible/scrollable area avoids excessive page length
+
+---
+
+##### Data Flow
+
+```
+Onionoo /details ─────────────────┐
+  ├─ exit_policy_summary          │   dict: {"accept"/"reject": [port ranges]}
+  ├─ exit_policy_v6_summary       │   dict: {"accept"/"reject": [port ranges]}
+  └─ exit_policy                  │   list: ["accept *:80", "reject *:*", ...]
+                                  ▼
+                            relays.py (no processing needed)
+                                  │
+                                  ▼
+                            page_writer.py write_relay_info()
+                                  │
+                                  ▼
+                            relay-info.html template
+```
+
+---
+
+##### Data Fields
+
+**From Onionoo /details (already in relay dict, no processing):**
+
+| Variable | Type | Template Access | Description |
+|----------|------|-----------------|-------------|
+| `relay['exit_policy_summary']` | dict/None | `relay['exit_policy_summary']` | IPv4 exit summary: `{"accept": ["80", "443"]}` or `{"reject": ["1-65535"]}` |
+| `relay['exit_policy_v6_summary']` | dict/None | `relay['exit_policy_v6_summary']` | IPv6 exit summary (same format as IPv4) |
+| `relay['exit_policy']` | list | `relay['exit_policy']` | Full exit policy lines: `["accept *:80", "reject *:*", ...]` |
+
+No pre-computed display values needed — data rendered directly in template.
+
+---
+
+##### Existing Jinja2 Filters Used
+
+None — all values rendered directly with `|escape`.
+
+---
+
+##### Mockups
+
+**Desktop Wireframe (Exit Relay):**
+
+```
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Exit Policy                                                          [#exit-policy]     ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ IPv4 Exit Policy Summary                        ┃ IPv6 Exit Policy Summary             ┃
+┃   accept:                                       ┃   accept:                            ┃
+┃     80                                          ┃     80                               ┃
+┃     443                                         ┃     443                              ┃
+┃     6660-6667                                   ┃                                      ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ Full Exit Policy (scrollable)                                                          ┃
+┃   accept *:80                                                                          ┃
+┃   accept *:443                                                                         ┃
+┃   accept *:6660-6667                                                                   ┃
+┃   reject *:*                                                                           ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+```
+
+**Desktop Wireframe (Non-Exit Relay):**
+
+```
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Exit Policy                                                          [#exit-policy]     ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃ IPv4 Exit Policy Summary                                                               ┃
+┃   reject: 1-65535                                                                      ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+```
+
+---
+
+##### Jinja2 Template
+
+```jinja2
+{# ============== SECTION 9: EXIT POLICY (#exit-policy) ============== #}
+<section id="exit-policy" class="section-box" style="margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+<h4 style="margin-top: 0; margin-bottom: 12px;">
+    <div class="section-header">
+        <a href="#exit-policy" class="anchor-link">Exit Policy</a>
+    </div>
+</h4>
+
+<div class="row">
+    {# IPv4 Exit Policy Summary #}
+    <div class="col-md-6">
+        <h5 class="subsection-header">IPv4 Exit Policy Summary</h5>
+        {% if relay['exit_policy_summary'] -%}
+            <pre class="pre-scrollable" style="max-height: 150px; font-size: 12px;">{% for k, v in relay['exit_policy_summary'].items() -%}
+{{ k|escape }}: {{ '\n  ' + v|join('\n  ')|escape }}
+{% endfor -%}</pre>
+        {% else -%}
+            <span style="color: #6c757d;">None</span>
+        {% endif -%}
+    </div>
+
+    {# IPv6 Exit Policy Summary #}
+    <div class="col-md-6">
+        <h5 class="subsection-header">IPv6 Exit Policy Summary</h5>
+        {% if relay['exit_policy_v6_summary'] -%}
+            <pre class="pre-scrollable" style="max-height: 150px; font-size: 12px;">{% for k, v in relay['exit_policy_v6_summary'].items() -%}
+{{ k|escape }}: {{ '\n  ' + v|join('\n  ')|escape }}
+{% endfor -%}</pre>
+        {% else -%}
+            <span style="color: #6c757d;">None</span>
+        {% endif -%}
+    </div>
+</div>
+
+{# Full Exit Policy #}
+<div style="margin-top: 10px;">
+    <h5 class="subsection-header">Full Exit Policy</h5>
+    <pre class="pre-scrollable" style="max-height: 200px; font-size: 12px;">{% for policy in relay['exit_policy'] -%}
+{{ policy|escape }}
+{% endfor -%}</pre>
+</div>
+</section>
+```
+
+---
+
+##### Old dt/dd Items Replaced by This Section
+
+| Old dt id | Old Line | Disposition |
+|-----------|----------|-------------|
+| `ipv4-exit-policy-summary` | 596 | → Left column "IPv4 Exit Policy Summary" |
+| `ipv6-exit-policy-summary` | 612 | → Right column "IPv6 Exit Policy Summary" |
+| `exit-policy` | 628 | → Full width "Full Exit Policy" |
+
+---
+
+##### Testing Checklist
+
+- [ ] Section appears at position 8 (after #software, before #authority-votes)
+- [ ] `#exit-policy` anchor navigates correctly
+- [ ] IPv4 summary shows accept/reject with port ranges
+- [ ] IPv6 summary shows accept/reject or "None"
+- [ ] Full policy is scrollable with pre-formatted text
+- [ ] Exit relays show both IPv4 and IPv6 summaries
+- [ ] Non-exit relays show "reject: 1-65535" appropriately
+- [ ] Values match what was shown in old dt/dd format
 
 
 ---
@@ -3375,22 +4169,20 @@ This section covers implementation details that affect multiple sections or the 
 {# ============== SECTION 4: BANDWIDTH (#bandwidth) ============== #}
 {# Observed/Advertised/Rate/Burst, Network participation, Authority-measured #}
 
-{# ============== SECTION 5: UPTIME AND STABILITY (#uptime) ============== #}
+{# ============== SECTION 5: UPTIME, STABILITY & OVERLOAD (#uptime) ============== #}
 {# Current status, Historical uptime, First/Last seen, Hibernating #}
+{# Overload subsection: <span id="overload"> General overload, Rate limits, FD exhaustion #}
 
-{# ============== SECTION 6: OVERLOAD STATUS (#overload) ============== #}
-{# General overload, Rate limits, File descriptor exhaustion, Recommendations #}
-
-{# ============== SECTION 7: OPERATOR AND FAMILY (#operator) ============== #}
+{# ============== SECTION 6: OPERATOR AND FAMILY (#operator) ============== #}
 {# AROI info, Contact, Effective/Alleged/Indirect family #}
 
-{# ============== SECTION 8: SOFTWARE AND VERSION (#software) ============== #}
-{# Platform, Version, Recommended status, Last changed #}
+{# ============== SECTION 7: SOFTWARE AND VERSION (#software) ============== #}
+{# Platform, Version, Recommended status #}
 
-{# ============== SECTION 9: EXIT POLICY (#exit-policy) ============== #}
+{# ============== SECTION 8: EXIT POLICY (#exit-policy) ============== #}
 {# IPv4/IPv6 summary, Full policy #}
 
-{# ============== SECTION 10: PER-AUTHORITY VOTE DETAILS (#authority-votes) ============== #}
+{# ============== SECTION 9: PER-AUTHORITY VOTE DETAILS (#authority-votes) ============== #}
 {# Detailed per-authority table, Explanatory info boxes #}
 ```
 
@@ -4203,23 +4995,383 @@ Each section header should be clickable and link to itself:
 ---
 
 
-### 5.5 Files to Modify Summary
+### 5.5 Implementation Execution Plan
+
+> **Added:** 2026-02-16 — Complete execution plan with implementation order, dt/dd removal mapping, and data flow verification.
+
+---
+
+#### 5.5.1 Execution Order
+
+| Phase | Section | Priority | Complexity | Backend Changes | New Filters |
+|-------|---------|----------|------------|-----------------|-------------|
+| 1 | **#uptime + #overload** — Merged section (fixes broken anchor) | 🚨 URGENT | Medium | None | `format_timestamp`, `format_timestamp_ago` |
+| 2 | **#bandwidth** — Add dedicated section | Medium | Medium | None | None |
+| 3 | **#operator** — Consolidate AROI + Family | Medium | Medium | None | None |
+| 4 | **#software** — Consolidate platform/version | Medium | Low | None | None |
+| 5 | **#exit-policy** — Consolidate exit policies | Medium | Low | None | None |
+| 6 | **Remove old dt/dd + Summary table** | Low | Low | None | None |
+| 7 | **Update doc status tracker** | Low | Low | None | None |
+
+---
+
+#### 5.5.2 Phase 1: #uptime + #overload Merged Section (URGENT — Broken Link Fix)
+
+**Problem:** Line 194 of `relay-info.html` has `<a href="#overload">` but no `id="overload"` exists. Every relay page has a broken anchor link in the Health Status section's Stability row.
+
+**Solution:** Create `<section id="uptime">` with uptime data + `<span id="overload">` anchor + overload subsection. This fixes the broken link while consolidating uptime data from dt/dd format.
+
+**Files to modify:**
+
+| File | Change | Lines |
+|------|--------|-------|
+| `allium/lib/time_utils.py` | Add `format_timestamp(ts_ms)` and `format_timestamp_ago(ts_ms)` functions | End of file |
+| `allium/lib/page_writer.py` | Register 2 new Jinja2 filters | After line 54 |
+| `allium/templates/relay-info.html` | Add `<section id="uptime">` block with `<span id="overload">` | After #flags section (~line 538) |
+| `allium/templates/relay-info.html` | Add CSS for overload subsection | In `<style>` block (lines 7-65) |
+
+**New Jinja2 Filters:**
+
+```python
+# In time_utils.py:
+def format_timestamp(ts_ms):
+    """Convert Onionoo millisecond timestamp to 'YYYY-MM-DD HH:MM' string."""
+    if not ts_ms:
+        return "N/A"
+    dt = datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc)
+    return dt.strftime('%Y-%m-%d %H:%M')
+
+def format_timestamp_ago(ts_ms):
+    """Convert Onionoo millisecond timestamp to 'X hours/days ago' string."""
+    if not ts_ms:
+        return "N/A"
+    import time
+    age_seconds = time.time() - (ts_ms / 1000)
+    if age_seconds < 3600:
+        return f"{int(age_seconds / 60)} minutes ago"
+    elif age_seconds < 86400:
+        return f"{int(age_seconds / 3600)} hours ago"
+    else:
+        return f"{int(age_seconds / 86400)} days ago"
+
+# In page_writer.py (after line 54):
+from .time_utils import format_timestamp, format_timestamp_ago
+ENV.filters['format_timestamp'] = format_timestamp
+ENV.filters['format_timestamp_ago'] = format_timestamp_ago
+```
+
+**Data flow verified:**
+```
+UPTIME DATA:
+Onionoo /details → relay['first_seen'], ['last_seen'], ['last_restarted'], ['hibernating']
+Onionoo /uptime → relays.py _reprocess_uptime_data() → relay['uptime_*'], ['flag_uptime_*']
+relays.py _preprocess_template_data() → relay['uptime_display'], ['*_ago'] pre-computed
+
+OVERLOAD DATA:
+Onionoo /details → relay['overload_general_timestamp'] (int, ms)
+Onionoo /bandwidth → bandwidth_utils.py → relay['overload_ratelimits'] (dict)
+Onionoo /bandwidth → bandwidth_utils.py → relay['overload_fd_exhausted'] (dict)
+    ↓
+relays.py _reprocess_bandwidth_data() (lines 570-587) merges overload fields
+    ↓
+stability_utils.py compute_relay_stability() → relay['stability_*'] pre-computed fields
+    ↓
+page_writer.py write_relay_info() (lines 962-1020) passes relay dict to template
+    ↓
+relay-info.html: <section id="uptime"> with <span id="overload"> anchor
+                 UPTIME: uses relay['uptime_*'] + |format_time_ago filter
+                 OVERLOAD: uses relay['overload_*'] raw fields
+                          + relay['stability_*'] pre-computed fields
+                          + |format_timestamp and |format_timestamp_ago filters (NEW)
+```
+
+**Template spec:** See section 3.5 for complete Jinja2 template.
+
+**Acceptance criteria:**
+- `#uptime` anchor navigates to section
+- `#overload` anchor (within section) scrolls to overload subsection — Stability row link works
+- Uptime metrics, timestamps, and hibernating status display correctly
+- Non-overloaded relays: green "Not Overloaded" compact bar
+- Overloaded relays: yellow warning with General Overload, Rate Limits, FD Exhaustion detail
+- BandwidthFormatter integration for rate/burst display (`relays.use_bits` respected)
+- `format_timestamp` and `format_timestamp_ago` filters registered and working
+
+---
+
+#### 5.5.3 Phase 2: #bandwidth Section
+
+**Files to modify:**
+
+| File | Change | Lines |
+|------|--------|-------|
+| `allium/templates/relay-info.html` | Add `<section id="bandwidth">` block | After #overload section |
+| `allium/templates/relay-info.html` | Add CSS for `#bandwidth` section | In `<style>` block |
+
+**No backend changes needed.** All data already in template context.
+
+**Data flow verified:**
+```
+Onionoo /details → relay['observed_bandwidth'], relay['advertised_bandwidth'],
+                   relay['bandwidth_rate'], relay['bandwidth_burst'],
+                   relay['consensus_weight'], relay['consensus_weight_fraction'],
+                   relay['guard_probability'], relay['middle_probability'],
+                   relay['exit_probability'], relay['measured']
+    ↓
+relays.py _preprocess_template_data() (lines 394-402):
+    relay['obs_bandwidth_formatted'], relay['obs_bandwidth_unit'], relay['obs_bandwidth_with_unit']
+    ↓
+CollecTor votes → consensus_evaluation.py → relay['consensus_evaluation']['bandwidth_summary']
+    (median, min, max, deviation, bw_auth_measured_count, bw_auth_total, bw_auth_color)
+    ↓
+intelligence_engine.py → relays.json.smart_context.performance_correlation
+                         .template_optimized.underutilized_fingerprints
+    ↓
+page_writer.py write_relay_info() passes relay + relays objects to template
+    ↓
+relay-info.html: <section id="bandwidth"> uses bandwidth filters + relay fields
+```
+
+**Jinja2 filters used** (all already registered):
+- `determine_unit(bytes, use_bits)` — in `page_writer.py` line 50
+- `format_bandwidth_with_unit(bytes, unit)` — in `page_writer.py` line 51
+
+**Template spec:** See section 3.4 for complete Jinja2 template.
+
+---
+
+#### 5.5.4 Phase 3: #operator Section
+
+**Files to modify:**
+
+| File | Change | Lines |
+|------|--------|-------|
+| `allium/templates/relay-info.html` | Add `<section id="operator">` block | After #overload section |
+
+**No backend changes needed.** AROI validation status already flows to relay pages.
+
+**Data flow verified:**
+```
+Onionoo /details → relay['aroi_domain'], relay['contact'], relay['contact_md5'],
+                   relay['effective_family'], relay['alleged_family'],
+                   relay['indirect_family']
+    ↓
+aroi_validation.py get_contact_validation_status() (lines 653+):
+    → contact_validation_status dict:
+      .validation_status ('validated'|'partially_validated'|'unauthorized'|'not_configured')
+      .validation_summary ({validated_count, total_relays, ...})
+      .validated_fingerprints (set)
+      .validated_relays (list of {fingerprint, proof_type})
+      .unvalidated_relays (list of {fingerprint, error})
+    ↓
+page_writer.py write_relay_info() (lines 986-1006):
+    contact_validation_status = contact_data.get('contact_validation_status')
+    validated_aroi_domains = getattr(relay_set, 'validated_aroi_domains', set())
+    → passes to template.render(contact_validation_status=..., validated_aroi_domains=..., base_url=...)
+    ↓
+relay-info.html: <section id="operator"> uses relay fields + validation context vars
+```
+
+**Template spec:** See section 3.7 for complete Jinja2 template.
+
+---
+
+#### 5.5.5 Phase 4: #software Section
+
+**Files to modify:**
+
+| File | Change | Lines |
+|------|--------|-------|
+| `allium/templates/relay-info.html` | Add `<section id="software">` block | After #operator section |
+
+**No backend changes or new filters needed.**
+
+**Data flow verified:**
+```
+Onionoo /details → relay['platform'] (raw), relay['version'],
+                   relay['recommended_version'], relay['version_status'],
+                   relay['last_changed_address_or_port']
+    ↓
+relays.py _trim_platform() (lines 164-190):
+    relay['platform_raw'] = original string (e.g., "Tor 0.4.8.10 on Linux")
+    relay['platform'] = trimmed (e.g., "Linux")
+    ↓
+page_writer.py write_relay_info() passes relay to template
+    ↓
+relay-info.html: <section id="software"> renders platform + version fields directly
+```
+
+**Template spec:** See section 3.8 for complete Jinja2 template.
+
+---
+
+#### 5.5.6 Phase 5: #exit-policy Section
+
+**Files to modify:**
+
+| File | Change | Lines |
+|------|--------|-------|
+| `allium/templates/relay-info.html` | Add `<section id="exit-policy">` block | After #software section |
+
+**No backend changes or new filters needed.**
+
+**Data flow verified:**
+```
+Onionoo /details → relay['exit_policy_summary'] (dict or None),
+                   relay['exit_policy_v6_summary'] (dict or None),
+                   relay['exit_policy'] (list of strings)
+    ↓
+relays.py (no processing — passed through as-is)
+    ↓
+page_writer.py write_relay_info() passes relay to template
+    ↓
+relay-info.html: <section id="exit-policy"> renders policy data with |escape
+```
+
+**Template spec:** See section 3.9 for complete Jinja2 template.
+
+---
+
+#### 5.5.7 Phase 6: Remove Old dt/dd Content + Summary Table
+
+**Complete dt/dd Item → Disposition Mapping:**
+
+| Line | dt id | Target Section | Action |
+|------|-------|----------------|--------|
+| 545 | `nickname` | Page header | **REMOVE** — already in header (line 72) |
+| 554 | `fingerprint` | Page header | **REMOVE** — already in header (line 72) |
+| 563 | `aroi` | `#operator` | **REMOVE** — migrated to Phase 3 |
+| 581 | `contact` | `#operator` | **REMOVE** — migrated to Phase 3 |
+| 596 | `ipv4-exit-policy-summary` | `#exit-policy` | **REMOVE** — migrated to Phase 5 |
+| 612 | `ipv6-exit-policy-summary` | `#exit-policy` | **REMOVE** — migrated to Phase 5 |
+| 628 | `exit-policy` | `#exit-policy` | **REMOVE** — migrated to Phase 5 |
+| 640 | `effective-family` | `#operator` | **REMOVE** — migrated to Phase 3 |
+| 646 | `effective-family` (dup) | `#operator` | **REMOVE** — migrated to Phase 3 |
+| 662 | `alleged-family` | `#operator` | **REMOVE** — migrated to Phase 3 |
+| 681 | `indirect-family` | `#operator` | **REMOVE** — migrated to Phase 3 |
+| 704 | `bandwidth-capacity` | `#bandwidth` | **REMOVE** — migrated to Phase 2 |
+| 727 | `network-participation` | `#bandwidth` | **REMOVE** — migrated to Phase 2 |
+| 742 | `or-address` | `#connectivity` | **REMOVE** — already in #connectivity section |
+| 760 | `exit-address` | `#connectivity` | **REMOVE** — already in #connectivity section |
+| 774 | `dir-address` | `#connectivity` | **REMOVE** — already in #connectivity section |
+| 790 | `location` | `#connectivity` | **REMOVE** — already in #connectivity section |
+| 815 | `coordinates` | `#connectivity` | **REMOVE** — already in #connectivity section |
+| 825 | `interactive-map` | `#connectivity` | **REMOVE** — already in #connectivity section |
+| 833 | `autonomous-system` | `#connectivity` | **REMOVE** — already in #connectivity section |
+| 850 | `flags` | `#flags` | **REMOVE** — already in #flags section |
+| 867 | `flag-uptime` | `#uptime` | **REMOVE** — migrated to Phase 1 |
+| 883 | `uptime-history` | `#uptime` | **REMOVE** — migrated to Phase 1 |
+| 895 | `uptime-downtime` | `#uptime` | **REMOVE** — migrated to Phase 1 |
+| 911 | `first-last-seen` | `#uptime` | **REMOVE** — migrated to Phase 1 |
+| 919 | `last-restarted` | `#uptime` | **REMOVE** — migrated to Phase 1 |
+| 931 | `last-changed-address` | `#uptime` | **REMOVE** — migrated to Phase 1 |
+| 943 | `hibernating` | `#uptime` | **REMOVE** — migrated to Phase 1 |
+| 955 | `platform` | `#software` | **REMOVE** — migrated to Phase 4 |
+| 963 | `version` | `#software` | **REMOVE** — migrated to Phase 4 |
+
+**Result:** The entire old `<div class="row"><div class="col-md-6"><dl>...</dl></div><div class="col-md-6"><dl>...</dl></div></div>` block (lines ~540-980) is removed.
+
+Also remove the "Last fetch" line (line ~540) — this data is in the page footer already.
+
+**Remove Summary Table:**
+
+The "Summary: Your Relay vs Consensus" table (lines 1065-1216) is fully redundant with the #flags Eligibility Details table. All metrics covered:
+
+| Summary Table Row | Now Covered In |
+|-------------------|----------------|
+| In Consensus | Health Status #status |
+| Running (IPv4 Reachable) | Flags Eligibility #flags |
+| Valid | Flags Eligibility #flags |
+| Consensus Weight | Health Status BW Weight + #bandwidth |
+| Guard WFU / TK / BW | Flags Eligibility #flags |
+| Stable Uptime / MTBF | Flags Eligibility #flags |
+| Fast Speed | Flags Eligibility #flags |
+| V2Dir | Flags Eligibility #flags |
+| Exit Policy | Flags Eligibility #flags |
+| MiddleOnly | Flags Eligibility #flags |
+| HSDir WFU / TK | Flags Eligibility #flags |
+| IPv6 Reachable | Health Status + #connectivity |
+
+---
+
+#### 5.5.8 Phase 7: Update Documentation
+
+Update the Implementation Status Tracker (section 1.2) to mark all completed items.
+
+---
+
+#### 5.5.9 Final Template Structure After All Phases
+
+```
+relay-info.html structure (estimated ~1,350 lines after cleanup):
+
+Lines 1-70:     <style> block (CSS for sections)
+Lines 71-115:   Page header (nickname, AROI, family, AS, country, platform)
+Lines 117-328:  <div id="status"> — Health Status Summary (8-cell grid)
+Lines 329-467:  <section id="connectivity"> — Connectivity and Location
+Lines 468-538:  <section id="flags"> — Flags and Eligibility
+Lines ~539-620: <section id="bandwidth"> — Bandwidth Metrics (NEW)
+Lines ~621-780: <section id="uptime"> — Uptime, Stability & Overload (NEW)
+                    includes <span id="overload"> anchor + overload subsection
+Lines ~781-910: <section id="operator"> — Operator and Family (NEW)
+Lines ~911-940: <section id="software"> — Software and Version (NEW)
+Lines ~941-980: <section id="exit-policy"> — Exit Policy (NEW)
+Lines ~981+:    Consensus Evaluation (header + bullets + Per-Authority Details table)
+```
+
+9 sections (down from original 10 — overload merged into uptime).
+Old dt/dd block (~440 lines) and Summary table (~150 lines) removed = net reduction of ~590 lines.
+New sections add ~440 lines. Net change: ~150 lines shorter.
+
+---
+
+#### 5.5.10 Jinja2 Filter Registry (Complete)
+
+**Location:** `allium/lib/page_writer.py` lines 50-56
+
+| Filter Name | Function | Source File | Status |
+|-------------|----------|-------------|--------|
+| `determine_unit` | `determine_unit_filter` | `bandwidth_formatter.py` | ✅ Registered |
+| `format_bandwidth_with_unit` | `format_bandwidth_with_unit` | `bandwidth_formatter.py` | ✅ Registered |
+| `format_bandwidth` | `format_bandwidth_filter` | `bandwidth_formatter.py` | ✅ Registered |
+| `format_time_ago` | `format_time_ago` | `time_utils.py` | ✅ Registered |
+| `split` | lambda | inline | ✅ Registered |
+| `format_timestamp` | `format_timestamp` | `time_utils.py` | ⏳ **TODO** (Phase 1) |
+| `format_timestamp_ago` | `format_timestamp_ago` | `time_utils.py` | ⏳ **TODO** (Phase 1) |
+
+---
+
+#### 5.5.11 Template Context Variables (Complete Reference)
+
+**From `write_relay_info()` in `page_writer.py` lines 1002-1006:**
+
+| Variable | Type | Source | Used By Sections |
+|----------|------|--------|------------------|
+| `relay` | dict | Onionoo + pre-processing | All sections |
+| `page_ctx` | dict | `page_context.py` | All sections (path_prefix) |
+| `relays` | Relays | `relays.py` core class | #bandwidth (use_bits), #overload (use_bits) |
+| `contact_display_data` | dict | Pre-computed in relays.py | #uptime (outliers tooltip) |
+| `contact_validation_status` | dict/None | `aroi_validation.py` | #operator (validation badges) |
+| `validated_aroi_domains` | set | AROI validation cache | #operator (link routing) |
+| `base_url` | str | CLI config | #operator (vanity URL links) |
+
+---
+
+### 5.6 Files to Modify Summary
 
 #### Summary of All Files to Modify
 
 #### Template Files
 
-| File | Phase | Changes |
-|------|-------|---------|
-| `allium/templates/relay-info.html` | 1, 2, 3 | Major restructure: emoji removal, new sections, reordering, flag table |
-| `allium/templates/skeleton.html` | 2 | CSS additions for fluid layout, section styling |
-| `allium/templates/macros.html` | 1 | Minor: update breadcrumb for relay pages (optional) |
+| File | Phases | Changes |
+|------|--------|---------|
+| `allium/templates/relay-info.html` | 1-7 | Add 6 new `<section>` blocks, CSS, remove old dt/dd block + summary table |
 
 #### Python Files
 
 | File | Phase | Changes |
 |------|-------|---------|
-| `allium/lib/consensus/consensus_evaluation.py` | 3 | Enhance `_identify_issues()` with new issue categories |
+| `allium/lib/time_utils.py` | 1 | Add `format_timestamp()` and `format_timestamp_ago()` for ms timestamps |
+| `allium/lib/page_writer.py` | 1 | Register 2 new Jinja2 filters (lines 50-54) |
 
 #### Data/Variables Reference
 
@@ -4270,7 +5422,29 @@ Each section header should be clickable and link to itself:
 | `relay['version']` | str | Tor version |
 | `relay['version_status']` | str | recommended/obsolete/etc |
 | `relay['uptime_display']` | str | "UP for X days" |
+| `relay['uptime_api_display']` | str | "99.5%/98.2%/97.0%/95.0%" (1M/6M/1Y/5Y) |
+| `relay['uptime_percentages']` | dict | `{1_month: float, 6_months: float, ...}` |
+| `relay['flag_uptime_display']` | str | Flag-specific uptime or "Match" or "N/A" |
+| `relay['flag_uptime_tooltip']` | str | Tooltip text for flag uptime |
 | `relay['last_restarted']` | str | Restart timestamp |
+| `relay['last_restarted_ago']` | str | Pre-formatted "5d 3h ago" |
+| `relay['first_seen_ago']` | str | Pre-formatted "2y 3mo ago" |
+| `relay['last_seen_ago']` | str | Pre-formatted "5m ago" |
+| `relay['platform_raw']` | str | Original unprocessed platform string |
+| `relay['obs_bandwidth_formatted']` | str | Pre-formatted observed bandwidth value |
+| `relay['obs_bandwidth_unit']` | str | Pre-computed bandwidth unit |
+| `relay['obs_bandwidth_with_unit']` | str | Combined "125 Mbit/s" |
+| `relay['stability_is_overloaded']` | bool | Any overload condition active |
+| `relay['stability_text']` | str | "Overloaded" or "Not Overloaded" |
+| `relay['stability_color']` | str | Hex color code |
+| `relay['stability_tooltip']` | str | Human-readable overload summary |
+| `relay['overload_general_timestamp']` | int/None | Millisecond timestamp from /details |
+| `relay['overload_ratelimits']` | dict/None | Rate limit data from /bandwidth |
+| `relay['overload_fd_exhausted']` | dict/None | FD exhaustion data from /bandwidth |
+| `relay['consensus_weight_percentage']` | str | Pre-formatted "0.15%" |
+| `relay['guard_probability_percentage']` | str | Pre-formatted "0.12%" |
+| `relay['middle_probability_percentage']` | str | Pre-formatted "0.18%" |
+| `relay['exit_probability_percentage']` | str | Pre-formatted "0.00%" |
 
 ---
 
