@@ -84,7 +84,8 @@
 
 </style>
 <div id="content">
-<h2>View Relay "{{ relay['nickname'] }}"</h2>
+<h2 id="nickname">View Relay "{{ relay['nickname'] }}"</h2>
+<p id="fingerprint" style="margin: 2px 0 8px 0; font-size: 13px; color: #495057;">Fingerprint: <code style="font-size: 12px; user-select: all;">{{ relay['fingerprint']|escape }}</code></p>
 {% set relay_data = {'nickname': relay['nickname'], 'fingerprint': relay['fingerprint'], 'as_number': relay['as']} %}
 {{ navigation('all', page_ctx) }}
 {# DRY: Compute operator page URL once — AROI vanity URL if validated, fallback to contact hash #}
@@ -349,6 +350,9 @@ Country: unknown
 {# ============== SECTION 2: CONNECTIVITY AND LOCATION ============== #}
 {# NOTE: Reuses existing 'diag' variable (defined line 115) - no new variables #}
 <section id="connectivity" class="section-box" style="padding-bottom: 5px;">
+{# Backward-compatible anchors from old dt/dd layout #}
+<span id="or-address"></span><span id="exit-address"></span><span id="dir-address"></span>
+<span id="location"></span><span id="coordinates"></span><span id="interactive-map"></span><span id="autonomous-system"></span>
 <h4 style="margin-top: 0; margin-bottom: 12px;">
     <div class="section-header">
         <a href="#connectivity" class="anchor-link">Connectivity and Location</a>
@@ -428,7 +432,7 @@ Country: unknown
 <div class="subsection-card">
 <h5 class="subsection-header">Location</h5>
 <dl>
-    <dt>Country</dt>
+    <dt title="Country name of the location of this relay as found by a geolocation database based on the relay's IP address.">Country</dt>
     <dd>
         {% if relay['country'] -%}
             <a href="{{ page_ctx.path_prefix }}country/{{ relay['country']|escape }}/">
@@ -441,18 +445,18 @@ Country: unknown
     </dd>
     
     {% if relay['region_name'] %}
-    <dt>Region</dt>
+    <dt title="Region name of the location of this relay as found by a geolocation database.">Region</dt>
     <dd>{{ relay['region_name']|escape }}</dd>
     {% endif %}
     
     {% if relay['city_name'] %}
-    <dt>City</dt>
+    <dt title="City name of the location of this relay as found by a geolocation database.">City</dt>
     <dd>{{ relay['city_name']|escape }}</dd>
     {% endif %}
     
     {% if relay['latitude'] and relay['longitude'] and relay['latitude'] != 0 and relay['longitude'] != 0 %}
-    <dt>Coordinates</dt>
-    <dd>{{ relay['latitude']|escape }}, {{ relay['longitude']|escape }}</dd>
+    <dt title="Latitude and longitude of the relay's location as found by a geolocation database based on the relay's IP address.">Coordinates</dt>
+    <dd><span title="Latitude">{{ relay['latitude']|escape }}</span>, <span title="Longitude">{{ relay['longitude']|escape }}</span></dd>
     {% endif %}
     
     <dt>Interactive Map</dt>
@@ -572,6 +576,8 @@ Country: unknown
 {# NOTE: reuses 'diag' variable set in Health Status section (line 117) #}
 
 <section id="bandwidth" class="section-box relay-section">
+{# Backward-compatible anchors from old dt/dd layout #}
+<span id="bandwidth-capacity"></span><span id="network-participation"></span>
 <h4 style="margin-top: 0; margin-bottom: 12px;">
     <div class="section-header">
         <a href="#bandwidth" class="anchor-link">Bandwidth Metrics</a>
@@ -584,12 +590,12 @@ Country: unknown
         <h5 class="subsection-header">Capacity (Relay Reported)</h5>
         <dl>
             <dt title="Bandwidth capacity your relay measured and reported in its descriptor">Observed Bandwidth</dt>
-            <dd>{{ bw(relay['observed_bandwidth']) }}</dd>
+            <dd><span title="Observed: {{ bw(relay['observed_bandwidth']) }}">{{ bw(relay['observed_bandwidth']) }}</span></dd>
             
             <dt title="min(Observed, Rate, Burst) - what your relay advertises to the network">Advertised Bandwidth</dt>
             <dd>
                 {% if relay['advertised_bandwidth'] %}
-                    {{ bw(relay['advertised_bandwidth']) }}
+                    <span title="Advertised: {{ bw(relay['advertised_bandwidth']) }}">{{ bw(relay['advertised_bandwidth']) }}</span>
                 {% else %}
                     <span style="color: #6c757d;">Unknown</span>
                 {% endif %}
@@ -598,7 +604,7 @@ Country: unknown
             <dt title="RelayBandwidthRate setting in torrc">Rate Limit</dt>
             <dd>
                 {% if relay['bandwidth_rate'] %}
-                    {{ bw(relay['bandwidth_rate']) }}
+                    <span title="Rate: {{ bw(relay['bandwidth_rate']) }}">{{ bw(relay['bandwidth_rate']) }}</span>
                 {% else %}
                     <span style="color: #6c757d;">Not set</span>
                 {% endif %}
@@ -607,7 +613,7 @@ Country: unknown
             <dt title="RelayBandwidthBurst setting in torrc">Burst Limit</dt>
             <dd>
                 {% if relay['bandwidth_burst'] %}
-                    {{ bw(relay['bandwidth_burst']) }}
+                    <span title="Burst: {{ bw(relay['bandwidth_burst']) }}">{{ bw(relay['bandwidth_burst']) }}</span>
                 {% else %}
                     <span style="color: #6c757d;">Not set</span>
                 {% endif %}
@@ -678,11 +684,11 @@ Country: unknown
         {% endif %}
     </span>
     |
-    <span title="Probability of being selected as guard">Guard: 
+    <span title="Probability of this relay to be selected for the guard position. Calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so this probability is an approximation.">Guard: 
         {% if relay['guard_probability'] %}{{ "%.4f"|format(relay['guard_probability'] * 100) }}%{% else %}N/A{% endif %}</span> |
-    <span title="Probability of being selected as middle">Middle: 
+    <span title="Probability of this relay to be selected for the middle position. Calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so this probability is an approximation.">Middle: 
         {% if relay['middle_probability'] %}{{ "%.4f"|format(relay['middle_probability'] * 100) }}%{% else %}N/A{% endif %}</span> |
-    <span title="Probability of being selected as exit">Exit: 
+    <span title="Probability of this relay to be selected for the exit position. Calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so this probability is an approximation.">Exit: 
         {% if relay['exit_probability'] %}{{ "%.4f"|format(relay['exit_probability'] * 100) }}%{% else %}N/A{% endif %}</span>
     
     {% if relay['fingerprint'] in relays.json.smart_context.performance_correlation.template_optimized.underutilized_fingerprints %}
@@ -695,6 +701,8 @@ Country: unknown
 
 {# ============== SECTION 5: UPTIME, STABILITY & OVERLOAD (#uptime) ============== #}
 <section id="uptime" class="section-box relay-section">
+{# Backward-compatible anchors: #uptime-downtime, #uptime-history, #flag-uptime on dt elements below #}
+{# #first-last-seen, #last-restarted, #last-changed-address, #hibernating on dt elements in Timestamps #}
 <h4 style="margin-top: 0; margin-bottom: 12px;">
     <div class="section-header">
         <a href="#uptime" class="anchor-link">Uptime and Stability</a>
@@ -732,7 +740,7 @@ Country: unknown
             <dd>
                 {% if relay.get('flag_uptime_display') and relay['flag_uptime_display'] != 'N/A' -%}
                     {% if relay['flag_uptime_display'] == 'Match' -%}
-                        <span title="{{ relay['flag_uptime_tooltip']|escape }}">Matches Overall Uptime</span>
+                        <span title="{{ relay['flag_uptime_tooltip']|escape }}">Matches Overall Uptime ({{ relay['uptime_api_display']|safe }})</span>
                     {% else -%}
                         <span title="{{ relay['flag_uptime_tooltip']|escape }}">{{ relay['flag_uptime_display']|safe }}</span>
                     {% endif -%}
@@ -935,6 +943,8 @@ Country: unknown
 
 {# ============== SECTION 6: OPERATOR AND FAMILY (#operator) ============== #}
 <section id="operator" class="section-box relay-section">
+{# Backward-compatible anchors: #aroi, #contact on dt elements below #}
+{# #effective-family, #alleged-family, #indirect-family on dt elements in Family Configuration #}
 <h4 style="margin-top: 0; margin-bottom: 12px;">
     <div class="section-header">
         <a href="#operator" class="anchor-link">Operator and Family</a>
@@ -949,7 +959,7 @@ Country: unknown
 <p style="font-size: 10px; color: #999; margin: -4px 0 6px 0;">Source: <a href="https://aroivalidator.1aeo.com/" target="_blank" rel="noopener" style="color: #999;">AROI Validation API</a> — {{ aroi_validation_timestamp }}</p>
 {% endif %}
 <dl>
-    <dt>AROI Domain</dt>
+    <dt>AROI Domain <a href="https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/" target="_blank" rel="noopener" title="Autonomous Relay Operator Identifier — ContactInfo Information Sharing Specification" style="font-weight: normal; font-size: 11px;">(?)</a></dt>
     <dd>
         {% if has_aroi -%}
             <a href="{{ operator_url }}">{{ relay['aroi_domain']|escape }}</a>
@@ -1070,6 +1080,7 @@ Country: unknown
 
 {# ============== SECTION 7: SOFTWARE AND VERSION (#software) ============== #}
 <section id="software" class="section-box relay-section">
+{# Anchors #platform and #version are on the <dt> elements below #}
 <h4 style="margin-top: 0; margin-bottom: 12px;">
     <div class="section-header">
         <a href="#software" class="anchor-link">Software and Version</a>
@@ -1081,7 +1092,7 @@ Country: unknown
     <dd>
         <a href="{{ page_ctx.path_prefix }}platform/{{ relay['platform']|escape }}/" title="View all relays on this platform">{{ relay['platform']|escape }}</a>
         {% if relay['platform_raw'] and relay['platform_raw'] != relay['platform'] -%}
-            <span style="font-size: 12px; color: #666;"> — {{ relay['platform_raw']|escape }}</span>
+            <span style="font-size: 12px; color: #666;" title="Complete platform information as reported by relay"> — {{ relay['platform_raw']|escape }}</span>
         {% endif -%}
     </dd>
 
@@ -1121,6 +1132,7 @@ Country: unknown
 
 {# ============== SECTION 8: EXIT POLICY (#exit-policy) ============== #}
 <section id="exit-policy" class="section-box relay-section">
+{# Backward-compatible anchors: #ipv4-exit-policy-summary, #ipv6-exit-policy-summary on h5 elements below #}
 <h4 style="margin-top: 0; margin-bottom: 12px;">
     <div class="section-header">
         <a href="#exit-policy" class="anchor-link">Exit Policy</a>
