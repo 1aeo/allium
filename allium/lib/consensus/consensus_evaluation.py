@@ -1865,7 +1865,6 @@ def _format_bandwidth_summary(consensus_data: dict, use_bits: bool = False) -> d
         'bw_auth_total': bw_auth_total,
         'bw_auth_majority': bw_auth_majority,  # Pre-computed for template
         'bw_auth_color': bw_auth_color,        # Pre-computed for template
-        'bw_auth_measured_names': bandwidth.get('bw_auth_measured_names', []),
         'bw_auth_not_measured_names': bandwidth.get('bw_auth_not_measured_names', []),
     }
 

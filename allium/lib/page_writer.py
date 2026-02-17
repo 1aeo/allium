@@ -984,8 +984,10 @@ def write_relay_info(relay_set):
     # Safely get contact map - avoiding 3-level .get() in loop
     contact_map = relay_set.json.get("sorted", {}).get("contact", {})
     
-    # Optimization: Cache validated domains set
+    # Optimization: Cache frequently-accessed properties before 10K relay loop
     validated_aroi_domains = getattr(relay_set, 'validated_aroi_domains', set())
+    aroi_validation_timestamp = relay_set._aroi_validation_timestamp
+    base_url = relay_set.base_url
 
     for relay in relay_list:
         if not relay["fingerprint"].isalnum():
@@ -1007,9 +1009,9 @@ def write_relay_info(relay_set):
         rendered = template.render(
             relay=relay, page_ctx=page_ctx, relays=relay_set, contact_display_data=contact_display_data,
             contact_validation_status=contact_validation_status,
-            aroi_validation_timestamp=relay_set._aroi_validation_timestamp,
+            aroi_validation_timestamp=aroi_validation_timestamp,
             validated_aroi_domains=validated_aroi_domains,
-            base_url=relay_set.base_url
+            base_url=base_url
         )
         
         # Create directory structure: relay/FINGERPRINT/index.html (depth 2)

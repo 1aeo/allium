@@ -1010,31 +1010,31 @@ class CollectorFetcher:
         
         bandwidth_values = []
         bw_auth_measured_count = 0  # BW authorities that measured THIS relay
-        bw_auth_measured_names = []  # Names of BW authorities that measured
+        bw_auth_measured_set = set()  # Track names only for "not measured" display
         
         for auth_name, vote in votes.items():
             if vote.get('measured') is not None:
                 bandwidth_values.append(vote['measured'])
-                # Count if this is a BW authority that actually measured
                 if auth_name in self.bw_authorities:
                     bw_auth_measured_count += 1
-                    bw_auth_measured_names.append(auth_name)
+                    bw_auth_measured_set.add(auth_name)
             elif vote.get('bandwidth') is not None:
-                # This is just relay-reported bandwidth, not a measurement
                 bandwidth_values.append(vote['bandwidth'])
         
         # Add measurements from bandwidth files
         bandwidth_values.extend(measurements.values())
         
-        bw_auth_not_measured_names = sorted(self.bw_authorities - set(bw_auth_measured_names))
+        bw_auth_total = len(self.bw_authorities)
+        # Only compute missing names when not all BW authorities measured (template only uses this case)
+        bw_auth_not_measured = (sorted(self.bw_authorities - bw_auth_measured_set)
+                                if bw_auth_measured_count < bw_auth_total else [])
         
         if not bandwidth_values:
             return {
                 'median': None, 'average': None, 'min': None, 'max': None, 
                 'deviation': None, 'measurement_count': 0,
                 'bw_auth_measured_count': 0,
-                'bw_auth_total': len(self.bw_authorities),
-                'bw_auth_measured_names': [],
+                'bw_auth_total': bw_auth_total,
                 'bw_auth_not_measured_names': sorted(self.bw_authorities),
             }
         
@@ -1054,10 +1054,9 @@ class CollectorFetcher:
             'max': max(bandwidth_values),
             'deviation': max(bandwidth_values) - min(bandwidth_values) if len(bandwidth_values) > 1 else 0,
             'measurement_count': len(bandwidth_values),
-            'bw_auth_measured_count': bw_auth_measured_count,  # Numerator: BW auths that measured this relay
-            'bw_auth_total': len(self.bw_authorities),  # Denominator: Total BW authorities
-            'bw_auth_measured_names': sorted(bw_auth_measured_names),
-            'bw_auth_not_measured_names': bw_auth_not_measured_names,
+            'bw_auth_measured_count': bw_auth_measured_count,
+            'bw_auth_total': bw_auth_total,
+            'bw_auth_not_measured_names': bw_auth_not_measured,
         }
     
     def _format_reachability(self, relay: dict) -> dict:
