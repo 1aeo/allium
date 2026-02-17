@@ -5,6 +5,8 @@ Time-related utility functions for parsing, formatting, and calculating
 timestamps used throughout the allium codebase.
 """
 
+import time as _time_module
+
 from datetime import datetime, timedelta, timezone
 
 # Shared period name constants (DRY: used across operator_analysis, flag_analysis, network_health)
@@ -156,8 +158,7 @@ def format_timestamp_ago(ts_ms):
     if not ts_ms:
         return "N/A"
     try:
-        import time
-        age_seconds = time.time() - (ts_ms / 1000)
+        age_seconds = _time_module.time() - (ts_ms / 1000)
         if age_seconds < 0:
             return "in the future"
         elif age_seconds < 3600:
