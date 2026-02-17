@@ -42,7 +42,7 @@ This document proposes a redesign of the Allium relay page to prioritize operato
 |------|--------|----------|-------|
 | 0.1 Single Column Width on Desktop | ⏳ Not Started | `relay-info.html` CSS | Max-width 1400px, fluid layout |
 | 0.2 Relay Identity in Page Header | ✅ Implemented | `relay-info.html` lines 70-100 | Nickname, Contact, AROI, Family, AS, Country, Platform |
-| 0.3 Section List (10 sections) | 🔶 Partial | `relay-info.html` | 3 done (#status, #connectivity, #flags) + #authority-votes; 6 remaining in dt/dd format |
+| 0.3 Section List (9 sections) | 🔶 Partial | `relay-info.html` | 4 done (#status, #connectivity, #flags, #authority-votes); 5 remaining in dt/dd format |
 
 #### Section 1: Health Status Summary at Page Top
 
@@ -181,6 +181,10 @@ This section provides the visual reference for the proposed layout. All subseque
 ---
 
 ### 2.2 Desktop Wireframe (max-width: 1400px)
+
+> **Note:** These wireframes are from the original 10-section proposal. Overload Status
+> has since been merged into the Uptime & Stability section (see section 3.5).
+> Updated mockups for the merged section are in section 3.5.
 
 Two columns inside each section to maximize information density on wide screens.
 
@@ -3461,7 +3465,7 @@ The `_simplify_error_message()` function in `aroi_validation.py` (lines 178-231)
 
 | Attribute | Value |
 |-----------|-------|
-| **Section Number** | 8 |
+| **Section Number** | 7 |
 | **Anchor** | `#software` |
 | **Position** | After `#operator`, before `#exit-policy` |
 | **Template File** | `allium/templates/relay-info.html` |
@@ -3486,8 +3490,7 @@ Onionoo /details ─────────────────┐
   ├─ platform                     │
   ├─ version                      │
   ├─ recommended_version          │
-  ├─ version_status               │
-  └─ last_changed_address_or_port │
+  └─ version_status               │
                                   ▼
                             relays.py
                             _trim_platform() (lines ~164-190)
@@ -3515,9 +3518,11 @@ Onionoo /details ─────────────────┐
 | `relay['version']` | str | `relay['version']` | Tor version number (e.g., "0.4.8.10") |
 | `relay['recommended_version']` | bool/None | `relay['recommended_version']` | Whether version is on recommended list |
 | `relay['version_status']` | str | `relay['version_status']` | "recommended", "obsolete", "experimental", "new in series", "unrecommended" |
-| `relay['last_changed_address_or_port']` | str | `relay['last_changed_address_or_port']` | ISO timestamp of last address/port change |
 
 No pre-computed display values needed — all values are simple strings.
+
+> **Note:** `last_changed_address_or_port` was originally in the old dt/dd software area but is rendered
+> in the #uptime section (3.5) alongside other timestamps. It is NOT in this section's template.
 
 ---
 
@@ -3613,7 +3618,7 @@ None — all values are simple strings rendered directly.
 
 ##### Testing Checklist
 
-- [ ] Section appears at position 8 (after #operator, before #exit-policy)
+- [ ] Section appears at position 7 (after #operator, before #exit-policy)
 - [ ] `#software` anchor navigates correctly
 - [ ] Platform links to platform page
 - [ ] Full platform string shown in smaller text if different from trimmed
@@ -3634,7 +3639,7 @@ None — all values are simple strings rendered directly.
 
 | Attribute | Value |
 |-----------|-------|
-| **Section Number** | 9 |
+| **Section Number** | 8 |
 | **Anchor** | `#exit-policy` |
 | **Position** | After `#software`, before `#authority-votes` |
 | **Template File** | `allium/templates/relay-info.html` |
@@ -3787,7 +3792,7 @@ None — all values rendered directly with `|escape`.
 
 ##### Testing Checklist
 
-- [ ] Section appears at position 9 (after #software, before #authority-votes)
+- [ ] Section appears at position 8 (after #software, before #authority-votes)
 - [ ] `#exit-policy` anchor navigates correctly
 - [ ] IPv4 summary shows accept/reject with port ranges
 - [ ] IPv6 summary shows accept/reject or "None"
@@ -4164,22 +4169,20 @@ This section covers implementation details that affect multiple sections or the 
 {# ============== SECTION 4: BANDWIDTH (#bandwidth) ============== #}
 {# Observed/Advertised/Rate/Burst, Network participation, Authority-measured #}
 
-{# ============== SECTION 5: UPTIME AND STABILITY (#uptime) ============== #}
+{# ============== SECTION 5: UPTIME, STABILITY & OVERLOAD (#uptime) ============== #}
 {# Current status, Historical uptime, First/Last seen, Hibernating #}
+{# Overload subsection: <span id="overload"> General overload, Rate limits, FD exhaustion #}
 
-{# ============== SECTION 6: OVERLOAD STATUS (#overload) ============== #}
-{# General overload, Rate limits, File descriptor exhaustion, Recommendations #}
-
-{# ============== SECTION 7: OPERATOR AND FAMILY (#operator) ============== #}
+{# ============== SECTION 6: OPERATOR AND FAMILY (#operator) ============== #}
 {# AROI info, Contact, Effective/Alleged/Indirect family #}
 
-{# ============== SECTION 8: SOFTWARE AND VERSION (#software) ============== #}
-{# Platform, Version, Recommended status, Last changed #}
+{# ============== SECTION 7: SOFTWARE AND VERSION (#software) ============== #}
+{# Platform, Version, Recommended status #}
 
-{# ============== SECTION 9: EXIT POLICY (#exit-policy) ============== #}
+{# ============== SECTION 8: EXIT POLICY (#exit-policy) ============== #}
 {# IPv4/IPv6 summary, Full policy #}
 
-{# ============== SECTION 10: PER-AUTHORITY VOTE DETAILS (#authority-votes) ============== #}
+{# ============== SECTION 9: PER-AUTHORITY VOTE DETAILS (#authority-votes) ============== #}
 {# Detailed per-authority table, Explanatory info boxes #}
 ```
 
@@ -5236,15 +5239,15 @@ relay-info.html: <section id="exit-policy"> renders policy data with |escape
 |------|-------|----------------|--------|
 | 545 | `nickname` | Page header | **REMOVE** — already in header (line 72) |
 | 554 | `fingerprint` | Page header | **REMOVE** — already in header (line 72) |
-| 563 | `aroi` | `#operator` | **REMOVE** — migrated to Phase 4 |
-| 581 | `contact` | `#operator` | **REMOVE** — migrated to Phase 4 |
-| 596 | `ipv4-exit-policy-summary` | `#exit-policy` | **REMOVE** — migrated to Phase 6 |
-| 612 | `ipv6-exit-policy-summary` | `#exit-policy` | **REMOVE** — migrated to Phase 6 |
-| 628 | `exit-policy` | `#exit-policy` | **REMOVE** — migrated to Phase 6 |
-| 640 | `effective-family` | `#operator` | **REMOVE** — migrated to Phase 4 |
-| 646 | `effective-family` (dup) | `#operator` | **REMOVE** — migrated to Phase 4 |
-| 662 | `alleged-family` | `#operator` | **REMOVE** — migrated to Phase 4 |
-| 681 | `indirect-family` | `#operator` | **REMOVE** — migrated to Phase 4 |
+| 563 | `aroi` | `#operator` | **REMOVE** — migrated to Phase 3 |
+| 581 | `contact` | `#operator` | **REMOVE** — migrated to Phase 3 |
+| 596 | `ipv4-exit-policy-summary` | `#exit-policy` | **REMOVE** — migrated to Phase 5 |
+| 612 | `ipv6-exit-policy-summary` | `#exit-policy` | **REMOVE** — migrated to Phase 5 |
+| 628 | `exit-policy` | `#exit-policy` | **REMOVE** — migrated to Phase 5 |
+| 640 | `effective-family` | `#operator` | **REMOVE** — migrated to Phase 3 |
+| 646 | `effective-family` (dup) | `#operator` | **REMOVE** — migrated to Phase 3 |
+| 662 | `alleged-family` | `#operator` | **REMOVE** — migrated to Phase 3 |
+| 681 | `indirect-family` | `#operator` | **REMOVE** — migrated to Phase 3 |
 | 704 | `bandwidth-capacity` | `#bandwidth` | **REMOVE** — migrated to Phase 2 |
 | 727 | `network-participation` | `#bandwidth` | **REMOVE** — migrated to Phase 2 |
 | 742 | `or-address` | `#connectivity` | **REMOVE** — already in #connectivity section |
@@ -5255,15 +5258,15 @@ relay-info.html: <section id="exit-policy"> renders policy data with |escape
 | 825 | `interactive-map` | `#connectivity` | **REMOVE** — already in #connectivity section |
 | 833 | `autonomous-system` | `#connectivity` | **REMOVE** — already in #connectivity section |
 | 850 | `flags` | `#flags` | **REMOVE** — already in #flags section |
-| 867 | `flag-uptime` | `#uptime` | **REMOVE** — migrated to Phase 3 |
-| 883 | `uptime-history` | `#uptime` | **REMOVE** — migrated to Phase 3 |
-| 895 | `uptime-downtime` | `#uptime` | **REMOVE** — migrated to Phase 3 |
-| 911 | `first-last-seen` | `#uptime` | **REMOVE** — migrated to Phase 3 |
-| 919 | `last-restarted` | `#uptime` | **REMOVE** — migrated to Phase 3 |
-| 931 | `last-changed-address` | `#uptime` | **REMOVE** — migrated to Phase 3 |
-| 943 | `hibernating` | `#uptime` | **REMOVE** — migrated to Phase 3 |
-| 955 | `platform` | `#software` | **REMOVE** — migrated to Phase 5 |
-| 963 | `version` | `#software` | **REMOVE** — migrated to Phase 5 |
+| 867 | `flag-uptime` | `#uptime` | **REMOVE** — migrated to Phase 1 |
+| 883 | `uptime-history` | `#uptime` | **REMOVE** — migrated to Phase 1 |
+| 895 | `uptime-downtime` | `#uptime` | **REMOVE** — migrated to Phase 1 |
+| 911 | `first-last-seen` | `#uptime` | **REMOVE** — migrated to Phase 1 |
+| 919 | `last-restarted` | `#uptime` | **REMOVE** — migrated to Phase 1 |
+| 931 | `last-changed-address` | `#uptime` | **REMOVE** — migrated to Phase 1 |
+| 943 | `hibernating` | `#uptime` | **REMOVE** — migrated to Phase 1 |
+| 955 | `platform` | `#software` | **REMOVE** — migrated to Phase 4 |
+| 963 | `version` | `#software` | **REMOVE** — migrated to Phase 4 |
 
 **Result:** The entire old `<div class="row"><div class="col-md-6"><dl>...</dl></div><div class="col-md-6"><dl>...</dl></div></div>` block (lines ~540-980) is removed.
 
