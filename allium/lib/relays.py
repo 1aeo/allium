@@ -349,98 +349,87 @@ class Relays:
         # Use centralized HTML escaping utility
         bulk_escaper = create_bulk_escaper()
         
-        # Pre-compute total network consensus weight for fallback fraction calculations
-        # This is used when individual relays don't have consensus_weight_fraction from API
-        self._total_network_cw = sum(
-            relay.get('consensus_weight', 0) for relay in self.json["relays"]
-        )
+        # Single pass: total CW + percentile distributions
+        cw_vals, gp_vals, mp_vals, ep_vals = [], [], [], []
+        total_cw = 0
+        for r in self.json["relays"]:
+            cw = r.get('consensus_weight', 0)
+            total_cw += cw
+            if cw: cw_vals.append(cw)
+            gp = r.get('guard_probability')
+            if gp: gp_vals.append(gp)
+            mp = r.get('middle_probability')
+            if mp: mp_vals.append(mp)
+            ep = r.get('exit_probability')
+            if ep: ep_vals.append(ep)
+        self._total_network_cw = total_cw
         
-        # Pre-compute consensus weight percentiles for all relays
-        # Sorted ascending so we can use bisect for O(log n) lookups
-        cw_sorted = sorted(relay.get('consensus_weight', 0) for relay in self.json["relays"] if relay.get('consensus_weight'))
-        cw_count = len(cw_sorted)
+        # Sort once, store with counts for O(log n) bisect lookups
+        cw_vals.sort(); gp_vals.sort(); mp_vals.sort(); ep_vals.sort()
+        cw_n, gp_n, mp_n, ep_n = len(cw_vals), len(gp_vals), len(mp_vals), len(ep_vals)
+        
+        # Cache method refs outside loop to avoid repeated attribute lookups (10K iterations)
+        _bw_determine = self.bandwidth_formatter.determine_unit
+        _bw_format = self.bandwidth_formatter.format_bandwidth_with_unit
+        _time_ago = self._format_time_ago
+        _time_keys = (('last_restarted', 'last_restarted_ago'),
+                      ('first_seen', 'first_seen_ago'),
+                      ('last_seen', 'last_seen_ago'))
+        _prob_defs = (('guard_probability', 'guard_percentile', 'guard_probability_percentage', gp_vals, gp_n),
+                      ('middle_probability', 'middle_percentile', 'middle_probability_percentage', mp_vals, mp_n),
+                      ('exit_probability', 'exit_percentile', 'exit_probability_percentage', ep_vals, ep_n))
+        _bisect_left = bisect.bisect_left
         
         for relay in self.json["relays"]:
-            # Use centralized bulk escaping for all HTML escape patterns
             bulk_escaper.escape_all_relay_fields(relay)
             
-            # Normalize country code to UPPERCASE for consistent URL generation
-            # (matches RouteFluxMap's URL schema and sorted["country"] keys)
-            if relay.get("country"):
-                relay["country"] = relay["country"].upper()
+            country = relay.get("country")
+            if country:
+                relay["country"] = country.upper()
             
-            # Continue with non-HTML-escaping optimizations
-            # Optimization 4: Pre-compute percentage values for relay-info templates
-            # This avoids expensive format operations in individual relay pages
-            # Use API-provided consensus_weight_fraction first, fallback to manual calculation
-            if relay.get("consensus_weight_fraction") is not None:
-                relay["consensus_weight_percentage"] = f"{relay['consensus_weight_fraction'] * 100:.2f}%"
-            elif relay.get("consensus_weight") is not None and hasattr(self, '_total_network_cw') and self._total_network_cw > 0:
-                # Fallback: compute fraction from raw consensus_weight
-                computed_fraction = relay["consensus_weight"] / self._total_network_cw
-                relay["consensus_weight_fraction"] = computed_fraction  # Store for consistency
-                relay["consensus_weight_percentage"] = f"{computed_fraction * 100:.2f}%"
+            # CW percentage + percentile (single lookup for consensus_weight)
+            cw_raw = relay.get("consensus_weight")
+            cwf = relay.get("consensus_weight_fraction")
+            if cwf is not None:
+                relay["consensus_weight_percentage"] = f"{cwf * 100:.2f}%"
+            elif cw_raw and total_cw > 0:
+                cwf = cw_raw / total_cw
+                relay["consensus_weight_fraction"] = cwf
+                relay["consensus_weight_percentage"] = f"{cwf * 100:.2f}%"
             else:
                 relay["consensus_weight_percentage"] = NA_FALLBACK
+            relay['cw_percentile'] = round(_bisect_left(cw_vals, cw_raw) / cw_n * 100, 1) if cw_raw and cw_n else None
             
-            # Compute consensus weight percentile rank (what % of relays have lower CW)
-            cw = relay.get('consensus_weight', 0)
-            if cw and cw_count > 0:
-                rank = bisect.bisect_left(cw_sorted, cw)
-                relay['cw_percentile'] = round(rank / cw_count * 100, 1)
-            else:
-                relay['cw_percentile'] = None
-                
-            if relay.get("guard_probability") is not None:
-                relay["guard_probability_percentage"] = f"{relay['guard_probability'] * 100:.2f}%"
-            else:
-                relay["guard_probability_percentage"] = NA_FALLBACK
-                
-            if relay.get("middle_probability") is not None:
-                relay["middle_probability_percentage"] = f"{relay['middle_probability'] * 100:.2f}%"
-            else:
-                relay["middle_probability_percentage"] = NA_FALLBACK
-                
-            if relay.get("exit_probability") is not None:
-                relay["exit_probability_percentage"] = f"{relay['exit_probability'] * 100:.2f}%"
-            else:
-                relay["exit_probability_percentage"] = NA_FALLBACK
-                
-            # Optimization 5: Pre-compute bandwidth formatting (major relay-list.html optimization)
-            # This avoids calling _determine_unit and _format_bandwidth_with_unit in templates
+            # Role probability percentiles + percentage strings
+            for src, pctl_key, pct_key, arr, n in _prob_defs:
+                v = relay.get(src)
+                relay[pctl_key] = round(_bisect_left(arr, v) / n * 100, 1) if v and n else None
+                relay[pct_key] = f"{v * 100:.2f}%" if v is not None else NA_FALLBACK
+            
+            # Bandwidth formatting
             obs_bw = relay.get("observed_bandwidth", 0)
-            obs_unit = self.bandwidth_formatter.determine_unit(obs_bw)
-            obs_formatted = self.bandwidth_formatter.format_bandwidth_with_unit(obs_bw, obs_unit)
+            obs_unit = _bw_determine(obs_bw)
+            obs_formatted = _bw_format(obs_bw, obs_unit)
             relay["obs_bandwidth_formatted"] = obs_formatted
             relay["obs_bandwidth_unit"] = obs_unit
             relay["obs_bandwidth_with_unit"] = f"{obs_formatted} {obs_unit}"
             
-            # Optimization 6: Pre-compute time ago formatting (expensive function calls)
-            if relay.get("last_restarted"):
-                relay["last_restarted_ago"] = self._format_time_ago(relay["last_restarted"])
-                relay["last_restarted_date"] = relay["last_restarted"].split(' ', 1)[0]
-            else:
-                relay["last_restarted_ago"] = UNKNOWN_LOWERCASE
-                relay["last_restarted_date"] = UNKNOWN_LOWERCASE
+            # Time ago strings
+            lr = None
+            for src_key, dst_key in _time_keys:
+                ts = relay.get(src_key)
+                relay[dst_key] = _time_ago(ts) if ts else UNKNOWN_LOWERCASE
+                if src_key == 'last_restarted':
+                    lr = ts
+            relay["last_restarted_date"] = lr.split(' ', 1)[0] if lr else UNKNOWN_LOWERCASE
                 
-            # Optimization 7: Pre-parse IP addresses using safe parsing for validation
-            if relay.get("or_addresses") and len(relay["or_addresses"]) > 0:
-                # Use safe IP parsing to extract IP address properly
-                parsed_ip, _ = _safe_parse_ip_address(relay["or_addresses"][0])
-                relay["ip_address"] = parsed_ip if parsed_ip else UNKNOWN_LOWERCASE
+            # Pre-parse IP address from first OR address
+            or_addrs = relay.get("or_addresses")
+            if or_addrs:
+                parsed_ip, _ = _safe_parse_ip_address(or_addrs[0])
+                relay["ip_address"] = parsed_ip or UNKNOWN_LOWERCASE
             else:
                 relay["ip_address"] = UNKNOWN_LOWERCASE
-                
-            # Optimization 10: Pre-compute time formatting for relay-info pages
-            if relay.get("first_seen"):
-                relay["first_seen_ago"] = self._format_time_ago(relay["first_seen"])
-            else:
-                relay["first_seen_ago"] = UNKNOWN_LOWERCASE
-                
-            if relay.get("last_seen"):
-                relay["last_seen_ago"] = self._format_time_ago(relay["last_seen"])
-            else:
-                relay["last_seen_ago"] = UNKNOWN_LOWERCASE
                 
             # Optimization 11: Pre-compute uptime/downtime display based on last_restarted and running status
             relay["uptime_display"] = self._calculate_uptime_display(relay)
