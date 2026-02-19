@@ -9,6 +9,14 @@ import time as _time_module
 
 from datetime import datetime, timedelta, timezone
 
+# Time constants (seconds)
+SECONDS_PER_MINUTE = 60
+SECONDS_PER_HOUR = 3600
+SECONDS_PER_DAY = 86400
+SECONDS_PER_WEEK = 604800
+SECONDS_PER_MONTH = 2592000   # 30 days
+SECONDS_PER_YEAR = 31536000   # 365 days
+
 # Shared period name constants (DRY: used across operator_analysis, flag_analysis, network_health)
 PERIOD_SHORT_NAMES = {
     '1_month': '1M',
@@ -50,10 +58,9 @@ def create_time_thresholds():
 
 def format_timestamp_gmt(timestamp=None):
     """Format timestamp as GMT string for HTTP headers and display"""
-    import time
     if timestamp is None:
-        timestamp = time.time()
-    return time.strftime("%a, %d %b %Y %H:%M:%S GMT", time.gmtime(timestamp))
+        timestamp = _time_module.time()
+    return _time_module.strftime("%a, %d %b %Y %H:%M:%S GMT", _time_module.gmtime(timestamp))
 
 
 def format_time_ago(timestamp_str):
@@ -73,24 +80,13 @@ def format_time_ago(timestamp_str):
         if total_seconds < 0:
             return "in the future"
 
-        # Time unit calculations
-        years = total_seconds // (365 * 24 * 3600)
-        remainder = total_seconds % (365 * 24 * 3600)
-
-        months = remainder // (30 * 24 * 3600)
-        remainder = remainder % (30 * 24 * 3600)
-
-        weeks = remainder // (7 * 24 * 3600)
-        remainder = remainder % (7 * 24 * 3600)
-
-        days = remainder // (24 * 3600)
-        remainder = remainder % (24 * 3600)
-
-        hours = remainder // 3600
-        remainder = remainder % 3600
-
-        minutes = remainder // 60
-        seconds = remainder % 60
+        # Time unit calculations (using module constants)
+        years, remainder = divmod(total_seconds, SECONDS_PER_YEAR)
+        months, remainder = divmod(remainder, SECONDS_PER_MONTH)
+        weeks, remainder = divmod(remainder, SECONDS_PER_WEEK)
+        days, remainder = divmod(remainder, SECONDS_PER_DAY)
+        hours, remainder = divmod(remainder, SECONDS_PER_HOUR)
+        minutes, seconds = divmod(remainder, SECONDS_PER_MINUTE)
 
         # Build the result with up to 3 largest units
         parts = []
@@ -161,11 +157,11 @@ def format_timestamp_ago(ts_ms):
         age_seconds = _time_module.time() - (ts_ms / 1000)
         if age_seconds < 0:
             return "in the future"
-        elif age_seconds < 3600:
-            return f"{int(age_seconds / 60)} minutes ago"
-        elif age_seconds < 86400:
-            return f"{int(age_seconds / 3600)} hours ago"
+        elif age_seconds < SECONDS_PER_HOUR:
+            return f"{int(age_seconds / SECONDS_PER_MINUTE)} minutes ago"
+        elif age_seconds < SECONDS_PER_DAY:
+            return f"{int(age_seconds / SECONDS_PER_HOUR)} hours ago"
         else:
-            return f"{int(age_seconds / 86400)} days ago"
+            return f"{int(age_seconds / SECONDS_PER_DAY)} days ago"
     except (ValueError, TypeError):
         return "N/A"
