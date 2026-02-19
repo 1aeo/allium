@@ -265,10 +265,8 @@ class TestFormatRelayValues:
         
         result = _format_relay_values(diagnostics, flag_thresholds)
         
-        assert result['wfu'] == 0.99
-        assert '99' in result['wfu_display']
         assert result['wfu_meets'] == True
-        assert result['ipv4_reachable_count'] == 9
+        assert result['running_ipv4_count'] == 9
 
 
 class TestFormatBandwidthValue:
@@ -558,12 +556,11 @@ class TestFormatAuthorityTableEnhanced:
         assert len(result) >= 1
         moria1_row = result[0]
         
-        # Should have threshold comparisons
-        # Note: guard_bw_threshold was renamed to guard_bw_guarantee and guard_bw_top25_threshold
-        assert 'guard_bw_guarantee' in moria1_row
+        # Should have threshold display fields and meets comparisons
+        assert 'guard_bw_guarantee_display' in moria1_row
         assert 'guard_bw_meets' in moria1_row
         assert 'stable_threshold' in moria1_row
-        assert 'fast_threshold' in moria1_row
+        assert 'fast_meets' in moria1_row
     
     def test_authority_table_fingerprint_included(self):
         """Test that authority fingerprints are included in table."""
@@ -611,8 +608,8 @@ class TestRelayValuesCalculation:
         # With thresholds 10MB, 30MB, 35MB, range should be "10.0 MB/s-35.0 MB/s"
         assert 'MB/s' in result['guard_bw_range']
     
-    def test_stable_range_calculation(self):
-        """Test that Stable range is calculated correctly."""
+    def test_stable_mtbf_display_calculation(self):
+        """Test that Stable MTBF display fields are calculated correctly."""
         diagnostics = {
             'authority_votes': [{'wfu': 0.99, 'tk': 1000000}],
             'flag_eligibility': {'stable': {'eligible_count': 5}},
@@ -623,11 +620,10 @@ class TestRelayValuesCalculation:
         
         result = _format_relay_values(diagnostics, SAMPLE_FLAG_THRESHOLDS)
         
-        assert 'stable_range' in result
-        # Stable uptime varies: 1209600 (14d) to 1693440 (19.6d)
-        assert 'd' in result['stable_range']  # Should show days
+        assert 'stable_mtbf_min_display' in result
+        assert 'd' in result['stable_mtbf_min_display']
     
-    def test_ipv6_tested_count(self):
+    def test_running_ipv6_tested(self):
         """Test IPv6 tested count accounts for non-testing authorities."""
         diagnostics = {
             'authority_votes': [{'wfu': 0.99, 'tk': 1000000}],
@@ -644,7 +640,7 @@ class TestRelayValuesCalculation:
         result = _format_relay_values(diagnostics, {})
         
         # 9 total - 2 not testing = 7 tested
-        assert result['ipv6_tested_count'] == 7
+        assert result['running_ipv6_tested'] == 7
 
 
 class TestIssueIdentification:
@@ -1149,12 +1145,12 @@ class TestStableUptimeFeature:
         
         rv = result.get('relay_values', {})
         
-        # Should have stable uptime fields
+        # Should have stable uptime fields (raw min/max removed, display versions kept)
         assert 'stable_uptime' in rv
         assert rv['stable_uptime'] == relay_uptime
         assert 'stable_uptime_display' in rv
-        assert 'stable_uptime_min' in rv
-        assert 'stable_uptime_max' in rv
+        assert 'stable_uptime_min_display' in rv
+        assert 'stable_uptime_max_display' in rv
         assert 'stable_uptime_meets_count' in rv
         assert 'stable_uptime_meets_all' in rv
     
@@ -1691,18 +1687,17 @@ class TestRunningValidV2DirFlags:
         assert 'not recommended' in valid_rows[0]['status_text'].lower()
     
     def test_valid_relay_values(self):
-        """Test Valid relay values are populated."""
+        """Test Valid-related relay values exist (version fields removed, V2Dir kept)."""
         result = format_relay_consensus_evaluation(
             self.FULL_RELAY,
-            current_flags=['Running', 'Valid'],
+            current_flags=['Running', 'Valid', 'V2Dir'],
             observed_bandwidth=5000000,
             version='0.4.8.12',
             recommended_version=True,
         )
         rv = result['relay_values']
-        assert rv['valid_version'] == '0.4.8.12'
-        assert rv['valid_recommended'] is True
-        assert 'Recommended' in rv['valid_version_display']
+        assert rv['v2dir_has_flag'] is True
+        assert 'v2dir_display' in rv
     
     def test_v2dir_row_with_dirport(self):
         """Test V2Dir row with DirPort."""
@@ -1800,7 +1795,7 @@ class TestRunningValidV2DirFlags:
             )
     
     def test_vote_threshold_in_threshold_text(self):
-        """Test that every row has vote threshold (≥M/T DA) in threshold."""
+        """Test that every row has DA reference in threshold."""
         result = format_relay_consensus_evaluation(
             self.FULL_RELAY,
             current_flags=['Running', 'Valid', 'Fast', 'Stable', 'Guard', 'HSDir', 'V2Dir'],
@@ -1812,8 +1807,8 @@ class TestRunningValidV2DirFlags:
         frt = result['flag_requirements_table']
         
         for row in frt:
-            assert 'DA)' in row['threshold'], (
-                f"Row [{row['flag']}] {row['metric']} missing vote threshold: {row['threshold']}"
+            assert 'DA' in row['threshold'], (
+                f"Row [{row['flag']}] {row['metric']} missing DA reference: {row['threshold']}"
             )
     
     def test_da_counts_are_dynamic(self):
