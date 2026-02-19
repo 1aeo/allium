@@ -1656,7 +1656,7 @@ class TestRunningValidV2DirFlags:
         assert rv['running_has_ipv6'] is True
     
     def test_valid_row_recommended_version(self):
-        """Test Valid row with recommended version."""
+        """Test Valid row shows DA vote count (version is not a Valid requirement)."""
         result = format_relay_consensus_evaluation(
             self.FULL_RELAY,
             current_flags=['Running', 'Valid'],
@@ -1667,12 +1667,11 @@ class TestRunningValidV2DirFlags:
         frt = result['flag_requirements_table']
         valid_rows = [r for r in frt if r['flag'] == 'Valid']
         assert len(valid_rows) == 1
-        assert valid_rows[0]['metric'] == 'Tor Version'
+        assert valid_rows[0]['metric'] == 'Descriptor'
         assert valid_rows[0]['status'] == 'meets'
-        assert '0.4.8.12' in valid_rows[0]['value']
     
     def test_valid_row_not_recommended(self):
-        """Test Valid row with not-recommended version shows below."""
+        """Test Valid row still meets when version is not recommended (per dir-spec, Valid doesn't require recommended version)."""
         result = format_relay_consensus_evaluation(
             self.FULL_RELAY,
             current_flags=['Running', 'Valid'],
@@ -1683,8 +1682,7 @@ class TestRunningValidV2DirFlags:
         frt = result['flag_requirements_table']
         valid_rows = [r for r in frt if r['flag'] == 'Valid']
         assert len(valid_rows) == 1
-        assert valid_rows[0]['status'] == 'below'
-        assert 'not recommended' in valid_rows[0]['status_text'].lower()
+        assert valid_rows[0]['status'] == 'meets'
     
     def test_valid_relay_values(self):
         """Test Valid-related relay values exist (version fields removed, V2Dir kept)."""
@@ -1710,7 +1708,7 @@ class TestRunningValidV2DirFlags:
         frt = result['flag_requirements_table']
         v2dir_rows = [r for r in frt if r['flag'] == 'V2Dir']
         assert len(v2dir_rows) == 1
-        assert v2dir_rows[0]['metric'] == 'Dir Capability'
+        assert v2dir_rows[0]['metric'] == 'DirPort Available'
         assert v2dir_rows[0]['status'] == 'meets'
         assert '9030' in v2dir_rows[0]['value']
     
