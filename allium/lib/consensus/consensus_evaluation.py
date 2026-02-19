@@ -118,6 +118,23 @@ def _format_days(seconds, decimals=1, suffix='d', fallback='N/A'):
     return f"{days:.{decimals}f}{suffix}"
 
 
+def _format_days_adaptive(value_seconds, threshold_seconds, decimals=1):
+    """Format value/threshold day pair with increased precision when they round the same.
+    
+    Returns (value_display, threshold_display) with enough decimals to distinguish them.
+    """
+    if value_seconds is None or threshold_seconds is None:
+        return _format_days(value_seconds, decimals), _format_days(threshold_seconds, decimals)
+    val_days = value_seconds / SECONDS_PER_DAY
+    thresh_days = threshold_seconds / SECONDS_PER_DAY
+    d = decimals
+    while d <= decimals + 2:
+        if round(val_days, d) != round(thresh_days, d) or abs(val_days - thresh_days) < 1e-6:
+            break
+        d += 1
+    return f"{val_days:.{d}f}d", f"{thresh_days:.{d}f}d"
+
+
 def _format_wfu_display(wfu, decimals=1, fallback='N/A'):
     """Format WFU (weighted fractional uptime) as percentage using existing formatter."""
     if wfu is None:
@@ -407,10 +424,7 @@ def format_relay_consensus_evaluation(evaluation: dict, flag_thresholds: dict = 
         'total_authorities': evaluation.get('total_authorities', get_voting_authority_count()),
         'majority_required': evaluation.get('majority_required', 5),
         
-        # Consensus status display
-        'consensus_status': _format_consensus_status(evaluation),
-        
-        # Relay values summary (for Summary table) - pass observed_bandwidth, use_bits, relay_uptime, exit_policy_summary
+        # Relay values (consumed by flag_requirements_table builder below)
         'relay_values': _format_relay_values(evaluation, flag_thresholds, observed_bandwidth, use_bits, relay_uptime, exit_policy_summary, current_flags=current_flags, version=version, recommended_version=recommended_version, dir_address=dir_address),
         
         # Per-authority voting details - pass observed_bandwidth, use_bits, relay_uptime
@@ -425,9 +439,8 @@ def format_relay_consensus_evaluation(evaluation: dict, flag_thresholds: dict = 
         # Bandwidth summary - pass use_bits
         'bandwidth_summary': _format_bandwidth_summary(evaluation, use_bits),
         
-        # Issues and advice
+        # Issues (advice removed - was computed but never consumed by templates)
         'issues': _identify_issues(evaluation, current_flags, observed_bandwidth, version, recommended_version),
-        'advice': _generate_advice(evaluation),
     }
     
     # Add pre-computed flag requirements table (Phase 4 optimization)
@@ -592,6 +605,19 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
     hsdir_tk_consensus = HSDIR_TK_DEFAULT  # what majority requires (dir-spec default)
     hsdir_tk_strict_auths = [name for name, val in hsdir_tk_values if val > HSDIR_TK_DEFAULT * 2]  # significantly stricter
     
+    # Count per-authority HSDir metric evaluations for Summary table
+    # (avoids conflating overall HSDir flag assignment count with per-metric counts)
+    hsdir_wfu_meets_count = sum(1 for v in all_wfu_values if v is not None and v >= hsdir_wfu_threshold)
+    hsdir_tk_meets_count = 0
+    for vote in authority_votes:
+        if vote.get('voted'):
+            auth_name = vote.get('authority', '')
+            auth_thresh = flag_thresholds.get(auth_name, {}) if flag_thresholds else {}
+            auth_hsdir_tk = auth_thresh.get('hsdir-tk', HSDIR_TK_DEFAULT)
+            tk_val = vote.get('tk')
+            if tk_val is not None and tk_val >= auth_hsdir_tk:
+                hsdir_tk_meets_count += 1
+    
     # Calculate Fast speed statistics
     # Most authorities use ~102 KB/s, moria1 uses ~1 MB/s
     fast_speed_min = min(fast_speed_values) if fast_speed_values else FAST_BW_GUARANTEE
@@ -680,164 +706,86 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
     _badexit_count = flag_eligibility.get('badexit', {}).get('assigned_count', 0)
     
     return {
-        # WFU values (DA-measured, with majority/min/median/max stats)
-        'wfu': relay_wfu,
-        'wfu_display': _format_wfu_display(relay_wfu),
-        'wfu_meets': relay_wfu and relay_wfu >= guard_wfu_threshold,
-        'guard_wfu_threshold': guard_wfu_threshold,
-        # WFU stats for display (full stats dict passed to formatter)
+        # Stats dicts passed to eligibility table formatter
         'wfu_stats': wfu_stats,
-        
-        # Time Known values (DA-measured, with majority/min/median/max stats)
-        'tk': relay_tk,
-        'tk_display': _format_days(relay_tk, suffix=' days'),
-        'tk_meets': relay_tk and relay_tk >= guard_tk_threshold,
-        'guard_tk_threshold': guard_tk_threshold,
-        'tk_days_needed': (guard_tk_threshold - (relay_tk or 0)) / SECONDS_PER_DAY if relay_tk and relay_tk < guard_tk_threshold else 0,
-        # TK stats for display (full stats dict passed to formatter)
         'tk_stats': tk_stats,
+        'mtbf_stats': mtbf_stats,
         
-        # Guard BW values - use observed_bandwidth for eligibility (actual bandwidth, not scaled)
-        # Note: relay_bw is the scaled consensus value, guard_bw_value is observed_bandwidth
-        'measured_bw': relay_bw,  # Scaled consensus value (for reference)
-        'measured_bw_display': _format_bandwidth_value(relay_bw, use_bits),  # Scaled consensus value
-        'observed_bw': guard_bw_value,  # Actual observed bandwidth (for Guard eligibility)
-        'observed_bw_display': _format_bandwidth_value(guard_bw_value, use_bits),  # Actual bandwidth
-        'guard_bw_guarantee': GUARD_BW_GUARANTEE,
+        # Guard WFU/TK eligibility
+        'wfu_meets': relay_wfu and relay_wfu >= guard_wfu_threshold,
+        'tk_meets': relay_tk and relay_tk >= guard_tk_threshold,
+        'tk_days_needed': (guard_tk_threshold - (relay_tk or 0)) / SECONDS_PER_DAY if relay_tk and relay_tk < guard_tk_threshold else 0,
+        
+        # Guard BW eligibility (uses observed_bandwidth, not scaled consensus value)
+        'observed_bw_display': _format_bandwidth_value(guard_bw_value, use_bits),
         'guard_bw_guarantee_display': _format_bandwidth_value(GUARD_BW_GUARANTEE, use_bits),
         'guard_bw_range': guard_bw_range,
         'guard_bw_meets_guarantee': guard_bw_meets_guarantee,
-        'guard_bw_meets_all': guard_bw_meets_all,
         'guard_bw_meets_some': guard_bw_meets_some,
         'guard_bw_meets_count': guard_bw_meets_count,
         
-        # Guard prerequisite flag counts (per Tor dir-spec: Guard requires Fast, Stable, V2Dir)
+        # Guard prerequisite flag counts
         'guard_prereq_fast_count': guard_prereq_fast_count,
         'guard_prereq_stable_count': guard_prereq_stable_count,
         'guard_prereq_v2dir_count': guard_prereq_v2dir_count,
-        'total_authorities': total_authorities,
-        'majority_required': majority_required,
         
-        # Stable values
-        'stable_range': stable_range,
-        'stable_meets_all': stable_meets_all,
-        'stable_meets_count': stable_meets_count,
-        'stable_mtbf_range': stable_mtbf_range,
-        'stable_mtbf_meets_all': stable_meets_all,  # Same count for simplicity
+        # Stable MTBF
+        'stable_mtbf_meets_all': stable_meets_all,
         'stable_mtbf_meets_count': stable_meets_count,
-        # MTBF stats for display (full stats dict passed to formatter)
-        'mtbf': relay_mtbf,
-        'mtbf_display': _format_days(relay_mtbf, decimals=0, suffix=' days'),
-        'mtbf_stats': mtbf_stats,
-        
-        # Fast values - use observed_bandwidth like Guard
-        'fast_speed': guard_bw_value,  # Use observed_bandwidth
-        'fast_speed_display': _format_bandwidth_value(guard_bw_value, use_bits),
-        'fast_minimum': FAST_BW_MINIMUM,
-        'fast_minimum_display': _format_bandwidth_value(FAST_BW_MINIMUM, use_bits),
-        'fast_range': fast_range,
-        'fast_meets_minimum': fast_meets_minimum,
-        'fast_meets_all': fast_meets_all,
-        'fast_meets_count': fast_meets_count,
-        
-        # HSDir values
-        'hsdir_wfu_threshold': hsdir_wfu_threshold,
-        'hsdir_tk_threshold': hsdir_tk_threshold,
-        'hsdir_wfu_meets': relay_wfu and relay_wfu >= hsdir_wfu_threshold,
-        'hsdir_tk_meets': relay_tk and relay_tk >= hsdir_tk_threshold,
-        'hsdir_tk_days_needed': (hsdir_tk_threshold - (relay_tk or 0)) / SECONDS_PER_DAY if relay_tk and relay_tk < hsdir_tk_threshold else 0,
-        
-        # HSDir prerequisite flag counts (per Tor dir-spec: HSDir requires Stable and Fast)
-        'hsdir_prereq_stable_count': hsdir_prereq_stable_count,
-        'hsdir_prereq_fast_count': hsdir_prereq_fast_count,
-        
-        # HSDir TK threshold statistics (showing dir-spec vs actual)
-        # dir-spec default: 25 hours; moria1 uses ~10 days; others use default
-        'hsdir_tk_min': hsdir_tk_min,  # dir-spec default (25 hours)
-        'hsdir_tk_max': hsdir_tk_max,  # strictest authority (moria1's ~10 days)
-        'hsdir_tk_consensus': hsdir_tk_consensus,  # what majority requires
-        'hsdir_tk_min_display': _format_days(hsdir_tk_min),
-        'hsdir_tk_max_display': _format_days(hsdir_tk_max),
-        'hsdir_tk_consensus_display': _format_days(hsdir_tk_consensus),
-        'hsdir_tk_strict_auths': hsdir_tk_strict_auths,  # authorities with stricter requirements
-        'hsdir_tk_default_count': hsdir_tk_default_count,  # count using dir-spec default
-        
-        # Fast speed threshold statistics
-        # Most authorities use ~102 KB/s, moria1 uses ~1 MB/s
-        'fast_speed_min': fast_speed_min,
-        'fast_speed_max': fast_speed_max,
-        'fast_speed_typical': fast_speed_typical,
-        'fast_speed_min_display': _format_bandwidth_value(fast_speed_min, use_bits),
-        'fast_speed_max_display': _format_bandwidth_value(fast_speed_max, use_bits),
-        'fast_speed_typical_display': _format_bandwidth_value(fast_speed_typical, use_bits),
-        'fast_speed_strict_auths': fast_speed_strict_auths,  # authorities with stricter requirements
-        
-        # Stable MTBF threshold statistics
-        # Most authorities have similar thresholds, outliers shown separately
-        'stable_mtbf_min': stable_mtbf_min,
-        'stable_mtbf_max': stable_mtbf_max,
-        'stable_mtbf_typical': stable_mtbf_typical,
         'stable_mtbf_min_display': _format_days(stable_mtbf_min),
         'stable_mtbf_max_display': _format_days(stable_mtbf_max),
         'stable_mtbf_typical_display': _format_days(stable_mtbf_typical),
-        'stable_mtbf_strict_auths': stable_mtbf_strict_auths,  # authorities with stricter requirements (outliers)
+        'stable_mtbf_strict_auths': stable_mtbf_strict_auths,
         
-        # Stable Uptime values (relay uptime from Onionoo vs per-authority threshold from CollecTor)
-        # Note: relay_uptime is the SAME for all authorities (relay's self-reported uptime)
-        # Only the threshold varies per authority
-        'stable_uptime': relay_uptime,  # From Onionoo (relay's descriptor via last_restarted)
+        # Stable Uptime (relay_uptime is same for all authorities, thresholds vary)
+        'stable_uptime': relay_uptime,
         'stable_uptime_display': _format_days(relay_uptime) if relay_uptime else 'N/A',
-        'stable_uptime_min': stable_uptime_min,
-        'stable_uptime_max': stable_uptime_max,
-        'stable_uptime_typical': stable_uptime_typical,
+        'stable_uptime_meets_count': stable_uptime_meets_count,
+        'stable_uptime_meets_all': stable_uptime_meets_all,
         'stable_uptime_min_display': _format_days(stable_uptime_min),
         'stable_uptime_max_display': _format_days(stable_uptime_max),
         'stable_uptime_typical_display': _format_days(stable_uptime_typical),
         'stable_uptime_strict_auths': stable_uptime_strict_auths,
-        'stable_uptime_meets_count': stable_uptime_meets_count,
-        'stable_uptime_meets_all': stable_uptime_meets_all,
         
-        # Reachability values
-        'ipv4_reachable_count': ipv4_reachable_count,
-        'ipv6_reachable_count': ipv6_reachable_count,
-        'ipv6_tested_count': ipv6_tested_count,
-        'total_authorities': total_authorities,
-        'majority_required': majority_required,
+        # Fast flag
+        'fast_speed_display': _format_bandwidth_value(guard_bw_value, use_bits),
+        'fast_minimum_display': _format_bandwidth_value(FAST_BW_MINIMUM, use_bits),
+        'fast_meets_minimum': fast_meets_minimum,
+        'fast_meets_all': fast_meets_all,
+        'fast_meets_count': fast_meets_count,
+        'fast_speed_max_display': _format_bandwidth_value(fast_speed_max, use_bits),
+        'fast_speed_strict_auths': fast_speed_strict_auths,
         
-        # Exit policy values (from Onionoo exit_policy_summary)
-        # Per Tor dir-spec: Exit requires allowing exits to ≥1 /8 on ports 80 AND 443
+        # HSDir eligibility
+        'hsdir_wfu_threshold': hsdir_wfu_threshold,
+        'hsdir_wfu_meets': relay_wfu and relay_wfu >= hsdir_wfu_threshold,
+        'hsdir_tk_meets': relay_tk and relay_tk >= hsdir_tk_threshold,
+        'hsdir_prereq_stable_count': hsdir_prereq_stable_count,
+        'hsdir_prereq_fast_count': hsdir_prereq_fast_count,
+        'hsdir_tk_max_display': _format_days(hsdir_tk_max),
+        'hsdir_tk_consensus_display': _format_days(hsdir_tk_consensus),
+        'hsdir_tk_strict_auths': hsdir_tk_strict_auths,
+        
+        # Running flag (reachability)
+        'running_ipv4_count': ipv4_reachable_count,
+        'running_ipv6_count': ipv6_reachable_count,
+        'running_ipv6_tested': ipv6_tested_count,
+        'running_has_ipv6': ipv6_tested_count > 0,
+        
+        # Exit policy
         'exit_allows_80': exit_analysis['allows_80'],
         'exit_allows_443': exit_analysis['allows_443'],
         'exit_eligible': exit_analysis['eligible'],
         'exit_policy_display': exit_analysis['display'],
         'exit_assigned_count': flag_eligibility.get('exit', {}).get('assigned_count', 0),
         
-        # MiddleOnly detection (from CollecTor vote flags)
-        # MiddleOnly is a negative flag — restricts relay to middle position only.
-        # Conditional display: only shown when relay is flagged.
+        # MiddleOnly / BadExit detection
         'middleonly_flagged': _middleonly_count > 0,
         'middleonly_count': _middleonly_count,
-        
-        # BadExit detection (from CollecTor vote flags)
-        # BadExit marks misbehaving exit nodes; also added when MiddleOnly is assigned.
         'badexit_flagged': _badexit_count > 0,
         'badexit_count': _badexit_count,
         
-        # Running flag values (from reachability data, already computed above)
-        # Running = authority could reach relay's ORPort within last 45 minutes
-        'running_ipv4_count': ipv4_reachable_count,
-        'running_ipv6_count': ipv6_reachable_count,
-        'running_ipv6_tested': ipv6_tested_count,
-        'running_has_ipv6': ipv6_tested_count > 0,
-        
-        # Valid flag values (version check)
-        # Valid = not blacklisted + valid descriptor + non-broken Tor version
-        'valid_version': version,
-        'valid_recommended': recommended_version,
-        'valid_version_display': _format_valid_version_display(version, recommended_version),
-        
-        # V2Dir flag values (DirPort or tunnelled-dir-server)
-        # V2Dir = has DirPort OR tunnelled-dir-server; required for Guard
+        # V2Dir flag
         'v2dir_has_flag': 'V2Dir' in current_flags,
         'v2dir_dir_address': dir_address or '',
         'v2dir_has_dirport': bool(dir_address),
@@ -867,10 +815,10 @@ FLAG_TOOLTIPS = {
 METRIC_TOOLTIPS = {
     'wfu_guard': "Weighted Fractional Uptime: Measures relay reliability with recent uptime weighted more heavily. Required >=98% for Guard flag. Source: Dir. Auth. vote files.",
     'tk_guard': "How long Directory Authorities have tracked this relay. Required >=8 days for Guard flag to prevent Sybil attacks. Source: Dir. Auth. vote files.",
-    'bw_guard': "Relay's observed bandwidth capacity. Required >=2 MB/s (guaranteed) OR in top 25% of network for Guard flag. Source: Relay descriptor.",
+    'bw_guard': "Relay's observed bandwidth capacity. Required >=2 MB/s (dir-spec minimum) OR in top 25% of network for Guard flag. Source: Relay descriptor.",
     'mtbf_stable': "Mean Time Between Failures: Average uptime between restarts/crashes. Higher = more reliable for long-lived connections. Source: Dir. Auth. vote files.",
     'uptime_stable': "Current session uptime since last restart. Compared against each authority's stable-uptime threshold. Source: Relay descriptor.",
-    'speed_fast': "Relay's observed bandwidth. Required >=100 KB/s (guaranteed) OR in top 7/8 of network for Fast flag. Source: Relay descriptor.",
+    'speed_fast': "Relay's observed bandwidth. Required >=100 KB/s (dir-spec minimum) OR in top 7/8 of network for Fast flag. Source: Relay descriptor.",
     'wfu_hsdir': "Weighted Fractional Uptime: Required >=98% for HSDir flag to ensure reliable hidden service directory. Source: Dir. Auth. vote files.",
     'tk_hsdir': "How long authorities have tracked this relay. Most require >=25 hours; some (moria1) require ~10 days. Source: Dir. Auth. vote files.",
     'policy_exit': "Exit policy must allow traffic to at least one /8 address space on both port 80 AND port 443 per Tor dir-spec Section 3.4.2. Source: Onionoo exit_policy_summary.",
@@ -992,7 +940,6 @@ def _format_eligible_flags_display(diag: dict) -> dict:
     
     return {
         'flags': flags,
-        'vote_flags': [],  # Empty for backwards compatibility
         'eligible_count': eligible_count,
         'flag_order': FLAG_ORDER,
     }
@@ -1128,18 +1075,23 @@ def _make_row(flag: str, flag_tooltip: str, flag_color: str, metric: str, metric
 
 def _make_prereq_row(parent_flag: str, parent_tooltip: str, parent_color: str,
                      prereq_flag: str, count: int, total: int, majority: int,
-                     rowspan: int = 0) -> dict:
-    """Build a prerequisite row dict. DRY helper for Guard/HSDir prereq rows."""
+                     rowspan: int = 0, threshold_override: str = None) -> dict:
+    """Build a prerequisite row dict. DRY helper for Guard/HSDir prereq rows.
+    
+    If threshold_override is provided, shows the actual flag's threshold
+    (e.g. Fast's bandwidth threshold) instead of a generic authority count.
+    """
     status = _majority_status(count, majority)
+    threshold = threshold_override or f'≥{majority}/{total} DA assigned flag'
     return _make_row(
         flag=parent_flag,
         flag_tooltip=parent_tooltip,
         flag_color=parent_color,
         metric=f'Prereq: {prereq_flag}',
-        metric_tooltip=f'{parent_flag} requires the {prereq_flag} flag. Relay must have {prereq_flag} from majority of authorities.',
-        value=f'{count}/{total} authorities assigned {prereq_flag} flag',
+        metric_tooltip=f'{parent_flag} requires the {prereq_flag} flag.',
+        value=f'{count}/{total} DA assigned {prereq_flag}',
         value_source='da',
-        threshold=_vote_threshold(f'≥{majority}/{total} authorities', majority, total),
+        threshold=threshold,
         status=status,
         status_text=_get_status_text(status, da_count=count, da_total=total),
         rowspan=rowspan,
@@ -1195,7 +1147,7 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
         'IPv4 Reachability', METRIC_TOOLTIPS.get('running_ipv4', ''),
         f'{running_ipv4}/{total_authorities} authorities reached relay',
         'da',
-        _vote_threshold(f'≥{majority_required}/{total_authorities} (majority)', majority_required, total_authorities),
+        f'≥{majority_required}/{total_authorities} DA ORPort reachable',
         ipv4_status,
         _get_status_text(ipv4_status, da_count=running_ipv4, da_total=total_authorities),
         rowspan=running_rowspan,
@@ -1252,12 +1204,13 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
     v2dir_color = STATUS_COLORS[v2dir_status]
     v2dir_da_count = rv.get('guard_prereq_v2dir_count', 0)
     
+    v2dir_threshold = _vote_threshold('Tunnelled directory via ORPort or DirPort', majority_required, total_authorities)
     rows.append(_make_row(
         'V2Dir', v2dir_tooltip, v2dir_color,
         'DirPort Available', METRIC_TOOLTIPS.get('v2dir_capability', ''),
         _format_relay_value_html(v2dir_display),
         'relay',
-        _vote_threshold('Tunnelled directory via ORPort or DirPort', majority_required, total_authorities),
+        v2dir_threshold,
         v2dir_status,
         _get_status_text(v2dir_status, da_count=v2dir_da_count, da_total=total_authorities),
         rowspan=1,
@@ -1267,7 +1220,7 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
     fast_color = get_flag_color('fast')
     fast_da_count = rv.get('fast_meets_count', 0)
     fast_status = 'meets' if rv.get('fast_meets_minimum') or rv.get('fast_meets_all') else ('partial' if fast_da_count > 0 else 'below')
-    fast_threshold = (_vote_threshold(f"≥{rv.get('fast_minimum_display', '100 KB/s')} (guarantee) OR top 7/8", majority_required, total_authorities)
+    fast_threshold = (_vote_threshold(f"≥{rv.get('fast_minimum_display', '100 KB/s')} (Tor spec minimum) OR top 7/8", majority_required, total_authorities)
         + _format_stricter_threshold(rv.get('fast_speed_strict_auths', []), rv.get('fast_speed_max_display', '')))
     rows.append(_make_row('Fast', FLAG_TOOLTIPS['fast'], fast_color, 'Speed', METRIC_TOOLTIPS['speed_fast'],
                           _format_relay_value_html(rv.get('fast_speed_display', 'N/A')), 'relay',
@@ -1311,11 +1264,13 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
     hsdir_prereq_stable = rv.get('hsdir_prereq_stable_count', 0)
     hsdir_prereq_fast = rv.get('hsdir_prereq_fast_count', 0)
     
-    # Row 1-2: Prerequisites (using DRY helper)
+    # Row 1-2: Prerequisites - show actual flag thresholds
     rows.append(_make_prereq_row('HSDir', hsdir_tooltip, hsdir_color, 'Stable', 
-                                  hsdir_prereq_stable, total_authorities, majority_required, rowspan=4))
+                                  hsdir_prereq_stable, total_authorities, majority_required, rowspan=4,
+                                  threshold_override=mtbf_threshold))
     rows.append(_make_prereq_row('HSDir', hsdir_tooltip, hsdir_color, 'Fast',
-                                  hsdir_prereq_fast, total_authorities, majority_required))
+                                  hsdir_prereq_fast, total_authorities, majority_required,
+                                  threshold_override=fast_threshold))
     
     # Row 3: WFU (using DRY helper)
     hsdir_wfu_status = 'meets' if rv.get('hsdir_wfu_meets') else 'below'
@@ -1343,13 +1298,16 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
     guard_prereq_stable = rv.get('guard_prereq_stable_count', 0)
     guard_prereq_v2dir = rv.get('guard_prereq_v2dir_count', 0)
     
-    # Row 1-3: Prerequisites (using DRY helper)
+    # Row 1-3: Prerequisites - show actual flag thresholds
     rows.append(_make_prereq_row('Guard', guard_tooltip, guard_color, 'Fast',
-                                  guard_prereq_fast, total_authorities, majority_required, rowspan=6))
+                                  guard_prereq_fast, total_authorities, majority_required, rowspan=6,
+                                  threshold_override=fast_threshold))
     rows.append(_make_prereq_row('Guard', guard_tooltip, guard_color, 'Stable',
-                                  guard_prereq_stable, total_authorities, majority_required))
+                                  guard_prereq_stable, total_authorities, majority_required,
+                                  threshold_override=mtbf_threshold))
     rows.append(_make_prereq_row('Guard', guard_tooltip, guard_color, 'V2Dir',
-                                  guard_prereq_v2dir, total_authorities, majority_required))
+                                  guard_prereq_v2dir, total_authorities, majority_required,
+                                  threshold_override=v2dir_threshold))
     
     # Row 4: WFU (using DRY helper)
     wfu_status = 'meets' if rv.get('wfu_meets') else 'below'
@@ -1380,7 +1338,7 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
     else:
         bw_status, bw_extra = 'below', ''
     bw_threshold = _vote_threshold(
-        f"≥{rv.get('guard_bw_guarantee_display', '2 MB/s')} OR ≥{rv.get('guard_bw_range', 'top 25%')}",
+        f"≥{rv.get('guard_bw_guarantee_display', '2 MB/s')} (Tor spec minimum) OR ≥{rv.get('guard_bw_range', 'top 25%')}",
         majority_required, total_authorities)
     rows.append(_make_row('Guard', guard_tooltip, guard_color, 'Bandwidth', METRIC_TOOLTIPS['bw_guard'],
                           _format_relay_value_html(rv.get('observed_bw_display', 'N/A')), 'relay',
@@ -1498,20 +1456,26 @@ def _format_authority_table_enhanced(consensus_data: dict, flag_thresholds: dict
     unanimous_flags = consensus['unanimous_flags']
     partial_flags = consensus['partial_flags']
     
+    # Hoist constant computations out of per-authority loop
+    # These values are identical for all 9 authorities
+    _obs_bw_display = _format_bandwidth_value(observed_bandwidth, use_bits)
+    _guard_bw_guarantee_display = _format_bandwidth_value(GUARD_BW_GUARANTEE, use_bits)
+    _guard_bw_meets_guarantee = observed_bandwidth >= GUARD_BW_GUARANTEE
+    _stable_uptime_display = _format_days(relay_uptime) if relay_uptime else 'N/A'
+    
     rows = []
     for vote in authority_votes:
         auth_name = vote.get('authority', 'Unknown')
         thresholds = flag_thresholds.get(auth_name, {}) if flag_thresholds else {}
         
-        # Get threshold values for this authority using helper function
+        # Per-authority threshold values
         guard_wfu_threshold = _parse_wfu_threshold(thresholds.get('guard-wfu')) or DEFAULT_WFU_THRESHOLD
         guard_tk_threshold = thresholds.get('guard-tk', GUARD_TK_DEFAULT)
-        guard_bw_top25_threshold = thresholds.get('guard-bw-inc-exits', 0)  # Top 25% cutoff
+        guard_bw_top25_threshold = thresholds.get('guard-bw-inc-exits', 0)
         stable_threshold = thresholds.get('stable-uptime', 0)
         stable_mtbf_threshold = thresholds.get('stable-mtbf', 0)
         fast_threshold = thresholds.get('fast-speed', 0)
         hsdir_tk_threshold = thresholds.get('hsdir-tk', HSDIR_TK_DEFAULT)
-        hsdir_wfu_threshold = _parse_wfu_threshold(thresholds.get('hsdir-wfu')) or DEFAULT_WFU_THRESHOLD
         
         # Relay's measured values from this authority
         relay_wfu = vote.get('wfu')
@@ -1519,112 +1483,77 @@ def _format_authority_table_enhanced(consensus_data: dict, flag_thresholds: dict
         relay_bw = vote.get('measured') or vote.get('bandwidth')
         relay_mtbf = vote.get('mtbf')
         
+        # Adaptive HSDir TK displays (increased precision when close)
+        _hsdir_tk_val_disp, _hsdir_tk_thresh_disp = _format_days_adaptive(relay_tk, hsdir_tk_threshold)
+        
         # Format flags with consensus highlighting info, in canonical order
         authority_flags = _sort_flags(vote.get('flags', []))
-        flags_with_consensus = []
-        for flag in authority_flags:
-            flags_with_consensus.append({
-                'name': flag,
-                'unanimous': flag in unanimous_flags,
-                'partial': flag in partial_flags,
-            })
+        flags_with_consensus = [
+            {'name': flag, 'unanimous': flag in unanimous_flags, 'partial': flag in partial_flags}
+            for flag in authority_flags
+        ]
         
-        # Get country code for this authority
         country_code = AUTHORITY_COUNTRIES.get(auth_name.lower(), '')
-        authority_display = f"{auth_name} ({country_code})" if country_code else auth_name
         
-        row = {
+        rows.append({
             'authority': auth_name,
-            'authority_display': authority_display,
-            'country_code': country_code,
+            'authority_display': f"{auth_name} ({country_code})" if country_code else auth_name,
             'fingerprint': vote.get('fingerprint', ''),
             'voted': vote.get('voted', False),
-            'voted_display': 'Yes' if vote.get('voted') else 'No',
-            'voted_class': 'success' if vote.get('voted') else 'danger',
             
-            # Flags with consensus info
             'flags': authority_flags,
             'flags_with_consensus': flags_with_consensus,
             'flags_display': ', '.join(authority_flags) or 'None',
             
-            # BW authority indicator
             'is_bw_authority': vote.get('is_bw_authority', False),
             
-            # Measured BW value and display
             'measured': relay_bw,
             'measured_display': _format_bandwidth_value(relay_bw, use_bits),
             
-            # WFU: measured value | threshold
             'wfu': relay_wfu,
             'wfu_display': _format_wfu_display(relay_wfu),
             'wfu_threshold_display': _format_wfu_display(guard_wfu_threshold, decimals=0),
             'wfu_meets': relay_wfu and relay_wfu >= guard_wfu_threshold,
-            'guard_wfu_threshold': guard_wfu_threshold,
             
-            # TK: measured value | threshold
             'tk': relay_tk,
             'tk_display': _format_days(relay_tk),
             'tk_threshold_display': _format_days(guard_tk_threshold, decimals=0),
             'tk_meets': relay_tk and relay_tk >= guard_tk_threshold,
-            'guard_tk_threshold': guard_tk_threshold,
             
-            # Guard BW: uses observed_bandwidth (from descriptor), NOT scaled consensus value
-            # Per Tor dir-spec: "bandwidth >= AuthDirGuardBWGuarantee (2 MB) OR in top 25%"
-            'guard_bw_guarantee': GUARD_BW_GUARANTEE,
-            'guard_bw_top25_threshold': guard_bw_top25_threshold,
-            'guard_bw_value': observed_bandwidth,
-            'guard_bw_value_display': _format_bandwidth_value(observed_bandwidth, use_bits),
-            'guard_bw_guarantee_display': _format_bandwidth_value(GUARD_BW_GUARANTEE, use_bits),
+            # Guard BW: hoisted constant displays + per-authority top-25% threshold
+            'guard_bw_value_display': _obs_bw_display,
+            'guard_bw_guarantee_display': _guard_bw_guarantee_display,
             'guard_bw_top25_display': _format_bandwidth_value(guard_bw_top25_threshold, use_bits),
-            'guard_bw_meets_guarantee': observed_bandwidth >= GUARD_BW_GUARANTEE,
-            'guard_bw_in_top25': observed_bandwidth >= guard_bw_top25_threshold if guard_bw_top25_threshold else False,
-            'guard_bw_meets': observed_bandwidth >= GUARD_BW_GUARANTEE or (guard_bw_top25_threshold and observed_bandwidth >= guard_bw_top25_threshold),
+            'guard_bw_meets_guarantee': _guard_bw_meets_guarantee,
+            'guard_bw_meets': _guard_bw_meets_guarantee or (guard_bw_top25_threshold and observed_bandwidth >= guard_bw_top25_threshold),
             
-            # Stable MTBF: measured MTBF | threshold  
-            'stable_mtbf': relay_mtbf,
             'stable_mtbf_display': _format_days(relay_mtbf),
             'stable_threshold': stable_mtbf_threshold,
             'stable_threshold_display': _format_days(stable_mtbf_threshold),
             'stable_meets': relay_mtbf and relay_mtbf >= stable_mtbf_threshold if stable_mtbf_threshold else True,
             
-            # Stable Uptime: relay uptime (from Onionoo) | threshold (from CollecTor)
-            # Note: relay_uptime is the SAME for all authorities (relay's self-reported uptime from descriptor)
-            # Only the stable-uptime threshold varies per authority
-            'stable_uptime': relay_uptime,  # From Onionoo (relay descriptor via last_restarted)
-            'stable_uptime_display': _format_days(relay_uptime) if relay_uptime else 'N/A',
-            'stable_uptime_threshold': stable_threshold,  # From CollecTor (per-authority)
+            # Stable Uptime: relay uptime is constant (hoisted), only threshold varies
+            'stable_uptime': relay_uptime,
+            'stable_uptime_display': _stable_uptime_display,
+            'stable_uptime_threshold': stable_threshold,
             'stable_uptime_threshold_display': _format_days(stable_threshold) if stable_threshold else 'N/A',
             'stable_uptime_meets': relay_uptime and relay_uptime >= stable_threshold if stable_threshold and relay_uptime else None,
             
-            # Fast: uses observed_bandwidth (from descriptor), NOT scaled consensus value
-            # Fast requires: bandwidth in top 7/8ths (fast_threshold) OR >= 100 KB/s
-            'fast_speed': observed_bandwidth,
-            'fast_speed_display': _format_bandwidth_value(observed_bandwidth, use_bits),
-            'fast_threshold': fast_threshold,
+            'fast_speed_display': _obs_bw_display,
             'fast_threshold_display': _format_bandwidth_value(fast_threshold, use_bits),
             'fast_meets': observed_bandwidth >= fast_threshold if fast_threshold else (observed_bandwidth >= FAST_BW_MINIMUM),
             
-            # HSDir TK: measured | threshold
+            'hsdir_tk_value_display': _hsdir_tk_val_disp,
+            'hsdir_tk_threshold_display': _hsdir_tk_thresh_disp,
             'hsdir_tk_threshold': hsdir_tk_threshold,
-            'hsdir_tk_value_display': _format_days(relay_tk),
-            'hsdir_tk_threshold_display': _format_days(hsdir_tk_threshold),
             'hsdir_tk_meets': relay_tk and relay_tk >= hsdir_tk_threshold,
-            'hsdir_wfu_threshold': hsdir_wfu_threshold,
             
-            # Reachability
             'ipv4_reachable': vote.get('ipv4_reachable', False),
-            'ipv4_display': 'Yes' if vote.get('ipv4_reachable') else 'No',
-            'ipv4_class': 'success' if vote.get('ipv4_reachable') else 'danger',
-            
             'ipv6_reachable': vote.get('ipv6_reachable'),
-            'ipv6_display': _format_ipv6_status(vote.get('ipv6_reachable'), vote.get('ipv6_address')),
-            'ipv6_class': _get_ipv6_class(vote.get('ipv6_reachable')),
             
-            # Descriptor freshness (StaleDesc flag detection)
             'descriptor_published': vote.get('descriptor_published', 'N/A'),
             'has_staledesc': 'StaleDesc' in authority_flags,
-        }
-        rows.append(row)
+        })
     
     return rows
 
@@ -1699,26 +1628,17 @@ def format_authority_consensus_evaluation(
 
 
 def _format_consensus_status(consensus_data: dict) -> dict:
-    """Format consensus status display."""
+    """Format consensus status display. Retained for test compatibility."""
     in_consensus = consensus_data.get('in_consensus', False)
     vote_count = consensus_data.get('vote_count', 0)
     total = consensus_data.get('total_authorities', get_voting_authority_count())
     majority = consensus_data.get('majority_required', 5)
-    
-    if in_consensus:
-        return {
-            'status': 'IN CONSENSUS',
-            'status_class': 'success',
-            'display': f"IN CONSENSUS ({vote_count}/{total} authorities)",
-            'tooltip': f"Relay is in consensus. {vote_count} out of {total} authorities voted for this relay (requires {majority}).",
-        }
-    else:
-        return {
-            'status': 'NOT IN CONSENSUS',
-            'status_class': 'danger',
-            'display': f"NOT IN CONSENSUS ({vote_count}/{total} authorities)",
-            'tooltip': f"Relay is NOT in consensus. Only {vote_count} out of {total} authorities voted for this relay (requires {majority}).",
-        }
+    tpl = ('IN CONSENSUS', 'success', 'is') if in_consensus else ('NOT IN CONSENSUS', 'danger', 'is NOT')
+    return {
+        'status': tpl[0], 'status_class': tpl[1],
+        'display': f"{tpl[0]} ({vote_count}/{total} authorities)",
+        'tooltip': f"Relay {tpl[2]} in consensus. {vote_count} out of {total} authorities voted for this relay (requires {majority}).",
+    }
 
 
 def _format_flag_summary(consensus_data: dict, observed_bandwidth: int = 0) -> dict:
