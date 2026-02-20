@@ -25,7 +25,7 @@ from .bandwidth_formatter import (
     format_bandwidth_filter,
 )
 from .intelligence_engine import IntelligenceEngine
-from .time_utils import format_time_ago
+from .time_utils import format_time_ago, format_timestamp, format_timestamp_ago
 
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
 
@@ -54,7 +54,6 @@ ENV.filters['format_time_ago'] = format_time_ago
 ENV.filters['split'] = lambda s, sep='/': s.split(sep) if s else []
 
 # Overload section filters for millisecond timestamps (Onionoo overload fields)
-from .time_utils import format_timestamp, format_timestamp_ago
 ENV.filters['format_timestamp'] = format_timestamp
 ENV.filters['format_timestamp_ago'] = format_timestamp_ago
 
