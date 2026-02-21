@@ -319,10 +319,31 @@ def generate_issues_from_consensus(
             })
     
     # =========================================================================
-    # HSDIR FLAG ISSUES (4 issue types) - all warning severity
+    # HSDIR FLAG ISSUES (5 issue types) - all warning severity
+    # Per Tor source (voteflags.c dirserv_thinks_router_is_hs_dir):
+    #   HSDir requires: wants_to_be_hs_dir AND supports_tunnelled_dir_requests
+    #   AND is_stable AND is_fast AND uptime >= threshold AND is_active
+    # supports_tunnelled_dir_requests maps to the V2Dir flag.
     # =========================================================================
     has_hsdir = 'HSDir' in current_flags
+    has_v2dir = 'V2Dir' in current_flags
     if not has_hsdir:
+        # V2Dir / tunnelled-dir-server check — the #1 hidden root cause
+        # Tor source requires supports_tunnelled_dir_requests for HSDir.
+        # Without it, HSDir is never assigned even if all other metrics pass.
+        if not has_v2dir:
+            issues.append({
+                'severity': 'warning',
+                'category': 'hsdir',
+                'title': 'HSDir: requires V2Dir (tunnelled-dir-server)',
+                'description': 'HSDir requires the relay to support tunnelled directory requests (V2Dir flag). '
+                              'This relay is missing V2Dir — the descriptor likely does not include '
+                              '<code>tunnelled-dir-server</code>, usually because <code>DirCache 0</code> is set in torrc.',
+                'suggestion': 'Remove <code>DirCache 0</code> from torrc (DirCache is enabled by default in Tor ≥0.3.3). '
+                             'Restart Tor and verify the descriptor includes <code>tunnelled-dir-server</code>. '
+                             'You can check with: <code>grep tunnelled-dir-server /var/lib/tor/cached-descriptors</code>',
+            })
+        
         # Prerequisite checks (most common reason for missing HSDir)
         if not has_stable:
             issues.append({
