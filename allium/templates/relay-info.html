@@ -276,7 +276,7 @@ Country: unknown
             <dt title="First appearance in network consensus."><a href="#uptime" class="anchor-link">First Seen</a></dt>
             <dd>
                 {% if relay['first_seen'] -%}
-                    <a href="{{ page_ctx.path_prefix }}first_seen/{{ relay['first_seen'].split(' ', 1)[0]|escape }}/" title="Date relay first appeared in consensus. Newer relays have restrictions (Guard flag requires ~8 days).">{{ relay['first_seen']|format_time_ago }}</a>
+                    <a href="{{ page_ctx.path_prefix }}first_seen/{{ relay['first_seen'].split(' ', 1)[0]|escape }}/" title="Date relay first appeared in consensus. Newer relays have restrictions (Guard flag requires ~8 days).">{{ relay['first_seen_ago'] }}</a>
                 {% else -%}
                     <span style="color: #6c757d;">Unknown</span>
                 {% endif -%}
@@ -291,7 +291,7 @@ Country: unknown
                 {% set obs_unit = relay['observed_bandwidth']|determine_unit(relays.use_bits) -%}
                 {% set obs_bandwidth = relay['observed_bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
                 {% if relay['consensus_weight_fraction'] -%}
-<span title="Percentage of total network consensus weight. Determines probability of being selected by clients.">{{ "%.2f"|format(relay['consensus_weight_fraction'] * 100) }}% of Network</span>
+<span title="Percentage of total network consensus weight. Determines probability of being selected by clients.">{{ relay['consensus_weight_percentage'] }} of Network</span>
                     | <span title="Bandwidth capacity reported by the relay itself. May differ from measured bandwidth.">{{ obs_bandwidth|float|int }} {{ obs_unit }} Observed By Relay</span>
                 {% else -%}
 <span title="Bandwidth capacity reported by the relay itself.">{{ obs_bandwidth|float|int }} {{ obs_unit }} Observed By Relay</span>
@@ -689,7 +689,7 @@ Country: unknown
     <span title="Fraction of total network consensus weight. The consensus weight is a unitless integer assigned by directory authorities (median of bandwidth measurements) used to determine this relay's probability of being selected by Tor clients for circuit building.">
         Consensus Weight:
         {% if relay['consensus_weight_fraction'] %}
-            {{ "%.4f"|format(relay['consensus_weight_fraction'] * 100) }}% of network
+            {{ relay['consensus_weight_percentage_precise'] }} of network
             {{ pctile(relay.get('cw_percentile'), 'consensus weight') }}
         {% else %}
             <span style="color: #6c757d;">N/A</span>
@@ -697,11 +697,11 @@ Country: unknown
     </span>
     |
     <span title="Probability of this relay to be selected for the guard position. Calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so this probability is an approximation.">Guard: 
-        {% if relay['guard_probability'] %}{{ "%.4f"|format(relay['guard_probability'] * 100) }}% {{ pctile(relay.get('guard_percentile'), 'guard probability') }}{% else %}N/A{% endif %}</span> |
+        {% if relay['guard_probability'] %}{{ relay['guard_probability_percentage'] }} {{ pctile(relay.get('guard_percentile'), 'guard probability') }}{% else %}N/A{% endif %}</span> |
     <span title="Probability of this relay to be selected for the middle position. Calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so this probability is an approximation.">Middle: 
-        {% if relay['middle_probability'] %}{{ "%.4f"|format(relay['middle_probability'] * 100) }}% {{ pctile(relay.get('middle_percentile'), 'middle probability') }}{% else %}N/A{% endif %}</span> |
+        {% if relay['middle_probability'] %}{{ relay['middle_probability_percentage'] }} {{ pctile(relay.get('middle_percentile'), 'middle probability') }}{% else %}N/A{% endif %}</span> |
     <span title="Probability of this relay to be selected for the exit position. Calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so this probability is an approximation.">Exit: 
-        {% if relay['exit_probability'] %}{{ "%.4f"|format(relay['exit_probability'] * 100) }}% {{ pctile(relay.get('exit_percentile'), 'exit probability') }}{% else %}N/A{% endif %}</span>
+        {% if relay['exit_probability'] %}{{ relay['exit_probability_percentage'] }} {{ pctile(relay.get('exit_percentile'), 'exit probability') }}{% else %}N/A{% endif %}</span>
     
     {% if relay['fingerprint'] in relays.json.smart_context.performance_correlation.template_optimized.underutilized_fingerprints %}
     <div style="margin-top: 8px; color: #856404;">
@@ -783,7 +783,7 @@ Country: unknown
             <dt title="Date relay first appeared in network consensus. Newer relays have restrictions (Guard flag requires ~8 days).">First Seen</dt>
             <dd>
                 {% if relay['first_seen'] -%}
-                    <a href="{{ page_ctx.path_prefix }}first_seen/{{ relay['first_seen'].split(' ', 1)[0]|escape }}/">{{ relay['first_seen']|format_time_ago }}</a>
+                    <a href="{{ page_ctx.path_prefix }}first_seen/{{ relay['first_seen'].split(' ', 1)[0]|escape }}/">{{ relay['first_seen_ago'] }}</a>
                     <span class="text-small-muted">({{ relay['first_seen']|escape }})</span>
                 {% else -%}
                     <span class="status-note">Unknown</span>
@@ -793,7 +793,7 @@ Country: unknown
             <dt title="Most recent time this relay was seen in the network consensus.">Last Seen</dt>
             <dd>
                 {% if relay['last_seen'] -%}
-                    {{ relay['last_seen']|format_time_ago }}
+                    {{ relay['last_seen_ago'] }}
                     <span class="text-small-muted">({{ relay['last_seen']|escape }})</span>
                 {% else -%}
                     <span class="status-note">Unknown</span>
@@ -803,7 +803,7 @@ Country: unknown
             <dt title="UTC timestamp when this relay was last (re-)started. Missing if router descriptor containing this information cannot be found.">Last Restarted</dt>
             <dd>
                 {% if relay['last_restarted'] -%}
-                    {{ relay['last_restarted']|format_time_ago }}
+                    {{ relay['last_restarted_ago'] }}
                     <span class="text-small-muted">({{ relay['last_restarted']|escape }})</span>
                 {% else -%}
                     <span class="status-note">Unknown</span>
@@ -1185,436 +1185,6 @@ Country: unknown
 </section>
 
 <p>Last fetch was at {{ relays.timestamp }}.</p>
-<div class="row">
-<div class="col-md-6">
-<dl>
-<dt id="nickname">
-<div class="section-header">
-<a href="#nickname" class="anchor-link">Nickname</a>
-</div>
-</dt>
-<dd>
-{{ relay['nickname']|escape }}
-</dd>
-
-<dt id="fingerprint">
-<div class="section-header">
-<a href="#fingerprint" class="anchor-link">Fingerprint</a>
-</div>
-</dt>
-<dd>
-<code>{{ relay['fingerprint']|escape }}</code>
-</dd>
-
-<dt id="aroi">
-<div class="section-header">
-<a href="#aroi" class="anchor-link">AROI</a> <a href="https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/" target="_blank" title="Autonomous Relay Operator Identifier - unverified">(?)</a>
-</div>
-</dt>
-{% if has_aroi -%}
-<dd>
-<a href="{{ operator_url }}">{{ relay['aroi_domain']|escape }}</a>
-</dd>
-{% else -%}
-<dd>
-none
-</dd>
-{% endif -%}
-<dt id="contact">
-<div class="section-header">
-<a href="#contact" class="anchor-link">Contact</a>
-</div>
-</dt>
-{% if relay['contact'] -%}
-<dd style="word-wrap: break-word; word-break: break-all; max-width: 100%; overflow-wrap: break-word;">
-<a href="{{ page_ctx.path_prefix }}contact/{{ relay['contact_md5'] }}/" style="word-wrap: break-word; word-break: break-all; overflow-wrap: break-word;">{{
-relay['contact']|escape }}</a>
-</dd>
-{% else -%}
-<dd>
-<a href="{{ page_ctx.path_prefix }}contact/{{ relay['contact_md5'] }}">none</a>
-</dd>
-{% endif -%}
-<dt id="ipv4-exit-policy-summary">
-<div class="section-header">
-<a href="#ipv4-exit-policy-summary" class="anchor-link">IPv4 Exit Policy Summary</a>
-</div>
-</dt>
-<dd>
-{% if relay['exit_policy_summary'] -%}
-{%- set v4_summary = relay['exit_policy_summary'].items() -%}
-<pre class="pre-scrollable">{% for k, v in v4_summary -%}
-{{ k|escape }}: {{ '\n  ' + v|join('\n  ')|escape }}
-{% endfor -%}
-</pre>
-{% else -%}
-<pre>none</pre>
-{% endif -%}
-</dd>
-<dt id="ipv6-exit-policy-summary">
-<div class="section-header">
-<a href="#ipv6-exit-policy-summary" class="anchor-link">IPv6 Exit Policy Summary</a>
-</div>
-</dt>
-<dd>
-{% if relay['exit_policy_v6_summary'] -%}
-{%- set v6_summary = relay['exit_policy_v6_summary'].items() -%}
-<pre class="pre-scrollable">{% for k, v in v6_summary -%}
-{{ k|escape }}: {{ '\n  ' + v|join('\n  ')|escape }}
-{% endfor -%}
-</pre>
-{% else -%}
-<pre>none</pre>
-{% endif -%}
-</dd>
-<dt id="exit-policy">
-<div class="section-header">
-<a href="#exit-policy" class="anchor-link">Exit Policy</a>
-</div>
-</dt>
-<dd>
-<pre class="pre-scrollable">{% for policy in relay['exit_policy'] -%}
-{{ policy|escape }}
-{% endfor -%}
-</pre>
-</dd>
-{% if relay['effective_family']|length > 1 -%}
-<dt id="effective-family" title="Array of fingerprints of relays that are in an effective, mutual family relationship with this relay. These relays are part of this relay's family and they consider this relay to be part of their family. Always contains the relay's own fingerprint. Omitted if the descriptor containing this information cannot be found.">
-<div class="section-header">
-<a href="#effective-family" class="anchor-link">Effective Family Members: {{ relay['effective_family']|length }}</a> (<a href="{{ page_ctx.path_prefix }}family/{{ relay['fingerprint']|escape }}/">View</a>)
-</div>
-</dt>
-{% else -%}
-<dt id="effective-family" title="Array of fingerprints of relays that are in an effective, mutual family relationship with this relay. These relays are part of this relay's family and they consider this relay to be part of their family. Always contains the relay's own fingerprint. Omitted if the descriptor containing this information cannot be found.">
-<div class="section-header">
-<a href="#effective-family" class="anchor-link">Effective Family Member: {{ relay['effective_family']|length }}</a>
-</div>
-</dt>
-{% endif -%}
-<dd>
-<pre class="pre-scrollable">{% for e_relay in relay['effective_family'] -%}
-{% if relay['effective_family']|length > 1 -%}
-<a href="../{{ e_relay|escape }}/">{{ e_relay|escape }}</a>
-{% else -%}
-{{ e_relay|escape }}
-{% endif -%}
-{% endfor -%}
-</pre>
-</dd>
-<dt id="alleged-family" title="Array of fingerprints of relays that are not in an effective, mutual family relationship with this relay. These relays are part of this relay's family but they don't consider this relay to be part of their family. Omitted if empty or if descriptor containing this information cannot be found.">
-<div class="section-header">
-<a href="#alleged-family" class="anchor-link">Alleged Family {{ plural(relay['alleged_family']|length if relay['alleged_family'] else 0, 'Member') }}: {{ relay['alleged_family']|length if relay['alleged_family'] else 0 }}</a>
-</div>
-</dt>
-<dd>
-{% if relay['alleged_family'] -%}
-<pre class="pre-scrollable">{% for a_relay in relay['alleged_family'] -%}
-{% if relay['alleged_family']|length > 1 -%}
-<a href="../{{ a_relay|escape }}/">{{ a_relay|escape }}</a>
-{% else -%}
-{{ a_relay|escape }}
-{% endif -%}
-{% endfor -%}
-{% else -%}
-<pre class="pre-scrollable">none
-{% endif -%}
-</pre>
-</dd>
-<dt id="indirect-family" title="Array of fingerprints of relays that consider this relay to be part of their family but that are not part of this relay's family. Omitted if empty or if descriptor containing this information cannot be found.">
-<div class="section-header">
-<a href="#indirect-family" class="anchor-link">Indirect Family {{ plural(relay['indirect_family']|length if relay['indirect_family'] else 0, 'Member') }}: {{ relay['indirect_family']|length if relay['indirect_family'] else 0 }}</a>
-</div>
-</dt>
-<dd>
-{% if relay['indirect_family'] -%}
-<pre class="pre-scrollable">{% for i_relay in relay['indirect_family'] -%}
-{% if relay['indirect_family']|length > 1 -%}
-<a href="../{{ i_relay|escape }}/">{{ i_relay|escape }}</a>
-{% else -%}
-{{ i_relay|escape }}
-{% endif -%}
-{% endfor -%}
-{% else -%}
-<pre class="pre-scrollable">none
-{% endif -%}
-</pre>
-</dd>
-</dl>
-</div>
-<div class="col-md-6">
-<dl>
-<dt id="bandwidth-capacity" title="Bandwidth capacity details: Observed capacity | Advertised capability | Rate limit | Burst limit">
-<div class="section-header">
-<a href="#bandwidth-capacity" class="anchor-link">Bandwidth Capacity (Observed | Advertised | Rate Limit | Burst Limit)</a>
-</div>
-</dt>
-    {% set obs_unit = relay['observed_bandwidth']|determine_unit(relays.use_bits) -%}
-    {% set obs_bandwidth = relay['observed_bandwidth']|format_bandwidth_with_unit(obs_unit) -%}
-<dd>
-<span title="Observed: {{ obs_bandwidth }} {{ obs_unit }}">{{ obs_bandwidth }} {{ obs_unit }}</span> | 
-{% if relay['advertised_bandwidth'] -%}{% set adv_unit = relay['advertised_bandwidth']|determine_unit(relays.use_bits) -%}{% set adv_bandwidth = relay['advertised_bandwidth']|format_bandwidth_with_unit(adv_unit) -%}<span title="Advertised: {{ adv_bandwidth }} {{ adv_unit }}">{{ adv_bandwidth }} {{ adv_unit }}</span>{% else -%}<span title="Advertised: unknown">unknown</span>{% endif -%} | 
-{% if relay['bandwidth_rate'] -%}{% set rate_unit = relay['bandwidth_rate']|determine_unit(relays.use_bits) -%}{% set rate_bandwidth = relay['bandwidth_rate']|format_bandwidth_with_unit(rate_unit) -%}<span title="Rate: {{ rate_bandwidth }} {{ rate_unit }}">{{ rate_bandwidth }} {{ rate_unit }}</span>{% else -%}<span title="Rate: unknown">unknown</span>{% endif -%} | 
-{% if relay['bandwidth_burst'] -%}{% set burst_unit = relay['bandwidth_burst']|determine_unit(relays.use_bits) -%}{% set burst_bandwidth = relay['bandwidth_burst']|format_bandwidth_with_unit(burst_unit) -%}<span title="Burst: {{ burst_bandwidth }} {{ burst_unit }}">{{ burst_bandwidth }} {{ burst_unit }}</span>{% else -%}<span title="Burst: unknown">unknown</span>{% endif -%}
-{% if relay['measured'] is not none -%}
-    {% if relay['measured'] -%}
-        &nbsp;&nbsp;<span style="color: #28a745; font-weight: bold;" title="Bandwidth capacity measured by ≥3 bandwidth authorities">Measured</span>
-    {% else -%}
-        &nbsp;&nbsp;<span style="color: #dc3545; font-weight: bold;" title="Bandwidth capacity not measured by ≥3 bandwidth authorities">Not Measured</span>
-    {% endif -%}
-{% else -%}
-    &nbsp;&nbsp;<span style="color: #6c757d;" title="Bandwidth capacity measurement status unknown">Unknown</span>
-{% endif -%}
-</dd>
-
-<dt id="network-participation">
-<div class="section-header">
-<a href="#network-participation" class="anchor-link">Network Participation (Consensus Weight | Guard | Middle | Exit)</a>
-</div>
-</dt>
-<dd>
-<span title="Fraction of this relay's consensus weight compared to the sum of all consensus weights in the network. This fraction is a very rough approximation of the probability of this relay to be selected by clients.">{% if relay['consensus_weight_fraction'] -%}{{ "%.2f"|format(relay['consensus_weight_fraction'] * 100) }}%{% else -%}N/A{% endif -%}</span> | 
-<span title="Probability of this relay to be selected for the guard position. This probability is calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so that this probability can only be an approximation.">{% if relay['guard_probability'] -%}{{ "%.2f"|format(relay['guard_probability'] * 100) }}%{% else -%}N/A{% endif -%}</span> | 
-<span title="Probability of this relay to be selected for the middle position. This probability is calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so that this probability can only be an approximation.">{% if relay['middle_probability'] -%}{{ "%.2f"|format(relay['middle_probability'] * 100) }}%{% else -%}N/A{% endif -%}</span> | 
-<span title="Probability of this relay to be selected for the exit position. This probability is calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so that this probability can only be an approximation.">{% if relay['exit_probability'] -%}{{ "%.2f"|format(relay['exit_probability'] * 100) }}%{% else -%}N/A{% endif -%}</span>
-{% if relay['fingerprint'] in relays.json.smart_context.performance_correlation.template_optimized.underutilized_fingerprints %}
-<br><small class="text-warning">[Warning] Underutilized: High bandwidth capacity but low consensus weight</small>
-{% endif %}
-</dd>
-
-<dt id="or-address" title="IP address and TCP port where this relay accepts onion-routing connections, with hostname when available">
-<div class="section-header">
-<a href="#or-address" class="anchor-link">OR Address</a>
-</div>
-</dt>
-<dd>
-{% if relay['verified_host_names'] -%}
-{% for hostname in relay['verified_host_names'] -%}
-<span class="verified-hostname" title="verified hostname">{{ hostname|escape }}</span>{% if not loop.last %}, {% endif %}
-{% endfor %} | {% for address in relay['or_addresses'] -%}{{ address }}{% if not loop.last %}, {% endif %}{% endfor -%}
-{% elif relay['unverified_host_names'] -%}
-{% for hostname in relay['unverified_host_names'] -%}
-<span class="unverified-hostname" title="unverified hostname">{{ hostname|escape }}</span>{% if not loop.last %}, {% endif %}
-{% endfor %} | {% for address in relay['or_addresses'] -%}{{ address }}{% if not loop.last %}, {% endif %}{% endfor -%}
-{% else -%}
-{% for address in relay['or_addresses'] -%}{{ address }}{% if not loop.last %}, {% endif %}{% endfor -%}
-{% endif -%}
-</dd>
-<dt id="exit-address">
-<div class="section-header">
-<a href="#exit-address" class="anchor-link">Exit Address</a>
-</div>
-</dt>
-{% if relay['exit_address'] -%}
-<dd>
-{{ relay['exit_address']|escape }}
-</dd>
-{% else -%}
-<dd>
-none
-</dd>
-{% endif -%}
-<dt id="dir-address">
-<div class="section-header">
-<a href="#dir-address" class="anchor-link">Dir Address</a>
-</div>
-</dt>
-{% if relay['dir_address'] -%}
-<dd>
-<a href="http://{{ relay['dir_address']|escape }}">{{
-relay['dir_address']|escape }}</a>
-</dd>
-{% else -%}
-<dd>
-none
-</dd>
-{% endif -%}
-
-<dt id="location">
-<div class="section-header">
-<a href="#location" class="anchor-link">{% if relay['city_name'] or relay['region_name'] -%}City | Region | Country{% else -%}Country{% endif -%}</a>
-</div>
-</dt>
-<dd>
-{% if relay['city_name'] -%}
-<span title="City name of the location of this relay as found by a geolocation database. Omitted if the relay location could not be found or if the database does not contain city information.">{{ relay['city_name']|escape }}</span>
-{% endif -%}
-{% if relay['city_name'] and relay['region_name'] -%} | {% endif -%}
-{% if relay['region_name'] -%}
-<span title="Region name of the location of this relay as found by a geolocation database. Omitted if the relay location could not be found or if the database does not contain region information.">{{ relay['region_name']|escape }}</span>
-{% endif -%}
-{% if (relay['city_name'] or relay['region_name']) and relay['country'] -%} | {% endif -%}
-{% if relay['country'] -%}
-<a href="{{ page_ctx.path_prefix }}country/{{ relay['country']|escape }}/">
-<img src="{{ page_ctx.path_prefix }}static/images/cc/{{ relay['country']|lower|escape }}.png"
-title="{{ relay['country_name']|escape }}"
-alt="{{ relay['country_name']|escape }}">
-</a> <span title="Country name of the location of this relay as found by a geolocation database based on the relay's IP address. Omitted if the relay location could not be found.">{{ relay['country_name']|escape }}</span>
-{% else -%}
-unknown
-{% endif -%}
-</dd>
-{% if relay['latitude'] and relay['longitude'] and relay['latitude'] != 0 and relay['longitude'] != 0 -%}
-<dt id="coordinates">
-<div class="section-header">
-<a href="#coordinates" class="anchor-link">Latitude, Longitude</a>
-</div>
-</dt>
-<dd>
-<span title="Latitude of the location of this relay as found by a geolocation database based on the relay's IP address. Omitted if the relay location could not be found.">{{ relay['latitude']|escape }}</span>, 
-<span title="Longitude of the location of this relay as found by a geolocation database based on the relay's IP address. Omitted if the relay location could not be found.">{{ relay['longitude']|escape }}</span>
-</dd>
-{% endif -%}
-<dt id="interactive-map">
-<div class="section-header">
-<a href="#interactive-map" class="anchor-link">Interactive Map</a>
-</div>
-</dt>
-<dd>
-<a href="https://routefluxmap.1aeo.com/#relay={{ relay['fingerprint']|escape }}" target="_blank" rel="noopener" title="View this relay on RouteFluxMap interactive visualization">View in RouteFluxMap</a>
-</dd>
-<dt id="autonomous-system">
-<div class="section-header">
-<a href="#autonomous-system" class="anchor-link">Autonomous System (AS Number | AS Name)</a>
-</div>
-</dt>
-<dd>
-{% if relay['as'] -%}
-<a href='{{ page_ctx.path_prefix }}as/{{ relay['as']|escape }}/' title="AS Number">{{ relay['as']|escape }}</a>
-{% else -%}
-<span title="AS Number">unknown</span>
-{% endif -%} | {% if relay['as_name'] -%}
-<span title="AS Name">{{ relay['as_name']|escape }}</span> (<a href='https://bgp.tools/{{ relay['as']|escape }}'>BGP.tools</a>)
-{% else -%}
-<span title="AS Name">unknown</span>
-{% endif -%}
-</dd>
-
-<dt id="flags">
-<div class="section-header">
-<a href="#flags" class="anchor-link">Flags: {{ relay['flags']|reject('equalto', 'StaleDesc')|list|length }}</a>
-</div>
-</dt>
-<dd>
-{% for flag in relay['flags'] -%}
-{% if flag != 'StaleDesc' -%}
-<a href="{{ page_ctx.path_prefix }}flag/{{ flag.lower()|escape }}/">
-<img src="{{ page_ctx.path_prefix }}static/images/flags/{{ flag.lower()|escape }}.png"
-title="{{ flag|escape }}"
-alt="{{ flag|escape }}">
-</a> {{ flag|escape }}
-{% endif -%}
-{% endfor -%}
-</dd>
-
-<dt id="flag-uptime" title="Flag-specific uptime percentages showing the reliability of this relay when operating in its primary network role. Priority: Exit > Guard > Fast > Running flags.">
-<div class="section-header">
-<a href="#flag-uptime" class="anchor-link">Flag Uptime (1M/6M/1Y/5Y)</a>
-</div>
-</dt>
-<dd>
-{% if relay.get('flag_uptime_display') and relay['flag_uptime_display'] != 'N/A' -%}
-    {% if relay['flag_uptime_display'] == 'Match' -%}
-        <span title="{{ relay['flag_uptime_tooltip']|escape }}">Match Overall Uptime ({{ relay['uptime_api_display']|safe }})</span>
-    {% else -%}
-        <span title="{{ relay['flag_uptime_tooltip']|escape }}">{{ relay['flag_uptime_display']|safe }}</span>
-    {% endif -%}
-{% else -%}
-N/A
-{% endif -%}
-</dd>
-<dt id="uptime-history" title="{% if contact_display_data and contact_display_data.outliers and contact_display_data.outliers.tooltip %}{{ contact_display_data.outliers.tooltip }}{% else %}Statistical outliers: ≥2σ from average{% endif %}">
-<div class="section-header">
-<a href="#uptime-history" class="anchor-link">Uptime (1M/6M/1Y/5Y)</a>
-</div>
-</dt>
-<dd>
-{% if relay.get('uptime_api_display') -%}
-    {{ relay['uptime_api_display']|safe }}
-{% else -%}
-    N/A
-{% endif -%}
-</dd>
-<dt id="uptime-downtime">
-<div class="section-header">
-<a href="#uptime-downtime" class="anchor-link">Uptime / Downtime</a>
-</div>
-</dt>
-<dd>
-{% if relay.get('uptime_display') -%}
-    {% if relay['uptime_display'].startswith('DOWN') -%}
-        <span style="color: #dc3545;">{{ relay['uptime_display']|escape }}</span>
-    {% else -%}
-        {{ relay['uptime_display']|escape }}
-    {% endif -%}
-{% else -%}
-    N/A
-{% endif -%}
-</dd>
-<dt id="first-last-seen">
-<div class="section-header">
-<a href="#first-last-seen" class="anchor-link">Seen (First | Last)</a>
-</div>
-</dt>
-<dd>
-<a href="{{ page_ctx.path_prefix }}first_seen/{{ relay['first_seen'].split(' ', 1)[0]|escape }}/">{{ relay['first_seen']|format_time_ago }} ({{ relay['first_seen']|escape }})</a> | {{ relay['last_seen']|format_time_ago }} ({{ relay['last_seen']|escape }})
-</dd>
-<dt id="last-restarted" title="UTC timestamp when this relay was last (re-)started. Missing if router descriptor containing this information cannot be found.">
-<div class="section-header">
-<a href="#last-restarted" class="anchor-link">Last Restarted</a>
-</div>
-</dt>
-<dd>
-{% if relay['last_restarted'] -%}
-{{ relay['last_restarted']|format_time_ago }} ({{ relay['last_restarted']|escape }})
-{% else -%}
-unknown
-{% endif -%}
-</dd>
-<dt id="last-changed-address" title="UTC timestamp when this relay last stopped announcing an IPv4 or IPv6 address or TCP port where it previously accepted onion-routing or directory connections. This timestamp can serve as indicator whether this relay would be a suitable fallback directory.">
-<div class="section-header">
-<a href="#last-changed-address" class="anchor-link">Last Changed Address or Port</a>
-</div>
-</dt>
-<dd>
-{% if relay['last_changed_address_or_port'] -%}
-{{ relay['last_changed_address_or_port']|escape }}
-{% else -%}
-unknown
-{% endif -%}
-</dd>
-<dt id="hibernating" title="Boolean field saying whether this relay indicated that it is hibernating in its last known server descriptor. This information may be helpful to decide whether a relay that is not running anymore has reached its accounting limit and has not dropped out due to a technical problem. Omitted if the last known server descriptor of this relay does not contain hibernation information or if no such descriptor is known.">
-<div class="section-header">
-<a href="#hibernating" class="anchor-link">Hibernating</a>
-</div>
-</dt>
-<dd>
-{% if relay['hibernating'] is not none -%}
-{% if relay['hibernating'] -%}Yes{% else -%}No{% endif -%}
-{% else -%}
-unknown
-{% endif -%}
-</dd>
-<dt id="platform">
-<div class="section-header">
-<a href="#platform" class="anchor-link">Platform (Short | Long)</a>
-</div>
-</dt>
-<dd>
-<a href='{{ page_ctx.path_prefix }}platform/{{ relay['platform']|escape }}/' title="Simplified platform identifier for categorization">{{ relay['platform']|escape }}</a> | <span title="Complete platform information as reported by relay">{% if relay['platform_raw'] -%}{{ relay['platform_raw']|escape }}{% else -%}{{ relay['platform']|escape }}{% endif -%}</span>
-</dd>
-<dt id="version">
-<div class="section-header">
-<a href="#version" class="anchor-link">Version (Running | Recommended | Status)</a>
-</div>
-</dt>
-<dd>
-<span title="Tor software version without leading 'Tor' as reported by the directory authorities in the 'v' line of the consensus. Omitted if either the directory authorities or the relay did not report which version the relay runs or if the relay runs an alternative Tor implementation.">{% if relay['version'] -%}{{ relay['version']|escape }}{% else -%}unknown{% endif -%}</span> | 
-<span title="Boolean field saying whether the Tor software version of this relay is recommended by the directory authorities or not. Uses the relay version in the consensus. Omitted if either the directory authorities did not recommend versions, or the relay did not report which version it runs.">{% if relay['recommended_version'] is not none -%}{% if relay['recommended_version'] -%}Yes{% else -%}No{% endif -%}{% else -%}unknown{% endif -%}</span> | 
-<span title="Status of the Tor software version of this relay based on the versions recommended by the directory authorities. Possible version statuses are: 'recommended' if a version is listed as recommended; 'experimental' if a version is newer than every recommended version; 'obsolete' if a version is older than every recommended version; 'new in series' if a version has other recommended versions with the same first three components, and the version is newer than all such recommended versions, but it is not newer than every recommended version; 'unrecommended' if none of the above conditions hold. Omitted if either the directory authorities did not recommend versions, or the relay did not report which version it runs.">{% if relay['version_status'] -%}{{ relay['version_status']|capitalize|escape }}{% else -%}unknown{% endif -%}</span>
-</dd>
-</dl>
-</div>
-</div>
 
 {# Consensus Evaluation Section - Per-Authority Details only #}
 {% if diag and diag.available and diag.authority_table %}
