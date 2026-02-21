@@ -56,7 +56,12 @@ def preformat_network_health_template_strings(health_metrics):
         # NEW: AROI domain-level metrics
         'unique_aroi_domains_count', 'validated_aroi_domains_count', 'invalid_aroi_domains_count',
         # NEW: IPv6 AROI operator metrics
-        'ipv4_only_aroi_operators', 'both_ipv4_ipv6_aroi_operators'
+        'ipv4_only_aroi_operators', 'both_ipv4_ipv6_aroi_operators',
+        # NEW: Happy Family Key Migration metrics
+        'hf_ready_relays', 'hf_ready_exit_relays', 'hf_ready_guard_relays',
+        'hf_ready_authorities', 'hf_some_operators', 'hf_all_operators',
+        'hf_not_ready_relays', 'hf_total_validated_operators',
+        'hf_family_cert_count', 'hf_family_cert_not_configured',
     ]
     
     for key in integer_format_keys:
@@ -87,7 +92,11 @@ def preformat_network_health_template_strings(health_metrics):
         # NEW: IPv6 AROI operator percentages
         'ipv4_only_aroi_operators_percentage', 'both_ipv4_ipv6_aroi_operators_percentage',
         # NEW: AROI domain percentages
-        'validated_aroi_domains_percentage', 'invalid_aroi_domains_percentage'
+        'validated_aroi_domains_percentage', 'invalid_aroi_domains_percentage',
+        # NEW: Happy Family Key Migration percentages
+        'hf_ready_relays_percentage', 'hf_ready_bandwidth_percentage',
+        'hf_ready_cw_percentage', 'hf_some_operators_percentage',
+        'hf_all_operators_percentage', 'hf_not_ready_relays_percentage',
     ]
     
     # Add 1_month period formatting keys (used directly in templates) 
@@ -459,6 +468,27 @@ def calculate_network_health_metrics(relay_set):
     # Track what types of relays each operator has to determine their overall support
     operator_ipv6_status = {}  # domain -> {'has_ipv4_only': bool, 'has_dual_stack': bool}
     
+    # NEW: Happy Family Key Migration tracking
+    def _is_happy_family_ready(version_str):
+        """Check if relay version supports Happy Families (>= 0.4.9.1)."""
+        if not version_str:
+            return False
+        try:
+            clean = version_str.split('-')[0]
+            parts = [int(p) for p in clean.split('.')]
+            while len(parts) < 4:
+                parts.append(0)
+            return tuple(parts) >= (0, 4, 9, 1)
+        except (ValueError, IndexError):
+            return False
+    
+    family_key_ready_relays = 0
+    family_key_ready_exit_relays = 0
+    family_key_ready_guard_relays = 0
+    family_key_ready_bandwidth = 0
+    family_key_ready_cw = 0
+    operator_relay_versions = {}  # aroi_domain -> {'total': N, 'ready': N}
+    
     # Uptime data will be extracted from existing consolidated results after uptime API processing
     
     # SINGLE LOOP - calculate everything at once
@@ -613,6 +643,10 @@ def calculate_network_health_metrics(relay_set):
         elif version_status in ['unrecommended', 'old']:
             outdated_count += 1
         
+        # Happy Family Key Migration tracking (version-based)
+        relay_version = relay.get('version', '')
+        is_family_ready = _is_happy_family_ready(relay_version)
+        
         # Bandwidth calculations
         bandwidth = relay.get('observed_bandwidth', 0)
         consensus_weight = relay.get('consensus_weight', 0)
@@ -626,6 +660,16 @@ def calculate_network_health_metrics(relay_set):
             observed_advertised_diff_sum += diff
             observed_advertised_count += 1
             observed_advertised_diff_values.append(diff)
+        
+        # Happy Family: accumulate counts (is_family_ready set above with version check)
+        if is_family_ready:
+            family_key_ready_relays += 1
+            family_key_ready_bandwidth += bandwidth
+            family_key_ready_cw += consensus_weight
+            if is_exit:
+                family_key_ready_exit_relays += 1
+            if is_guard:
+                family_key_ready_guard_relays += 1
         
         # Role-specific bandwidth and consensus weight - combined calculation
         if is_exit:
@@ -742,6 +786,13 @@ def calculate_network_health_metrics(relay_set):
                 operator_ipv6_status[aroi_domain]['has_ipv4_only'] = True
             elif ipv6_support == 'both':
                 operator_ipv6_status[aroi_domain]['has_dual_stack'] = True
+            
+            # Happy Family: per-operator version readiness (reuses aroi_domain from above)
+            if aroi_domain not in operator_relay_versions:
+                operator_relay_versions[aroi_domain] = {'total': 0, 'ready': 0}
+            operator_relay_versions[aroi_domain]['total'] += 1
+            if is_family_ready:
+                operator_relay_versions[aroi_domain]['ready'] += 1
         
         # Skip uptime calculation here - will use existing consolidated results
     
@@ -1130,6 +1181,9 @@ def calculate_network_health_metrics(relay_set):
                        ('ipv4_only_bandwidth', ipv4_only_bandwidth), ('both_ipv4_ipv6_bandwidth', both_ipv4_ipv6_bandwidth)]:
         health_metrics[f'{key}_formatted'] = _fmt_bw(value, total_unit)
     
+    # Happy Family: bandwidth formatting
+    health_metrics['hf_ready_bandwidth_formatted'] = _fmt_bw(family_key_ready_bandwidth, total_unit)
+    
     # Uptime metrics - reuse existing consolidated uptime calculations for efficiency
     if hasattr(relay_set, '_consolidated_uptime_results') and relay_set._consolidated_uptime_results:
         network_statistics = relay_set._consolidated_uptime_results.get('network_statistics', {})
@@ -1311,6 +1365,94 @@ def calculate_network_health_metrics(relay_set):
     
     # === AROI VALIDATION METRICS ===
     _integrate_aroi_validation(health_metrics, relay_set, total_relays_count)
+    
+    # === HAPPY FAMILY KEY MIGRATION METRICS ===
+    # DA readiness (small loop over ~10 authority relays)
+    family_key_ready_authorities = sum(
+        1 for r in relay_set.json['relays']
+        if 'Authority' in r.get('flags', []) and _is_happy_family_ready(r.get('version', ''))
+    )
+    
+    # Consensus method + family params from collector consensus data
+    collector_data_hf = getattr(relay_set, 'collector_consensus_data', None)
+    cm_info = {}
+    if collector_data_hf and isinstance(collector_data_hf, dict):
+        cm_info = collector_data_hf.get('consensus_method_info', {})
+    
+    # Family-cert from collector descriptors (separate worker, separate cache)
+    collector_descs = getattr(relay_set, 'collector_descriptors_data', None)
+    family_cert_count = 0
+    desc_sample_total = 0
+    if collector_descs and isinstance(collector_descs, dict):
+        family_cert_fps = set(collector_descs.get('family_cert_fingerprints', []))
+        desc_sample_total = collector_descs.get('total_descriptors', 0)
+        # Count relays in our Onionoo dataset that appear in the family-cert set
+        for relay in relay_set.json['relays']:
+            if relay.get('fingerprint', '').upper() in family_cert_fps:
+                family_cert_count += 1
+    
+    # Operator readiness (AROI-validated operators only)
+    validated_domain_set_hf = getattr(relay_set, 'validated_aroi_domains', set())
+    family_key_some_operators = 0
+    family_key_all_operators_count = 0
+    for domain, counts in operator_relay_versions.items():
+        if domain in validated_domain_set_hf:
+            if counts['ready'] > 0:
+                family_key_some_operators += 1
+            if counts['ready'] == counts['total']:
+                family_key_all_operators_count += 1
+    total_validated_operators = len(validated_domain_set_hf) if validated_domain_set_hf else 0
+    
+    # Consensus params: extract family-related params from votes (None = not voted on yet)
+    family_params_votes = cm_info.get('family_params_votes', {})
+    use_family_ids_votes = family_params_votes.get('use-family-ids', {})
+    use_family_lists_votes = family_params_votes.get('use-family-lists', {})
+    hf_use_family_ids = None
+    hf_use_family_lists = None
+    if use_family_ids_votes:
+        vals = sorted(use_family_ids_votes.values())
+        hf_use_family_ids = vals[len(vals) // 2]  # median per dir-spec
+    if use_family_lists_votes:
+        vals = sorted(use_family_lists_votes.values())
+        hf_use_family_lists = vals[len(vals) // 2]
+    
+    health_metrics.update({
+        # Consensus method
+        'hf_consensus_method': cm_info.get('current_method'),
+        'hf_consensus_method_max': cm_info.get('max_method'),
+        'hf_consensus_method_required': 35,
+        'hf_max_method_support': cm_info.get('max_method_support', 0),
+        'hf_consensus_total_voters': cm_info.get('total_voters', 0),
+        # DA readiness
+        'hf_ready_authorities': family_key_ready_authorities,
+        'hf_total_voting_authorities': 9,
+        'hf_authorities_needed': 7,
+        'hf_authorities_remaining': max(0, 7 - family_key_ready_authorities),
+        # Relay adoption (from Onionoo version)
+        'hf_ready_relays': family_key_ready_relays,
+        'hf_ready_relays_percentage': _pct(family_key_ready_relays, total_relays_count),
+        'hf_not_ready_relays': total_relays_count - family_key_ready_relays,
+        'hf_not_ready_relays_percentage': _pct(total_relays_count - family_key_ready_relays, total_relays_count),
+        'hf_ready_exit_relays': family_key_ready_exit_relays,
+        'hf_ready_guard_relays': family_key_ready_guard_relays,
+        # Family-cert actual adoption (from server descriptors)
+        'hf_family_cert_count': family_cert_count,
+        'hf_family_cert_sample_size': desc_sample_total,
+        'hf_family_cert_not_configured': max(0, family_key_ready_relays - family_cert_count),
+        # Bandwidth + CW
+        'hf_ready_bandwidth': family_key_ready_bandwidth,
+        'hf_ready_bandwidth_percentage': _pct(family_key_ready_bandwidth, total_bandwidth),
+        'hf_ready_cw_percentage': _pct(family_key_ready_cw, total_consensus_weight),
+        # Operator adoption
+        'hf_some_operators': family_key_some_operators,
+        'hf_all_operators': family_key_all_operators_count,
+        'hf_some_operators_percentage': _pct(family_key_some_operators, total_validated_operators) if total_validated_operators > 0 else 0.0,
+        'hf_all_operators_percentage': _pct(family_key_all_operators_count, total_validated_operators) if total_validated_operators > 0 else 0.0,
+        'hf_total_validated_operators': total_validated_operators,
+        # Consensus params (None = not voted on yet, auto-populates when they appear)
+        'hf_use_family_ids': hf_use_family_ids,
+        'hf_use_family_lists': hf_use_family_lists,
+    })
     
     # OPTIMIZATION: Pre-format all template strings to eliminate Jinja2 formatting overhead
     # Template formatting in Jinja2 is 3-5x slower than Python formatting
