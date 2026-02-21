@@ -201,6 +201,11 @@ AROI_TIMEOUT_STALE_CACHE = 120        # 2 minutes for stale/missing cache
 COLLECTOR_CACHE_MAX_AGE_HOURS = 1     # Cache older than this is considered stale (1 hour)
 COLLECTOR_TIMEOUT_FRESH_CACHE = 30    # 30 seconds when cache is available (fallback on timeout)
 COLLECTOR_TIMEOUT_STALE_CACHE = 300   # 5 minutes when no cache exists
+
+# COLLECTOR DESCRIPTORS API - Fetches server descriptors for family-cert analysis
+DESCRIPTORS_CACHE_MAX_AGE_HOURS = 1   # Cache older than this is considered stale (1 hour)
+DESCRIPTORS_TIMEOUT_FRESH_CACHE = 30  # 30 seconds when cache is available (fallback on timeout)
+DESCRIPTORS_TIMEOUT_STALE_CACHE = 120 # 2 minutes when no cache exists (~7MB file)
 # ============================================================================
 
 
@@ -814,6 +819,172 @@ def fetch_collector_data(progress_logger=None):
     Maintained for backward compatibility.
     """
     return fetch_collector_consensus_data(progress_logger=progress_logger)
+
+
+def fetch_collector_descriptors(progress_logger=None):
+    """
+    Fetch latest CollecTor server-descriptors file and extract family-cert
+    presence per relay in a single pass. Used for Happy Family Key Migration tracking.
+    
+    Follows same worker pattern as fetch_collector_consensus_data():
+    feature flag → cache check → timeout selection → fetch → parse → cache → mark ready.
+    
+    Args:
+        progress_logger: Optional function for progress updates
+    
+    Returns:
+        dict with 'family_cert_fingerprints' (list of uppercase hex strings),
+        'total_descriptors' (int), 'fetched_at' (str), or None on failure
+    """
+    import re
+    from .consensus import is_consensus_evaluation_enabled
+    
+    api_name = "collector_descriptors"
+    
+    def log_progress(message):
+        if progress_logger:
+            progress_logger(message)
+        else:
+            print(message)
+    
+    # Check feature flag (same as collector_consensus)
+    if not is_consensus_evaluation_enabled():
+        log_progress("consensus evaluation feature is disabled")
+        return None
+    
+    # Check cache age — same pattern as fetch_collector_consensus_data
+    cache_age = _cache_manager.get_cache_age(api_name)
+    cache_max_age_seconds = DESCRIPTORS_CACHE_MAX_AGE_HOURS * 3600
+    if cache_age is not None and cache_age < cache_max_age_seconds:
+        log_progress(f"using cached descriptor data (less than {DESCRIPTORS_CACHE_MAX_AGE_HOURS} hour(s) old)")
+        cached_data = _load_cache(api_name)
+        if cached_data and _validate_descriptors_cache(cached_data):
+            _mark_ready(api_name)
+            cert_count = len(cached_data.get('family_cert_fingerprints', []))
+            total = cached_data.get('total_descriptors', 0)
+            log_progress(f"loaded {cert_count}/{total} descriptors with family-cert from cache")
+            return cached_data
+    
+    try:
+        # Determine timeout based on cache availability
+        cached_data = _load_cache(api_name)
+        has_valid_cache = cached_data and _validate_descriptors_cache(cached_data)
+        if has_valid_cache:
+            timeout_seconds = DESCRIPTORS_TIMEOUT_FRESH_CACHE
+            log_progress(f"cache is {(cache_age or 0) / 3600:.1f} hours old (>={DESCRIPTORS_CACHE_MAX_AGE_HOURS}h), using {timeout_seconds}s timeout to refresh...")
+        else:
+            timeout_seconds = DESCRIPTORS_TIMEOUT_STALE_CACHE
+            log_progress(f"no valid cache exists, using {timeout_seconds}s timeout for initial fetch...")
+        
+        base_url = 'https://collector.torproject.org'
+        descs_path = '/recent/relay-descriptors/server-descriptors/'
+        
+        # Step 1: Get directory listing
+        log_progress("fetching server descriptor listing...")
+        req = urllib.request.Request(f"{base_url}{descs_path}", headers={'User-Agent': 'Allium/1.0'})
+        with urllib.request.urlopen(req, timeout=timeout_seconds) as response:
+            html = response.read(10 * 1024 * 1024).decode('utf-8', errors='replace')
+        
+        # Step 2: Find most recent file
+        pattern = r'href="([0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-server-descriptors)"'
+        matches = re.findall(pattern, html)
+        if not matches:
+            log_progress("warning: no server descriptor files found")
+            _mark_stale(api_name, "No descriptor files found")
+            if has_valid_cache:
+                log_progress("using cached data due to empty listing")
+                return cached_data
+            return None
+        
+        latest_file = max(matches)
+        url = f"{base_url}{descs_path}{latest_file}"
+        log_progress(f"downloading {latest_file}...")
+        
+        # Step 3: Download (~7MB typical)
+        req = urllib.request.Request(url, headers={'User-Agent': 'Allium/1.0'})
+        with urllib.request.urlopen(req, timeout=timeout_seconds) as response:
+            content = response.read(100 * 1024 * 1024).decode('utf-8', errors='replace')
+        
+        # Step 4: Single-pass parse — only extract fingerprint + family-cert presence
+        # Minimal work per line for compute efficiency on ~7MB of data
+        family_cert_fps = set()
+        total = 0
+        current_fp = None
+        has_cert = False
+        
+        for line in content.split('\n'):
+            if line.startswith('router '):
+                # Save previous descriptor result
+                if current_fp is not None:
+                    total += 1
+                    if has_cert:
+                        family_cert_fps.add(current_fp)
+                # Reset for new descriptor
+                current_fp = None
+                has_cert = False
+            elif line.startswith('fingerprint '):
+                # "fingerprint ABCD 1234 ..." → join without spaces, uppercase
+                current_fp = line[12:].replace(' ', '').upper()
+            elif line == 'family-cert':
+                has_cert = True
+        
+        # Don't forget last descriptor
+        if current_fp is not None:
+            total += 1
+            if has_cert:
+                family_cert_fps.add(current_fp)
+        
+        # Build result — list() for JSON cache serialization
+        data = {
+            'family_cert_fingerprints': list(family_cert_fps),
+            'total_descriptors': total,
+            'fetched_at': datetime.utcnow().isoformat(),
+        }
+        
+        # Validate result
+        if total == 0:
+            log_progress("warning: parsed 0 descriptors from file")
+            _mark_stale(api_name, "No descriptors parsed")
+            if has_valid_cache:
+                log_progress("using cached data due to empty parse result")
+                return cached_data
+            return None
+        
+        # Cache + mark ready
+        log_progress("caching descriptor data...")
+        _save_cache(api_name, data)
+        _mark_ready(api_name)
+        
+        log_progress(f"successfully parsed {len(family_cert_fps)}/{total} descriptors with family-cert")
+        return data
+        
+    except Exception as e:
+        error_msg = str(e)
+        is_timeout = 'timeout' in error_msg.lower()
+        reason = "timeout" if is_timeout else "error"
+        
+        log_progress(f"request timed out after {timeout_seconds}s..." if is_timeout else f"error: {error_msg}")
+        _mark_stale(api_name, f"{reason}: {error_msg}")
+        
+        if has_valid_cache:
+            log_progress(f"using cached descriptor data due to {reason}")
+            return cached_data
+        log_progress(f"no cached data available after {reason}")
+        return None
+
+
+def _validate_descriptors_cache(data):
+    """
+    Validate descriptors cache data structure.
+    Same validation pattern as _validate_collector_cache.
+    """
+    if not isinstance(data, dict):
+        return False
+    if 'family_cert_fingerprints' not in data:
+        return False
+    if 'total_descriptors' not in data:
+        return False
+    return True
 
 
 def fetch_consensus_health(progress_logger=None):
