@@ -1427,6 +1427,14 @@ def calculate_network_health_metrics(relay_set):
     # Voting authority count — dynamic from collector data, not hardcoded
     hf_total_voters = cm_info.get('total_voters', 0)
     
+    # Consensus method voting threshold — replicates the formula from Tor's C source:
+    # https://gitlab.torproject.org/tpo/core/tor/-/blob/main/src/feature/dirauth/dirvote.c
+    #   int min = (smartlist_len(votes) * 2) / 3;
+    #   get_frequent_members(acceptable_methods, all_methods, min);  // count > min
+    # A method is accepted when strictly more than (n*2)/3 authorities support it.
+    # With 9 voters: (9*2)/3 = 6, need >6, so threshold is 7.
+    hf_method_threshold = (hf_total_voters * 2) // 3 + 1 if hf_total_voters > 0 else 0
+    
     health_metrics.update({
         # Consensus method (from actual consensus document, never self-computed)
         'hf_consensus_method': cm_info.get('current_method'),
@@ -1436,6 +1444,8 @@ def calculate_network_health_metrics(relay_set):
         'hf_max_method_support': cm_info.get('max_method_support', 0),
         # Total voting authorities (dynamic from votes, not hardcoded)
         'hf_consensus_total_voters': hf_total_voters,
+        # 2/3 supermajority threshold (dynamic from voter count, per Tor dirvote.c formula)
+        'hf_method_threshold': hf_method_threshold,
         # DA readiness (v0.4.9.x+ from Onionoo version field)
         'hf_ready_authorities': family_key_ready_authorities,
         # Relay adoption (from Onionoo version)
