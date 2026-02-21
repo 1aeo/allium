@@ -445,7 +445,6 @@ class TestNetworkHealthDashboard(unittest.TestCase):
         
         # 1 authority relay on v0.4.9.x+
         self.assertEqual(health['hf_ready_authorities'], 1)
-        self.assertEqual(health['hf_authorities_remaining'], 6)  # 7 - 1
         
         # 1 exit relay ready, 1 guard relay ready (authority with Guard flag)
         self.assertEqual(health['hf_ready_exit_relays'], 1)
@@ -453,7 +452,8 @@ class TestNetworkHealthDashboard(unittest.TestCase):
         
         # Consensus method should be None (no collector data in unit test)
         self.assertIsNone(health['hf_consensus_method'])
-        self.assertEqual(health['hf_consensus_method_required'], 35)
+        # No hardcoded "required" method — we only show what Tor says
+        self.assertIn('hf_consensus_method_max', health)
         
         # Family-cert count should be 0 (no descriptor data in unit test)
         self.assertEqual(health['hf_family_cert_count'], 0)

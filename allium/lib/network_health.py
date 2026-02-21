@@ -470,7 +470,15 @@ def calculate_network_health_metrics(relay_set):
     
     # NEW: Happy Family Key Migration tracking
     def _is_happy_family_ready(version_str):
-        """Check if relay version supports Happy Families (>= 0.4.9.1)."""
+        """Check if relay version supports Happy Families (>= 0.4.9.1).
+        
+        Per Proposal 321: family-cert was implemented in Tor 0.4.9.1-alpha
+        (first alpha in the 0.4.9 series). The community setup guide at
+        community.torproject.org/relay/setup/post-install/family-ids/
+        specifies "Tor 0.4.9.2-alpha and later" for the keygen-family tool.
+        We use 0.4.9.1 as the minimum since that's when the protocol support
+        was added to the codebase.
+        """
         if not version_str:
             return False
         try:
@@ -1416,18 +1424,20 @@ def calculate_network_health_metrics(relay_set):
         vals = sorted(use_family_lists_votes.values())
         hf_use_family_lists = vals[len(vals) // 2]
     
+    # Voting authority count — dynamic from collector data, not hardcoded
+    hf_total_voters = cm_info.get('total_voters', 0)
+    
     health_metrics.update({
-        # Consensus method
+        # Consensus method (from actual consensus document, never self-computed)
         'hf_consensus_method': cm_info.get('current_method'),
+        # Max method available from any DA (from vote data)
         'hf_consensus_method_max': cm_info.get('max_method'),
-        'hf_consensus_method_required': 35,
+        # How many DAs support the max method
         'hf_max_method_support': cm_info.get('max_method_support', 0),
-        'hf_consensus_total_voters': cm_info.get('total_voters', 0),
-        # DA readiness
+        # Total voting authorities (dynamic from votes, not hardcoded)
+        'hf_consensus_total_voters': hf_total_voters,
+        # DA readiness (v0.4.9.x+ from Onionoo version field)
         'hf_ready_authorities': family_key_ready_authorities,
-        'hf_total_voting_authorities': 9,
-        'hf_authorities_needed': 7,
-        'hf_authorities_remaining': max(0, 7 - family_key_ready_authorities),
         # Relay adoption (from Onionoo version)
         'hf_ready_relays': family_key_ready_relays,
         'hf_ready_relays_percentage': _pct(family_key_ready_relays, total_relays_count),
