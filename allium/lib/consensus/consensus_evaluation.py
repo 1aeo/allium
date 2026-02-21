@@ -757,9 +757,12 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
         'fast_speed_strict_auths': fast_speed_strict_auths,
         
         # HSDir eligibility
+        # hsdir_tk_meets uses majority logic: relay needs to meet TK threshold
+        # for ≥5/9 authorities (not the strictest one, which is moria1's ~10 days)
         'hsdir_wfu_threshold': hsdir_wfu_threshold,
         'hsdir_wfu_meets': relay_wfu and relay_wfu >= hsdir_wfu_threshold,
-        'hsdir_tk_meets': relay_tk and relay_tk >= hsdir_tk_threshold,
+        'hsdir_tk_meets': hsdir_tk_meets_count >= majority_required,
+        'hsdir_tk_meets_count': hsdir_tk_meets_count,
         'hsdir_prereq_stable_count': hsdir_prereq_stable_count,
         'hsdir_prereq_fast_count': hsdir_prereq_fast_count,
         'hsdir_tk_max_display': _format_days(hsdir_tk_max),
@@ -1282,8 +1285,10 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
                           _get_status_text(hsdir_wfu_status, da_count=hsdir_wfu_da_count, da_total=total_authorities)))
     
     # Row 4: Time Known (using DRY helper)
+    # Use HSDir-specific TK meets count (per-authority hsdir-tk thresholds),
+    # not Guard TK stats (which use 8-day threshold)
     hsdir_tk_status = 'meets' if rv.get('hsdir_tk_meets') else 'below'
-    hsdir_tk_da_count = tk_stats.get('meets_threshold_count', 0) or 0
+    hsdir_tk_da_count = rv.get('hsdir_tk_meets_count', tk_stats.get('meets_threshold_count', 0) or 0)
     hsdir_tk_threshold = (_vote_threshold(f"≥{rv.get('hsdir_tk_consensus_display', '25h')} (most)", majority_required, total_authorities)
         + _format_stricter_threshold(rv.get('hsdir_tk_strict_auths', []), rv.get('hsdir_tk_max_display', '10d')))
     rows.append(_make_row('HSDir', hsdir_tooltip, hsdir_color, 'Time Known', METRIC_TOOLTIPS['tk_hsdir'],
