@@ -1034,14 +1034,14 @@ def fetch_collector_descriptors(progress_logger=None):
 def _validate_descriptors_cache(data):
     """
     Validate descriptors cache data structure.
-    Same validation pattern as _validate_collector_cache.
+    Requires the current format with all_seen_fingerprints (not the old
+    single-file format which had total_descriptors instead).
     """
     if not isinstance(data, dict):
         return False
     if 'family_cert_fingerprints' not in data:
         return False
-    # Accept both old format (total_descriptors) and new format (all_seen_fingerprints)
-    if 'total_descriptors' not in data and 'all_seen_fingerprints' not in data:
+    if 'all_seen_fingerprints' not in data:
         return False
     return True
 
