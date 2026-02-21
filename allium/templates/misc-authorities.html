@@ -38,9 +38,9 @@
         {% if relays.consensus_method_info and relays.consensus_method_info.current_method %}
         <li><strong>Consensus Method:</strong> 
             <span style="font-weight: bold;">{{ relays.consensus_method_info.current_method }}</span>
-            (highest supported by {{ relays.consensus_method_info.majority_required }}+/{{ relays.consensus_method_info.total_voters }} authorities)
+            (from consensus document)
             {% if relays.consensus_method_info.max_method and relays.consensus_method_info.max_method > relays.consensus_method_info.current_method %}
-            | Max available: <strong>{{ relays.consensus_method_info.max_method }}</strong> (supported by {{ relays.consensus_method_info.max_method_support }}/{{ relays.consensus_method_info.total_voters }})
+            | Max available: <strong>{{ relays.consensus_method_info.max_method }}</strong> (supported by {{ relays.consensus_method_info.max_method_support }}/{{ relays.consensus_method_info.total_voters }} authorities)
             {% endif %}
         </li>
         {% endif %}

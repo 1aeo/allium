@@ -789,17 +789,18 @@ class CollectorFetcher:
     
     def _compute_consensus_method_info(self) -> dict:
         """
-        Compute the active consensus method from per-authority vote data.
+        Get the current consensus method from the actual consensus document
+        and extract per-authority method support from votes.
         
-        Per Tor dir-spec: "The consensus method is the highest method
-        supported by more than half of the voting authorities."
+        The current_method is read directly from the CollecTor consensus document
+        (the 'consensus-method' line) — NOT computed from votes. Only Tor itself
+        determines what the active consensus method is.
+        
+        Per-authority consensus-methods lists from votes are used to show which
+        authorities support which methods (e.g., how many support method 35).
         
         Also extracts family-related consensus params from votes
         (use-family-ids, use-family-lists) for Happy Family migration tracking.
-        
-        Returns:
-            dict with current_method, max_method, per_authority breakdown,
-            and family_params_votes.
         """
         from collections import Counter
         
@@ -824,18 +825,10 @@ class CollectorFetcher:
                     family_params[key][auth_name] = params[key]
         
         total_voters = len(per_authority)
-        if total_voters == 0:
-            return {
-                'current_method': None, 'max_method': None,
-                'max_method_support': 0, 'total_voters': 0,
-                'majority_required': 0, 'per_authority': {},
-                'method_support_counts': {}, 'family_params_votes': {},
-            }
         
-        # Active method = highest supported by more than half of voters
-        majority = total_voters // 2 + 1
-        majority_methods = [m for m, c in method_counts.items() if c >= majority]
-        current_method = max(majority_methods) if majority_methods else None
+        # Get the ACTUAL current consensus method from the consensus document
+        # This is the authoritative source — we never compute it ourselves
+        current_method = self._fetch_current_consensus_method()
         
         # Max method any authority supports (shows what's coming next)
         all_methods = [m for methods in per_authority.values() for m in methods]
@@ -847,11 +840,52 @@ class CollectorFetcher:
             'max_method': max_method,
             'max_method_support': max_method_support,
             'total_voters': total_voters,
-            'majority_required': majority,
             'per_authority': per_authority,
             'method_support_counts': dict(method_counts),
             'family_params_votes': family_params,
         }
+    
+    def _fetch_current_consensus_method(self) -> Optional[int]:
+        """
+        Fetch the actual consensus-method from the latest CollecTor consensus document.
+        
+        Only reads the first few lines of the consensus header to extract
+        the 'consensus-method' line. This is the authoritative value from Tor.
+        
+        Returns:
+            int: The current consensus method number, or None on failure.
+        """
+        try:
+            # Get listing of consensus files
+            html = self._fetch_url(f"{COLLECTOR_BASE}/recent/relay-descriptors/consensuses/")
+            consensus_pattern = re.compile(
+                r'href="([0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-consensus)"'
+            )
+            matches = consensus_pattern.findall(html)
+            if not matches:
+                logger.warning("No consensus files found on CollecTor")
+                return None
+            
+            latest_file = max(matches)
+            url = f"{COLLECTOR_BASE}/recent/relay-descriptors/consensuses/{latest_file}"
+            
+            # Fetch only the first chunk — consensus-method is in the first 5 lines
+            req = urllib.request.Request(url, headers={'User-Agent': 'Allium/1.0'})
+            with urllib.request.urlopen(req, timeout=self.timeout) as response:
+                # Read just 4KB — consensus-method is in the header
+                header_bytes = response.read(4096)
+                header_text = header_bytes.decode('utf-8', errors='replace')
+            
+            for line in header_text.split('\n'):
+                if line.startswith('consensus-method '):
+                    return int(line.split()[1])
+            
+            logger.warning("consensus-method line not found in consensus header")
+            return None
+            
+        except Exception as e:
+            logger.warning(f"Failed to fetch consensus method from consensus document: {e}")
+            return None
     
     def _validate_fingerprint(self, fingerprint: str) -> bool:
         """Validate fingerprint is 40 hex characters."""
