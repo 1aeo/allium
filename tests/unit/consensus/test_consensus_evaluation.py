@@ -1463,8 +1463,8 @@ class TestMiddleOnlyFlag:
     def test_normal_relay_row_count(self):
         """Test that normal relay has correct row count (no MiddleOnly).
         
-        Rows: Fast:1 + Stable:2 + HSDir:4 + Guard:6 + Running:2 (IPv4+IPv6) +
-              Valid:1 + V2Dir:1 + Exit:1 = 18
+        Rows: Fast:1 + Stable:2 + HSDir:5 + Guard:6 + Running:2 (IPv4+IPv6) +
+              Valid:1 + V2Dir:1 + Exit:1 = 19
         """
         result = format_relay_consensus_evaluation(
             self.NORMAL_EVALUATION,
@@ -1479,13 +1479,13 @@ class TestMiddleOnlyFlag:
         assert 'Valid' in flags_present
         assert 'V2Dir' in flags_present
         assert 'MiddleOnly' not in flags_present
-        assert len(frt) == 18  # 14 original + Running:2 + Valid:1 + V2Dir:1
+        assert len(frt) == 19  # 15 original + Running:2 + Valid:1 + V2Dir:1
     
     def test_middleonly_relay_row_count(self):
         """Test that MiddleOnly relay has correct row count (base + MiddleOnly).
         
-        Rows: Fast:1 + Stable:2 + HSDir:4 + Guard:6 + Running:2 (IPv4+IPv6) +
-              Valid:1 + V2Dir:1 + Exit:1 + MiddleOnly:1 = 19
+        Rows: Fast:1 + Stable:2 + HSDir:5 + Guard:6 + Running:2 (IPv4+IPv6) +
+              Valid:1 + V2Dir:1 + Exit:1 + MiddleOnly:1 = 20
         """
         result = format_relay_consensus_evaluation(
             self.MIDDLEONLY_EVALUATION,
@@ -1494,7 +1494,7 @@ class TestMiddleOnlyFlag:
         )
         
         frt = result['flag_requirements_table']
-        assert len(frt) == 19  # 18 base + 1 MiddleOnly
+        assert len(frt) == 20  # 19 base + 1 MiddleOnly
     
     def test_middleonly_row_color_is_red(self):
         """Test that MiddleOnly row uses red (below) color."""

@@ -959,13 +959,14 @@ class CollectorFetcher:
             })
             
             # HSDir flag eligibility
-            # Per Tor dir-spec Section 3.4.2: HSDir requires Stable AND Fast flags
-            # as prerequisites, plus WFU >= hsdir-wfu and TK >= hsdir-tk thresholds
+            # Per Tor source (voteflags.c dirserv_thinks_router_is_hs_dir):
+            #   HSDir requires: supports_tunnelled_dir_requests (V2Dir),
+            #   Stable, Fast flags, plus WFU >= hsdir-wfu and TK >= hsdir-tk
             hsdir_wfu = thresholds.get('hsdir-wfu', 0.98)
             hsdir_tk = thresholds.get('hsdir-tk', HSDIR_TK_DEFAULT)
             
             hsdir_metrics_met = relay_wfu >= hsdir_wfu and relay_tk >= hsdir_tk
-            hsdir_eligible = has_stable and has_fast and hsdir_metrics_met
+            hsdir_eligible = has_stable and has_fast and has_v2dir and hsdir_metrics_met
             if hsdir_eligible:
                 eligibility['hsdir']['eligible_count'] += 1
             
@@ -980,6 +981,7 @@ class CollectorFetcher:
                 'assigned': has_hsdir_flag,  # Whether authority actually assigned HSDir flag
                 'has_stable': has_stable,
                 'has_fast': has_fast,
+                'has_v2dir': has_v2dir,
                 'metrics_met': hsdir_metrics_met,
                 'wfu_threshold': hsdir_wfu,
                 'tk_threshold': hsdir_tk,

@@ -247,7 +247,31 @@ def generate_issues_from_consensus(
     tk_eligible = relay_tk and relay_tk >= GUARD_TK_DEFAULT
     
     if not has_guard:
-        # Check each Guard requirement and provide specific advice
+        # Check each Guard requirement (order matches flag table: Fast → Stable → V2Dir → BW → WFU → TK)
+        
+        # Prerequisite flags first
+        if not has_fast:
+            issues.append({
+                'severity': 'warning',
+                'category': 'guard',
+                'title': 'Guard: requires Fast flag',
+                'description': 'Guard flag requires having the Fast flag first',
+                'suggestion': 'Get Fast flag by having bandwidth ≥100 KB/s OR in top 7/8ths of network. Most relays get this easily.',
+            })
+        
+        if not has_stable:
+            issues.append({
+                'severity': 'warning',
+                'category': 'guard',
+                'title': 'Guard: requires Stable flag',
+                'description': 'Guard flag requires having the Stable flag first',
+                'suggestion': 'Get Stable flag by maintaining consistent uptime. Stable requires uptime and MTBF at or above network median (typically 2-3 weeks of stable running).',
+            })
+        
+        # Note: V2Dir prereq for Guard is checked via the flag table but not
+        # as a separate diagnostic — V2Dir is almost always present (default on)
+        
+        # Metric thresholds
         if not guard_bw_eligible and observed_bandwidth:
             bw_display = f"{observed_bandwidth / 1_000_000:.1f} MB/s"
             issues.append({
@@ -270,37 +294,16 @@ def generate_issues_from_consensus(
                 'doc_ref': 'https://spec.torproject.org/dir-spec/assigning-flags-vote.html',
             })
         
-        # CHANGED: info → warning
         if not tk_eligible and relay_tk is not None:
             tk_days = relay_tk / SECONDS_PER_DAY
             days_needed = (GUARD_TK_DEFAULT - relay_tk) / SECONDS_PER_DAY
             issues.append({
-                'severity': 'warning',  # Changed from 'info'
+                'severity': 'warning',
                 'category': 'guard',
                 'title': 'Guard: Time Known below threshold',
                 'description': f"Time Known {tk_days:.1f} days is below 8 days requirement ({days_needed:.1f} more days needed)",
                 'suggestion': 'Time Known tracks how long authorities have observed your relay. This resets if: 1) Identity key changes, 2) Long downtime makes authorities forget you. Just keep running stably.',
                 'doc_ref': 'https://spec.torproject.org/dir-spec/assigning-flags-vote.html',
-            })
-        
-        # CHANGED: info → warning
-        if not has_stable:
-            issues.append({
-                'severity': 'warning',  # Changed from 'info'
-                'category': 'guard',
-                'title': 'Guard: requires Stable flag',
-                'description': 'Guard flag requires having the Stable flag first',
-                'suggestion': 'Get Stable flag by maintaining consistent uptime. Stable requires uptime and MTBF at or above network median (typically 2-3 weeks of stable running).',
-            })
-        
-        # CHANGED: info → warning
-        if not has_fast:
-            issues.append({
-                'severity': 'warning',  # Changed from 'info'
-                'category': 'guard',
-                'title': 'Guard: requires Fast flag',
-                'description': 'Guard flag requires having the Fast flag first',
-                'suggestion': 'Get Fast flag by having bandwidth ≥100 KB/s OR in top 7/8ths of network. Most relays get this easily.',
             })
     
     # =========================================================================
@@ -319,11 +322,25 @@ def generate_issues_from_consensus(
             })
     
     # =========================================================================
-    # HSDIR FLAG ISSUES (4 issue types) - all warning severity
+    # HSDIR FLAG ISSUES (5 issue types) - all warning severity
+    # Per Tor source (voteflags.c dirserv_thinks_router_is_hs_dir):
+    #   HSDir requires: wants_to_be_hs_dir AND supports_tunnelled_dir_requests
+    #   AND is_stable AND is_fast AND uptime >= threshold AND is_active
+    # supports_tunnelled_dir_requests maps to the V2Dir flag.
     # =========================================================================
     has_hsdir = 'HSDir' in current_flags
+    has_v2dir = 'V2Dir' in current_flags
     if not has_hsdir:
-        # Prerequisite checks (most common reason for missing HSDir)
+        # Prerequisite checks (order matches Guard & flag table: Fast → Stable → V2Dir)
+        if not has_fast:
+            issues.append({
+                'severity': 'warning',
+                'category': 'hsdir',
+                'title': 'HSDir: requires Fast flag',
+                'description': 'HSDir flag requires having the Fast flag first',
+                'suggestion': 'Get Fast flag by having bandwidth ≥100 KB/s OR in top 7/8ths of network. Most relays get this easily.',
+            })
+        
         if not has_stable:
             issues.append({
                 'severity': 'warning',
@@ -333,13 +350,20 @@ def generate_issues_from_consensus(
                 'suggestion': 'Get Stable flag by maintaining consistent uptime. Stable requires uptime and MTBF at or above network median (typically 2-3 weeks of stable running). Avoid restarts.',
             })
         
-        if not has_fast:
+        # V2Dir / tunnelled-dir-server check
+        # Tor source requires supports_tunnelled_dir_requests for HSDir.
+        # Without it, HSDir is never assigned even if all other metrics pass.
+        if not has_v2dir:
             issues.append({
                 'severity': 'warning',
                 'category': 'hsdir',
-                'title': 'HSDir: requires Fast flag',
-                'description': 'HSDir flag requires having the Fast flag first',
-                'suggestion': 'Get Fast flag by having bandwidth ≥100 KB/s OR in top 7/8ths of network. Most relays get this easily.',
+                'title': 'HSDir: requires V2Dir (tunnelled-dir-server)',
+                'description': 'HSDir requires the relay to support tunnelled directory requests (V2Dir flag). '
+                              'This relay is missing V2Dir — the descriptor likely does not include '
+                              '<code>tunnelled-dir-server</code>, usually because <code>DirCache 0</code> is set in torrc.',
+                'suggestion': 'Remove <code>DirCache 0</code> from torrc (DirCache is enabled by default in Tor ≥0.3.3). '
+                             'Restart Tor and verify the descriptor includes <code>tunnelled-dir-server</code>. '
+                             'You can check with: <code>grep tunnelled-dir-server /var/lib/tor/cached-descriptors</code>',
             })
         
         # WFU check

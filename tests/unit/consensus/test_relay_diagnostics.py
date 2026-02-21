@@ -1,12 +1,12 @@
 """
 Tests for relay_diagnostics module.
 
-Tests all 24 issue types across 10 categories:
+Tests all 25 issue types across 10 categories:
 - consensus (1): Not in consensus
 - reachability (3): IPv4 issues, IPv6 not reachable, Partial IPv4
 - guard (5): BW below, WFU below, TK below, requires Stable, requires Fast
 - stable (1): Not eligible
-- hsdir (4): requires Stable, requires Fast, WFU below, TK below
+- hsdir (5): requires V2Dir, requires Stable, requires Fast, WFU below, TK below
 - bandwidth (1): High deviation
 - descriptor (1): StaleDesc
 - flags (1): BadExit
@@ -333,8 +333,13 @@ class TestConsensusIssues:
         assert len(hsdir_fast_issues) == 1
         assert hsdir_fast_issues[0]['severity'] == 'warning'
     
-    def test_hsdir_no_prereq_warning_when_has_both(self):
-        """Test no HSDir prerequisite warnings when relay has both Stable and Fast."""
+    def test_hsdir_requires_v2dir_is_warning(self):
+        """Test HSDir requires V2Dir flag is WARNING when V2Dir missing.
+        
+        This is the root cause for relays like Doomereu1: has Stable, Fast,
+        good WFU/TK, but missing V2Dir because descriptor lacks
+        tunnelled-dir-server (DirCache 0 in torrc).
+        """
         consensus_data = {
             'in_consensus': True,
             'authority_votes': [{'wfu': 0.99, 'tk': 10 * SECONDS_PER_DAY}],
@@ -344,7 +349,27 @@ class TestConsensusIssues:
         
         issues = generate_issues_from_consensus(
             consensus_data,
-            current_flags=['Stable', 'Fast'],  # No HSDir, but has both prereqs
+            current_flags=['Stable', 'Fast'],  # No HSDir, no V2Dir, but has Stable+Fast
+            observed_bandwidth=3_000_000
+        )
+        
+        hsdir_v2dir_issues = [i for i in issues if i['category'] == 'hsdir' and 'V2Dir' in i['title']]
+        assert len(hsdir_v2dir_issues) == 1
+        assert hsdir_v2dir_issues[0]['severity'] == 'warning'
+        assert 'tunnelled-dir-server' in hsdir_v2dir_issues[0]['description']
+    
+    def test_hsdir_no_prereq_warning_when_has_all(self):
+        """Test no HSDir prerequisite warnings when relay has Stable, Fast, and V2Dir."""
+        consensus_data = {
+            'in_consensus': True,
+            'authority_votes': [{'wfu': 0.99, 'tk': 10 * SECONDS_PER_DAY}],
+            'reachability': {'ipv4_reachable_count': 9},
+            'flag_eligibility': {},
+        }
+        
+        issues = generate_issues_from_consensus(
+            consensus_data,
+            current_flags=['Stable', 'Fast', 'V2Dir'],  # No HSDir, but has all prereqs
             observed_bandwidth=3_000_000
         )
         
@@ -686,7 +711,7 @@ class TestNoIssuesForHealthyRelay:
         }
         
         relay = {
-            'flags': ['Guard', 'Stable', 'Fast', 'Valid', 'Running', 'HSDir'],
+            'flags': ['Guard', 'Stable', 'Fast', 'Valid', 'Running', 'HSDir', 'V2Dir'],
             'observed_bandwidth': 10_000_000,  # 10 MB/s
             'version': '0.4.8.12',
             'recommended_version': True,

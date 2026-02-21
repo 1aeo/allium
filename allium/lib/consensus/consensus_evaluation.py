@@ -676,11 +676,12 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
     guard_prereq_v2dir_count = sum(1 for d in guard_details if d.get('has_v2dir', False))
     
     # Extract HSDir prerequisite flag counts from flag_eligibility
-    # Per Tor dir-spec: HSDir requires Stable and Fast flags
-    # Note: Using guard_details since it contains has_stable/has_fast fields
-    # (HSDir and Guard share the same authority flag assignments)
+    # Per Tor source (voteflags.c): HSDir requires Stable, Fast, AND V2Dir
+    # (supports_tunnelled_dir_requests). Using guard_details since it contains
+    # has_stable/has_fast/has_v2dir fields from the same authority loop.
     hsdir_prereq_stable_count = sum(1 for d in guard_details if d.get('has_stable', False))
     hsdir_prereq_fast_count = sum(1 for d in guard_details if d.get('has_fast', False))
+    hsdir_prereq_v2dir_count = sum(1 for d in guard_details if d.get('has_v2dir', False))
     
     # Calculate Fast analysis using observed_bandwidth
     fast_range = _format_range(fast_speed_values, bw_formatter) if fast_speed_values else 'N/A'
@@ -765,6 +766,7 @@ def _format_relay_values(consensus_data: dict, flag_thresholds: dict = None, obs
         'hsdir_tk_meets_count': hsdir_tk_meets_count,
         'hsdir_prereq_stable_count': hsdir_prereq_stable_count,
         'hsdir_prereq_fast_count': hsdir_prereq_fast_count,
+        'hsdir_prereq_v2dir_count': hsdir_prereq_v2dir_count,
         'hsdir_tk_max_display': _format_days(hsdir_tk_max),
         'hsdir_tk_consensus_display': _format_days(hsdir_tk_consensus),
         'hsdir_tk_strict_auths': hsdir_tk_strict_auths,
@@ -805,7 +807,7 @@ FLAG_TOOLTIPS = {
     'guard': "Entry Guard: First hop in Tor circuits. Requires high uptime (WFU>=98%), sufficient age (TK>=8d), and bandwidth (>=2MB/s or top 25%).",
     'stable': "Suitable for long-lived connections. Requires sufficient MTBF and uptime to handle persistent streams.",
     'fast': "High bandwidth relay. Requires >=100 KB/s or in top 7/8 of network bandwidth.",
-    'hsdir': "Hidden Service Directory: Stores and serves hidden service descriptors. Requires high uptime (WFU>=98%) and sufficient age.",
+    'hsdir': "Hidden Service Directory: Stores and serves hidden service descriptors. Requires V2Dir (tunnelled-dir-server), Stable, Fast flags, high uptime (WFU>=98%), and sufficient age.",
     'running': "Relay is reachable: Directory Authority successfully connected to relay's OR port.",
     'valid': "Relay is verified: Not blacklisted, has valid descriptor, and properly configured. Does not require a recommended Tor version.",
     'v2dir': "Supports directory protocol v2+: Can serve directory information to clients.",
@@ -1260,20 +1262,25 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
                           uptime_threshold, uptime_status,
                           _get_status_text(uptime_status, da_count=uptime_meets_count, da_total=total_authorities)))
     
-    # HSDir flag (4 rows: 2 prereqs + 2 metrics)
-    # Per Tor dir-spec: HSDir requires Stable and Fast flags (2 deps)
+    # HSDir flag (5 rows: 3 prereqs + 2 metrics)
+    # Per Tor source (voteflags.c): HSDir requires Stable, Fast, AND V2Dir
+    # (supports_tunnelled_dir_requests = tunnelled-dir-server in descriptor)
     hsdir_color = get_flag_color('hsdir')
     hsdir_tooltip = FLAG_TOOLTIPS['hsdir']
     hsdir_prereq_stable = rv.get('hsdir_prereq_stable_count', 0)
     hsdir_prereq_fast = rv.get('hsdir_prereq_fast_count', 0)
+    hsdir_prereq_v2dir = rv.get('hsdir_prereq_v2dir_count', 0)
     
-    # Row 1-2: Prerequisites - show actual flag thresholds
-    rows.append(_make_prereq_row('HSDir', hsdir_tooltip, hsdir_color, 'Stable', 
-                                  hsdir_prereq_stable, total_authorities, majority_required, rowspan=4,
-                                  threshold_override=mtbf_threshold))
+    # Row 1-3: Prerequisites (order matches Guard: Fast → Stable → V2Dir)
     rows.append(_make_prereq_row('HSDir', hsdir_tooltip, hsdir_color, 'Fast',
-                                  hsdir_prereq_fast, total_authorities, majority_required,
+                                  hsdir_prereq_fast, total_authorities, majority_required, rowspan=5,
                                   threshold_override=fast_threshold))
+    rows.append(_make_prereq_row('HSDir', hsdir_tooltip, hsdir_color, 'Stable', 
+                                  hsdir_prereq_stable, total_authorities, majority_required,
+                                  threshold_override=mtbf_threshold))
+    rows.append(_make_prereq_row('HSDir', hsdir_tooltip, hsdir_color, 'V2Dir',
+                                  hsdir_prereq_v2dir, total_authorities, majority_required,
+                                  threshold_override=v2dir_threshold))
     
     # Row 3: WFU (using DRY helper)
     hsdir_wfu_status = 'meets' if rv.get('hsdir_wfu_meets') else 'below'
