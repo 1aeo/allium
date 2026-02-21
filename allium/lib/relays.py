@@ -387,24 +387,29 @@ class Relays:
             if country:
                 relay["country"] = country.upper()
             
-            # CW percentage + percentile (single lookup for consensus_weight)
+            # CW percentage + percentile (precomputed for template efficiency)
+            # Two precisions: .2f for Health Status summary, .4f for Bandwidth section detail
             cw_raw = relay.get("consensus_weight")
             cwf = relay.get("consensus_weight_fraction")
             if cwf is not None:
                 relay["consensus_weight_percentage"] = f"{cwf * 100:.2f}%"
+                relay["consensus_weight_percentage_precise"] = f"{cwf * 100:.4f}%"
             elif cw_raw and total_cw > 0:
                 cwf = cw_raw / total_cw
                 relay["consensus_weight_fraction"] = cwf
                 relay["consensus_weight_percentage"] = f"{cwf * 100:.2f}%"
+                relay["consensus_weight_percentage_precise"] = f"{cwf * 100:.4f}%"
             else:
                 relay["consensus_weight_percentage"] = NA_FALLBACK
+                relay["consensus_weight_percentage_precise"] = NA_FALLBACK
             relay['cw_percentile'] = round(_bisect_left(cw_vals, cw_raw) / cw_n * 100, 1) if cw_raw and cw_n else None
             
-            # Role probability percentiles + percentage strings
+            # Role probability percentiles + percentage strings (precomputed for template efficiency)
+            # .4f precision for Bandwidth section detail display
             for src, pctl_key, pct_key, arr, n in _prob_defs:
                 v = relay.get(src)
                 relay[pctl_key] = round(_bisect_left(arr, v) / n * 100, 1) if v and n else None
-                relay[pct_key] = f"{v * 100:.2f}%" if v is not None else NA_FALLBACK
+                relay[pct_key] = f"{v * 100:.4f}%" if v is not None else NA_FALLBACK
             
             # Bandwidth formatting
             obs_bw = relay.get("observed_bandwidth", 0)
