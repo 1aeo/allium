@@ -701,13 +701,13 @@ Network Health Dashboard
                     </div>
                 </div>
                 
-                <!-- Family-cert Actual Adoption (from server descriptors) -->
+                <!-- Family-cert Actual Adoption (accumulated from server descriptors) -->
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
-                    <div class="metric-item" title="Relays confirmed publishing family-cert in their server descriptors (from latest descriptor sample of {{ "{:,}".format(relays.json.network_health.hf_family_cert_sample_size) }} descriptors). This is the ACTUAL adoption count — relays that have generated and deployed a family key.">
+                    <div class="metric-item" title="Relays confirmed publishing family-cert in their server descriptors. Accumulated across hourly runs — each run adds ~800-2000 relays toward full network coverage (~16 hours for 100%). Currently tracking {{ "{:,}".format(relays.json.network_health.hf_family_cert_seen_total) }} relays.">
                         <span class="metric-value" style="color: #28a745; font-weight: 600;">{{ "{:,}".format(relays.json.network_health.hf_family_cert_count) }}</span>
                         <span class="metric-label">Relays with family-cert</span>
                     </div>
-                    <div class="metric-item" title="Relays running v0.4.9.x+ but not yet publishing family-cert. These operators need to generate and deploy a family key using 'tor --keygen-family'.">
+                    <div class="metric-item" title="Relays running v0.4.9.x+ but not yet publishing family-cert. These operators need to generate and deploy a family key using 'tor --keygen-family'. This count improves as more descriptors are tracked across runs.">
                         <span class="metric-value" style="color: #ff8c00;">{{ "{:,}".format(relays.json.network_health.hf_family_cert_not_configured) }}</span>
                         <span class="metric-label">v0.4.9.x+ without family-cert</span>
                     </div>

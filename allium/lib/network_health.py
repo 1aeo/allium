@@ -1388,12 +1388,15 @@ def calculate_network_health_metrics(relay_set):
         cm_info = collector_data_hf.get('consensus_method_info', {})
     
     # Family-cert from collector descriptors (separate worker, separate cache)
+    # Data accumulates across runs: each hourly file has ~800-2000 descriptors out of ~10k.
+    # After ~16 runs the accumulated set reaches full network coverage.
     collector_descs = getattr(relay_set, 'collector_descriptors_data', None)
     family_cert_count = 0
-    desc_sample_total = 0
+    desc_seen_total = 0
     if collector_descs and isinstance(collector_descs, dict):
         family_cert_fps = set(collector_descs.get('family_cert_fingerprints', []))
-        desc_sample_total = collector_descs.get('total_descriptors', 0)
+        all_seen_fps = set(collector_descs.get('all_seen_fingerprints', []))
+        desc_seen_total = len(all_seen_fps)
         # Count relays in our Onionoo dataset that appear in the family-cert set
         for relay in relay_set.json['relays']:
             if relay.get('fingerprint', '').upper() in family_cert_fps:
@@ -1455,9 +1458,9 @@ def calculate_network_health_metrics(relay_set):
         'hf_not_ready_relays_percentage': _pct(total_relays_count - family_key_ready_relays, total_relays_count),
         'hf_ready_exit_relays': family_key_ready_exit_relays,
         'hf_ready_guard_relays': family_key_ready_guard_relays,
-        # Family-cert actual adoption (from server descriptors)
+        # Family-cert actual adoption (accumulated from server descriptors across runs)
         'hf_family_cert_count': family_cert_count,
-        'hf_family_cert_sample_size': desc_sample_total,
+        'hf_family_cert_seen_total': desc_seen_total,
         'hf_family_cert_not_configured': max(0, family_key_ready_relays - family_cert_count),
         # Bandwidth + CW
         'hf_ready_bandwidth': family_key_ready_bandwidth,

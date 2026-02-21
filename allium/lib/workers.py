@@ -824,17 +824,27 @@ def fetch_collector_data(progress_logger=None):
 def fetch_collector_descriptors(progress_logger=None):
     """
     Fetch latest CollecTor server-descriptors file and extract family-cert
-    presence per relay in a single pass. Used for Happy Family Key Migration tracking.
+    presence per relay. Accumulates results across runs for full network coverage.
+    
+    CollecTor publishes ~800-2000 descriptors per hourly file (out of ~10,000 total
+    relays), since relays publish new descriptors every ~18 hours. To build a
+    complete picture, this worker MERGES new fingerprints into the cached set on
+    each run, building toward full coverage over ~16 hours of runs.
+    
+    The cache stores ALL fingerprints seen with family-cert plus ALL fingerprints
+    seen without it. On each run, fingerprints from the latest file update or add
+    to this accumulated set, so a relay that adds family-cert will be correctly
+    re-classified on the next run that includes its descriptor.
     
     Follows same worker pattern as fetch_collector_consensus_data():
-    feature flag → cache check → timeout selection → fetch → parse → cache → mark ready.
+    feature flag → cache check → timeout selection → fetch → parse → merge → cache.
     
     Args:
         progress_logger: Optional function for progress updates
     
     Returns:
-        dict with 'family_cert_fingerprints' (list of uppercase hex strings),
-        'total_descriptors' (int), 'fetched_at' (str), or None on failure
+        dict with 'family_cert_fingerprints' (list), 'all_seen_fingerprints' (list),
+        'total_descriptors_latest' (int), 'fetched_at' (str), or None on failure
     """
     import re
     from .consensus import is_consensus_evaluation_enabled
@@ -852,23 +862,23 @@ def fetch_collector_descriptors(progress_logger=None):
         log_progress("consensus evaluation feature is disabled")
         return None
     
-    # Check cache age — same pattern as fetch_collector_consensus_data
+    # Always load existing cache for merging (even if fresh — we still merge new data)
+    cached_data = _load_cache(api_name)
+    has_valid_cache = cached_data and _validate_descriptors_cache(cached_data)
+    
+    # Check cache age — if fresh, return cached data without fetching
     cache_age = _cache_manager.get_cache_age(api_name)
     cache_max_age_seconds = DESCRIPTORS_CACHE_MAX_AGE_HOURS * 3600
-    if cache_age is not None and cache_age < cache_max_age_seconds:
+    if cache_age is not None and cache_age < cache_max_age_seconds and has_valid_cache:
         log_progress(f"using cached descriptor data (less than {DESCRIPTORS_CACHE_MAX_AGE_HOURS} hour(s) old)")
-        cached_data = _load_cache(api_name)
-        if cached_data and _validate_descriptors_cache(cached_data):
-            _mark_ready(api_name)
-            cert_count = len(cached_data.get('family_cert_fingerprints', []))
-            total = cached_data.get('total_descriptors', 0)
-            log_progress(f"loaded {cert_count}/{total} descriptors with family-cert from cache")
-            return cached_data
+        _mark_ready(api_name)
+        cert_count = len(cached_data.get('family_cert_fingerprints', []))
+        seen_count = len(cached_data.get('all_seen_fingerprints', []))
+        log_progress(f"loaded {cert_count} with family-cert out of {seen_count} tracked relays from cache")
+        return cached_data
     
     try:
         # Determine timeout based on cache availability
-        cached_data = _load_cache(api_name)
-        has_valid_cache = cached_data and _validate_descriptors_cache(cached_data)
         if has_valid_cache:
             timeout_seconds = DESCRIPTORS_TIMEOUT_FRESH_CACHE
             log_progress(f"cache is {(cache_age or 0) / 3600:.1f} hours old (>={DESCRIPTORS_CACHE_MAX_AGE_HOURS}h), using {timeout_seconds}s timeout to refresh...")
@@ -905,9 +915,10 @@ def fetch_collector_descriptors(progress_logger=None):
         with urllib.request.urlopen(req, timeout=timeout_seconds) as response:
             content = response.read(100 * 1024 * 1024).decode('utf-8', errors='replace')
         
-        # Step 4: Single-pass parse — only extract fingerprint + family-cert presence
-        # Minimal work per line for compute efficiency on ~7MB of data
-        family_cert_fps = set()
+        # Step 4: Single-pass parse — extract fingerprint + family-cert presence
+        # Each descriptor: track whether it has family-cert or not
+        new_cert_fps = set()       # FPs with family-cert in this file
+        new_no_cert_fps = set()    # FPs without family-cert in this file
         total = 0
         current_fp = None
         has_cert = False
@@ -918,12 +929,13 @@ def fetch_collector_descriptors(progress_logger=None):
                 if current_fp is not None:
                     total += 1
                     if has_cert:
-                        family_cert_fps.add(current_fp)
+                        new_cert_fps.add(current_fp)
+                    else:
+                        new_no_cert_fps.add(current_fp)
                 # Reset for new descriptor
                 current_fp = None
                 has_cert = False
             elif line.startswith('fingerprint '):
-                # "fingerprint ABCD 1234 ..." → join without spaces, uppercase
                 current_fp = line[12:].replace(' ', '').upper()
             elif line == 'family-cert':
                 has_cert = True
@@ -932,16 +944,11 @@ def fetch_collector_descriptors(progress_logger=None):
         if current_fp is not None:
             total += 1
             if has_cert:
-                family_cert_fps.add(current_fp)
+                new_cert_fps.add(current_fp)
+            else:
+                new_no_cert_fps.add(current_fp)
         
-        # Build result — list() for JSON cache serialization
-        data = {
-            'family_cert_fingerprints': list(family_cert_fps),
-            'total_descriptors': total,
-            'fetched_at': datetime.utcnow().isoformat(),
-        }
-        
-        # Validate result
+        # Validate parse result
         if total == 0:
             log_progress("warning: parsed 0 descriptors from file")
             _mark_stale(api_name, "No descriptors parsed")
@@ -950,12 +957,42 @@ def fetch_collector_descriptors(progress_logger=None):
                 return cached_data
             return None
         
+        # Step 5: MERGE with cached data — accumulate across runs
+        # Start from cached accumulated sets
+        accumulated_cert = set(cached_data.get('family_cert_fingerprints', [])) if has_valid_cache else set()
+        accumulated_seen = set(cached_data.get('all_seen_fingerprints', [])) if has_valid_cache else set()
+        
+        prev_cert_count = len(accumulated_cert)
+        prev_seen_count = len(accumulated_seen)
+        
+        # For relays in this file: update their status (they may have added/removed family-cert)
+        # A relay in new_cert_fps: mark as having family-cert (add to cert set)
+        # A relay in new_no_cert_fps: mark as NOT having family-cert (remove from cert set if present)
+        accumulated_cert.update(new_cert_fps)
+        accumulated_cert -= new_no_cert_fps  # If a relay dropped family-cert, remove it
+        accumulated_seen.update(new_cert_fps)
+        accumulated_seen.update(new_no_cert_fps)
+        
+        # Build result
+        data = {
+            'family_cert_fingerprints': list(accumulated_cert),
+            'all_seen_fingerprints': list(accumulated_seen),
+            'total_descriptors_latest': total,
+            'fetched_at': datetime.utcnow().isoformat(),
+        }
+        
         # Cache + mark ready
         log_progress("caching descriptor data...")
         _save_cache(api_name, data)
         _mark_ready(api_name)
         
-        log_progress(f"successfully parsed {len(family_cert_fps)}/{total} descriptors with family-cert")
+        new_in_file = len(new_cert_fps)
+        log_progress(
+            f"parsed {new_in_file}/{total} with family-cert in latest file, "
+            f"accumulated {len(accumulated_cert)} with family-cert across "
+            f"{len(accumulated_seen)} tracked relays "
+            f"(+{len(accumulated_cert) - prev_cert_count} cert, +{len(accumulated_seen) - prev_seen_count} seen)"
+        )
         return data
         
     except Exception as e:
@@ -982,7 +1019,8 @@ def _validate_descriptors_cache(data):
         return False
     if 'family_cert_fingerprints' not in data:
         return False
-    if 'total_descriptors' not in data:
+    # Accept both old format (total_descriptors) and new format (all_seen_fingerprints)
+    if 'total_descriptors' not in data and 'all_seen_fingerprints' not in data:
         return False
     return True
 
