@@ -659,6 +659,126 @@ Network Health Dashboard
     <!-- FOURTH ROW -->
     <div class="ribbon-row">
         
+        <!-- CARD 11: HAPPY FAMILY KEY MIGRATION -->
+        <div class="ribbon-card happy-family-migration">
+            <div class="card-header">
+                <h4>🔑 Happy Family Key Migration</h4>
+            </div>
+            <div class="card-metrics">
+                <!-- Primary: DA Readiness -->
+                <div class="metric-item primary" title="Directory Authority upgrade status for Happy Families (Proposal 321). Need 7/9 voting authorities running Tor v0.4.9.x+ to activate consensus method 35 for family-ids in microdescriptors. Current: {{ relays.json.network_health.hf_ready_authorities }}/9 upgraded.">
+                    <span class="metric-value" style="{% if relays.json.network_health.hf_ready_authorities >= 7 %}color: #28a745;{% elif relays.json.network_health.hf_ready_authorities >= 5 %}color: #ff8c00;{% else %}color: #dc3545;{% endif %} font-weight: 700;">
+                        {{ relays.json.network_health.hf_ready_authorities }}/{{ relays.json.network_health.hf_total_voting_authorities }}
+                    </span>
+                    <span class="metric-label">Dir Authorities on v0.4.9.x+ (need {{ relays.json.network_health.hf_authorities_needed }}/{{ relays.json.network_health.hf_total_voting_authorities }})</span>
+                </div>
+                
+                <!-- Consensus Method + DAs remaining -->
+                <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
+                    <div class="metric-item" title="Current consensus method number computed from directory authority votes. The consensus method is the highest method supported by a majority of voting authorities. Method 35 is required for family-ids to appear in microdescriptors.">
+                        <span class="metric-value" style="{% if relays.json.network_health.hf_consensus_method and relays.json.network_health.hf_consensus_method >= relays.json.network_health.hf_consensus_method_required %}color: #28a745;{% else %}color: #dc3545;{% endif %} font-weight: 600;">
+                            {{ relays.json.network_health.hf_consensus_method|default('N/A', true) }}
+                        </span>
+                        <span class="metric-label">Consensus Method (need {{ relays.json.network_health.hf_consensus_method_required }})</span>
+                    </div>
+                    <div class="metric-item" title="Number of voting directory authorities still needing to upgrade to Tor v0.4.9.x+ for consensus method 35 to activate. Method 35 supported by {{ relays.json.network_health.hf_max_method_support }}/{{ relays.json.network_health.hf_consensus_total_voters }} DAs.">
+                        <span class="metric-value" style="{% if relays.json.network_health.hf_authorities_remaining == 0 %}color: #28a745;{% else %}color: #dc3545;{% endif %}">
+                            {{ relays.json.network_health.hf_authorities_remaining }}
+                        </span>
+                        <span class="metric-label">DAs Still Need Upgrade</span>
+                    </div>
+                </div>
+                
+                <!-- Relay Version Adoption -->
+                <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
+                    <div class="metric-item" title="Relays running Tor v0.4.9.x+ which supports Happy Families (family-cert certificates). These relays can use the new family key system once consensus method 35 activates.">
+                        <span class="metric-value" style="color: #28a745;">{{ "{:,}".format(relays.json.network_health.hf_ready_relays) }} ({{ "%.1f%%"|format(relays.json.network_health.hf_ready_relays_percentage) }})</span>
+                        <span class="metric-label">Relays on v0.4.9.x+</span>
+                    </div>
+                    <div class="metric-item" title="Relays still running older Tor versions without Happy Families support.">
+                        <span class="metric-value" style="color: #dc3545;">{{ "{:,}".format(relays.json.network_health.hf_not_ready_relays) }} ({{ "%.1f%%"|format(relays.json.network_health.hf_not_ready_relays_percentage) }})</span>
+                        <span class="metric-label">Relays on Older Versions</span>
+                    </div>
+                </div>
+                
+                <!-- Family-cert Actual Adoption (from server descriptors) -->
+                <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
+                    <div class="metric-item" title="Relays confirmed publishing family-cert in their server descriptors (from latest descriptor sample of {{ "{:,}".format(relays.json.network_health.hf_family_cert_sample_size) }} descriptors). This is the ACTUAL adoption count — relays that have generated and deployed a family key.">
+                        <span class="metric-value" style="color: #28a745; font-weight: 600;">{{ "{:,}".format(relays.json.network_health.hf_family_cert_count) }}</span>
+                        <span class="metric-label">Relays with family-cert</span>
+                    </div>
+                    <div class="metric-item" title="Relays running v0.4.9.x+ but not yet publishing family-cert. These operators need to generate and deploy a family key using 'tor --keygen-family'.">
+                        <span class="metric-value" style="color: #ff8c00;">{{ "{:,}".format(relays.json.network_health.hf_family_cert_not_configured) }}</span>
+                        <span class="metric-label">v0.4.9.x+ without family-cert</span>
+                    </div>
+                </div>
+                
+                <!-- Role breakdown + CW -->
+                <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
+                    <div class="metric-item" title="Exit relays running v0.4.9.x+ (Happy Families ready).">
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.hf_ready_exit_relays) }}</span>
+                        <span class="metric-label">Exit Relays Ready</span>
+                    </div>
+                    <div class="metric-item" title="Guard relays running v0.4.9.x+ (Happy Families ready).">
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.hf_ready_guard_relays) }}</span>
+                        <span class="metric-label">Guard Relays Ready</span>
+                    </div>
+                    <div class="metric-item" title="Consensus weight from v0.4.9.x+ relays. Shows what fraction of routing weight supports the new family system.">
+                        <span class="metric-value">{{ "%.1f%%"|format(relays.json.network_health.hf_ready_cw_percentage) }}</span>
+                        <span class="metric-label">CW Ready</span>
+                    </div>
+                </div>
+                
+                <!-- Bandwidth ready -->
+                <div class="metric-grid" style="grid-template-columns: repeat(1, 1fr);">
+                    <div class="metric-item" title="Total observed bandwidth capacity from relays running v0.4.9.x+ (Happy Families ready).">
+                        <span class="metric-value">{{ relays.json.network_health.hf_ready_bandwidth_formatted }} ({{ "%.1f%%"|format(relays.json.network_health.hf_ready_bandwidth_percentage) }})</span>
+                        <span class="metric-label">Bandwidth Capacity Ready</span>
+                    </div>
+                </div>
+                
+                <!-- Operator Adoption (AROI validated) -->
+                <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
+                    <div class="metric-item" title="Validated AROI operators with at least one relay running v0.4.9.x+. These operators have begun upgrading. Percentage is of {{ "{:,}".format(relays.json.network_health.hf_total_validated_operators) }} total validated AROI operators.">
+                        <span class="metric-value" style="color: #28a745;">{{ "{:,}".format(relays.json.network_health.hf_some_operators) }} ({{ "%.1f%%"|format(relays.json.network_health.hf_some_operators_percentage) }})</span>
+                        <span class="metric-label">Operators with ≥1 Relay Ready</span>
+                    </div>
+                    <div class="metric-item" title="Validated AROI operators with ALL their relays running v0.4.9.x+. Fully ready for Happy Family Key migration. Percentage is of {{ "{:,}".format(relays.json.network_health.hf_total_validated_operators) }} total validated AROI operators.">
+                        <span class="metric-value" style="color: {% if relays.json.network_health.hf_all_operators > 0 %}#28a745{% else %}#dc3545{% endif %}; font-weight: 600;">{{ "{:,}".format(relays.json.network_health.hf_all_operators) }} ({{ "%.1f%%"|format(relays.json.network_health.hf_all_operators_percentage) }})</span>
+                        <span class="metric-label">Operators Fully Ready</span>
+                    </div>
+                </div>
+                
+                <!-- Consensus Parameters (auto-populates when they appear) -->
+                <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
+                    <div class="metric-item" title="Consensus parameter 'use-family-ids' controls whether clients enforce family-ID-based grouping for path selection. Default: 1. When explicitly set to 1, clients use family-ids from microdescriptors.">
+                        <span class="metric-value">
+                            {% if relays.json.network_health.hf_use_family_ids is not none %}
+                                <span style="color: #28a745; font-weight: 600;">{{ relays.json.network_health.hf_use_family_ids }}</span>
+                            {% else %}
+                                <span style="color: #6c757d;">Not in consensus</span>
+                            {% endif %}
+                        </span>
+                        <span class="metric-label">use-family-ids (default: 1)</span>
+                    </div>
+                    <div class="metric-item" title="Consensus parameter 'use-family-lists' controls the legacy MyFamily system. Default: 1. When set to 0, MyFamily is deprecated and operators can remove it from torrc — achieving ~80% microdescriptor size reduction.">
+                        <span class="metric-value">
+                            {% if relays.json.network_health.hf_use_family_lists is not none %}
+                                {% if relays.json.network_health.hf_use_family_lists == 0 %}
+                                    <span style="color: #28a745; font-weight: 600;">0 (deprecated!)</span>
+                                {% else %}
+                                    <span style="color: #ff8c00;">{{ relays.json.network_health.hf_use_family_lists }}</span>
+                                {% endif %}
+                            {% else %}
+                                <span style="color: #6c757d;">Not in consensus</span>
+                            {% endif %}
+                        </span>
+                        <span class="metric-label">use-family-lists (default: 1)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
         <!-- CARD 10: EXIT POLICIES -->
         <div class="ribbon-card exit-policies">
             <div class="card-header">
