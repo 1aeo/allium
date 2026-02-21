@@ -1271,16 +1271,16 @@ def _format_flag_requirements_table(rv: dict, diag: dict) -> list:
     hsdir_prereq_fast = rv.get('hsdir_prereq_fast_count', 0)
     hsdir_prereq_v2dir = rv.get('hsdir_prereq_v2dir_count', 0)
     
-    # Row 1-3: Prerequisites - show actual flag thresholds
-    rows.append(_make_prereq_row('HSDir', hsdir_tooltip, hsdir_color, 'V2Dir', 
-                                  hsdir_prereq_v2dir, total_authorities, majority_required, rowspan=5,
-                                  threshold_override=v2dir_threshold))
+    # Row 1-3: Prerequisites (order matches Guard: Fast → Stable → V2Dir)
+    rows.append(_make_prereq_row('HSDir', hsdir_tooltip, hsdir_color, 'Fast',
+                                  hsdir_prereq_fast, total_authorities, majority_required, rowspan=5,
+                                  threshold_override=fast_threshold))
     rows.append(_make_prereq_row('HSDir', hsdir_tooltip, hsdir_color, 'Stable', 
                                   hsdir_prereq_stable, total_authorities, majority_required,
                                   threshold_override=mtbf_threshold))
-    rows.append(_make_prereq_row('HSDir', hsdir_tooltip, hsdir_color, 'Fast',
-                                  hsdir_prereq_fast, total_authorities, majority_required,
-                                  threshold_override=fast_threshold))
+    rows.append(_make_prereq_row('HSDir', hsdir_tooltip, hsdir_color, 'V2Dir',
+                                  hsdir_prereq_v2dir, total_authorities, majority_required,
+                                  threshold_override=v2dir_threshold))
     
     # Row 3: WFU (using DRY helper)
     hsdir_wfu_status = 'meets' if rv.get('hsdir_wfu_meets') else 'below'
