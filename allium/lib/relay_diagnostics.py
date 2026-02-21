@@ -3,7 +3,7 @@ Relay diagnostics - centralized issue detection for relay health.
 
 This module consolidates all issue detection into a single source of truth:
 - Consensus issues (votes, reachability)
-- Flag eligibility issues (Guard, Stable, HSDir)
+- Flag eligibility issues (Guard, Stable, HSDir prerequisites + metrics)
 - Bandwidth issues (measurement deviation)
 - Version issues (not recommended)
 - Overload issues (general, rate limits, FD exhaustion)
@@ -319,11 +319,30 @@ def generate_issues_from_consensus(
             })
     
     # =========================================================================
-    # HSDIR FLAG ISSUES (2 issue types) - both changed from info to warning
+    # HSDIR FLAG ISSUES (4 issue types) - all warning severity
     # =========================================================================
     has_hsdir = 'HSDir' in current_flags
     if not has_hsdir:
-        # CHANGED: info → warning
+        # Prerequisite checks (most common reason for missing HSDir)
+        if not has_stable:
+            issues.append({
+                'severity': 'warning',
+                'category': 'hsdir',
+                'title': 'HSDir: requires Stable flag',
+                'description': 'HSDir flag requires having the Stable flag first',
+                'suggestion': 'Get Stable flag by maintaining consistent uptime. Stable requires uptime and MTBF at or above network median (typically 2-3 weeks of stable running). Avoid restarts.',
+            })
+        
+        if not has_fast:
+            issues.append({
+                'severity': 'warning',
+                'category': 'hsdir',
+                'title': 'HSDir: requires Fast flag',
+                'description': 'HSDir flag requires having the Fast flag first',
+                'suggestion': 'Get Fast flag by having bandwidth ≥100 KB/s OR in top 7/8ths of network. Most relays get this easily.',
+            })
+        
+        # WFU check
         if relay_wfu is not None and relay_wfu < HSDIR_WFU_DEFAULT:
             issues.append({
                 'severity': 'warning',  # Changed from 'info'

@@ -1,12 +1,12 @@
 """
 Tests for relay_diagnostics module.
 
-Tests all 22 issue types across 10 categories:
+Tests all 24 issue types across 10 categories:
 - consensus (1): Not in consensus
 - reachability (3): IPv4 issues, IPv6 not reachable, Partial IPv4
 - guard (5): BW below, WFU below, TK below, requires Stable, requires Fast
 - stable (1): Not eligible
-- hsdir (2): WFU below, TK below
+- hsdir (4): requires Stable, requires Fast, WFU below, TK below
 - bandwidth (1): High deviation
 - descriptor (1): StaleDesc
 - flags (1): BadExit
@@ -294,6 +294,62 @@ class TestConsensusIssues:
         hsdir_tk_issues = [i for i in issues if 'HSDir' in i['title'] and 'Time Known' in i['title']]
         assert len(hsdir_tk_issues) >= 1
         assert hsdir_tk_issues[0]['severity'] == 'warning'  # Changed from 'info'
+    
+    def test_hsdir_requires_stable_is_warning(self):
+        """Test HSDir requires Stable flag is WARNING when Stable missing."""
+        consensus_data = {
+            'in_consensus': True,
+            'authority_votes': [{'wfu': 0.99, 'tk': 10 * SECONDS_PER_DAY}],
+            'reachability': {'ipv4_reachable_count': 9},
+            'flag_eligibility': {},
+        }
+        
+        issues = generate_issues_from_consensus(
+            consensus_data,
+            current_flags=['Fast'],  # No HSDir, no Stable
+            observed_bandwidth=3_000_000
+        )
+        
+        hsdir_stable_issues = [i for i in issues if i['category'] == 'hsdir' and 'requires Stable' in i['title']]
+        assert len(hsdir_stable_issues) == 1
+        assert hsdir_stable_issues[0]['severity'] == 'warning'
+    
+    def test_hsdir_requires_fast_is_warning(self):
+        """Test HSDir requires Fast flag is WARNING when Fast missing."""
+        consensus_data = {
+            'in_consensus': True,
+            'authority_votes': [{'wfu': 0.99, 'tk': 10 * SECONDS_PER_DAY}],
+            'reachability': {'ipv4_reachable_count': 9},
+            'flag_eligibility': {},
+        }
+        
+        issues = generate_issues_from_consensus(
+            consensus_data,
+            current_flags=['Stable'],  # No HSDir, no Fast
+            observed_bandwidth=3_000_000
+        )
+        
+        hsdir_fast_issues = [i for i in issues if i['category'] == 'hsdir' and 'requires Fast' in i['title']]
+        assert len(hsdir_fast_issues) == 1
+        assert hsdir_fast_issues[0]['severity'] == 'warning'
+    
+    def test_hsdir_no_prereq_warning_when_has_both(self):
+        """Test no HSDir prerequisite warnings when relay has both Stable and Fast."""
+        consensus_data = {
+            'in_consensus': True,
+            'authority_votes': [{'wfu': 0.99, 'tk': 10 * SECONDS_PER_DAY}],
+            'reachability': {'ipv4_reachable_count': 9},
+            'flag_eligibility': {},
+        }
+        
+        issues = generate_issues_from_consensus(
+            consensus_data,
+            current_flags=['Stable', 'Fast'],  # No HSDir, but has both prereqs
+            observed_bandwidth=3_000_000
+        )
+        
+        hsdir_prereq_issues = [i for i in issues if i['category'] == 'hsdir' and 'requires' in i['title']]
+        assert len(hsdir_prereq_issues) == 0
     
     def test_high_consensus_weight_deviation(self):
         """Test high consensus weight deviation (warning severity)."""
