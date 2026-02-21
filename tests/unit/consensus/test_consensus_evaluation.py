@@ -318,9 +318,9 @@ class TestIdentifyIssues:
                 'guard': {'eligible_count': 9},
             },
         }
-        # Pass current_flags with 'Guard' to avoid the "not eligible for Guard" warning
+        # Pass current_flags with Guard + prerequisites to avoid flag eligibility warnings
         # Pass observed_bandwidth >= 2MB/s to meet Guard BW requirement
-        issues = _identify_issues(diagnostics, current_flags=['Guard'], observed_bandwidth=3_000_000)
+        issues = _identify_issues(diagnostics, current_flags=['Guard', 'Stable', 'Fast', 'HSDir'], observed_bandwidth=3_000_000)
         assert len(issues) == 0
     
     def test_not_in_consensus_issue(self):
