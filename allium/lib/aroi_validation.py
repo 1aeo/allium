@@ -10,85 +10,10 @@ Functional approach for simplicity and maintainability
 """
 
 import json
-import os
 import re
-import time
-import urllib.request
-import urllib.error
 from collections import defaultdict
 from typing import Dict, Optional, List
 from datetime import datetime
-
-DEFAULT_AROI_VALIDATION_URL = "https://aroivalidator.1aeo.com/latest.json"
-CACHE_FILE_NAME = "aroi_validation_cache.json"
-CACHE_DURATION_HOURS = 1
-
-
-def fetch_aroi_validation_data(cache_dir="./cache", 
-                                 url=DEFAULT_AROI_VALIDATION_URL,
-                                 force_refresh=False):
-    """
-    DEPRECATED: Use workers.fetch_aroi_validation() instead.
-    
-    This standalone function has its own cache in a different directory,
-    no total-timeout protection, no retry logic, and doesn't catch JSONDecodeError.
-    The active code path uses workers.py:fetch_aroi_validation() which has
-    proper total timeout, retry with backoff, and centralized caching.
-    
-    This function is retained only for backward compatibility and will be
-    removed in a future release.
-    
-    Args:
-        cache_dir: Directory to store cache file
-        url: API endpoint URL
-        force_refresh: Force fetch from API even if cache is valid
-        
-    Returns:
-        Dict containing validation data or None if fetch failed
-    """
-    import warnings
-    warnings.warn(
-        "fetch_aroi_validation_data() is deprecated. Use workers.fetch_aroi_validation() instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    os.makedirs(cache_dir, exist_ok=True)
-    cache_path = os.path.join(cache_dir, CACHE_FILE_NAME)
-    
-    # Check cache first
-    if not force_refresh and os.path.exists(cache_path):
-        try:
-            cache_age = time.time() - os.path.getmtime(cache_path)
-            if cache_age < CACHE_DURATION_HOURS * 3600:
-                with open(cache_path, 'r') as f:
-                    cached_data = json.load(f)
-                    if _validate_structure(cached_data):
-                        return cached_data
-        except (OSError, json.JSONDecodeError) as e:
-            print(f"⚠️  Warning: Failed to read AROI validation cache: {e}")
-    
-    # Fetch from API using same pattern as workers.py
-    try:
-        req = urllib.request.Request(url, headers={'User-Agent': 'Allium/1.0'})
-        api_response = urllib.request.urlopen(req, timeout=30).read()
-        data = json.loads(api_response.decode('utf-8'))
-        
-        if not _validate_structure(data):
-            print("❌ Error: Invalid AROI validation data structure")
-            return None
-        
-        # Cache the data
-        with open(cache_path, 'w') as f:
-            json.dump(data, f, indent=2)
-        
-        return data
-        
-    except urllib.error.URLError as e:
-        print(f"⚠️  AROI Validation: Network error: {e}")
-        return None
-    except Exception as e:
-        print(f"⚠️  AROI Validation: Unexpected error: {e}")
-        return None
 
 
 def _validate_structure(data):
