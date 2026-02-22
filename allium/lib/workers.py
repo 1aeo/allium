@@ -907,6 +907,8 @@ def fetch_collector_consensus_data(authorities=None, progress_logger=None):
             return cached_data
     
     try:
+        fetch_start = time.time()
+        
         # Determine timeout based on cache availability
         cached_data = _load_cache(api_name)
         if cached_data and _validate_collector_cache(cached_data):
@@ -948,12 +950,13 @@ def fetch_collector_consensus_data(authorities=None, progress_logger=None):
         _mark_ready(api_name)
         
         # Log success with timing info
+        fetch_elapsed = time.time() - fetch_start
         relay_count = len(data.get('relay_index', {}))
         vote_count = len(data.get('votes', {}))
         timings = data.get('timings', {})
         total_time = sum(timings.values()) if timings else 0
         
-        log_progress(f"successfully fetched {relay_count} relays from {vote_count} authority votes ({total_time:.1f}s)")
+        log_progress(f"successfully fetched {relay_count} relays from {vote_count} authority votes ({fetch_elapsed:.1f}s total, {total_time:.1f}s fetch)")
         
         return data
         
@@ -1069,6 +1072,8 @@ def fetch_collector_descriptors(progress_logger=None):
         return cached_data
     
     try:
+        fetch_start = time.time()
+        
         # Determine timeout
         if has_valid_cache:
             timeout_seconds = DESCRIPTORS_TIMEOUT_FRESH_CACHE
@@ -1229,10 +1234,11 @@ def fetch_collector_descriptors(progress_logger=None):
         _save_cache(api_name, data)
         _mark_ready(api_name)
         
+        fetch_elapsed = time.time() - fetch_start
         log_progress(
             f"{len(final_seen_fps)} relays tracked ({len(final_cert_fps)} with family-cert) "
             f"from {len(target_files)} hourly files "
-            f"({files_downloaded} downloaded, {files_from_cache} cached)"
+            f"({files_downloaded} downloaded, {files_from_cache} cached) in {fetch_elapsed:.1f}s"
         )
         return data
         
@@ -1270,6 +1276,9 @@ def fetch_consensus_health(progress_logger=None):
     """
     Fetch consensus health data using AuthorityMonitor.
     
+    Uses TCP socket probes (not HTTP) to check authority responsiveness.
+    Falls back to cached data on failure.
+    
     Args:
         progress_logger: Optional function to call for progress updates
     
@@ -1291,14 +1300,20 @@ def fetch_consensus_health(progress_logger=None):
         log_progress("consensus evaluation feature is disabled")
         return None
     
+    # Pre-load cache for fallback
+    cached_data = _load_cache(api_name)
+    
     try:
         log_progress("checking authority health status...")
+        fetch_start = time.time()
         
         # Create monitor and check all authorities
         monitor = AuthorityMonitor(timeout=10)
         status = monitor.check_all_authorities()
         summary = monitor.get_summary(status)
         alerts = monitor.get_alerts(status)
+        
+        elapsed = time.time() - fetch_start
         
         data = {
             'authority_status': status,
@@ -1307,13 +1322,13 @@ def fetch_consensus_health(progress_logger=None):
             'fetched_at': summary.get('checked_at'),
         }
         
-        # Cache the data
+        # Cache the data for future fallback
         _save_cache(api_name, data)
         _mark_ready(api_name)
         
         online_count = summary.get('online_count', 0)
         total = summary.get('total_authorities', 0)
-        log_progress(f"authority health check complete: {online_count}/{total} online")
+        log_progress(f"authority health check complete: {online_count}/{total} online in {elapsed:.1f}s")
         
         return data
         
@@ -1321,6 +1336,12 @@ def fetch_consensus_health(progress_logger=None):
         error_msg = f"Failed to fetch consensus health: {str(e)}"
         log_progress(f"error: {error_msg}")
         _mark_stale(api_name, error_msg)
+        
+        # Fall back to cached data if available
+        if cached_data:
+            log_progress("using cached consensus health data due to error")
+            return cached_data
+        log_progress("no cached consensus health data available")
         return None
 
 

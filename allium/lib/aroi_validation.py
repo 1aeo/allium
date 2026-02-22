@@ -28,7 +28,15 @@ def fetch_aroi_validation_data(cache_dir="./cache",
                                  url=DEFAULT_AROI_VALIDATION_URL,
                                  force_refresh=False):
     """
-    Fetch AROI validation data from API with file-based caching.
+    DEPRECATED: Use workers.fetch_aroi_validation() instead.
+    
+    This standalone function has its own cache in a different directory,
+    no total-timeout protection, no retry logic, and doesn't catch JSONDecodeError.
+    The active code path uses workers.py:fetch_aroi_validation() which has
+    proper total timeout, retry with backoff, and centralized caching.
+    
+    This function is retained only for backward compatibility and will be
+    removed in a future release.
     
     Args:
         cache_dir: Directory to store cache file
@@ -38,6 +46,12 @@ def fetch_aroi_validation_data(cache_dir="./cache",
     Returns:
         Dict containing validation data or None if fetch failed
     """
+    import warnings
+    warnings.warn(
+        "fetch_aroi_validation_data() is deprecated. Use workers.fetch_aroi_validation() instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     os.makedirs(cache_dir, exist_ok=True)
     cache_path = os.path.join(cache_dir, CACHE_FILE_NAME)
     
