@@ -39,3 +39,5 @@ www-after/
 # Generated output directories
 baseline_output/
 refactored_output/
+www_before_opt/
+allium/www_before_opt/

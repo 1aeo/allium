@@ -35,7 +35,7 @@ Network Health Dashboard
                         <span class="metric-value">{{ relays.json.network_health.exit_count_with_percentage }}</span>
                         <span class="metric-label">Exit</span>
                     </div>
-                    <div class="metric-item" title="Guard relays serve as entry points into the Tor network. Must be Fast, Stable, and meet specific uptime and bandwidth requirements.">
+                    <div class="metric-item" title="Guard relays serve as entry points into the Tor network. Must be Fast, Stable, familiar to the authority, have sufficient weighted fractional uptime, and meet minimum bandwidth (AuthDirGuardBWGuarantee per dir-spec §3.4.2).">
                         <span class="metric-value">{{ relays.json.network_health.guard_count_with_percentage }}</span>
                         <span class="metric-label">Guard</span>
                     </div>
@@ -44,7 +44,7 @@ Network Health Dashboard
                         <span class="metric-label">Middle</span>
                     </div>
                     <div class="metric-item" title="Relays with both Exit and Guard flags can serve as both entry and exit points. Provides maximum utility to the network.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.guard_exit_count) }} ({{ "%.1f%%"|format(relays.json.network_health.guard_exit_percentage) }})</span>
+                        <span class="metric-value">{{ relays.json.network_health.guard_exit_count_formatted }} ({{ relays.json.network_health.guard_exit_percentage_formatted }})</span>
                         <span class="metric-label">Exit + Guard</span>
                     </div>
                 </div>
@@ -62,7 +62,7 @@ Network Health Dashboard
                         <span class="metric-label">Measured</span>
                     </div>
                     <div class="metric-item" title="Offline relays are not currently running according to the latest consensus. These relays are temporarily unavailable to the network.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.offline_relays) }} ({{ "%.1f%%"|format(relays.json.network_health.offline_relays_percentage) }})</span>
+                        <span class="metric-value">{{ relays.json.network_health.offline_relays_with_percentage }}</span>
                         <span class="metric-label">Offline</span>
                     </div>
                 </div>
@@ -71,59 +71,59 @@ Network Health Dashboard
                         <span class="metric-value">{{ relays.json.network_health.authorities_count_with_percentage }}</span>
                         <span class="metric-label">Directory Authorities</span>
                     </div>
-                    <div class="metric-item" title="V2Dir relays serve directory information including consensus documents and relay descriptors. Essential for network discovery and connectivity.">
+                    <div class="metric-item" title="V2Dir relays serve directory information to clients and other relays. Requires an open DirPort or tunnelled-dir-server support (Proposal 237). Essential for network discovery.">
                         <span class="metric-value">{{ relays.json.network_health.v2dir_count_with_percentage }}</span>
                         <span class="metric-label">V2Dir</span>
                     </div>
-                    <div class="metric-item" title="HSDir relays store and serve hidden service descriptors, enabling access to onion services. Requires Stable and Fast flags plus 96+ hours uptime.">
+                    <div class="metric-item" title="HSDir relays store and serve hidden service descriptors, enabling access to onion services. Requires Stable, Fast, and V2Dir flags plus uptime ≥ MinUptimeHidServDirectoryV2 (default 96 hours, per dir-spec §3.4.2 and Proposal 243).">
                         <span class="metric-value">{{ relays.json.network_health.hsdir_count_with_percentage }}</span>
                         <span class="metric-label">HSDir</span>
                     </div>
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
                     <div class="metric-item" title="Number and percentage of relays supporting both IPv4 and IPv6 protocols. Dual-stack relays provide maximum connectivity.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.both_ipv4_ipv6_relays) }} ({{ "%.1f%%"|format(relays.json.network_health.both_ipv4_ipv6_relays_percentage) }})</span>
+                        <span class="metric-value">{{ relays.json.network_health.both_ipv4_ipv6_relays_formatted }} ({{ relays.json.network_health.both_ipv4_ipv6_relays_percentage_formatted }})</span>
                         <span class="metric-label">Relays with IPv4 & IPv6</span>
                     </div>
                     <div class="metric-item" title="Number and percentage of relays supporting only IPv4 protocol. These relays cannot connect to IPv6-only destinations.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.ipv4_only_relays) }} ({{ "%.1f%%"|format(relays.json.network_health.ipv4_only_relays_percentage) }})</span>
+                        <span class="metric-value">{{ relays.json.network_health.ipv4_only_relays_formatted }} ({{ relays.json.network_health.ipv4_only_relays_percentage_formatted }})</span>
                         <span class="metric-label">Only IPv4</span>
                     </div>
                 </div>
                 <div class="metric-grid">
-                    <div class="metric-item" title="BadExit relays are flagged by authorities when misconfigured or malicious. These relays cannot be used as exit points for security reasons.">
+                    <div class="metric-item" title="BadExit relays are flagged by directory authorities as misbehaving exit nodes (traffic manipulation, SSL stripping, DNS manipulation). These relays cannot be used as exit points.">
                         <span class="metric-value">{{ relays.json.network_health.bad_exits_count_with_percentage }}</span>
-                        <span class="metric-label">Bad Relays</span>
+                        <span class="metric-label">BadExit</span>
                     </div>
-                    <div class="metric-item" title="StaleDesc relays have published descriptors over 18 hours old. These relays may have outdated information about their capabilities.">
+                    <div class="metric-item" title="StaleDesc relays have descriptors older than DESC_IS_STALE_INTERVAL (per Proposal 293). These relays should upload a fresh descriptor to directory authorities.">
                         <span class="metric-value">{{ relays.json.network_health.stabledesc_count_with_percentage }}</span>
                         <span class="metric-label">StaleDesc</span>
                     </div>
-                    <div class="metric-item" title="Sybil relays are flagged as potentially belonging to the same operator when more than 2 relays share an IP address. Helps prevent network control attacks.">
+                    <div class="metric-item" title="Sybil relays are flagged by directory authorities when too many relays share an IP address (AuthDirMaxServersPerAddr, default 2). Sybil relays are excluded from flag threshold calculations per dir-spec §3.4.2.">
                         <span class="metric-value">{{ relays.json.network_health.sybil_count_with_percentage }}</span>
                         <span class="metric-label">Sybil</span>
                     </div>
                     <div class="metric-item" title="Overloaded relays are experiencing resource constraints like memory pressure, CPU exhaustion, or TCP port limits. May impact network performance.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.overloaded_relays) }} ({{ "%.1f%%"|format(relays.json.network_health.overloaded_relays_percentage) }})</span>
+                        <span class="metric-value">{{ relays.json.network_health.overloaded_relays_formatted }} ({{ relays.json.network_health.overloaded_relays_percentage_formatted }})</span>
                         <span class="metric-label">Overloaded</span>
                     </div>
                 </div>
 
                 <div class="metric-grid">
                     <div class="metric-item" title="New relays that first appeared in the network in the last 24 hours based on first_seen timestamp.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.new_relays_24h) }} ({{ "%.1f%%"|format(relays.json.network_health.new_relays_24h_percentage) }})</span>
+                        <span class="metric-value">{{ relays.json.network_health.new_relays_24h_formatted }} ({{ relays.json.network_health.new_relays_24h_percentage_formatted }})</span>
                         <span class="metric-label">New 1d</span>
                     </div>
                     <div class="metric-item" title="New relays that first appeared in the network in the last month based on first_seen timestamp.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.new_relays_30d) }} ({{ "%.1f%%"|format(relays.json.network_health.new_relays_30d_percentage) }})</span>
+                        <span class="metric-value">{{ relays.json.network_health.new_relays_30d_formatted }} ({{ relays.json.network_health.new_relays_30d_percentage_formatted }})</span>
                         <span class="metric-label">New 1mo</span>
                     </div>
                     <div class="metric-item" title="New relays that first appeared in the network in the last 6 months based on first_seen timestamp.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.new_relays_6m) }} ({{ "%.1f%%"|format(relays.json.network_health.new_relays_6m_percentage) }})</span>
+                        <span class="metric-value">{{ relays.json.network_health.new_relays_6m_formatted }} ({{ relays.json.network_health.new_relays_6m_percentage_formatted }})</span>
                         <span class="metric-label">New 6mo</span>
                     </div>
                     <div class="metric-item" title="New relays that first appeared in the network in the last year based on first_seen timestamp.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.new_relays_1y) }} ({{ "%.1f%%"|format(relays.json.network_health.new_relays_1y_percentage) }})</span>
+                        <span class="metric-value">{{ relays.json.network_health.new_relays_1y_formatted }} ({{ relays.json.network_health.new_relays_1y_percentage_formatted }})</span>
                         <span class="metric-label">New 1y</span>
                     </div>
                 </div>
@@ -214,7 +214,7 @@ Network Health Dashboard
                         <span class="metric-label">Obs to Adv Diff (Mean | Median)</span>
                     </div>
                     <div class="metric-item" title="Number and percentage of relays with bandwidth capacity measured by directory authorities for accuracy.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.measured_relays) }} ({{ "%.1f%%"|format(relays.json.network_health.measured_percentage) }})</span>
+                        <span class="metric-value">{{ relays.json.network_health.measured_relays_with_percentage }}</span>
                         <span class="metric-label">Capacity Measured</span>
                     </div>
                 </div>
@@ -610,19 +610,19 @@ Network Health Dashboard
                 </div>
                 <div class="metric-grid">
                     <div class="metric-item" title="Number of relays not running recommended Tor versions. May have security vulnerabilities.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.not_recommended_count) }} ({{ "%.1f%%"|format(relays.json.network_health.not_recommended_percentage) }})</span>
+                        <span class="metric-value">{{ relays.json.network_health.not_recommended_count_formatted }} ({{ relays.json.network_health.not_recommended_percentage_formatted }})</span>
                         <span class="metric-label">Not Recommended</span>
                     </div>
                     <div class="metric-item" title="Number of relays running experimental Tor versions. Newer than recommended versions.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.experimental_count) }} ({{ "%.1f%%"|format(relays.json.network_health.experimental_percentage) }})</span>
+                        <span class="metric-value">{{ relays.json.network_health.experimental_count_formatted }} ({{ relays.json.network_health.experimental_percentage_formatted }})</span>
                         <span class="metric-label">Experimental</span>
                     </div>
                     <div class="metric-item" title="Number of relays running obsolete Tor versions. Older than all recommended versions.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.obsolete_count) }} ({{ "%.1f%%"|format(relays.json.network_health.obsolete_percentage) }})</span>
+                        <span class="metric-value">{{ relays.json.network_health.obsolete_count_formatted }} ({{ relays.json.network_health.obsolete_percentage_formatted }})</span>
                         <span class="metric-label">Obsolete</span>
                     </div>
                     <div class="metric-item" title="Number of relays running outdated or unrecommended Tor versions. Should be upgraded for security.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.outdated_count) }} ({{ "%.1f%%"|format(relays.json.network_health.outdated_percentage) }})</span>
+                        <span class="metric-value">{{ relays.json.network_health.outdated_count_formatted }} ({{ relays.json.network_health.outdated_percentage_formatted }})</span>
                         <span class="metric-label">Outdated</span>
                     </div>
                 </div>
@@ -636,7 +636,7 @@ Network Health Dashboard
             </div>
             <div class="card-metrics">
                 <div class="metric-item primary" title="Number of unique platform strings reported by relays. Shows diversity of operating systems and Tor versions.">
-                    <span class="metric-value">{{ "{:,}".format(relays.json.network_health.unique_platforms_count) }}</span>
+                    <span class="metric-value">{{ relays.json.network_health.unique_platforms_count_formatted }}</span>
                     <span class="metric-label">Unique Operating Systems</span>
                 </div>
                 <div class="metric-grid">
@@ -724,11 +724,11 @@ Network Health Dashboard
                 <!-- Row 4: Family-cert adoption from server descriptors -->
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
                     <div class="metric-item" title="Relays publishing a family-cert entry in their server descriptor, proving family membership via an ed25519 family key (Proposal 321). Source: CollecTor server descriptors, last 18 hourly files. Tracking {{ "{:,}".format(relays.json.network_health.hf_family_cert_seen_total) }} relays.">
-                        <span class="metric-value" style="color: #28a745; font-weight: 600;">{{ "{:,}".format(relays.json.network_health.hf_family_cert_count) }}</span>
+                        <span class="metric-value" style="color: #28a745; font-weight: 600;">{{ relays.json.network_health.hf_family_cert_count_formatted }}</span>
                         <span class="metric-label">Relays with family-cert</span>
                     </div>
                     <div class="metric-item" title="Relays seen in server descriptors without a family-cert entry. Operators can add one with 'tor --keygen-family' (requires Tor ≥0.4.9.2-alpha). Source: CollecTor server descriptors.">
-                        <span class="metric-value" style="color: #dc3545;">{{ "{:,}".format(relays.json.network_health.hf_family_no_cert_count) }}</span>
+                        <span class="metric-value" style="color: #dc3545;">{{ relays.json.network_health.hf_family_no_cert_count_formatted }}</span>
                         <span class="metric-label">Relays without family-cert</span>
                     </div>
                 </div>
@@ -736,11 +736,11 @@ Network Health Dashboard
                 <!-- Row 5: Operator adoption from server descriptors (AROI validated) -->
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
                     <div class="metric-item" title="Validated AROI operators with at least one relay publishing family-cert. Source: CollecTor server descriptors matched against AROI-validated operator domains. Percentage of {{ "{:,}".format(relays.json.network_health.hf_total_validated_operators) }} validated operators.">
-                        <span class="metric-value" style="color: #28a745;">{{ "{:,}".format(relays.json.network_health.hf_some_operators) }} ({{ "%.1f%%"|format(relays.json.network_health.hf_some_operators_percentage) }})</span>
+                        <span class="metric-value" style="color: #28a745;">{{ relays.json.network_health.hf_some_operators_formatted }} ({{ relays.json.network_health.hf_some_operators_percentage_formatted }})</span>
                         <span class="metric-label">Operators with ≥1 family-cert</span>
                     </div>
                     <div class="metric-item" title="Validated AROI operators where every relay publishes family-cert. Fully transitioned to Proposal 321. Source: CollecTor server descriptors. Percentage of {{ "{:,}".format(relays.json.network_health.hf_total_validated_operators) }} validated operators.">
-                        <span class="metric-value" style="color: {% if relays.json.network_health.hf_all_operators > 0 %}#28a745{% else %}#dc3545{% endif %}; font-weight: 600;">{{ "{:,}".format(relays.json.network_health.hf_all_operators) }} ({{ "%.1f%%"|format(relays.json.network_health.hf_all_operators_percentage) }})</span>
+                        <span class="metric-value" style="color: {% if relays.json.network_health.hf_all_operators > 0 %}#28a745{% else %}#dc3545{% endif %}; font-weight: 600;">{{ relays.json.network_health.hf_all_operators_formatted }} ({{ relays.json.network_health.hf_all_operators_percentage_formatted }})</span>
                         <span class="metric-label">Operators Fully Migrated</span>
                     </div>
                 </div>
@@ -748,11 +748,11 @@ Network Health Dashboard
                 <!-- Row 6: Relay Version Adoption -->
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
                     <div class="metric-item" title="Relays running Tor ≥0.4.9.1-alpha, the first version implementing Proposal 321 family-cert support. Source: Onionoo details API version field.">
-                        <span class="metric-value" style="color: #28a745;">{{ "{:,}".format(relays.json.network_health.hf_ready_relays) }} ({{ "%.1f%%"|format(relays.json.network_health.hf_ready_relays_percentage) }})</span>
+                        <span class="metric-value" style="color: #28a745;">{{ relays.json.network_health.hf_ready_relays_formatted }} ({{ relays.json.network_health.hf_ready_relays_percentage_formatted }})</span>
                         <span class="metric-label">Relays on v0.4.9.x+</span>
                     </div>
                     <div class="metric-item" title="Relays running Tor <0.4.9.x without Proposal 321 support. Must upgrade before they can publish family-cert. Source: Onionoo details API version field.">
-                        <span class="metric-value" style="color: #dc3545;">{{ "{:,}".format(relays.json.network_health.hf_not_ready_relays) }} ({{ "%.1f%%"|format(relays.json.network_health.hf_not_ready_relays_percentage) }})</span>
+                        <span class="metric-value" style="color: #dc3545;">{{ relays.json.network_health.hf_not_ready_relays_formatted }} ({{ relays.json.network_health.hf_not_ready_relays_percentage_formatted }})</span>
                         <span class="metric-label">Relays on Older Versions</span>
                     </div>
                 </div>
@@ -760,11 +760,11 @@ Network Health Dashboard
                 <!-- Row 7: Role breakdown + CW -->
                 <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
                     <div class="metric-item" title="Exit relays running Tor ≥0.4.9.x (Proposal 321 capable). Source: Onionoo details API.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.hf_ready_exit_relays) }}</span>
+                        <span class="metric-value">{{ relays.json.network_health.hf_ready_exit_relays_formatted }}</span>
                         <span class="metric-label">Exit Relays Ready</span>
                     </div>
                     <div class="metric-item" title="Guard relays running Tor ≥0.4.9.x (Proposal 321 capable). Source: Onionoo details API.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.hf_ready_guard_relays) }}</span>
+                        <span class="metric-value">{{ relays.json.network_health.hf_ready_guard_relays_formatted }}</span>
                         <span class="metric-label">Guard Relays Ready</span>
                     </div>
                     <div class="metric-item" title="Fraction of total consensus weight contributed by relays running Tor ≥0.4.9.x. Source: Onionoo details API.">
@@ -790,32 +790,32 @@ Network Health Dashboard
             </div>
             <div class="card-metrics">
                 <div class="metric-item primary" title="Number and percentage of exit relays without ANY restrictions - neither port restrictions nor public IP address restrictions. These relays provide maximum utility for Tor users, allowing unrestricted access to all public internet resources.">
-                    <span class="metric-value">{{ "{:,}".format(relays.json.network_health.unrestricted_and_no_ip_restrictions) }} ({{ "%.1f%%"|format(relays.json.network_health.unrestricted_and_no_ip_restrictions_percentage) }})</span>
+                    <span class="metric-value">{{ relays.json.network_health.unrestricted_and_no_ip_restrictions_formatted }} ({{ relays.json.network_health.unrestricted_and_no_ip_restrictions_percentage_formatted }})</span>
                     <span class="metric-label">Completely Unrestricted Relays</span>
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
                     <div class="metric-item" title="Number and percentage of exit relays without port restrictions, allowing all traffic to any destination port. These relays provide comprehensive port access for Tor users.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.unrestricted_exits) }} ({{ "%.1f%%"|format(relays.json.network_health.unrestricted_exits_percentage) }})</span>
+                        <span class="metric-value">{{ relays.json.network_health.unrestricted_exits_formatted }} ({{ relays.json.network_health.unrestricted_exits_percentage_formatted }})</span>
                         <span class="metric-label">without Port Restrictions</span>
                     </div>
                     <div class="metric-item" title="Number and percentage of exit relays with port restrictions. These relays block certain types of traffic based on destination port.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.restricted_exits) }} ({{ "%.1f%%"|format(relays.json.network_health.restricted_exits_percentage) }})</span>
+                        <span class="metric-value">{{ relays.json.network_health.restricted_exits_formatted }} ({{ relays.json.network_health.restricted_exits_percentage_formatted }})</span>
                         <span class="metric-label">with Port Restrictions</span>
                     </div>
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(1, 1fr);">
                     <div class="metric-item" title="Number and percentage of exit relays that allow web traffic on ports 80 and 443. Essential for basic web browsing functionality.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.web_traffic_exits) }} ({{ "%.1f%%"|format(relays.json.network_health.web_traffic_exits_percentage) }})</span>
+                        <span class="metric-value">{{ relays.json.network_health.web_traffic_exits_formatted }} ({{ relays.json.network_health.web_traffic_exits_percentage_formatted }})</span>
                         <span class="metric-label">allow Web Traffic (ports 80, 443)</span>
                     </div>
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
                     <div class="metric-item" title="Number and percentage of exit relays without public IP address restrictions. These relays accept traffic from any public IP address (restrictions on private IP ranges like 192.168.x, 10.x are not counted).">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.ip_unrestricted_exits) }} ({{ "%.1f%%"|format(relays.json.network_health.ip_unrestricted_exits_percentage) }})</span>
+                        <span class="metric-value">{{ relays.json.network_health.ip_unrestricted_exits_formatted }} ({{ relays.json.network_health.ip_unrestricted_exits_percentage_formatted }})</span>
                         <span class="metric-label">without Public IP Restrictions</span>
                     </div>
                     <div class="metric-item" title="Number and percentage of exit relays with public IP address restrictions limiting connections from specific public IP addresses or ranges. Restrictions on private IP ranges (192.168.x, 10.x, 127.x, etc.) are not counted as they don't limit access to public internet resources.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.ip_restricted_exits) }} ({{ "%.1f%%"|format(relays.json.network_health.ip_restricted_exits_percentage) }})</span>
+                        <span class="metric-value">{{ relays.json.network_health.ip_restricted_exits_formatted }} ({{ relays.json.network_health.ip_restricted_exits_percentage_formatted }})</span>
                         <span class="metric-label">with Public IP Restrictions</span>
                     </div>
                 </div>

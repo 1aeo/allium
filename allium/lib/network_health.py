@@ -5,10 +5,15 @@ Network health dashboard metrics calculation and template string pre-formatting.
 Extracted from relays.py for better modularity.
 """
 
+import statistics
+
 from .ip_utils import safe_parse_ip_address as _safe_parse_ip_address
 from .ip_utils import is_private_ip_address, determine_ipv6_support
 from .time_utils import parse_onionoo_timestamp, create_time_thresholds
 from .string_utils import format_percentage_from_fraction
+from .consensus.consensus_evaluation import _port_in_rules
+from .country_utils import is_eu_political, is_frontier_country, get_rare_countries_weighted_with_existing_data
+from .uptime_utils import find_relay_uptime_data, calculate_relay_uptime_average
 
 
 def _pct(numerator, denominator):
@@ -18,14 +23,60 @@ def _pct(numerator, denominator):
 
 def _safe_mean(values):
     """Return statistics.mean(values) if non-empty, else 0.0."""
-    import statistics as _stats
-    return _stats.mean(values) if values else 0.0
+    return statistics.mean(values) if values else 0.0
 
 
 def _safe_median(values):
     """Return statistics.median(values) if non-empty, else 0.0."""
-    import statistics as _stats
-    return _stats.median(values) if values else 0.0
+    return statistics.median(values) if values else 0.0
+
+
+def _is_happy_family_ready(version_str):
+    """Check if relay version supports Happy Families (>= 0.4.9.1).
+    
+    Per Proposal 321: family-cert was implemented in Tor 0.4.9.1-alpha
+    (first alpha in the 0.4.9 series). The community setup guide at
+    community.torproject.org/relay/setup/post-install/family-ids/
+    specifies "Tor 0.4.9.2-alpha and later" for the keygen-family tool.
+    We use 0.4.9.1 as the minimum since that's when the protocol support
+    was added to the codebase.
+    """
+    if not version_str:
+        return False
+    try:
+        clean = version_str.split('-')[0]
+        parts = [int(p) for p in clean.split('.')]
+        while len(parts) < 4:
+            parts.append(0)
+        return tuple(parts) >= (0, 4, 9, 1)
+    except (ValueError, IndexError):
+        return False
+
+
+def _fmt_bw(bw_fmt, value, unit):
+    """Format bandwidth value (in bytes/s) with unit suffix using the given formatter."""
+    return bw_fmt.format_bandwidth_with_unit(value, unit, decimal_places=0) + f" {unit}"
+
+
+def _format_age(days):
+    """Format age in days to 'Xy Zmo' format."""
+    if days < 30:
+        return f"{days}d"
+    elif days < 365:
+        months = days // 30
+        remaining_days = days % 30
+        if remaining_days == 0:
+            return f"{months}mo"
+        else:
+            return f"{months}mo {remaining_days}d"
+    else:
+        years = days // 365
+        remaining_days = days % 365
+        months = remaining_days // 30
+        if months == 0:
+            return f"{years}y"
+        else:
+            return f"{years}y {months}mo"
 
 
 def preformat_network_health_template_strings(health_metrics):
@@ -42,7 +93,7 @@ def preformat_network_health_template_strings(health_metrics):
     # Format all number values with comma separators (16+ format operations eliminated)
     integer_format_keys = [
         'relays_total', 'exit_count', 'guard_count', 'middle_count', 'authorities_count',
-        'bad_exits_count', 'offline_relays', 'overloaded_relays',  # REMOVED: hibernating_relays
+        'bad_exits_count', 'offline_relays', 'overloaded_relays',
         # NEW: Additional flag counts
         'fast_count', 'stable_count', 'v2dir_count', 'hsdir_count', 'stabledesc_count', 'sybil_count',
         'new_relays_24h', 'new_relays_30d', 'new_relays_6m', 'new_relays_1y',
@@ -51,7 +102,8 @@ def preformat_network_health_template_strings(health_metrics):
         'countries_count', 'unique_as_count', 'unique_platforms_count', 'platform_others',
         'recommended_version_count', 'not_recommended_count', 'experimental_count', 
         'obsolete_count', 'outdated_count', 'guard_exit_count', 'unrestricted_exits',
-        'restricted_exits', 'web_traffic_exits', 'eu_relays_count', 'non_eu_relays_count',
+        'restricted_exits', 'web_traffic_exits', 'ip_unrestricted_exits', 'ip_restricted_exits',
+        'unrestricted_and_no_ip_restrictions', 'eu_relays_count', 'non_eu_relays_count',
         'rare_countries_relays', 'ipv4_only_relays', 'both_ipv4_ipv6_relays',
         # NEW: AROI domain-level metrics
         'unique_aroi_domains_count', 'validated_aroi_domains_count', 'invalid_aroi_domains_count',
@@ -72,8 +124,7 @@ def preformat_network_health_template_strings(health_metrics):
     percentage_format_keys = [
         'exit_percentage', 'guard_percentage', 'middle_percentage', 'authorities_percentage',
         'bad_exits_percentage', 'offline_relays_percentage', 'overloaded_relays_percentage',
-        # REMOVED: 'hibernating_relays_percentage',
-        # NEW: Additional flag percentages
+        # Flag percentages
         'fast_percentage', 'stable_percentage', 'v2dir_percentage', 'hsdir_percentage',
         'stabledesc_percentage', 'sybil_percentage',
         'new_relays_24h_percentage', 'new_relays_30d_percentage',
@@ -93,6 +144,12 @@ def preformat_network_health_template_strings(health_metrics):
         'ipv4_only_aroi_operators_percentage', 'both_ipv4_ipv6_aroi_operators_percentage',
         # NEW: AROI domain percentages
         'validated_aroi_domains_percentage', 'invalid_aroi_domains_percentage',
+        # Exit policy percentages
+        'guard_exit_percentage',
+        'unrestricted_exits_percentage', 'restricted_exits_percentage',
+        'web_traffic_exits_percentage',
+        'ip_unrestricted_exits_percentage', 'ip_restricted_exits_percentage',
+        'unrestricted_and_no_ip_restrictions_percentage',
         # NEW: Happy Family Key Migration percentages
         'hf_ready_relays_percentage', 'hf_ready_bandwidth_percentage',
         'hf_ready_cw_percentage', 'hf_some_operators_percentage',
@@ -101,9 +158,9 @@ def preformat_network_health_template_strings(health_metrics):
     
     # Add 1_month period formatting keys (used directly in templates) 
     roles = ['exit', 'guard', 'middle', 'authority', 'v2dir', 'hsdir']
-    statistics = ['mean', 'median']
+    stat_types = ['mean', 'median']
     for role in roles:
-        for stat in statistics:
+        for stat in stat_types:
             percentage_format_keys.append(f'{role}_uptime_1_month_{stat}')
     
     for key in percentage_format_keys:
@@ -366,11 +423,7 @@ def calculate_network_health_metrics(relay_set):
     else:
         health_metrics['aroi_operators_count'] = len(sorted_data.get('contact', {}))
     
-    # Import modules once
-    import statistics
-    import datetime
-    from .country_utils import is_eu_political, is_frontier_country
-    from .uptime_utils import find_relay_uptime_data, calculate_relay_uptime_average
+    # Imports are at module level for efficiency (this function is called 3x during enrichment)
     
     # Time calculations for new relay detection - use centralized function
     time_thresholds = create_time_thresholds()
@@ -384,20 +437,25 @@ def calculate_network_health_metrics(relay_set):
     valid_rare_countries = set()
     try:
         if 'country' in sorted_data:
-            from .country_utils import get_rare_countries_weighted_with_existing_data
             all_rare_countries = get_rare_countries_weighted_with_existing_data(
                 sorted_data['country'], network_totals['total_relays'])
             valid_rare_countries = {c.lower() for c in all_rare_countries if len(c) == 2 and c.isalpha()}
-    except:
+    except Exception:
         pass
+    
+    # Pre-compute Happy Family descriptor sets before main loop (enables single-pass counting)
+    collector_descs = getattr(relay_set, 'collector_descriptors_data', None)
+    family_cert_fps = set()
+    all_seen_fps = set()
+    if collector_descs and isinstance(collector_descs, dict):
+        family_cert_fps = set(collector_descs.get('family_cert_fingerprints', []))
+        all_seen_fps = set(collector_descs.get('all_seen_fingerprints', []))
     
     # Initialize all counters and collectors for SINGLE LOOP
     authority_count = bad_exit_count = 0
-    # NEW: Additional flag counts
     fast_count = stable_count = v2dir_count = hsdir_count = 0
     stabledesc_count = sybil_count = 0
     total_bandwidth = guard_bandwidth = exit_bandwidth = middle_bandwidth = 0
-    # NEW: Additional flag-specific bandwidth collectors
     fast_bandwidth_values = []
     stable_bandwidth_values = []
     authority_bandwidth_values = []
@@ -408,29 +466,27 @@ def calculate_network_health_metrics(relay_set):
     unique_contacts = set()
     eu_relays = non_eu_relays = rare_countries_relays = 0
     eu_consensus_weight = non_eu_consensus_weight = rare_countries_consensus_weight = 0
-    offline_relays = overloaded_relays = 0  # REMOVED: hibernating_relays
+    offline_relays = overloaded_relays = 0
     new_relays_24h = new_relays_30d = new_relays_1y = new_relays_6m = 0
     unique_platforms = set()
     platform_counts = {}
     recommended_version_count = not_recommended_count = 0
     experimental_count = obsolete_count = outdated_count = 0
-    total_consensus_weight = total_advertised_bandwidth = 0
+    total_consensus_weight = 0
     observed_advertised_diff_sum = observed_advertised_count = 0
     observed_advertised_diff_values = []
-    
-    # NEW: Age calculations
     relay_ages_days = []
     
-    # NEW: Exit policy analysis
+    # Exit policy counters
     guard_exit_count = 0
     port_restricted_exits = 0
     port_unrestricted_exits = 0
     ip_unrestricted_exits = 0
     ip_restricted_exits = 0
-    no_port_restrictions_and_no_ip_restrictions = 0  # NEW: Combined metric for both no port AND no IP restrictions
+    no_port_restrictions_and_no_ip_restrictions = 0
     web_traffic_exits = 0
     
-    # Role-specific collectors - combined into single loop
+    # Role-specific bandwidth/CW collectors
     exit_cw_values = []
     guard_cw_values = []
     middle_cw_values = []
@@ -438,66 +494,35 @@ def calculate_network_health_metrics(relay_set):
     guard_bw_values = []
     middle_bw_values = []
     exit_cw_sum = exit_bw_sum = 0
-    guard_cw_sum = guard_bw_sum = 0  
+    guard_cw_sum = guard_bw_sum = 0
     middle_cw_sum = middle_bw_sum = 0
     
-    # NEW: Geographic CW/BW ratio collectors
+    # Geographic / AS CW/BW ratio collectors
     eu_cw_bw_values = []
     non_eu_cw_bw_values = []
-    
-    # OPTIMIZATION: AS-specific CW/BW collectors (eliminates need for separate relay loop)
     as_cw_bw_data = {}  # as_number -> [cw_bw_ratios]
     
-    # NEW: IPv6 support analysis - relay-level counters
+    # IPv6 support counters
     ipv4_only_relays = 0
     both_ipv4_ipv6_relays = 0
-    
-    # NEW: IPv6 support analysis - bandwidth-level counters
     ipv4_only_bandwidth = 0
     both_ipv4_ipv6_bandwidth = 0
-    
-    # NEW: IPv6 support analysis - country-level collections
-    ipv4_only_countries = {}  # country -> count
-    both_ipv4_ipv6_countries = {}  # country -> count
-    
-    # NEW: IPv6 support analysis - AS-level collections
-    ipv4_only_as = {}  # as_number -> count
-    both_ipv4_ipv6_as = {}  # as_number -> count
-    
-    # NEW: IPv6 support analysis - operator-level collections
-    # Track what types of relays each operator has to determine their overall support
+    ipv4_only_countries = {}
+    both_ipv4_ipv6_countries = {}
+    ipv4_only_as = {}
+    both_ipv4_ipv6_as = {}
     operator_ipv6_status = {}  # domain -> {'has_ipv4_only': bool, 'has_dual_stack': bool}
     
-    # NEW: Happy Family Key Migration tracking
-    def _is_happy_family_ready(version_str):
-        """Check if relay version supports Happy Families (>= 0.4.9.1).
-        
-        Per Proposal 321: family-cert was implemented in Tor 0.4.9.1-alpha
-        (first alpha in the 0.4.9 series). The community setup guide at
-        community.torproject.org/relay/setup/post-install/family-ids/
-        specifies "Tor 0.4.9.2-alpha and later" for the keygen-family tool.
-        We use 0.4.9.1 as the minimum since that's when the protocol support
-        was added to the codebase.
-        """
-        if not version_str:
-            return False
-        try:
-            clean = version_str.split('-')[0]
-            parts = [int(p) for p in clean.split('.')]
-            while len(parts) < 4:
-                parts.append(0)
-            return tuple(parts) >= (0, 4, 9, 1)
-        except (ValueError, IndexError):
-            return False
-    
+    # Happy Family Key Migration counters (merged into main loop)
     family_key_ready_relays = 0
     family_key_ready_exit_relays = 0
     family_key_ready_guard_relays = 0
+    family_key_ready_authorities = 0
     family_key_ready_bandwidth = 0
     family_key_ready_cw = 0
-    operator_relay_versions = {}  # aroi_domain -> {'total': N, 'ready': N}
-    
-    # Uptime data will be extracted from existing consolidated results after uptime API processing
+    family_cert_count = 0       # relays with family-cert in descriptors
+    family_no_cert_count = 0    # relays seen in descriptors but no family-cert
+    operator_desc_counts = {}   # aroi_domain -> {'cert': N, 'seen': N}
     
     # SINGLE LOOP - calculate everything at once
     for relay in relay_set.json['relays']:
@@ -507,7 +532,6 @@ def calculate_network_health_metrics(relay_set):
         is_exit = 'Exit' in flags
         is_authority = 'Authority' in flags
         is_bad_exit = 'BadExit' in flags
-        # NEW: Additional flag checks
         is_fast = 'Fast' in flags
         is_stable = 'Stable' in flags
         is_v2dir = 'V2Dir' in flags
@@ -515,7 +539,6 @@ def calculate_network_health_metrics(relay_set):
         is_stabledesc = 'StaleDesc' in flags
         is_sybil = 'Sybil' in flags
         is_running = relay.get('running', True)
-        # REMOVED: is_hibernating
         # Use pre-computed stability field (computed in _reprocess_bandwidth_data)
         is_overloaded = relay.get('stability_is_overloaded', False)
         
@@ -524,7 +547,6 @@ def calculate_network_health_metrics(relay_set):
             authority_count += 1
         if is_bad_exit:
             bad_exit_count += 1
-        # NEW: Additional flag counts
         if is_fast:
             fast_count += 1
         if is_stable:
@@ -541,39 +563,28 @@ def calculate_network_health_metrics(relay_set):
             offline_relays += 1
         if is_overloaded:
             overloaded_relays += 1
-        # REMOVED: hibernating count
-        
-        # NEW: Guard+Exit flag combination
+        # Guard+Exit flag combination
         if is_guard and is_exit:
             guard_exit_count += 1
         
-        # NEW: Exit policy analysis
+        # Exit policy analysis
         if is_exit:
-            # Basic exit policy analysis
+            # Basic exit policy analysis using proper port range parsing
+            # Reuses _port_in_rules from consensus_evaluation (DRY) which correctly
+            # handles Onionoo exit_policy_summary format: '80', '443', '1-65535', etc.
             exit_policy_summary = relay.get('exit_policy_summary', {})
             ipv4_summary = exit_policy_summary.get('accept', [])
-            ipv6_summary = exit_policy_summary.get('accept6', [])
             
-            # Check for web traffic (ports 80 and 443)
-            has_web_traffic_ports = False
-            if ipv4_summary:
-                for policy in ipv4_summary:
-                    if ('80' in policy or '443' in policy or 
-                        '1-65535' in policy or policy == '*:*'):
-                        has_web_traffic_ports = True
-                        break
+            # Check for web traffic (ports 80 or 443)
+            has_web_traffic_ports = (
+                _port_in_rules(ipv4_summary, 80) or _port_in_rules(ipv4_summary, 443)
+            )
             
             if has_web_traffic_ports:
                 web_traffic_exits += 1
             
-            # Check for unrestricted exits (accept all or most traffic)
-            is_port_unrestricted = False
-            if ipv4_summary:
-                for policy in ipv4_summary:
-                    if (policy == '*:*' or '1-65535' in policy or 
-                        '1-' in policy or '*:1-65535' in policy):
-                        is_port_unrestricted = True
-                        break
+            # Check for unrestricted exits — Onionoo normalizes full-range to '1-65535'
+            is_port_unrestricted = '1-65535' in ipv4_summary
             
             if is_port_unrestricted:
                 port_unrestricted_exits += 1
@@ -605,11 +616,11 @@ def calculate_network_health_metrics(relay_set):
             else:
                 ip_unrestricted_exits += 1
             
-            # NEW: Track exits with BOTH no port restrictions AND no IP restrictions
+            # Track exits with BOTH no port restrictions AND no IP restrictions
             if is_port_unrestricted and not has_ip_restrictions:
                 no_port_restrictions_and_no_ip_restrictions += 1
         
-        # NEW: Age calculation using first_seen - use centralized parsing
+        # Age calculation using first_seen
         first_seen_str = relay.get('first_seen', '')
         if first_seen_str:
             first_seen = parse_onionoo_timestamp(first_seen_str)
@@ -661,7 +672,6 @@ def calculate_network_health_metrics(relay_set):
         total_bandwidth += bandwidth
         advertised_bandwidth = relay.get('advertised_bandwidth', 0)
         total_consensus_weight += consensus_weight
-        total_advertised_bandwidth += advertised_bandwidth
         
         if bandwidth > 0 and advertised_bandwidth > 0:
             diff = abs(bandwidth - advertised_bandwidth)
@@ -702,7 +712,7 @@ def calculate_network_health_metrics(relay_set):
                 middle_cw_values.append(consensus_weight / bandwidth)
                 middle_bw_values.append(bandwidth)
         
-        # NEW: Flag-specific bandwidth collection for additional metrics
+        # Flag-specific bandwidth collection
         if bandwidth > 0:  # Only collect bandwidth for relays with actual bandwidth
             if is_fast:
                 fast_bandwidth_values.append(bandwidth)
@@ -735,13 +745,13 @@ def calculate_network_health_metrics(relay_set):
             if is_eu_political(country):
                 eu_relays += 1
                 eu_consensus_weight += consensus_weight
-                # NEW: Collect EU CW/BW ratios for mean/median calculation
+                # Collect EU CW/BW ratios
                 if consensus_weight > 0 and bandwidth > 0:
                     eu_cw_bw_values.append(consensus_weight / bandwidth * 1000000)
             else:
                 non_eu_relays += 1
                 non_eu_consensus_weight += consensus_weight
-                # NEW: Collect Non-EU CW/BW ratios for mean/median calculation
+                # Collect Non-EU CW/BW ratios
                 if consensus_weight > 0 and bandwidth > 0:
                     non_eu_cw_bw_values.append(consensus_weight / bandwidth * 1000000)
             
@@ -749,7 +759,7 @@ def calculate_network_health_metrics(relay_set):
                 rare_countries_relays += 1
                 rare_countries_consensus_weight += consensus_weight
                 
-        # OPTIMIZATION: AS-specific CW/BW collection (eliminates separate loop)
+        # AS-specific CW/BW collection
         as_number = relay.get('as')
         if as_number and consensus_weight > 0 and bandwidth > 0:
             cw_bw_ratio = consensus_weight / bandwidth * 1000000
@@ -757,7 +767,7 @@ def calculate_network_health_metrics(relay_set):
                 as_cw_bw_data[as_number] = []
             as_cw_bw_data[as_number].append(cw_bw_ratio)
         
-        # NEW: IPv6 support analysis - determine IP version support for this relay
+        # IPv6 support analysis
         or_addresses = relay.get('or_addresses', [])
         ipv6_support = determine_ipv6_support(or_addresses)
         relay['ipv6_support'] = ipv6_support  # Store for template O(1) access
@@ -784,7 +794,7 @@ def calculate_network_health_metrics(relay_set):
             elif ipv6_support == 'both':
                 both_ipv4_ipv6_as[as_number] = both_ipv4_ipv6_as.get(as_number, 0) + 1
         
-        # Operator-level IPv6 support tracking (uses AROI domain for consistency with Option B)
+        # Operator-level IPv6 support tracking (uses AROI domain for consistency)
         aroi_domain = relay.get('aroi_domain', 'none')
         if aroi_domain and aroi_domain != 'none':
             if aroi_domain not in operator_ipv6_status:
@@ -794,40 +804,27 @@ def calculate_network_health_metrics(relay_set):
                 operator_ipv6_status[aroi_domain]['has_ipv4_only'] = True
             elif ipv6_support == 'both':
                 operator_ipv6_status[aroi_domain]['has_dual_stack'] = True
-            
-            # Happy Family: per-operator version readiness (reuses aroi_domain from above)
-            if aroi_domain not in operator_relay_versions:
-                operator_relay_versions[aroi_domain] = {'total': 0, 'ready': 0}
-            operator_relay_versions[aroi_domain]['total'] += 1
-            if is_family_ready:
-                operator_relay_versions[aroi_domain]['ready'] += 1
         
-        # Skip uptime calculation here - will use existing consolidated results
+        # Happy Family: DA readiness (merged — avoids separate relay pass)
+        if is_authority and is_family_ready:
+            family_key_ready_authorities += 1
+        
+        # Happy Family: descriptor-based family-cert counting (merged — avoids 2 separate relay passes)
+        fp = relay.get('fingerprint', '').upper()
+        if fp in family_cert_fps:
+            family_cert_count += 1
+        elif fp in all_seen_fps:
+            family_no_cert_count += 1
+        
+        # Happy Family: per-operator descriptor counts (merged into main loop)
+        if aroi_domain and aroi_domain != 'none' and fp in all_seen_fps:
+            if aroi_domain not in operator_desc_counts:
+                operator_desc_counts[aroi_domain] = {'cert': 0, 'seen': 0}
+            operator_desc_counts[aroi_domain]['seen'] += 1
+            if fp in family_cert_fps:
+                operator_desc_counts[aroi_domain]['cert'] += 1
     
-    # NEW: Calculate age statistics
-        # Skip uptime calculation here - will use existing consolidated results
-    
-    # NEW: Calculate age statistics
-    def _format_age(days):
-        """Format age in days to 'Xy Zmo' format"""
-        if days < 30:
-            return f"{days}d"
-        elif days < 365:
-            months = days // 30
-            remaining_days = days % 30
-            if remaining_days == 0:
-                return f"{months}mo"
-            else:
-                return f"{months}mo {remaining_days}d"
-        else:
-            years = days // 365
-            remaining_days = days % 365
-            months = remaining_days // 30
-            if months == 0:
-                return f"{years}y"
-            else:
-                return f"{years}y {months}mo"
-    
+    # Age statistics
     if relay_ages_days:
         mean_age_days = statistics.mean(relay_ages_days)
         median_age_days = statistics.median(relay_ages_days)
@@ -964,7 +961,6 @@ def calculate_network_health_metrics(relay_set):
         'sybil_count': sybil_count,
         'offline_relays': offline_relays,
         'overloaded_relays': overloaded_relays,
-        # REMOVED: 'hibernating_relays': hibernating_relays,
         'new_relays_24h': new_relays_24h,
         'new_relays_30d': new_relays_30d,
         'new_relays_1y': new_relays_1y,
@@ -1055,51 +1051,48 @@ def calculate_network_health_metrics(relay_set):
     top_ipv4_only_as = max(ipv4_only_as.items(), key=lambda x: x[1]) if ipv4_only_as else (None, 0)
     top_both_as = max(both_ipv4_ipv6_as.items(), key=lambda x: x[1]) if both_ipv4_ipv6_as else (None, 0)
     
-    # Get AS names from sorted data
-    as_names = {}
-    if 'as' in sorted_data:
-        for as_number, as_data in sorted_data['as'].items():
-            as_names[as_number] = as_data.get('as_name', f'AS{as_number}')
+    # Look up AS names directly from sorted data (avoids building full dict for 2 lookups)
+    def _get_as_name(as_num):
+        return sorted_data.get('as', {}).get(as_num, {}).get('as_name', 'Unknown') if as_num else 'N/A'
     
     health_metrics.update({
         'top_ipv4_only_as_number': top_ipv4_only_as[0],
-        'top_ipv4_only_as_name': as_names.get(top_ipv4_only_as[0], 'Unknown') if top_ipv4_only_as[0] else 'N/A',
+        'top_ipv4_only_as_name': _get_as_name(top_ipv4_only_as[0]),
         'top_ipv4_only_as_count': top_ipv4_only_as[1],
         'top_ipv4_only_as_percentage': _pct(top_ipv4_only_as[1], total_relays_count),
         'top_both_ipv4_ipv6_as_number': top_both_as[0],
-        'top_both_ipv4_ipv6_as_name': as_names.get(top_both_as[0], 'Unknown') if top_both_as[0] else 'N/A',
+        'top_both_ipv4_ipv6_as_name': _get_as_name(top_both_as[0]),
         'top_both_ipv4_ipv6_as_count': top_both_as[1],
         'top_both_ipv4_ipv6_as_percentage': _pct(top_both_as[1], total_relays_count)
     })
     
     # Platform metrics with percentages
-    total_relays = health_metrics['relays_total']
     sorted_platforms = sorted(platform_counts.items(), key=lambda x: x[1], reverse=True)
     top_platforms = sorted_platforms[:3]
     others_count = sum(count for _, count in sorted_platforms[3:])
     
     top_platforms_with_pct = []
     for platform, count in top_platforms:
-        percentage = _pct(count, total_relays)
+        percentage = _pct(count, total_relays_count)
         top_platforms_with_pct.append((platform, count, percentage))
     
     health_metrics['platform_top3'] = top_platforms_with_pct
     health_metrics['platform_others'] = others_count
-    health_metrics['platform_others_percentage'] = _pct(others_count, total_relays)
+    health_metrics['platform_others_percentage'] = _pct(others_count, total_relays_count)
     
-    # Version compliance with percentages
-    total_with_version_info = recommended_version_count + not_recommended_count
+    # Version compliance with percentages — all use total_relays_count as denominator
+    # for consistency with every other percentage metric on the dashboard
     health_metrics.update({
-        'recommended_version_percentage': _pct(recommended_version_count, total_with_version_info),
+        'recommended_version_percentage': _pct(recommended_version_count, total_relays_count),
         'recommended_version_count': recommended_version_count,
         'not_recommended_count': not_recommended_count,
         'experimental_count': experimental_count,
         'obsolete_count': obsolete_count,
         'outdated_count': outdated_count,
-        'not_recommended_percentage': _pct(not_recommended_count, total_relays),
-        'experimental_percentage': _pct(experimental_count, total_relays),
-        'obsolete_percentage': _pct(obsolete_count, total_relays),
-        'outdated_percentage': _pct(outdated_count, total_relays)
+        'not_recommended_percentage': _pct(not_recommended_count, total_relays_count),
+        'experimental_percentage': _pct(experimental_count, total_relays_count),
+        'obsolete_percentage': _pct(obsolete_count, total_relays_count),
+        'outdated_percentage': _pct(outdated_count, total_relays_count)
     })
     
     # Bandwidth utilization metrics - calculate mean and median for Obs to Adv Diff
@@ -1112,14 +1105,16 @@ def calculate_network_health_metrics(relay_set):
         if observed_advertised_diff_values else 0
     )
     
-    # DRY: Use multiplier to avoid duplicating bits/bytes code paths
-    bw_mult = 8 if relay_set.use_bits else 1
+    # BandwidthFormatter already handles bytes→bits conversion internally via its
+    # divisors (e.g. Gbit/s divisor = 10^9/8), so we pass raw bytes values directly.
+    # This matches how relays.py _preprocess_template_data() formats relay-level bandwidth.
     bw_fmt = relay_set.bandwidth_formatter
     
-    obs_adv_unit = bw_fmt.determine_unit(avg_obs_adv_diff_bytes * bw_mult)
-    avg_formatted = bw_fmt.format_bandwidth_with_unit(avg_obs_adv_diff_bytes * bw_mult, obs_adv_unit, decimal_places=0) + f" {obs_adv_unit}"
-    median_formatted = bw_fmt.format_bandwidth_with_unit(median_obs_adv_diff_bytes * bw_mult, obs_adv_unit, decimal_places=0) + f" {obs_adv_unit}"
-    health_metrics['avg_observed_advertised_diff_formatted'] = f"{avg_formatted} | {median_formatted}"
+    obs_adv_unit = bw_fmt.determine_unit(avg_obs_adv_diff_bytes)
+    health_metrics['avg_observed_advertised_diff_formatted'] = (
+        f"{_fmt_bw(bw_fmt, avg_obs_adv_diff_bytes, obs_adv_unit)} | "
+        f"{_fmt_bw(bw_fmt, median_obs_adv_diff_bytes, obs_adv_unit)}"
+    )
     
     health_metrics['consensus_weight_bandwidth_ratio'] = (
         (total_consensus_weight / total_bandwidth) 
@@ -1157,14 +1152,10 @@ def calculate_network_health_metrics(relay_set):
     })
     
     # PRE-CALCULATE BANDWIDTH MEAN/MEDIAN WITH PROPER UNITS - avoid showing 0 values
-    # DRY: bw_mult already set above (8 for bits, 1 for bytes)
-    def _fmt_bw(value, unit):
-        """Helper: format bandwidth value with unit suffix."""
-        return bw_fmt.format_bandwidth_with_unit(value * bw_mult, unit, decimal_places=0) + f" {unit}"
     
     # Determine appropriate unit for role-specific mean/median values
-    base_unit = bw_fmt.determine_unit(total_bandwidth * bw_mult)
-    test_values = [health_metrics[k] * bw_mult for k in 
+    base_unit = bw_fmt.determine_unit(total_bandwidth)
+    test_values = [health_metrics[k] for k in 
                    ('exit_bw_mean', 'exit_bw_median', 'guard_bw_mean',
                     'guard_bw_median', 'middle_bw_mean', 'middle_bw_median')]
     
@@ -1179,18 +1170,18 @@ def calculate_network_health_metrics(relay_set):
     
     # Format all role/flag-specific bandwidth mean/median in a single pass
     for role in ('exit', 'guard', 'middle', 'fast', 'stable', 'authority', 'v2dir', 'hsdir'):
-        health_metrics[f'{role}_bw_mean_formatted'] = _fmt_bw(health_metrics[f'{role}_bw_mean'], unit)
-        health_metrics[f'{role}_bw_median_formatted'] = _fmt_bw(health_metrics[f'{role}_bw_median'], unit)
+        health_metrics[f'{role}_bw_mean_formatted'] = _fmt_bw(bw_fmt, health_metrics[f'{role}_bw_mean'], unit)
+        health_metrics[f'{role}_bw_median_formatted'] = _fmt_bw(bw_fmt, health_metrics[f'{role}_bw_median'], unit)
     
     # Bandwidth formatting with proper units for totals
-    total_unit = bw_fmt.determine_unit(total_bandwidth * bw_mult)
+    total_unit = bw_fmt.determine_unit(total_bandwidth)
     for key, value in [('total_bandwidth', total_bandwidth), ('guard_bandwidth', guard_bandwidth),
                        ('exit_bandwidth', exit_bandwidth), ('middle_bandwidth', middle_bandwidth),
                        ('ipv4_only_bandwidth', ipv4_only_bandwidth), ('both_ipv4_ipv6_bandwidth', both_ipv4_ipv6_bandwidth)]:
-        health_metrics[f'{key}_formatted'] = _fmt_bw(value, total_unit)
+        health_metrics[f'{key}_formatted'] = _fmt_bw(bw_fmt, value, total_unit)
     
     # Happy Family: bandwidth formatting
-    health_metrics['hf_ready_bandwidth_formatted'] = _fmt_bw(family_key_ready_bandwidth, total_unit)
+    health_metrics['hf_ready_bandwidth_formatted'] = _fmt_bw(bw_fmt, family_key_ready_bandwidth, total_unit)
     
     # Uptime metrics - reuse existing consolidated uptime calculations for efficiency
     if hasattr(relay_set, '_consolidated_uptime_results') and relay_set._consolidated_uptime_results:
@@ -1213,85 +1204,31 @@ def calculate_network_health_metrics(relay_set):
         else:
             health_metrics['uptime_percentiles'] = None
         
-        # Reuse all existing role-specific calculations from consolidated uptime processing
-        # This follows DRY/DIY principle by using already computed statistics
-        # Exit and Guard statistics come from flag-specific network statistics
-        # Middle statistics come from consolidated middle relay calculations
-        # Other statistics come from consolidated other relay calculations
+        # Data-driven uptime extraction: maps (output_role, flag_key, source_dict)
+        # Flag-based roles use network_flag_statistics[flag_key][period]
+        # Non-flag roles (middle, other) use their own dedicated dicts directly
+        uptime_sources = [
+            ('exit',      'Exit',      network_flag_statistics),
+            ('guard',     'Guard',     network_flag_statistics),
+            ('middle',    None,        network_middle_statistics),
+            ('other',     None,        network_other_statistics),
+            ('authority', 'Authority', network_flag_statistics),
+            ('v2dir',     'V2Dir',     network_flag_statistics),
+            ('hsdir',     'HSDir',     network_flag_statistics),
+        ]
         
         for period in ['1_month', '6_months', '1_year', '5_years']:
-            # Exit relay statistics - reuse existing calculation
-            if network_flag_statistics.get('Exit', {}).get(period, {}).get('mean') is not None:
-                exit_mean = network_flag_statistics['Exit'][period]['mean']
-                exit_median = network_flag_statistics['Exit'][period].get('median', exit_mean)
-            else:
-                exit_mean = 0.0
-                exit_median = 0.0
-        
-            # Guard relay statistics - reuse existing calculation  
-            if network_flag_statistics.get('Guard', {}).get(period, {}).get('mean') is not None:
-                guard_mean = network_flag_statistics['Guard'][period]['mean']
-                guard_median = network_flag_statistics['Guard'][period].get('median', guard_mean)
-            else:
-                guard_mean = 0.0
-                guard_median = 0.0
-            
-            # Middle relay statistics - reuse existing consolidated calculation
-            if network_middle_statistics.get(period, {}).get('mean') is not None:
-                middle_mean = network_middle_statistics[period]['mean']
-                middle_median = network_middle_statistics[period].get('median', middle_mean)
-            else:
-                middle_mean = 0.0
-                middle_median = 0.0
-            
-            # Other relay statistics - reuse existing consolidated calculation
-            if network_other_statistics.get(period, {}).get('mean') is not None:
-                other_mean = network_other_statistics[period]['mean']
-                other_median = network_other_statistics[period].get('median', other_mean)
-            else:
-                other_mean = 0.0
-                other_median = 0.0
-            
-            # NEW: Additional flag-specific uptime calculations
-            # Authority uptime statistics
-            if network_flag_statistics.get('Authority', {}).get(period, {}).get('mean') is not None:
-                authority_mean = network_flag_statistics['Authority'][period]['mean']
-                authority_median = network_flag_statistics['Authority'][period].get('median', authority_mean)
-            else:
-                authority_mean = 0.0
-                authority_median = 0.0
-            
-            # V2Dir uptime statistics
-            if network_flag_statistics.get('V2Dir', {}).get(period, {}).get('mean') is not None:
-                v2dir_mean = network_flag_statistics['V2Dir'][period]['mean']
-                v2dir_median = network_flag_statistics['V2Dir'][period].get('median', v2dir_mean)
-            else:
-                v2dir_mean = 0.0
-                v2dir_median = 0.0
-            
-            # HSDir uptime statistics
-            if network_flag_statistics.get('HSDir', {}).get(period, {}).get('mean') is not None:
-                hsdir_mean = network_flag_statistics['HSDir'][period]['mean']
-                hsdir_median = network_flag_statistics['HSDir'][period].get('median', hsdir_mean)
-            else:
-                hsdir_mean = 0.0
-                hsdir_median = 0.0
-            
-            # REFACTORED: Consistent naming pattern for all periods - {role}_uptime_{period}_{statistic}
-            # Eliminates redundant variables and special cases for better maintainability
-            role_data = [
-                ('exit', exit_mean, exit_median),
-                ('guard', guard_mean, guard_median),
-                ('middle', middle_mean, middle_median),
-                ('other', other_mean, other_median),
-                ('authority', authority_mean, authority_median),
-                ('v2dir', v2dir_mean, v2dir_median),
-                ('hsdir', hsdir_mean, hsdir_median)
-            ]
-            
-            for role, mean_val, median_val in role_data:
-                health_metrics[f'{role}_uptime_{period}_mean'] = mean_val
-                health_metrics[f'{role}_uptime_{period}_median'] = median_val
+            for role, flag_key, source in uptime_sources:
+                # Flag-based: source[flag_key][period], non-flag: source[period]
+                period_stats = (source.get(flag_key, {}).get(period, {})
+                                if flag_key else source.get(period, {}))
+                mean_val = period_stats.get('mean') if period_stats else None
+                if mean_val is not None:
+                    health_metrics[f'{role}_uptime_{period}_mean'] = mean_val
+                    health_metrics[f'{role}_uptime_{period}_median'] = period_stats.get('median', mean_val)
+                else:
+                    health_metrics[f'{role}_uptime_{period}_mean'] = 0.0
+                    health_metrics[f'{role}_uptime_{period}_median'] = 0.0
         
     else:
         # Initialize to 0 when no consolidated uptime results available
@@ -1301,20 +1238,20 @@ def calculate_network_health_metrics(relay_set):
         # REFACTORED: Consistent fallback initialization using unified pattern
         uptime_periods = ['1_month', '6_months', '1_year', '5_years']
         roles = ['exit', 'guard', 'middle', 'other', 'authority', 'v2dir', 'hsdir']
-        statistics = ['mean', 'median']
+        stat_types = ['mean', 'median']
         
         # Generate all uptime keys using consistent pattern: {role}_uptime_{period}_{statistic}
-        uptime_keys = [f'{role}_uptime_{period}_{stat}' for role in roles for period in uptime_periods for stat in statistics]
+        uptime_keys = [f'{role}_uptime_{period}_{stat}' for role in roles for period in uptime_periods for stat in stat_types]
         
         for key in uptime_keys:
             health_metrics[key] = 0.0
     
     # Percentage calculations for participation metrics
     health_metrics.update({
-        'relays_with_family_percentage': _pct(relays_with_family, total_relays),
-        'relays_without_family_percentage': _pct(relays_without_family, total_relays),
-        'relays_with_contact_percentage': _pct(relays_with_contact, total_relays),
-        'relays_without_contact_percentage': _pct(relays_without_contact, total_relays)
+        'relays_with_family_percentage': _pct(relays_with_family, total_relays_count),
+        'relays_without_family_percentage': _pct(relays_without_family, total_relays_count),
+        'relays_with_contact_percentage': _pct(relays_with_contact, total_relays_count),
+        'relays_without_contact_percentage': _pct(relays_without_contact, total_relays_count)
     })
     
     # Final calculations - reuse existing data
@@ -1375,11 +1312,8 @@ def calculate_network_health_metrics(relay_set):
     _integrate_aroi_validation(health_metrics, relay_set, total_relays_count)
     
     # === HAPPY FAMILY KEY MIGRATION METRICS ===
-    # DA readiness (small loop over ~10 authority relays)
-    family_key_ready_authorities = sum(
-        1 for r in relay_set.json['relays']
-        if 'Authority' in r.get('flags', []) and _is_happy_family_ready(r.get('version', ''))
-    )
+    # DA readiness, family-cert counts, and operator_desc_counts were all
+    # computed in the main relay loop above (eliminates 3 extra relay passes).
     
     # Consensus method + family params from collector consensus data
     collector_data_hf = getattr(relay_set, 'collector_consensus_data', None)
@@ -1387,46 +1321,10 @@ def calculate_network_health_metrics(relay_set):
     if collector_data_hf and isinstance(collector_data_hf, dict):
         cm_info = collector_data_hf.get('consensus_method_info', {})
     
-    # Family-cert from collector descriptors (separate worker, separate cache)
-    # Fetches last 18 hourly files for full network coverage (~10k relays).
-    # Per-file results cached so subsequent runs only download new files.
-    collector_descs = getattr(relay_set, 'collector_descriptors_data', None)
-    family_cert_count = 0
-    family_no_cert_count = 0
-    desc_seen_total = 0
-    family_cert_fps = set()
-    all_seen_fps = set()
-    if collector_descs and isinstance(collector_descs, dict):
-        family_cert_fps = set(collector_descs.get('family_cert_fingerprints', []))
-        all_seen_fps = set(collector_descs.get('all_seen_fingerprints', []))
-        desc_seen_total = len(all_seen_fps)
-        # Count relays in our Onionoo dataset: with family-cert vs without (from descriptors only)
-        for relay in relay_set.json['relays']:
-            fp = relay.get('fingerprint', '').upper()
-            if fp in family_cert_fps:
-                family_cert_count += 1
-            elif fp in all_seen_fps:
-                family_no_cert_count += 1
-    
-    # Operator readiness from SERVER DESCRIPTORS (not version-based)
-    # Uses family_cert_fps and all_seen_fps from descriptor data
-    validated_domain_set_hf = getattr(relay_set, 'validated_aroi_domains', set())
-    # Build per-operator descriptor counts: {domain: {'cert': N, 'seen': N}}
-    operator_desc_counts = {}
-    for relay in relay_set.json['relays']:
-        aroi_dom = relay.get('aroi_domain', 'none')
-        if not aroi_dom or aroi_dom == 'none':
-            continue
-        fp = relay.get('fingerprint', '').upper()
-        if fp not in all_seen_fps:
-            continue  # Not yet seen in descriptors, skip
-        if aroi_dom not in operator_desc_counts:
-            operator_desc_counts[aroi_dom] = {'cert': 0, 'seen': 0}
-        operator_desc_counts[aroi_dom]['seen'] += 1
-        if fp in family_cert_fps:
-            operator_desc_counts[aroi_dom]['cert'] += 1
+    desc_seen_total = len(all_seen_fps)
     
     # Count validated operators with ≥1 family-cert relay vs all relays having family-cert
+    validated_domain_set_hf = getattr(relay_set, 'validated_aroi_domains', set())
     family_cert_some_operators = 0
     family_cert_all_operators = 0
     for domain, counts in operator_desc_counts.items():
