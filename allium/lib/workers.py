@@ -6,7 +6,9 @@ Extracted from the original monolithic Relays class for multi-API support.
 """
 
 import json
+import logging
 import os
+import random
 import sys
 import time
 import urllib.request
@@ -17,6 +19,8 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeou
 from datetime import datetime, timedelta
 from pathlib import Path
 from .error_handlers import handle_file_io_errors, handle_http_errors, handle_json_errors
+
+logger = logging.getLogger(__name__)
 
 
 # ============================================================================
@@ -218,7 +222,7 @@ from typing import Optional, Dict, Any, Callable
 
 @dataclass
 class APIConfig:
-    """Configuration for an API worker with cache and timeout settings."""
+    """Configuration for an API worker with cache, timeout, and retry settings."""
     api_name: str                    # Internal name for caching (e.g., 'onionoo_details')
     display_name: str                # Human-readable name for logging
     cache_max_age_hours: float       # Hours after which cache is considered stale
@@ -227,6 +231,10 @@ class APIConfig:
     use_conditional_requests: bool = True   # Whether to use If-Modified-Since header
     custom_headers: Optional[Dict[str, str]] = None  # Additional request headers
     count_field: str = 'relays'      # Field name to count items in response
+    # Retry settings
+    retry_count: int = 3             # Max retries on transient failures (0 = no retry)
+    retry_delay_base: float = 1.0    # Base delay in seconds for exponential backoff
+    retry_on_fresh_cache: bool = False  # If True, retry even when fresh cache exists
 
 
 # Pre-configured API settings
@@ -236,6 +244,8 @@ DETAILS_CONFIG = APIConfig(
     cache_max_age_hours=DETAILS_CACHE_MAX_AGE_HOURS,
     timeout_fresh_cache=DETAILS_TIMEOUT_FRESH_CACHE,
     timeout_stale_cache=DETAILS_TIMEOUT_STALE_CACHE,
+    retry_count=3,               # Critical API: retry up to 3 times
+    retry_delay_base=2.0,        # 2s → 4s → 8s backoff
 )
 
 UPTIME_CONFIG = APIConfig(
@@ -244,6 +254,8 @@ UPTIME_CONFIG = APIConfig(
     cache_max_age_hours=UPTIME_CACHE_MAX_AGE_HOURS,
     timeout_fresh_cache=UPTIME_TIMEOUT_FRESH_CACHE,
     timeout_stale_cache=UPTIME_TIMEOUT_STALE_CACHE,
+    retry_count=2,               # Non-critical: retry up to 2 times
+    retry_delay_base=2.0,
 )
 
 BANDWIDTH_CONFIG = APIConfig(
@@ -252,6 +264,8 @@ BANDWIDTH_CONFIG = APIConfig(
     cache_max_age_hours=BANDWIDTH_CACHE_MAX_AGE_HOURS,
     timeout_fresh_cache=BANDWIDTH_TIMEOUT_FRESH_CACHE,
     timeout_stale_cache=BANDWIDTH_TIMEOUT_STALE_CACHE,
+    retry_count=2,               # Non-critical: retry up to 2 times
+    retry_delay_base=2.0,
 )
 
 AROI_CONFIG = APIConfig(
@@ -263,6 +277,8 @@ AROI_CONFIG = APIConfig(
     use_conditional_requests=False,
     custom_headers={'User-Agent': 'Allium/1.0'},
     count_field='results',
+    retry_count=2,               # External API: retry up to 2 times
+    retry_delay_base=1.0,
 )
 # ============================================================================
 
@@ -407,6 +423,130 @@ def _read_timestamp(api_name):
 
 
 # ============================================================================
+# RETRY WITH EXPONENTIAL BACKOFF
+# ============================================================================
+
+# Exceptions that indicate transient failures worth retrying
+_RETRYABLE_EXCEPTIONS = (
+    TotalTimeoutError,
+    socket.timeout,
+    TimeoutError,
+    ConnectionResetError,
+    ConnectionAbortedError,
+    ConnectionRefusedError,
+    BrokenPipeError,
+)
+
+
+def _is_retryable_error(exc: Exception) -> bool:
+    """
+    Determine if an exception represents a transient error worth retrying.
+
+    Retryable:
+      - Timeout errors (TotalTimeoutError, socket.timeout, TimeoutError)
+      - Connection errors (reset, refused, aborted, broken pipe)
+      - urllib URLError wrapping a retryable socket error
+      - HTTP 5xx server errors and 429 Too Many Requests
+
+    Not retryable:
+      - HTTP 4xx client errors (except 429)
+      - JSON parse errors
+      - Validation / data structure errors
+    """
+    if isinstance(exc, _RETRYABLE_EXCEPTIONS):
+        return True
+    if isinstance(exc, urllib.error.URLError):
+        # URLError wrapping a retryable socket error
+        if isinstance(exc.reason, _RETRYABLE_EXCEPTIONS):
+            return True
+        # URLError wrapping OSError with retryable errno
+        if isinstance(exc.reason, OSError):
+            return True
+        return False
+    if isinstance(exc, urllib.error.HTTPError):
+        # Retry on 5xx server errors and 429 rate limiting
+        return exc.code >= 500 or exc.code == 429
+    if isinstance(exc, OSError):
+        # Generic OS-level network errors (ECONNRESET, etc.)
+        return True
+    return False
+
+
+def _retry_with_backoff(
+    fetch_fn: Callable,
+    args: tuple = (),
+    kwargs: dict = None,
+    retry_count: int = 3,
+    retry_delay_base: float = 1.0,
+    log_fn: Optional[Callable] = None,
+    operation_name: str = "fetch",
+) -> Any:
+    """
+    Execute a function with retry and exponential backoff on transient failures.
+
+    Backoff formula: delay = base * (2 ** attempt) + random jitter [0, 1)
+    Example with base=2.0: attempt 0 → 2-3s, attempt 1 → 4-5s, attempt 2 → 8-9s
+
+    Args:
+        fetch_fn:         Callable to execute
+        args:             Positional arguments for fetch_fn
+        kwargs:           Keyword arguments for fetch_fn
+        retry_count:      Maximum number of retries (0 = no retry, just one attempt)
+        retry_delay_base: Base delay in seconds for exponential backoff
+        log_fn:           Optional logging function (receives string messages)
+        operation_name:   Human-readable name for log messages
+
+    Returns:
+        The return value of fetch_fn on success
+
+    Raises:
+        The last exception if all retries are exhausted
+    """
+    if kwargs is None:
+        kwargs = {}
+
+    last_exception = None
+    max_attempts = 1 + retry_count  # 1 initial attempt + retry_count retries
+
+    for attempt in range(max_attempts):
+        try:
+            return fetch_fn(*args, **kwargs)
+        except Exception as exc:
+            last_exception = exc
+
+            # Don't retry if this is not a transient error
+            if not _is_retryable_error(exc):
+                raise
+
+            # Don't retry if we've exhausted retries
+            if attempt >= max_attempts - 1:
+                if log_fn:
+                    log_fn(f"{operation_name}: all {max_attempts} attempts failed, giving up")
+                raise
+
+            # Calculate backoff delay with jitter
+            delay = retry_delay_base * (2 ** attempt) + random.random()
+
+            if log_fn:
+                log_fn(
+                    f"{operation_name}: attempt {attempt + 1}/{max_attempts} failed "
+                    f"({type(exc).__name__}), retrying in {delay:.1f}s..."
+                )
+            else:
+                logger.info(
+                    f"{operation_name}: attempt {attempt + 1}/{max_attempts} failed "
+                    f"({type(exc).__name__}), retrying in {delay:.1f}s..."
+                )
+
+            time.sleep(delay)
+
+    # Should not reach here, but just in case
+    raise last_exception  # type: ignore[misc]
+
+# ============================================================================
+
+
+# ============================================================================
 # GENERIC API FETCH WITH CACHE FALLBACK
 # ============================================================================
 
@@ -496,12 +636,28 @@ def _fetch_with_cache_fallback(
     else:
         conn = urllib.request.Request(url)
     
-    # Try to fetch with TOTAL timeout (not just socket timeout), fallback to cache on timeout
-    # Uses ThreadPoolExecutor to enforce true total timeout including all data transfer
+    # Determine retry count: skip retries when fresh cache is available (fast fallback)
+    has_fresh_cache = cached_data is not None and cache_age is not None and cache_age < cache_max_age_seconds
+    if has_fresh_cache and not config.retry_on_fresh_cache:
+        effective_retries = 0
+    else:
+        effective_retries = config.retry_count
+    
+    # Try to fetch with TOTAL timeout (not just socket timeout) + retry with backoff
+    # Falls back to cache on exhausted retries or non-retryable errors
+    fetch_start = time.time()
     try:
-        api_response = _fetch_url_with_total_timeout(url, timeout_seconds, headers if headers else None)
+        api_response = _retry_with_backoff(
+            fetch_fn=_fetch_url_with_total_timeout,
+            args=(url, timeout_seconds, headers if headers else None),
+            retry_count=effective_retries,
+            retry_delay_base=config.retry_delay_base,
+            log_fn=log_progress,
+            operation_name=display_name,
+        )
     except TotalTimeoutError as e:
-        log_progress(f"request exceeded total timeout of {timeout_seconds} seconds (includes all data transfer)...")
+        elapsed = time.time() - fetch_start
+        log_progress(f"request exceeded total timeout of {timeout_seconds}s after {elapsed:.1f}s total (includes retries)...")
         if cached_data:
             log_progress(f"using cached {display_name} data due to timeout")
             _mark_ready(api_name)
@@ -511,13 +667,14 @@ def _fetch_with_cache_fallback(
             _mark_stale(api_name, f"Total timeout after {timeout_seconds}s with no cache")
             return None
     except (socket.timeout, TimeoutError, urllib.error.URLError) as e:
+        elapsed = time.time() - fetch_start
         is_timeout = (
             isinstance(e, (socket.timeout, TimeoutError)) or 
             (isinstance(e, urllib.error.URLError) and isinstance(e.reason, (socket.timeout, TimeoutError)))
         )
         
         if is_timeout:
-            log_progress(f"request timed out after {timeout_seconds} seconds...")
+            log_progress(f"request timed out after {elapsed:.1f}s (limit: {timeout_seconds}s)...")
             if cached_data:
                 log_progress(f"using cached {display_name} data due to timeout")
                 _mark_ready(api_name)
@@ -528,10 +685,36 @@ def _fetch_with_cache_fallback(
                 return None
         else:
             raise
+    except urllib.error.HTTPError:
+        # Let the @handle_http_errors decorator handle HTTP errors (304, 4xx, 5xx)
+        raise
+    except Exception as e:
+        # Non-retryable error after exhausting retries
+        elapsed = time.time() - fetch_start
+        log_progress(f"request failed after {elapsed:.1f}s: {type(e).__name__}: {e}")
+        if cached_data:
+            log_progress(f"using cached {display_name} data due to error")
+            _mark_ready(api_name)
+            return cached_data
+        else:
+            log_progress("no cached data available after error")
+            _mark_stale(api_name, f"Error: {type(e).__name__}: {e}")
+            return None
     
-    # Parse JSON response
+    fetch_elapsed = time.time() - fetch_start
+    
+    # Parse JSON response with explicit error handling
     log_progress("parsing JSON response...")
-    data = json.loads(api_response.decode("utf-8"))
+    try:
+        data = json.loads(api_response.decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as e:
+        log_progress(f"failed to parse JSON response: {e}")
+        if cached_data:
+            log_progress(f"using cached {display_name} data due to parse error")
+            _mark_ready(api_name)
+            return cached_data
+        _mark_stale(api_name, f"JSON parse error: {e}")
+        return None
     
     # Validate response if validator provided
     if validator and not validator(data):
@@ -554,9 +737,10 @@ def _fetch_with_cache_fallback(
     # Mark as ready
     _mark_ready(api_name)
     
-    # Log success
+    # Log success with elapsed time
     item_count = len(data.get(config.count_field, []))
-    log_progress(f"successfully fetched {item_count} items from {display_name} API")
+    retry_info = f" (with {effective_retries} retries available)" if effective_retries > 0 else ""
+    log_progress(f"successfully fetched {item_count} items from {display_name} API in {fetch_elapsed:.1f}s{retry_info}")
     
     return data
 
