@@ -57,6 +57,12 @@ class TestFetchCollectorConsensusData:
             'votes': {'moria1': {}},
             'relay_index': {'ABC123': {}},
             'fetched_at': datetime.utcnow().isoformat(),
+            'consensus_method_info': {
+                'total_voters': 9,
+                'current_method': 34,
+                'max_method': 34,
+                'max_method_support': 9,
+            },
         }
         mock_cache_manager.load_cache.return_value = cached_data
         
@@ -106,6 +112,7 @@ class TestValidateCollectorCache:
             'votes': {'moria1': {'relay_index': {}}},
             'relay_index': {'ABC123': {}},
             'fetched_at': datetime.utcnow().isoformat(),
+            'consensus_method_info': {'total_voters': 9, 'current_method': 34},
         }
         assert _validate_collector_cache(valid_data) == True
     
@@ -123,6 +130,35 @@ class TestValidateCollectorCache:
         }
         assert _validate_collector_cache(data) == False
     
+    def test_validate_missing_consensus_method_info(self):
+        """Test validation rejects cache without consensus_method_info."""
+        data = {
+            'votes': {'moria1': {}},
+            'relay_index': {},
+            'fetched_at': datetime.utcnow().isoformat(),
+        }
+        assert _validate_collector_cache(data) == False
+    
+    def test_validate_empty_consensus_method_info(self):
+        """Test validation rejects cache with empty consensus_method_info."""
+        data = {
+            'votes': {'moria1': {}},
+            'relay_index': {},
+            'fetched_at': datetime.utcnow().isoformat(),
+            'consensus_method_info': {},
+        }
+        assert _validate_collector_cache(data) == False
+    
+    def test_validate_consensus_method_info_zero_voters(self):
+        """Test validation rejects cache with zero total_voters."""
+        data = {
+            'votes': {'moria1': {}},
+            'relay_index': {},
+            'fetched_at': datetime.utcnow().isoformat(),
+            'consensus_method_info': {'total_voters': 0},
+        }
+        assert _validate_collector_cache(data) == False
+    
     def test_validate_old_cache(self):
         """Test validation rejects cache older than 3 hours."""
         old_time = (datetime.utcnow() - timedelta(hours=4)).isoformat()
@@ -130,6 +166,7 @@ class TestValidateCollectorCache:
             'votes': {'moria1': {}},
             'relay_index': {},
             'fetched_at': old_time,
+            'consensus_method_info': {'total_voters': 9},
         }
         assert _validate_collector_cache(data) == False
     
@@ -140,6 +177,7 @@ class TestValidateCollectorCache:
             'votes': {'moria1': {}},
             'relay_index': {},
             'fetched_at': recent_time,
+            'consensus_method_info': {'total_voters': 9, 'current_method': 34},
         }
         assert _validate_collector_cache(data) == True
 
