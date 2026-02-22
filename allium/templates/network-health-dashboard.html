@@ -661,7 +661,7 @@ Network Health Dashboard
         
         <!-- CARD 11: HAPPY FAMILY KEY MIGRATION -->
         <div class="ribbon-card happy-family-migration">
-            <div class="card-header">
+            <div class="card-header" id="happy-family">
                 <h4>🔑 Happy Family Key Migration</h4>
             </div>
             <div class="card-metrics">
@@ -682,7 +682,7 @@ Network Health Dashboard
                         <span class="metric-label">Consensus Method{% if relays.json.network_health.hf_consensus_method_max %} (max: {{ relays.json.network_health.hf_consensus_method_max }}){% endif %}</span>
                     </div>
                     <div class="metric-item" title="Authorities advertising method {{ relays.json.network_health.hf_consensus_method_max|default('?', true) }} in their consensus-methods vote header. Per dirvote.c, a 2/3 supermajority (>⌊n×2/3⌋) is required to activate a new method.">
-                        <span class="metric-value" style="{% if relays.json.network_health.hf_max_method_support >= relays.json.network_health.hf_method_threshold and relays.json.network_health.hf_method_threshold > 0 %}color: #28a745;{% elif relays.json.network_health.hf_max_method_support > 0 %}color: #ff8c00;{% else %}color: #dc3545;{% endif %}">
+                        <span class="metric-value" style="{% if relays.json.network_health.hf_max_method_support >= relays.json.network_health.hf_method_threshold and relays.json.network_health.hf_method_threshold > 0 %}color: #28a745;{% elif relays.json.network_health.hf_max_method_support > 0 %}color: #cc9900;{% else %}color: #dc3545;{% endif %}">
                             {{ relays.json.network_health.hf_max_method_support }}/{{ relays.json.network_health.hf_consensus_total_voters }}
                         </span>
                         <span class="metric-label">DAs Support Method {{ relays.json.network_health.hf_consensus_method_max|default('?', true) }} (Need {{ relays.json.network_health.hf_method_threshold }} for Majority)</span>
@@ -691,29 +691,33 @@ Network Health Dashboard
                 
                 <!-- Row 3: Consensus Parameters (auto-populates when authorities vote on them) -->
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
-                    <div class="metric-item" title="Consensus parameter (param-spec). When 1, clients enforce family membership via family-ids in microdescriptors per Proposal 321.">
+                    <div class="metric-item" title="Consensus parameter use-family-ids (param-spec). When 1, clients enforce family membership via family-ids in microdescriptors per Proposal 321. Default: 1.">
                         <span class="metric-value">
                             {% if relays.json.network_health.hf_use_family_ids is not none %}
-                                <span style="color: #28a745; font-weight: 600;">{{ relays.json.network_health.hf_use_family_ids }}</span>
-                            {% else %}
-                                <span style="color: #6c757d;">Not in consensus</span>
-                            {% endif %}
-                        </span>
-                        <span class="metric-label">use-family-ids (default: 1)</span>
-                    </div>
-                    <div class="metric-item" title="Consensus parameter (param-spec). When 0, the legacy MyFamily system is deprecated — operators can remove MyFamily from torrc, reducing microdescriptors by ~80%.">
-                        <span class="metric-value">
-                            {% if relays.json.network_health.hf_use_family_lists is not none %}
-                                {% if relays.json.network_health.hf_use_family_lists == 0 %}
-                                    <span style="color: #28a745; font-weight: 600;">0 (deprecated!)</span>
+                                {% if relays.json.network_health.hf_use_family_ids == 1 %}
+                                    <span style="color: #28a745; font-weight: 600;">Yes</span>
                                 {% else %}
-                                    <span style="color: #ff8c00;">{{ relays.json.network_health.hf_use_family_lists }}</span>
+                                    <span style="color: #cc9900; font-weight: 600;">No</span>
                                 {% endif %}
                             {% else %}
                                 <span style="color: #6c757d;">Not in consensus</span>
                             {% endif %}
                         </span>
-                        <span class="metric-label">use-family-lists (default: 1)</span>
+                        <span class="metric-label">Clients Using Happy Family</span>
+                    </div>
+                    <div class="metric-item" title="Consensus parameter use-family-lists (param-spec). When 0, the legacy MyFamily system is deprecated — operators can remove MyFamily from torrc, reducing microdescriptors by ~80%. Default: 1.">
+                        <span class="metric-value">
+                            {% if relays.json.network_health.hf_use_family_lists is not none %}
+                                {% if relays.json.network_health.hf_use_family_lists == 0 %}
+                                    <span style="color: #28a745; font-weight: 600;">Yes</span>
+                                {% else %}
+                                    <span style="color: #cc9900; font-weight: 600;">No</span>
+                                {% endif %}
+                            {% else %}
+                                <span style="color: #6c757d;">Not in consensus</span>
+                            {% endif %}
+                        </span>
+                        <span class="metric-label">MyFamily Deprecated</span>
                     </div>
                 </div>
                 
