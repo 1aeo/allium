@@ -1450,8 +1450,10 @@ def calculate_network_health_metrics(relay_set):
         vals = sorted(use_family_lists_votes.values())
         hf_use_family_lists = vals[len(vals) // 2]
     
-    # Voting authority count — dynamic from collector data, not hardcoded
+    # Voting authority count — prefer collector data, fall back to Onionoo authority count
     hf_total_voters = cm_info.get('total_voters', 0)
+    if hf_total_voters == 0 and authority_count > 0:
+        hf_total_voters = authority_count
     
     # Consensus method voting threshold — replicates the formula from Tor's C source:
     # https://gitlab.torproject.org/tpo/core/tor/-/blob/main/src/feature/dirauth/dirvote.c
