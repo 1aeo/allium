@@ -9,6 +9,7 @@ from .ip_utils import safe_parse_ip_address as _safe_parse_ip_address
 from .ip_utils import is_private_ip_address, determine_ipv6_support
 from .time_utils import parse_onionoo_timestamp, create_time_thresholds
 from .string_utils import format_percentage_from_fraction
+from .consensus.consensus_evaluation import _port_in_rules
 
 
 def _pct(numerator, denominator):
@@ -549,31 +550,22 @@ def calculate_network_health_metrics(relay_set):
         
         # NEW: Exit policy analysis
         if is_exit:
-            # Basic exit policy analysis
+            # Basic exit policy analysis using proper port range parsing
+            # Reuses _port_in_rules from consensus_evaluation (DRY) which correctly
+            # handles Onionoo exit_policy_summary format: '80', '443', '1-65535', etc.
             exit_policy_summary = relay.get('exit_policy_summary', {})
             ipv4_summary = exit_policy_summary.get('accept', [])
-            ipv6_summary = exit_policy_summary.get('accept6', [])
             
-            # Check for web traffic (ports 80 and 443)
-            has_web_traffic_ports = False
-            if ipv4_summary:
-                for policy in ipv4_summary:
-                    if ('80' in policy or '443' in policy or 
-                        '1-65535' in policy or policy == '*:*'):
-                        has_web_traffic_ports = True
-                        break
+            # Check for web traffic (ports 80 or 443)
+            has_web_traffic_ports = (
+                _port_in_rules(ipv4_summary, 80) or _port_in_rules(ipv4_summary, 443)
+            )
             
             if has_web_traffic_ports:
                 web_traffic_exits += 1
             
-            # Check for unrestricted exits (accept all or most traffic)
-            is_port_unrestricted = False
-            if ipv4_summary:
-                for policy in ipv4_summary:
-                    if (policy == '*:*' or '1-65535' in policy or 
-                        '1-' in policy or '*:1-65535' in policy):
-                        is_port_unrestricted = True
-                        break
+            # Check for unrestricted exits — Onionoo normalizes full-range to '1-65535'
+            is_port_unrestricted = '1-65535' in ipv4_summary
             
             if is_port_unrestricted:
                 port_unrestricted_exits += 1
