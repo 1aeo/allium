@@ -35,7 +35,7 @@ Network Health Dashboard
                         <span class="metric-value">{{ relays.json.network_health.exit_count_with_percentage }}</span>
                         <span class="metric-label">Exit</span>
                     </div>
-                    <div class="metric-item" title="Guard relays serve as entry points into the Tor network. Must be Fast, Stable, and meet specific uptime and bandwidth requirements.">
+                    <div class="metric-item" title="Guard relays serve as entry points into the Tor network. Must be Fast, Stable, familiar to the authority, have sufficient weighted fractional uptime, and meet minimum bandwidth (AuthDirGuardBWGuarantee per dir-spec §3.4.2).">
                         <span class="metric-value">{{ relays.json.network_health.guard_count_with_percentage }}</span>
                         <span class="metric-label">Guard</span>
                     </div>
@@ -71,11 +71,11 @@ Network Health Dashboard
                         <span class="metric-value">{{ relays.json.network_health.authorities_count_with_percentage }}</span>
                         <span class="metric-label">Directory Authorities</span>
                     </div>
-                    <div class="metric-item" title="V2Dir relays serve directory information including consensus documents and relay descriptors. Essential for network discovery and connectivity.">
+                    <div class="metric-item" title="V2Dir relays serve directory information to clients and other relays. Requires an open DirPort or tunnelled-dir-server support (Proposal 237). Essential for network discovery.">
                         <span class="metric-value">{{ relays.json.network_health.v2dir_count_with_percentage }}</span>
                         <span class="metric-label">V2Dir</span>
                     </div>
-                    <div class="metric-item" title="HSDir relays store and serve hidden service descriptors, enabling access to onion services. Requires Stable and Fast flags plus 96+ hours uptime.">
+                    <div class="metric-item" title="HSDir relays store and serve hidden service descriptors, enabling access to onion services. Requires Stable, Fast, and V2Dir flags plus uptime ≥ MinUptimeHidServDirectoryV2 (default 96 hours, per dir-spec §3.4.2 and Proposal 243).">
                         <span class="metric-value">{{ relays.json.network_health.hsdir_count_with_percentage }}</span>
                         <span class="metric-label">HSDir</span>
                     </div>
@@ -91,15 +91,15 @@ Network Health Dashboard
                     </div>
                 </div>
                 <div class="metric-grid">
-                    <div class="metric-item" title="BadExit relays are flagged by authorities when misconfigured or malicious. These relays cannot be used as exit points for security reasons.">
+                    <div class="metric-item" title="BadExit relays are flagged by directory authorities as misbehaving exit nodes (traffic manipulation, SSL stripping, DNS manipulation). These relays cannot be used as exit points.">
                         <span class="metric-value">{{ relays.json.network_health.bad_exits_count_with_percentage }}</span>
-                        <span class="metric-label">Bad Relays</span>
+                        <span class="metric-label">BadExit</span>
                     </div>
-                    <div class="metric-item" title="StaleDesc relays have published descriptors over 18 hours old. These relays may have outdated information about their capabilities.">
+                    <div class="metric-item" title="StaleDesc relays have descriptors older than DESC_IS_STALE_INTERVAL (per Proposal 293). These relays should upload a fresh descriptor to directory authorities.">
                         <span class="metric-value">{{ relays.json.network_health.stabledesc_count_with_percentage }}</span>
                         <span class="metric-label">StaleDesc</span>
                     </div>
-                    <div class="metric-item" title="Sybil relays are flagged as potentially belonging to the same operator when more than 2 relays share an IP address. Helps prevent network control attacks.">
+                    <div class="metric-item" title="Sybil relays are flagged by directory authorities when too many relays share an IP address (AuthDirMaxServersPerAddr, default 2). Sybil relays are excluded from flag threshold calculations per dir-spec §3.4.2.">
                         <span class="metric-value">{{ relays.json.network_health.sybil_count_with_percentage }}</span>
                         <span class="metric-label">Sybil</span>
                     </div>
