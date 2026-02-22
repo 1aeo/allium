@@ -22,8 +22,8 @@ Network Health Dashboard
         
         <!-- CARD 1: RELAY COUNTS -->
         <div class="ribbon-card relay-counts">
-            <div class="card-header">
-                <h4>📊 Relay Counts</h4>
+            <div class="card-header" id="relay-counts">
+                <h4><a href="#relay-counts" style="color: inherit; text-decoration: none;">📊 Relay Counts</a></h4>
             </div>
             <div class="card-metrics">
                 <div class="metric-item primary" title="Total number of Tor relays currently running in the network. Calculated by counting all active relays from Onionoo API.">
@@ -138,8 +138,8 @@ Network Health Dashboard
         
         <!-- CARD 2: BANDWIDTH AVAILABILITY -->
                     <div class="ribbon-card bandwidth-counts">
-                <div class="card-header">
-                    <h4>⚡ Bandwidth Capacity Availability</h4>
+                <div class="card-header" id="bandwidth-capacity">
+                    <h4><a href="#bandwidth-capacity" style="color: inherit; text-decoration: none;">⚡ Bandwidth Capacity Availability</a></h4>
                 </div>
             <div class="card-metrics">
                 <div class="metric-item primary" title="Total observed bandwidth capacity across all relays. Sum of observed_bandwidth from all active relays.">
@@ -223,8 +223,8 @@ Network Health Dashboard
         
         <!-- CARD 3: RELAY UPTIME -->
         <div class="ribbon-card relay-uptime">
-            <div class="card-header">
-                <h4>⏰ Relay Uptime</h4>
+            <div class="card-header" id="relay-uptime">
+                <h4><a href="#relay-uptime" style="color: inherit; text-decoration: none;">⏰ Relay Uptime</a></h4>
             </div>
             <div class="card-metrics">
                 <div class="metric-item primary" title="Average uptime percentage across all relays over the last month. Higher is better for network stability. 1mo Mean by category: Exit {{ relays.json.network_health.exit_uptime_1_month_mean_formatted }}, Guard {{ relays.json.network_health.guard_uptime_1_month_mean_formatted }}, Middle {{ relays.json.network_health.middle_uptime_1_month_mean_formatted }}, Other {{ relays.json.network_health.other_uptime_1_month_mean_formatted }}.">
@@ -293,8 +293,8 @@ Network Health Dashboard
         
         <!-- CARD 4: OPERATOR PARTICIPATION -->
         <div class="ribbon-card operator-participation">
-            <div class="card-header">
-                <h4>👥 Operator Participation</h4>
+            <div class="card-header" id="operator-participation">
+                <h4><a href="#operator-participation" style="color: inherit; text-decoration: none;">👥 Operator Participation</a></h4>
             </div>
             <div class="card-metrics">
                 <!-- AROI Coverage - Dual Focus (matches Bandwidth Utilization style) -->
@@ -416,8 +416,8 @@ Network Health Dashboard
         
         <!-- CARD 5: GEOGRAPHIC PARTICIPATION -->
         <div class="ribbon-card geographic-participation">
-            <div class="card-header">
-                <h4>🌍 Geographic Participation</h4>
+            <div class="card-header" id="geographic-participation">
+                <h4><a href="#geographic-participation" style="color: inherit; text-decoration: none;">🌍 Geographic Participation</a></h4>
             </div>
             <div class="card-metrics">
                 <div class="metric-item primary" title="Number of countries hosting Tor relays. Higher geographic diversity improves censorship resistance and network resilience.">
@@ -486,8 +486,8 @@ Network Health Dashboard
         
         <!-- CARD 6: PROVIDER PARTICIPATION -->
         <div class="ribbon-card provider-participation">
-            <div class="card-header">
-                <h4>🏢 Provider Participation</h4>
+            <div class="card-header" id="provider-participation">
+                <h4><a href="#provider-participation" style="color: inherit; text-decoration: none;">🏢 Provider Participation</a></h4>
             </div>
             <div class="card-metrics">
                 <div class="metric-item primary" title="Unique Autonomous Systems hosting relays. Higher AS diversity reduces single points of failure and improves network resilience.">
@@ -553,8 +553,8 @@ Network Health Dashboard
         
         <!-- CARD 8: BANDWIDTH UTILIZATION -->
         <div class="ribbon-card bandwidth-utilization">
-            <div class="card-header">
-                <h4>📈 Bandwidth Utilization</h4>
+            <div class="card-header" id="bandwidth-utilization">
+                <h4><a href="#bandwidth-utilization" style="color: inherit; text-decoration: none;">📈 Bandwidth Utilization</a></h4>
             </div>
             <div class="card-metrics">
                 <div class="metric-item primary" title="Network-wide CW/BW ratio mean and median across all relays. CW/BW ratio = Consensus Weight ÷ Bandwidth Capacity × 1,000,000. Higher ratios indicate better network utilization per bandwidth capacity contributed. Same calculation as Performance Insights in contact operator pages.">
@@ -600,8 +600,8 @@ Network Health Dashboard
         
         <!-- CARD 9: VERSION COMPLIANCE -->
         <div class="ribbon-card version-compliance">
-            <div class="card-header">
-                <h4>🔄 Version Compliance</h4>
+            <div class="card-header" id="version-compliance">
+                <h4><a href="#version-compliance" style="color: inherit; text-decoration: none;">🔄 Version Compliance</a></h4>
             </div>
             <div class="card-metrics">
                 <div class="metric-item primary" title="Percentage of relays running Tor versions recommended by directory authorities. Higher is better for security.">
@@ -631,8 +631,8 @@ Network Health Dashboard
         
         <!-- CARD 7: UNIQUE OPERATING SYSTEMS -->
         <div class="ribbon-card platform-counts">
-            <div class="card-header">
-                <h4>💻 Unique Operating Systems</h4>
+            <div class="card-header" id="operating-systems">
+                <h4><a href="#operating-systems" style="color: inherit; text-decoration: none;">💻 Unique Operating Systems</a></h4>
             </div>
             <div class="card-metrics">
                 <div class="metric-item primary" title="Number of unique platform strings reported by relays. Shows diversity of operating systems and Tor versions.">
@@ -785,8 +785,8 @@ Network Health Dashboard
         
         <!-- CARD 10: EXIT POLICIES -->
         <div class="ribbon-card exit-policies">
-            <div class="card-header">
-                <h4>🚪 Exit Policies</h4>
+            <div class="card-header" id="exit-policies">
+                <h4><a href="#exit-policies" style="color: inherit; text-decoration: none;">🚪 Exit Policies</a></h4>
             </div>
             <div class="card-metrics">
                 <div class="metric-item primary" title="Number and percentage of exit relays without ANY restrictions - neither port restrictions nor public IP address restrictions. These relays provide maximum utility for Tor users, allowing unrestricted access to all public internet resources.">
