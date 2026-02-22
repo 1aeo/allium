@@ -455,6 +455,10 @@ def _is_retryable_error(exc: Exception) -> bool:
     """
     if isinstance(exc, _RETRYABLE_EXCEPTIONS):
         return True
+    # IMPORTANT: Check HTTPError BEFORE URLError because HTTPError is a subclass of URLError
+    if isinstance(exc, urllib.error.HTTPError):
+        # Retry on 5xx server errors and 429 rate limiting
+        return exc.code >= 500 or exc.code == 429
     if isinstance(exc, urllib.error.URLError):
         # URLError wrapping a retryable socket error
         if isinstance(exc.reason, _RETRYABLE_EXCEPTIONS):
@@ -463,9 +467,6 @@ def _is_retryable_error(exc: Exception) -> bool:
         if isinstance(exc.reason, OSError):
             return True
         return False
-    if isinstance(exc, urllib.error.HTTPError):
-        # Retry on 5xx server errors and 429 rate limiting
-        return exc.code >= 500 or exc.code == 429
     if isinstance(exc, OSError):
         # Generic OS-level network errors (ECONNRESET, etc.)
         return True

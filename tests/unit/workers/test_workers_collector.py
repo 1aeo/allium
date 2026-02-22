@@ -182,15 +182,40 @@ class TestErrorHandling:
                 mock_mark_stale.assert_called()
     
     @patch('allium.lib.workers._mark_stale')
-    def test_fetch_health_handles_exception(self, mock_mark_stale):
-        """Test that fetch_consensus_health handles exceptions gracefully."""
+    @patch('allium.lib.workers._load_cache', return_value=None)
+    def test_fetch_health_handles_exception_no_cache(self, mock_load_cache, mock_mark_stale):
+        """Test that fetch_consensus_health returns None on exception with no cache."""
         with patch('allium.lib.consensus.is_consensus_evaluation_enabled', return_value=True):
             with patch('allium.lib.consensus.AuthorityMonitor') as MockMonitor:
                 MockMonitor.side_effect = Exception('Network error')
                 
-                # Should not raise, should return None
+                # Should not raise, should return None when no cache
                 result = fetch_consensus_health()
                 
                 assert result is None
                 # Should mark as stale
+                mock_mark_stale.assert_called()
+    
+    @patch('allium.lib.workers._mark_stale')
+    @patch('allium.lib.workers._load_cache')
+    def test_fetch_health_falls_back_to_cache_on_exception(self, mock_load_cache, mock_mark_stale):
+        """Test that fetch_consensus_health falls back to cache on exception."""
+        cached_health = {
+            'authority_status': {'moria1': {'online': True, 'latency_ms': 50}},
+            'summary': {'online': 1, 'offline': 0},
+            'alerts': [],
+            'fetched_at': None,
+        }
+        mock_load_cache.return_value = cached_health
+        
+        with patch('allium.lib.consensus.is_consensus_evaluation_enabled', return_value=True):
+            with patch('allium.lib.consensus.AuthorityMonitor') as MockMonitor:
+                MockMonitor.side_effect = Exception('Network error')
+                
+                # Should fall back to cached data
+                result = fetch_consensus_health()
+                
+                assert result is not None
+                assert result == cached_health
+                # Should still mark as stale
                 mock_mark_stale.assert_called()
