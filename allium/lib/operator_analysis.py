@@ -701,29 +701,44 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
     intelligence_formatted['version_status_tooltips'] = version_status_tooltips
     
     # 4b. Family Certificate Migration (Proposal 321) — from server descriptors
-    collector_descs = getattr(relay_set, 'collector_descriptors_data', None)
-    if collector_descs and isinstance(collector_descs, dict):
-        family_cert_fps = set(collector_descs.get('family_cert_fingerprints', []))
-        all_seen_fps = set(collector_descs.get('all_seen_fingerprints', []))
-        
+    # Reuse cached sets from relay_set to avoid O(n) set() construction per operator.
+    # Sets are built once in network_health.py and cached on relay_set.
+    family_cert_fps = getattr(relay_set, '_family_cert_fps_cache', None)
+    all_seen_fps = getattr(relay_set, '_all_seen_fps_cache', None)
+    coverage_hours = getattr(relay_set, '_descriptor_coverage_hours', 0)
+    
+    if family_cert_fps is None:
+        # Build and cache on first access (shared across all ~3000 operator pages)
+        collector_descs = getattr(relay_set, 'collector_descriptors_data', None)
+        if collector_descs and isinstance(collector_descs, dict):
+            family_cert_fps = set(collector_descs.get('family_cert_fingerprints', []))
+            all_seen_fps = set(collector_descs.get('all_seen_fingerprints', []))
+            coverage_hours = collector_descs.get('coverage_hours', 0)
+        else:
+            family_cert_fps = set()
+            all_seen_fps = set()
+        relay_set._family_cert_fps_cache = family_cert_fps
+        relay_set._all_seen_fps_cache = all_seen_fps
+        relay_set._descriptor_coverage_hours = coverage_hours
+    
+    if all_seen_fps:
         cert_count = 0
-        no_cert_count = 0
         not_seen_count = 0
         for relay in members:
             fp = relay.get('fingerprint', '').upper()
             if fp in family_cert_fps:
                 cert_count += 1
-            elif fp in all_seen_fps:
-                no_cert_count += 1
-            else:
+            elif fp not in all_seen_fps:
                 not_seen_count += 1
         
-        if cert_count > 0 or no_cert_count > 0:
+        if cert_count > 0 or (total_relays - not_seen_count) > 0:
             pct = round(cert_count / total_relays * 100, 1) if total_relays > 0 else 0
-            intelligence_formatted['family_cert_count'] = cert_count
-            intelligence_formatted['family_cert_total'] = total_relays
-            intelligence_formatted['family_cert_pct'] = pct
-            intelligence_formatted['family_cert_not_seen'] = not_seen_count
+            # Pre-format the entire display string in Python (same pattern as version_compliance)
+            result = f'{cert_count}/{total_relays} relays ({pct}%) have family-cert in server descriptors'
+            if not_seen_count > 0 and coverage_hours > 0:
+                plural = 's' if not_seen_count != 1 else ''
+                result += f', {not_seen_count} relay{plural} haven\'t published in last {coverage_hours} hours'
+            intelligence_formatted['family_cert_migration'] = result
     
     display_data['operator_intelligence'] = intelligence_formatted
     
