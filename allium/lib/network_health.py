@@ -1463,13 +1463,19 @@ def calculate_network_health_metrics(relay_set):
     # With 9 voters: (9*2)/3 = 6, need >6, so threshold is 7.
     hf_method_threshold = (hf_total_voters * 2) // 3 + 1 if hf_total_voters > 0 else 0
     
+    # Method support count — prefer collector data, fall back to ready authorities count
+    # Authorities running v0.4.9.x+ necessarily support new consensus methods
+    hf_max_method_support = cm_info.get('max_method_support', 0)
+    if hf_max_method_support == 0 and not cm_info.get('total_voters') and family_key_ready_authorities > 0:
+        hf_max_method_support = family_key_ready_authorities
+    
     health_metrics.update({
-        # Consensus method (from actual consensus document, never self-computed)
+        # Consensus method (from actual consensus document, or inferred from votes)
         'hf_consensus_method': cm_info.get('current_method'),
         # Max method available from any DA (from vote data)
         'hf_consensus_method_max': cm_info.get('max_method'),
         # How many DAs support the max method
-        'hf_max_method_support': cm_info.get('max_method_support', 0),
+        'hf_max_method_support': hf_max_method_support,
         # Total voting authorities (dynamic from votes, not hardcoded)
         'hf_consensus_total_voters': hf_total_voters,
         # 2/3 supermajority threshold (dynamic from voter count, per Tor dirvote.c formula)
