@@ -154,9 +154,9 @@ def preformat_network_health_template_strings(health_metrics):
     
     # Add 1_month period formatting keys (used directly in templates) 
     roles = ['exit', 'guard', 'middle', 'authority', 'v2dir', 'hsdir']
-    statistics = ['mean', 'median']
+    stat_types = ['mean', 'median']
     for role in roles:
-        for stat in statistics:
+        for stat in stat_types:
             percentage_format_keys.append(f'{role}_uptime_1_month_{stat}')
     
     for key in percentage_format_keys:
@@ -1297,10 +1297,10 @@ def calculate_network_health_metrics(relay_set):
         # REFACTORED: Consistent fallback initialization using unified pattern
         uptime_periods = ['1_month', '6_months', '1_year', '5_years']
         roles = ['exit', 'guard', 'middle', 'other', 'authority', 'v2dir', 'hsdir']
-        statistics = ['mean', 'median']
+        stat_types = ['mean', 'median']
         
         # Generate all uptime keys using consistent pattern: {role}_uptime_{period}_{statistic}
-        uptime_keys = [f'{role}_uptime_{period}_{stat}' for role in roles for period in uptime_periods for stat in statistics]
+        uptime_keys = [f'{role}_uptime_{period}_{stat}' for role in roles for period in uptime_periods for stat in stat_types]
         
         for key in uptime_keys:
             health_metrics[key] = 0.0
