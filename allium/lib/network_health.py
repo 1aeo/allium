@@ -1112,13 +1112,14 @@ def calculate_network_health_metrics(relay_set):
         if observed_advertised_diff_values else 0
     )
     
-    # DRY: Use multiplier to avoid duplicating bits/bytes code paths
-    bw_mult = 8 if relay_set.use_bits else 1
+    # BandwidthFormatter already handles bytes→bits conversion internally via its
+    # divisors (e.g. Gbit/s divisor = 10^9/8), so we pass raw bytes values directly.
+    # This matches how relays.py _preprocess_template_data() formats relay-level bandwidth.
     bw_fmt = relay_set.bandwidth_formatter
     
-    obs_adv_unit = bw_fmt.determine_unit(avg_obs_adv_diff_bytes * bw_mult)
-    avg_formatted = bw_fmt.format_bandwidth_with_unit(avg_obs_adv_diff_bytes * bw_mult, obs_adv_unit, decimal_places=0) + f" {obs_adv_unit}"
-    median_formatted = bw_fmt.format_bandwidth_with_unit(median_obs_adv_diff_bytes * bw_mult, obs_adv_unit, decimal_places=0) + f" {obs_adv_unit}"
+    obs_adv_unit = bw_fmt.determine_unit(avg_obs_adv_diff_bytes)
+    avg_formatted = bw_fmt.format_bandwidth_with_unit(avg_obs_adv_diff_bytes, obs_adv_unit, decimal_places=0) + f" {obs_adv_unit}"
+    median_formatted = bw_fmt.format_bandwidth_with_unit(median_obs_adv_diff_bytes, obs_adv_unit, decimal_places=0) + f" {obs_adv_unit}"
     health_metrics['avg_observed_advertised_diff_formatted'] = f"{avg_formatted} | {median_formatted}"
     
     health_metrics['consensus_weight_bandwidth_ratio'] = (
@@ -1157,14 +1158,14 @@ def calculate_network_health_metrics(relay_set):
     })
     
     # PRE-CALCULATE BANDWIDTH MEAN/MEDIAN WITH PROPER UNITS - avoid showing 0 values
-    # DRY: bw_mult already set above (8 for bits, 1 for bytes)
+    # BandwidthFormatter expects bytes input and handles bits conversion internally
     def _fmt_bw(value, unit):
-        """Helper: format bandwidth value with unit suffix."""
-        return bw_fmt.format_bandwidth_with_unit(value * bw_mult, unit, decimal_places=0) + f" {unit}"
+        """Helper: format bandwidth value (in bytes/s) with unit suffix."""
+        return bw_fmt.format_bandwidth_with_unit(value, unit, decimal_places=0) + f" {unit}"
     
     # Determine appropriate unit for role-specific mean/median values
-    base_unit = bw_fmt.determine_unit(total_bandwidth * bw_mult)
-    test_values = [health_metrics[k] * bw_mult for k in 
+    base_unit = bw_fmt.determine_unit(total_bandwidth)
+    test_values = [health_metrics[k] for k in 
                    ('exit_bw_mean', 'exit_bw_median', 'guard_bw_mean',
                     'guard_bw_median', 'middle_bw_mean', 'middle_bw_median')]
     
@@ -1183,7 +1184,7 @@ def calculate_network_health_metrics(relay_set):
         health_metrics[f'{role}_bw_median_formatted'] = _fmt_bw(health_metrics[f'{role}_bw_median'], unit)
     
     # Bandwidth formatting with proper units for totals
-    total_unit = bw_fmt.determine_unit(total_bandwidth * bw_mult)
+    total_unit = bw_fmt.determine_unit(total_bandwidth)
     for key, value in [('total_bandwidth', total_bandwidth), ('guard_bandwidth', guard_bandwidth),
                        ('exit_bandwidth', exit_bandwidth), ('middle_bandwidth', middle_bandwidth),
                        ('ipv4_only_bandwidth', ipv4_only_bandwidth), ('both_ipv4_ipv6_bandwidth', both_ipv4_ipv6_bandwidth)]:
