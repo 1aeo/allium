@@ -14,7 +14,7 @@ import urllib.error
 import socket
 import threading
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from .error_handlers import handle_file_io_errors, handle_http_errors, handle_json_errors
 
@@ -850,9 +850,10 @@ def fetch_collector_descriptors(progress_logger=None):
     # Separate cache key for per-file parsed results (persistent across runs)
     file_cache_name = "collector_descriptors_files"
     
-    # Relays publish descriptors every ~18 hours; fetch this many hourly files
-    # to ensure full network coverage on every run
-    HOURS_COVERAGE = 18
+    # Relays publish descriptors every ~18 hours (dir-spec §2.1). We fetch files
+    # from the last 20 hours to ensure full coverage with margin. Files are
+    # published every ~36-45 minutes on CollecTor, so 20 hours ≈ 27-33 files.
+    COVERAGE_HOURS = 20
     
     def log_progress(message):
         if progress_logger:
@@ -901,8 +902,23 @@ def fetch_collector_descriptors(progress_logger=None):
             _mark_stale(api_name, "No descriptor files found")
             return cached_data if has_valid_cache else None
         
-        # Step 2: Take the last HOURS_COVERAGE files for full relay coverage
-        target_files = all_files[-HOURS_COVERAGE:]
+        # Step 2: Select files from the last COVERAGE_HOURS by parsing timestamps
+        # Filename format: YYYY-MM-DD-HH-MM-SS-server-descriptors
+        cutoff = datetime.utcnow() - timedelta(hours=COVERAGE_HOURS)
+        target_files = []
+        for fname in all_files:
+            try:
+                # Parse "2026-02-21-14-19-00" from filename
+                ts_str = fname.replace('-server-descriptors', '')
+                file_time = datetime.strptime(ts_str, '%Y-%m-%d-%H-%M-%S')
+                if file_time >= cutoff:
+                    target_files.append(fname)
+            except ValueError:
+                continue
+        
+        if not target_files:
+            # Fallback: if no files match the time window, take the latest 24
+            target_files = all_files[-24:]
         
         # Step 3: Load per-file cache (maps filename → parsed result)
         file_cache = _load_cache(file_cache_name) or {}
