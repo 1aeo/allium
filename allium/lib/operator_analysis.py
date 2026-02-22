@@ -732,7 +732,9 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
                 not_seen_count += 1
         
         if cert_count > 0 or (total_relays - not_seen_count) > 0:
-            pct = round(cert_count / total_relays * 100, 1) if total_relays > 0 else 0
+            pct_raw = cert_count / total_relays * 100 if total_relays > 0 else 0
+            # Format percentage: drop .0 when unnecessary (100% not 100.0%, but 72.6% keeps decimal)
+            pct = f'{pct_raw:.1f}'.rstrip('0').rstrip('.')
             # Pre-format the entire display string in Python (same pattern as version_compliance)
             result = f'{cert_count}/{total_relays} relays ({pct}%) have family-cert in server descriptors'
             if not_seen_count > 0 and coverage_hours > 0:

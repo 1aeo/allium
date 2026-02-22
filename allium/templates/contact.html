@@ -163,7 +163,7 @@
                 {% endif %}
                 
                 {% if intelligence.family_cert_migration %}
-                <li><strong><span title="Relays publishing a family-cert entry in their server descriptor, proving family membership via an ed25519 family key per Proposal 321. Source: CollecTor server descriptors.">Family Certificate Migration</span>:</strong> {{ intelligence.family_cert_migration }}</li>
+                <li id="family-cert"><strong><span title="Relays publishing a family-cert entry in their server descriptor, proving family membership via an ed25519 family key per Proposal 321. Source: CollecTor server descriptors.">Family Certificate Migration</span>:</strong> {{ intelligence.family_cert_migration }}</li>
                 {% endif %}
             </ul>
         </div>

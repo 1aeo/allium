@@ -130,7 +130,7 @@
             <th title="Source: CollecTor | Vote file exists for this consensus period{% if relays.collector_fetched_at %} | Checked: {{ relays.collector_fetched_at.replace('T', ' ').split('.')[0] }}{% endif %}">Voted</th>
             <th title="Source: CollecTor | Has 'bandwidth-file-headers' line = runs sbws scanner">BW Auth</th>
             <th title="TCP connection test to authority's directory port | Response time in milliseconds">Latency (ms)</th>
-            <th title="Source: CollecTor | Highest consensus method this authority supports (from consensus-methods line in vote)">Max Method</th>
+            <th title="Source: CollecTor | Consensus method this authority supports (from consensus-methods line in vote)">Consensus Method</th>
             {# Existing columns #}
             <th title="Source: Onionoo | File: details | Field: as">AS Number</th>
             <th title="Source: Onionoo | File: details | Field: as_name">AS Name</th>
@@ -205,7 +205,7 @@
                     {% if authority.collector_data and authority.collector_data.max_consensus_method %}
                         {% set auth_max = authority.collector_data.max_consensus_method %}
                         {% set network_max = relays.consensus_method_info.max_method if relays.consensus_method_info else None %}
-                        <span style="{% if network_max and auth_max >= network_max %}color: #28a745; font-weight: bold;{% elif auth_max %}color: #dc3545;{% endif %}" title="This authority supports consensus methods up to {{ auth_max }}{% if network_max and auth_max < network_max %}. Does NOT support max method {{ network_max }}{% endif %}">{{ auth_max }}</span>
+                        <span style="{% if network_max and auth_max >= network_max %}color: #28a745; font-weight: bold;{% elif auth_max %}color: #dc3545;{% endif %}" title="This authority supports consensus method {{ auth_max }}{% if network_max and auth_max < network_max %} (network highest: {{ network_max }}){% endif %}">{{ auth_max }}</span>
                     {% else %}
                         <span style="color: #6c757d;" title="No vote data available">—</span>
                     {% endif %}

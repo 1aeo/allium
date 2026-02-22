@@ -183,7 +183,7 @@ class Coordinator:
             
             # Log API-specific start message
             api_display_name = self._get_api_display_name(api_name)
-            self._log_progress_with_step_increment(f"{api_display_name} - fetching onionoo data using workers system")
+            self._log_progress_with_step_increment(f"{api_display_name} - fetching data...")
             
             result = worker_func(*args_with_api_logger)
             self.worker_data[api_name] = result
