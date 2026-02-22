@@ -14,7 +14,7 @@ import urllib.error
 import socket
 import threading
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from .error_handlers import handle_file_io_errors, handle_http_errors, handle_json_errors
 
@@ -201,6 +201,12 @@ AROI_TIMEOUT_STALE_CACHE = 120        # 2 minutes for stale/missing cache
 COLLECTOR_CACHE_MAX_AGE_HOURS = 1     # Cache older than this is considered stale (1 hour)
 COLLECTOR_TIMEOUT_FRESH_CACHE = 30    # 30 seconds when cache is available (fallback on timeout)
 COLLECTOR_TIMEOUT_STALE_CACHE = 300   # 5 minutes when no cache exists
+
+# COLLECTOR DESCRIPTORS API - Fetches server descriptors for family-cert analysis
+# First run downloads ~18 hourly files (~126MB total), subsequent runs only ~1 new file (~7MB)
+DESCRIPTORS_CACHE_MAX_AGE_HOURS = 1   # Cache older than this is considered stale (1 hour)
+DESCRIPTORS_TIMEOUT_FRESH_CACHE = 60  # 60 seconds per file when cache available (typically 1 new file)
+DESCRIPTORS_TIMEOUT_STALE_CACHE = 300 # 5 minutes when no cache exists (first run: ~18 files)
 # ============================================================================
 
 
@@ -814,6 +820,247 @@ def fetch_collector_data(progress_logger=None):
     Maintained for backward compatibility.
     """
     return fetch_collector_consensus_data(progress_logger=progress_logger)
+
+
+def fetch_collector_descriptors(progress_logger=None):
+    """
+    Fetch CollecTor server-descriptors covering the last 18 hours and extract
+    family-cert presence per relay. Achieves full network coverage on every run.
+    
+    Relays publish new server descriptors every ~18 hours, and CollecTor publishes
+    hourly incremental files (~800-2000 descriptors each, ~10k total relays).
+    To see every relay, we fetch the last 18 hours of files.
+    
+    Optimization: Parsed results are cached per-file. On each run, only NEW files
+    (typically 1 per hour) are downloaded. Previously-parsed files are loaded from
+    the per-file cache. This means the first run downloads ~18 files (~126MB total),
+    but subsequent hourly runs only download ~1 new file (~7MB).
+    
+    Args:
+        progress_logger: Optional function for progress updates
+    
+    Returns:
+        dict with 'family_cert_fingerprints' (list), 'all_seen_fingerprints' (list),
+        'fetched_at' (str), or None on failure
+    """
+    import re
+    from .consensus import is_consensus_evaluation_enabled
+    
+    api_name = "collector_descriptors"
+    # Separate cache key for per-file parsed results (persistent across runs)
+    file_cache_name = "collector_descriptors_files"
+    
+    # Relays publish descriptors every ~18 hours (dir-spec §2.1). We fetch files
+    # from the last 20 hours to ensure full coverage with margin. Files are
+    # published every ~36-45 minutes on CollecTor, so 20 hours ≈ 27-33 files.
+    COVERAGE_HOURS = 20
+    
+    def log_progress(message):
+        if progress_logger:
+            progress_logger(message)
+        else:
+            print(message)
+    
+    # Check feature flag (same as collector_consensus)
+    if not is_consensus_evaluation_enabled():
+        log_progress("consensus evaluation feature is disabled")
+        return None
+    
+    # Check cache age on the merged result — if fresh, return it
+    cached_data = _load_cache(api_name)
+    has_valid_cache = cached_data and _validate_descriptors_cache(cached_data)
+    cache_age = _cache_manager.get_cache_age(api_name)
+    cache_max_age_seconds = DESCRIPTORS_CACHE_MAX_AGE_HOURS * 3600
+    if cache_age is not None and cache_age < cache_max_age_seconds and has_valid_cache:
+        log_progress(f"using cached descriptor data (less than {DESCRIPTORS_CACHE_MAX_AGE_HOURS} hour(s) old)")
+        _mark_ready(api_name)
+        cert_count = len(cached_data.get('family_cert_fingerprints', []))
+        seen_count = len(cached_data.get('all_seen_fingerprints', []))
+        log_progress(f"loaded {seen_count} relays ({cert_count} with family-cert) from cache")
+        return cached_data
+    
+    try:
+        # Determine timeout
+        if has_valid_cache:
+            timeout_seconds = DESCRIPTORS_TIMEOUT_FRESH_CACHE
+        else:
+            timeout_seconds = DESCRIPTORS_TIMEOUT_STALE_CACHE
+        
+        base_url = 'https://collector.torproject.org'
+        descs_path = '/recent/relay-descriptors/server-descriptors/'
+        
+        # Step 1: Get directory listing
+        log_progress("fetching server descriptor listing...")
+        req = urllib.request.Request(f"{base_url}{descs_path}", headers={'User-Agent': 'Allium/1.0'})
+        with urllib.request.urlopen(req, timeout=timeout_seconds) as response:
+            html = response.read(10 * 1024 * 1024).decode('utf-8', errors='replace')
+        
+        pattern = r'href="([0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-server-descriptors)"'
+        all_files = sorted(re.findall(pattern, html))
+        if not all_files:
+            log_progress("warning: no server descriptor files found")
+            _mark_stale(api_name, "No descriptor files found")
+            return cached_data if has_valid_cache else None
+        
+        # Step 2: Select files from the last COVERAGE_HOURS by parsing timestamps
+        # Filename format: YYYY-MM-DD-HH-MM-SS-server-descriptors
+        cutoff = datetime.utcnow() - timedelta(hours=COVERAGE_HOURS)
+        target_files = []
+        for fname in all_files:
+            try:
+                # Parse "2026-02-21-14-19-00" from filename
+                ts_str = fname.replace('-server-descriptors', '')
+                file_time = datetime.strptime(ts_str, '%Y-%m-%d-%H-%M-%S')
+                if file_time >= cutoff:
+                    target_files.append(fname)
+            except ValueError:
+                continue
+        
+        if not target_files:
+            # Fallback: if no files match the time window, take the latest 24
+            target_files = all_files[-24:]
+        
+        # Step 3: Load per-file cache (maps filename → parsed result)
+        file_cache = _load_cache(file_cache_name) or {}
+        
+        # Step 4: Download and parse only NEW files; reuse cached results
+        files_downloaded = 0
+        files_from_cache = 0
+        all_cert_fps = set()
+        all_seen_fps = set()
+        
+        for filename in target_files:
+            if filename in file_cache:
+                # Reuse cached parse result for this file
+                file_result = file_cache[filename]
+                all_cert_fps.update(file_result.get('cert', []))
+                all_seen_fps.update(file_result.get('cert', []))
+                all_seen_fps.update(file_result.get('no_cert', []))
+                files_from_cache += 1
+            else:
+                # Download and parse this new file
+                url = f"{base_url}{descs_path}{filename}"
+                try:
+                    req = urllib.request.Request(url, headers={'User-Agent': 'Allium/1.0'})
+                    with urllib.request.urlopen(req, timeout=timeout_seconds) as response:
+                        content = response.read(100 * 1024 * 1024).decode('utf-8', errors='replace')
+                    
+                    # Single-pass parse: fingerprint + family-cert presence
+                    cert_fps = set()
+                    no_cert_fps = set()
+                    current_fp = None
+                    has_cert = False
+                    
+                    for line in content.split('\n'):
+                        if line.startswith('router '):
+                            if current_fp is not None:
+                                if has_cert:
+                                    cert_fps.add(current_fp)
+                                else:
+                                    no_cert_fps.add(current_fp)
+                            current_fp = None
+                            has_cert = False
+                        elif line.startswith('fingerprint '):
+                            current_fp = line[12:].replace(' ', '').upper()
+                        elif line == 'family-cert':
+                            has_cert = True
+                    
+                    if current_fp is not None:
+                        if has_cert:
+                            cert_fps.add(current_fp)
+                        else:
+                            no_cert_fps.add(current_fp)
+                    
+                    # Cache this file's parsed result (compact: just FP lists)
+                    file_cache[filename] = {
+                        'cert': list(cert_fps),
+                        'no_cert': list(no_cert_fps),
+                    }
+                    
+                    all_cert_fps.update(cert_fps)
+                    all_seen_fps.update(cert_fps)
+                    all_seen_fps.update(no_cert_fps)
+                    files_downloaded += 1
+                    
+                except Exception as e:
+                    logger.warning(f"Failed to fetch {filename}: {e}")
+                    continue
+        
+        if not all_seen_fps:
+            log_progress("warning: no descriptors parsed from any file")
+            _mark_stale(api_name, "No descriptors parsed")
+            return cached_data if has_valid_cache else None
+        
+        # Step 5: When a relay appears in multiple files, the latest file wins.
+        # Since we process files chronologically (sorted), later files overwrite earlier.
+        # A relay with family-cert in an older file but without in a newer file
+        # should NOT be counted. Rebuild from chronological order:
+        final_cert_fps = set()
+        final_seen_fps = set()
+        for filename in target_files:
+            if filename in file_cache:
+                file_result = file_cache[filename]
+                cert_in_file = set(file_result.get('cert', []))
+                no_cert_in_file = set(file_result.get('no_cert', []))
+                # Later files override earlier: add certs, remove non-certs
+                final_cert_fps.update(cert_in_file)
+                final_cert_fps -= no_cert_in_file
+                final_seen_fps.update(cert_in_file)
+                final_seen_fps.update(no_cert_in_file)
+        
+        # Step 6: Prune file cache — remove files older than our window
+        target_set = set(target_files)
+        stale_keys = [k for k in file_cache if k not in target_set]
+        for k in stale_keys:
+            del file_cache[k]
+        
+        # Step 7: Save both caches
+        _save_cache(file_cache_name, file_cache)
+        
+        data = {
+            'family_cert_fingerprints': list(final_cert_fps),
+            'all_seen_fingerprints': list(final_seen_fps),
+            'coverage_hours': COVERAGE_HOURS,
+            'fetched_at': datetime.utcnow().isoformat(),
+        }
+        _save_cache(api_name, data)
+        _mark_ready(api_name)
+        
+        log_progress(
+            f"{len(final_seen_fps)} relays tracked ({len(final_cert_fps)} with family-cert) "
+            f"from {len(target_files)} hourly files "
+            f"({files_downloaded} downloaded, {files_from_cache} cached)"
+        )
+        return data
+        
+    except Exception as e:
+        error_msg = str(e)
+        is_timeout = 'timeout' in error_msg.lower()
+        reason = "timeout" if is_timeout else "error"
+        
+        log_progress(f"request timed out after {timeout_seconds}s..." if is_timeout else f"error: {error_msg}")
+        _mark_stale(api_name, f"{reason}: {error_msg}")
+        
+        if has_valid_cache:
+            log_progress(f"using cached descriptor data due to {reason}")
+            return cached_data
+        log_progress(f"no cached data available after {reason}")
+        return None
+
+
+def _validate_descriptors_cache(data):
+    """
+    Validate descriptors cache data structure.
+    Requires the current format with all_seen_fingerprints (not the old
+    single-file format which had total_descriptors instead).
+    """
+    if not isinstance(data, dict):
+        return False
+    if 'family_cert_fingerprints' not in data:
+        return False
+    if 'all_seen_fingerprints' not in data:
+        return False
+    return True
 
 
 def fetch_consensus_health(progress_logger=None):

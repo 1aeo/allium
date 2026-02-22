@@ -11,6 +11,7 @@ import time
 from .workers import (
     fetch_onionoo_details, fetch_onionoo_uptime, fetch_onionoo_bandwidth,
     fetch_aroi_validation, fetch_collector_consensus_data, fetch_consensus_health,
+    fetch_collector_descriptors,
     get_worker_status, get_all_worker_status
 )
 from .relays import Relays
@@ -129,6 +130,13 @@ class Coordinator:
             "args_fn": lambda self: [None, self._log_progress],
             "enabled_fn": None,  # Checked dynamically in _build_api_workers
         },
+        {
+            "name": "collector_descriptors",
+            "fetch_fn": fetch_collector_descriptors,
+            "group": "all",
+            "args_fn": lambda self: [self._log_progress],
+            "enabled_fn": None,  # Checked dynamically in _build_api_workers
+        },
     ]
     
     def _build_api_workers(self):
@@ -138,6 +146,7 @@ class Coordinator:
         # Feature flag checks by worker name (avoids import issues in class-level lambdas)
         feature_flags = {
             "collector_consensus": is_consensus_evaluation_enabled,
+            "collector_descriptors": is_consensus_evaluation_enabled,
         }
         
         workers = []
@@ -174,7 +183,7 @@ class Coordinator:
             
             # Log API-specific start message
             api_display_name = self._get_api_display_name(api_name)
-            self._log_progress_with_step_increment(f"{api_display_name} - fetching onionoo data using workers system")
+            self._log_progress_with_step_increment(f"{api_display_name} - fetching data...")
             
             result = worker_func(*args_with_api_logger)
             self.worker_data[api_name] = result
@@ -207,6 +216,8 @@ class Coordinator:
             return "AROI Validation API"
         elif api_name == "collector_consensus":
             return "CollecTor Consensus API"
+        elif api_name == "collector_descriptors":
+            return "CollecTor Descriptors API"
         elif api_name == "consensus_health":
             return "Authority Health API"
         else:
@@ -337,6 +348,13 @@ class Coordinator:
         """
         return self.worker_data.get('collector_consensus')
 
+    def get_collector_descriptors_data(self):
+        """
+        Get CollecTor server descriptors summary if available.
+        Contains family-cert fingerprints for Happy Family migration tracking.
+        """
+        return self.worker_data.get('collector_descriptors')
+
     def create_relay_set(self, relay_data):
         """
         Create Relays instance with fetched data.
@@ -377,6 +395,7 @@ class Coordinator:
             aroi_validation_data=self.get_aroi_validation_data(),
             collector_consensus_data=self.get_collector_consensus_data(),
             consensus_health_data=self.get_consensus_health_data(),
+            collector_descriptors_data=self.get_collector_descriptors_data(),
         )
         
         # Sync progress state

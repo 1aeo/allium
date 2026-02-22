@@ -328,6 +328,7 @@ def write_misc(
         relay_set.authority_alerts = authorities_data.get('authority_alerts')
         relay_set.collector_flag_thresholds = authorities_data.get('collector_flag_thresholds')
         relay_set.collector_fetched_at = authorities_data.get('collector_fetched_at')
+        relay_set.consensus_method_info = authorities_data.get('consensus_method_info')
         template_vars.update(authorities_data)
     
     template_render = template.render(**template_vars)
@@ -408,10 +409,22 @@ def get_directory_authorities_data(relay_set):
                 auth_nickname in bw_auth_nicknames
             )
             
+            # Get per-authority consensus methods from consensus_method_info
+            auth_consensus_methods = None
+            auth_max_method = None
+            if collector_data:
+                cm_per_auth = collector_data.get('consensus_method_info', {}).get('per_authority', {})
+                # Try matching by nickname (vote auth names are lowercase)
+                auth_methods = cm_per_auth.get(auth_nickname)
+                if auth_methods:
+                    auth_consensus_methods = auth_methods
+                    auth_max_method = max(auth_methods) if auth_methods else None
+            
             authority['collector_data'] = {
                 'voted': voted,
                 'is_bw_authority': is_bw,
                 'relay_count': relay_count,
+                'max_consensus_method': auth_max_method,
             }
     
     # Perform latency checks on authorities
@@ -553,6 +566,11 @@ def get_directory_authorities_data(relay_set):
     # This is more accurate since some authorities (like Serge) may have Authority flag but don't vote
     voting_authority_count = len(collector_flag_thresholds) if collector_flag_thresholds else len(authorities)
     
+    # Extract consensus method info from collector data (for Happy Family migration tracking)
+    consensus_method_info = None
+    if collector_data:
+        consensus_method_info = collector_data.get('consensus_method_info')
+    
     return {
         'authorities_data': authorities,
         'authorities_summary': {
@@ -569,6 +587,7 @@ def get_directory_authorities_data(relay_set):
         'authority_alerts': authority_alerts if authority_alerts else None,
         'collector_flag_thresholds': collector_flag_thresholds,
         'collector_fetched_at': collector_fetched_at,
+        'consensus_method_info': consensus_method_info,
     }
 
 

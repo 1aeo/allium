@@ -363,6 +363,206 @@ class TestNetworkHealthDashboard(unittest.TestCase):
         health_data = relays_obj.json['network_health']
         self.assertEqual(intelligence_families_count, health_data['families_count'],
                         "Intelligence engine total_families should match network health families_count")
+
+    def test_happy_family_migration_metrics(self):
+        """Test Happy Family Key Migration metrics with mixed relay versions"""
+        relay_data = {
+            'relays': [
+                {
+                    'fingerprint': 'A' * 40,
+                    'contact': 'op@example.com',
+                    'or_addresses': ['1.2.3.4:9001'],
+                    'observed_bandwidth': 1000000,
+                    'consensus_weight': 100,
+                    'advertised_bandwidth': 1200000,
+                    'flags': ['Fast', 'Guard', 'Running', 'V2Dir', 'Authority'],
+                    'running': True,
+                    'country': 'US',
+                    'as': '12345',
+                    'as_name': 'Test AS',
+                    'first_seen': '2023-01-01 00:00:00',
+                    'platform': 'Tor 0.4.9.5 on Linux',
+                    'version': '0.4.9.5',
+                    'version_status': 'recommended',
+                    'recommended_version': True,
+                    'aroi_domain': 'example.com',
+                },
+                {
+                    'fingerprint': 'B' * 40,
+                    'contact': 'op@example.com',
+                    'or_addresses': ['1.2.3.5:9001'],
+                    'observed_bandwidth': 500000,
+                    'consensus_weight': 50,
+                    'advertised_bandwidth': 600000,
+                    'flags': ['Fast', 'Stable', 'Running', 'V2Dir'],
+                    'running': True,
+                    'country': 'DE',
+                    'as': '67890',
+                    'as_name': 'Test AS 2',
+                    'first_seen': '2023-06-01 00:00:00',
+                    'platform': 'Tor 0.4.8.12 on Linux',
+                    'version': '0.4.8.12',
+                    'version_status': 'recommended',
+                    'recommended_version': True,
+                    'aroi_domain': 'example.com',
+                },
+                {
+                    'fingerprint': 'C' * 40,
+                    'contact': 'op2@example2.com',
+                    'or_addresses': ['1.2.3.6:9001'],
+                    'observed_bandwidth': 800000,
+                    'consensus_weight': 80,
+                    'advertised_bandwidth': 900000,
+                    'flags': ['Fast', 'Exit', 'Running', 'V2Dir'],
+                    'running': True,
+                    'country': 'FR',
+                    'as': '11111',
+                    'as_name': 'Test AS 3',
+                    'first_seen': '2024-01-01 00:00:00',
+                    'platform': 'Tor 0.4.9.3 on Linux',
+                    'version': '0.4.9.3',
+                    'version_status': 'recommended',
+                    'recommended_version': True,
+                    'aroi_domain': 'example2.com',
+                },
+            ]
+        }
+        
+        relays_obj = Relays(
+            output_dir="/tmp/test",
+            onionoo_url="http://test.url",
+            relay_data=relay_data,
+            use_bits=False,
+            progress=False
+        )
+        relays_obj._calculate_network_health_metrics()
+        
+        health = relays_obj.json['network_health']
+        
+        # 2 of 3 relays run v0.4.9.x+
+        self.assertEqual(health['hf_ready_relays'], 2)
+        self.assertEqual(health['hf_not_ready_relays'], 1)
+        
+        # 1 authority relay on v0.4.9.x+
+        self.assertEqual(health['hf_ready_authorities'], 1)
+        
+        # 1 exit relay ready, 1 guard relay ready (authority with Guard flag)
+        self.assertEqual(health['hf_ready_exit_relays'], 1)
+        self.assertEqual(health['hf_ready_guard_relays'], 1)
+        
+        # Consensus method should be None (no collector data in unit test)
+        self.assertIsNone(health['hf_consensus_method'])
+        # No hardcoded "required" method — we only show what Tor says
+        self.assertIn('hf_consensus_method_max', health)
+        
+        # Family-cert count should be 0 (no descriptor data in unit test)
+        self.assertEqual(health['hf_family_cert_count'], 0)
+        
+        # Consensus params should be None (no collector data)
+        self.assertIsNone(health['hf_use_family_ids'])
+        self.assertIsNone(health['hf_use_family_lists'])
+        
+        # Bandwidth: relay A (1000000) + relay C (800000) = 1800000
+        self.assertEqual(health['hf_ready_bandwidth'], 1800000)
+        
+        # Ready relay percentage should be correct
+        self.assertAlmostEqual(health['hf_ready_relays_percentage'], 2/3 * 100, places=1)
+
+    def test_happy_family_version_edge_cases(self):
+        """Test _is_happy_family_ready version parsing edge cases"""
+        from allium.lib.network_health import calculate_network_health_metrics
+        
+        # Access the nested helper by running a minimal calculation
+        relay_data = {
+            'relays': [
+                {
+                    'fingerprint': 'A' * 40,
+                    'contact': '',
+                    'or_addresses': ['1.2.3.4:9001'],
+                    'observed_bandwidth': 100,
+                    'consensus_weight': 1,
+                    'advertised_bandwidth': 100,
+                    'flags': ['Running'],
+                    'running': True,
+                    'country': 'US',
+                    'as': '12345',
+                    'as_name': 'Test',
+                    'first_seen': '2023-01-01 00:00:00',
+                    'platform': 'Tor 0.4.9.1-alpha on Linux',
+                    'version': '0.4.9.1-alpha',
+                    'version_status': 'experimental',
+                },
+                {
+                    'fingerprint': 'B' * 40,
+                    'contact': '',
+                    'or_addresses': ['1.2.3.5:9001'],
+                    'observed_bandwidth': 100,
+                    'consensus_weight': 1,
+                    'advertised_bandwidth': 100,
+                    'flags': ['Running'],
+                    'running': True,
+                    'country': 'US',
+                    'as': '12345',
+                    'as_name': 'Test',
+                    'first_seen': '2023-01-01 00:00:00',
+                    'platform': 'Tor 0.4.9.4-rc-dev on Linux',
+                    'version': '0.4.9.4-rc-dev',
+                    'version_status': 'experimental',
+                },
+                {
+                    'fingerprint': 'C' * 40,
+                    'contact': '',
+                    'or_addresses': ['1.2.3.6:9001'],
+                    'observed_bandwidth': 100,
+                    'consensus_weight': 1,
+                    'advertised_bandwidth': 100,
+                    'flags': ['Running'],
+                    'running': True,
+                    'country': 'US',
+                    'as': '12345',
+                    'as_name': 'Test',
+                    'first_seen': '2023-01-01 00:00:00',
+                    'platform': 'Tor 0.4.8.22 on Linux',
+                    'version': '0.4.8.22',
+                    'version_status': 'recommended',
+                },
+                {
+                    'fingerprint': 'D' * 40,
+                    'contact': '',
+                    'or_addresses': ['1.2.3.7:9001'],
+                    'observed_bandwidth': 100,
+                    'consensus_weight': 1,
+                    'advertised_bandwidth': 100,
+                    'flags': ['Running'],
+                    'running': True,
+                    'country': 'US',
+                    'as': '12345',
+                    'as_name': 'Test',
+                    'first_seen': '2023-01-01 00:00:00',
+                    'platform': 'Tor 0.4.9.0 on Linux',
+                    'version': '0.4.9.0',
+                    'version_status': 'experimental',
+                },
+            ]
+        }
+        
+        relays_obj = Relays(
+            output_dir="/tmp/test",
+            onionoo_url="http://test.url",
+            relay_data=relay_data,
+            use_bits=False,
+            progress=False
+        )
+        relays_obj._calculate_network_health_metrics()
+        
+        health = relays_obj.json['network_health']
+        
+        # 0.4.9.1-alpha → ready (>= 0.4.9.1)
+        # 0.4.9.4-rc-dev → ready
+        # 0.4.8.22 → NOT ready
+        # 0.4.9.0 → NOT ready (< 0.4.9.1)
+        self.assertEqual(health['hf_ready_relays'], 2, 
+                         "0.4.9.1-alpha and 0.4.9.4-rc-dev should be ready, 0.4.8.22 and 0.4.9.0 should not")
  
 if __name__ == '__main__':
     unittest.main() 

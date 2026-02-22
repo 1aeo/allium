@@ -323,6 +323,14 @@ class CollectorFetcher:
             
             self._timings['index'] = time.time() - start_time
         
+        # Compute consensus method info from per-authority vote data (zero extra I/O)
+        try:
+            result['consensus_method_info'] = self._compute_consensus_method_info()
+        except Exception as e:
+            logger.error(f"Failed to compute consensus method info: {e}")
+            result['errors'].append(f"consensus_method_info: {e}")
+            result['consensus_method_info'] = {}
+        
         result['bw_authorities'] = list(self.bw_authorities)
         result['ipv6_testing_authorities'] = list(self.ipv6_testing_authorities)
         result['timings'] = self._timings
@@ -511,6 +519,8 @@ class CollectorFetcher:
             'relays': {},
             'flag_thresholds': {},
             'has_bandwidth_file_headers': False,
+            'consensus_methods': [],  # Methods this authority supports (from header)
+            'params': {},  # Voted consensus params (from header)
         }
         
         lines = content.split('\n')
@@ -526,6 +536,23 @@ class CollectorFetcher:
             # Check for bandwidth-file-headers (indicates bandwidth authority)
             elif line.startswith('bandwidth-file-headers'):
                 vote['has_bandwidth_file_headers'] = True
+            
+            # Parse consensus-methods header (methods this authority supports)
+            elif line.startswith('consensus-methods '):
+                try:
+                    vote['consensus_methods'] = [int(m) for m in line.split()[1:]]
+                except (ValueError, IndexError):
+                    vote['consensus_methods'] = []
+            
+            # Parse params line (voted consensus params, e.g. use-family-ids)
+            elif line.startswith('params ') and not current_relay:
+                for part in line.split()[1:]:
+                    if '=' in part:
+                        key, val = part.split('=', 1)
+                        try:
+                            vote['params'][key] = int(val)
+                        except ValueError:
+                            vote['params'][key] = val
             
             # Parse relay entry (r line)
             elif line.startswith('r '):
@@ -759,6 +786,106 @@ class CollectorFetcher:
                 self.relay_index[fingerprint]['bandwidth_measurements'] = bw_data
         
         logger.info(f"Indexed {len(self.relay_index)} relays from votes, {len(self.flag_thresholds)} authority thresholds")
+    
+    def _compute_consensus_method_info(self) -> dict:
+        """
+        Get the current consensus method from the actual consensus document
+        and extract per-authority method support from votes.
+        
+        The current_method is read directly from the CollecTor consensus document
+        (the 'consensus-method' line) — NOT computed from votes. Only Tor itself
+        determines what the active consensus method is.
+        
+        Per-authority consensus-methods lists from votes are used to show which
+        authorities support which methods (e.g., how many support method 35).
+        
+        Also extracts family-related consensus params from votes
+        (use-family-ids, use-family-lists) for Happy Family migration tracking.
+        """
+        from collections import Counter
+        
+        per_authority = {}  # auth_name -> sorted list of supported methods
+        method_counts = Counter()
+        family_params = {}  # param_name -> {auth_name: value}
+        
+        for auth_name, vote_data in self.votes.items():
+            if not vote_data:
+                continue
+            methods = vote_data.get('consensus_methods', [])
+            per_authority[auth_name] = sorted(methods)
+            for m in methods:
+                method_counts[m] += 1
+            
+            # Extract family-related consensus params from this authority's vote
+            params = vote_data.get('params', {})
+            for key in ('use-family-ids', 'use-family-lists'):
+                if key in params:
+                    if key not in family_params:
+                        family_params[key] = {}
+                    family_params[key][auth_name] = params[key]
+        
+        total_voters = len(per_authority)
+        
+        # Get the ACTUAL current consensus method from the consensus document
+        # This is the authoritative source — we never compute it ourselves
+        current_method = self._fetch_current_consensus_method()
+        
+        # Max method any authority supports (shows what's coming next)
+        all_methods = [m for methods in per_authority.values() for m in methods]
+        max_method = max(all_methods) if all_methods else None
+        max_method_support = method_counts.get(max_method, 0) if max_method else 0
+        
+        return {
+            'current_method': current_method,
+            'max_method': max_method,
+            'max_method_support': max_method_support,
+            'total_voters': total_voters,
+            'per_authority': per_authority,
+            'method_support_counts': dict(method_counts),
+            'family_params_votes': family_params,
+        }
+    
+    def _fetch_current_consensus_method(self) -> Optional[int]:
+        """
+        Fetch the actual consensus-method from the latest CollecTor consensus document.
+        
+        Only reads the first few lines of the consensus header to extract
+        the 'consensus-method' line. This is the authoritative value from Tor.
+        
+        Returns:
+            int: The current consensus method number, or None on failure.
+        """
+        try:
+            # Get listing of consensus files
+            html = self._fetch_url(f"{COLLECTOR_BASE}/recent/relay-descriptors/consensuses/")
+            consensus_pattern = re.compile(
+                r'href="([0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-consensus)"'
+            )
+            matches = consensus_pattern.findall(html)
+            if not matches:
+                logger.warning("No consensus files found on CollecTor")
+                return None
+            
+            latest_file = max(matches)
+            url = f"{COLLECTOR_BASE}/recent/relay-descriptors/consensuses/{latest_file}"
+            
+            # Fetch only the first chunk — consensus-method is in the first 5 lines
+            req = urllib.request.Request(url, headers={'User-Agent': 'Allium/1.0'})
+            with urllib.request.urlopen(req, timeout=self.timeout) as response:
+                # Read just 4KB — consensus-method is in the header
+                header_bytes = response.read(4096)
+                header_text = header_bytes.decode('utf-8', errors='replace')
+            
+            for line in header_text.split('\n'):
+                if line.startswith('consensus-method '):
+                    return int(line.split()[1])
+            
+            logger.warning("consensus-method line not found in consensus header")
+            return None
+            
+        except Exception as e:
+            logger.warning(f"Failed to fetch consensus method from consensus document: {e}")
+            return None
     
     def _validate_fingerprint(self, fingerprint: str) -> bool:
         """Validate fingerprint is 40 hex characters."""

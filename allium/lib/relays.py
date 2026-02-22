@@ -97,7 +97,7 @@ class Relays:
 
     def enrich_with_api_data(self, uptime_data=None, bandwidth_data=None,
                              aroi_validation_data=None, collector_consensus_data=None,
-                             consensus_health_data=None):
+                             consensus_health_data=None, collector_descriptors_data=None):
         """
         Enrich relay data with secondary API sources.
         Called by coordinator after threaded API fetch completes.
@@ -128,6 +128,7 @@ class Relays:
         self.aroi_validation_data = aroi_validation_data
         self.collector_consensus_data = collector_consensus_data
         self.consensus_health_data = consensus_health_data
+        self.collector_descriptors_data = collector_descriptors_data
         # Legacy attribute for backward compatibility
         self.collector_data = None
 
