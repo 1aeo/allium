@@ -97,7 +97,8 @@ def preformat_network_health_template_strings(health_metrics):
         'countries_count', 'unique_as_count', 'unique_platforms_count', 'platform_others',
         'recommended_version_count', 'not_recommended_count', 'experimental_count', 
         'obsolete_count', 'outdated_count', 'guard_exit_count', 'unrestricted_exits',
-        'restricted_exits', 'web_traffic_exits', 'eu_relays_count', 'non_eu_relays_count',
+        'restricted_exits', 'web_traffic_exits', 'ip_unrestricted_exits', 'ip_restricted_exits',
+        'unrestricted_and_no_ip_restrictions', 'eu_relays_count', 'non_eu_relays_count',
         'rare_countries_relays', 'ipv4_only_relays', 'both_ipv4_ipv6_relays',
         # NEW: AROI domain-level metrics
         'unique_aroi_domains_count', 'validated_aroi_domains_count', 'invalid_aroi_domains_count',
@@ -139,6 +140,12 @@ def preformat_network_health_template_strings(health_metrics):
         'ipv4_only_aroi_operators_percentage', 'both_ipv4_ipv6_aroi_operators_percentage',
         # NEW: AROI domain percentages
         'validated_aroi_domains_percentage', 'invalid_aroi_domains_percentage',
+        # Exit policy percentages
+        'guard_exit_percentage',
+        'unrestricted_exits_percentage', 'restricted_exits_percentage',
+        'web_traffic_exits_percentage',
+        'ip_unrestricted_exits_percentage', 'ip_restricted_exits_percentage',
+        'unrestricted_and_no_ip_restrictions_percentage',
         # NEW: Happy Family Key Migration percentages
         'hf_ready_relays_percentage', 'hf_ready_bandwidth_percentage',
         'hf_ready_cw_percentage', 'hf_some_operators_percentage',
