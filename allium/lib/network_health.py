@@ -1485,6 +1485,8 @@ def calculate_network_health_metrics(relay_set):
         'hf_family_cert_count': family_cert_count,
         'hf_family_no_cert_count': family_no_cert_count,
         'hf_family_cert_seen_total': desc_seen_total,
+        # Coverage window from descriptor worker (dynamic, not hardcoded)
+        'hf_descriptor_coverage_hours': collector_descs.get('coverage_hours', 20) if collector_descs else 0,
         # Bandwidth + CW
         'hf_ready_bandwidth': family_key_ready_bandwidth,
         'hf_ready_bandwidth_percentage': _pct(family_key_ready_bandwidth, total_bandwidth),

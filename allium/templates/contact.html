@@ -161,6 +161,10 @@
                     {% endif %}
                 </li>
                 {% endif %}
+                
+                {% if intelligence.family_cert_count is defined %}
+                <li><strong><span title="Relays publishing a family-cert entry in their server descriptor, proving family membership via an ed25519 family key per Proposal 321. Source: CollecTor server descriptors (last {{ relays.json.network_health.hf_descriptor_coverage_hours }} hours).">Family Certificate Migration</span>:</strong> {{ intelligence.family_cert_count }}/{{ intelligence.family_cert_total }} relays ({{ intelligence.family_cert_pct }}%) have family-cert in server descriptors{% if intelligence.family_cert_not_seen > 0 %}, {{ intelligence.family_cert_not_seen }} relay{{ 's' if intelligence.family_cert_not_seen != 1 }} haven't published in last {{ relays.json.network_health.hf_descriptor_coverage_hours }} hours{% endif %}</li>
+                {% endif %}
             </ul>
         </div>
         {% endif %}

@@ -700,6 +700,31 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
     
     intelligence_formatted['version_status_tooltips'] = version_status_tooltips
     
+    # 4b. Family Certificate Migration (Proposal 321) — from server descriptors
+    collector_descs = getattr(relay_set, 'collector_descriptors_data', None)
+    if collector_descs and isinstance(collector_descs, dict):
+        family_cert_fps = set(collector_descs.get('family_cert_fingerprints', []))
+        all_seen_fps = set(collector_descs.get('all_seen_fingerprints', []))
+        
+        cert_count = 0
+        no_cert_count = 0
+        not_seen_count = 0
+        for relay in members:
+            fp = relay.get('fingerprint', '').upper()
+            if fp in family_cert_fps:
+                cert_count += 1
+            elif fp in all_seen_fps:
+                no_cert_count += 1
+            else:
+                not_seen_count += 1
+        
+        if cert_count > 0 or no_cert_count > 0:
+            pct = round(cert_count / total_relays * 100, 1) if total_relays > 0 else 0
+            intelligence_formatted['family_cert_count'] = cert_count
+            intelligence_formatted['family_cert_total'] = total_relays
+            intelligence_formatted['family_cert_pct'] = pct
+            intelligence_formatted['family_cert_not_seen'] = not_seen_count
+    
     display_data['operator_intelligence'] = intelligence_formatted
     
     # 5. Overall uptime formatting

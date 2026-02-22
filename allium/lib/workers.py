@@ -1020,6 +1020,7 @@ def fetch_collector_descriptors(progress_logger=None):
         data = {
             'family_cert_fingerprints': list(final_cert_fps),
             'all_seen_fingerprints': list(final_seen_fps),
+            'coverage_hours': COVERAGE_HOURS,
             'fetched_at': datetime.utcnow().isoformat(),
         }
         _save_cache(api_name, data)
