@@ -689,7 +689,8 @@ Network Health Dashboard
                     </div>
                 </div>
                 
-                <!-- Row 3: Consensus Parameters (auto-populates when authorities vote on them) -->
+                <!-- Row 3: Consensus Parameters (hidden when data unavailable, auto-populates when authorities vote on them) -->
+                {% if relays.json.network_health.hf_use_family_ids is not none or relays.json.network_health.hf_use_family_lists is not none %}
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
                     <div class="metric-item" title="Consensus parameter use-family-ids (param-spec). When 1, clients enforce family membership via family-ids in microdescriptors per Proposal 321. Default: 1.">
                         <span class="metric-value">
@@ -699,8 +700,6 @@ Network Health Dashboard
                                 {% else %}
                                     <span style="color: #cc9900; font-weight: 600;">No</span>
                                 {% endif %}
-                            {% else %}
-                                <span style="color: #6c757d;">Not in consensus</span>
                             {% endif %}
                         </span>
                         <span class="metric-label">Clients Using Happy Families</span>
@@ -713,13 +712,12 @@ Network Health Dashboard
                                 {% else %}
                                     <span style="color: #cc9900; font-weight: 600;">No</span>
                                 {% endif %}
-                            {% else %}
-                                <span style="color: #6c757d;">Not in consensus</span>
                             {% endif %}
                         </span>
                         <span class="metric-label">MyFamily Deprecated</span>
                     </div>
                 </div>
+                {% endif %}
                 
                 <!-- Row 4: Family-cert adoption from server descriptors -->
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
