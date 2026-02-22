@@ -796,8 +796,13 @@ def _validate_collector_cache(data):
     if not isinstance(data, dict):
         return False
     
-    required_keys = ['votes', 'relay_index', 'fetched_at']
+    required_keys = ['votes', 'relay_index', 'fetched_at', 'consensus_method_info']
     if not all(key in data for key in required_keys):
+        return False
+    
+    # Ensure consensus_method_info has actual data (not empty from old code or error)
+    cmi = data.get('consensus_method_info', {})
+    if not cmi.get('total_voters'):
         return False
     
     # Check fetched_at is not too old (max 3 hours)
