@@ -5,11 +5,15 @@ Network health dashboard metrics calculation and template string pre-formatting.
 Extracted from relays.py for better modularity.
 """
 
+import statistics
+
 from .ip_utils import safe_parse_ip_address as _safe_parse_ip_address
 from .ip_utils import is_private_ip_address, determine_ipv6_support
 from .time_utils import parse_onionoo_timestamp, create_time_thresholds
 from .string_utils import format_percentage_from_fraction
 from .consensus.consensus_evaluation import _port_in_rules
+from .country_utils import is_eu_political, is_frontier_country, get_rare_countries_weighted_with_existing_data
+from .uptime_utils import find_relay_uptime_data, calculate_relay_uptime_average
 
 
 def _pct(numerator, denominator):
@@ -19,14 +23,55 @@ def _pct(numerator, denominator):
 
 def _safe_mean(values):
     """Return statistics.mean(values) if non-empty, else 0.0."""
-    import statistics as _stats
-    return _stats.mean(values) if values else 0.0
+    return statistics.mean(values) if values else 0.0
 
 
 def _safe_median(values):
     """Return statistics.median(values) if non-empty, else 0.0."""
-    import statistics as _stats
-    return _stats.median(values) if values else 0.0
+    return statistics.median(values) if values else 0.0
+
+
+def _is_happy_family_ready(version_str):
+    """Check if relay version supports Happy Families (>= 0.4.9.1).
+    
+    Per Proposal 321: family-cert was implemented in Tor 0.4.9.1-alpha
+    (first alpha in the 0.4.9 series). The community setup guide at
+    community.torproject.org/relay/setup/post-install/family-ids/
+    specifies "Tor 0.4.9.2-alpha and later" for the keygen-family tool.
+    We use 0.4.9.1 as the minimum since that's when the protocol support
+    was added to the codebase.
+    """
+    if not version_str:
+        return False
+    try:
+        clean = version_str.split('-')[0]
+        parts = [int(p) for p in clean.split('.')]
+        while len(parts) < 4:
+            parts.append(0)
+        return tuple(parts) >= (0, 4, 9, 1)
+    except (ValueError, IndexError):
+        return False
+
+
+def _format_age(days):
+    """Format age in days to 'Xy Zmo' format."""
+    if days < 30:
+        return f"{days}d"
+    elif days < 365:
+        months = days // 30
+        remaining_days = days % 30
+        if remaining_days == 0:
+            return f"{months}mo"
+        else:
+            return f"{months}mo {remaining_days}d"
+    else:
+        years = days // 365
+        remaining_days = days % 365
+        months = remaining_days // 30
+        if months == 0:
+            return f"{years}y"
+        else:
+            return f"{years}y {months}mo"
 
 
 def preformat_network_health_template_strings(health_metrics):
@@ -367,11 +412,7 @@ def calculate_network_health_metrics(relay_set):
     else:
         health_metrics['aroi_operators_count'] = len(sorted_data.get('contact', {}))
     
-    # Import modules once
-    import statistics
-    import datetime
-    from .country_utils import is_eu_political, is_frontier_country
-    from .uptime_utils import find_relay_uptime_data, calculate_relay_uptime_average
+    # Imports are at module level for efficiency (this function is called 3x during enrichment)
     
     # Time calculations for new relay detection - use centralized function
     time_thresholds = create_time_thresholds()
@@ -385,11 +426,10 @@ def calculate_network_health_metrics(relay_set):
     valid_rare_countries = set()
     try:
         if 'country' in sorted_data:
-            from .country_utils import get_rare_countries_weighted_with_existing_data
             all_rare_countries = get_rare_countries_weighted_with_existing_data(
                 sorted_data['country'], network_totals['total_relays'])
             valid_rare_countries = {c.lower() for c in all_rare_countries if len(c) == 2 and c.isalpha()}
-    except:
+    except Exception:
         pass
     
     # Initialize all counters and collectors for SINGLE LOOP
@@ -469,28 +509,7 @@ def calculate_network_health_metrics(relay_set):
     # Track what types of relays each operator has to determine their overall support
     operator_ipv6_status = {}  # domain -> {'has_ipv4_only': bool, 'has_dual_stack': bool}
     
-    # NEW: Happy Family Key Migration tracking
-    def _is_happy_family_ready(version_str):
-        """Check if relay version supports Happy Families (>= 0.4.9.1).
-        
-        Per Proposal 321: family-cert was implemented in Tor 0.4.9.1-alpha
-        (first alpha in the 0.4.9 series). The community setup guide at
-        community.torproject.org/relay/setup/post-install/family-ids/
-        specifies "Tor 0.4.9.2-alpha and later" for the keygen-family tool.
-        We use 0.4.9.1 as the minimum since that's when the protocol support
-        was added to the codebase.
-        """
-        if not version_str:
-            return False
-        try:
-            clean = version_str.split('-')[0]
-            parts = [int(p) for p in clean.split('.')]
-            while len(parts) < 4:
-                parts.append(0)
-            return tuple(parts) >= (0, 4, 9, 1)
-        except (ValueError, IndexError):
-            return False
-    
+    # NEW: Happy Family Key Migration tracking (_is_happy_family_ready is at module level)
     family_key_ready_relays = 0
     family_key_ready_exit_relays = 0
     family_key_ready_guard_relays = 0
@@ -796,30 +815,7 @@ def calculate_network_health_metrics(relay_set):
         
         # Skip uptime calculation here - will use existing consolidated results
     
-    # NEW: Calculate age statistics
-        # Skip uptime calculation here - will use existing consolidated results
-    
-    # NEW: Calculate age statistics
-    def _format_age(days):
-        """Format age in days to 'Xy Zmo' format"""
-        if days < 30:
-            return f"{days}d"
-        elif days < 365:
-            months = days // 30
-            remaining_days = days % 30
-            if remaining_days == 0:
-                return f"{months}mo"
-            else:
-                return f"{months}mo {remaining_days}d"
-        else:
-            years = days // 365
-            remaining_days = days % 365
-            months = remaining_days // 30
-            if months == 0:
-                return f"{years}y"
-            else:
-                return f"{years}y {months}mo"
-    
+    # NEW: Calculate age statistics (_format_age is at module level)
     if relay_ages_days:
         mean_age_days = statistics.mean(relay_ages_days)
         median_age_days = statistics.median(relay_ages_days)
