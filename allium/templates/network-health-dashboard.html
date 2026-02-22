@@ -679,7 +679,7 @@ Network Health Dashboard
                         <span class="metric-value" style="{% if relays.json.network_health.hf_consensus_method and relays.json.network_health.hf_consensus_method_max and relays.json.network_health.hf_consensus_method >= relays.json.network_health.hf_consensus_method_max %}color: #28a745;{% elif relays.json.network_health.hf_consensus_method %}color: #dc3545;{% else %}color: #6c757d;{% endif %} font-weight: 600;">
                             {{ relays.json.network_health.hf_consensus_method|default('N/A', true) }}
                         </span>
-                        <span class="metric-label">Consensus Method{% if relays.json.network_health.hf_consensus_method_max %} (max: {{ relays.json.network_health.hf_consensus_method_max }}){% endif %}</span>
+                        <span class="metric-label">Consensus Method{% if relays.json.network_health.hf_consensus_method_max %} ≥{{ relays.json.network_health.hf_consensus_method_max }}{% endif %}</span>
                     </div>
                     <div class="metric-item" title="Authorities advertising method {{ relays.json.network_health.hf_consensus_method_max|default('?', true) }} in their consensus-methods vote header. Per dirvote.c, a 2/3 supermajority (>⌊n×2/3⌋) is required to activate a new method.">
                         <span class="metric-value" style="{% if relays.json.network_health.hf_max_method_support >= relays.json.network_health.hf_method_threshold and relays.json.network_health.hf_method_threshold > 0 %}color: #28a745;{% elif relays.json.network_health.hf_max_method_support > 0 %}color: #cc9900;{% else %}color: #dc3545;{% endif %}">
