@@ -499,8 +499,8 @@ class TestCoordinatorMultiAPI:
         )
         
         assert coordinator.enabled_apis == 'all'
-        # Should have all 5 API workers: details, uptime, bandwidth, aroi, collector
-        assert len(coordinator.api_workers) == 5
+        # Should have all 6 API workers: details, uptime, bandwidth, aroi, collector, descriptors
+        assert len(coordinator.api_workers) == 6
         
         # Check that all APIs are configured
         api_names = [worker[0] for worker in coordinator.api_workers]
@@ -509,6 +509,7 @@ class TestCoordinatorMultiAPI:
         assert "onionoo_bandwidth" in api_names
         assert "aroi_validation" in api_names
         assert "collector_consensus" in api_names
+        assert "collector_descriptors" in api_names
         
         # Check URLs are correct for the primary APIs
         details_worker = next(w for w in coordinator.api_workers if w[0] == "onionoo_details")
@@ -678,6 +679,7 @@ class TestCoordinatorMultiAPI:
                 aroi_validation_data=None,
                 collector_consensus_data=None,
                 consensus_health_data={"health_status": {}},
+                collector_descriptors_data=None,
             )
     
     def test_fetch_onionoo_data_multiapi_compatibility(self):
@@ -775,8 +777,8 @@ class TestCoordinatorMultiAPI:
             enabled_apis='all'
         )
         
-        # Check that all 5 workers are configured
-        assert len(coordinator.api_workers) == 5
+        # Check that all 6 workers are configured
+        assert len(coordinator.api_workers) == 6
         
         details_worker = next(w for w in coordinator.api_workers if w[0] == 'onionoo_details')
         uptime_worker = next(w for w in coordinator.api_workers if w[0] == 'onionoo_uptime')
@@ -797,8 +799,8 @@ class TestCoordinatorThreading:
         """Test that worker threads are properly configured"""
         coordinator = make_coordinator(enabled_apis='all')
         
-        # Test that api_workers are properly configured (all 5 workers)
-        assert len(coordinator.api_workers) == 5
+        # Test that api_workers are properly configured (all 6 workers)
+        assert len(coordinator.api_workers) == 6
         
         api_names = [worker[0] for worker in coordinator.api_workers]
         assert "onionoo_details" in api_names
@@ -806,6 +808,7 @@ class TestCoordinatorThreading:
         assert "onionoo_bandwidth" in api_names
         assert "aroi_validation" in api_names
         assert "collector_consensus" in api_names
+        assert "collector_descriptors" in api_names
     
     def test_worker_configuration(self):
         """Test that worker functions and arguments are properly set up"""

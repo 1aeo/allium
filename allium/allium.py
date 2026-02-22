@@ -197,11 +197,11 @@ if __name__ == "__main__":
     #   3. Output directory ready
     #   4. Initializing relay data
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # Coordinator - API Fetching (14 steps, FIXED count):
+    # Coordinator - API Fetching (16 steps, FIXED count):
     #   - Section start (1)
     #   - Starting threaded API fetching (1)
-    #   - 5 API workers start messages (5) - details, uptime, bandwidth, aroi, collector
-    #   - 5 API workers complete messages (5)
+    #   - 6 API workers start messages (6) - details, uptime, bandwidth, aroi, collector, descriptors
+    #   - 6 API workers complete messages (6)
     #   - All workers completed (1)
     #   - Section end (1)
     #   Note: Intermediate messages (cache status, parsing, etc.) are logged
@@ -232,9 +232,9 @@ if __name__ == "__main__":
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     
     setup_steps = 4
-    coordinator_steps = 18  # API Fetching (14) + Data Processing (4)
+    coordinator_steps = 20  # API Fetching (16) + Data Processing (4)
     page_generation_steps = 31  # Page generation and completion
-    total_steps = setup_steps + coordinator_steps + page_generation_steps  # 53 total steps
+    total_steps = setup_steps + coordinator_steps + page_generation_steps  # 55 total steps
 
     # Create unified progress logger
     progress_logger = create_progress_logger(start_time, 0, total_steps, args.progress)
