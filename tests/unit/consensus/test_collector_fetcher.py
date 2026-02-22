@@ -1139,6 +1139,124 @@ class TestParseStatsLineEdgeCases:
         assert result['mtbf'] == 315360000
 
 
+class TestConsensusMethodInference:
+    """Tests for consensus method inference from vote data.
+    
+    When _fetch_current_consensus_method() fails (consensus document HTTP
+    requests fail), the consensus method should be inferred from vote data
+    using Tor's supermajority algorithm (highest method with >2/3 support).
+    """
+    
+    def test_infer_method_when_consensus_doc_fails(self):
+        """Test that consensus method is inferred from votes when doc fetch fails."""
+        fetcher = CollectorFetcher()
+        
+        # Simulate 9 authorities all supporting methods 28-34
+        fetcher.votes = {}
+        for i, auth_name in enumerate(['moria1', 'tor26', 'gabelmoo', 'faravahar', 
+                                        'dizum', 'bastet', 'dannenberg', 'maatuska', 'longclaw']):
+            fetcher.votes[auth_name] = {
+                'consensus_methods': list(range(28, 35)),  # methods 28-34
+                'relays': {},
+                'params': {},
+            }
+        
+        # Mock _fetch_current_consensus_method to return None (simulates failure)
+        with patch.object(fetcher, '_fetch_current_consensus_method', return_value=None):
+            result = fetcher._compute_consensus_method_info()
+        
+        # Should infer method 34 (highest with 9/9 support, threshold = 7)
+        assert result['current_method'] == 34
+        assert result['max_method'] == 34
+        assert result['total_voters'] == 9
+        assert result['max_method_support'] == 9
+    
+    def test_infer_method_with_split_support(self):
+        """Test inference when authorities support different max methods."""
+        fetcher = CollectorFetcher()
+        
+        # 7 authorities support up to method 34, 2 support up to method 35
+        fetcher.votes = {}
+        for auth_name in ['moria1', 'tor26', 'gabelmoo', 'faravahar', 'dizum', 'bastet', 'dannenberg']:
+            fetcher.votes[auth_name] = {
+                'consensus_methods': list(range(28, 35)),  # 28-34
+                'relays': {},
+                'params': {},
+            }
+        for auth_name in ['maatuska', 'longclaw']:
+            fetcher.votes[auth_name] = {
+                'consensus_methods': list(range(28, 36)),  # 28-35
+                'relays': {},
+                'params': {},
+            }
+        
+        with patch.object(fetcher, '_fetch_current_consensus_method', return_value=None):
+            result = fetcher._compute_consensus_method_info()
+        
+        # Method 35 only has 2 supporters (below threshold of 7)
+        # Method 34 has 9 supporters (above threshold)
+        assert result['current_method'] == 34
+        assert result['max_method'] == 35
+        assert result['max_method_support'] == 2  # Only 2 support method 35
+    
+    def test_no_inference_when_consensus_doc_succeeds(self):
+        """Test that inference is NOT used when consensus doc fetch succeeds."""
+        fetcher = CollectorFetcher()
+        
+        fetcher.votes = {
+            'moria1': {
+                'consensus_methods': list(range(28, 35)),
+                'relays': {},
+                'params': {},
+            },
+        }
+        
+        # Mock returns actual method (not None)
+        with patch.object(fetcher, '_fetch_current_consensus_method', return_value=32):
+            result = fetcher._compute_consensus_method_info()
+        
+        # Should use the actual method, not infer
+        assert result['current_method'] == 32
+    
+    def test_no_inference_when_no_votes(self):
+        """Test that inference doesn't crash when no votes available."""
+        fetcher = CollectorFetcher()
+        fetcher.votes = {}
+        
+        with patch.object(fetcher, '_fetch_current_consensus_method', return_value=None):
+            result = fetcher._compute_consensus_method_info()
+        
+        # No votes = no inference possible
+        assert result['current_method'] is None
+        assert result['total_voters'] == 0
+        assert result['max_method'] is None
+    
+    def test_inference_extracts_family_params(self):
+        """Test that family params are still extracted during inference."""
+        fetcher = CollectorFetcher()
+        
+        fetcher.votes = {
+            'moria1': {
+                'consensus_methods': [32, 33, 34],
+                'relays': {},
+                'params': {'use-family-ids': 1, 'use-family-lists': 1},
+            },
+            'tor26': {
+                'consensus_methods': [32, 33, 34],
+                'relays': {},
+                'params': {'use-family-ids': 1},
+            },
+        }
+        
+        with patch.object(fetcher, '_fetch_current_consensus_method', return_value=None):
+            result = fetcher._compute_consensus_method_info()
+        
+        # Family params should be extracted regardless of inference
+        assert 'use-family-ids' in result['family_params_votes']
+        assert result['family_params_votes']['use-family-ids']['moria1'] == 1
+        assert result['family_params_votes']['use-family-ids']['tor26'] == 1
+
+
 class TestMiddleOnlyFlagTracking:
     """Tests for MiddleOnly flag tracking in _analyze_flag_eligibility."""
     

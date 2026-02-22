@@ -455,6 +455,19 @@ class TestNetworkHealthDashboard(unittest.TestCase):
         # No hardcoded "required" method — we only show what Tor says
         self.assertIn('hf_consensus_method_max', health)
         
+        # hf_consensus_total_voters falls back to authority_count from Onionoo
+        # Test data has 1 Authority relay, so expect 1 (not 0)
+        self.assertEqual(health['hf_consensus_total_voters'], 1,
+                         "hf_consensus_total_voters should fall back to authority_count (1) when no collector data")
+        
+        # hf_method_threshold is computed from hf_total_voters: (1*2)//3 + 1 = 1
+        self.assertEqual(health['hf_method_threshold'], 1,
+                         "hf_method_threshold should be computed from fallback voter count")
+        
+        # hf_max_method_support falls back to hf_ready_authorities when no collector data
+        self.assertEqual(health['hf_max_method_support'], health['hf_ready_authorities'],
+                         "hf_max_method_support should fall back to ready authorities count")
+        
         # Family-cert count should be 0 (no descriptor data in unit test)
         self.assertEqual(health['hf_family_cert_count'], 0)
         
