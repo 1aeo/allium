@@ -203,7 +203,7 @@ AROI_TIMEOUT_STALE_CACHE = 120        # 2 minutes for stale/missing cache
 
 # COLLECTOR CONSENSUS API - Fetches authority votes from CollecTor
 COLLECTOR_CACHE_MAX_AGE_HOURS = 1     # Cache older than this is considered stale (1 hour)
-COLLECTOR_TIMEOUT_FRESH_CACHE = 30    # 30 seconds when cache is available (fallback on timeout)
+COLLECTOR_TIMEOUT_FRESH_CACHE = 90    # 90 seconds when cache is available (fallback on timeout)
 COLLECTOR_TIMEOUT_STALE_CACHE = 300   # 5 minutes when no cache exists
 
 # COLLECTOR DESCRIPTORS API - Fetches server descriptors for family-cert analysis
