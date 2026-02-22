@@ -563,6 +563,126 @@ class TestNetworkHealthDashboard(unittest.TestCase):
         # 0.4.9.0 → NOT ready (< 0.4.9.1)
         self.assertEqual(health['hf_ready_relays'], 2, 
                          "0.4.9.1-alpha and 0.4.9.4-rc-dev should be ready, 0.4.8.22 and 0.4.9.0 should not")
- 
+
+    def test_bandwidth_formatting_no_double_conversion(self):
+        """Test that bandwidth values are NOT double-converted when use_bits=True.
+        
+        BandwidthFormatter already converts bytes→bits internally via its divisors
+        (e.g. Gbit/s divisor = 10^9/8). Previously, network_health.py had a bw_mult=8
+        that caused 8x inflation of all bandwidth values.
+        
+        This test verifies the fix by checking that the same relay bandwidth value
+        produces consistent formatting between relay-level and health-level display.
+        """
+        # Create a relay with exactly 125,000,000 bytes/s = 1 Gbit/s
+        relay_data = {
+            'relays': [
+                {
+                    'fingerprint': 'A' * 40,
+                    'contact': 'op@example.com',
+                    'or_addresses': ['1.2.3.4:9001'],
+                    'observed_bandwidth': 125000000,  # Exactly 1 Gbit/s
+                    'consensus_weight': 1000,
+                    'advertised_bandwidth': 125000000,
+                    'flags': ['Fast', 'Guard', 'Running', 'V2Dir', 'Stable'],
+                    'running': True,
+                    'country': 'US',
+                    'as': '12345',
+                    'as_name': 'Test AS',
+                    'first_seen': '2023-01-01 00:00:00',
+                    'platform': 'Tor 0.4.8.10 on Linux',
+                    'version': '0.4.8.10',
+                    'version_status': 'recommended',
+                    'recommended_version': True,
+                },
+            ]
+        }
+        
+        # Test with use_bits=True (the default)
+        relays_bits = Relays(
+            output_dir="/tmp/test",
+            onionoo_url="http://test.url",
+            relay_data=relay_data,
+            use_bits=True,
+            progress=False
+        )
+        relays_bits._calculate_network_health_metrics()
+        health_bits = relays_bits.json['network_health']
+        
+        # 125,000,000 bytes/s = 1.00 Gbit/s — verify it shows ~1 Gbit/s, NOT 8 Gbit/s
+        total_bw_bits = health_bits['total_bandwidth_formatted']
+        self.assertIn('Gbit/s', total_bw_bits, 
+                      f"Expected Gbit/s unit, got: {total_bw_bits}")
+        # Extract the numeric value
+        numeric_str = total_bw_bits.replace('Gbit/s', '').strip()
+        numeric_val = float(numeric_str)
+        self.assertAlmostEqual(numeric_val, 1.0, delta=0.1,
+                               msg=f"Expected ~1.0 Gbit/s, got {numeric_val} Gbit/s (8x would be {numeric_val})")
+        
+        # Also test with use_bits=False for comparison
+        relays_bytes = Relays(
+            output_dir="/tmp/test",
+            onionoo_url="http://test.url",
+            relay_data=relay_data,
+            use_bits=False,
+            progress=False
+        )
+        relays_bytes._calculate_network_health_metrics()
+        health_bytes = relays_bytes.json['network_health']
+        
+        # 125,000,000 bytes/s = 125 MB/s
+        total_bw_bytes = health_bytes['total_bandwidth_formatted']
+        self.assertIn('MB/s', total_bw_bytes,
+                      f"Expected MB/s unit, got: {total_bw_bytes}")
+
+    def test_exit_policy_port_detection_accuracy(self):
+        """Test that exit policy port detection doesn't false-positive on similar ports.
+        
+        Previously used substring matching ('80' in policy) which would match '8080'.
+        Now uses proper port range parsing via _port_in_rules().
+        """
+        relay_data = {
+            'relays': [
+                {
+                    'fingerprint': 'A' * 40,
+                    'contact': '',
+                    'or_addresses': ['1.2.3.4:9001'],
+                    'observed_bandwidth': 100000,
+                    'consensus_weight': 10,
+                    'advertised_bandwidth': 100000,
+                    'flags': ['Exit', 'Fast', 'Running', 'V2Dir'],
+                    'running': True,
+                    'country': 'US',
+                    'as': '12345',
+                    'as_name': 'Test',
+                    'first_seen': '2023-01-01 00:00:00',
+                    'platform': 'Tor 0.4.8.10 on Linux',
+                    'version': '0.4.8.10',
+                    'exit_policy_summary': {
+                        'accept': ['8080', '8443']  # Only proxy ports, NOT 80/443
+                    },
+                    'exit_policy': ['accept *:8080', 'accept *:8443', 'reject *:*'],
+                },
+            ]
+        }
+        
+        relays_obj = Relays(
+            output_dir="/tmp/test",
+            onionoo_url="http://test.url",
+            relay_data=relay_data,
+            use_bits=False,
+            progress=False
+        )
+        relays_obj._calculate_network_health_metrics()
+        health = relays_obj.json['network_health']
+        
+        # Port 8080 should NOT count as web traffic (ports 80/443)
+        self.assertEqual(health['web_traffic_exits'], 0,
+                         "Relay with only port 8080/8443 should NOT be counted as web traffic exit")
+        
+        # Should NOT be unrestricted (only 2 specific ports)
+        self.assertEqual(health['unrestricted_exits'], 0,
+                         "Relay with only ports 8080/8443 should NOT be unrestricted")
+
 if __name__ == '__main__':
     unittest.main() 
