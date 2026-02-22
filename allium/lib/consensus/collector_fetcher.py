@@ -835,6 +835,17 @@ class CollectorFetcher:
         max_method = max(all_methods) if all_methods else None
         max_method_support = method_counts.get(max_method, 0) if max_method else 0
         
+        # Infer consensus method from vote data if consensus document fetch failed.
+        # Uses the same supermajority algorithm as Tor's dirvote.c:
+        #   threshold = floor(n * 2 / 3) + 1  (strictly more than 2/3)
+        # The active consensus method is the highest method supported by >= threshold voters.
+        if current_method is None and method_counts and total_voters > 0:
+            threshold = (total_voters * 2) // 3 + 1
+            for method in sorted(method_counts.keys(), reverse=True):
+                if method_counts[method] >= threshold:
+                    current_method = method
+                    break
+        
         return {
             'current_method': current_method,
             'max_method': max_method,
