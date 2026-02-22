@@ -1079,10 +1079,10 @@ def calculate_network_health_metrics(relay_set):
     health_metrics['platform_others'] = others_count
     health_metrics['platform_others_percentage'] = _pct(others_count, total_relays)
     
-    # Version compliance with percentages
-    total_with_version_info = recommended_version_count + not_recommended_count
+    # Version compliance with percentages — all use total_relays as denominator
+    # for consistency with every other percentage metric on the dashboard
     health_metrics.update({
-        'recommended_version_percentage': _pct(recommended_version_count, total_with_version_info),
+        'recommended_version_percentage': _pct(recommended_version_count, total_relays),
         'recommended_version_count': recommended_version_count,
         'not_recommended_count': not_recommended_count,
         'experimental_count': experimental_count,
