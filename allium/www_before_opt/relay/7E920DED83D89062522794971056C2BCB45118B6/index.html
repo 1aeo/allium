@@ -1,0 +1,2101 @@
+    <!DOCTYPE html>
+    <html lang="en">
+        <head>
+            <title>
+Tor Relays :: TV8807
+            </title>
+            <meta name="description"
+                  content="Javascript-free Tor metrics generated from a 30 minute API request.">
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <link rel="stylesheet" href="../../static/css/bootstrap.min.css">
+            <!--source: metrics.torproject.org-->
+            <style>
+                /* 1AEO Brand Design Tokens */
+                :root {
+                    --aeo-green: #00ff7f;
+                    --aeo-green-dim: #00cc66;
+                    --aeo-green-hover: #009955;  /* Darker green for hover on light backgrounds */
+                    --aeo-green-dark: #004d26;
+                    --aeo-dark-bg: #121212;
+                    --aeo-dark-surface: #1e1e1e;
+                    --aeo-dark-border: rgba(0, 255, 127, 0.2);
+                    --aeo-text: #ffffff;
+                    --aeo-text-muted: #cccccc;
+                    --aeo-text-dim: #888888;
+                }
+
+                /* 1AEO Cross-Site Navigation Bar */
+                .aeo-cross-nav {
+                    background-color: var(--aeo-dark-surface);
+                    padding: 10px 0;
+                    border-bottom: 1px solid var(--aeo-dark-border);
+                    margin-bottom: 0;
+                }
+                
+                .aeo-cross-nav .aeo-nav-container {
+                    max-width: 95%;
+                    margin: 0 auto;
+                    padding: 0 15px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    flex-wrap: wrap;
+                    gap: 10px;
+                }
+                
+                .aeo-cross-nav .aeo-nav-brand {
+                    color: var(--aeo-green);
+                    text-decoration: none;
+                    font-weight: bold;
+                    font-size: 16px;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+                
+                .aeo-cross-nav .aeo-nav-brand:hover {
+                    color: var(--aeo-green);
+                    text-decoration: none;
+                }
+                
+                .aeo-cross-nav .aeo-nav-links {
+                    display: flex;
+                    gap: 20px;
+                    flex-wrap: wrap;
+                    font-size: 14px;
+                }
+                
+                .aeo-cross-nav .aeo-nav-links a {
+                    color: var(--aeo-text-muted);
+                    text-decoration: none;
+                    transition: color 0.2s ease;
+                }
+                
+                .aeo-cross-nav .aeo-nav-links a:hover {
+                    color: var(--aeo-green);
+                    text-decoration: none;
+                }
+                
+                .aeo-cross-nav .aeo-nav-links a.active {
+                    color: var(--aeo-green);
+                    font-weight: 500;
+                }
+                
+                @media (max-width: 480px) {
+                    .aeo-cross-nav .aeo-nav-container {
+                        justify-content: center;
+                        text-align: center;
+                    }
+                    .aeo-cross-nav .aeo-nav-links {
+                        justify-content: center;
+                        gap: 12px;
+                    }
+                }
+
+                /* Breadcrumb links - no underline */
+                .breadcrumb a {
+                    text-decoration: none;
+                }
+                
+                /* 1AEO Footer */
+                .aeo-footer {
+                    background-color: var(--aeo-dark-surface);
+                    color: var(--aeo-text-muted);
+                    padding: 25px 20px;
+                    margin-top: 40px;
+                    text-align: center;
+                    border-top: 1px solid var(--aeo-dark-border);
+                }
+                
+                .aeo-footer a {
+                    color: var(--aeo-green);
+                    text-decoration: none;
+                }
+                
+                .aeo-footer a:hover {
+                    color: var(--aeo-green);
+                    text-decoration: underline;
+                }
+                
+                .aeo-footer-links {
+                    display: flex;
+                    justify-content: center;
+                    gap: 25px;
+                    margin-bottom: 15px;
+                    flex-wrap: wrap;
+                }
+                
+                .aeo-footer-brand {
+                    font-size: 14px;
+                    margin: 0;
+                }
+                
+                .aeo-footer-legal {
+                    font-size: 12px;
+                    color: var(--aeo-text-dim);
+                    margin-top: 10px;
+                }
+                .circle {
+                    display: inline-block;
+                    vertical-align: middle;
+                    background: #999999;
+                    width: 7px;
+                    height: 7px;
+                    -moz-border-radius: 50%;
+                    -webkit-border-radius: 50%;
+                    border-radius: 50%;
+                }
+
+                .circle-online {
+                    background: #25d918;
+                }
+
+                .circle-offline {
+                    background: #ff1515;
+                }
+
+                .verified-hostname {
+                    color: #FE9F30;
+                }
+
+                .verified-hostname {
+                    color: #68b030;
+                }
+
+                .unverified-hostname {
+                    color: #FE9F30;
+                }
+
+                /* DRY Status Classes - reusable across templates */
+                .status-success { color: #28a745; font-weight: bold; }
+                .status-danger { color: #dc3545; font-weight: bold; }
+                .status-warning { color: #ffc107; font-weight: bold; }
+                .status-muted { color: #6c757d; font-weight: bold; }
+
+                /* Section box - gray background container for major sections */
+                .section-box {
+                    margin: 20px 0;
+                    padding: 15px;
+                    background: #f8f9fa;
+                    border-radius: 8px;
+                }
+
+                /* Subsection cards - visual containers for Level 2 content */
+                .subsection-card {
+                    background: #ffffff;
+                    border-radius: 6px;
+                    padding: 12px;
+                    margin-bottom: 12px;
+                }
+                .subsection-card dl {
+                    margin-bottom: 0;
+                }
+
+                /* Subsection headers - Level 2 in information hierarchy */
+                .subsection-header {
+                    margin-top: 0;
+                    margin-bottom: 10px;
+                    padding-bottom: 6px;
+                    font-weight: 600;
+                    font-size: 15px;
+                    color: #495057;
+                    border-bottom: 2px solid #dee2e6;
+                }
+
+                /* Status note - small muted text for additional context */
+                .status-note {
+                    font-size: 11px;
+                    font-weight: normal;
+                    color: #6c757d;
+                }
+
+                /* Dynamic text truncation for contact information */
+                .contact-text {
+                    display: inline-block;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    max-width: 20vw;  /* Use viewport width for responsive sizing */
+                }
+                
+                /* Contact cell in contacts table - dynamic width with CSS ellipsis */
+                .contact-cell {
+                    max-width: 25vw;
+                    display: flex;
+                    align-items: center;
+                }
+                
+                .contact-cell > span {
+                    flex-shrink: 0;
+                    margin-right: 4px;
+                }
+                
+                .contact-cell a {
+                    flex: 1;
+                    min-width: 0;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+
+                /* Table styles */
+                .table {
+                    width: 100%;
+                    margin-bottom: 1rem;
+                }
+
+                /* Precise alignment for multi-value columns using monospace */
+                .bw-header, .cw-header, .rc-header, /* rc = relay count */
+                .bw-data, .cw-data, .rc-data {
+                    font-family: Consolas, "Courier New", monospace;
+                    white-space: nowrap;
+                    text-align: center;
+                    letter-spacing: 0.05em; /* Slight spacing for readability */
+                }
+
+                /* Container breakpoint */
+                @media (min-width: 1400px) {
+                    .container {
+                        width: 95%;
+                        max-width: none;
+                        padding-right: 15px;
+                        padding-left: 15px;
+                        margin-right: auto;
+                        margin-left: auto;
+                    }
+                }
+
+                /* Fix two-column layout overflow in contact/operator pages */
+                .row > .col-md-7,
+                .row > .col-md-5 {
+                    overflow-wrap: break-word;
+                    word-wrap: break-word;
+                    word-break: break-word;
+                    min-width: 0; /* Allow flex/grid children to shrink below content size */
+                }
+                
+                /* Ensure nested content doesn't overflow columns */
+                .col-md-7 ul,
+                .col-md-7 li,
+                .col-md-5 ul,
+                .col-md-5 li {
+                    overflow-wrap: break-word;
+                    word-wrap: break-word;
+                }
+
+                /* AROI Leaderboards - Consolidated CSS Components */
+                
+                /* Section Spacing */
+                .aroi-section {
+                    margin-bottom: 40px;
+                    scroll-margin-top: 20px; /* Offset anchor links to show space above title */
+                }
+                
+                .aroi-subsection {
+                    margin-bottom: 30px;
+                }
+                
+                .aroi-champion-badge {
+                    margin-bottom: 20px;
+                }
+                
+                /* Top 3 Summary Tables */
+                .aroi-top3-table thead th:nth-child(1) {
+                    width: 30%;
+                }
+                
+                .aroi-top3-table thead th:nth-child(2) {
+                    width: 25%;
+                }
+                
+                .aroi-top3-table thead th:nth-child(3) {
+                    width: 45%;
+                }
+                
+                /* Complete Rankings Tables - Common patterns */
+                .aroi-rankings-table thead th:nth-child(1) {
+                    width: 5%;  /* Rank */
+                }
+                
+                .aroi-rankings-table thead th:nth-child(2) {
+                    width: 25%; /* Operator */
+                }
+                
+                /* Standard bandwidth/consensus table layout */
+                .aroi-standard-table thead th:nth-child(3) {
+                    width: 12%;  /* Relays - increased from 8% */
+                }
+                
+                .aroi-standard-table thead th:nth-child(4) {
+                    width: 11%; /* Bandwidth - decreased from 15% */
+                }
+                
+                .aroi-standard-table thead th:nth-child(5) {
+                    width: 12%; /* Consensus Weight */
+                }
+                
+                .aroi-standard-table thead th:nth-child(6) {
+                    width: 15%; /* Guard/Exit Count */
+                }
+                
+                .aroi-standard-table thead th:nth-child(7) {
+                    width: 10%; /* Countries */
+                }
+                
+                .aroi-standard-table thead th:nth-child(8) {
+                    width: 10%; /* Platforms/Efficiency/Other */
+                }
+                
+                /* Specialized table for Exit/Guard operators */
+                .aroi-specialized-table thead th:nth-child(3) {
+                    width: 10%; /* Specific Relays (Exit/Guard) */
+                }
+                
+                .aroi-specialized-table thead th:nth-child(4) {
+                    width: 8%;  /* Total Relays */
+                }
+                
+                .aroi-specialized-table thead th:nth-child(5) {
+                    width: 15%; /* Bandwidth */
+                }
+                
+                .aroi-specialized-table thead th:nth-child(6) {
+                    width: 12%; /* Consensus Weight */
+                }
+                
+                .aroi-specialized-table thead th:nth-child(7) {
+                    width: 10%; /* Countries */
+                }
+                
+                .aroi-specialized-table thead th:nth-child(8) {
+                    width: 15%; /* Cross Reference (Guard/Exit Count) */
+                }
+                
+                /* Diversity/Category table layout - Generic defaults */
+                .aroi-category-table thead th:nth-child(3) {
+                    width: 8%;  /* Relays */
+                }
+                
+                .aroi-category-table thead th:nth-child(4) {
+                    width: 15%; /* Key Metric */
+                }
+                
+                .aroi-category-table thead th:nth-child(5) {
+                    width: 12%; /* Bandwidth */
+                }
+                
+                .aroi-category-table thead th:nth-child(6) {
+                    width: 10%; /* Countries */
+                }
+                
+                .aroi-category-table thead th:nth-child(7) {
+                    width: 10%; /* Platforms */
+                }
+                
+                .aroi-category-table thead th:nth-child(8) {
+                    width: 15%; /* Specialization */
+                }
+                
+                /* Geographic Champions (Non-EU Leaders) specific layout */
+                .aroi-geographic-table thead th:nth-child(3) {
+                    width: 15%; /* Non-EU Relays */
+                }
+                
+                .aroi-geographic-table thead th:nth-child(4) {
+                    width: 10%; /* Bandwidth */
+                }
+                
+                .aroi-geographic-table thead th:nth-child(5) {
+                    width: 8%; /* Countries */
+                }
+                
+                .aroi-geographic-table thead th:nth-child(6) {
+                    width: 25%; /* Specialization - Much wider for geographic breakdown details */
+                }
+                
+                /* Frontier Builders (Rare Countries) specific layout */
+                .aroi-frontier-table thead th:nth-child(3) {
+                    width: 10%; /* Rare Relays - Reduced from 15% */
+                }
+                
+                .aroi-frontier-table thead th:nth-child(4) {
+                    width: 12%; /* Bandwidth */
+                }
+                
+                .aroi-frontier-table thead th:nth-child(5) {
+                    width: 10%; /* Countries */
+                }
+                
+                .aroi-frontier-table thead th:nth-child(6) {
+                    width: 23%; /* Specialization - Increased from 18% (+5% from Rare Relays column) */
+                }
+                
+                /* Platform Diversity (Non-Linux Heroes) specific layout */
+                .aroi-platform-table thead th:nth-child(3) {
+                    width: 10%; /* Non Linux Relays - Reduced from 15% */
+                }
+                
+                .aroi-platform-table thead th:nth-child(4) {
+                    width: 8%; /* Bandwidth - Reduced from 12% */
+                }
+                
+                .aroi-platform-table thead th:nth-child(5) {
+                    width: 22%; /* Specialization - Increased from 15% (+7% from reductions) */
+                }
+
+                /* AROI Champion Badge Styles - Harmonized Color Tier System */
+                
+                /* Authority/Network Control (Gold/Orange spectrum) */
+                .aroi-champion-platinum {
+                    background: linear-gradient(45deg, #FFD700, #FFA500);
+                    color: #000;
+                    box-shadow: 0 2px 6px rgba(255, 215, 0, 0.25);
+                }
+                
+                .aroi-champion-network {
+                    background: linear-gradient(45deg, #FFB300, #FF8C00);
+                    color: #000;
+                    box-shadow: 0 2px 6px rgba(255, 179, 0, 0.25);
+                }
+                
+                .aroi-champion-exit-authority {
+                    background: linear-gradient(45deg, #FFAA00, #FF9500);
+                    color: #000;
+                    box-shadow: 0 2px 6px rgba(255, 170, 0, 0.25);
+                }
+                
+                .aroi-champion-guard-authority {
+                    background: linear-gradient(45deg, #FF6B35, #F7931E);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(255, 107, 53, 0.25);
+                }
+                
+                .aroi-champion-guard {
+                    background: linear-gradient(45deg, #E67E22, #D35400);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(230, 126, 34, 0.25);
+                }
+                
+                .aroi-champion-exit {
+                    background: linear-gradient(45deg, #FF8C42, #FF7315);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(255, 140, 66, 0.25);
+                }
+                
+                /* Innovation & Technology (Purple/Blue spectrum) */
+                .aroi-champion-platform {
+                    background: linear-gradient(45deg, #a29bfe, #6c5ce7);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(162, 155, 254, 0.25);
+                }
+                
+                .aroi-champion-ipv4 {
+                    background: linear-gradient(45deg, #0984e3, #74b9ff);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(9, 132, 227, 0.25);
+                }
+                
+                .aroi-champion-ipv6 {
+                    background: linear-gradient(45deg, #6c5ce7, #a29bfe);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(108, 92, 231, 0.25);
+                }
+                
+
+                
+                /* Diversity & Growth (Green spectrum) */
+                .aroi-champion-diversity {
+                    background: linear-gradient(45deg, #00b894, #55a3ff);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(0, 184, 148, 0.25);
+                }
+                
+                .aroi-champion-global {
+                    background: linear-gradient(45deg, #00cec9, #55efc4);
+                    color: #000;
+                    box-shadow: 0 2px 6px rgba(0, 206, 201, 0.25);
+                }
+                
+                .aroi-champion-frontier {
+                    background: linear-gradient(45deg, #27ae60, #2ecc71);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(39, 174, 96, 0.25);
+                }
+                
+                /* Reliability & Legacy (Earth tones) */
+                .aroi-champion-reliability {
+                    background: linear-gradient(45deg, #8b7355, #a0845c);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(139, 115, 85, 0.25);
+                }
+                
+                .aroi-champion-veteran {
+                    background: linear-gradient(45deg, #cd7f32, #b8860b);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(205, 127, 50, 0.25);
+                }
+                
+                /* Legacy compatibility class */
+                .aroi-champion-legacy {
+                    background: linear-gradient(45deg, #8b4513, #a0522d);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(139, 69, 19, 0.25);
+                }
+                
+                /* Bandwidth categories */
+                .aroi-champion-bandwidth {
+                    background: linear-gradient(45deg, #00b894, #55a3ff);
+                    color: #fff;
+                    box-shadow: 0 2px 6px rgba(0, 184, 148, 0.25);
+                }
+                
+                .aroi-champion-bandwidth-legend {
+                    background: linear-gradient(45deg, #FFB300, #FF8C00);
+                    color: #000;
+                    box-shadow: 0 2px 6px rgba(255, 179, 0, 0.25);
+                }
+                
+
+                
+                /* Enhanced hover effects for all badges */
+                .aroi-champion-badge .panel-body {
+                    transition: transform 0.2s ease, box-shadow 0.2s ease;
+                }
+                
+                .aroi-champion-badge .panel-body:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+                }
+
+                /* AROI Ranking Badge Styles */
+                .aroi-rank-gold {
+                    background-color: #FFD700;
+                }
+                
+                .aroi-rank-silver {
+                    background-color: #C0C0C0;
+                }
+                
+                .aroi-rank-bronze {
+                    background-color: #CD7F32;
+                }
+
+                /* AROI Link Styles */
+                .aroi-underline-link {
+                    text-decoration: underline;
+                    color: inherit;
+                }
+                
+                .aroi-contact-link {
+                    text-decoration: underline;
+                }
+
+                /* AROI Layout Styles */
+                .aroi-center-text {
+                    text-align: center;
+                }
+                
+                .aroi-flex-nav {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 10px;
+                }
+                
+                .aroi-nav-spacing {
+                    margin-bottom: 20px;
+                }
+                
+                .aroi-nav-spacing h4 {
+                    margin-top: 5px;
+                }
+                
+                .aroi-primary-nav {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 15px;
+                    margin-bottom: 15px;
+                    justify-content: center;
+                }
+                
+                .aroi-category-nav {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 8px;
+                    padding-top: 15px;
+                    border-top: 1px solid #ddd;
+                    justify-content: center;
+                }
+
+                /* Compact Navigation Styles */
+                .aroi-compact-nav {
+                    margin-bottom: 15px;
+                    padding: 10px 15px;
+                }
+                
+                .aroi-compact-nav-row {
+                    display: flex;
+                    flex-wrap: wrap;
+                    align-items: center;
+                    gap: 15px;
+                    font-size: 14px;
+                }
+                
+                .aroi-nav-label {
+                    font-weight: bold;
+                    color: #333;
+                    white-space: nowrap;
+                }
+                
+                .aroi-primary-nav-centered {
+                    display: flex;
+                    justify-content: center;
+                    gap: 8px;
+                    margin-bottom: 10px;
+                    flex-wrap: wrap;
+                }
+                
+                .aroi-category-links-row {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 12px;
+                    justify-content: center;
+                }
+                
+                .aroi-nav-link {
+                    color: #337ab7;
+                    text-decoration: none;
+                    padding: 2px 6px;
+                    border-radius: 3px;
+                    font-size: 13px;
+                    white-space: nowrap;
+                }
+                
+                .aroi-nav-link:hover {
+                    color: #23527c;
+                    background-color: #f5f5f5;
+                    text-decoration: none;
+                }
+
+                /* Responsive adjustments for compact nav */
+                @media (max-width: 768px) {
+                    .aroi-primary-nav-centered {
+                        flex-direction: column;
+                        align-items: center;
+                        gap: 8px;
+                    }
+                    
+                    .aroi-category-links-row {
+                        justify-content: center;
+                    }
+                    
+                    .aroi-nav-link {
+                        font-size: 12px;
+                    }
+                }
+                
+                .aroi-nav-separator {
+                    border-top: 1px solid #ddd;
+                    margin: 15px 0;
+                }
+                
+                .aroi-top-margin {
+                    margin-top: 10px;
+                }
+                
+                .aroi-compact-summary {
+                    margin-bottom: 8px;
+                    padding: 8px 12px;
+                }
+                
+                .aroi-compact-summary h5 {
+                    margin-top: 0;
+                    margin-bottom: 4px;
+                    font-size: 15px;
+                    line-height: 1.2;
+                }
+                
+                .aroi-compact-summary .row {
+                    margin-bottom: 2px;
+                }
+                
+                .aroi-compact-summary .col-md-3 {
+                    padding-top: 2px;
+                    padding-bottom: 2px;
+                }
+                
+                .aroi-compact-footer {
+                    margin-top: 4px;
+                    padding-top: 3px;
+                    border-top: 1px solid rgba(255,255,255,0.3);
+                }
+                
+                .aroi-compact-footer small {
+                    font-size: 11px;
+                    line-height: 1.3;
+                }
+                
+                .aroi-header-spacing {
+                    margin-top: 0;
+                }
+                
+                .aroi-fixed-nav {
+                    position: fixed;
+                    bottom: 20px;
+                    right: 20px;
+                    z-index: 1000;
+                }
+                
+                .aroi-footer-section {
+                    margin-top: 50px;
+                    border-top: 2px solid #ccc;
+                    padding-top: 30px;
+                }
+
+                /* AROI Pagination Styles using :target selector */
+                .pagination-section {
+                    display: none; /* Hidden by default */
+                }
+                
+                /* Show first page (1-10) by default for all categories - uses CSS attribute selector for pattern matching */
+                [id$="-1-10"].pagination-section {
+                    display: block;
+                }
+                
+                /* Show any targeted pagination section */
+                .pagination-section:target {
+                    display: block;
+                }
+                
+                /* When a section is targeted, hide other sections in same category - uses :has() for scoped hiding */
+                .aroi-section:has(.pagination-section:target) .pagination-section:not(:target) {
+                    display: none !important;
+                }
+
+                /* Improved pagination positioning and table spacing */
+                .pagination-section {
+                    scroll-margin-top: 80px; /* Modern CSS property for scroll positioning without layout gaps */
+                }
+                
+                .pagination-section:target {
+                    /* Using scroll-margin-top instead of padding/margin for clean scroll behavior */
+                }
+
+                .pagination-section h4 {
+                    margin-top: 20px;
+                    margin-bottom: 15px;
+                }
+
+                /* Compact table styling to match other tables */
+                .aroi-rankings-table.aroi-standard-table td,
+                .aroi-rankings-table.aroi-standard-table th {
+                    padding: 6px 8px; /* Reduced from default Bootstrap padding */
+                    vertical-align: middle;
+                }
+
+                .aroi-rankings-table.aroi-standard-table {
+                    margin-bottom: 10px; /* Reduce bottom margin */
+                }
+
+                /* Move pagination nav below tables */
+                .pagination-nav-bottom {
+                    margin: 0 0 30px 0; /* Remove top margin to sit right below table */
+                    text-align: center;
+                    border: 1px solid #ddd;
+                    border-radius: 5px;
+                    padding: 4px; /* Reduced padding to match table row height */
+                    background-color: #f9f9f9;
+                }
+
+                .pagination-nav-bottom a {
+                    display: inline-block;
+                    padding: 4px 8px; /* Smaller padding to match table text size */
+                    margin: 0 2px; /* Reduced margin */
+                    border: 1px solid #337ab7;
+                    border-radius: 3px;
+                    color: #337ab7;
+                    text-decoration: none;
+                    background-color: white;
+                    font-size: 14px; /* Match table text size */
+                    line-height: 1.2; /* Match table row height */
+                }
+
+                .pagination-nav-bottom a:hover {
+                    background-color: #337ab7;
+                    color: white;
+                }
+
+                .pagination-nav-bottom a.active {
+                    background-color: #337ab7;
+                    color: white;
+                }
+
+                /* AROI Panel Background Colors for Champion Badges */
+                .panel-danger .panel-body {
+                    background-color: #f2dede;
+                    border-color: #ebccd1;
+                }
+                
+                .panel-warning .panel-body {
+                    background-color: #fcf8e3;
+                    border-color: #faebcc;
+                }
+                
+                .panel-info .panel-body {
+                    background-color: #d9edf7;
+                    border-color: #bce8f1;
+                }
+                
+                .panel-success .panel-body {
+                    background-color: #dff0d8;
+                    border-color: #d6e9c6;
+                }
+                
+                .panel-primary {
+                    border-color: #bce8f1;
+                }
+                
+                .panel-primary .panel-body {
+                    background-color: #d9edf7;
+                }
+
+                /* Mobile-friendly tooltips - CSS-only solution */
+                /* Base tooltip styling for elements with title attributes */
+                [title] {
+                    position: relative;
+                    cursor: help;
+                }
+
+                /* Create tooltip content using title attribute */
+                [title]:before {
+                    content: attr(title);
+                    position: absolute;
+                    background: rgba(0, 0, 0, 0.9);
+                    color: white;
+                    padding: 8px 12px;
+                    border-radius: 6px;
+                    font-size: 13px;
+                    line-height: 1.3;
+                    white-space: nowrap;
+                    max-width: 300px;
+                    word-wrap: break-word;
+                    white-space: normal;
+                    z-index: 1000;
+                    pointer-events: none;
+                    opacity: 0;
+                    visibility: hidden;
+                    transition: opacity 0.3s, visibility 0.3s;
+                    
+                    /* Position above the element by default */
+                    bottom: 100%;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    margin-bottom: 8px;
+                }
+
+                /* Tooltip arrow */
+                [title]:after {
+                    content: '';
+                    position: absolute;
+                    border: 6px solid transparent;
+                    border-top-color: rgba(0, 0, 0, 0.9);
+                    z-index: 1001;
+                    pointer-events: none;
+                    opacity: 0;
+                    visibility: hidden;
+                    transition: opacity 0.3s, visibility 0.3s;
+                    
+                    /* Position arrow */
+                    bottom: 100%;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    margin-bottom: 2px;
+                }
+
+                /* Show tooltip on hover (desktop) and focus/active (mobile) */
+                [title]:hover:before,
+                [title]:focus:before,
+                [title]:active:before,
+                [title]:hover:after,
+                [title]:focus:after,
+                [title]:active:after {
+                    opacity: 1;
+                    visibility: visible;
+                }
+
+                /* Make elements focusable on mobile for tooltip interaction */
+                @media (max-width: 767px) {
+                    [title] {
+                        -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+                        outline: none;
+                    }
+                    
+                    /* Add subtle visual feedback for tapped tooltips on mobile */
+                    [title]:active {
+                        background-color: rgba(0, 0, 0, 0.05);
+                        border-radius: 3px;
+                    }
+                    
+                    /* Ensure tooltip fits on mobile screens */
+                    [title]:before {
+                        max-width: 280px;
+                        left: 0;
+                        right: 0;
+                        transform: none;
+                        margin-left: auto;
+                        margin-right: auto;
+                    }
+                    
+                    [title]:after {
+                        left: 50%;
+                        transform: translateX(-50%);
+                    }
+                }
+
+                /* Special positioning for table cells and small elements */
+                td[title]:before,
+                th[title]:before {
+                    bottom: 100%;       /* position tooltip above cell */
+                    top: auto;
+                    margin-bottom: 8px; /* spacing between cell and tooltip */
+                    margin-top: 0;
+                }
+
+                td[title]:after,
+                th[title]:after {
+                    bottom: 100%;
+                    top: auto;
+                    border-top-color: rgba(0, 0, 0, 0.9); /* arrow points down */
+                    border-bottom-color: transparent;
+                    margin-bottom: 2px;
+                    margin-top: 0;
+                }
+
+                /* CSS-only navbar collapse using checkbox hack */
+                .navbar-toggle {
+                    display: none;
+                    background-color: transparent;
+                    background-image: none;
+                    border: 1px solid #ddd;
+                    border-radius: 4px;
+                    padding: 9px 10px;
+                    margin-top: 8px;
+                    margin-right: 15px;
+                    margin-bottom: 8px;
+                    cursor: pointer;
+                    float: right;
+                }
+
+                .navbar-toggle:hover,
+                .navbar-toggle:focus {
+                    background-color: #ddd;
+                }
+
+                .navbar-toggle .icon-bar {
+                    display: block;
+                    width: 22px;
+                    height: 2px;
+                    background-color: #888;
+                    border-radius: 1px;
+                    margin: 4px 0;
+                }
+
+                .navbar-brand {
+                    float: left;
+                    height: 50px;
+                    padding: 15px;
+                    font-size: 18px;
+                    line-height: 20px;
+                    font-weight: bold;
+                }
+
+                /* Desktop: show navigation horizontally */
+                @media (min-width: 768px) {
+                    .navbar-collapse {
+                        display: block !important;
+                        height: auto !important;
+                        overflow: visible !important;
+                    }
+                    
+                    .nav.navbar-nav {
+                        float: left;
+                        margin: 0;
+                    }
+                    
+                    .nav.navbar-nav > li {
+                        float: left;
+                    }
+                    
+                    .nav.navbar-nav > li > a {
+                        padding-top: 15px;
+                        padding-bottom: 15px;
+                        color: #777;
+                        text-decoration: none;
+                        padding-left: 15px;
+                        padding-right: 15px;
+                    }
+                    
+                    .nav.navbar-nav > li.active > a,
+                    .nav.navbar-nav > li > a:hover,
+                    .nav.navbar-nav > li > a:focus {
+                        color: #333;
+                        background-color: #e7e7e7;
+                    }
+                    
+                    .navbar-brand {
+                        display: none;
+                    }
+                }
+
+                /* Mobile: hide navigation by default, show hamburger */
+                @media (max-width: 767px) {
+                    .navbar-toggle {
+                        display: block;
+                    }
+                    
+                    .navbar-collapse {
+                        display: none;
+                        clear: both;
+                        width: 100%;
+                        margin-top: 50px;
+                        border-top: 1px solid #e7e7e7;
+                        padding-top: 10px;
+                    }
+                    
+                    /* When checkbox is checked, show the menu */
+                    .navbar-toggle-checkbox:checked ~ .navbar-header + .navbar-collapse {
+                        display: block;
+                    }
+                    
+                    .nav.navbar-nav > li {
+                        float: none;
+                    }
+                    
+                    .nav.navbar-nav > li > a {
+                        display: block;
+                        padding: 12px 20px;
+                        color: #777;
+                        text-decoration: none;
+                        border-bottom: 1px solid #e7e7e7;
+                    }
+                    
+                    .nav.navbar-nav > li:last-child > a {
+                        border-bottom: none;
+                    }
+                    
+                    .nav.navbar-nav > li.active > a,
+                    .nav.navbar-nav > li > a:hover,
+                    .nav.navbar-nav > li > a:focus {
+                        color: #333;
+                        background-color: #f5f5f5;
+                    }
+                }
+
+                /* Network Health Ribbon Styles */
+                .network-health-ribbon {
+                    max-width: 1400px;
+                    margin: 0 auto;
+                    padding: 7px;
+                }
+
+                .ribbon-row {
+                    display: grid;
+                    grid-template-columns: repeat(3, 1fr);
+                    gap: 7px;
+                    margin-bottom: 7px;
+                }
+
+                .ribbon-card {
+                    background: white;
+                    border-radius: 6px;
+                    padding: 10px;
+                    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+                    border: 1px solid #e1e8ed;
+                    transition: all 0.3s ease;
+                    min-height: 90px;
+                }
+
+                .ribbon-card:hover {
+                    transform: translateY(-1px);
+                    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+                }
+
+                .ribbon-card .card-header {
+                    margin-bottom: 7px;
+                    padding-bottom: 5px;
+                    border-bottom: 1px solid #f0f4f8;
+                }
+
+                .ribbon-card .card-header h4 {
+                    margin: 0;
+                    font-size: 1.65rem;
+                    color: #2c3e50;
+                    font-weight: 600;
+                }
+
+                .card-metrics {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 6px;
+                }
+
+                .metric-item.primary {
+                    text-align: center;
+                    padding-bottom: 5px;
+                    border-bottom: 1px solid #f8fafc;
+                    margin-bottom: 4px;
+                }
+
+                .metric-item.primary .metric-value {
+                    display: block;
+                    font-size: 3.3rem;
+                    font-weight: bold;
+                    color: #2c3e50;
+                    line-height: 1.0;
+                }
+
+                .metric-item.primary .metric-label {
+                    display: block;
+                    font-size: 1.5rem;
+                    color: #64748b;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                    margin-top: 2px;
+                    font-weight: 500;
+                }
+
+                .metric-grid {
+                    display: grid;
+                    grid-template-columns: repeat(4, 1fr);
+                    gap: 5px;
+                }
+
+                .metric-grid .metric-item {
+                    text-align: center;
+                    padding: 4px;
+                    background: #f8fafc;
+                    border-radius: 3px;
+                }
+
+                .metric-grid .metric-value {
+                    display: block;
+                    font-size: 1.65rem;
+                    font-weight: 600;
+                    color: #374151;
+                    line-height: 1.0;
+                }
+
+                .metric-grid .metric-label {
+                    display: block;
+                    font-size: 1.275rem;
+                    color: #6b7280;
+                    margin-top: 1px;
+                    font-weight: 500;
+                }
+
+                /* Card-specific colors and styling - All primary metrics now black */
+                .ribbon-card.relay-counts .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                .ribbon-card.bandwidth-counts .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                .ribbon-card.relay-uptime .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                .ribbon-card.operator-participation .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                .ribbon-card.geographic-participation .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                .ribbon-card.provider-participation .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                .ribbon-card.platform-counts .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                .ribbon-card.bandwidth-utilization .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                .ribbon-card.version-compliance .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                .ribbon-card.happy-family-migration .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                .ribbon-card.exit-policies .metric-item.primary .metric-value {
+                    color: #000000;
+                }
+
+                /* Tooltip styles for network health metrics */
+                .metric-item[title] {
+                    position: relative;
+                    cursor: help;
+                }
+
+                .metric-item[title]:hover::after {
+                    content: attr(title);
+                    position: absolute;
+                    bottom: 100%;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background: #1f2937;
+                    color: white;
+                    padding: 8px 12px;
+                    border-radius: 6px;
+                    font-size: 0.85rem;
+                    white-space: normal;
+                    max-width: 300px;
+                    width: max-content;
+                    z-index: 1000;
+                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                    line-height: 1.4;
+                    text-align: left;
+                    font-weight: normal;
+                    margin-bottom: 8px;
+                }
+
+                .metric-item[title]:hover::before {
+                    content: '';
+                    position: absolute;
+                    bottom: 100%;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    border: 6px solid transparent;
+                    border-top-color: #1f2937;
+                    z-index: 1000;
+                    margin-bottom: 2px;
+                }
+
+                .ribbon-footer {
+                    text-align: center;
+                    margin-top: 15px;
+                    padding-top: 12px;
+                    border-top: 1px solid #e5e7eb;
+                }
+
+                .ribbon-footer .last-updated {
+                    font-size: 0.9rem;
+                    color: #9ca3af;
+                    margin: 0;
+                }
+
+                /* Responsive adjustments for ribbon */
+                @media (max-width: 1200px) {
+                    .ribbon-row {
+                        grid-template-columns: repeat(2, 1fr);
+                    }
+                    
+                    .metric-grid {
+                        grid-template-columns: repeat(3, 1fr);
+                    }
+                }
+
+                @media (max-width: 768px) {
+                    .ribbon-row {
+                        grid-template-columns: 1fr;
+                        gap: 6px;
+                    }
+                    
+                    .network-health-ribbon {
+                        padding: 6px;
+                    }
+
+                    .ribbon-card {
+                        padding: 8px;
+                        min-height: 80px;
+                    }
+
+                    .ribbon-card .card-header h4 {
+                        font-size: 1.35rem;
+                    }
+
+                    .metric-item.primary .metric-value {
+                        font-size: 2.7rem;
+                    }
+
+                    .metric-item.primary .metric-label {
+                        font-size: 1.2rem;
+                    }
+
+                    .metric-grid {
+                        grid-template-columns: repeat(2, 1fr);
+                        gap: 4px;
+                    }
+
+                    .metric-grid .metric-value {
+                        font-size: 1.35rem;
+                    }
+
+                    .metric-grid .metric-label {
+                        font-size: 1.05rem;
+                    }
+                }
+
+                @media (max-width: 480px) {
+                    .ribbon-card .card-header h4 {
+                        font-size: 1.2rem;
+                    }
+
+                    .metric-item.primary .metric-value {
+                        font-size: 3.2rem;
+                    }
+
+                    .metric-item.primary .metric-label {
+                        font-size: 1.4rem;
+                    }
+
+                    .metric-grid .metric-value {
+                        font-size: 1.6rem;
+                    }
+
+                    .metric-grid .metric-label {
+                        font-size: 1.2rem;
+                    }
+                }
+
+                /* Allium Search Form Styles */
+                .navbar-form.navbar-right {
+                    margin-left: 15px;
+                    padding-top: 8px;
+                    padding-bottom: 8px;
+                }
+
+                .navbar-form .input-group {
+                    display: inline-table;
+                    vertical-align: middle;
+                }
+
+                .navbar-form .form-control {
+                    border-radius: 3px 0 0 3px;
+                }
+
+                .navbar-form .btn {
+                    border-radius: 0 3px 3px 0;
+                }
+
+                .allium-mobile-search {
+                    background: #f8f9fa;
+                    padding: 8px 15px;
+                    margin-top: -20px; /* Pull up to sit flush with navbar */
+                    margin-bottom: 15px;
+                    border-radius: 0 0 4px 4px; /* Only round bottom corners */
+                    border: 1px solid #e7e7e7;
+                    border-top: none;
+                }
+
+                .allium-mobile-search .form-control {
+                    font-size: 15px; /* Smaller than nav (18px) but larger than body (14px) */
+                    padding: 6px 10px;
+                    height: auto;
+                }
+
+                .allium-mobile-search .btn {
+                    font-size: 14px;
+                    padding: 6px 12px;
+                }
+
+                /* 
+                 * Search bar responsive behavior:
+                 * - Below 1600px: Always show full-width search bar below navbar
+                 * - At 1600px+: Show compact search in navbar (enough room for all nav items + search)
+                 */
+                
+                /* Default: show full-width search, hide navbar search */
+                .allium-mobile-search {
+                    display: block !important;
+                }
+                
+                .navbar-form.navbar-right {
+                    display: none !important;
+                }
+
+                /* Extra large desktop (≥1600px): enough room for inline search */
+                @media (min-width: 1600px) {
+                    .allium-mobile-search {
+                        display: none !important;
+                    }
+                    .navbar-form.navbar-right {
+                        display: block !important;
+                    }
+                }
+            </style>
+        </head>
+    <body>
+        <!-- 1AEO Cross-Site Navigation -->
+        <nav class="aeo-cross-nav">
+            <div class="aeo-nav-container">
+                <a href="https://www.1aeo.com" class="aeo-nav-brand">
+                    <span>1AEO</span>
+                </a>
+                <div class="aeo-nav-links">
+                    <a href="https://www.1aeo.com">Home</a>
+                    <a href="https://metrics.1aeo.com" class="active">Metrics</a>
+                    <a href="https://aroivalidator.1aeo.com">AROI Validator</a>
+                    <a href="https://routefluxmap.1aeo.com">RouteFluxMap</a>
+                </div>
+            </div>
+        </nav>
+        
+        <div class="container">
+<style>
+.section-header {
+    position: relative;
+    display: inline-block;
+}
+
+.anchor-link {
+    text-decoration: none;
+    color: inherit;
+}
+
+/* Highlight section when targeted */
+:target {
+    background-color: #fff3cd !important;
+    padding: 8px;
+    border-radius: 4px;
+    margin: -8px;
+    transition: background-color 0.3s;
+}
+
+/* Backward-compat anchor aliases: invisible but still scrollable */
+.compat-anchor {
+    display: block;
+    height: 0;
+    overflow: hidden;
+    visibility: hidden;
+}
+
+/* Health Status Grid Layout */
+.health-status-grid {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;  /* 60/40 split */
+    gap: 8px 24px;
+}
+
+.health-status-grid dl {
+    margin: 0;
+    font-size: 14px;
+}
+
+.health-status-grid .health-row {
+    display: flex;
+    align-items: baseline;
+    margin-bottom: 8px;
+}
+
+.health-status-grid dt {
+    width: 100px;
+    font-weight: bold;
+    color: #495057;
+    flex-shrink: 0;
+}
+
+.health-status-grid dd {
+    margin: 0;
+    flex: 1;
+}
+
+/* Responsive: Stack on mobile */
+@media (max-width: 767px) {
+    .health-status-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Shared section styling for new consolidated sections (#bandwidth, #uptime, #operator, etc.) */
+.relay-section {
+    margin-top: 15px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+.relay-section > h4:first-child {
+    margin-top: 0;
+    margin-bottom: 12px;
+}
+
+/* Reusable status color classes (DRY: replaces inline style="color: #hex" attributes) */
+.status-success { color: #28a745; }
+.status-danger  { color: #dc3545; }
+.status-warning { color: #856404; }
+.status-note    { color: #6c757d; }
+.status-info    { color: #17a2b8; }
+.status-success-bold { color: #28a745; font-weight: bold; }
+.status-danger-bold  { color: #dc3545; font-weight: bold; }
+.status-warning-bold { color: #856404; font-weight: bold; }
+.text-small-muted { font-size: 11px; color: #666; }
+.text-small-note  { font-size: 12px; color: #666; }
+
+</style>
+<div id="content">
+<h2 id="nickname">View Relay "TV8807"</h2>
+        <nav aria-label="breadcrumb" style="margin-bottom: 10px;">
+    <ol class="breadcrumb" style="background: none; padding: 0; margin: 0; font-size: 0.9em; list-style: none;">
+        <li style="display: inline;"><a href="../../index.html">Home</a></li>
+            <li style="display: inline;"> > <a href="../../misc/networks-by-bandwidth.html">Browse by Network</a></li>
+                <li style="display: inline;"> > <a href="../../as/AS6128/">AS6128</a></li>
+            <li style="display: inline; color: #777;"> > TV8807</li>
+    </ol>
+</nav>
+    <nav class="navbar navbar-default" style="margin-bottom: 20px;">
+        <div class="container-fluid">
+            <!-- CSS-only hamburger toggle using checkbox hack -->
+            <input type="checkbox" id="navbar-toggle" class="navbar-toggle-checkbox" style="display: none;">
+            
+            <div class="navbar-header">
+                <label for="navbar-toggle" class="navbar-toggle" role="button" aria-label="Toggle navigation">
+                    <span class="sr-only">Toggle navigation</span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </label>
+                <span class="navbar-brand visible-xs">Browse Categories</span>
+            </div>
+            
+            <div class="navbar-collapse" id="main-navbar">
+                <ul class="nav navbar-nav">
+                    <li class="">
+                        <a href="../../network-health.html">Network Health</a>
+                    </li>
+                    <li class="">
+                        <a href="../../index.html">Operator Champions</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/contacts-by-bandwidth.html">By Operator / Contact</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/families-by-bandwidth.html">By Family</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/networks-by-bandwidth.html">By Network</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/countries-by-bandwidth.html">By Country</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/platforms-by-bandwidth.html">By Platform</a>
+                    </li>
+                    <li class="">
+                        <a href="../../misc/authorities.html">Directory Authorities</a>
+                    </li>
+                    <li class="">
+                        <a href="../../top500.html">Top 500 Relays</a>
+                    </li>
+                    <li class="active">
+                        <a href="../../misc/all.html">All Relays</a>
+                    </li>
+                </ul>
+                
+                <!-- Desktop: Search in navbar (hidden on mobile via CSS) -->
+                <form action="../../search" method="GET" 
+                      class="navbar-form navbar-right hidden-xs hidden-sm"
+                      style="margin-right: 0;">
+                    <div class="input-group" style="width: 220px;">
+                        <input type="text" 
+       name="q" 
+       class="form-control input-sm" 
+       placeholder="Search relays..."
+       title="Search by fingerprint, nickname, AROI, IP, AS number, family, or country"
+       maxlength="100"
+       pattern="[A-Za-z0-9\s\-_.@:]+"
+       autocomplete="off"
+       autocapitalize="off"
+       spellcheck="false">
+<span class="input-group-btn">
+    <button type="submit" class="btn btn-sm btn-default"><span class="glyphicon glyphicon-search" aria-hidden="true"></span></button>
+</span>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- Mobile: Search bar below navbar (hidden on desktop via CSS) -->
+    <div class="allium-mobile-search visible-xs visible-sm">
+        <form action="../../search" method="GET">
+            <div class="input-group">
+                <input type="text" 
+       name="q" 
+       class="form-control" 
+       placeholder="Search: fingerprint, nickname, AROI, IP, AS number, family, country..."
+       title="Search by fingerprint, nickname, AROI, IP, AS number, family, or country"
+       maxlength="100"
+       pattern="[A-Za-z0-9\s\-_.@:]+"
+       autocomplete="off"
+       autocapitalize="off"
+       spellcheck="false">
+<span class="input-group-btn">
+    <button type="submit" class="btn btn-primary">Search</button>
+</span>
+            </div>
+        </form>
+    </div>
+<h4>
+<span id="fingerprint">Fingerprint: <code style="font-size: 12px; user-select: all;" title="Relay fingerprint (click to select)">7E920DED83D89062522794971056C2BCB45118B6</code></span> | 
+Family: 1 relay
+| 
+<a href="../../contact/32cb0861adc94fe7853fb21328e94596/" title="Contact information">printerexpert@mail2tor.com</a> | 
+<a href="../../as/AS6128/">AS6128</a>
+| 
+<a href="../../country/US/">United States of America</a>
+| 
+<a href="../../platform/Linux/">Linux</a>
+</h4>
+
+<div id="status" style="margin: 15px 0; padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #28a745;">
+
+<h4 style="margin-top: 0; margin-bottom: 12px;">
+    <div class="section-header">
+        <a href="#status" class="anchor-link">Health Status</a>
+    </div>
+</h4>
+
+<div class="health-status-grid">
+    <dl>
+        <div class="health-row">
+            <dt title="Inclusion in network consensus. Majority of Directory Auths must vote yes."><a href="#flags" class="anchor-link">Consensus</a></dt>
+            <dd>
+<span style="color: #28a745;" title="Relay IS in the network consensus. Tor clients will use this relay.">In Consensus</span>
+                    <span title="Inferred from Running flag in Onionoo data.">(has Running flag)</span>
+</dd>
+        </div>
+
+        <div class="health-row">
+            <dt title="Capabilities assigned by Dir. Auth. based on performance."><a href="#flags" class="anchor-link">Flags</a></dt>
+            <dd>
+                <span title="Guard=entry point, Exit=exit node, Stable=long-lived connections, Fast=high bandwidth, Valid=properly configured, Running=currently reachable."><a href="../../flag/exit/">Exit</a>, <a href="../../flag/fast/">Fast</a>, <a href="../../flag/running/">Running</a>, <a href="../../flag/v2dir/">V2Dir</a>, <a href="../../flag/valid/">Valid</a></span> <span title="Total number of flags assigned to this relay.">(5)</span>
+</dd>
+        </div>
+
+        <div class="health-row">
+            <dt title="Bandwidth verification by directory authorities running sbws scanners."><a href="#bandwidth" class="anchor-link">BW Verified</a></dt>
+            <dd>
+<span style="color: #28a745;" title="Relay has been measured by bandwidth authorities.">Measured</span>
+</dd>
+        </div>
+
+        <div class="health-row">
+            <dt title="Relay stability: overload status and uptime."><a href="#uptime" class="anchor-link">Stability</a></dt>
+            <dd>
+                <a href="#overload" title="No overload reported" style="text-decoration: none;">
+                    <span style="color: #28a745;">Not Overloaded</span>
+                </a>
+                <span style="color: #6c757d;"> | </span>
+<span style="color: #dc3545;" title="Relay is currently offline.">DOWN 6d 4h 55m ago</span>
+| <span style="color: #dc3545;" title="Percentage of time relay had Running flag in last month. 100%=always up, <90%=reliability concerns.">UP 22%</span> <span title="1 Month availability percentage.">(1M)</span>
+</dd>
+        </div>
+    </dl>
+
+    <dl>
+        <div class="health-row">
+            <dt title="Directory Auths connectivity to relay's OR port."><a href="#connectivity" class="anchor-link">Reachability</a></dt>
+            <dd>
+<span style="color: #6c757d;">N/A</span>
+</dd>
+        </div>
+
+        <div class="health-row">
+            <dt title="First appearance in network consensus."><a href="#uptime" class="anchor-link">First Seen</a></dt>
+            <dd>
+<a href="../../first_seen/2026-02-10/" title="Date relay first appeared in consensus. Newer relays have restrictions (Guard flag requires ~8 days).">1w 5d 11h ago</a>
+</dd>
+        </div>
+
+        <div class="health-row">
+            <dt title="Traffic share and self-reported bandwidth capacity."><a href="#bandwidth" class="anchor-link">BW Weight</a></dt>
+            <dd>
+<span title="Percentage of total network consensus weight. Determines probability of being selected by clients.">0.00% of Network</span>
+                    | <span title="Bandwidth capacity reported by the relay itself. May differ from measured bandwidth.">3 Mbit/s Observed By Relay</span>
+</dd>
+        </div>
+
+        <div class="health-row">
+            <dt title="Tor software version. Outdated versions may be rejected by Tor network and have security vulnerabilities."><a href="#software" class="anchor-link">Version</a></dt>
+            <dd>
+<span style="color: #28a745;" title="This Tor version is on the recommended list. Safe to use.">0.4.8.22 Recommended</span>
+</dd>
+        </div>
+    </dl>
+</div>
+
+<div style="margin-top: 12px; padding: 10px; background: #d4edda; border-radius: 4px; border-left: 3px solid #28a745;">
+    <span style="color: #155724;"><strong>No issues detected.</strong> Relay appears to be operating normally.</span>
+</div>
+
+</div>
+
+<section id="connectivity" class="section-box" style="padding-bottom: 5px;">
+<span id="or-address" class="compat-anchor"></span><span id="exit-address" class="compat-anchor"></span><span id="dir-address" class="compat-anchor"></span>
+<span id="location" class="compat-anchor"></span><span id="coordinates" class="compat-anchor"></span><span id="interactive-map" class="compat-anchor"></span><span id="autonomous-system" class="compat-anchor"></span>
+<h4 style="margin-top: 0; margin-bottom: 12px;">
+    <div class="section-header">
+        <a href="#connectivity" class="anchor-link">Connectivity and Location</a>
+    </div>
+</h4>
+
+<div class="row">
+<div class="col-md-6">
+<div class="subsection-card">
+<h5 class="subsection-header">Addresses</h5>
+<dl>
+    <dt>OR Address</dt>
+    <dd>
+<span class="verified-hostname" title="Verified: reverse DNS lookup matched a forward A record (DNSSEC validated). Source: Onionoo API">ool-182c744d.dyn.optonline.net</span><br>
+24.44.116.77:9001</dd>
+    
+    
+    
+</dl>
+</div>
+
+<div class="subsection-card">
+<h5 class="subsection-header">Reachability (Directory Authorities)</h5>
+<dl>
+    <dt>Status</dt>
+    <dd><span class="status-note">Reachability data unavailable</span></dd>
+</dl>
+</div>
+</div>
+
+<div class="col-md-6">
+<div class="subsection-card">
+<h5 class="subsection-header">Location</h5>
+<dl>
+    <dt title="Country name of the location of this relay as found by a geolocation database based on the relay's IP address.">Country</dt>
+    <dd>
+<a href="../../country/US/">
+                <img src="../../static/images/cc/us.png"
+                     title="United States of America" alt="United States of America">
+            </a> United States of America
+</dd>
+    
+    
+    
+    
+    <dt>Interactive Map</dt>
+    <dd><a href="https://routefluxmap.1aeo.com/#relay=7E920DED83D89062522794971056C2BCB45118B6" target="_blank" rel="noopener">View in RouteFluxMap</a></dd>
+</dl>
+</div>
+
+<div class="subsection-card">
+<h5 class="subsection-header">Autonomous System</h5>
+<dl>
+    <dt>AS Number</dt>
+    <dd>
+<a href="../../as/AS6128/">AS6128</a>
+</dd>
+    
+    <dt>AS Name</dt>
+    <dd>
+Cablevision Systems Corp.
+(<a href="https://bgp.tools/AS6128">BGP.tools</a>)</dd>
+    
+    <dt>AS Rarity</dt>
+    <dd>
+<span style="color: #9b59b6; font-weight: bold;" title="AS rarity measures how rare this hosting choice is for the Tor network. Higher scores indicate better diversity for the network. Score combines consensus weight concentration (0-3) and operator uniqueness (0-2).">Legendary</span> (score: 4/5, &lt;0.05% consensus weight, 5 operators)
+    </dd>
+</dl>
+</div>
+</div>
+</div>
+</section>
+
+
+
+<section id="bandwidth" class="section-box relay-section">
+<span id="bandwidth-capacity" class="compat-anchor"></span><span id="network-participation" class="compat-anchor"></span>
+<h4 style="margin-top: 0; margin-bottom: 12px;">
+    <div class="section-header">
+        <a href="#bandwidth" class="anchor-link">Bandwidth Metrics</a>
+    </div>
+</h4>
+
+<div class="row">
+    <div class="col-md-6">
+        <h5 class="subsection-header">Capacity (Relay Reported)</h5>
+        <dl>
+            <dt title="Bandwidth capacity your relay measured and reported in its descriptor">Observed Bandwidth</dt>
+            <dd><span title="Observed: 3.07 Mbit/s">3.07 Mbit/s</span></dd>
+            
+            <dt title="min(Observed, Rate, Burst) - what your relay advertises to the network">Advertised Bandwidth</dt>
+            <dd>
+                    <span title="Advertised: 3.07 Mbit/s">3.07 Mbit/s</span>
+            </dd>
+            
+            <dt title="RelayBandwidthRate setting in torrc">Rate Limit</dt>
+            <dd>
+                    <span title="Rate: 100.00 Mbit/s">100.00 Mbit/s</span>
+            </dd>
+            
+            <dt title="RelayBandwidthBurst setting in torrc">Burst Limit</dt>
+            <dd>
+                    <span title="Burst: 100.00 Mbit/s">100.00 Mbit/s</span>
+            </dd>
+        </dl>
+    </div>
+    
+    <div class="col-md-6">
+        <h5 class="subsection-header">Measurement (Directory Authority Verified)</h5>
+        <p style="font-size: 10px; color: #999; margin: -4px 0 6px 0;">Source: <a href="https://collector.torproject.org/recent/relay-descriptors/votes/" target="_blank" rel="noopener" style="color: #999;">CollecTor</a> — fetched 2026-02-22 14:54:19</p>
+        <dl>
+            <dt title="How many bandwidth authorities (sbws scanners) measured this relay">Measured By</dt>
+            <dd>
+                        <span class="status-success-bold">Yes</span> (≥3 authorities)
+            </dd>
+            
+        </dl>
+    </div>
+</div>
+
+<div style="margin-top: 12px; padding: 10px; background: #ffffff; border-radius: 4px; border: 1px solid #e9ecef;">
+    <strong>Network Participation:</strong>
+    <span title="Fraction of total network consensus weight. The consensus weight is a unitless integer assigned by directory authorities (median of bandwidth measurements) used to determine this relay's probability of being selected by Tor clients for circuit building.">
+        Consensus Weight:
+            0.0000% of network
+            <span style="color: #856404;" title="This relay's consensus weight is higher than 7.1% of all relays on the network.">(7th pctl)</span>
+    </span>
+    |
+    <span title="Probability of this relay to be selected for the guard position. Calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so this probability is an approximation.">Guard: 
+N/A</span> |
+    <span title="Probability of this relay to be selected for the middle position. Calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so this probability is an approximation.">Middle: 
+N/A</span> |
+    <span title="Probability of this relay to be selected for the exit position. Calculated based on consensus weights, relay flags, and bandwidth weights in the consensus. Path selection depends on more factors, so this probability is an approximation.">Exit: 
+N/A</span>
+    
+</div>
+</section>
+
+<section id="uptime" class="section-box relay-section">
+<span id="first-last-seen" class="compat-anchor"></span>
+<h4 style="margin-top: 0; margin-bottom: 12px;">
+    <div class="section-header">
+        <a href="#uptime" class="anchor-link">Uptime and Stability</a>
+    </div>
+</h4>
+
+<div class="row">
+    <div class="col-md-6">
+        <h5 class="subsection-header">Uptime Metrics</h5>
+        <dl>
+            <dt id="uptime-downtime" title="Current uptime or downtime duration based on relay's running status and last_restarted timestamp."><a href="#uptime-downtime" class="anchor-link" style="text-decoration: none; color: inherit;">Current Status</a></dt>
+            <dd>
+<span class="status-danger-bold">DOWN 6d 4h 55m ago</span>
+</dd>
+
+            <dt id="uptime-history" title="6mo: ≥2σ 0.0% from μ 0.0%"><a href="#uptime-history" class="anchor-link" style="text-decoration: none; color: inherit;">Overall Uptime (1M/6M/1Y/5Y)</a></dt>
+            <dd>
+<span style="color: #dc3545;">22.4%</span>/0.0%/0.0%/0.0%
+</dd>
+
+            <dt id="flag-uptime" title="Exit Node flag uptime matches overall uptime across all periods"><a href="#flag-uptime" class="anchor-link" style="text-decoration: none; color: inherit;">Flag Uptime (1M/6M/1Y/5Y)</a></dt>
+            <dd>
+<span title="Exit Node flag uptime matches overall uptime across all periods">Matches Overall Uptime (<span style="color: #dc3545;">22.4%</span>/0.0%/0.0%/0.0%)</span>
+</dd>
+
+            <dt title="Whether relay indicated it is hibernating in its last known server descriptor. Hibernation typically means the relay reached its accounting limit.">Hibernating</dt>
+            <dd>
+No
+</dd>
+        </dl>
+    </div>
+
+    <div class="col-md-6">
+        <h5 class="subsection-header">Timestamps</h5>
+        <dl>
+            <dt title="Date relay first appeared in network consensus. Newer relays have restrictions (Guard flag requires ~8 days).">First Seen</dt>
+            <dd>
+<a href="../../first_seen/2026-02-10/">1w 5d 11h ago</a>
+                    <span class="text-small-muted">(2026-02-10 03:00:00)</span>
+</dd>
+
+            <dt title="Most recent time this relay was seen in the network consensus.">Last Seen</dt>
+            <dd>
+6d 4h 55m ago
+                    <span class="text-small-muted">(2026-02-16 10:00:00)</span>
+</dd>
+
+            <dt title="UTC timestamp when this relay was last (re-)started. Missing if router descriptor containing this information cannot be found.">Last Restarted</dt>
+            <dd>
+6d 16h 42m ago
+                    <span class="text-small-muted">(2026-02-15 22:12:23)</span>
+</dd>
+
+            <dt title="UTC timestamp when this relay last stopped announcing an IPv4/IPv6 address or TCP port. Can indicate relay stability as a fallback directory.">Last Changed Address</dt>
+            <dd>
+2026-02-10 03:00:00
+</dd>
+        </dl>
+    </div>
+</div>
+
+<span id="overload"></span>
+
+
+
+<div style="margin-top: 12px; padding: 10px; background: #d4edda; border-radius: 4px; border-left: 3px solid #28a745;">
+    <strong style="color: #155724;">Overload Status:</strong>
+    <span style="color: #155724;">Not Overloaded — No overload conditions reported.</span>
+</div>
+
+
+</section>
+
+<section id="operator" class="section-box relay-section">
+<span id="contact" class="compat-anchor"></span><span id="aroi" class="compat-anchor"></span>
+<h4 style="margin-top: 0; margin-bottom: 12px;">
+    <div class="section-header">
+        <a href="#operator" class="anchor-link">Operator and Family</a>
+    </div>
+</h4>
+
+<div class="row">
+<div class="col-md-6">
+<h5 class="subsection-header">Operator Identity</h5>
+<p style="font-size: 10px; color: #999; margin: -4px 0 6px 0;">Source: <a href="https://aroivalidator.1aeo.com/" target="_blank" rel="noopener" style="color: #999;">AROI Validation API</a> — 2026-02-22 06:00 UTC</p>
+<dl>
+    <dt>AROI Domain <a href="https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/" target="_blank" rel="noopener" title="Autonomous Relay Operator Identifier — ContactInfo Information Sharing Specification" style="font-weight: normal; font-size: 11px;">(?)</a></dt>
+    <dd>
+Not specified
+</dd>
+    
+<dt>Operator Validation</dt>
+    <dd>
+<span style="color: #dc3545;" title="No relays have AROI validation proof">Unvalidated</span>
+</dd>
+    
+    <dt>This Relay</dt>
+    <dd>
+<span style="color: #6c757d;">N/A (no AROI configured)</span>
+</dd>
+<dt>Contact</dt>
+    <dd style="word-wrap: break-word; word-break: break-all; max-width: 100%;">
+<a href="../../contact/32cb0861adc94fe7853fb21328e94596/">printerexpert@mail2tor.com</a>
+</dd>
+</dl>
+</div>
+
+<div class="col-md-6">
+<h5 class="subsection-header">Family Configuration</h5>
+<dl>
+    <dt id="effective-family" title="Array of fingerprints of relays that are in an effective, mutual family relationship with this relay. These relays are part of this relay's family and they consider this relay to be part of their family. Always contains the relay's own fingerprint. Omitted if the descriptor containing this information cannot be found.">
+        <a href="#effective-family" class="anchor-link">Effective Family Member: 1</a>
+    </dt>
+    <dd>
+        <pre class="pre-scrollable" style="max-height: 100px; font-size: 11px; margin-top: 5px;">7E920DED83D89062522794971056C2BCB45118B6 (this relay)
+</pre>
+    </dd>
+    
+    <dt id="alleged-family" title="Array of fingerprints of relays that are not in an effective, mutual family relationship with this relay. These relays are part of this relay's family but they don't consider this relay to be part of their family. Omitted if empty or if descriptor containing this information cannot be found.">
+        <a href="#alleged-family" class="anchor-link">Alleged Family Members: 0</a>
+    </dt>
+    <dd>
+        <span style="color: #6c757d;">none</span>
+    </dd>
+    
+    <dt id="indirect-family" title="Array of fingerprints of relays that consider this relay to be part of their family but that are not part of this relay's family. Omitted if empty or if descriptor containing this information cannot be found.">
+        <a href="#indirect-family" class="anchor-link">Indirect Family Members: 0</a>
+    </dt>
+    <dd>
+        <span style="color: #6c757d;">none</span>
+    </dd>
+</dl>
+</div>
+</div>
+</section>
+
+<section id="software" class="section-box relay-section">
+<h4 style="margin-top: 0; margin-bottom: 12px;">
+    <div class="section-header">
+        <a href="#software" class="anchor-link">Software and Version</a>
+    </div>
+</h4>
+
+<dl>
+    <dt id="platform" title="Simplified platform identifier for categorization"><a href="#platform" class="anchor-link">Platform</a></dt>
+    <dd>
+        <a href="../../platform/Linux/" title="View all relays on this platform">Linux</a>
+<span style="font-size: 12px; color: #666;" title="Complete platform information as reported by relay"> — Tor 0.4.8.22 on Linux</span>
+</dd>
+
+    <dt id="version" title="Tor software version. Outdated versions may have security vulnerabilities and could be rejected by the network."><a href="#version" class="anchor-link">Version</a></dt>
+    <dd>
+<span>0.4.8.22</span>
+— <span class="status-success-bold" title="This Tor version is on the recommended list.">Recommended</span>
+</dd>
+
+    <dt title="Version status as determined by directory authorities: recommended, experimental, obsolete, new in series, unrecommended">Version Status</dt>
+    <dd>
+<span class="status-success">Recommended</span>
+</dd>
+</dl>
+</section>
+
+<section id="exit-policy" class="section-box relay-section">
+<h4 style="margin-top: 0; margin-bottom: 12px;">
+    <div class="section-header">
+        <a href="#exit-policy" class="anchor-link">Exit Policy</a>
+    </div>
+</h4>
+
+<div class="row">
+    <div class="col-md-6">
+        <h5 id="ipv4-exit-policy-summary" class="subsection-header"><a href="#ipv4-exit-policy-summary" class="anchor-link">IPv4 Exit Policy Summary</a></h5>
+<pre class="pre-scrollable" style="max-height: 150px; font-size: 12px;">accept: 
+  1-65535
+</pre>
+</div>
+
+    <div class="col-md-6">
+        <h5 id="ipv6-exit-policy-summary" class="subsection-header"><a href="#ipv6-exit-policy-summary" class="anchor-link">IPv6 Exit Policy Summary</a></h5>
+<span style="color: #6c757d;">None</span>
+</div>
+</div>
+
+<div style="margin-top: 10px;">
+    <h5 class="subsection-header">Full Exit Policy</h5>
+    <pre class="pre-scrollable" style="max-height: 200px; font-size: 12px;">reject 0.0.0.0/8:*
+reject 169.254.0.0/16:*
+reject 127.0.0.0/8:*
+reject 192.168.0.0/16:*
+reject 10.0.0.0/8:*
+reject 172.16.0.0/12:*
+reject 24.44.116.77:*
+accept *:*
+</pre>
+</div>
+</section>
+
+<p>Last fetch was at Sun, 22 Feb 2026 14:55:01 GMT.</p>
+
+
+</div>
+        </div>
+    </body>
+        <footer class="aeo-footer">
+            <div class="aeo-footer-links">
+                <a href="https://metrics.1aeo.com">Metrics</a>
+                <a href="https://aroivalidator.1aeo.com">AROI Validator</a>
+                <a href="https://routefluxmap.1aeo.com">RouteFluxMap</a>
+                <a href="https://github.com/1aeo">GitHub</a>
+            </div>
+            <p class="aeo-footer-brand">
+                Part of <a href="https://www.1aeo.com" style="font-weight: bold;">1st Amendment Encrypted Openness LLC</a>
+            </p>
+            <p class="aeo-footer-legal">
+                Generated by a <a href="https://github.com/1aeo/allium">1aeo modified fork of allium</a>, based on original <a href="https://git.jordan.im/allium/">allium</a>, on Sun, 22 Feb 2026 14:55:01 GMT. Source data from <a href="https://onionoo.torproject.org/">Tor Project onionoo</a>.
+            </p>
+        </footer>
+    </html>
