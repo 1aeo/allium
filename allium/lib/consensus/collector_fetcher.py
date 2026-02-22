@@ -15,10 +15,18 @@ import urllib.request
 import urllib.error
 import socket
 import concurrent.futures
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Tuple, Any, Callable
 from datetime import datetime
 import logging
 import time
+
+# Import centralized retry and total-timeout infrastructure from workers
+from ..workers import (
+    _fetch_url_with_total_timeout,
+    _retry_with_backoff,
+    _is_retryable_error,
+    TotalTimeoutError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -242,15 +250,20 @@ class CollectorFetcher:
         consensus_evaluation = fetcher.get_relay_consensus_evaluation('FINGERPRINT')
     """
     
-    def __init__(self, timeout: int = 30, authorities: Optional[List[Dict]] = None):
+    def __init__(self, timeout: int = 30, authorities: Optional[List[Dict]] = None,
+                 retry_count: int = 2, retry_delay_base: float = 1.0):
         """
         Initialize CollectorFetcher.
         
         Args:
-            timeout: HTTP request timeout in seconds
+            timeout: HTTP request timeout in seconds (true total timeout)
             authorities: Optional list of authority dicts discovered from Onionoo
+            retry_count: Number of retries per request on transient failures
+            retry_delay_base: Base delay in seconds for exponential backoff
         """
         self.timeout = timeout
+        self.retry_count = retry_count
+        self.retry_delay_base = retry_delay_base
         self.authorities = authorities or []
         self.votes = {}
         self.bandwidth_files = {}
@@ -383,29 +396,47 @@ class CollectorFetcher:
         }
     
     def _fetch_url(self, url: str) -> str:
-        """Fetch URL with timeout, size limit, and error handling."""
-        req = urllib.request.Request(url, headers={'User-Agent': 'Allium/1.0'})
+        """
+        Fetch URL with true total timeout, size limit, retry, and error handling.
+
+        Uses the centralized _fetch_url_with_total_timeout() from workers.py
+        to enforce a real total timeout (not just socket-level), and
+        _retry_with_backoff() for transient failure recovery.
+
+        Args:
+            url: URL to fetch
+
+        Returns:
+            str: Response content decoded as UTF-8
+
+        Raises:
+            TotalTimeoutError: If total timeout exceeded after all retries
+            urllib.error.HTTPError: On non-retryable HTTP errors
+            ValueError: If response exceeds MAX_RESPONSE_SIZE
+        """
+        headers = {'User-Agent': 'Allium/1.0'}
+
+        def _do_fetch():
+            data = _fetch_url_with_total_timeout(url, self.timeout, headers)
+            if len(data) > MAX_RESPONSE_SIZE:
+                raise ValueError(f"Response exceeded {MAX_RESPONSE_SIZE} bytes")
+            return data.decode('utf-8', errors='replace')
+
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as response:
-                # Check content length before reading
-                content_length = response.headers.get('Content-Length')
-                if content_length and int(content_length) > MAX_RESPONSE_SIZE:
-                    raise ValueError(f"Response too large: {content_length} bytes")
-                
-                data = response.read(MAX_RESPONSE_SIZE + 1)
-                if len(data) > MAX_RESPONSE_SIZE:
-                    raise ValueError(f"Response exceeded {MAX_RESPONSE_SIZE} bytes")
-                
-                return data.decode('utf-8', errors='replace')
-                
+            return _retry_with_backoff(
+                fetch_fn=_do_fetch,
+                retry_count=self.retry_count,
+                retry_delay_base=self.retry_delay_base,
+                operation_name=f"CollecTor fetch {url.split('/')[-1]}",
+            )
+        except (TotalTimeoutError, socket.timeout) as e:
+            logger.warning(f"Timeout fetching {url}: {e}")
+            raise
         except urllib.error.HTTPError as e:
             logger.warning(f"HTTP {e.code} for {url}")
             raise
         except urllib.error.URLError as e:
             logger.warning(f"URL error for {url}: {e.reason}")
-            raise
-        except socket.timeout:
-            logger.warning(f"Timeout fetching {url}")
             raise
     
     def _fetch_vote_listing(self) -> List[str]:
@@ -869,12 +900,21 @@ class CollectorFetcher:
             latest_file = max(matches)
             url = f"{COLLECTOR_BASE}/recent/relay-descriptors/consensuses/{latest_file}"
             
-            # Fetch only the first chunk — consensus-method is in the first 5 lines
-            req = urllib.request.Request(url, headers={'User-Agent': 'Allium/1.0'})
-            with urllib.request.urlopen(req, timeout=self.timeout) as response:
-                # Read just 4KB — consensus-method is in the header
-                header_bytes = response.read(4096)
-                header_text = header_bytes.decode('utf-8', errors='replace')
+            # Fetch only the first 4KB — consensus-method is in the first 5 lines.
+            # We intentionally read only 4KB (not the full ~30MB consensus document),
+            # so socket-level timeout is safe here (one small read, not a slow-drip risk).
+            # Wrapped in retry for transient connection failures.
+            def _fetch_header():
+                req = urllib.request.Request(url, headers={'User-Agent': 'Allium/1.0'})
+                with urllib.request.urlopen(req, timeout=self.timeout) as response:
+                    return response.read(4096).decode('utf-8', errors='replace')
+            
+            header_text = _retry_with_backoff(
+                fetch_fn=_fetch_header,
+                retry_count=self.retry_count,
+                retry_delay_base=self.retry_delay_base,
+                operation_name="consensus method header",
+            )
             
             for line in header_text.split('\n'):
                 if line.startswith('consensus-method '):

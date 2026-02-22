@@ -916,8 +916,13 @@ def fetch_collector_consensus_data(authorities=None, progress_logger=None):
             timeout_seconds = COLLECTOR_TIMEOUT_STALE_CACHE
             log_progress(f"no valid cache exists, using {timeout_seconds // 60} minute timeout for initial fetch...")
         
-        # Create fetcher with optional discovered authorities
-        fetcher = CollectorFetcher(timeout=timeout_seconds, authorities=authorities)
+        # Create fetcher with optional discovered authorities and retry support
+        fetcher = CollectorFetcher(
+            timeout=timeout_seconds,
+            authorities=authorities,
+            retry_count=2,           # Retry individual requests within CollectorFetcher
+            retry_delay_base=1.0,    # 1s → 2s backoff per request
+        )
         
         # Fetch all data (votes, bandwidth files, build index)
         data = fetcher.fetch_all()
@@ -1073,11 +1078,19 @@ def fetch_collector_descriptors(progress_logger=None):
         base_url = 'https://collector.torproject.org'
         descs_path = '/recent/relay-descriptors/server-descriptors/'
         
-        # Step 1: Get directory listing
+        # Step 1: Get directory listing (with total timeout + retry)
         log_progress("fetching server descriptor listing...")
-        req = urllib.request.Request(f"{base_url}{descs_path}", headers={'User-Agent': 'Allium/1.0'})
-        with urllib.request.urlopen(req, timeout=timeout_seconds) as response:
-            html = response.read(10 * 1024 * 1024).decode('utf-8', errors='replace')
+        listing_url = f"{base_url}{descs_path}"
+        listing_headers = {'User-Agent': 'Allium/1.0'}
+        raw_listing = _retry_with_backoff(
+            fetch_fn=_fetch_url_with_total_timeout,
+            args=(listing_url, timeout_seconds, listing_headers),
+            retry_count=2,
+            retry_delay_base=1.0,
+            log_fn=log_progress,
+            operation_name="descriptor listing",
+        )
+        html = raw_listing.decode('utf-8', errors='replace')
         
         pattern = r'href="([0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-server-descriptors)"'
         all_files = sorted(re.findall(pattern, html))
@@ -1122,12 +1135,18 @@ def fetch_collector_descriptors(progress_logger=None):
                 all_seen_fps.update(file_result.get('no_cert', []))
                 files_from_cache += 1
             else:
-                # Download and parse this new file
+                # Download and parse this new file (with total timeout + retry)
                 url = f"{base_url}{descs_path}{filename}"
                 try:
-                    req = urllib.request.Request(url, headers={'User-Agent': 'Allium/1.0'})
-                    with urllib.request.urlopen(req, timeout=timeout_seconds) as response:
-                        content = response.read(100 * 1024 * 1024).decode('utf-8', errors='replace')
+                    file_headers = {'User-Agent': 'Allium/1.0'}
+                    raw_content = _retry_with_backoff(
+                        fetch_fn=_fetch_url_with_total_timeout,
+                        args=(url, timeout_seconds, file_headers),
+                        retry_count=2,
+                        retry_delay_base=1.0,
+                        operation_name=f"descriptor file {filename}",
+                    )
+                    content = raw_content.decode('utf-8', errors='replace')
                     
                     # Single-pass parse: fingerprint + family-cert presence
                     cert_fps = set()
