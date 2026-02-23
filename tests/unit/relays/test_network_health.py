@@ -365,11 +365,16 @@ class TestNetworkHealthDashboard(unittest.TestCase):
                         "Intelligence engine total_families should match network health families_count")
 
     def test_happy_family_migration_metrics(self):
-        """Test Happy Family Key Migration metrics with mixed relay versions"""
+        """Test Happy Family Key Migration metrics with mixed relay versions.
+        
+        Verifies that hf_ready_authorities only counts VOTING authorities
+        (excludes non-voting authorities like Serge who have the Authority flag).
+        """
         relay_data = {
             'relays': [
                 {
                     'fingerprint': 'A' * 40,
+                    'nickname': 'moria1',  # Known voting authority name
                     'contact': 'op@example.com',
                     'or_addresses': ['1.2.3.4:9001'],
                     'observed_bandwidth': 1000000,
@@ -425,6 +430,28 @@ class TestNetworkHealthDashboard(unittest.TestCase):
                     'recommended_version': True,
                     'aroi_domain': 'example2.com',
                 },
+                {
+                    # Serge-like non-voting authority: has Authority flag + v0.4.9.x+
+                    # but should NOT be counted in hf_ready_authorities
+                    'fingerprint': 'D' * 40,
+                    'nickname': 'Serge',
+                    'contact': 'serge@example.com',
+                    'or_addresses': ['1.2.3.7:9001'],
+                    'observed_bandwidth': 200000,
+                    'consensus_weight': 20,
+                    'advertised_bandwidth': 250000,
+                    'flags': ['Fast', 'Running', 'V2Dir', 'Authority'],
+                    'running': True,
+                    'country': 'US',
+                    'as': '12345',
+                    'as_name': 'Test AS',
+                    'first_seen': '2023-01-01 00:00:00',
+                    'platform': 'Tor 0.4.9.5 on Linux',
+                    'version': '0.4.9.5',
+                    'version_status': 'recommended',
+                    'recommended_version': True,
+                    'aroi_domain': 'serge.example.com',
+                },
             ]
         }
         
@@ -439,14 +466,18 @@ class TestNetworkHealthDashboard(unittest.TestCase):
         
         health = relays_obj.json['network_health']
         
-        # 2 of 3 relays run v0.4.9.x+
-        self.assertEqual(health['hf_ready_relays'], 2)
+        # 3 of 4 relays run v0.4.9.x+ (A=moria1, C=exit, D=Serge)
+        self.assertEqual(health['hf_ready_relays'], 3)
         self.assertEqual(health['hf_not_ready_relays'], 1)
         
-        # 1 authority relay on v0.4.9.x+
-        self.assertEqual(health['hf_ready_authorities'], 1)
+        # Only 1 VOTING authority on v0.4.9.x+ (moria1).
+        # Serge has Authority flag + v0.4.9.x+ but is NOT a voting authority,
+        # so it must be excluded from hf_ready_authorities.
+        self.assertEqual(health['hf_ready_authorities'], 1,
+                         "hf_ready_authorities should only count voting authorities "
+                         "(moria1=1), excluding non-voting Serge")
         
-        # 1 exit relay ready, 1 guard relay ready (authority with Guard flag)
+        # 1 exit relay ready, 1 guard relay ready (moria1 with Guard flag)
         self.assertEqual(health['hf_ready_exit_relays'], 1)
         self.assertEqual(health['hf_ready_guard_relays'], 1)
         
@@ -455,14 +486,15 @@ class TestNetworkHealthDashboard(unittest.TestCase):
         # No hardcoded "required" method — we only show what Tor says
         self.assertIn('hf_consensus_method_max', health)
         
-        # hf_consensus_total_voters falls back to authority_count from Onionoo
-        # Test data has 1 Authority relay, so expect 1 (not 0)
-        self.assertEqual(health['hf_consensus_total_voters'], 1,
-                         "hf_consensus_total_voters should fall back to authority_count (1) when no collector data")
+        # hf_consensus_total_voters falls back to get_voting_authority_count() = 9
+        # (not authority_count which would include Serge)
+        self.assertEqual(health['hf_consensus_total_voters'], 9,
+                         "hf_consensus_total_voters should fall back to "
+                         "get_voting_authority_count() (9) when no collector data")
         
-        # hf_method_threshold is computed from hf_total_voters: (1*2)//3 + 1 = 1
-        self.assertEqual(health['hf_method_threshold'], 1,
-                         "hf_method_threshold should be computed from fallback voter count")
+        # hf_method_threshold: (9*2)//3 + 1 = 7
+        self.assertEqual(health['hf_method_threshold'], 7,
+                         "hf_method_threshold should be computed from fallback voter count (9)")
         
         # hf_max_method_support falls back to hf_ready_authorities when no collector data
         self.assertEqual(health['hf_max_method_support'], health['hf_ready_authorities'],
@@ -475,11 +507,11 @@ class TestNetworkHealthDashboard(unittest.TestCase):
         self.assertIsNone(health['hf_use_family_ids'])
         self.assertIsNone(health['hf_use_family_lists'])
         
-        # Bandwidth: relay A (1000000) + relay C (800000) = 1800000
-        self.assertEqual(health['hf_ready_bandwidth'], 1800000)
+        # Bandwidth: relay A (1000000) + relay C (800000) + relay D (200000) = 2000000
+        self.assertEqual(health['hf_ready_bandwidth'], 2000000)
         
-        # Ready relay percentage should be correct
-        self.assertAlmostEqual(health['hf_ready_relays_percentage'], 2/3 * 100, places=1)
+        # Ready relay percentage: 3/4 = 75%
+        self.assertAlmostEqual(health['hf_ready_relays_percentage'], 3/4 * 100, places=1)
 
     def test_happy_family_version_edge_cases(self):
         """Test _is_happy_family_ready version parsing edge cases"""

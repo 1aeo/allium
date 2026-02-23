@@ -14,6 +14,7 @@ from .string_utils import format_percentage_from_fraction
 from .consensus.consensus_evaluation import _port_in_rules
 from .country_utils import is_eu_political, is_frontier_country, get_rare_countries_weighted_with_existing_data
 from .uptime_utils import find_relay_uptime_data, calculate_relay_uptime_average
+from .consensus.collector_fetcher import get_voting_authority_names, get_voting_authority_count
 
 
 def _pct(numerator, denominator):
@@ -443,6 +444,11 @@ def calculate_network_health_metrics(relay_set):
     except Exception:
         pass
     
+    # Pre-compute voting authority nicknames for Happy Family DA readiness counting.
+    # Only VOTING authorities matter for consensus method activation — non-voting
+    # authorities like Serge have the Authority flag but don't produce votes.
+    voting_authority_nicknames = {n.lower() for n in get_voting_authority_names()}
+    
     # Pre-compute Happy Family descriptor sets before main loop (enables single-pass counting)
     collector_descs = getattr(relay_set, 'collector_descriptors_data', None)
     family_cert_fps = set()
@@ -805,8 +811,9 @@ def calculate_network_health_metrics(relay_set):
             elif ipv6_support == 'both':
                 operator_ipv6_status[aroi_domain]['has_dual_stack'] = True
         
-        # Happy Family: DA readiness (merged — avoids separate relay pass)
-        if is_authority and is_family_ready:
+        # Happy Family: DA readiness — only count VOTING authorities (excludes Serge
+        # who has Authority flag but doesn't vote on consensus methods)
+        if is_authority and is_family_ready and relay.get('nickname', '').lower() in voting_authority_nicknames:
             family_key_ready_authorities += 1
         
         # Happy Family: descriptor-based family-cert counting (merged — avoids 2 separate relay passes)
@@ -1348,10 +1355,12 @@ def calculate_network_health_metrics(relay_set):
         vals = sorted(use_family_lists_votes.values())
         hf_use_family_lists = vals[len(vals) // 2]
     
-    # Voting authority count — prefer collector data, fall back to Onionoo authority count
+    # Voting authority count — prefer collector data, fall back to known voting authority count.
+    # Uses get_voting_authority_count() (9) instead of authority_count (10) because
+    # non-voting authorities like Serge must not inflate the denominator.
     hf_total_voters = cm_info.get('total_voters', 0)
-    if hf_total_voters == 0 and authority_count > 0:
-        hf_total_voters = authority_count
+    if hf_total_voters == 0:
+        hf_total_voters = get_voting_authority_count()
     
     # Consensus method voting threshold — replicates the formula from Tor's C source:
     # https://gitlab.torproject.org/tpo/core/tor/-/blob/main/src/feature/dirauth/dirvote.c
