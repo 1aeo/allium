@@ -670,7 +670,7 @@ Network Health Dashboard
                     <span class="metric-value" style="{% if relays.json.network_health.hf_consensus_total_voters > 0 and relays.json.network_health.hf_ready_authorities == relays.json.network_health.hf_consensus_total_voters %}color: #28a745;{% elif relays.json.network_health.hf_ready_authorities > 0 %}color: #ff8c00;{% else %}color: #dc3545;{% endif %} font-weight: 700;">
                         {{ relays.json.network_health.hf_ready_authorities }}/{{ relays.json.network_health.hf_consensus_total_voters }}
                     </span>
-                    <span class="metric-label">Dir Authorities on v0.4.9.x+</span>
+                    <span class="metric-label">Voting Dir Authorities on v0.4.9.x+</span>
                 </div>
                 
                 <!-- Row 2: Consensus Method + DAs Support Max Method -->
