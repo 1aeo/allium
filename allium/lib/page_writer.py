@@ -852,8 +852,11 @@ def build_template_args(relay_set, k, v, i, the_prefixed, validated_aroi_domains
             contact_validation_status = relay_set._get_contact_validation_status(members)
         aroi_validation_timestamp = relay_set._aroi_validation_timestamp
     
+    from .bandwidth_formatter import format_data_volume_with_unit
+    
     return {
         'relay_subset': members,
+        'total_data_formatted': format_data_volume_with_unit(i.get("total_data", 0)),
         'bandwidth': bw.format_bandwidth_with_unit(i["bandwidth"], bw_unit),
         'bandwidth_unit': bw_unit,
         'guard_bandwidth': bw.format_bandwidth_with_unit(i["guard_bandwidth"], bw_unit),
