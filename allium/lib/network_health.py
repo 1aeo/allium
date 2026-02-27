@@ -718,6 +718,8 @@ def calculate_network_health_metrics(relay_set):
                 middle_bw_sum += bandwidth
                 middle_cw_values.append(consensus_weight / bandwidth)
         
+                middle_bw_values.append(bandwidth)
+        
         # Total data transferred (cumulative bytes from bandwidth history)
         relay_td = relay.get('total_data', {}).get('5_years', 0)
         network_total_data += relay_td
@@ -727,7 +729,6 @@ def calculate_network_health_metrics(relay_set):
             guard_total_data += relay_td
         else:
             middle_total_data += relay_td
-                middle_bw_values.append(bandwidth)
         
         # Flag-specific bandwidth collection
         if bandwidth > 0:  # Only collect bandwidth for relays with actual bandwidth
