@@ -550,6 +550,7 @@ class Relays:
         try:
             # Use consolidated bandwidth processing with flag analysis
             from .bandwidth_utils import process_all_bandwidth_data_consolidated
+            from .bandwidth_formatter import format_data_volume_with_unit as _fmt_data_vol
             
             # SINGLE PASS PROCESSING: Process all bandwidth data in one optimized loop
             # This includes flag bandwidth analysis similar to uptime processing
@@ -579,6 +580,7 @@ class Relays:
                 if fingerprint in relay_bandwidth_data:
                     bw_data = relay_bandwidth_data[fingerprint]
                     relay["bandwidth_averages"] = bw_data['bandwidth_averages']
+                    relay["total_data"] = bw_data.get('total_data', {})
                     # Store flag bandwidth data for flag bandwidth analysis
                     relay["_flag_bandwidth_data"] = bw_data['flag_data']
                     # Merge overload fields from bandwidth endpoint
@@ -588,12 +590,21 @@ class Relays:
                         relay['overload_fd_exhausted'] = bw_data['overload_fd_exhausted']
                 else:
                     relay["bandwidth_averages"] = {'6_months': 0.0, '1_year': 0.0, '5_years': 0.0}
+                    relay["total_data"] = {}
                     relay["_flag_bandwidth_data"] = {}
                 
                 # Compute stability using helper with bandwidth formatter
                 # (overload_general_timestamp from /details is already in relay,
                 #  overload_ratelimits/overload_fd_exhausted now merged from /bandwidth)
                 relay.update(compute_relay_stability(relay, now_timestamp, self.bandwidth_formatter))
+                
+                # Pre-format total data transferred display strings
+                td = relay.get("total_data", {})
+                best = next((p for p in ('5_years', '1_year', '6_months', '1_month') if td.get(p, 0) > 0), None)
+                relay["total_data_display"] = _fmt_data_vol(td[best]) if best else "N/A"
+                relay["total_data_period"] = best.replace('_', ' ') if best else ""
+                for _p in ('1_month', '6_months', '1_year', '5_years'):
+                    relay[f"total_data_{_p}_display"] = _fmt_data_vol(td.get(_p, 0))
             
             # Process flag bandwidth display data
             self._process_flag_bandwidth_display(network_flag_statistics)
@@ -607,12 +618,34 @@ class Relays:
             else:
                 self.network_bandwidth_percentiles = None
                 self._log_progress("Network bandwidth percentiles calculation failed: insufficient data")
+            
+            # Aggregate total_data to sorted groups (can't be done during _categorize
+            # since bandwidth data isn't available yet at that point in the pipeline)
+            self._aggregate_total_data_to_groups()
                 
         except Exception as e:
             # Fallback gracefully if bandwidth processing fails
             print(f"Warning: Bandwidth processing failed ({e}), continuing without bandwidth metrics")
             self._consolidated_bandwidth_results = None
             self.network_bandwidth_percentiles = None
+
+    def _aggregate_total_data_to_groups(self):
+        """Aggregate per-relay total_data into sorted groups (contact, family, AS, etc.).
+        
+        Called after _reprocess_bandwidth_data() because total_data isn't available
+        during _categorize() (bandwidth API data hasn't been fetched yet at that point).
+        """
+        from .bandwidth_formatter import format_data_volume_with_unit
+        
+        for category in self.json.get("sorted", {}):
+            for key, group_data in self.json["sorted"][category].items():
+                total = 0
+                for idx in group_data.get("relays", []):
+                    total += self.json["relays"][idx].get("total_data", {}).get("5_years", 0)
+                group_data["total_data"] = total
+                # Update pre-computed display dict if it exists
+                if "display" in group_data:
+                    group_data["display"]["total_data_formatted"] = format_data_volume_with_unit(total)
 
     def _reprocess_collector_data(self):
         """

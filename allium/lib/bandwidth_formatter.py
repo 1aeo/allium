@@ -173,4 +173,47 @@ def determine_unit_filter(bandwidth_bytes, use_bits=False):
 def format_bandwidth_filter(bandwidth_bytes, unit=None, use_bits=False, decimal_places=2):
     """Jinja2 filter for formatting bandwidth with optional unit specification."""
     formatter = BandwidthFormatter(use_bits=use_bits)
-    return formatter.format_bandwidth(bandwidth_bytes, unit, decimal_places) 
+    return formatter.format_bandwidth(bandwidth_bytes, unit, decimal_places)
+
+
+# =============================================================================
+# CUMULATIVE DATA VOLUME FORMATTING (for total data transferred)
+# =============================================================================
+
+def format_data_volume(total_bytes):
+    """Format cumulative data volume in human-readable form.
+    
+    Unlike bandwidth formatting (bytes/sec rates), this formats total bytes
+    transferred over a time period (e.g., '3.74 TB', '162.93 GB').
+    
+    Args:
+        total_bytes (float): Total bytes transferred
+    Returns:
+        tuple: (formatted_value_str, unit_str) e.g. ('3.74', 'TB')
+    """
+    if total_bytes >= 1e15:
+        return f"{total_bytes / 1e15:.2f}", "PB"
+    elif total_bytes >= 1e12:
+        return f"{total_bytes / 1e12:.2f}", "TB"
+    elif total_bytes >= 1e9:
+        return f"{total_bytes / 1e9:.2f}", "GB"
+    elif total_bytes >= 1e6:
+        return f"{total_bytes / 1e6:.2f}", "MB"
+    else:
+        return f"{total_bytes / 1e3:.2f}", "KB"
+
+
+def format_data_volume_with_unit(total_bytes):
+    """Format cumulative data volume as a single string like '3.74 TB'.
+    
+    Returns 'N/A' for zero, negative, or falsy values.
+    
+    Args:
+        total_bytes (float): Total bytes transferred
+    Returns:
+        str: Formatted string e.g. '3.74 TB' or 'N/A'
+    """
+    if not total_bytes or total_bytes <= 0:
+        return "N/A"
+    value, unit = format_data_volume(total_bytes)
+    return f"{value} {unit}"
