@@ -42,6 +42,7 @@
         <a href="#ipv4_leaders" class="aroi-nav-link" title="IPv4 Address Leaders: Operators with the highest quantity of unique IPv4 addresses across their relay infrastructure">🌐 IPv4 Leaders</a>
         <a href="#ipv6_leaders" class="aroi-nav-link" title="IPv6 Address Leaders: Operators with the highest quantity of unique IPv6 addresses across their relay infrastructure">🔮 IPv6 Leaders</a>
         <a href="#validated_relays" class="aroi-nav-link" title="AROI Validation Champions: Operators with the most relays that have valid AROI cryptographic proofs (DNS-RSA or URI-RSA), demonstrating verified operator identity and accountability">✅ Validation Champions</a>
+        <a href="#total_data_champions" class="aroi-nav-link" title="Operators ranked by total cumulative data transferred (read + write) over 5-year bandwidth history">📦 Total Data Champions</a>
     </div>
 </nav>
 
@@ -110,6 +111,8 @@
         {{ champion_badge("ipv6_leaders", relays.json.aroi_leaderboards.leaderboards.ipv6_leaders, "IPv6 Pioneer", "🔮", "panel-info", "aroi-champion-ipv6", page_ctx.path_prefix, relays.use_bits) }}
         
         {{ champion_badge("validated_relays", relays.json.aroi_leaderboards.leaderboards.validated_relays, "AROI Validation Champion", "✅", "panel-success", "aroi-champion-validation", page_ctx.path_prefix, relays.use_bits) }}
+        
+        {{ champion_badge("total_data_champions", relays.json.aroi_leaderboards.leaderboards.total_data_champions, "Total Data Transferred Champion", "📦", "panel-info", "aroi-champion-total-data", page_ctx.path_prefix, relays.use_bits) }}
     </div>
 </section>
 
@@ -174,6 +177,9 @@
     <!-- AROI Validation Champions -->
     {{ top3_table("AROI Validation Champions", "✅", relays.json.aroi_leaderboards.leaderboards.validated_relays, ["Validation King", "Validation Commander", "Validation Hero"], "validated_relays", page_ctx, relays.use_bits) }}
 
+    <!-- Total Data Transferred Champions -->
+    {{ top3_table("Total Data Transferred Champions", "📦", relays.json.aroi_leaderboards.leaderboards.total_data_champions, ["Data Transfer Legend", "Data Transfer Master", "Data Transfer Champion"], "total_data_champions", page_ctx, relays.use_bits) }}
+
 </section>
 
 <!-- ===================================================================== -->
@@ -220,10 +226,10 @@
     </section>
 
     <!-- Paginated Generic Categories -->
-    {% for category_key in ['most_diverse', 'platform_diversity', 'non_eu_leaders', 'frontier_builders', 'network_veterans', 'reliability_masters', 'legacy_titans', 'bandwidth_masters', 'bandwidth_legends'] %}
+    {% for category_key in ['most_diverse', 'platform_diversity', 'non_eu_leaders', 'frontier_builders', 'network_veterans', 'reliability_masters', 'legacy_titans', 'bandwidth_masters', 'bandwidth_legends', 'total_data_champions'] %}
         {% set category_name = relays.json.aroi_leaderboards.summary.categories[category_key] %}
         {% set category_data = relays.json.aroi_leaderboards.leaderboards[category_key] %}
-        {% set emoji = '🌈' if category_key == 'most_diverse' else '💻' if category_key == 'platform_diversity' else '🌍' if category_key == 'non_eu_leaders' else '🏴‍☠️' if category_key == 'frontier_builders' else '🏆' if category_key == 'network_veterans' else '⏰' if category_key == 'reliability_masters' else '👑' if category_key == 'legacy_titans' else '🚀' if category_key == 'bandwidth_masters' else '🌟' if category_key == 'bandwidth_legends' else '🌐' if category_key == 'ipv4_leaders' else '🔮' if category_key == 'ipv6_leaders' else '' %}
+        {% set emoji = '🌈' if category_key == 'most_diverse' else '💻' if category_key == 'platform_diversity' else '🌍' if category_key == 'non_eu_leaders' else '🏴‍☠️' if category_key == 'frontier_builders' else '🏆' if category_key == 'network_veterans' else '⏰' if category_key == 'reliability_masters' else '👑' if category_key == 'legacy_titans' else '🚀' if category_key == 'bandwidth_masters' else '🌟' if category_key == 'bandwidth_legends' else '📦' if category_key == 'total_data_champions' else '🌐' if category_key == 'ipv4_leaders' else '🔮' if category_key == 'ipv6_leaders' else '' %}
         
         <section id="{{ category_key }}" class="aroi-section">
             <h3 title="Operators ranked by 
@@ -236,6 +242,7 @@
             {%- elif category_key == 'legacy_titans' -%}5-year average uptime reliability scores from Onionoo API data for operators with 25+ relays. Formula: reliability_score = average_5_year_uptime. Measures long-term operational stability and reliability over 5-year historical period using simple average uptime percentages
             {%- elif category_key == 'bandwidth_masters' -%}6-month average bandwidth served from Onionoo API data for operators with 25+ relays. Formula: bandwidth_score = average_6_month_bandwidth. Measures recent bandwidth served performance and network contribution
             {%- elif category_key == 'bandwidth_legends' -%}5-year average bandwidth served from Onionoo API data for operators with 25+ relays. Formula: bandwidth_score = average_5_year_bandwidth. Measures sustained bandwidth served capacity and long-term network contribution
+            {%- elif category_key == 'total_data_champions' -%}total cumulative data transferred (read + write) over 5-year bandwidth history from Onionoo API. Recognizes operators for sustained traffic contribution to the Tor network
             {%- elif category_key == 'ipv4_leaders' -%}quantity of unique IPv4 addresses per operator across their relay infrastructure. Measures IPv4 address diversity and network distribution capabilities
             {%- elif category_key == 'ipv6_leaders' -%}quantity of unique IPv6 addresses per operator across their relay infrastructure. Measures IPv6 adoption and modern network infrastructure capabilities
             {%- endif -%}">{% if emoji and category_key not in ['reliability_masters', 'legacy_titans', 'bandwidth_masters', 'bandwidth_legends'] %}{{ emoji }} {% endif %}{{ category_name }}</h3>
@@ -292,6 +299,7 @@
                     <li><strong>🚀 Bandwidth Served Masters:</strong> 6-month average bandwidth performance (25+ relays, recent bandwidth served excellence)</li>
                     <li><strong>🌟 Bandwidth Served Legends:</strong> 5-year average bandwidth performance (25+ relays, sustained bandwidth served capacity)</li>
                     <li><strong>✅ AROI Validation Champions:</strong> Most relays with valid AROI cryptographic proofs (DNS-RSA or URI-RSA verification)</li>
+                    <li><strong>📦 Total Data Transferred Champions:</strong> Operators ranked by total cumulative data transferred (read + write) over 5-year bandwidth history</li>
                 </ul>
             </div>
         </div>

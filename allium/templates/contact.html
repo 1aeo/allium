@@ -98,6 +98,10 @@
                         {% endif %}
                     </li>
                     
+                    {% if contact_display_data and contact_display_data.total_data_formatted and contact_display_data.total_data_formatted != 'N/A' %}
+                    <li><strong><span title="Total data transferred by all relays belonging to this operator (read + write, 5yr history). Source: Onionoo /bandwidth endpoint.">Total Data Transferred</span>:</strong> {{ contact_display_data.total_data_formatted }}</li>
+                    {% endif %}
+                    
                     <li><strong><span title="Network influence represents the percentage of overall consensus weight, indicating relative importance in the Tor network across guard, middle, and exit positions">Network Influence</span>:</strong> {{ "%.2f%%"|format(consensus_weight_fraction * 100) }} of overall consensus weight
                         {% if contact_display_data and contact_display_data.consensus_weight_breakdown %}
                             (<span title="Consensus weight breakdown by position">{{ contact_display_data.consensus_weight_breakdown }}</span>)

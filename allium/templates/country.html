@@ -29,5 +29,8 @@
         )
         {%- endif %}</li>
     <li><strong><span title="Network position indicates the strategic role distribution of relays">Network Position</span>:</strong> {{ network_position.formatted_string }}</li>
+    {% if total_data_formatted and total_data_formatted != 'N/A' %}
+    <li><strong><span title="Total data transferred by all relays in this country (read + write, 5yr). Source: Onionoo /bandwidth endpoint.">Total Data Transferred</span>:</strong> {{ total_data_formatted }}</li>
+    {% endif %}
     <li><a href="https://routefluxmap.1aeo.com/#CC={{ country_abbr }}" target="_blank" rel="noopener" title="View {{ country_name }} on RouteFluxMap interactive visualization">🗺️ View on Interactive Map</a></li>
 </ul>{% endblock %}
