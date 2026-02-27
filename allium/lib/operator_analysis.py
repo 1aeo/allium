@@ -92,7 +92,11 @@ def get_leaderboard_category_info(category):
         'reliability_masters': _info('Reliability Master', '⏰'),
         'legacy_titans': _info('Legacy Titan', '👑'),
         'ipv4_leaders': _info('IPv4 Address Leaders', '🌐'),
-        'ipv6_leaders': _info('IPv6 Address Leaders', '🔮')
+        'ipv6_leaders': _info('IPv6 Address Leaders', '🔮'),
+        'bandwidth_masters': _info('Bandwidth Served Master', '🚀'),
+        'bandwidth_legends': _info('Bandwidth Served Legend', '🌟'),
+        'validated_relays': _info('AROI Validation Champion', '✅'),
+        'total_data_champions': _info('Total Data Transferred Champion', '📦'),
     }
     
     # Default for unknown categories
@@ -513,6 +517,11 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
     
     # 2. Consensus weight breakdown by role
     display_data['consensus_weight_breakdown'] = _format_cw_breakdown(i)
+    
+    # 2b. Total data transferred (aggregate across all operator relays)
+    from .bandwidth_formatter import format_data_volume_with_unit
+    operator_total_data = sum(r.get('total_data', {}).get('5_years', 0) for r in members)
+    display_data['total_data_formatted'] = format_data_volume_with_unit(operator_total_data)
     
     # 3. Operator intelligence formatting (reuse existing contact intelligence data)
     intelligence_formatted = {}

@@ -462,6 +462,7 @@ def calculate_network_health_metrics(relay_set):
     fast_count = stable_count = v2dir_count = hsdir_count = 0
     stabledesc_count = sybil_count = 0
     total_bandwidth = guard_bandwidth = exit_bandwidth = middle_bandwidth = 0
+    network_total_data = exit_total_data = guard_total_data = middle_total_data = 0
     fast_bandwidth_values = []
     stable_bandwidth_values = []
     authority_bandwidth_values = []
@@ -716,6 +717,16 @@ def calculate_network_health_metrics(relay_set):
                 middle_cw_sum += consensus_weight
                 middle_bw_sum += bandwidth
                 middle_cw_values.append(consensus_weight / bandwidth)
+        
+        # Total data transferred (cumulative bytes from bandwidth history)
+        relay_td = relay.get('total_data', {}).get('5_years', 0)
+        network_total_data += relay_td
+        if is_exit:
+            exit_total_data += relay_td
+        elif is_guard:
+            guard_total_data += relay_td
+        else:
+            middle_total_data += relay_td
                 middle_bw_values.append(bandwidth)
         
         # Flag-specific bandwidth collection
@@ -830,6 +841,12 @@ def calculate_network_health_metrics(relay_set):
             operator_desc_counts[aroi_domain]['seen'] += 1
             if fp in family_cert_fps:
                 operator_desc_counts[aroi_domain]['cert'] += 1
+    
+    # Total data transferred metrics
+    health_metrics['network_total_data'] = network_total_data
+    health_metrics['exit_total_data'] = exit_total_data
+    health_metrics['guard_total_data'] = guard_total_data
+    health_metrics['middle_total_data'] = middle_total_data
     
     # Age statistics
     if relay_ages_days:
@@ -1189,6 +1206,13 @@ def calculate_network_health_metrics(relay_set):
     
     # Happy Family: bandwidth formatting
     health_metrics['hf_ready_bandwidth_formatted'] = _fmt_bw(bw_fmt, family_key_ready_bandwidth, total_unit)
+    
+    # Total data transferred formatting (cumulative bytes, not rate)
+    from .bandwidth_formatter import format_data_volume_with_unit
+    health_metrics['network_total_data_formatted'] = format_data_volume_with_unit(health_metrics.get('network_total_data', 0))
+    health_metrics['exit_total_data_formatted'] = format_data_volume_with_unit(health_metrics.get('exit_total_data', 0))
+    health_metrics['guard_total_data_formatted'] = format_data_volume_with_unit(health_metrics.get('guard_total_data', 0))
+    health_metrics['middle_total_data_formatted'] = format_data_volume_with_unit(health_metrics.get('middle_total_data', 0))
     
     # Uptime metrics - reuse existing consolidated uptime calculations for efficiency
     if hasattr(relay_set, '_consolidated_uptime_results') and relay_set._consolidated_uptime_results:
