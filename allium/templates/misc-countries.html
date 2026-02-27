@@ -117,6 +117,7 @@
                     <a href="countries-by-unique-as-count.html">Unique AS</a>
                 </th>
             {% endif -%}
+            <th title="Total data transferred (read + write) over 5-year bandwidth history. Source: Onionoo /bandwidth endpoint.">Total Data</th>
         </tr>
         <tbody>
             {% for k, v in relays.json['sorted'].get('country', {}).items()|sort(attribute=sorted_by,
@@ -140,6 +141,7 @@
                     <td>{{ v['unique_contact_count'] }}</td>
                     <td>{{ v['unique_family_count'] }}</td>
                     <td>{{ v['unique_as_count'] }}</td>
+                    <td>{{ d.total_data_formatted }}</td>
                 </tr>
             {% endfor -%}
         </tbody>

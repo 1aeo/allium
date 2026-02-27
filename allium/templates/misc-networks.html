@@ -116,6 +116,7 @@
                     <a href="networks-by-unique-family-count.html">Unique Families</a>
                 </th>
             {% endif -%}
+            <th title="Total data transferred (read + write) over 5-year bandwidth history. Source: Onionoo /bandwidth endpoint.">Total Data</th>
         </tr>
         <tbody>
             {% for k, v in relays.json['sorted'].get('as', {}).items()|sort(attribute=sorted_by,
@@ -152,6 +153,7 @@
                     <td class="text-center rc-data">{{ d.count_combined }}</td>
                     <td>{{ v['unique_contact_count'] }}</td>
                     <td>{{ v['unique_family_count'] }}</td>
+                    <td>{{ d.total_data_formatted }}</td>
                 </tr>
             {% endfor -%}
         </tbody>
