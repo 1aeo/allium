@@ -518,10 +518,10 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
     # 2. Consensus weight breakdown by role
     display_data['consensus_weight_breakdown'] = _format_cw_breakdown(i)
     
-    # 2b. Total data transferred (aggregate across all operator relays)
+    # 2b. Total data transferred (aggregate across all operator relays, respects use_bits flag)
     from .bandwidth_formatter import format_data_volume_with_unit
     operator_total_data = sum(r.get('total_data', {}).get('5_years', 0) for r in members)
-    display_data['total_data_formatted'] = format_data_volume_with_unit(operator_total_data)
+    display_data['total_data_formatted'] = format_data_volume_with_unit(operator_total_data, use_bits=relay_set.use_bits)
     
     # 3. Operator intelligence formatting (reuse existing contact intelligence data)
     intelligence_formatted = {}

@@ -550,7 +550,9 @@ class Relays:
         try:
             # Use consolidated bandwidth processing with flag analysis
             from .bandwidth_utils import process_all_bandwidth_data_consolidated
-            from .bandwidth_formatter import format_data_volume_with_unit as _fmt_data_vol
+            from .bandwidth_formatter import format_data_volume_with_unit
+            _use_bits = self.use_bits
+            _fmt_data_vol = lambda v: format_data_volume_with_unit(v, use_bits=_use_bits)
             
             # SINGLE PASS PROCESSING: Process all bandwidth data in one optimized loop
             # This includes flag bandwidth analysis similar to uptime processing
@@ -636,6 +638,7 @@ class Relays:
         during _categorize() (bandwidth API data hasn't been fetched yet at that point).
         """
         from .bandwidth_formatter import format_data_volume_with_unit
+        _use_bits = self.use_bits
         
         for category in self.json.get("sorted", {}):
             for key, group_data in self.json["sorted"][category].items():
@@ -645,7 +648,7 @@ class Relays:
                 group_data["total_data"] = total
                 # Update pre-computed display dict if it exists
                 if "display" in group_data:
-                    group_data["display"]["total_data_formatted"] = format_data_volume_with_unit(total)
+                    group_data["display"]["total_data_formatted"] = format_data_volume_with_unit(total, use_bits=_use_bits)
 
     def _reprocess_collector_data(self):
         """

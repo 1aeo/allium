@@ -1208,12 +1208,13 @@ def calculate_network_health_metrics(relay_set):
     # Happy Family: bandwidth formatting
     health_metrics['hf_ready_bandwidth_formatted'] = _fmt_bw(bw_fmt, family_key_ready_bandwidth, total_unit)
     
-    # Total data transferred formatting (cumulative bytes, not rate)
+    # Total data transferred formatting (cumulative bytes, not rate — respects use_bits flag)
     from .bandwidth_formatter import format_data_volume_with_unit
-    health_metrics['network_total_data_formatted'] = format_data_volume_with_unit(health_metrics.get('network_total_data', 0))
-    health_metrics['exit_total_data_formatted'] = format_data_volume_with_unit(health_metrics.get('exit_total_data', 0))
-    health_metrics['guard_total_data_formatted'] = format_data_volume_with_unit(health_metrics.get('guard_total_data', 0))
-    health_metrics['middle_total_data_formatted'] = format_data_volume_with_unit(health_metrics.get('middle_total_data', 0))
+    _use_bits = bw_fmt.use_bits
+    health_metrics['network_total_data_formatted'] = format_data_volume_with_unit(health_metrics.get('network_total_data', 0), use_bits=_use_bits)
+    health_metrics['exit_total_data_formatted'] = format_data_volume_with_unit(health_metrics.get('exit_total_data', 0), use_bits=_use_bits)
+    health_metrics['guard_total_data_formatted'] = format_data_volume_with_unit(health_metrics.get('guard_total_data', 0), use_bits=_use_bits)
+    health_metrics['middle_total_data_formatted'] = format_data_volume_with_unit(health_metrics.get('middle_total_data', 0), use_bits=_use_bits)
     
     # Uptime metrics - reuse existing consolidated uptime calculations for efficiency
     if hasattr(relay_set, '_consolidated_uptime_results') and relay_set._consolidated_uptime_results:

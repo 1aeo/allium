@@ -180,40 +180,61 @@ def format_bandwidth_filter(bandwidth_bytes, unit=None, use_bits=False, decimal_
 # CUMULATIVE DATA VOLUME FORMATTING (for total data transferred)
 # =============================================================================
 
-def format_data_volume(total_bytes):
+def format_data_volume(total_bytes, use_bits=False):
     """Format cumulative data volume in human-readable form.
     
     Unlike bandwidth formatting (bytes/sec rates), this formats total bytes
     transferred over a time period (e.g., '3.74 TB', '162.93 GB').
     
+    Respects the same use_bits flag as BandwidthFormatter so that when the
+    CLI ``--display-bandwidth-units bits`` option is active, volumes are
+    shown in bits (Tbit, Gbit, …) instead of bytes (TB, GB, …).
+    
     Args:
         total_bytes (float): Total bytes transferred
+        use_bits (bool): If True, display in bits (Tbit, Gbit, …).
+                         If False, display in bytes (TB, GB, …).  Default False.
     Returns:
         tuple: (formatted_value_str, unit_str) e.g. ('3.74', 'TB')
     """
-    if total_bytes >= 1e15:
-        return f"{total_bytes / 1e15:.2f}", "PB"
-    elif total_bytes >= 1e12:
-        return f"{total_bytes / 1e12:.2f}", "TB"
-    elif total_bytes >= 1e9:
-        return f"{total_bytes / 1e9:.2f}", "GB"
-    elif total_bytes >= 1e6:
-        return f"{total_bytes / 1e6:.2f}", "MB"
+    if use_bits:
+        total_bits = total_bytes * 8
+        if total_bits >= 1e15:
+            return f"{total_bits / 1e15:.2f}", "Pbit"
+        elif total_bits >= 1e12:
+            return f"{total_bits / 1e12:.2f}", "Tbit"
+        elif total_bits >= 1e9:
+            return f"{total_bits / 1e9:.2f}", "Gbit"
+        elif total_bits >= 1e6:
+            return f"{total_bits / 1e6:.2f}", "Mbit"
+        else:
+            return f"{total_bits / 1e3:.2f}", "Kbit"
     else:
-        return f"{total_bytes / 1e3:.2f}", "KB"
+        if total_bytes >= 1e15:
+            return f"{total_bytes / 1e15:.2f}", "PB"
+        elif total_bytes >= 1e12:
+            return f"{total_bytes / 1e12:.2f}", "TB"
+        elif total_bytes >= 1e9:
+            return f"{total_bytes / 1e9:.2f}", "GB"
+        elif total_bytes >= 1e6:
+            return f"{total_bytes / 1e6:.2f}", "MB"
+        else:
+            return f"{total_bytes / 1e3:.2f}", "KB"
 
 
-def format_data_volume_with_unit(total_bytes):
+def format_data_volume_with_unit(total_bytes, use_bits=False):
     """Format cumulative data volume as a single string like '3.74 TB'.
     
     Returns 'N/A' for zero, negative, or falsy values.
+    Respects the same use_bits flag as BandwidthFormatter.
     
     Args:
         total_bytes (float): Total bytes transferred
+        use_bits (bool): If True, display in bits.  Default False.
     Returns:
         str: Formatted string e.g. '3.74 TB' or 'N/A'
     """
     if not total_bytes or total_bytes <= 0:
         return "N/A"
-    value, unit = format_data_volume(total_bytes)
+    value, unit = format_data_volume(total_bytes, use_bits=use_bits)
     return f"{value} {unit}"
