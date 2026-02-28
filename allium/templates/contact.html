@@ -162,8 +162,17 @@
                 </li>
                 {% endif %}
                 
-                {% if intelligence.family_cert_migration %}
-                <li id="family-cert"><a href="#family-cert" style="color: inherit; text-decoration: none;"><strong><span title="Relays publishing a family-cert entry in their server descriptor, proving family membership via an ed25519 family key per Proposal 321. Source: CollecTor server descriptors.">Family Certificate Migration</span>:</strong></a> {{ intelligence.family_cert_migration }}</li>
+                {% if intelligence.family_support_counts %}
+                {% set fsc = intelligence.family_support_counts %}
+                {% set fsc_total = fsc.get('both', 0) + fsc.get('happy_families', 0) + fsc.get('my_family', 0) + fsc.get('none', 0) %}
+                {% if fsc_total > 0 %}
+                <li id="family-support"><a href="#family-support" style="color: inherit; text-decoration: none;"><strong><span title="Family membership method breakdown per relay: Both = Happy Families (family-cert) and MyFamily, Happy Families = family-cert only, MyFamily = legacy only, None = no family membership. Source: CollecTor server descriptors.">Family Support</span>:</strong></a>
+                    {% if fsc.get('both', 0) > 0 %}<span style="color: #28a745;">{{ fsc.both }} Both, Happy Families and MyFamily ({{ (fsc.both / fsc_total * 100)|round(0)|int }}%)</span>{% if fsc.get('happy_families', 0) > 0 or fsc.get('my_family', 0) > 0 or fsc.get('none', 0) > 0 %}, {% endif %}{% endif %}
+                    {% if fsc.get('happy_families', 0) > 0 %}<span style="color: #28a745;">{{ fsc.happy_families }} Happy Families ({{ (fsc.happy_families / fsc_total * 100)|round(0)|int }}%)</span>{% if fsc.get('my_family', 0) > 0 or fsc.get('none', 0) > 0 %}, {% endif %}{% endif %}
+                    {% if fsc.get('my_family', 0) > 0 %}<span style="color: #dc3545;">{{ fsc.my_family }} MyFamily ({{ (fsc.my_family / fsc_total * 100)|round(0)|int }}%)</span>{% if fsc.get('none', 0) > 0 %}, {% endif %}{% endif %}
+                    {% if fsc.get('none', 0) > 0 %}<span style="color: #6c757d;">{{ fsc.none }} None ({{ (fsc.none / fsc_total * 100)|round(0)|int }}%)</span>{% endif %}
+                </li>
+                {% endif %}
                 {% endif %}
             </ul>
         </div>
