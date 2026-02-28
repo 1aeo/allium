@@ -1182,8 +1182,8 @@ def _format_leaderboard_entries(leaderboards, aroi_operators, relays_instance):
                     metrics['validated_bandwidth'], relays_instance.bandwidth_formatter
                 )
             
-            # Format total data transferred for all categories (reused in template, respects use_bits flag)
-            formatted_total_data_transferred = format_data_volume_with_unit(metrics.get('total_data_transferred', 0), use_bits=relays_instance.use_bits)
+            # Format total data transferred for all categories (reused in template)
+            formatted_total_data_transferred = format_data_volume_with_unit(metrics.get('total_data_transferred', 0))
 
             
             display_name = metrics['aroi_domain'] if metrics['aroi_domain'] and metrics['aroi_domain'] != 'none' else operator_key

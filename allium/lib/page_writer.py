@@ -856,7 +856,7 @@ def build_template_args(relay_set, k, v, i, the_prefixed, validated_aroi_domains
     
     return {
         'relay_subset': members,
-        'total_data_formatted': format_data_volume_with_unit(i.get("total_data", 0), use_bits=relay_set.use_bits),
+        'total_data_formatted': format_data_volume_with_unit(i.get("total_data", 0)),
         'bandwidth': bw.format_bandwidth_with_unit(i["bandwidth"], bw_unit),
         'bandwidth_unit': bw_unit,
         'guard_bandwidth': bw.format_bandwidth_with_unit(i["guard_bandwidth"], bw_unit),
