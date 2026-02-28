@@ -61,19 +61,26 @@ ENV.filters['format_timestamp_ago'] = format_timestamp_ago
 # HELPER: Partition effective_family by family-cert status
 # ============================================================================
 
-def _partition_family_lists(relay, family_cert_fps):
+def _partition_family_lists(relay, family_cert_fps, fp_to_family_key, family_key_to_fps):
     """Partition effective_family by family-cert status for relay-info template.
 
     Happy Families (family-cert) relationships are always mutual — no alleged/indirect
     possible. Only effective_family is partitioned; alleged/indirect stay as-is (MyFamily only).
 
     Sets 2 underscore-prefixed keys on relay dict (follows _flags_html convention):
-      _hf_effective  — effective family members WITH family-cert
+      _hf_effective  — all relays sharing same family-cert key
       _mf_effective  — effective family members WITHOUT family-cert
     """
+    fp = relay.get('fingerprint', '').upper()
     effective = relay.get('effective_family') or []
-    relay['_hf_effective'] = [fp for fp in effective if fp.upper() in family_cert_fps]
-    relay['_mf_effective'] = [fp for fp in effective if fp.upper() not in family_cert_fps]
+
+    family_key = fp_to_family_key.get(fp)
+    if family_key:
+        relay['_hf_effective'] = family_key_to_fps.get(family_key, [])
+    else:
+        relay['_hf_effective'] = []
+
+    relay['_mf_effective'] = [f for f in effective if f.upper() not in family_cert_fps]
 
 
 # Multiprocessing globals (initialized via fork for copy-on-write memory sharing)
@@ -1061,8 +1068,10 @@ def write_relay_info(relay_set):
     validated_aroi_domains = getattr(relay_set, 'validated_aroi_domains', set())
     aroi_validation_timestamp = relay_set._aroi_validation_timestamp
     base_url = relay_set.base_url
-    # Pre-fetch family cert set for partitioned family display (O(1) per member)
+    # Pre-fetch family cert data for partitioned family display (O(1) per member)
     family_cert_fps = getattr(relay_set, '_family_cert_fps_cache', set())
+    fp_to_family_key = getattr(relay_set, '_fp_to_family_key', {})
+    family_key_to_fps = getattr(relay_set, '_family_key_to_fps', {})
 
     for relay in relay_list:
         if not relay["fingerprint"].isalnum():
@@ -1082,7 +1091,7 @@ def write_relay_info(relay_set):
         page_ctx = full_context
         
         # Partition family lists by family-cert status for template display
-        _partition_family_lists(relay, family_cert_fps)
+        _partition_family_lists(relay, family_cert_fps, fp_to_family_key, family_key_to_fps)
         
         rendered = template.render(
             relay=relay, page_ctx=page_ctx, relays=relay_set, contact_display_data=contact_display_data,

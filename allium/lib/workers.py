@@ -5,6 +5,7 @@ API worker functions for fetching data from multiple sources.
 Extracted from the original monolithic Relays class for multi-API support.
 """
 
+import base64
 import json
 import logging
 import os
@@ -1159,36 +1160,74 @@ def fetch_collector_descriptors(progress_logger=None):
                     )
                     content = raw_content.decode('utf-8', errors='replace')
                     
-                    # Single-pass parse: fingerprint + family-cert presence
+                    # Single-pass parse: fingerprint + family-cert presence + family key extraction
                     cert_fps = set()
                     no_cert_fps = set()
+                    fp_to_family_key = {}
                     current_fp = None
                     has_cert = False
+                    in_cert_block = False
+                    cert_b64_lines = []
+                    current_family_key = None
                     
                     for line in content.split('\n'):
+                        if in_cert_block:
+                            if line.startswith('-----END'):
+                                in_cert_block = False
+                                try:
+                                    cert_bytes = base64.b64decode(''.join(cert_b64_lines))
+                                    # Family key is the SIGNING key (ext type 0x04),
+                                    # not the certified key (which is per-relay identity).
+                                    if len(cert_bytes) > 40:
+                                        n_ext = cert_bytes[39]
+                                        off = 40
+                                        for _ in range(n_ext):
+                                            if off + 4 > len(cert_bytes):
+                                                break
+                                            ext_len = int.from_bytes(cert_bytes[off:off+2], 'big')
+                                            ext_type = cert_bytes[off+2]
+                                            if ext_type == 0x04:
+                                                current_family_key = cert_bytes[off+4:off+4+ext_len-2].hex().upper()
+                                                break
+                                            off += 2 + ext_len
+                                except Exception:
+                                    pass
+                                cert_b64_lines = []
+                            elif not line.startswith('-----'):
+                                cert_b64_lines.append(line.strip())
+                            continue
+                        
                         if line.startswith('router '):
                             if current_fp is not None:
                                 if has_cert:
                                     cert_fps.add(current_fp)
+                                    if current_family_key:
+                                        fp_to_family_key[current_fp] = current_family_key
                                 else:
                                     no_cert_fps.add(current_fp)
                             current_fp = None
                             has_cert = False
+                            current_family_key = None
                         elif line.startswith('fingerprint '):
                             current_fp = line[12:].replace(' ', '').upper()
                         elif line == 'family-cert':
                             has_cert = True
+                            in_cert_block = True
+                            cert_b64_lines = []
                     
                     if current_fp is not None:
                         if has_cert:
                             cert_fps.add(current_fp)
+                            if current_family_key:
+                                fp_to_family_key[current_fp] = current_family_key
                         else:
                             no_cert_fps.add(current_fp)
                     
-                    # Cache this file's parsed result (compact: just FP lists)
+                    # Cache this file's parsed result
                     file_cache[filename] = {
                         'cert': list(cert_fps),
                         'no_cert': list(no_cert_fps),
+                        'cert_keys': fp_to_family_key,
                     }
                     
                     all_cert_fps.update(cert_fps)
@@ -1211,6 +1250,7 @@ def fetch_collector_descriptors(progress_logger=None):
         # should NOT be counted. Rebuild from chronological order:
         final_cert_fps = set()
         final_seen_fps = set()
+        merged_fp_to_key = {}
         for filename in target_files:
             if filename in file_cache:
                 file_result = file_cache[filename]
@@ -1221,6 +1261,21 @@ def fetch_collector_descriptors(progress_logger=None):
                 final_cert_fps -= no_cert_in_file
                 final_seen_fps.update(cert_in_file)
                 final_seen_fps.update(no_cert_in_file)
+                # Merge fp→family_key (later files override)
+                for fp, key in file_result.get('cert_keys', {}).items():
+                    merged_fp_to_key[fp] = key
+                # Remove key mapping for relays that lost cert in later file
+                for fp in no_cert_in_file:
+                    merged_fp_to_key.pop(fp, None)
+        
+        # Build family_cert_groups: family_key → [fingerprints]
+        from collections import defaultdict
+        family_groups = defaultdict(list)
+        for fp in final_cert_fps:
+            key = merged_fp_to_key.get(fp)
+            if key:
+                family_groups[key].append(fp)
+        family_cert_groups = {k: sorted(v) for k, v in family_groups.items()}
         
         # Step 6: Prune file cache — remove files older than our window
         target_set = set(target_files)
@@ -1234,6 +1289,7 @@ def fetch_collector_descriptors(progress_logger=None):
         data = {
             'family_cert_fingerprints': list(final_cert_fps),
             'all_seen_fingerprints': list(final_seen_fps),
+            'family_cert_groups': family_cert_groups,
             'coverage_hours': COVERAGE_HOURS,
             'fetched_at': datetime.utcnow().isoformat(),
         }
