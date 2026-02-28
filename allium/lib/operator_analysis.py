@@ -611,7 +611,9 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
                     version_status_versions[status_key].add(version)
         # Family support type (pre-computed by _set_family_support_types)
         fst = relay.get('family_support_type', 'none')
-        family_support_counts[fst] = family_support_counts.get(fst, 0) + 1
+        if fst not in family_support_counts:
+            fst = 'none'
+        family_support_counts[fst] += 1
     
     # Format version compliance display (only show non-zero values for not compliant and unknown)
     # Add status indicators based on compliance ratio

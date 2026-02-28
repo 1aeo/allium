@@ -1186,12 +1186,13 @@ def fetch_collector_descriptors(progress_logger=None):
                                                 break
                                             ext_len = int.from_bytes(cert_bytes[off:off+2], 'big')
                                             ext_type = cert_bytes[off+2]
+                                            # ext_flags = cert_bytes[off+3]
                                             if ext_type == 0x04:
-                                                current_family_key = cert_bytes[off+4:off+4+ext_len-2].hex().upper()
+                                                current_family_key = cert_bytes[off+4:off+4+ext_len].hex().upper()
                                                 break
-                                            off += 2 + ext_len
-                                except Exception:
-                                    pass
+                                            off += 4 + ext_len
+                                except (IndexError, ValueError) as e:
+                                    logger.debug("family-cert parse failed for %s: %s", current_fp, e)
                                 cert_b64_lines = []
                             elif not line.startswith('-----'):
                                 cert_b64_lines.append(line.strip())

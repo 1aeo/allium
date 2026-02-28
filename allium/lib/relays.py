@@ -937,15 +937,17 @@ class Relays:
             has_family_cert = fp in family_cert_fps
             effective = relay.get('effective_family', [])
 
-            if has_family_cert:
-                # Check for MyFamily content: effective members without cert, or alleged/indirect
-                has_mf_content = (
-                    any(f.upper() not in family_cert_fps for f in effective)
-                    or relay.get('alleged_family')
-                    or relay.get('indirect_family')
-                )
-                relay['family_support_type'] = 'both' if has_mf_content else 'happy_families'
-            elif len(effective) > 1:
+            has_my_family = (
+                len(effective) > 1
+                or bool(relay.get('alleged_family'))
+                or bool(relay.get('indirect_family'))
+            )
+
+            if has_family_cert and has_my_family:
+                relay['family_support_type'] = 'both'
+            elif has_family_cert:
+                relay['family_support_type'] = 'happy_families'
+            elif has_my_family:
                 relay['family_support_type'] = 'my_family'
             else:
                 relay['family_support_type'] = 'none'

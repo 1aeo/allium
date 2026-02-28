@@ -18,11 +18,11 @@
 {% if members -%}
 <pre class="pre-scrollable" style="max-height: 80px; font-size: 11px; margin-top: 5px;">
 {%- for fp in members -%}
-{% if show_self and fp == relay_fp -%}
-{{ fp|escape }} (this relay)
-{% else -%}
-<a href="../{{ fp|escape }}/">{{ fp|escape }}</a>
-{% endif -%}
+{%- if show_self and fp == relay_fp -%}
+{{ fp|escape }} (this relay){{ '\n' if not loop.last }}
+{%- else -%}
+<a href="../{{ fp|escape }}/">{{ fp|escape }}</a>{{ '\n' if not loop.last }}
+{%- endif -%}
 {%- endfor -%}
 </pre>
 {%- else -%}
