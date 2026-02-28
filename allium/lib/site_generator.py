@@ -66,6 +66,7 @@ SORTED_BY_VARIANTS = {
     "by-unique-contact-count": "1.unique_contact_count",
     "by-unique-family-count": "1.unique_family_count",
     "by-first-seen": "1.first_seen",
+    "by-total-data": "1.total_data",
 }
 
 # Miscellaneous sorted page types (each gets every sorted-by variant)

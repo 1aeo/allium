@@ -173,4 +173,98 @@ def determine_unit_filter(bandwidth_bytes, use_bits=False):
 def format_bandwidth_filter(bandwidth_bytes, unit=None, use_bits=False, decimal_places=2):
     """Jinja2 filter for formatting bandwidth with optional unit specification."""
     formatter = BandwidthFormatter(use_bits=use_bits)
-    return formatter.format_bandwidth(bandwidth_bytes, unit, decimal_places) 
+    return formatter.format_bandwidth(bandwidth_bytes, unit, decimal_places)
+
+
+# =============================================================================
+# CUMULATIVE DATA VOLUME FORMATTING (for total data transferred)
+# =============================================================================
+
+def format_data_volume(total_bytes, *, _use_bits=False):
+    """Format cumulative data volume in human-readable form.
+    
+    Data volumes are always expressed in bytes (TB, GB, PB).
+    
+    Args:
+        total_bytes (float): Total bytes transferred
+        _use_bits: Ignored. Keyword-only for API compatibility with BandwidthFormatter.
+    Returns:
+        tuple: (formatted_value_str, unit_str) e.g. ('3.74', 'TB')
+    """
+    def _smart_fmt(val):
+        """Use 1 decimal for single-digit values (e.g. 1.3 TB), 0 for 10+.
+        Handles the edge case where 9.95+ rounds up to 10.0 with .1f."""
+        if round(val, 1) < 10:
+            return f"{val:.1f}"
+        return f"{val:.0f}"
+
+    if total_bytes >= 1e15:
+        return _smart_fmt(total_bytes / 1e15), "PB"
+    elif total_bytes >= 1e12:
+        return _smart_fmt(total_bytes / 1e12), "TB"
+    elif total_bytes >= 1e9:
+        return _smart_fmt(total_bytes / 1e9), "GB"
+    elif total_bytes >= 1e6:
+        return _smart_fmt(total_bytes / 1e6), "MB"
+    else:
+        return _smart_fmt(total_bytes / 1e3), "KB"
+
+
+def format_data_volume_with_unit(total_bytes, *, _use_bits=False):
+    """Format cumulative data volume as a single string like '3.74 TB'.
+    
+    Returns 'N/A' for zero, negative, or falsy values.
+    
+    Args:
+        total_bytes (float): Total bytes transferred
+        _use_bits: Ignored. Keyword-only for API compatibility with BandwidthFormatter.
+    Returns:
+        str: Formatted string e.g. '3.74 TB' or 'N/A'
+    """
+    if not total_bytes or total_bytes <= 0:
+        return "N/A"
+    value, unit = format_data_volume(total_bytes)
+    return f"{value} {unit}"
+
+
+_BEST_PERIOD_ORDER = ('5_years', '1_year', '6_months', '1_month')
+
+def pick_best_period(sums):
+    """Return (total, period) for the longest period with non-zero data.
+
+    Args:
+        sums: dict mapping period keys to numeric totals
+    Returns:
+        tuple: (total_bytes, period_key) or (0, None) if all zero
+    """
+    for p in _BEST_PERIOD_ORDER:
+        val = sums.get(p, 0)
+        if val > 0:
+            return val, p
+    return 0, None
+
+
+_PERIOD_LABELS = {
+    '1_month': '1mo', '6_months': '6mo', '1_year': '1yr', '5_years': '5yr',
+}
+
+def compute_total_data_pct(total_bytes, period, network_totals_by_period):
+    """Compute period-matched percentage of network total data.
+
+    Args:
+        total_bytes: Operator/group total bytes for `period`
+        period: One of '1_month', '6_months', '1_year', '5_years'
+        network_totals_by_period: dict from network_health['network_total_data_by_period']
+    Returns:
+        str: e.g. "2.20% of 6mo network data" or "" if negligible/no data
+    """
+    if not total_bytes or total_bytes <= 0 or not network_totals_by_period:
+        return ""
+    denom = network_totals_by_period.get(period, 0)
+    if denom <= 0:
+        return ""
+    pct = total_bytes / denom * 100
+    if pct < 0.01:
+        return ""
+    label = _PERIOD_LABELS.get(period, period)
+    return f"{pct:.2f}% of {label} network data"

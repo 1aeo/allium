@@ -648,6 +648,24 @@ Country: unknown
                     <span style="color: #6c757d;">Not set</span>
                 {% endif %}
             </dd>
+            
+            <dt title="Total data transferred by this relay (read + write) over available bandwidth history. Source: Onionoo /bandwidth endpoint.">Total Data</dt>
+            <dd>
+                {% if relay.get('total_data_display') and relay['total_data_display'] != 'N/A' %}
+                    <span title="Total data transferred over {{ relay['total_data_period'] }}">{{ relay['total_data_display'] }}</span>
+                    <span class="text-small-muted">({{ relay['total_data_period'] }})</span>
+                    {% set periods = [] %}
+                    {% if relay.get('total_data_1_month_display') and relay['total_data_1_month_display'] != 'N/A' %}{% set _ = periods.append('1mo: ' + relay['total_data_1_month_display']) %}{% endif %}
+                    {% if relay.get('total_data_6_months_display') and relay['total_data_6_months_display'] != 'N/A' %}{% set _ = periods.append('6mo: ' + relay['total_data_6_months_display']) %}{% endif %}
+                    {% if relay.get('total_data_1_year_display') and relay['total_data_1_year_display'] != 'N/A' %}{% set _ = periods.append('1y: ' + relay['total_data_1_year_display']) %}{% endif %}
+                    {% if relay.get('total_data_5_years_display') and relay['total_data_5_years_display'] != 'N/A' %}{% set _ = periods.append('5y: ' + relay['total_data_5_years_display']) %}{% endif %}
+                    {% if periods|length > 1 %}
+                    <br><span class="text-small-note">{{ periods|join(' | ') }}</span>
+                    {% endif %}
+                {% else %}
+                    <span style="color: #6c757d;">N/A</span>
+                {% endif %}
+            </dd>
         </dl>
     </div>
     

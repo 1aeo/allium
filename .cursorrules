@@ -1,0 +1,74 @@
+# Allium Project Rules
+
+## Project Overview
+
+Allium generates a static site (~22k HTML pages) from Tor relay data via the
+onionoo API. The main entry point is `allium/allium.py`. Templates are Jinja2
+in `allium/templates/`. Tests are pytest-based in `tests/`.
+
+## Output Comparison Workflow
+
+**When**: Before and after ANY major code change that affects HTML output
+(templates, data processing, relay rendering, page generation, CSS changes
+visible in output).
+
+**Why**: The site generates ~22k pages. Manual review is impossible. The
+comparison tool classifies every file and surfaces only real content changes.
+
+**Steps**:
+
+```bash
+# 1. Generate baseline BEFORE your change
+python3 allium/allium.py --out allium/www_baseline --apis all --progress
+
+# 2. Make your code changes
+
+# 3. Generate output AFTER your change
+python3 allium/allium.py --out allium/www_after --apis all --progress
+
+# 4. Compare (~8 seconds for ~22k files)
+python3 compare_outputs.py
+
+# 5. Review: exit code 0 = clean, 1 = real diffs to review
+#    Use --quiet for summary only
+#    Use --max-diffs N to limit diff output
+```
+
+**Interpreting results**:
+- "Identical" and "Timestamp only" files are expected — no action needed
+- "Content diffs" need review — verify each matches your intended change
+- ~300-400 relay pages may show data drift from live API (uptime ticking,
+  vote counts shifting) — these are noise, not code-related
+- Files only in baseline/after indicate pages added or removed by your change
+
+**Important**: The `allium/www_baseline/` and `allium/www_after/` directories
+are gitignored. Do not commit generated output.
+
+## Running Tests
+
+```bash
+# Unit tests
+pytest
+
+# With coverage
+pytest --cov=allium --cov-report=html
+
+# Linting
+flake8 . --select=E9,F63,F7,F82 --show-source
+```
+
+## Code Conventions
+
+- Python 3.8+ compatible
+- Jinja2 templates in `allium/templates/`
+- No external dependencies beyond Jinja2 for production code
+- Tests use pytest with fixtures in `tests/conftest.py`
+- Follow PEP 8, max line length 127 characters
+
+## Key Architecture
+
+- `allium/allium.py` — CLI entry point, argument parsing
+- `allium/lib/coordinator.py` — Orchestrates API fetching (threaded)
+- `allium/lib/site_generator.py` — Page generation definitions and orchestration
+- `allium/lib/relays.py` — Relay data model and page rendering
+- `compare_outputs.py` — Output comparison tool (repo root)

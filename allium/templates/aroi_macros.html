@@ -52,6 +52,8 @@
                             <span title="Number of unique IPv6 addresses across relay infrastructure">{{ champion.unique_ipv6_count }} unique IPv6</span>
                         {% elif category_key == "validated_relays" %}
                             <span title="Number of relays with valid AROI cryptographic proofs">{{ champion.validated_relay_count }} validated relays</span>
+                        {% elif category_key == "total_data_champions" %}
+                            <span title="Total cumulative data transferred (read + write)">{{ champion.total_data_transferred }}{% if champion.total_data_pct %} ({{ champion.total_data_pct }}){% endif %}</span>
                         {% endif %}
                     </p>
                     <small>
@@ -159,6 +161,8 @@
                                 <span title="{{ entry.ip_address_tooltip }}">{{ entry.unique_ipv6_count }} unique IPv6 addresses</span>
                             {% elif performance_type == "validated_relays" %}
                                 <span title="Number of relays with valid AROI cryptographic proofs ({{ entry.invalid_relay_count }} invalid)">{{ entry.validated_relay_count }} validated relays</span>
+                            {% elif performance_type == "total_data_champions" %}
+                                <span title="Total cumulative data transferred (read + write)">{{ entry.total_data_transferred }}{% if entry.total_data_pct %} ({{ entry.total_data_pct }}){% endif %} across {{ entry.total_relays }} relays</span>
                             {% endif %}
                         </td>
                     </tr>
@@ -824,8 +828,9 @@
                     {%- elif category_key == 'legacy_titans' -%}5-year reliability score: simple average uptime percentage from Onionoo API (25+ relays). Measures long-term operational stability and historical reliability
                     {%- elif category_key == 'bandwidth_masters' -%}6-month bandwidth score: simple average bandwidth served from Onionoo API (25+ relays). Measures recent bandwidth served performance and network contribution
                     {%- elif category_key == 'bandwidth_legends' -%}5-year bandwidth score: simple average bandwidth served from Onionoo API (25+ relays). Measures sustained bandwidth served capacity and long-term network contribution
-                    {%- endif -%}">{% if category_key == 'platform_diversity' %}Non Linux Relays{% elif category_key == 'non_eu_leaders' %}Non-EU Relays{% elif category_key == 'frontier_builders' %}Rare Relays{% elif category_key == 'reliability_masters' %}Reliability Score{% elif category_key == 'legacy_titans' %}Legacy Score{% elif category_key == 'bandwidth_masters' %}Bandwidth Score{% elif category_key == 'bandwidth_legends' %}Bandwidth Score{% else %}Key Metric{% endif %}</th>
-                    {% if category_key != 'bandwidth_masters' and category_key != 'bandwidth_legends' %}
+                    {%- elif category_key == 'total_data_champions' -%}total cumulative data transferred (read + write) over bandwidth history from Onionoo API. Recognizes operators for sustained traffic contribution to the Tor network
+                    {%- endif -%}">{% if category_key == 'platform_diversity' %}Non Linux Relays{% elif category_key == 'non_eu_leaders' %}Non-EU Relays{% elif category_key == 'frontier_builders' %}Rare Relays{% elif category_key == 'reliability_masters' %}Reliability Score{% elif category_key == 'legacy_titans' %}Legacy Score{% elif category_key == 'bandwidth_masters' %}Bandwidth Score{% elif category_key == 'bandwidth_legends' %}Bandwidth Score{% elif category_key == 'total_data_champions' %}Total Data{% else %}Key Metric{% endif %}</th>
+                    {% if category_key not in ('bandwidth_masters', 'bandwidth_legends', 'total_data_champions') %}
                     <th title="{% if category_key == 'platform_diversity' %}Bandwidth capacity from non-Linux relays only (matches diverse relay count){% elif category_key == 'non_eu_leaders' %}Bandwidth capacity from non-EU relays only (matches diverse relay count){% elif category_key == 'frontier_builders' %}Bandwidth capacity from relays in rare countries only (matches diverse relay count){% else %}Total observed bandwidth capacity in {% if use_bits %}bits per second{% else %}bytes per second{% endif %}{% endif %}">Bandwidth Capacity</th>
                     {% endif %}
                     {% if category_key != 'platform_diversity' %}
@@ -836,7 +841,7 @@
                     {% endif %}
                     {% if category_key == 'most_diverse' %}
                     <th title="Number of unique Autonomous Systems (ASNs) used for network diversity">Unique AS</th>
-                    {% elif category_key != 'reliability_masters' and category_key != 'legacy_titans' %}
+                    {% elif category_key not in ('reliability_masters', 'legacy_titans', 'bandwidth_masters', 'bandwidth_legends', 'total_data_champions') %}
                     <th title="Primary operational focus or unique contribution to Tor network">Specialization</th>
                     {% endif %}
                 </tr>
@@ -864,10 +869,12 @@
                             <span title="{{ entry.bandwidth_tooltip }}">{{ entry.bandwidth_details_short }}</span>
                         {% elif category_key == 'bandwidth_legends' %}
                             <span title="{{ entry.bandwidth_tooltip }}">{{ entry.bandwidth_details_short }}</span>
+                        {% elif category_key == 'total_data_champions' %}
+                            <span title="Total cumulative data transferred by all relays (read + write)">{{ entry.total_data_transferred }}{% if entry.total_data_pct %}<br><small class="text-muted">{{ entry.total_data_pct }}</small>{% endif %}</span>
                         {% endif %}
                         </strong>
                     </td>
-                    {% if category_key != 'bandwidth_masters' and category_key != 'bandwidth_legends' %}
+                    {% if category_key not in ('bandwidth_masters', 'bandwidth_legends', 'total_data_champions') %}
                     <td title="{% if category_key == 'platform_diversity' %}Bandwidth capacity from {{ entry.non_linux_count }} non-Linux relays only{% elif category_key == 'non_eu_leaders' %}Bandwidth capacity from {{ entry.non_eu_count }} non-EU relays only{% elif category_key == 'frontier_builders' %}Bandwidth capacity from {{ entry.relays_in_rare_countries }} relays in rare countries only{% else %}Observed bandwidth capacity in {% if use_bits %}{{ entry.bandwidth_unit }} (bits per second){% else %}{{ entry.bandwidth_unit }} (bytes per second){% endif %}{% endif %}">
                         {%- if category_key == 'platform_diversity' -%}
                             {{ entry.non_linux_bandwidth }} {{ entry.non_linux_bandwidth_unit }}
@@ -888,7 +895,7 @@
                     {% endif %}
                     {% if category_key == 'most_diverse' %}
                     <td title="Number of unique Autonomous Systems providing network distribution">{{ entry.unique_as_count }}</td>
-                    {% elif category_key != 'reliability_masters' and category_key != 'legacy_titans' %}
+                    {% elif category_key not in ('reliability_masters', 'legacy_titans', 'bandwidth_masters', 'bandwidth_legends', 'total_data_champions') %}
                     <td>
                         {% if category_key == 'platform_diversity' %}<span title="{{ entry.platform_breakdown_tooltip if entry.platform_breakdown_tooltip else 'Promoting operating system diversity beyond Linux dominance' }}">{{ entry.platform_breakdown_details if entry.platform_breakdown_details else 'OS diversity' }}</span>
                         {% elif category_key == 'non_eu_leaders' %}<span title="{{ entry.geographic_breakdown_tooltip }}">{{ entry.geographic_breakdown_details if entry.geographic_breakdown_details else 'Global expansion' }}</span>

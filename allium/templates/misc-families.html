@@ -130,6 +130,13 @@
                     <a href="families-by-first-seen.html">First Seen</a>
                 </th>
             {% endif -%}
+            {% if sorted_by_label == 'total_data' -%}
+                <th title="Total data transferred (read + write) over 5-year bandwidth history. Source: Onionoo /bandwidth endpoint.">Total Data</th>
+            {% else -%}
+                <th title="Total data transferred (read + write) over 5-year bandwidth history. Source: Onionoo /bandwidth endpoint.">
+                    <a href="families-by-total-data.html">Total Data</a>
+                </th>
+            {% endif -%}
         </tr>
         <tbody>
             {% set processed = dict() -%}
@@ -166,6 +173,7 @@
                         <td>
                         <a href="{{ page_ctx.path_prefix }}first_seen/{{ d.first_seen_date|escape }}">{{ d.first_seen_date|escape }}</a>
                     </td>
+                        <td>{{ d.total_data_formatted }}</td>
                         {% for r in v['relays'] -%}
                             {% set _dummy = processed.update({relay_subset[r]['fingerprint']:
                             None}) -%}
