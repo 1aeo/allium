@@ -196,16 +196,23 @@ def format_data_volume(total_bytes, use_bits=False):
     Returns:
         tuple: (formatted_value_str, unit_str) e.g. ('3.74', 'TB')
     """
+    def _smart_fmt(val):
+        """Use 1 decimal for single-digit values (e.g. 1.3 TB), 0 for 10+.
+        Handles the edge case where 9.95+ rounds up to 10.0 with .1f."""
+        if round(val, 1) < 10:
+            return f"{val:.1f}"
+        return f"{val:.0f}"
+
     if total_bytes >= 1e15:
-        return f"{total_bytes / 1e15:.2f}", "PB"
+        return _smart_fmt(total_bytes / 1e15), "PB"
     elif total_bytes >= 1e12:
-        return f"{total_bytes / 1e12:.2f}", "TB"
+        return _smart_fmt(total_bytes / 1e12), "TB"
     elif total_bytes >= 1e9:
-        return f"{total_bytes / 1e9:.2f}", "GB"
+        return _smart_fmt(total_bytes / 1e9), "GB"
     elif total_bytes >= 1e6:
-        return f"{total_bytes / 1e6:.2f}", "MB"
+        return _smart_fmt(total_bytes / 1e6), "MB"
     else:
-        return f"{total_bytes / 1e3:.2f}", "KB"
+        return _smart_fmt(total_bytes / 1e3), "KB"
 
 
 def format_data_volume_with_unit(total_bytes, use_bits=False):
@@ -225,3 +232,46 @@ def format_data_volume_with_unit(total_bytes, use_bits=False):
         return "N/A"
     value, unit = format_data_volume(total_bytes)
     return f"{value} {unit}"
+
+
+_BEST_PERIOD_ORDER = ('5_years', '1_year', '6_months', '1_month')
+
+def pick_best_period(sums):
+    """Return (total, period) for the longest period with non-zero data.
+
+    Args:
+        sums: dict mapping period keys to numeric totals
+    Returns:
+        tuple: (total_bytes, period_key) or (0, None) if all zero
+    """
+    for p in _BEST_PERIOD_ORDER:
+        val = sums.get(p, 0)
+        if val > 0:
+            return val, p
+    return 0, None
+
+
+_PERIOD_LABELS = {
+    '1_month': '1mo', '6_months': '6mo', '1_year': '1yr', '5_years': '5yr',
+}
+
+def compute_total_data_pct(total_bytes, period, network_totals_by_period):
+    """Compute period-matched percentage of network total data.
+
+    Args:
+        total_bytes: Operator/group total bytes for `period`
+        period: One of '1_month', '6_months', '1_year', '5_years'
+        network_totals_by_period: dict from network_health['network_total_data_by_period']
+    Returns:
+        str: e.g. "2.20% of 6mo network data" or "" if negligible/no data
+    """
+    if not total_bytes or total_bytes <= 0 or not network_totals_by_period:
+        return ""
+    denom = network_totals_by_period.get(period, 0)
+    if denom <= 0:
+        return ""
+    pct = total_bytes / denom * 100
+    if pct < 0.01:
+        return ""
+    label = _PERIOD_LABELS.get(period, period)
+    return f"{pct:.2f}% of {label} network data"

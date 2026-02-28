@@ -111,10 +111,11 @@ class Relays:
           3. trim_platform                      9. Re-generate leaderboards (uses uptime)
           4. add_hashed_contact                10. Re-calculate health metrics (uses uptime)
           5. preprocess_template_data          11. Bandwidth processing
-          6. categorize                        12. Re-calculate health metrics (uses bandwidth)
-             propagate_as_rarity               13. Collector consensus evaluation
-             generate_aroi_leaderboards        14. Pre-compute contact page data
-             generate_smart_context            15. Pre-compute family page data
+          6. categorize                        12. Re-generate leaderboards (uses total_data)
+             propagate_as_rarity               13. Re-calculate health metrics (uses bandwidth)
+             generate_aroi_leaderboards        14. Collector consensus evaluation
+             generate_smart_context            15. Pre-compute contact page data
+             calculate_network_health_metrics  16. Pre-compute family page data
              calculate_network_health_metrics
 
         Processing order matters:
@@ -138,11 +139,13 @@ class Relays:
             self._generate_aroi_leaderboards()
             self._calculate_network_health_metrics()
 
-        # Steps 11-12: Bandwidth processing → regenerate health
+        # Steps 11-14: Bandwidth → health → aggregate groups (needs health %) → leaderboards
         if bandwidth_data and self.json.get('relays'):
             try:
                 self._reprocess_bandwidth_data()
                 self._calculate_network_health_metrics()
+                self._aggregate_total_data_to_groups()
+                self._generate_aroi_leaderboards()
             except Exception as e:
                 print(f"Warning: Bandwidth processing failed ({e}), continuing without bandwidth metrics")
 
@@ -619,9 +622,8 @@ class Relays:
                 self.network_bandwidth_percentiles = None
                 self._log_progress("Network bandwidth percentiles calculation failed: insufficient data")
             
-            # Aggregate total_data to sorted groups (can't be done during _categorize
-            # since bandwidth data isn't available yet at that point in the pipeline)
-            self._aggregate_total_data_to_groups()
+            # Note: _aggregate_total_data_to_groups is called from enrich_with_api_data
+            # after _calculate_network_health_metrics (needs network_total_data_by_period)
                 
         except Exception as e:
             # Fallback gracefully if bandwidth processing fails
@@ -634,17 +636,28 @@ class Relays:
         
         Called after _reprocess_bandwidth_data() because total_data isn't available
         during _categorize() (bandwidth API data hasn't been fetched yet at that point).
+        
+        Uses best-available period: tries 5_years first, falls back through
+        1_year -> 6_months -> 1_month so relays with shorter history aren't N/A.
+        Stores both the total and which period was used for period-matched % calc.
         """
-        from .bandwidth_formatter import format_data_volume_with_unit
+        from .bandwidth_formatter import format_data_volume_with_unit, compute_total_data_pct, pick_best_period, _BEST_PERIOD_ORDER
         relays = self.json["relays"]
+        net_by_period = self.json.get('network_health', {}).get('network_total_data_by_period', {})
         
         for category in self.json.get("sorted", {}):
             for key, group_data in self.json["sorted"][category].items():
-                total = sum(relays[idx].get("total_data", {}).get("5_years", 0)
-                            for idx in group_data.get("relays", []))
+                sums = {p: 0 for p in _BEST_PERIOD_ORDER}
+                for idx in group_data.get("relays", []):
+                    td = relays[idx].get("total_data", {})
+                    for p in _BEST_PERIOD_ORDER:
+                        sums[p] += td.get(p, 0)
+                total, used_period = pick_best_period(sums)
                 group_data["total_data"] = total
+                group_data["total_data_period"] = used_period
                 if "display" in group_data:
                     group_data["display"]["total_data_formatted"] = format_data_volume_with_unit(total)
+                    group_data["display"]["total_data_pct"] = compute_total_data_pct(total, used_period, net_by_period) if used_period else ""
 
     def _reprocess_collector_data(self):
         """

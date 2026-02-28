@@ -463,6 +463,7 @@ def calculate_network_health_metrics(relay_set):
     stabledesc_count = sybil_count = 0
     total_bandwidth = guard_bandwidth = exit_bandwidth = middle_bandwidth = 0
     network_total_data = exit_total_data = guard_total_data = middle_total_data = 0
+    network_total_data_by_period = {'1_month': 0, '6_months': 0, '1_year': 0, '5_years': 0}
     fast_bandwidth_values = []
     stable_bandwidth_values = []
     authority_bandwidth_values = []
@@ -721,7 +722,8 @@ def calculate_network_health_metrics(relay_set):
                 middle_bw_values.append(bandwidth)
         
         # Total data transferred (cumulative bytes from bandwidth history)
-        relay_td = relay.get('total_data', {}).get('5_years', 0)
+        relay_td_dict = relay.get('total_data', {})
+        relay_td = relay_td_dict.get('5_years', 0)
         network_total_data += relay_td
         if is_exit:
             exit_total_data += relay_td
@@ -729,6 +731,8 @@ def calculate_network_health_metrics(relay_set):
             guard_total_data += relay_td
         else:
             middle_total_data += relay_td
+        for _p in ('1_month', '6_months', '1_year'):
+            network_total_data_by_period[_p] += relay_td_dict.get(_p, 0)
         
         # Flag-specific bandwidth collection
         if bandwidth > 0:  # Only collect bandwidth for relays with actual bandwidth
@@ -848,6 +852,8 @@ def calculate_network_health_metrics(relay_set):
     health_metrics['exit_total_data'] = exit_total_data
     health_metrics['guard_total_data'] = guard_total_data
     health_metrics['middle_total_data'] = middle_total_data
+    network_total_data_by_period['5_years'] = network_total_data
+    health_metrics['network_total_data_by_period'] = network_total_data_by_period
     
     # Age statistics
     if relay_ages_days:

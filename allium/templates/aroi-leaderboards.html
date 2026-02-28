@@ -39,10 +39,10 @@
         <a href="#legacy_titans" class="aroi-nav-link" title="Legacy Titans: 5-year average uptime scores for operators with 25+ relays, recognizing long-term operational stability">👑 Legacy Titans</a>
         <a href="#bandwidth_masters" class="aroi-nav-link" title="Bandwidth Served Masters: 6-month average bandwidth performance for operators with 25+ relays, measuring recent bandwidth served excellence">🚀 Bandwidth Served Masters</a>
         <a href="#bandwidth_legends" class="aroi-nav-link" title="Bandwidth Served Legends: 5-year average bandwidth performance for operators with 25+ relays, measuring sustained bandwidth served capacity">🌟 Bandwidth Served Legends</a>
+        <a href="#total_data_champions" class="aroi-nav-link" title="Operators ranked by total cumulative data transferred (read + write) over 5-year bandwidth history">📦 Total Data Champions</a>
         <a href="#ipv4_leaders" class="aroi-nav-link" title="IPv4 Address Leaders: Operators with the highest quantity of unique IPv4 addresses across their relay infrastructure">🌐 IPv4 Leaders</a>
         <a href="#ipv6_leaders" class="aroi-nav-link" title="IPv6 Address Leaders: Operators with the highest quantity of unique IPv6 addresses across their relay infrastructure">🔮 IPv6 Leaders</a>
         <a href="#validated_relays" class="aroi-nav-link" title="AROI Validation Champions: Operators with the most relays that have valid AROI cryptographic proofs (DNS-RSA or URI-RSA), demonstrating verified operator identity and accountability">✅ Validation Champions</a>
-        <a href="#total_data_champions" class="aroi-nav-link" title="Operators ranked by total cumulative data transferred (read + write) over 5-year bandwidth history">📦 Total Data Champions</a>
     </div>
 </nav>
 
@@ -106,13 +106,13 @@
         
         {{ champion_badge("bandwidth_legends", relays.json.aroi_leaderboards.leaderboards.bandwidth_legends, "Bandwidth Served Legend", "🌟", "panel-warning", "aroi-champion-bandwidth-legend", page_ctx.path_prefix, relays.use_bits) }}
         
+        {{ champion_badge("total_data_champions", relays.json.aroi_leaderboards.leaderboards.total_data_champions, "Total Data Transferred Champion", "📦", "panel-info", "aroi-champion-total-data", page_ctx.path_prefix, relays.use_bits) }}
+        
         {{ champion_badge("ipv4_leaders", relays.json.aroi_leaderboards.leaderboards.ipv4_leaders, "IPv4 Master", "🌐", "panel-primary", "aroi-champion-ipv4", page_ctx.path_prefix, relays.use_bits) }}
         
         {{ champion_badge("ipv6_leaders", relays.json.aroi_leaderboards.leaderboards.ipv6_leaders, "IPv6 Pioneer", "🔮", "panel-info", "aroi-champion-ipv6", page_ctx.path_prefix, relays.use_bits) }}
         
         {{ champion_badge("validated_relays", relays.json.aroi_leaderboards.leaderboards.validated_relays, "AROI Validation Champion", "✅", "panel-success", "aroi-champion-validation", page_ctx.path_prefix, relays.use_bits) }}
-        
-        {{ champion_badge("total_data_champions", relays.json.aroi_leaderboards.leaderboards.total_data_champions, "Total Data Transferred Champion", "📦", "panel-info", "aroi-champion-total-data", page_ctx.path_prefix, relays.use_bits) }}
     </div>
 </section>
 
@@ -168,6 +168,9 @@
     <!-- Bandwidth Legends -->
     {{ top3_table("Bandwidth Served Legends", "🌟", relays.json.aroi_leaderboards.leaderboards.bandwidth_legends, ["Bandwidth Legend", "Bandwidth Master", "Bandwidth Champion"], "bandwidth_legends", page_ctx, relays.use_bits) }}
 
+    <!-- Total Data Transferred Champions -->
+    {{ top3_table("Total Data Transferred Champions", "📦", relays.json.aroi_leaderboards.leaderboards.total_data_champions, ["Data Transfer Legend", "Data Transfer Master", "Data Transfer Champion"], "total_data_champions", page_ctx, relays.use_bits) }}
+
     <!-- IPv4 Address Leaders -->
     {{ top3_table("IPv4 Address Leaders", "🌐", relays.json.aroi_leaderboards.leaderboards.ipv4_leaders, ["IPv4 Legend", "IPv4 Master", "IPv4 Champion"], "ipv4_leaders", page_ctx, relays.use_bits) }}
 
@@ -176,9 +179,6 @@
 
     <!-- AROI Validation Champions -->
     {{ top3_table("AROI Validation Champions", "✅", relays.json.aroi_leaderboards.leaderboards.validated_relays, ["Validation King", "Validation Commander", "Validation Hero"], "validated_relays", page_ctx, relays.use_bits) }}
-
-    <!-- Total Data Transferred Champions -->
-    {{ top3_table("Total Data Transferred Champions", "📦", relays.json.aroi_leaderboards.leaderboards.total_data_champions, ["Data Transfer Legend", "Data Transfer Master", "Data Transfer Champion"], "total_data_champions", page_ctx, relays.use_bits) }}
 
 </section>
 
@@ -298,8 +298,8 @@
                     <li><strong>👑 Legacy Titans:</strong> 5-year average uptime scores (25+ relays, long-term stability)</li>
                     <li><strong>🚀 Bandwidth Served Masters:</strong> 6-month average bandwidth performance (25+ relays, recent bandwidth served excellence)</li>
                     <li><strong>🌟 Bandwidth Served Legends:</strong> 5-year average bandwidth performance (25+ relays, sustained bandwidth served capacity)</li>
-                    <li><strong>✅ AROI Validation Champions:</strong> Most relays with valid AROI cryptographic proofs (DNS-RSA or URI-RSA verification)</li>
                     <li><strong>📦 Total Data Transferred Champions:</strong> Operators ranked by total cumulative data transferred (read + write) over 5-year bandwidth history</li>
+                    <li><strong>✅ AROI Validation Champions:</strong> Most relays with valid AROI cryptographic proofs (DNS-RSA or URI-RSA verification)</li>
                 </ul>
             </div>
         </div>

@@ -116,7 +116,13 @@
                     <a href="networks-by-unique-family-count.html">Unique Families</a>
                 </th>
             {% endif -%}
-            <th title="Total data transferred (read + write) over 5-year bandwidth history. Source: Onionoo /bandwidth endpoint.">Total Data</th>
+            {% if sorted_by_label == 'total_data' -%}
+                <th title="Total data transferred (read + write) over 5-year bandwidth history. Source: Onionoo /bandwidth endpoint.">Total Data</th>
+            {% else -%}
+                <th title="Total data transferred (read + write) over 5-year bandwidth history. Source: Onionoo /bandwidth endpoint.">
+                    <a href="networks-by-total-data.html">Total Data</a>
+                </th>
+            {% endif -%}
         </tr>
         <tbody>
             {% for k, v in relays.json['sorted'].get('as', {}).items()|sort(attribute=sorted_by,

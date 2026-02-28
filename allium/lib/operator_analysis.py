@@ -518,10 +518,17 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
     # 2. Consensus weight breakdown by role
     display_data['consensus_weight_breakdown'] = _format_cw_breakdown(i)
     
-    # 2b. Total data transferred (aggregate across all operator relays)
-    from .bandwidth_formatter import format_data_volume_with_unit
-    display_data['total_data_formatted'] = format_data_volume_with_unit(
-        sum(r.get('total_data', {}).get('5_years', 0) for r in members))
+    # 2b. Total data transferred (single-pass period sums + best-period selection)
+    from .bandwidth_formatter import format_data_volume_with_unit, compute_total_data_pct, pick_best_period
+    td_sums = {'1_month': 0, '6_months': 0, '1_year': 0, '5_years': 0}
+    for r in members:
+        td = r.get('total_data', {})
+        for p in td_sums:
+            td_sums[p] += td.get(p, 0)
+    td_total, td_period = pick_best_period(td_sums)
+    display_data['total_data_formatted'] = format_data_volume_with_unit(td_total)
+    net_by_period = relay_set.json.get('network_health', {}).get('network_total_data_by_period', {}) if hasattr(relay_set, 'json') else {}
+    display_data['total_data_pct'] = compute_total_data_pct(td_total, td_period, net_by_period) if td_period else ""
     
     # 3. Operator intelligence formatting (reuse existing contact intelligence data)
     intelligence_formatted = {}
