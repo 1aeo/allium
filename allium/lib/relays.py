@@ -892,9 +892,20 @@ class Relays:
     def _set_family_support_types(self):
         """Set per-relay family_support_type and cache descriptor sets for downstream consumers.
 
-        Builds family_cert_fps/all_seen_fps from collector_descriptors_data and caches them
-        as _family_cert_fps_cache/_all_seen_fps_cache/_descriptor_coverage_hours for:
-          - page_writer.py (_partition_family_lists for relay-info pages)
+        Uses the EXTRACTED Ed25519 signing key as the single source of truth for
+        Happy Families classification. A relay is only classified as 'happy_families'
+        if we can actually extract and verify its family signing key from the cert.
+        This ensures consistency between relay pages and contact/operator pages.
+
+        Data flow (single source of truth):
+          _fp_to_family_key (extracted Ed25519 key)
+            ├── family_support_type     → contact/operator page counts
+            ├── _family_cert_fps_cache  → _partition_family_lists (_mf_effective)
+            └── _family_key_to_fps      → _partition_family_lists (_hf_effective)
+
+        The weaker 'family_cert_fingerprints' (line-presence only) is kept for
+        network_health.py informational dashboard stats, but NOT used for
+        relay classification.
 
         Sets relay['family_support_type'] to one of: 'both', 'happy_families', 'my_family', 'none'.
 
@@ -903,18 +914,14 @@ class Relays:
         """
         collector_descs = getattr(self, 'collector_descriptors_data', None)
         if collector_descs and isinstance(collector_descs, dict):
-            family_cert_fps = set(collector_descs.get('family_cert_fingerprints', []))
             all_seen_fps = set(collector_descs.get('all_seen_fingerprints', []))
             coverage_hours = collector_descs.get('coverage_hours', 0)
             raw_groups = collector_descs.get('family_cert_groups', {})
         else:
-            family_cert_fps = set()
             all_seen_fps = set()
             coverage_hours = 0
             raw_groups = {}
 
-        # Cache flat sets for page_writer.py (_partition_family_lists)
-        self._family_cert_fps_cache = family_cert_fps
         self._all_seen_fps_cache = all_seen_fps
         self._descriptor_coverage_hours = coverage_hours
 
@@ -932,13 +939,27 @@ class Relays:
             for fp in fps:
                 self._fp_to_family_key[fp.upper()] = key
 
+        # Cache the verified-key fingerprint set for page_writer.py (_partition_family_lists).
+        # Uses extracted-key set (strong check) — NOT the line-presence set.
+        # This ensures _mf_effective correctly excludes only verified Happy Families members.
+        verified_cert_fps = set(self._fp_to_family_key.keys())
+        self._family_cert_fps_cache = verified_cert_fps
+
         for relay in self.json['relays']:
             fp = relay.get('fingerprint', '').upper()
-            has_family_cert = fp in family_cert_fps
+            # Strong check: relay has verified extracted Ed25519 family signing key
+            has_family_cert = fp in verified_cert_fps
             effective = relay.get('effective_family', [])
 
+            # Exclude verified Happy Families members from MyFamily check.
+            # Onionoo effective_family may include family-cert members; counting
+            # them here would incorrectly label relay as 'both' when it only has
+            # family-cert. Filter to actual MyFamily-only members.
+            my_family_members = [f for f in effective
+                                 if f.upper() not in verified_cert_fps
+                                 and f.upper() != fp]
             has_my_family = (
-                len(effective) > 1
+                len(my_family_members) > 0
                 or bool(relay.get('alleged_family'))
                 or bool(relay.get('indirect_family'))
             )

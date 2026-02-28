@@ -10,13 +10,18 @@ from pathlib import Path
 
 
 # List of required anchor IDs used across multiple tests
+# These must have both id="..." and href="#..." in the template
 REQUIRED_ANCHORS = [
     'ipv4-exit-policy-summary',
     'ipv6-exit-policy-summary', 
     'exit-policy',
+]
+
+# Backward-compatible anchors (id= only, no href= link — kept for external URL compatibility)
+COMPAT_ANCHORS = [
     'effective-family',
     'alleged-family',
-    'indirect-family'
+    'indirect-family',
 ]
 
 # Required CSS classes
@@ -51,6 +56,11 @@ class TestAnchorLinks:
         section_header_pattern = r'<div class="section-header">'
         matches = re.findall(section_header_pattern, template_content)
         assert len(matches) >= 6, "Missing section header divs for anchor links"
+
+    @pytest.mark.parametrize("anchor", COMPAT_ANCHORS)
+    def test_compat_anchor_id_present(self, template_content, anchor):
+        """Test that backward-compatible anchor IDs exist (for external URL compatibility)"""
+        assert f'id="{anchor}"' in template_content, f"Missing compat anchor ID: {anchor}"
 
     @pytest.mark.parametrize("css_class", REQUIRED_CSS_CLASSES)
     def test_css_classes_present(self, template_content, css_class):
