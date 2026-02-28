@@ -104,6 +104,27 @@ def test_with_fixture(sample_relay_data):
 | `test_system_` | Full system | Slow | May use real APIs |
 | `test_regression_` | Bug fixes | Varies | None |
 
+## Output Comparison (Full-Site Regression Testing)
+
+For changes that affect HTML output — templates, data processing, page
+generation — use `compare_outputs.py` to diff the full ~22k-file site
+before and after your change:
+
+```bash
+# Generate baseline, make changes, generate after, compare
+python3 allium/allium.py --out allium/www_baseline --apis all --progress
+# ... make code changes ...
+python3 allium/allium.py --out allium/www_after --apis all --progress
+python3 compare_outputs.py
+```
+
+Classifies every file as **identical**, **timestamp-only**, or **content diff**.
+Shows normalized unified diffs (timestamps stripped) for content diffs only.
+Takes ~8 seconds for 22k files using parallel processing across all CPUs.
+
+See `python3 compare_outputs.py --help` for options and `CONTRIBUTING.md`
+for the full workflow.
+
 ## CI Integration
 
 Tests run automatically on PR via GitHub Actions. See `.github/workflows/ci.yml`.
