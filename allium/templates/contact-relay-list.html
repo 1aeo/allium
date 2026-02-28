@@ -50,6 +50,7 @@
     <th title="Flag-specific uptime percentages showing the reliability of this relay when operating in its primary network role. Priority: Exit > Guard > Fast > Running flags.">Flag Uptime (1M/6M/1Y/5Y)</th>
     <th>IPv4</th>
     <th>Flags</th>
+    <th title="Family membership method: Happy Families (family-cert), MyFamily (legacy), Both, or None. Green = has family-cert (Happy Families and Both), Red = MyFamily only.">Family</th>
     <th>Country</th>
     <th>AS Number</th>
     <th>AS Name</th>
@@ -148,6 +149,17 @@
     </td>
     {# PERF: Use pre-rendered flags HTML from Python (eliminates Jinja2 loop) - THE KEY OPTIMIZATION #}
     <td>{{ relay['_flags_html']|replace('{path}', page_ctx.path_prefix)|safe }}</td>
+    <td>
+        {% if relay.get('family_support_type') == 'both' -%}
+            <span style="color: #28a745;" title="Has both Happy Families (family-cert) and MyFamily declarations">Both</span>
+        {% elif relay.get('family_support_type') == 'happy_families' -%}
+            <span style="color: #28a745;" title="Has family-cert in server descriptor (Happy Families)">Happy Families</span>
+        {% elif relay.get('family_support_type') == 'my_family' -%}
+            <span style="color: #dc3545;" title="MyFamily only — no family-cert. Consider migrating to Happy Families.">MyFamily</span>
+        {% else -%}
+            <span style="color: #6c757d;">None</span>
+        {% endif -%}
+    </td>
     {% if relay['country'] -%}
         {% if key != 'country' -%}
             <td>
