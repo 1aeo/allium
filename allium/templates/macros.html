@@ -149,6 +149,20 @@
     </div>
 {%- endmacro %}
 
+{# =============================================================================
+   FAMILY SUPPORT INLINE (DRY — renders colored count spans with percentages)
+   Used by detail_summary (family pages) and contact.html (operator pages).
+   ============================================================================= #}
+{% macro family_support_inline(fsc) -%}
+{% set fsc_total = fsc.get('both', 0) + fsc.get('happy_families', 0) + fsc.get('my_family', 0) + fsc.get('none', 0) -%}
+{% if fsc_total > 0 -%}
+{% if fsc.get('both', 0) > 0 %}<span style="color: #28a745;">{{ fsc.both }} Both, Happy Families and MyFamily ({{ (fsc.both / fsc_total * 100)|round(0)|int }}%)</span>{% if fsc.get('happy_families', 0) > 0 or fsc.get('my_family', 0) > 0 or fsc.get('none', 0) > 0 %}, {% endif %}{% endif -%}
+{% if fsc.get('happy_families', 0) > 0 %}<span style="color: #28a745;">{{ fsc.happy_families }} Happy Families ({{ (fsc.happy_families / fsc_total * 100)|round(0)|int }}%)</span>{% if fsc.get('my_family', 0) > 0 or fsc.get('none', 0) > 0 %}, {% endif %}{% endif -%}
+{% if fsc.get('my_family', 0) > 0 %}<span style="color: #dc3545;">{{ fsc.my_family }} MyFamily ({{ (fsc.my_family / fsc_total * 100)|round(0)|int }}%)</span>{% if fsc.get('none', 0) > 0 %}, {% endif %}{% endif -%}
+{% if fsc.get('none', 0) > 0 %}<span style="color: #6c757d;">{{ fsc.none }} None ({{ (fsc.none / fsc_total * 100)|round(0)|int }}%)</span>{% endif -%}
+{% endif -%}
+{%- endmacro %}
+
 {% macro detail_summary(bandwidth, bandwidth_unit, guard_bandwidth, middle_bandwidth, exit_bandwidth, consensus_weight_fraction, guard_consensus_weight_fraction, middle_consensus_weight_fraction, exit_consensus_weight_fraction, guard_count, middle_count, exit_count, total_relays, network_position, aroi_domain=none, contact=none, contact_md5=none, page_ctx=none, unique_aroi_list=none, unique_contact_list=none, unique_aroi_count=none, unique_contact_count=none, unique_aroi_contact_html=none, aroi_to_contact_map=none, contact_validation_status=none, family_support_counts=none, total_data_formatted=none, total_data_pct=none) -%}
 <ul style="list-style-type: disc; padding-left: 20px; margin-bottom: 15px;">
     <li><strong><span title="Observed bandwidth capacity represents the estimated maximum throughput this group can handle, combining total, guard, middle, and exit bandwidth contributions">Bandwidth Capacity</span>:</strong> ~{{ bandwidth }} {{ bandwidth_unit }}
@@ -167,14 +181,10 @@
         {%- endif %}</li>
     <li><strong><span title="Network position indicates the strategic role distribution of relays. Labels: Guard-focused (>60% guard), Exit-focused (>40% exit), Multi-role (both guard and exit >20%), Balanced (mixed roles), Guard-only (100% guard), Exit-only (100% exit), Middle-only (100% middle)">Network Position</span>:</strong> {{ network_position.formatted_string }}</li>
     {%- if family_support_counts %}
-    {% set fsc = family_support_counts %}
-    {% set fsc_total = fsc.get('both', 0) + fsc.get('happy_families', 0) + fsc.get('my_family', 0) + fsc.get('none', 0) %}
-    {% if fsc_total > 0 %}
+    {% set fsc_check = family_support_counts.get('both', 0) + family_support_counts.get('happy_families', 0) + family_support_counts.get('my_family', 0) + family_support_counts.get('none', 0) %}
+    {% if fsc_check > 0 %}
     <li><strong><span title="Family membership method breakdown per relay: Both = Happy Families (family-cert) and MyFamily, Happy Families = family-cert only, MyFamily = legacy only, None = no family membership. Source: CollecTor server descriptors.">Family Support</span>:</strong>
-        {% if fsc.get('both', 0) > 0 %}<span style="color: #28a745;">{{ fsc.both }} Both, Happy Families and MyFamily ({{ (fsc.both / fsc_total * 100)|round(0)|int }}%)</span>{% if fsc.get('happy_families', 0) > 0 or fsc.get('my_family', 0) > 0 or fsc.get('none', 0) > 0 %}, {% endif %}{% endif %}
-        {% if fsc.get('happy_families', 0) > 0 %}<span style="color: #28a745;">{{ fsc.happy_families }} Happy Families ({{ (fsc.happy_families / fsc_total * 100)|round(0)|int }}%)</span>{% if fsc.get('my_family', 0) > 0 or fsc.get('none', 0) > 0 %}, {% endif %}{% endif %}
-        {% if fsc.get('my_family', 0) > 0 %}<span style="color: #dc3545;">{{ fsc.my_family }} MyFamily ({{ (fsc.my_family / fsc_total * 100)|round(0)|int }}%)</span>{% if fsc.get('none', 0) > 0 %}, {% endif %}{% endif %}
-        {% if fsc.get('none', 0) > 0 %}<span style="color: #6c757d;">{{ fsc.none }} None ({{ (fsc.none / fsc_total * 100)|round(0)|int }}%)</span>{% endif %}
+        {{ family_support_inline(family_support_counts) }}
     </li>
     {% endif %}
     {%- endif %}
