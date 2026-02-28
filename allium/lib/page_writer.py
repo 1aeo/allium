@@ -67,9 +67,14 @@ def _partition_family_lists(relay, family_cert_fps, fp_to_family_key, family_key
     Happy Families (family-cert) relationships are always mutual — no alleged/indirect
     possible. Only effective_family is partitioned; alleged/indirect stay as-is (MyFamily only).
 
+    Uses the same verified-key data as _set_family_support_types() for consistency:
+      - family_cert_fps = set of fingerprints with verified extracted Ed25519 key
+      - fp_to_family_key = map from fingerprint to family signing key
+      - family_key_to_fps = map from family key to list of member fingerprints
+
     Sets 2 underscore-prefixed keys on relay dict (follows _flags_html convention):
       _hf_effective  — all relays sharing same family-cert key
-      _mf_effective  — effective family members WITHOUT family-cert
+      _mf_effective  — effective family members WITHOUT verified family-cert
     """
     fp = relay.get('fingerprint', '').upper()
     effective = relay.get('effective_family') or []

@@ -1211,7 +1211,7 @@ def fetch_collector_descriptors(progress_logger=None):
                             current_family_key = None
                         elif line.startswith('fingerprint '):
                             current_fp = line[12:].replace(' ', '').upper()
-                        elif line == 'family-cert':
+                        elif line.rstrip() == 'family-cert':
                             has_cert = True
                             in_cert_block = True
                             cert_b64_lines = []
@@ -1298,8 +1298,12 @@ def fetch_collector_descriptors(progress_logger=None):
         _mark_ready(api_name)
         
         fetch_elapsed = time.time() - fetch_start
+        cert_without_key = len(final_cert_fps) - len(merged_fp_to_key)
+        key_info = f", {len(merged_fp_to_key)} with verified key"
+        if cert_without_key > 0:
+            key_info += f", {cert_without_key} cert-present-but-key-not-extracted"
         log_progress(
-            f"{len(final_seen_fps)} relays tracked ({len(final_cert_fps)} with family-cert) "
+            f"{len(final_seen_fps)} relays tracked ({len(final_cert_fps)} with family-cert{key_info}) "
             f"from {len(target_files)} hourly files "
             f"({files_downloaded} downloaded, {files_from_cache} cached) in {fetch_elapsed:.1f}s"
         )
