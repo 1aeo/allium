@@ -555,10 +555,12 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
             intelligence_formatted['performance_relay_count'] = contact_intel.get('performance_relay_count', 0)
             intelligence_formatted['maturity'] = contact_intel.get('maturity', '')
     
-    # 4. Version compliance, status counts, and version strings — single pass over members
+    # 4. Version compliance, status counts, version strings, and family support — single pass over members
     version_compliant = 0
     version_not_compliant = 0
     version_unknown = 0
+    # Family support counters (merged into version compliance loop — DRY)
+    family_support_counts = {'both': 0, 'happy_families': 0, 'my_family': 0, 'none': 0}
     version_status_counts = {
         'recommended': 0, 'experimental': 0, 'obsolete': 0,
         'new_in_series': 0, 'unrecommended': 0
@@ -591,6 +593,9 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
                 version = relay.get('version')
                 if version:
                     version_status_versions[status_key].add(version)
+        # Family support type (pre-computed by _set_family_support_types)
+        fst = relay.get('family_support_type', 'none')
+        family_support_counts[fst] = family_support_counts.get(fst, 0) + 1
     
     # Format version compliance display (only show non-zero values for not compliant and unknown)
     # Add status indicators based on compliance ratio
@@ -700,47 +705,9 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
     
     intelligence_formatted['version_status_tooltips'] = version_status_tooltips
     
-    # 4b. Family Certificate Migration (Proposal 321) — from server descriptors
-    # Reuse cached sets from relay_set to avoid O(n) set() construction per operator.
-    # Sets are built once in network_health.py and cached on relay_set.
-    family_cert_fps = getattr(relay_set, '_family_cert_fps_cache', None)
-    all_seen_fps = getattr(relay_set, '_all_seen_fps_cache', None)
-    coverage_hours = getattr(relay_set, '_descriptor_coverage_hours', 0)
-    
-    if family_cert_fps is None:
-        # Build and cache on first access (shared across all ~3000 operator pages)
-        collector_descs = getattr(relay_set, 'collector_descriptors_data', None)
-        if collector_descs and isinstance(collector_descs, dict):
-            family_cert_fps = set(collector_descs.get('family_cert_fingerprints', []))
-            all_seen_fps = set(collector_descs.get('all_seen_fingerprints', []))
-            coverage_hours = collector_descs.get('coverage_hours', 0)
-        else:
-            family_cert_fps = set()
-            all_seen_fps = set()
-        relay_set._family_cert_fps_cache = family_cert_fps
-        relay_set._all_seen_fps_cache = all_seen_fps
-        relay_set._descriptor_coverage_hours = coverage_hours
-    
-    if all_seen_fps:
-        cert_count = 0
-        not_seen_count = 0
-        for relay in members:
-            fp = relay.get('fingerprint', '').upper()
-            if fp in family_cert_fps:
-                cert_count += 1
-            elif fp not in all_seen_fps:
-                not_seen_count += 1
-        
-        if cert_count > 0 or (total_relays - not_seen_count) > 0:
-            pct_raw = cert_count / total_relays * 100 if total_relays > 0 else 0
-            # Format percentage: drop .0 when unnecessary (100% not 100.0%, but 72.6% keeps decimal)
-            pct = f'{pct_raw:.1f}'.rstrip('0').rstrip('.')
-            # Pre-format the entire display string in Python (same pattern as version_compliance)
-            result = f'{cert_count}/{total_relays} relays ({pct}%) have family-cert in server descriptors'
-            if not_seen_count > 0 and coverage_hours > 0:
-                plural = 's' if not_seen_count != 1 else ''
-                result += f', {not_seen_count} relay{plural} haven\'t published in last {coverage_hours} hours'
-            intelligence_formatted['family_cert_migration'] = result
+    # 4b. Family support counts (replaces former Family Certificate Migration section)
+    # Counts are computed in the version compliance loop above — no separate loop needed.
+    intelligence_formatted['family_support_counts'] = family_support_counts
     
     display_data['operator_intelligence'] = intelligence_formatted
     
