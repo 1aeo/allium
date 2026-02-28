@@ -113,9 +113,9 @@ class Relays:
           5. preprocess_template_data          11. Bandwidth processing
           6. categorize                        12. Re-calculate health metrics (uses bandwidth)
              propagate_as_rarity               13. Collector consensus evaluation
-             generate_aroi_leaderboards        14. Pre-compute contact page data
-             generate_smart_context            15. Pre-compute family page data
-             calculate_network_health_metrics
+             generate_aroi_leaderboards      13.5. Set family support types + cache descriptor sets
+             generate_smart_context            14. Pre-compute contact page data
+             calculate_network_health_metrics  15. Pre-compute family page data
 
         Processing order matters:
         - Uptime BEFORE leaderboards (leaderboards reuse per-relay uptime_percentages)
@@ -152,6 +152,10 @@ class Relays:
                 self._reprocess_collector_data()
             except Exception as e:
                 print(f"Warning: Collector consensus processing failed ({e}), continuing without consensus evaluation")
+
+        # Step 13.5: Set per-relay family support type and cache descriptor sets
+        # (depends on collector_descriptors_data from Step 7, consumed by Steps 14-15)
+        self._set_family_support_types()
 
         # Steps 14-15: Pre-compute page data (depends on ALL above)
         self._precompute_all_contact_page_data()
@@ -839,6 +843,46 @@ class Relays:
         """Pre-compute display strings for misc listing pages."""
         from .categorization import precompute_display_values
         precompute_display_values(self)
+
+    def _set_family_support_types(self):
+        """Set per-relay family_support_type and cache descriptor sets for downstream consumers.
+
+        Builds family_cert_fps/all_seen_fps from collector_descriptors_data and caches them
+        as _family_cert_fps_cache/_all_seen_fps_cache/_descriptor_coverage_hours for:
+          - page_writer.py (_partition_family_lists for relay-info pages)
+
+        Sets relay['family_support_type'] to one of: 'both', 'happy_families', 'my_family', 'none'.
+
+        Called at Step 13.5 in enrich_with_api_data() — after all API data is attached,
+        before precomputation (Steps 14-15). Runs exactly once, unconditionally.
+        """
+        collector_descs = getattr(self, 'collector_descriptors_data', None)
+        if collector_descs and isinstance(collector_descs, dict):
+            family_cert_fps = set(collector_descs.get('family_cert_fingerprints', []))
+            all_seen_fps = set(collector_descs.get('all_seen_fingerprints', []))
+            coverage_hours = collector_descs.get('coverage_hours', 0)
+        else:
+            family_cert_fps = set()
+            all_seen_fps = set()
+            coverage_hours = 0
+
+        # Cache for page_writer.py (_partition_family_lists)
+        self._family_cert_fps_cache = family_cert_fps
+        self._all_seen_fps_cache = all_seen_fps
+        self._descriptor_coverage_hours = coverage_hours
+
+        for relay in self.json['relays']:
+            fp = relay.get('fingerprint', '').upper()
+            has_family_cert = fp in family_cert_fps
+            has_my_family = len(relay.get('effective_family', [])) > 1
+            if has_family_cert and has_my_family:
+                relay['family_support_type'] = 'both'
+            elif has_family_cert:
+                relay['family_support_type'] = 'happy_families'
+            elif has_my_family:
+                relay['family_support_type'] = 'my_family'
+            else:
+                relay['family_support_type'] = 'none'
 
     def _precompute_all_contact_page_data(self):
         """
