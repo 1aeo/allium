@@ -149,7 +149,7 @@ def classify_file(args):
         return ('content_diff', rel_path)
 
     # Same line count: only normalize the lines that differ
-    for b_line, a_line in zip(baseline_lines, after_lines):
+    for b_line, a_line in zip(baseline_lines, after_lines, strict=True):
         if b_line != a_line:
             if VOLATILE_RE.sub('', b_line) != VOLATILE_RE.sub('', a_line):
                 return ('content_diff', rel_path)
