@@ -83,6 +83,18 @@ def _partition_family_lists(relay, family_cert_fps, fp_to_family_key, family_key
     relay['_mf_effective'] = [f for f in effective if f.upper() not in family_cert_fps]
 
 
+def _get_family_support_counts(k, contact_display_data, i):
+    """Extract family_support_counts from precomputed data for contact/family pages.
+
+    DRY helper used by both sequential (write_pages_by_key) and parallel (build_template_args) paths.
+    """
+    if k == "contact" and contact_display_data:
+        return contact_display_data.get("operator_intelligence", {}).get("family_support_counts", {})
+    elif k == "family":
+        return i.get("family_support_counts", {})
+    return {}
+
+
 # Multiprocessing globals (initialized via fork for copy-on-write memory sharing)
 _mp_relay_set = None
 _mp_template = None
@@ -741,13 +753,8 @@ def write_pages_by_key(relay_set, k):
             aroi_domain = members[0].get("aroi_domain")
             is_validated_aroi = aroi_domain and aroi_domain != "none" and aroi_domain in relay_set.validated_aroi_domains
         
-        # Family support counts for summary bullet (contact: from intelligence, family: from precompute)
-        family_support_counts = {}
-        if k == "contact" and contact_display_data:
-            intelligence = contact_display_data.get("operator_intelligence", {})
-            family_support_counts = intelligence.get("family_support_counts", {})
-        elif k == "family":
-            family_support_counts = i.get("family_support_counts", {})
+        # Family support counts for summary bullet (DRY helper)
+        family_support_counts = _get_family_support_counts(k, contact_display_data, i)
         
         # Time the template rendering
         render_start = time.time()
@@ -901,13 +908,8 @@ def build_template_args(relay_set, k, v, i, the_prefixed, validated_aroi_domains
             contact_validation_status = relay_set._get_contact_validation_status(members)
         aroi_validation_timestamp = relay_set._aroi_validation_timestamp
     
-    # Family support counts for summary bullet (contact: from intelligence, family: from precompute)
-    family_support_counts = {}
-    if k == "contact" and contact_display_data:
-        intelligence = contact_display_data.get("operator_intelligence", {})
-        family_support_counts = intelligence.get("family_support_counts", {})
-    elif k == "family":
-        family_support_counts = i.get("family_support_counts", {})
+    # Family support counts for summary bullet (DRY helper)
+    family_support_counts = _get_family_support_counts(k, contact_display_data, i)
     
     display = i.get("display", {})
     

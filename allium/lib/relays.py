@@ -936,14 +936,15 @@ class Relays:
             fp = relay.get('fingerprint', '').upper()
             has_family_cert = fp in family_cert_fps
             effective = relay.get('effective_family', [])
-            mf_only_effective = [f for f in effective if f.upper() not in family_cert_fps]
-            alleged = relay.get('alleged_family') or []
-            indirect = relay.get('indirect_family') or []
-            has_mf_content = len(mf_only_effective) > 0 or len(alleged) > 0 or len(indirect) > 0
-            if has_family_cert and has_mf_content:
-                relay['family_support_type'] = 'both'
-            elif has_family_cert:
-                relay['family_support_type'] = 'happy_families'
+
+            if has_family_cert:
+                # Check for MyFamily content: effective members without cert, or alleged/indirect
+                has_mf_content = (
+                    any(f.upper() not in family_cert_fps for f in effective)
+                    or relay.get('alleged_family')
+                    or relay.get('indirect_family')
+                )
+                relay['family_support_type'] = 'both' if has_mf_content else 'happy_families'
             elif len(effective) > 1:
                 relay['family_support_type'] = 'my_family'
             else:
