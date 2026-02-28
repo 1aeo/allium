@@ -180,19 +180,14 @@ def format_bandwidth_filter(bandwidth_bytes, unit=None, use_bits=False, decimal_
 # CUMULATIVE DATA VOLUME FORMATTING (for total data transferred)
 # =============================================================================
 
-def format_data_volume(total_bytes, use_bits=False):
+def format_data_volume(total_bytes, *, _use_bits=False):
     """Format cumulative data volume in human-readable form.
     
-    Unlike bandwidth formatting (bytes/sec rates), data *volumes* are
-    universally expressed in bytes (TB, GB, PB).  The ``use_bits``
-    parameter is accepted for API consistency with BandwidthFormatter
-    but is intentionally ignored — "I transferred 3 TB" is standard;
-    "I transferred 24 Tbit" is not.
+    Data volumes are always expressed in bytes (TB, GB, PB).
     
     Args:
         total_bytes (float): Total bytes transferred
-        use_bits (bool): Accepted for API compatibility but ignored.
-                         Data volumes are always displayed in bytes.
+        _use_bits: Ignored. Keyword-only for API compatibility with BandwidthFormatter.
     Returns:
         tuple: (formatted_value_str, unit_str) e.g. ('3.74', 'TB')
     """
@@ -215,16 +210,14 @@ def format_data_volume(total_bytes, use_bits=False):
         return _smart_fmt(total_bytes / 1e3), "KB"
 
 
-def format_data_volume_with_unit(total_bytes, use_bits=False):
+def format_data_volume_with_unit(total_bytes, *, _use_bits=False):
     """Format cumulative data volume as a single string like '3.74 TB'.
     
     Returns 'N/A' for zero, negative, or falsy values.
-    The ``use_bits`` parameter is accepted for API compatibility but
-    ignored — data volumes are always displayed in bytes (TB, GB, PB).
     
     Args:
         total_bytes (float): Total bytes transferred
-        use_bits (bool): Accepted for API compatibility but ignored.
+        _use_bits: Ignored. Keyword-only for API compatibility with BandwidthFormatter.
     Returns:
         str: Formatted string e.g. '3.74 TB' or 'N/A'
     """
