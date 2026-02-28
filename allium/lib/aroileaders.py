@@ -369,6 +369,7 @@ def _collect_operator_metrics(relays_instance):
     country_data = relays_instance.json.get('sorted', {}).get('country', {})
     as_sorted_data = relays_instance.json.get('sorted', {}).get('as', {})
     from .country_utils import get_rare_countries_weighted_with_existing_data
+    from .bandwidth_formatter import pick_best_period
     all_rare_countries = get_rare_countries_weighted_with_existing_data(country_data, len(all_relays))
     valid_rare_countries = {country for country in all_rare_countries if len(country) == 2 and country.isalpha()}
     
@@ -500,6 +501,7 @@ def _collect_operator_metrics(relays_instance):
         validated_bandwidth = 0
         validated_consensus_weight = 0.0
         validated_countries = set()
+        td_sums = {'1_month': 0, '6_months': 0, '1_year': 0, '5_years': 0}
         
         for relay in operator_relays:
             or_addresses = relay.get('or_addresses', [])
@@ -592,6 +594,10 @@ def _collect_operator_metrics(relays_instance):
                 else:
                     # This relay has AROI but failed validation
                     invalid_relay_count += 1
+            
+            relay_td = relay.get('total_data', {})
+            for _p in ('1_month', '6_months', '1_year', '5_years'):
+                td_sums[_p] += relay_td.get(_p, 0)
         
         unique_ipv4_count = len(unique_ipv4_addresses)
         unique_ipv6_count = len(unique_ipv6_addresses)
@@ -742,6 +748,9 @@ def _collect_operator_metrics(relays_instance):
         
         # Note: Validation tracking is now merged with IPv4/IPv6 loop above for efficiency
         
+        # Total data transferred: pick best-available period from sums collected above
+        operator_total_data, operator_total_data_period = pick_best_period(td_sums)
+        
         # Store operator data (mix of existing + new calculations)
         aroi_operators[operator_key] = {
             # === EXISTING CALCULATIONS (REUSED) ===
@@ -839,6 +848,10 @@ def _collect_operator_metrics(relays_instance):
             'validated_consensus_weight': validated_consensus_weight,
             'validated_country_count': validated_country_count,
             
+            # === TOTAL DATA TRANSFERRED (NEW) ===
+            'total_data_transferred': operator_total_data,
+            'total_data_period': operator_total_data_period,
+            
             # Keep minimal relay data for potential future use
             'relays': operator_relays
         }
@@ -883,6 +896,7 @@ def _rank_operators(aroi_operators):
         'bandwidth_masters':  _top_n(aroi_operators, 'bandwidth_6m_score', filter_fn=_bw_masters_filter),
         'bandwidth_legends':  _top_n(aroi_operators, 'bandwidth_5y_score', filter_fn=_bw_legends_filter),
         'validated_relays':   _top_n(aroi_operators, 'validated_relay_count', filter_fn=_validated_filter),
+        'total_data_champions': _top_n(aroi_operators, 'total_data_transferred'),
     }
 
     return leaderboards
@@ -898,6 +912,13 @@ def _format_leaderboard_entries(leaderboards, aroi_operators, relays_instance):
     Returns:
         dict with 'leaderboards' (formatted), 'summary' (stats), 'raw_operators'
     """
+    from .bandwidth_formatter import format_data_volume_with_unit, compute_total_data_pct
+    
+    # Get per-period network totals for period-matched percentage calculations
+    _net_by_period = {}
+    if hasattr(relays_instance, 'json') and relays_instance.json.get('network_health'):
+        _net_by_period = relays_instance.json['network_health'].get('network_total_data_by_period', {})
+    
     # Format data for template rendering with bandwidth units (reuse existing formatters)
     formatted_leaderboards = {}
     for category, data in leaderboards.items():
@@ -1172,6 +1193,12 @@ def _format_leaderboard_entries(leaderboards, aroi_operators, relays_instance):
                 formatted_validated_bandwidth, validated_bandwidth_unit = _format_bandwidth_with_auto_unit(
                     metrics['validated_bandwidth'], relays_instance.bandwidth_formatter
                 )
+            
+            # Format total data transferred for all categories (reused in template)
+            raw_total_data = metrics.get('total_data_transferred', 0)
+            raw_total_data_period = metrics.get('total_data_period')
+            formatted_total_data_transferred = format_data_volume_with_unit(raw_total_data)
+            total_data_pct = compute_total_data_pct(raw_total_data, raw_total_data_period, _net_by_period) if raw_total_data_period else ""
 
             
             display_name = metrics['aroi_domain'] if metrics['aroi_domain'] and metrics['aroi_domain'] != 'none' else operator_key
@@ -1290,6 +1317,10 @@ def _format_leaderboard_entries(leaderboards, aroi_operators, relays_instance):
                 'validated_consensus_weight': metrics['validated_consensus_weight'],
                 'validated_consensus_weight_pct': f"{metrics['validated_consensus_weight'] * 100:.2f}%",
                 'validated_country_count': metrics['validated_country_count'],
+                
+                # === TOTAL DATA TRANSFERRED (NEW) ===
+                'total_data_transferred': formatted_total_data_transferred,
+                'total_data_pct': total_data_pct,
             }
             formatted_data.append(formatted_entry)
         
@@ -1336,7 +1367,8 @@ def _format_leaderboard_entries(leaderboards, aroi_operators, relays_instance):
             'network_veterans': 'Network Veterans',
             'ipv4_leaders': 'IPv4 Address Leaders',
             'ipv6_leaders': 'IPv6 Address Leaders',
-            'validated_relays': 'AROI Validation Champions'
+            'validated_relays': 'AROI Validation Champions',
+            'total_data_champions': 'Total Data Transferred Champions (5-Year)',
         }
     }
     

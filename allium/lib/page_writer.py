@@ -654,6 +654,10 @@ def write_pages_by_key(relay_set, k):
         middle_bandwidth = relay_set.bandwidth_formatter.format_bandwidth_with_unit(i["middle_bandwidth"], bandwidth_unit)
         exit_bandwidth = relay_set.bandwidth_formatter.format_bandwidth_with_unit(i["exit_bandwidth"], bandwidth_unit)
         
+        display = i.get("display", {})
+        total_data_formatted = display.get("total_data_formatted", "N/A")
+        total_data_pct = display.get("total_data_pct", "")
+        
         # Calculate network position using DRY helper
         network_position = _compute_network_position_safe(
             i["guard_count"], i["middle_count"], i["exit_count"], len(members))
@@ -711,6 +715,8 @@ def write_pages_by_key(relay_set, k):
             relay_subset=members,  # Pass directly for thread safety
             bandwidth=bandwidth,
             bandwidth_unit=bandwidth_unit,
+            total_data_formatted=total_data_formatted,
+            total_data_pct=total_data_pct,
             guard_bandwidth=guard_bandwidth,
             middle_bandwidth=middle_bandwidth,
             exit_bandwidth=exit_bandwidth,
@@ -852,8 +858,12 @@ def build_template_args(relay_set, k, v, i, the_prefixed, validated_aroi_domains
             contact_validation_status = relay_set._get_contact_validation_status(members)
         aroi_validation_timestamp = relay_set._aroi_validation_timestamp
     
+    display = i.get("display", {})
+    
     return {
         'relay_subset': members,
+        'total_data_formatted': display.get("total_data_formatted", "N/A"),
+        'total_data_pct': display.get("total_data_pct", ""),
         'bandwidth': bw.format_bandwidth_with_unit(i["bandwidth"], bw_unit),
         'bandwidth_unit': bw_unit,
         'guard_bandwidth': bw.format_bandwidth_with_unit(i["guard_bandwidth"], bw_unit),

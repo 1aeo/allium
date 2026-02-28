@@ -45,6 +45,7 @@
     <th></th>
     <th>Nickname</th>
     <th title="Observed bandwidth capacity: An estimate of the capacity this relay can handle. The relay remembers the max bandwidth sustained output over any ten second period in the past 5 days, and another sustained input. The observed value is the lesser of these two numbers.">BW Cap ({{ bandwidth }} {{ bandwidth_unit }})</th>
+    <th title="Total data transferred by this relay (read + write, 5yr). Source: Onionoo /bandwidth.">Total Data</th>
     <th>Uptime/Downtime</th>
     <th title="{% if contact_display_data and contact_display_data.outliers and contact_display_data.outliers.tooltip %}{{ contact_display_data.outliers.tooltip }}{% else %}Statistical outliers: ≥2σ from average{% endif %}">Uptime (1M/6M/1Y/5Y)</th>
     <th title="Flag-specific uptime percentages showing the reliability of this relay when operating in its primary network role. Priority: Exit > Guard > Fast > Running flags.">Flag Uptime (1M/6M/1Y/5Y)</th>
@@ -112,6 +113,13 @@
         {% else -%}
             &nbsp;&nbsp;<span style="color: #6c757d;" title="Bandwidth measurement status unknown">?</span>
         {% endif -%}
+    </td>
+    <td>
+        {% if relay.get('total_data_display') and relay['total_data_display'] != 'N/A' %}
+            <span title="Total data ({{ relay['total_data_period'] }})">{{ relay['total_data_display'] }}</span>
+        {% else %}
+            N/A
+        {% endif %}
     </td>
     <td>
         {% if relay.get('uptime_display') -%}

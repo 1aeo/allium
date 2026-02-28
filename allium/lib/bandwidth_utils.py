@@ -29,6 +29,32 @@ def calculate_network_cv_statistics(all_operators_data):
     except Exception:
         return None
 
+def calculate_total_data_from_history(history_data):
+    """Calculate total bytes transferred from an Onionoo bandwidth history object.
+    
+    Each period contains compressed data points. Total bytes for a period:
+      total = sum(value * factor for each data point) * interval
+    where factor converts stored values to bytes/sec and interval is seconds per point.
+    
+    Args:
+        history_data (dict): e.g. {'1_month': {'factor': ..., 'interval': ..., 'values': [...]}, ...}
+    
+    Returns:
+        dict: {'1_month': bytes, '6_months': bytes, '1_year': bytes, '5_years': bytes}
+    """
+    result = {}
+    for period in ('1_month', '6_months', '1_year', '5_years'):
+        pd = history_data.get(period, {})
+        factor = pd.get('factor', 0)
+        interval = pd.get('interval', 0)
+        values = pd.get('values', [])
+        if factor and interval and values:
+            result[period] = sum(v * factor for v in values if v is not None) * interval
+        else:
+            result[period] = 0
+    return result
+
+
 def calculate_relay_bandwidth_average(bandwidth_values):
     """Calculate average bandwidth from a list of bandwidth values."""
     if not bandwidth_values:
@@ -474,8 +500,15 @@ def process_all_bandwidth_data_consolidated(all_relays, bandwidth_data, include_
                     
                     flag_data[flag] = bandwidth_averages
         
+        # Calculate total data transferred (read + write) per period
+        write_total = calculate_total_data_from_history(bandwidth_relay.get('write_history', {}))
+        read_total = calculate_total_data_from_history(read_history)
+        total_data = {p: write_total.get(p, 0) + read_total.get(p, 0)
+                      for p in ('1_month', '6_months', '1_year', '5_years')}
+        
         relay_bandwidth_data[fingerprint] = {
             'bandwidth_averages': bandwidth_averages,
+            'total_data': total_data,
             'flag_data': flag_data,
             # Overload fields from bandwidth endpoint (for stability computation)
             'overload_ratelimits': bandwidth_relay.get('overload_ratelimits'),

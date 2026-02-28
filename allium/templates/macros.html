@@ -149,7 +149,7 @@
     </div>
 {%- endmacro %}
 
-{% macro detail_summary(bandwidth, bandwidth_unit, guard_bandwidth, middle_bandwidth, exit_bandwidth, consensus_weight_fraction, guard_consensus_weight_fraction, middle_consensus_weight_fraction, exit_consensus_weight_fraction, guard_count, middle_count, exit_count, total_relays, network_position, aroi_domain=none, contact=none, contact_md5=none, page_ctx=none, unique_aroi_list=none, unique_contact_list=none, unique_aroi_count=none, unique_contact_count=none, unique_aroi_contact_html=none, aroi_to_contact_map=none, contact_validation_status=none) -%}
+{% macro detail_summary(bandwidth, bandwidth_unit, guard_bandwidth, middle_bandwidth, exit_bandwidth, consensus_weight_fraction, guard_consensus_weight_fraction, middle_consensus_weight_fraction, exit_consensus_weight_fraction, guard_count, middle_count, exit_count, total_relays, network_position, aroi_domain=none, contact=none, contact_md5=none, page_ctx=none, unique_aroi_list=none, unique_contact_list=none, unique_aroi_count=none, unique_contact_count=none, unique_aroi_contact_html=none, aroi_to_contact_map=none, contact_validation_status=none, total_data_formatted=none, total_data_pct=none) -%}
 <ul style="list-style-type: disc; padding-left: 20px; margin-bottom: 15px;">
     <li><strong><span title="Observed bandwidth capacity represents the estimated maximum throughput this group can handle, combining total, guard, middle, and exit bandwidth contributions">Bandwidth Capacity</span>:</strong> ~{{ bandwidth }} {{ bandwidth_unit }}
         {%- if guard_count > 0 or middle_count > 0 or exit_count > 0 %} 
@@ -166,6 +166,9 @@
         )
         {%- endif %}</li>
     <li><strong><span title="Network position indicates the strategic role distribution of relays. Labels: Guard-focused (>60% guard), Exit-focused (>40% exit), Multi-role (both guard and exit >20%), Balanced (mixed roles), Guard-only (100% guard), Exit-only (100% exit), Middle-only (100% middle)">Network Position</span>:</strong> {{ network_position.formatted_string }}</li>
+    {%- if total_data_formatted and total_data_formatted != 'N/A' %}
+    <li><strong><span title="Total data transferred (read + write) over bandwidth history. Source: Onionoo /bandwidth endpoint.">Total Data Transferred</span>:</strong> {{ total_data_formatted }}{% if total_data_pct %} ({{ total_data_pct }}){% endif %}</li>
+    {%- endif %}
     {%- if unique_aroi_count is not none and unique_contact_count is not none %}
     <li><strong><span title="Unique AROI operators and contact information for this network">Unique AROI Operators and Contact Information</span>:</strong> {{ unique_contact_count }}
         {%- if unique_aroi_contact_html %}, {{ unique_aroi_contact_html|safe }}{% endif -%}

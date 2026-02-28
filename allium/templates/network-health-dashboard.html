@@ -146,6 +146,26 @@ Network Health Dashboard
                     <span class="metric-value">{{ relays.json.network_health.total_bandwidth_formatted }}</span>
                     <span class="metric-label">Total Capacity</span>
                 </div>
+                <div class="metric-grid" style="grid-template-columns: repeat(1, 1fr);">
+                    <div class="metric-item" title="Total data transferred by all relays over 5-year bandwidth history (read + write combined). Source: Onionoo /bandwidth endpoint.">
+                        <span class="metric-value">{{ relays.json.network_health.network_total_data_formatted }}</span>
+                        <span class="metric-label">Total Data Transferred (5yr history)</span>
+                    </div>
+                </div>
+                <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
+                    <div class="metric-item" title="Total data transferred by Exit relays over 5-year history.">
+                        <span class="metric-value">{{ relays.json.network_health.exit_total_data_formatted }}</span>
+                        <span class="metric-label">Exit Total Data</span>
+                    </div>
+                    <div class="metric-item" title="Total data transferred by Guard relays over 5-year history.">
+                        <span class="metric-value">{{ relays.json.network_health.guard_total_data_formatted }}</span>
+                        <span class="metric-label">Guard Total Data</span>
+                    </div>
+                    <div class="metric-item" title="Total data transferred by Middle relays over 5-year history.">
+                        <span class="metric-value">{{ relays.json.network_health.middle_total_data_formatted }}</span>
+                        <span class="metric-label">Middle Total Data</span>
+                    </div>
+                </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
                     <div class="metric-item" title="Total observed bandwidth capacity of all Exit relays. Critical for network's ability to serve user traffic.">
                         <span class="metric-value">{{ relays.json.network_health.exit_bandwidth_formatted }}</span>
