@@ -73,8 +73,13 @@ PAGE_TYPE_MAP = {
 VOLATILE_RE = re.compile(
     r'Validation data last updated: [^\n<]+'          # AROI validation timestamp
     r'|Last updated: [^<]+'                            # relay-list header timestamp
-    r'|Last fetch was at [^\n<]+'                      # fetch timestamp (any format)
-    r'|fetched [^\n<]+'                                # collector fetched timestamp (any format)
+    r'|Last fetch was at (?:'
+    r'(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun), \d{1,2} '
+    r'(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) '
+    r'\d{4} \d{2}:\d{2}:\d{2} \w+'
+    r'|\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}'
+    r')'
+    r'|fetched \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}'
     r'|\d+ (?:second|minute|hour|day|week|month|year)s?\s*ago'  # "5 days ago"
     r'|\d+[ywdhms]\s*(?:\d+[ywdhms]\s*)*(?:ago)?(?![a-zA-Z])'  # "3w 2d 5h 17m ago" (not "1st")
     r'|UP \d+%'                                        # uptime percentage
