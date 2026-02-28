@@ -458,9 +458,15 @@ def calculate_network_health_metrics(relay_set):
         all_seen_fps = set(collector_descs.get('all_seen_fingerprints', []))
     
     # Verified-key set: relays with EXTRACTED Ed25519 family signing key (strong check).
+    # Built directly from family_cert_groups (same source as _fp_to_family_key in relays.py)
+    # rather than reading relay_set._fp_to_family_key, because _calculate_network_health_metrics
+    # may run before _set_family_support_types() which builds that map.
     # Used for operator relationship claims (hf_some_operators, hf_all_operators).
     # family_cert_fps (line-presence) is kept for the informational relay adoption count.
-    verified_family_cert_fps = set(getattr(relay_set, '_fp_to_family_key', {}).keys())
+    verified_family_cert_fps = set()
+    if collector_descs and isinstance(collector_descs, dict):
+        for group_fps in collector_descs.get('family_cert_groups', {}).values():
+            verified_family_cert_fps.update(fp.upper() for fp in group_fps)
     
     # Initialize all counters and collectors for SINGLE LOOP
     authority_count = bad_exit_count = 0
