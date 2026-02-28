@@ -88,9 +88,43 @@ safety check
 4. **Set up development environment**: Use the developer setup above
 5. **Make your changes** and add tests if applicable
 6. **Run tests**: `pytest` and `flake8 .`
-7. **Commit your changes**: `git commit -am "Add your feature"`
-8. **Push to your fork**: `git push origin feature/your-feature`
-9. **Create a Pull Request** on GitHub
+7. **Run output comparison** for major changes (see below)
+8. **Commit your changes**: `git commit -am "Add your feature"`
+9. **Push to your fork**: `git push origin feature/your-feature`
+10. **Create a Pull Request** on GitHub
+
+## 🔍 Output Comparison (Major Changes)
+
+For any change that affects HTML output (templates, data processing, page
+generation), run a before/after comparison to verify nothing unexpected broke:
+
+```bash
+# 1. Generate baseline BEFORE your change
+python3 allium/allium.py --out allium/www_baseline --apis all --progress
+
+# 2. Make your code changes
+
+# 3. Generate output AFTER your change
+python3 allium/allium.py --out allium/www_after --apis all --progress
+
+# 4. Compare (~8 seconds for ~22k files)
+python3 compare_outputs.py
+```
+
+The comparison tool classifies every file as:
+- **Identical** — no change at all
+- **Timestamp only** — only volatile data changed (timestamps, uptimes, time-ago strings)
+- **Content diff** — real structural/content change that needs review
+
+Files flagged as "content diff" are shown with normalized unified diffs
+(timestamps stripped) so you see only meaningful changes. Review each to
+confirm they match your intended code change.
+
+Options: `--quiet` for summary only, `--max-diffs N` to limit output,
+`--diff-lines N` to control diff length per file. Exit code 0 means clean,
+1 means review needed.
+
+The `allium/www_baseline/` and `allium/www_after/` directories are gitignored.
 
 ## 📝 Code Style
 

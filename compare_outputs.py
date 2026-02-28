@@ -17,6 +17,7 @@ Optimized for ~21k file pairs:
 Exit codes:
   0 = no real content differences (timestamp-only changes are expected)
   1 = real content differences or file additions/removals detected
+  2 = usage error (missing directories)
 """
 
 import argparse
@@ -43,6 +44,20 @@ BINARY_EXTENSIONS = frozenset({
 DIRECT_COMPARE_EXTENSIONS = frozenset({
     '.css', '.js', '.json', '.xml', '.txt',
 })
+
+# Output directory prefix → human-readable label for report breakdown
+PAGE_TYPE_MAP = {
+    'relay': 'relay pages',
+    'contact': 'contact pages',
+    'as': 'AS pages',
+    'country': 'country pages',
+    'family': 'family pages',
+    'flag': 'flag pages',
+    'platform': 'platform pages',
+    'first_seen': 'first_seen pages',
+    'misc': 'misc pages',
+    'static': 'static files',
+}
 
 # Single compiled regex matching ALL volatile patterns in one pass.
 # Order matters: longer/more-specific patterns first to avoid partial matches.
@@ -153,6 +168,21 @@ def get_files(directory):
 
 
 # ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _read_text(path):
+    """Read a file as text, replacing encoding errors. Returns list of lines."""
+    with open(path, 'r', errors='replace') as f:
+        return f.readlines()
+
+
+def _normalize_lines(lines):
+    """Replace volatile content with [VOLATILE] placeholder in each line."""
+    return [VOLATILE_RE.sub('[VOLATILE]', line) for line in lines]
+
+
+# ---------------------------------------------------------------------------
 # Diff display
 # ---------------------------------------------------------------------------
 
@@ -169,17 +199,11 @@ def show_diffs(diff_files, baseline_files, after_files, max_lines):
             continue
 
         try:
-            with open(bp, 'r', errors='replace') as f:
-                baseline_lines = f.readlines()
-            with open(ap, 'r', errors='replace') as f:
-                after_lines = f.readlines()
+            bl_norm = _normalize_lines(_read_text(bp))
+            al_norm = _normalize_lines(_read_text(ap))
         except Exception as e:
             print(f"\n--- {fp} --- ERROR: {e}")
             continue
-
-        # Normalize both sides so diff shows only real changes
-        bl_norm = [VOLATILE_RE.sub('[VOLATILE]', line) for line in baseline_lines]
-        al_norm = [VOLATILE_RE.sub('[VOLATILE]', line) for line in after_lines]
 
         diff = list(difflib.unified_diff(
             bl_norm, al_norm,
@@ -204,21 +228,8 @@ def categorize_diffs(diff_files):
     """Group diff files by page type for the summary breakdown."""
     categories = {}
     for fp in diff_files:
-        # Match on first path component
         first = fp.split('/')[0] if '/' in fp else ''
-        cat_map = {
-            'relay': 'relay pages',
-            'contact': 'contact pages',
-            'as': 'AS pages',
-            'country': 'country pages',
-            'family': 'family pages',
-            'flag': 'flag pages',
-            'platform': 'platform pages',
-            'first_seen': 'first_seen pages',
-            'misc': 'misc pages',
-            'static': 'static files',
-        }
-        cat = cat_map.get(first, 'root pages')
+        cat = PAGE_TYPE_MAP.get(first, 'root pages')
         categories.setdefault(cat, []).append(fp)
     return categories
 
@@ -362,9 +373,11 @@ def main():
     baseline_files = get_files(args.baseline)
     after_files = get_files(args.after)
 
-    only_baseline = sorted(set(baseline_files) - set(after_files))
-    only_after = sorted(set(after_files) - set(baseline_files))
-    common = sorted(set(baseline_files) & set(after_files))
+    baseline_keys = baseline_files.keys()
+    after_keys = after_files.keys()
+    only_baseline = sorted(baseline_keys - after_keys)
+    only_after = sorted(after_keys - baseline_keys)
+    common = sorted(baseline_keys & after_keys)
     t1 = time.time()
 
     # Phase 2: Parallel classify — distribute file pairs across workers
