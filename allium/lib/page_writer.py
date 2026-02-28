@@ -77,6 +77,11 @@ def _partition_family_lists(relay, family_cert_fps, fp_to_family_key, family_key
     family_key = fp_to_family_key.get(fp)
     if family_key:
         relay['_hf_effective'] = family_key_to_fps.get(family_key, [])
+    elif fp in family_cert_fps:
+        hf_members = [f for f in effective if f.upper() in family_cert_fps]
+        if fp not in [m.upper() for m in hf_members]:
+            hf_members = [fp] + hf_members
+        relay['_hf_effective'] = sorted(hf_members)
     else:
         relay['_hf_effective'] = []
 
