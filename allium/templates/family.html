@@ -14,7 +14,7 @@
 {{ navigation('families', page_ctx) }}
 {% endblock -%}
 {% block description %}Relays with effective family member <code>{{ value|escape }}</code> summary:
-{{ detail_summary(bandwidth, bandwidth_unit, guard_bandwidth, middle_bandwidth, exit_bandwidth, consensus_weight_fraction, guard_consensus_weight_fraction, middle_consensus_weight_fraction, exit_consensus_weight_fraction, guard_count, middle_count, exit_count, relay_subset|length, network_position, family_aroi_domain, family_contact, family_contact_md5, page_ctx, contact_validation_status=contact_validation_status, total_data_formatted=total_data_formatted, total_data_pct=total_data_pct) }}
+{{ detail_summary(bandwidth, bandwidth_unit, guard_bandwidth, middle_bandwidth, exit_bandwidth, consensus_weight_fraction, guard_consensus_weight_fraction, middle_consensus_weight_fraction, exit_consensus_weight_fraction, guard_count, middle_count, exit_count, relay_subset|length, network_position, family_aroi_domain, family_contact, family_contact_md5, page_ctx, contact_validation_status=contact_validation_status, family_support_counts=family_support_counts, total_data_formatted=total_data_formatted, total_data_pct=total_data_pct) }}
 {% endblock %}
 
 {# AROI Validation Issues are now integrated into the 4-section relay tables #}

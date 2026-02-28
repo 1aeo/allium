@@ -1,5 +1,5 @@
 {% extends "contact-relay-list.html" %}
-{% from "macros.html" import navigation, detail_summary, aroi_validation_badge, aroi_sub_bullets %}
+{% from "macros.html" import navigation, detail_summary, aroi_validation_badge, aroi_sub_bullets, family_support_inline %}
 {% set contact_hash = relay_subset[0]['contact_md5'] %}
 {% if relay_subset[0]['contact'] %}
     {% set contact = relay_subset[0]['contact']|escape %}
@@ -166,8 +166,14 @@
                 </li>
                 {% endif %}
                 
-                {% if intelligence.family_cert_migration %}
-                <li id="family-cert"><a href="#family-cert" style="color: inherit; text-decoration: none;"><strong><span title="Relays publishing a family-cert entry in their server descriptor, proving family membership via an ed25519 family key per Proposal 321. Source: CollecTor server descriptors.">Family Certificate Migration</span>:</strong></a> {{ intelligence.family_cert_migration }}</li>
+                {% if intelligence.family_support_counts %}
+                {% set fsc = intelligence.family_support_counts %}
+                {% set fsc_total = fsc.get('both', 0) + fsc.get('happy_families', 0) + fsc.get('my_family', 0) + fsc.get('none', 0) %}
+                {% if fsc_total > 0 %}
+                <li id="family-support"><a href="#family-support" style="color: inherit; text-decoration: none;"><strong><span title="Family membership method breakdown per relay: Both = Happy Families (family-cert) and MyFamily, Happy Families = family-cert only, MyFamily = legacy only, None = no family membership. Source: CollecTor server descriptors.">Family Support</span>:</strong></a>
+                    {{ family_support_inline(fsc) }}
+                </li>
+                {% endif %}
                 {% endif %}
             </ul>
         </div>

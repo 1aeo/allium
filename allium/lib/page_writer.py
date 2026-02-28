@@ -57,6 +57,44 @@ ENV.filters['split'] = lambda s, sep='/': s.split(sep) if s else []
 ENV.filters['format_timestamp'] = format_timestamp
 ENV.filters['format_timestamp_ago'] = format_timestamp_ago
 
+# ============================================================================
+# HELPER: Partition effective_family by family-cert status
+# ============================================================================
+
+def _partition_family_lists(relay, family_cert_fps, fp_to_family_key, family_key_to_fps):
+    """Partition effective_family by family-cert status for relay-info template.
+
+    Happy Families (family-cert) relationships are always mutual — no alleged/indirect
+    possible. Only effective_family is partitioned; alleged/indirect stay as-is (MyFamily only).
+
+    Sets 2 underscore-prefixed keys on relay dict (follows _flags_html convention):
+      _hf_effective  — all relays sharing same family-cert key
+      _mf_effective  — effective family members WITHOUT family-cert
+    """
+    fp = relay.get('fingerprint', '').upper()
+    effective = relay.get('effective_family') or []
+
+    family_key = fp_to_family_key.get(fp)
+    if family_key:
+        relay['_hf_effective'] = family_key_to_fps.get(family_key, [])
+    else:
+        relay['_hf_effective'] = []
+
+    relay['_mf_effective'] = [f for f in effective if f.upper() not in family_cert_fps]
+
+
+def _get_family_support_counts(k, contact_display_data, i):
+    """Extract family_support_counts from precomputed data for contact/family pages.
+
+    DRY helper used by both sequential (write_pages_by_key) and parallel (build_template_args) paths.
+    """
+    if k == "contact" and contact_display_data:
+        return contact_display_data.get("operator_intelligence", {}).get("family_support_counts", {})
+    elif k == "family":
+        return i.get("family_support_counts", {})
+    return {}
+
+
 # Multiprocessing globals (initialized via fork for copy-on-write memory sharing)
 _mp_relay_set = None
 _mp_template = None
@@ -226,9 +264,16 @@ def _compute_family_predata(relay_set, family_hash):
         family_data["guard_count"], family_data["middle_count"],
         family_data["exit_count"], len(members))
     
+    # Family support type counts (reads pre-computed field, no fingerprint lookups)
+    family_support_counts = {'both': 0, 'happy_families': 0, 'my_family': 0, 'none': 0}
+    for relay in members:
+        fst = relay.get('family_support_type', 'none')
+        family_support_counts[fst] = family_support_counts.get(fst, 0) + 1
+    
     return {
         "contact_validation_status": contact_validation_status,
         "network_position": network_position,
+        "family_support_counts": family_support_counts,
     }
 
 
@@ -708,6 +753,9 @@ def write_pages_by_key(relay_set, k):
             aroi_domain = members[0].get("aroi_domain")
             is_validated_aroi = aroi_domain and aroi_domain != "none" and aroi_domain in relay_set.validated_aroi_domains
         
+        # Family support counts for summary bullet (DRY helper)
+        family_support_counts = _get_family_support_counts(k, contact_display_data, i)
+        
         # Time the template rendering
         render_start = time.time()
         rendered = template.render(
@@ -768,7 +816,9 @@ def write_pages_by_key(relay_set, k):
             # Pass validated domains set to all templates for vanity URL links
             validated_aroi_domains=relay_set.validated_aroi_domains if hasattr(relay_set, 'validated_aroi_domains') else set(),
             # Base URL for vanity URLs
-            base_url=relay_set.base_url
+            base_url=relay_set.base_url,
+            # Family support counts for summary bullets
+            family_support_counts=family_support_counts
         )
         render_time += time.time() - render_start
 
@@ -858,6 +908,9 @@ def build_template_args(relay_set, k, v, i, the_prefixed, validated_aroi_domains
             contact_validation_status = relay_set._get_contact_validation_status(members)
         aroi_validation_timestamp = relay_set._aroi_validation_timestamp
     
+    # Family support counts for summary bullet (DRY helper)
+    family_support_counts = _get_family_support_counts(k, contact_display_data, i)
+    
     display = i.get("display", {})
     
     return {
@@ -909,6 +962,7 @@ def build_template_args(relay_set, k, v, i, the_prefixed, validated_aroi_domains
         'is_validated_aroi': is_validated_aroi,
         'validated_aroi_domains': validated_aroi_domains,
         'base_url': relay_set.base_url,
+        'family_support_counts': family_support_counts,
     }
 
 def write_pages_parallel(relay_set, k, sorted_values, template, output_path, the_prefixed, start_time):
@@ -1016,6 +1070,10 @@ def write_relay_info(relay_set):
     validated_aroi_domains = getattr(relay_set, 'validated_aroi_domains', set())
     aroi_validation_timestamp = relay_set._aroi_validation_timestamp
     base_url = relay_set.base_url
+    # Pre-fetch family cert data for partitioned family display (O(1) per member)
+    family_cert_fps = getattr(relay_set, '_family_cert_fps_cache', set())
+    fp_to_family_key = getattr(relay_set, '_fp_to_family_key', {})
+    family_key_to_fps = getattr(relay_set, '_family_key_to_fps', {})
 
     for relay in relay_list:
         if not relay["fingerprint"].isalnum():
@@ -1033,6 +1091,9 @@ def write_relay_info(relay_set):
         
         full_context = standard_contexts.get_relay_page_context(relay, contact_display_data)
         page_ctx = full_context
+        
+        # Partition family lists by family-cert status for template display
+        _partition_family_lists(relay, family_cert_fps, fp_to_family_key, family_key_to_fps)
         
         rendered = template.render(
             relay=relay, page_ctx=page_ctx, relays=relay_set, contact_display_data=contact_display_data,

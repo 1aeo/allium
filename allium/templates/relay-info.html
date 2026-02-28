@@ -13,6 +13,22 @@
 {%- macro pctile(value, label) -%}
 {% if value is not none %}<span style="color: {% if value >= 90 %}#28a745{% elif value >= 50 %}#495057{% else %}#856404{% endif %};" title="This relay's {{ label }} is higher than {{ value }}% of all relays on the network.">({{ value|round(0)|int }}th pctl)</span>{% endif %}
 {%- endmacro -%}
+{# DRY macro: render a family member fingerprint list (replaces 3 near-identical inline <pre> blocks) #}
+{%- macro family_member_list(members, relay_fp, show_self=false) -%}
+{% if members -%}
+<pre class="pre-scrollable" style="max-height: 80px; font-size: 11px; margin-top: 5px;">
+{%- for fp in members -%}
+{%- if show_self and fp == relay_fp -%}
+{{ fp|escape }} (this relay){{ '\n' if not loop.last }}
+{%- else -%}
+<a href="../{{ fp|escape }}/">{{ fp|escape }}</a>{{ '\n' if not loop.last }}
+{%- endif -%}
+{%- endfor -%}
+</pre>
+{%- else -%}
+<span style="color: #6c757d;">none</span>
+{%- endif -%}
+{%- endmacro -%}
 {% block title -%}
 	Tor Relays :: {{ relay['nickname']|escape }}
 {% endblock -%}
@@ -28,13 +44,17 @@
     color: inherit;
 }
 
-/* Highlight section when targeted */
+/* Highlight section when targeted (outline avoids layout shift/overlap) */
 :target {
     background-color: #fff3cd !important;
-    padding: 8px;
     border-radius: 4px;
-    margin: -8px;
+    outline: 3px solid #ffe69c;
+    outline-offset: 4px;
     transition: background-color 0.3s;
+}
+dt:target {
+    padding: 4px 6px;
+    margin: -4px -6px 6px;
 }
 
 /* Backward-compat anchor aliases: invisible but still scrollable */
@@ -1057,51 +1077,88 @@ Country: unknown
 {# Right Column: Family (fingerprint-based) #}
 <div class="col-md-6">
 <h5 class="subsection-header">Family Configuration</h5>
+{# Backward-compatible anchors for old direct links #}
+<span id="effective-family" class="compat-anchor"></span><span id="alleged-family" class="compat-anchor"></span><span id="indirect-family" class="compat-anchor"></span>
+
+{# Pre-compute partitioned lists so counts are available in Family Support summary #}
+{% set hf_eff = relay.get('_hf_effective', []) %}
+{% set mf_eff = relay.get('_mf_effective', []) %}
+{% set total_family = hf_eff|length + mf_eff|length %}
+
+{# Family Support Type — at top #}
 <dl>
-    <dt id="effective-family" title="Array of fingerprints of relays that are in an effective, mutual family relationship with this relay. These relays are part of this relay's family and they consider this relay to be part of their family. Always contains the relay's own fingerprint. Omitted if the descriptor containing this information cannot be found.">
-        <a href="#effective-family" class="anchor-link">Effective Family {{ plural(relay['effective_family']|length, 'Member') }}: {{ relay['effective_family']|length }}</a>
-        {% if relay['effective_family']|length > 1 %} (<a href="{{ page_ctx.path_prefix }}family/{{ relay['fingerprint']|escape }}/">View</a>){% endif %}
+    <dt id="family-support" style="font-size: 14px;" title="Family membership method: Happy Families uses cryptographic family-cert, MyFamily uses legacy declarations.">
+        <a href="#family-support" class="anchor-link">Family Support</a>
     </dt>
     <dd>
-        <pre class="pre-scrollable" style="max-height: 100px; font-size: 11px; margin-top: 5px;">{% for fp in relay['effective_family'] -%}
-{% if fp == relay['fingerprint'] -%}
-{{ fp|escape }} (this relay)
-{% elif relay['effective_family']|length > 1 -%}
-<a href="../{{ fp|escape }}/">{{ fp|escape }}</a>
-{% else -%}
-{{ fp|escape }}
-{% endif -%}
-{% endfor -%}</pre>
-    </dd>
-    
-    <dt id="alleged-family" title="Array of fingerprints of relays that are not in an effective, mutual family relationship with this relay. These relays are part of this relay's family but they don't consider this relay to be part of their family. Omitted if empty or if descriptor containing this information cannot be found.">
-        <a href="#alleged-family" class="anchor-link">Alleged Family {{ plural(relay['alleged_family']|length if relay['alleged_family'] else 0, 'Member') }}: {{ relay['alleged_family']|length if relay['alleged_family'] else 0 }}</a>
-    </dt>
-    <dd>
-        {% if relay['alleged_family'] %}
-        <span style="color: #856404; font-size: 11px;">(they don't list you back)</span>
-        <pre class="pre-scrollable" style="max-height: 60px; font-size: 11px; margin-top: 5px;">{% for fp in relay['alleged_family'] -%}
-<a href="../{{ fp|escape }}/">{{ fp|escape }}</a>
-{% endfor -%}</pre>
-        {% else %}
-        <span style="color: #6c757d;">none</span>
-        {% endif %}
-    </dd>
-    
-    <dt id="indirect-family" title="Array of fingerprints of relays that consider this relay to be part of their family but that are not part of this relay's family. Omitted if empty or if descriptor containing this information cannot be found.">
-        <a href="#indirect-family" class="anchor-link">Indirect Family {{ plural(relay['indirect_family']|length if relay['indirect_family'] else 0, 'Member') }}: {{ relay['indirect_family']|length if relay['indirect_family'] else 0 }}</a>
-    </dt>
-    <dd>
-        {% if relay['indirect_family'] %}
-        <span style="color: #856404; font-size: 11px;">(they list you, you don't list them)</span>
-        <pre class="pre-scrollable" style="max-height: 60px; font-size: 11px; margin-top: 5px;">{% for fp in relay['indirect_family'] -%}
-<a href="../{{ fp|escape }}/">{{ fp|escape }}</a>
-{% endfor -%}</pre>
-        {% else %}
-        <span style="color: #6c757d;">none</span>
-        {% endif %}
+        {% if relay.get('family_support_type') == 'both' -%}
+            <span style="color: #28a745;">Both</span> — Happy Families ({{ hf_eff|length }}{% if total_family > 0 %} / {{ (hf_eff|length / total_family * 100)|round(0)|int }}%{% endif %}) and MyFamily ({{ mf_eff|length }}{% if total_family > 0 %} / {{ (mf_eff|length / total_family * 100)|round(0)|int }}%{% endif %})
+        {% elif relay.get('family_support_type') == 'happy_families' -%}
+            <span style="color: #28a745;">Happy Families</span> ({{ hf_eff|length }}) — Has family-cert in server descriptor (<a href="https://community.torproject.org/relay/setup/post-install/family-ids/" target="_blank" rel="noopener">guide</a>)
+        {% elif relay.get('family_support_type') == 'my_family' -%}
+            <span style="color: #dc3545;">MyFamily Only</span> ({{ mf_eff|length }}) — Legacy only. <span class="text-small-note">Consider migrating to <a href="https://community.torproject.org/relay/setup/post-install/family-ids/" target="_blank" rel="noopener">Happy Families</a>.</span>
+        {% else -%}
+            <span style="color: #6c757d;">None</span> — No family membership configured
+        {% endif -%}
+        {% if relay['effective_family']|length > 1 %} | <a href="{{ page_ctx.path_prefix }}family/{{ relay['fingerprint']|escape }}/">View Full Family ({{ relay['effective_family']|length }})</a>{% endif %}
     </dd>
 </dl>
+
+{# ---- Happy Families (family-cert) ---- #}
+<div style="border-left: 3px solid #28a745; padding-left: 10px; margin-top: 12px;">
+<div style="margin: 0 0 8px 0; font-size: 14px; font-weight: bold; color: #28a745;">Happy Families <span style="font-weight: normal; color: #6c757d;">(family-cert)</span></div>
+<dl>
+    <dt id="hf-effective" title="Family members with family-cert in a mutual family relationship with this relay. Family-cert relationships are always mutual by design.">
+        <a href="#hf-effective" class="anchor-link">Effective {{ plural(hf_eff|length, 'Member') }}: {{ hf_eff|length }}</a>
+    </dt>
+    <dd>{{ family_member_list(hf_eff, relay['fingerprint'], show_self=true) }}</dd>
+</dl>
+</div>
+
+{# ---- MyFamily (legacy declarations) ---- #}
+{% set mf_alleged = relay.get('alleged_family') or [] %}
+{% set mf_indirect = relay.get('indirect_family') or [] %}
+{% set mf_has_content = mf_eff|length > 0 or mf_alleged|length > 0 or mf_indirect|length > 0 %}
+{% if mf_has_content %}
+<div style="border-left: 3px solid #dc3545; padding-left: 10px; margin-top: 12px;">
+<div style="margin: 0 0 8px 0; font-size: 14px; font-weight: bold; color: #dc3545;">MyFamily <span style="font-weight: normal; color: #6c757d;">(legacy declarations)</span></div>
+<dl>
+    <dt id="mf-effective" title="Family members without family-cert in a mutual family relationship with this relay via legacy MyFamily declarations.">
+        <a href="#mf-effective" class="anchor-link">Effective {{ plural(mf_eff|length, 'Member') }}: {{ mf_eff|length }}</a>
+    </dt>
+    <dd>{{ family_member_list(mf_eff, relay['fingerprint'], show_self=true) }}</dd>
+
+    <dt id="mf-alleged" title="Family members that this relay claims via MyFamily but who don't claim this relay back.">
+        <a href="#mf-alleged" class="anchor-link">Alleged {{ plural(mf_alleged|length, 'Member') }}: {{ mf_alleged|length }}</a>
+    </dt>
+    <dd>
+        {% if mf_alleged -%}
+        <span style="color: #856404; font-size: 11px;">(they don't list you back)</span>
+        {{ family_member_list(mf_alleged, relay['fingerprint']) }}
+        {%- else -%}
+        <span style="color: #6c757d;">none</span>
+        {%- endif %}
+    </dd>
+
+    <dt id="mf-indirect" title="Family members that claim this relay via MyFamily but this relay doesn't claim back.">
+        <a href="#mf-indirect" class="anchor-link">Indirect {{ plural(mf_indirect|length, 'Member') }}: {{ mf_indirect|length }}</a>
+    </dt>
+    <dd>
+        {% if mf_indirect -%}
+        <span style="color: #856404; font-size: 11px;">(they list you, you don't list them)</span>
+        {{ family_member_list(mf_indirect, relay['fingerprint']) }}
+        {%- else -%}
+        <span style="color: #6c757d;">none</span>
+        {%- endif %}
+    </dd>
+</dl>
+</div>
+{% else %}
+<div style="border-left: 3px solid #28a745; padding-left: 10px; margin-top: 12px;">
+<div style="margin: 0 0 4px 0; font-size: 14px; font-weight: bold; color: #28a745;">MyFamily <span style="font-weight: normal; color: #6c757d;">(legacy declarations) — none</span></div>
+</div>
+{% endif %}
+
 </div>
 </div>
 </section>
