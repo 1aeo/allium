@@ -292,16 +292,16 @@ class TestContactDisplayData(unittest.TestCase):
         # Should handle gracefully when no intelligence data exists
         # Version-related fields and family_support_counts are always present
         intelligence = result['operator_intelligence']
-        self.assertEqual(len(intelligence), 4)
-        self.assertIn('version_compliance', intelligence)
-        self.assertIn('version_status', intelligence)
-        self.assertIn('version_status_tooltips', intelligence)
-        self.assertIn('family_support_counts', intelligence)
-        self.assertEqual(intelligence['version_compliance'], '0 compliant')
-        self.assertEqual(intelligence['version_status'], 'none')
+        assert len(intelligence) == 4
+        assert 'version_compliance' in intelligence
+        assert 'version_status' in intelligence
+        assert 'version_status_tooltips' in intelligence
+        assert 'family_support_counts' in intelligence
+        assert intelligence['version_compliance'] == '0 compliant'
+        assert intelligence['version_status'] == 'none'
         # With empty members, all family support counts should be 0
         fsc = intelligence['family_support_counts']
-        self.assertEqual(fsc, {'both': 0, 'happy_families': 0, 'my_family': 0, 'none': 0})
+        assert fsc == {'both': 0, 'happy_families': 0, 'my_family': 0, 'none': 0}
 
     def test_compute_contact_display_data_no_reliability_data(self):
         """Test handling when no reliability data is available."""
