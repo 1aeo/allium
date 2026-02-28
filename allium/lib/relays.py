@@ -861,25 +861,45 @@ class Relays:
             family_cert_fps = set(collector_descs.get('family_cert_fingerprints', []))
             all_seen_fps = set(collector_descs.get('all_seen_fingerprints', []))
             coverage_hours = collector_descs.get('coverage_hours', 0)
+            raw_groups = collector_descs.get('family_cert_groups', {})
         else:
             family_cert_fps = set()
             all_seen_fps = set()
             coverage_hours = 0
+            raw_groups = {}
 
-        # Cache for page_writer.py (_partition_family_lists)
+        # Cache flat sets for page_writer.py (_partition_family_lists)
         self._family_cert_fps_cache = family_cert_fps
         self._all_seen_fps_cache = all_seen_fps
         self._descriptor_coverage_hours = coverage_hours
 
+        # Build family-cert group caches filtered to relays in current dataset.
+        # Onionoo effective_family reflects MyFamily only; family-cert groups come
+        # from shared Ed25519 family keys parsed from server descriptors.
+        valid_fps = {r.get("fingerprint", "").upper() for r in self.json["relays"]}
+        self._family_key_to_fps = {}
+        for key, fps in raw_groups.items():
+            members = sorted(fp for fp in fps if fp.upper() in valid_fps)
+            if members:
+                self._family_key_to_fps[key] = members
+        self._fp_to_family_key = {}
+        for key, fps in self._family_key_to_fps.items():
+            for fp in fps:
+                self._fp_to_family_key[fp.upper()] = key
+
         for relay in self.json['relays']:
             fp = relay.get('fingerprint', '').upper()
             has_family_cert = fp in family_cert_fps
-            has_my_family = len(relay.get('effective_family', [])) > 1
-            if has_family_cert and has_my_family:
+            effective = relay.get('effective_family', [])
+            mf_only_effective = [f for f in effective if f.upper() not in family_cert_fps]
+            alleged = relay.get('alleged_family') or []
+            indirect = relay.get('indirect_family') or []
+            has_mf_content = len(mf_only_effective) > 0 or len(alleged) > 0 or len(indirect) > 0
+            if has_family_cert and has_mf_content:
                 relay['family_support_type'] = 'both'
             elif has_family_cert:
                 relay['family_support_type'] = 'happy_families'
-            elif has_my_family:
+            elif len(effective) > 1:
                 relay['family_support_type'] = 'my_family'
             else:
                 relay['family_support_type'] = 'none'
