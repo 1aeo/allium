@@ -243,3 +243,122 @@ def test_fresh_source_large_published_delta_confirms_on_first_observation():
     assert result["source_freshness"] == "fresh"
     assert fp_old not in result["family_cert_fingerprints"]
     assert result["hf_transition_state"]["pending_no_cert"] == {}
+
+
+def test_stale_source_without_prior_cache_uses_raw_data():
+    fp_new = "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+    key_new = "22" * 32
+    published = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+
+    filename = _recent_filename(hours_ago=8, minutes_offset=0)
+    url = f"https://collector.torproject.org/recent/relay-descriptors/server-descriptors/{filename}"
+    content = _descriptor_text(fp_new, published, with_family_cert=True, family_key_hex=key_new).encode("utf-8")
+
+    run = _run_with_mocks(
+        initial_store={"collector_descriptors_files": {}},
+        listing_filenames=[filename],
+        file_contents={url: content},
+    )
+
+    result = run["result"]
+    assert result["source_freshness"] == "stale"
+    assert result["source_critical_stale"] is False
+    assert set(result["family_cert_fingerprints"]) == {fp_new}
+    assert result["family_cert_groups"][key_new] == [fp_new]
+    run["mock_mark_ready"].assert_called_once()
+
+
+def test_critical_stale_with_cache_marks_stale_and_keeps_prior():
+    fp_old = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    key_old = "11" * 32
+    cache = _base_cache(fp_old, key_old)
+    filename = _recent_filename(hours_ago=13, minutes_offset=0)
+
+    run = _run_with_mocks(
+        initial_store={
+            "collector_descriptors": cache,
+            "collector_descriptors_files": {},
+        },
+        listing_filenames=[filename],
+        file_contents={},
+    )
+
+    assert run["result"] == cache
+    run["mock_mark_stale"].assert_called_once()
+    stale_msg = run["mock_mark_stale"].call_args[0][1]
+    assert "[critical]" in stale_msg
+    run["mock_mark_ready"].assert_not_called()
+
+
+def test_backward_compatible_file_cache_without_published_maps():
+    fp_new = "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+    key_new = "22" * 32
+    filename = _recent_filename(hours_ago=1, minutes_offset=0)
+
+    run = _run_with_mocks(
+        initial_store={
+            "collector_descriptors_files": {
+                filename: {
+                    "cert": [fp_new],
+                    "no_cert": [],
+                    "cert_keys": {fp_new: key_new},
+                }
+            }
+        },
+        listing_filenames=[filename],
+        file_contents={},
+    )
+
+    result = run["result"]
+    assert result["source_freshness"] == "fresh"
+    assert set(result["family_cert_fingerprints"]) == {fp_new}
+    assert result["family_cert_groups"][key_new] == [fp_new]
+
+
+def test_fresh_degraded_fresh_sequence_preserves_pending_then_confirms():
+    fp_old = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    key_old = "11" * 32
+    published = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    cache = _base_cache(fp_old, key_old)
+
+    fresh_filename = _recent_filename(hours_ago=1, minutes_offset=0)
+    degraded_filename = _recent_filename(hours_ago=3, minutes_offset=0)
+    fresh2_filename = _recent_filename(hours_ago=1, minutes_offset=0)
+
+    fresh_url = f"https://collector.torproject.org/recent/relay-descriptors/server-descriptors/{fresh_filename}"
+    degraded_url = f"https://collector.torproject.org/recent/relay-descriptors/server-descriptors/{degraded_filename}"
+    fresh2_url = f"https://collector.torproject.org/recent/relay-descriptors/server-descriptors/{fresh2_filename}"
+
+    no_cert_content = _descriptor_text(fp_old, published, with_family_cert=False).encode("utf-8")
+
+    first_run = _run_with_mocks(
+        initial_store={
+            "collector_descriptors": cache,
+            "collector_descriptors_files": {},
+        },
+        listing_filenames=[fresh_filename],
+        file_contents={fresh_url: no_cert_content},
+    )
+    first_result = first_run["result"]
+    assert fp_old in first_result["family_cert_fingerprints"]
+    assert first_result["hf_transition_state"]["pending_no_cert"][fp_old]["count"] == 1
+
+    second_run = _run_with_mocks(
+        initial_store=first_run["store"],
+        listing_filenames=[degraded_filename],
+        file_contents={degraded_url: no_cert_content},
+    )
+    second_result = second_run["result"]
+    assert second_result["source_freshness"] == "degraded"
+    assert fp_old in second_result["family_cert_fingerprints"]
+    assert second_result["hf_transition_state"]["pending_no_cert"][fp_old]["count"] == 1
+
+    third_run = _run_with_mocks(
+        initial_store=second_run["store"],
+        listing_filenames=[fresh2_filename],
+        file_contents={fresh2_url: no_cert_content},
+    )
+    third_result = third_run["result"]
+    assert third_result["source_freshness"] == "fresh"
+    assert fp_old not in third_result["family_cert_fingerprints"]
+    assert fp_old not in third_result["hf_transition_state"]["pending_no_cert"]
