@@ -1139,7 +1139,7 @@ def fetch_collector_descriptors(progress_logger=None):
         all_seen_fps = set()
         
         for filename in target_files:
-            if filename in file_cache:
+            if filename in file_cache and 'cert_keys' in file_cache[filename]:
                 # Reuse cached parse result for this file
                 file_result = file_cache[filename]
                 all_cert_fps.update(file_result.get('cert', []))
