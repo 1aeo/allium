@@ -63,6 +63,7 @@ TEST_DETAILS_URL = "https://test.onionoo.torproject.org/details"
 TEST_UPTIME_URL = "https://test.onionoo.torproject.org/uptime"
 TEST_BANDWIDTH_URL = "https://test.onionoo.torproject.org/bandwidth"
 TEST_AROI_URL = "https://test.aroi.url/validate"
+TEST_EXIT_DNS_HEALTH_URL = "https://test.exitdnshealth.url/latest.json"
 TEST_BANDWIDTH_CACHE_HOURS = 1
 
 
