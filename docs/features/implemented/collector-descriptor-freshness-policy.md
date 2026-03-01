@@ -34,19 +34,19 @@ the CollecTor recent listing.
 
 ## Decision tree
 
-1. **Hard failure** (timeout/error/no files/no parsed descriptors):  
+1. **Hard failure** (timeout/error/no files/no parsed descriptors):
    fallback to prior cached data (existing behavior).
 
-2. **Stale source** (`>5h`) with valid prior cache:  
+2. **Stale source** (`>5h`) with valid prior cache:
    keep prior cached status unchanged.
 
-3. **Degraded source** (`2h..5h`):  
+3. **Degraded source** (`2h..5h`):
    allow upgrades, freeze downgrades:
    - keep prior cert/key mappings
    - add newly observed cert/key mappings
    - do not remove prior cert status
 
-4. **Fresh source** (`<=2h`):  
+4. **Fresh source** (`<=2h`):
    apply downgrade confirmation before removing cert status.
 
 ## Downgrade confirmation rules

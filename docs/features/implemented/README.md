@@ -4,7 +4,7 @@ This directory tracks feature behavior that is already implemented in the codeba
 
 ## Contents
 
-- `collector-descriptor-freshness-policy.md`  
+- `collector-descriptor-freshness-policy.md`
   Freshness and downgrade-protection policy for CollecTor server-descriptor based
   Happy Families classification.
 

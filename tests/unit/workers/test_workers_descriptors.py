@@ -7,6 +7,8 @@ from unittest.mock import MagicMock, patch
 
 from allium.lib.workers import fetch_collector_descriptors
 
+BASE_URL = "https://collector.torproject.org/recent/relay-descriptors/server-descriptors/"
+
 
 def _spaced_fp(fingerprint):
     return " ".join(fingerprint[i:i + 4] for i in range(0, len(fingerprint), 4))
@@ -78,8 +80,6 @@ def _run_with_mocks(initial_store, listing_filenames, file_contents):
             return file_contents[url]
         raise AssertionError(f"Unexpected URL: {url}")
 
-    base_url = "https://collector.torproject.org/recent/relay-descriptors/server-descriptors/"
-
     cache_manager = MagicMock()
     cache_manager.get_cache_age.return_value = 7200  # force refresh path
 
@@ -97,7 +97,6 @@ def _run_with_mocks(initial_store, listing_filenames, file_contents):
         "store": store,
         "mock_mark_ready": mock_mark_ready,
         "mock_mark_stale": mock_mark_stale,
-        "base_url": base_url,
     }
 
 
@@ -131,7 +130,7 @@ def test_degraded_source_allows_upgrades_but_freezes_downgrades():
 
     cache = _base_cache(fp_old, key_old)
     filename = _recent_filename(hours_ago=3, minutes_offset=5)
-    url = f"https://collector.torproject.org/recent/relay-descriptors/server-descriptors/{filename}"
+    url = f"{BASE_URL}{filename}"
     content = (
         _descriptor_text(fp_old, published, with_family_cert=False)
         + _descriptor_text(fp_new, published, with_family_cert=True, family_key_hex=key_new)
@@ -162,7 +161,7 @@ def test_fresh_source_first_no_cert_observation_stays_pending():
 
     cache = _base_cache(fp_old, key_old)
     filename = _recent_filename(hours_ago=1, minutes_offset=0)
-    url = f"https://collector.torproject.org/recent/relay-descriptors/server-descriptors/{filename}"
+    url = f"{BASE_URL}{filename}"
     content = _descriptor_text(fp_old, published, with_family_cert=False).encode("utf-8")
 
     run = _run_with_mocks(
@@ -188,7 +187,7 @@ def test_fresh_source_second_no_cert_observation_confirms_downgrade():
 
     cache = _base_cache(fp_old, key_old)
     filename = _recent_filename(hours_ago=1, minutes_offset=0)
-    url = f"https://collector.torproject.org/recent/relay-descriptors/server-descriptors/{filename}"
+    url = f"{BASE_URL}{filename}"
     content = _descriptor_text(fp_old, published, with_family_cert=False).encode("utf-8")
 
     store = {
@@ -227,7 +226,7 @@ def test_fresh_source_large_published_delta_confirms_on_first_observation():
     }
 
     filename = _recent_filename(hours_ago=1, minutes_offset=0)
-    url = f"https://collector.torproject.org/recent/relay-descriptors/server-descriptors/{filename}"
+    url = f"{BASE_URL}{filename}"
     content = _descriptor_text(fp_old, no_cert_published, with_family_cert=False).encode("utf-8")
 
     run = _run_with_mocks(
@@ -251,7 +250,7 @@ def test_stale_source_without_prior_cache_uses_raw_data():
     published = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 
     filename = _recent_filename(hours_ago=8, minutes_offset=0)
-    url = f"https://collector.torproject.org/recent/relay-descriptors/server-descriptors/{filename}"
+    url = f"{BASE_URL}{filename}"
     content = _descriptor_text(fp_new, published, with_family_cert=True, family_key_hex=key_new).encode("utf-8")
 
     run = _run_with_mocks(
@@ -325,9 +324,9 @@ def test_fresh_degraded_fresh_sequence_preserves_pending_then_confirms():
     degraded_filename = _recent_filename(hours_ago=3, minutes_offset=0)
     fresh2_filename = _recent_filename(hours_ago=1, minutes_offset=0)
 
-    fresh_url = f"https://collector.torproject.org/recent/relay-descriptors/server-descriptors/{fresh_filename}"
-    degraded_url = f"https://collector.torproject.org/recent/relay-descriptors/server-descriptors/{degraded_filename}"
-    fresh2_url = f"https://collector.torproject.org/recent/relay-descriptors/server-descriptors/{fresh2_filename}"
+    fresh_url = f"{BASE_URL}{fresh_filename}"
+    degraded_url = f"{BASE_URL}{degraded_filename}"
+    fresh2_url = f"{BASE_URL}{fresh2_filename}"
 
     no_cert_content = _descriptor_text(fp_old, published, with_family_cert=False).encode("utf-8")
 
