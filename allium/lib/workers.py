@@ -202,6 +202,11 @@ AROI_CACHE_MAX_AGE_HOURS = 1          # Cache older than this is considered stal
 AROI_TIMEOUT_FRESH_CACHE = 90         # 90 seconds for fresh cache
 AROI_TIMEOUT_STALE_CACHE = 120        # 2 minutes for stale/missing cache
 
+# EXIT DNS HEALTH API - External API for exit relay DNS resolution health
+EXIT_DNS_HEALTH_CACHE_MAX_AGE_HOURS = 6   # Cache older than this is stale (API updates every 12h)
+EXIT_DNS_HEALTH_TIMEOUT_FRESH_CACHE = 90  # 90 seconds when cache is fresh
+EXIT_DNS_HEALTH_TIMEOUT_STALE_CACHE = 120 # 2 minutes for stale/missing cache
+
 # COLLECTOR CONSENSUS API - Fetches authority votes from CollecTor
 COLLECTOR_CACHE_MAX_AGE_HOURS = 1     # Cache older than this is considered stale (1 hour)
 COLLECTOR_TIMEOUT_FRESH_CACHE = 90    # 90 seconds when cache is available (fallback on timeout)
@@ -275,6 +280,19 @@ AROI_CONFIG = APIConfig(
     cache_max_age_hours=AROI_CACHE_MAX_AGE_HOURS,
     timeout_fresh_cache=AROI_TIMEOUT_FRESH_CACHE,
     timeout_stale_cache=AROI_TIMEOUT_STALE_CACHE,
+    use_conditional_requests=False,
+    custom_headers={'User-Agent': 'Allium/1.0'},
+    count_field='results',
+    retry_count=2,               # External API: retry up to 2 times
+    retry_delay_base=1.0,
+)
+
+EXIT_DNS_HEALTH_CONFIG = APIConfig(
+    api_name='exit_dns_health',
+    display_name='Exit DNS Health',
+    cache_max_age_hours=EXIT_DNS_HEALTH_CACHE_MAX_AGE_HOURS,
+    timeout_fresh_cache=EXIT_DNS_HEALTH_TIMEOUT_FRESH_CACHE,
+    timeout_stale_cache=EXIT_DNS_HEALTH_TIMEOUT_STALE_CACHE,
     use_conditional_requests=False,
     custom_headers={'User-Agent': 'Allium/1.0'},
     count_field='results',
@@ -862,6 +880,45 @@ def fetch_aroi_validation(aroi_url="https://aroivalidator.1aeo.com/latest.json",
         progress_logger=log_wrapper,
         return_fresh_cache=True,  # Return fresh cache immediately without fetching
         validator=_validate_aroi_response,
+    )
+
+
+def _validate_exit_dns_health_response(data: dict) -> bool:
+    """Validator for Exit DNS Health API response structure."""
+    required_keys = ['metadata', 'results']
+    if not all(key in data for key in required_keys):
+        return False
+    metadata = data.get('metadata', {})
+    return 'timestamp' in metadata
+
+
+@handle_http_errors("Exit DNS Health", _load_cache, _save_cache, _mark_ready, _mark_stale,
+                   allow_exit_on_304=False, critical=False)
+def fetch_exit_dns_health(exit_dns_health_url="https://exitdnshealth.1aeo.com/latest.json", progress_logger=None):
+    """
+    Fetch Exit DNS Health data with smart caching and timeout fallback.
+    Tests whether Tor exit relays can handle simple DNS queries.
+    Data updates every 12 hours.
+
+    Args:
+        exit_dns_health_url: URL to fetch exit DNS health data from
+        progress_logger: Optional function to call for progress updates
+
+    Returns:
+        dict: JSON response with exit DNS health data
+    """
+    def log_wrapper(message):
+        if progress_logger:
+            progress_logger(message)
+        else:
+            print(message)
+
+    return _fetch_with_cache_fallback(
+        url=exit_dns_health_url,
+        config=EXIT_DNS_HEALTH_CONFIG,
+        progress_logger=log_wrapper,
+        return_fresh_cache=True,
+        validator=_validate_exit_dns_health_response,
     )
 
 

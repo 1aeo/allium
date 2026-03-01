@@ -168,7 +168,7 @@
 		    <td>{{ relay['platform']|truncate(length=10)|escape }}</td>
 		{% endif -%}
 		{# PERF: Use pre-rendered flags HTML from Python (eliminates Jinja2 loop) - THE KEY OPTIMIZATION #}
-		<td class="visible-md visible-lg">{{ relay['_flags_html']|replace('{path}', page_ctx.path_prefix)|safe }}</td>
+		<td class="visible-md visible-lg">{{ relay['_flags_html']|replace('{path}', page_ctx.path_prefix)|safe }}{% if relay.get('exit_dns_health') %}{% if relay.exit_dns_health.is_healthy is true %}<span style="color: #28a745; font-size: 9px;" title="DNS healthy">&#9679;</span>{% elif relay.exit_dns_health.is_healthy is false %}<span style="color: #dc3545; font-size: 9px;" title="DNS failing">&#9679;</span>{% endif %}{% endif %}</td>
 		{# PERF: Use pre-computed first_seen_date_escaped from _preprocess_template_data() #}
 		{% if key != 'first_seen' -%}
 		    <td class="visible-md visible-lg">

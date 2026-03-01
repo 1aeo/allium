@@ -175,10 +175,23 @@
                 </li>
                 {% endif %}
                 {% endif %}
+
+                {% if exit_dns_summary %}
+                <li><strong><span title="DNS resolution health of this operator's exit relays. Source: exitdnshealth.1aeo.com">Exit DNS Health</span>:</strong>
+                    {% if exit_dns_summary.all_healthy -%}
+                        <span style="color: #28a745;">All {{ exit_dns_summary.exit_count }} exit relay{{ 's' if exit_dns_summary.exit_count != 1 else '' }} healthy</span>
+                    {% elif exit_dns_summary.any_unhealthy -%}
+                        <span style="color: #dc3545;">{{ exit_dns_summary.unhealthy_count }} of {{ exit_dns_summary.exit_count }} exit relay{{ 's' if exit_dns_summary.exit_count != 1 else '' }} failing DNS</span>
+                        {% if exit_dns_summary.healthy_count > 0 %}, <span style="color: #28a745;">{{ exit_dns_summary.healthy_count }} healthy</span>{% endif %}
+                    {% else -%}
+                        <span style="color: #6c757d;">{{ exit_dns_summary.exit_count }} exit relay{{ 's' if exit_dns_summary.exit_count != 1 else '' }}: not tested</span>
+                    {% endif -%}
+                </li>
+                {% endif %}
             </ul>
         </div>
         {% endif %}
-        
+
         {# Relay Reliability on Left Side (when AROI rankings present) #}
         {% if contact_rankings and operator_reliability and operator_reliability.valid_relays > 0 %}
         <div class="reliability-section" style="padding: 15px; background-color: #f8f9fa; border-left: 4px solid #28a745; margin-top: 20px;">

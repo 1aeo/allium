@@ -97,7 +97,8 @@ class Relays:
 
     def enrich_with_api_data(self, uptime_data=None, bandwidth_data=None,
                              aroi_validation_data=None, collector_consensus_data=None,
-                             consensus_health_data=None, collector_descriptors_data=None):
+                             consensus_health_data=None, collector_descriptors_data=None,
+                             exit_dns_health_data=None):
         """
         Enrich relay data with secondary API sources.
         Called by coordinator after threaded API fetch completes.
@@ -130,8 +131,14 @@ class Relays:
         self.collector_consensus_data = collector_consensus_data
         self.consensus_health_data = consensus_health_data
         self.collector_descriptors_data = collector_descriptors_data
+        self.exit_dns_health_data = exit_dns_health_data
         # Legacy attribute for backward compatibility
         self.collector_data = None
+
+        # Build exit DNS health fingerprint map once (O(n) on results, ~2800 entries)
+        # Map is consumed by the bandwidth loop below and by templates
+        from .exit_dns_health import build_exit_dns_health_map
+        self._exit_dns_health_map = build_exit_dns_health_map(exit_dns_health_data)
 
         # Steps 8-10: Uptime processing → regenerate leaderboards + health
         if uptime_data:
@@ -148,6 +155,18 @@ class Relays:
                 self._generate_aroi_leaderboards()
             except Exception as e:
                 print(f"Warning: Bandwidth processing failed ({e}), continuing without bandwidth metrics")
+
+        # If bandwidth processing was skipped but we have DNS health data,
+        # attach it in a standalone pass (only runs when bandwidth_data is None)
+        if not bandwidth_data and self._exit_dns_health_map and self.json.get('relays'):
+            _not_tested_default = {'status': 'not_tested', 'error': None,
+                                   'consecutive_failures': 0, 'timing_ms': None, 'is_healthy': None}
+            for relay in self.json['relays']:
+                if 'Exit' in relay.get('flags', []):
+                    fp = relay.get('fingerprint', '').upper()
+                    relay['exit_dns_health'] = self._exit_dns_health_map.get(fp, _not_tested_default)
+                else:
+                    relay['exit_dns_health'] = None
 
         # Step 13: Collector consensus evaluation
         if collector_consensus_data and self.json.get('relays'):
@@ -579,6 +598,8 @@ class Relays:
             # Apply results to individual relays
             # PERF: Compute timestamp once for all relays (avoids ~10k time.time() calls)
             now_timestamp = time.time()
+            # PERF: Hoist DNS health map lookup outside loop (avoids getattr per relay)
+            _exit_dns_health_map = getattr(self, '_exit_dns_health_map', {})
             
             for relay in self.json["relays"]:
                 fingerprint = relay.get('fingerprint', '')
@@ -612,7 +633,17 @@ class Relays:
                 relay["total_data_period"] = best.replace('_', ' ') if best else ""
                 for _p in ('1_month', '6_months', '1_year', '5_years'):
                     relay[f"total_data_{_p}_display"] = _fmt_data_vol(td.get(_p, 0))
-            
+
+                # Exit DNS Health — piggybacked on this loop, reusing `fingerprint` variable
+                # Sets flat field on relay dict (like family_support_type) — no template.render() changes needed
+                if _exit_dns_health_map and 'Exit' in relay.get('flags', []):
+                    relay['exit_dns_health'] = _exit_dns_health_map.get(
+                        fingerprint.upper() if fingerprint else '',
+                        {'status': 'not_tested', 'error': None,
+                         'consecutive_failures': 0, 'timing_ms': None, 'is_healthy': None})
+                elif 'Exit' not in relay.get('flags', []):
+                    relay['exit_dns_health'] = None
+
             # Process flag bandwidth display data
             self._process_flag_bandwidth_display(network_flag_statistics)
             

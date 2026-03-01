@@ -390,6 +390,29 @@ Network Health Dashboard
                         <span class="metric-label">URI-RSA Validated</span>
                     </div>
                 </div>
+                {% if relays.json.network_health.exit_dns_health_available %}
+                <!-- Exit DNS Health Row -->
+                <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
+                    <div class="metric-item" title="DNS success rate across all tested exit relays. Source: exitdnshealth.1aeo.com">
+                        <span class="metric-value" style="color: {% if relays.json.network_health.exit_dns_success_rate >= 99 %}#28a745{% elif relays.json.network_health.exit_dns_success_rate >= 95 %}#856404{% else %}#dc3545{% endif %};">{{ "%.1f%%"|format(relays.json.network_health.exit_dns_success_rate) }}</span>
+                        <span class="metric-label">Exit DNS Success Rate</span>
+                    </div>
+                    <div class="metric-item" title="Exit relays that successfully resolved DNS queries.">
+                        <span class="metric-value" style="color: #28a745;">{{ relays.json.network_health.exit_dns_success_count_formatted }}</span>
+                        <span class="metric-label">DNS Healthy</span>
+                    </div>
+                    <div class="metric-item" title="Exit relays with DNS resolution failures (dns_fail, timeout, wrong_ip, socks_error, network_error).">
+                        <span class="metric-value" style="color: {% if relays.json.network_health.exit_dns_total_failures > 0 %}#dc3545{% else %}#28a745{% endif %};">{{ relays.json.network_health.exit_dns_total_failures_formatted }}</span>
+                        <span class="metric-label">DNS Failing</span>
+                    </div>
+                </div>
+                <div style="font-size: 11px; color: #666; margin-top: 2px; margin-bottom: 8px;">
+                    {{ relays.json.network_health.exit_dns_tested_count_formatted }} of {{ relays.json.network_health.exit_dns_consensus_relays_formatted }} exit relays tested.
+                    Reachability: {{ "%.1f%%"|format(relays.json.network_health.exit_dns_reachability_rate) }}.
+                    Source: <a href="https://exitdnshealth.1aeo.com" target="_blank">exitdnshealth.1aeo.com</a>.
+                    Last scan: {{ relays.json.network_health.exit_dns_health_timestamp }}.
+                </div>
+                {% endif %}
                 <!-- Contact Row (moved before Family) -->
                 <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
                     <div class="metric-item" title="Total number of unique contact addresses provided by relay operators.">

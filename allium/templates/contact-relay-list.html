@@ -156,7 +156,7 @@
         {% endif -%}
     </td>
     {# PERF: Use pre-rendered flags HTML from Python (eliminates Jinja2 loop) - THE KEY OPTIMIZATION #}
-    <td>{{ relay['_flags_html']|replace('{path}', page_ctx.path_prefix)|safe }}</td>
+    <td>{{ relay['_flags_html']|replace('{path}', page_ctx.path_prefix)|safe }}{% if relay.get('exit_dns_health') %}{% if relay.exit_dns_health.is_healthy is true %}<span style="color: #28a745; margin-left: 4px;" title="DNS Healthy">&#9679;</span>{% elif relay.exit_dns_health.is_healthy is false %}<span style="color: #dc3545; margin-left: 4px;" title="DNS Failing: {{ relay.exit_dns_health.status|escape }}">&#9679;</span>{% endif %}{% endif %}</td>
     <td>
         {% if relay.get('family_support_type') == 'both' -%}
             <span style="color: #28a745;" title="Has both Happy Families (family-cert) and MyFamily declarations">Both</span>

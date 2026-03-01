@@ -115,6 +115,11 @@ def preformat_network_health_template_strings(health_metrics):
         'hf_ready_authorities', 'hf_some_operators', 'hf_all_operators',
         'hf_not_ready_relays', 'hf_total_validated_operators',
         'hf_family_cert_count', 'hf_family_no_cert_count',
+        # NEW: Exit DNS Health metrics
+        'exit_dns_tested_count', 'exit_dns_success_count', 'exit_dns_fail_count',
+        'exit_dns_timeout_count', 'exit_dns_unreachable_count', 'exit_dns_total_failures',
+        'exit_dns_consensus_relays', 'exit_dns_wrong_ip_count',
+        'exit_dns_socks_error_count', 'exit_dns_network_error_count',
     ]
     
     for key in integer_format_keys:
@@ -376,13 +381,26 @@ def _integrate_aroi_validation(health_metrics, relay_set, total_relays_count):
         })
 
 
+def _integrate_exit_dns_health(health_metrics, relay_set, total_relays_count):
+    """Integrate Exit DNS Health metrics into health dashboard.
+    Network-wide stats come from the API response (pre-computed, no relay iteration).
+    """
+    try:
+        from .exit_dns_health import calculate_exit_dns_health_metrics
+        exit_dns_health_data = getattr(relay_set, 'exit_dns_health_data', None)
+        dns_metrics = calculate_exit_dns_health_metrics(exit_dns_health_data)
+        health_metrics.update(dns_metrics)
+    except Exception as e:
+        health_metrics['exit_dns_health_available'] = False
+
+
 def calculate_network_health_metrics(relay_set):
     """
     ULTRA-OPTIMIZED: Calculate network health metrics in single pass with maximum reuse.
-    
+
     OPTIMIZATIONS APPLIED:
     1. Single loop through relays instead of 3 separate loops
-    2. Reuse existing network_totals and sorted data 
+    2. Reuse existing network_totals and sorted data
     3. Pre-calculate all Jinja2 template values
     4. Consolidate uptime calculations for all periods
     5. Use existing data structures where possible
@@ -1360,7 +1378,10 @@ def calculate_network_health_metrics(relay_set):
     
     # === AROI VALIDATION METRICS ===
     _integrate_aroi_validation(health_metrics, relay_set, total_relays_count)
-    
+
+    # === EXIT DNS HEALTH METRICS ===
+    _integrate_exit_dns_health(health_metrics, relay_set, total_relays_count)
+
     # === HAPPY FAMILY KEY MIGRATION METRICS ===
     # DA readiness, family-cert counts, and operator_desc_counts were all
     # computed in the main relay loop above (eliminates 3 extra relay passes).

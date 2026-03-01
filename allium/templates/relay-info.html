@@ -341,6 +341,33 @@ Country: unknown
     </dl>
 </div>
 
+{# DNS Health (Exit relays only) — reads flat relay.exit_dns_health field #}
+{% if relay.get('exit_dns_health') %}
+{% set dns = relay.exit_dns_health %}
+<div class="health-row" style="margin-top: 8px;">
+    <dl style="display: flex; gap: 8px; align-items: baseline; margin: 0;">
+        <dt title="DNS resolution capability tested by exitdnshealth.1aeo.com."><a href="#exit-dns-health" class="anchor-link">DNS Health</a></dt>
+        <dd>
+            {% if dns.is_healthy is true -%}
+                <span style="color: #28a745;" title="This exit relay successfully resolved DNS queries.">Healthy</span>
+                {% if dns.timing_ms %}<span style="font-size: 12px; color: #6c757d;">({{ dns.timing_ms|int }}ms)</span>{% endif %}
+            {% elif dns.status == 'dns_fail' -%}
+                <span style="color: #dc3545;" title="DNS query failed.{% if dns.error %} Error: {{ dns.error|escape }}{% endif %}">DNS Failed</span>
+                {% if dns.consecutive_failures > 1 %}<span style="font-size: 12px; color: #6c757d;">({{ dns.consecutive_failures }} consecutive)</span>{% endif %}
+            {% elif dns.status == 'timeout' -%}
+                <span style="color: #856404;" title="DNS query timed out.">Timeout</span>
+            {% elif dns.status == 'relay_unreachable' -%}
+                <span style="color: #6c757d;" title="Relay was unreachable during DNS health testing.">Unreachable</span>
+            {% elif dns.status == 'not_tested' -%}
+                <span style="color: #6c757d;" title="Not included in the latest DNS health scan.">Not Tested</span>
+            {% else -%}
+                <span style="color: #6c757d;" title="DNS health status: {{ dns.status|escape }}">{{ dns.status|escape }}</span>
+            {% endif -%}
+        </dd>
+    </dl>
+</div>
+{% endif %}
+
 {# Issues and Warnings - Full width below grid #}
 {# Use new diagnostics if available (includes overload issues), fallback to consensus_evaluation #}
 {% set all_issues = relay.diagnostics.issues if relay.diagnostics else (diag.issues if diag else []) %}
