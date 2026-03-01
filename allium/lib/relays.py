@@ -926,8 +926,9 @@ class Relays:
         self._descriptor_coverage_hours = coverage_hours
 
         # Build family-cert group caches filtered to relays in current dataset.
-        # Onionoo effective_family reflects MyFamily only; family-cert groups come
-        # from shared Ed25519 family keys parsed from server descriptors.
+        # Onionoo effective_family includes both MyFamily AND Happy Families members
+        # (for Tor 0.4.9+); family-cert groups come from shared Ed25519 family keys
+        # parsed from server descriptors.
         valid_fps = {r.get("fingerprint", "").upper() for r in self.json["relays"]}
         self._family_key_to_fps = {}
         for key, fps in raw_groups.items():
@@ -951,17 +952,23 @@ class Relays:
             has_family_cert = fp in verified_cert_fps
             effective = relay.get('effective_family', [])
 
-            # Exclude verified Happy Families members from MyFamily check.
-            # Onionoo effective_family may include family-cert members; counting
-            # them here would incorrectly label relay as 'both' when it only has
-            # family-cert. Filter to actual MyFamily-only members.
+            # Exclude verified Happy Families members from all MyFamily checks.
+            # Onionoo effective_family, alleged_family, and indirect_family may
+            # all include family-cert members; counting them would incorrectly
+            # label a relay as 'both' when it only has family-cert.
             my_family_members = [f for f in effective
                                  if f.upper() not in verified_cert_fps
                                  and f.upper() != fp]
+            alleged_non_hf = [f for f in relay.get('alleged_family', [])
+                              if f.upper() not in verified_cert_fps
+                              and f.upper() != fp]
+            indirect_non_hf = [f for f in relay.get('indirect_family', [])
+                               if f.upper() not in verified_cert_fps
+                               and f.upper() != fp]
             has_my_family = (
                 len(my_family_members) > 0
-                or bool(relay.get('alleged_family'))
-                or bool(relay.get('indirect_family'))
+                or len(alleged_non_hf) > 0
+                or len(indirect_non_hf) > 0
             )
 
             if has_family_cert and has_my_family:
