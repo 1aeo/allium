@@ -208,7 +208,7 @@ COLLECTOR_TIMEOUT_FRESH_CACHE = 90    # 90 seconds when cache is available (fall
 COLLECTOR_TIMEOUT_STALE_CACHE = 300   # 5 minutes when no cache exists
 
 # COLLECTOR DESCRIPTORS API - Fetches server descriptors for family-cert analysis
-# First run downloads ~18 hourly files (~126MB total), subsequent runs only ~1 new file (~7MB)
+# First run downloads ~30 hourly files (~210MB total), subsequent runs only ~1 new file (~7MB)
 DESCRIPTORS_CACHE_MAX_AGE_HOURS = 1   # Cache older than this is considered stale (1 hour)
 DESCRIPTORS_TIMEOUT_FRESH_CACHE = 60  # 60 seconds per file when cache available (typically 1 new file)
 DESCRIPTORS_TIMEOUT_STALE_CACHE = 300 # 5 minutes when no cache exists (first run: ~18 files)
@@ -1032,7 +1032,7 @@ def fetch_collector_descriptors(progress_logger=None):
     
     Optimization: Parsed results are cached per-file. On each run, only NEW files
     (typically 1 per hour) are downloaded. Previously-parsed files are loaded from
-    the per-file cache. This means the first run downloads ~18 files (~126MB total),
+    the per-file cache. This means the first run downloads ~30 files (~210MB total),
     but subsequent hourly runs only download ~1 new file (~7MB).
     
     Args:
@@ -1050,9 +1050,10 @@ def fetch_collector_descriptors(progress_logger=None):
     file_cache_name = "collector_descriptors_files"
     
     # Relays publish descriptors every ~18 hours (dir-spec §2.1). We fetch files
-    # from the last 20 hours to ensure full coverage with margin. Files are
-    # published every ~36-45 minutes on CollecTor, so 20 hours ≈ 27-33 files.
-    COVERAGE_HOURS = 20
+    # from the last 36 hours (2x publishing interval) to handle CollecTor gaps
+    # and ensure full coverage. CollecTor publishes files irregularly (~1/hour
+    # on average but with multi-hour gaps), so 36 hours ≈ 25-35 files.
+    COVERAGE_HOURS = 36
     
     def log_progress(message):
         if progress_logger:
