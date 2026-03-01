@@ -1264,9 +1264,10 @@ def fetch_collector_descriptors(progress_logger=None):
                                                 break
                                             ext_len = int.from_bytes(cert_bytes[off:off + 2], 'big')
                                             ext_type = cert_bytes[off + 2]
-                                            # ext_flags = cert_bytes[off+3]
-                                            if ext_type == 0x04:
-                                                current_family_key = cert_bytes[off + 4:off + 4 + ext_len].hex().upper()
+                                            if off + 4 + ext_len > len(cert_bytes):
+                                                break
+                                            if ext_type == 0x04 and ext_len == 32:
+                                                current_family_key = cert_bytes[off + 4:off + 4 + 32].hex().upper()
                                                 break
                                             off += 4 + ext_len
                                 except (IndexError, ValueError) as e:
@@ -1423,19 +1424,17 @@ def fetch_collector_descriptors(progress_logger=None):
                     | (set(prior_fp_to_key.keys()) - set(raw_fp_to_key.keys()))
                 )
                 for fp in downgrade_candidates:
-                    no_cert_published = raw_no_cert_published.get(fp)
-                    is_confirmed = False
-                    if no_cert_published:
-                        prev = pending_no_cert.get(fp, {})
-                        count = int(prev.get('count', 0)) + 1
-                        pending_no_cert[fp] = {
-                            'count': count,
-                            'first_seen': prev.get('first_seen') or now_iso,
-                            'last_seen': now_iso,
-                        }
-                        if count >= DESCRIPTORS_DOWNGRADE_CONFIRM_RUNS:
-                            is_confirmed = True
-                        else:
+                    prev = pending_no_cert.get(fp, {})
+                    count = int(prev.get('count', 0)) + 1
+                    pending_no_cert[fp] = {
+                        'count': count,
+                        'first_seen': prev.get('first_seen') or now_iso,
+                        'last_seen': now_iso,
+                    }
+                    is_confirmed = count >= DESCRIPTORS_DOWNGRADE_CONFIRM_RUNS
+                    if not is_confirmed:
+                        no_cert_published = raw_no_cert_published.get(fp)
+                        if no_cert_published:
                             cert_ts = _parse_descriptor_published(last_cert_published.get(fp))
                             no_cert_ts = _parse_descriptor_published(no_cert_published)
                             if cert_ts and no_cert_ts:
