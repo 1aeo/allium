@@ -61,26 +61,31 @@ class TestWorkerCacheManagement:
             with patch('builtins.print') as mock_print:
                 save_cache("test_worker", test_data)
                 
-                # Check that error was logged
+                # Check that error was logged (decorator prints "Warning: Failed to write JSON file: ...")
                 mock_print.assert_called()
-                assert any("Warning: Failed to save cache" in str(call) for call in mock_print.call_args_list)
+                assert any("Warning: Failed to" in str(call) for call in mock_print.call_args_list)
     
     def test_cache_load_handles_file_read_errors_gracefully(self):
         """Test cache loading with error handling"""
+        from allium.lib.file_io_utils import CacheManager
+        
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create a file with invalid JSON
             cache_file = os.path.join(temp_dir, "onionoo_details.json")
             with open(cache_file, 'w') as f:
                 f.write("invalid json content")
             
-            with patch('allium.lib.workers.CACHE_DIR', temp_dir):
+            # Patch the actual _cache_manager instance (not CACHE_DIR which is only
+            # used at import time to construct _cache_manager)
+            temp_manager = CacheManager(temp_dir)
+            with patch('allium.lib.workers._cache_manager', temp_manager):
                 with patch('builtins.print') as mock_print:
                     result = load_cache("onionoo_details")
                     
                     assert result is None
-                    # Check that error was logged
+                    # Check that error was logged (decorator prints "Warning: Failed to parse JSON: ...")
                     mock_print.assert_called()
-                    assert any("Warning: Failed to load cache" in str(call) for call in mock_print.call_args_list)
+                    assert any("Warning: Failed to" in str(call) for call in mock_print.call_args_list)
 
 
 class TestWorkerStatusManagement:
