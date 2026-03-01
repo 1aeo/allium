@@ -1328,14 +1328,17 @@ def fetch_collector_descriptors(progress_logger=None):
 def _validate_descriptors_cache(data):
     """
     Validate descriptors cache data structure.
-    Requires the current format with all_seen_fingerprints (not the old
-    single-file format which had total_descriptors instead).
+    Requires family_cert_groups for Ed25519 key-based Happy Families
+    classification. Caches from older code without this field are
+    rejected so they get re-fetched with full key extraction.
     """
     if not isinstance(data, dict):
         return False
     if 'family_cert_fingerprints' not in data:
         return False
     if 'all_seen_fingerprints' not in data:
+        return False
+    if 'family_cert_groups' not in data:
         return False
     return True
 
