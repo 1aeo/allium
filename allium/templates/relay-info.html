@@ -229,6 +229,35 @@ Country: unknown
             </dd>
         </div>
 
+        {# DNS Health (Exit relays only) #}
+        {% if relay.get('exit_dns_health_status') is not none %}
+        <div class="health-row">
+            <dt title="DNS resolution health tested by exitdnshealth.1aeo.com."><a href="#exit-dns-health" class="anchor-link">DNS Health</a></dt>
+            <dd>
+                {% if relay.exit_dns_health_status == 'success' %}
+                    <span class="status-success" title="This exit relay successfully resolved DNS queries.">Healthy</span>
+                    {% if relay.exit_dns_health_timing_ms %}<span class="text-small-muted">({{ relay.exit_dns_health_timing_ms|int }}ms)</span>{% endif %}
+                {% elif relay.exit_dns_health_status == 'fail' %}
+                    {% if relay.exit_dns_health_detail == 'dns_fail' %}
+                        <span class="status-danger" title="DNS query failed.{% if relay.exit_dns_health_error %} Error: {{ relay.exit_dns_health_error|escape }}{% endif %}">Failing (DNS Error)</span>
+                    {% elif relay.exit_dns_health_detail == 'timeout' %}
+                        <span class="status-warning" title="DNS query timed out.">Failing (Timeout)</span>
+                    {% elif relay.exit_dns_health_detail == 'relay_unreachable' %}
+                        <span class="status-note" title="Relay was unreachable during DNS health testing.">Unreachable</span>
+                    {% elif relay.exit_dns_health_detail == 'dns_wrong_ip' %}
+                        <span class="status-danger" title="Returned incorrect IP for DNS query. May indicate DNS manipulation.">Failing (Wrong IP)</span>
+                    {% else %}
+                        <span class="status-danger" title="DNS test failed: {{ relay.exit_dns_health_detail|escape }}">Failing ({{ relay.exit_dns_health_detail|escape }})</span>
+                    {% endif %}
+                    {% if relay.exit_dns_health_consecutive_failures > 1 %}<span class="text-small-muted">({{ relay.exit_dns_health_consecutive_failures }} consecutive)</span>{% endif %}
+                {% elif relay.exit_dns_health_status == 'untested' %}
+                    <span class="status-note" title="Not included in the latest DNS health scan.">Not Tested</span>
+                {% endif %}
+                <span class="text-small-muted">(via <a href="https://exitdnshealth.1aeo.com" target="_blank">exitdnshealth.1aeo.com</a>)</span>
+            </dd>
+        </div>
+        {% endif %}
+
         {# Row 3 Left: BW Verified (authority measurement count + median) #}
         <div class="health-row">
             <dt title="Bandwidth verification by directory authorities running sbws scanners."><a href="#bandwidth" class="anchor-link">BW Verified</a></dt>

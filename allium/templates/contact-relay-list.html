@@ -92,6 +92,14 @@
                 {{- aroi_validation_icon(relay['fingerprint'], relay['aroi_domain'], validated_fps, unauthorized_fps, misconfigured_fps) }}
             {% endif -%}
         {% endif -%}
+        {# DNS Health indicator for exit relays #}
+        {% if relay.get('exit_dns_health_status') == 'success' %}
+            <span style="color: #28a745; margin-left: 4px;" title="DNS Healthy">&#9679;</span>
+        {% elif relay.get('exit_dns_health_status') == 'fail' %}
+            <span style="color: #dc3545; margin-left: 4px;" title="DNS Failing: {{ relay.get('exit_dns_health_detail', 'unknown')|escape }}">&#9679;</span>
+        {% elif relay.get('exit_dns_health_status') == 'untested' %}
+            <span style="color: #6c757d; margin-left: 4px;" title="DNS: Not tested">&#9675;</span>
+        {% endif %}
     </td>
     {% if relay['effective_family']|length > 1 -%}
         <td title="{{ relay['nickname']|escape }}">

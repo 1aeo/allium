@@ -839,7 +839,63 @@ Network Health Dashboard
                 </div>
             </div>
         </div>
-        
+
+        <!-- CARD 12: EXIT DNS HEALTH -->
+        {% if relays.json.network_health.exit_dns_health_available %}
+        <div class="ribbon-card exit-dns-health">
+            <div class="card-header" id="exit-dns-health">
+                <h4><a href="#exit-dns-health" style="color: inherit; text-decoration: none;">🔍 Exit DNS Health</a></h4>
+            </div>
+            <div class="card-metrics">
+                <div class="metric-item primary"
+                     title="DNS query success rate across all tested exit relays. Source: exitdnshealth.1aeo.com">
+                    <span class="metric-value" style="color: {% if relays.json.network_health.exit_dns_health_success_rate >= 95 %}#28a745{% elif relays.json.network_health.exit_dns_health_success_rate >= 80 %}#856404{% else %}#dc3545{% endif %};">
+                        {{ "%.1f%%"|format(relays.json.network_health.exit_dns_health_success_rate) }}
+                    </span>
+                    <span class="metric-label">DNS Success Rate ({{ relays.json.network_health.exit_dns_health_tested_formatted }} exits tested)</span>
+                </div>
+                <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
+                    <div class="metric-item" title="Exit relays that successfully resolved DNS queries.">
+                        <span class="metric-value" style="color: #28a745;">{{ relays.json.network_health.exit_dns_health_success_formatted }}</span>
+                        <span class="metric-label">DNS Healthy</span>
+                    </div>
+                    <div class="metric-item" title="Exit relays that failed DNS resolution (all failure types combined).">
+                        <span class="metric-value" style="color: #dc3545;">{{ relays.json.network_health.exit_dns_health_total_failures_formatted }}</span>
+                        <span class="metric-label">DNS Failing</span>
+                    </div>
+                    <div class="metric-item" title="Exit relays unreachable during testing.">
+                        <span class="metric-value">{{ relays.json.network_health.exit_dns_health_unreachable_formatted }}</span>
+                        <span class="metric-label">Unreachable</span>
+                    </div>
+                </div>
+                <div class="metric-grid" style="grid-template-columns: repeat(4, 1fr);">
+                    <div class="metric-item" title="DNS queries that returned a failure response.">
+                        <span class="metric-value" style="color: #dc3545;">{{ relays.json.network_health.exit_dns_health_fail_formatted }}</span>
+                        <span class="metric-label">DNS Fail</span>
+                    </div>
+                    <div class="metric-item" title="DNS queries that timed out.">
+                        <span class="metric-value" style="color: #856404;">{{ relays.json.network_health.exit_dns_health_timeout_formatted }}</span>
+                        <span class="metric-label">Timeout</span>
+                    </div>
+                    <div class="metric-item" title="DNS queries that returned incorrect IP. May indicate DNS manipulation.">
+                        <span class="metric-value" style="color: #dc3545;">{{ relays.json.network_health.exit_dns_health_wrong_ip_formatted }}</span>
+                        <span class="metric-label">Wrong IP</span>
+                    </div>
+                    <div class="metric-item" title="SOCKS or network errors during DNS testing.">
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.exit_dns_health_socks_error + relays.json.network_health.exit_dns_health_network_error) }}</span>
+                        <span class="metric-label">Connection Errors</span>
+                    </div>
+                </div>
+                <div style="font-size: 11px; color: #666; margin-top: 4px;">
+                    {{ relays.json.network_health.exit_dns_health_tested_formatted }} of {{ relays.json.network_health.exit_dns_health_consensus_exits_formatted }} exit relays tested.
+                    Reachability: {{ "%.1f%%"|format(relays.json.network_health.exit_dns_health_reachability_rate) }}.
+                    Source: <a href="https://exitdnshealth.1aeo.com" target="_blank">exitdnshealth.1aeo.com</a>.
+                    Last scan: {{ relays.json.network_health.exit_dns_health_timestamp }}.
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
     </div>
     
     <!-- LAST UPDATED -->
