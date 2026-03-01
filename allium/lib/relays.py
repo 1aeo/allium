@@ -96,7 +96,8 @@ class Relays:
         self._calculate_network_health_metrics()  # Calculate network health dashboard metrics (regenerated after uptime data)
 
     def enrich_with_api_data(self, uptime_data=None, bandwidth_data=None,
-                             aroi_validation_data=None, collector_consensus_data=None,
+                             aroi_validation_data=None, exit_dns_health_data=None,
+                             collector_consensus_data=None,
                              consensus_health_data=None, collector_descriptors_data=None):
         """
         Enrich relay data with secondary API sources.
@@ -127,6 +128,7 @@ class Relays:
         self.uptime_data = uptime_data
         self.bandwidth_data = bandwidth_data
         self.aroi_validation_data = aroi_validation_data
+        self.exit_dns_health_data = exit_dns_health_data
         self.collector_consensus_data = collector_consensus_data
         self.consensus_health_data = consensus_health_data
         self.collector_descriptors_data = collector_descriptors_data
@@ -160,7 +162,15 @@ class Relays:
         # (depends on collector_descriptors_data from Step 7, consumed by Steps 14-15)
         self._set_family_support_types()
 
-        # Steps 14-15: Pre-compute page data (depends on ALL above)
+        # Step 14: Exit DNS Health enrichment (before precompute since contact pages read relay fields)
+        if exit_dns_health_data and self.json.get('relays'):
+            try:
+                self._attach_exit_dns_health_data()
+                self._calculate_network_health_metrics()
+            except Exception as e:
+                print(f"Warning: Exit DNS Health processing failed ({e}), continuing without DNS health data")
+
+        # Steps 15-16: Pre-compute page data (depends on ALL above)
         self._precompute_all_contact_page_data()
         self._precompute_all_family_page_data()
 
@@ -979,6 +989,18 @@ class Relays:
                 relay['family_support_type'] = 'my_family'
             else:
                 relay['family_support_type'] = 'none'
+
+    def _attach_exit_dns_health_data(self):
+        """Attach per-relay DNS health status for exit relays.
+
+        Builds fingerprint map once from API data, then iterates relays to set
+        flat fields (exit_dns_health_status, exit_dns_health_detail, etc.).
+        Non-exit relays get exit_dns_health_status=None.
+        """
+        from .exit_dns_health import build_exit_dns_health_map, attach_exit_dns_health_to_relays
+        self._exit_dns_health_map = build_exit_dns_health_map(
+            getattr(self, 'exit_dns_health_data', None))
+        attach_exit_dns_health_to_relays(self.json.get('relays', []), self._exit_dns_health_map)
 
     def _precompute_all_contact_page_data(self):
         """

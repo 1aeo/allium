@@ -115,6 +115,11 @@ def preformat_network_health_template_strings(health_metrics):
         'hf_ready_authorities', 'hf_some_operators', 'hf_all_operators',
         'hf_not_ready_relays', 'hf_total_validated_operators',
         'hf_family_cert_count', 'hf_family_no_cert_count',
+        # EXIT DNS HEALTH metrics
+        'exit_dns_health_tested', 'exit_dns_health_success', 'exit_dns_health_fail',
+        'exit_dns_health_timeout', 'exit_dns_health_wrong_ip', 'exit_dns_health_unreachable',
+        'exit_dns_health_total_failures', 'exit_dns_health_consensus_exits',
+        'exit_dns_health_socks_error', 'exit_dns_health_network_error',
     ]
     
     for key in integer_format_keys:
@@ -374,6 +379,20 @@ def _integrate_aroi_validation(health_metrics, relay_set, total_relays_count):
             'ipv4_only_aroi_operators_percentage': 0.0,
             'both_ipv4_ipv6_aroi_operators_percentage': 0.0
         })
+
+
+def _integrate_exit_dns_health(health_metrics, relay_set, total_relays_count):
+    """Integrate Exit DNS Health metrics into health dashboard.
+
+    Network-wide stats come from the API response metadata (pre-computed by the API).
+    No relay iteration needed — the API provides summary totals directly.
+    """
+    try:
+        from .exit_dns_health import calculate_exit_dns_health_metrics
+        exit_dns_health_data = getattr(relay_set, 'exit_dns_health_data', None)
+        health_metrics.update(calculate_exit_dns_health_metrics(exit_dns_health_data))
+    except Exception as e:
+        health_metrics['exit_dns_health_available'] = False
 
 
 def calculate_network_health_metrics(relay_set):
@@ -1360,7 +1379,10 @@ def calculate_network_health_metrics(relay_set):
     
     # === AROI VALIDATION METRICS ===
     _integrate_aroi_validation(health_metrics, relay_set, total_relays_count)
-    
+
+    # === EXIT DNS HEALTH METRICS ===
+    _integrate_exit_dns_health(health_metrics, relay_set, total_relays_count)
+
     # === HAPPY FAMILY KEY MIGRATION METRICS ===
     # DA readiness, family-cert counts, and operator_desc_counts were all
     # computed in the main relay loop above (eliminates 3 extra relay passes).

@@ -10,8 +10,8 @@ import threading
 import time
 from .workers import (
     fetch_onionoo_details, fetch_onionoo_uptime, fetch_onionoo_bandwidth,
-    fetch_aroi_validation, fetch_collector_consensus_data, fetch_consensus_health,
-    fetch_collector_descriptors,
+    fetch_aroi_validation, fetch_exit_dns_health, fetch_collector_consensus_data,
+    fetch_consensus_health, fetch_collector_descriptors,
     get_worker_status, get_all_worker_status
 )
 from .relays import Relays
@@ -38,6 +38,7 @@ class Coordinator:
             self.onionoo_uptime_url = args.onionoo_uptime_url
             self.onionoo_bandwidth_url = args.onionoo_bandwidth_url
             self.aroi_url = args.aroi_url
+            self.exit_dns_health_url = args.exit_dns_health_url
             self.bandwidth_cache_hours = args.bandwidth_cache_hours
             self.use_bits = args.bandwidth_units == 'bits' if hasattr(args, 'bandwidth_units') else kwargs.get('use_bits', False)
             self.progress = args.progress
@@ -52,6 +53,7 @@ class Coordinator:
             self.onionoo_uptime_url = kwargs.get('onionoo_uptime_url', 'https://onionoo.torproject.org/uptime')
             self.onionoo_bandwidth_url = kwargs.get('onionoo_bandwidth_url', 'https://onionoo.torproject.org/bandwidth')
             self.aroi_url = kwargs.get('aroi_url', 'https://aroivalidator.1aeo.com/latest.json')
+            self.exit_dns_health_url = kwargs.get('exit_dns_health_url', 'https://exitdnshealth.1aeo.com/latest.json')
             self.bandwidth_cache_hours = kwargs.get('bandwidth_cache_hours', 12)
             self.use_bits = kwargs.get('use_bits', False)
             self.progress = kwargs.get('progress', False)
@@ -122,6 +124,12 @@ class Coordinator:
             "fetch_fn": fetch_aroi_validation,
             "group": "all",
             "args_fn": lambda self: [self.aroi_url, self._log_progress],
+        },
+        {
+            "name": "exit_dns_health",
+            "fetch_fn": fetch_exit_dns_health,
+            "group": "all",
+            "args_fn": lambda self: [self.exit_dns_health_url, self._log_progress],
         },
         {
             "name": "collector_consensus",
@@ -214,6 +222,8 @@ class Coordinator:
             return "Historical Bandwidth API"
         elif api_name == "aroi_validation":
             return "AROI Validation API"
+        elif api_name == "exit_dns_health":
+            return "Exit DNS Health API"
         elif api_name == "collector_consensus":
             return "CollecTor Consensus API"
         elif api_name == "collector_descriptors":
@@ -329,6 +339,12 @@ class Coordinator:
         """
         return self.worker_data.get('aroi_validation')
 
+    def get_exit_dns_health_data(self):
+        """
+        Get Exit DNS Health data if available.
+        """
+        return self.worker_data.get('exit_dns_health')
+
     def get_consensus_health_data(self):
         """
         Get consensus health data if available.
@@ -393,6 +409,7 @@ class Coordinator:
             uptime_data=self.get_uptime_data(),
             bandwidth_data=self.get_bandwidth_data(),
             aroi_validation_data=self.get_aroi_validation_data(),
+            exit_dns_health_data=self.get_exit_dns_health_data(),
             collector_consensus_data=self.get_collector_consensus_data(),
             consensus_health_data=self.get_consensus_health_data(),
             collector_descriptors_data=self.get_collector_descriptors_data(),
