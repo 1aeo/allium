@@ -160,6 +160,13 @@ class Relays:
         # (depends on collector_descriptors_data from Step 7, consumed by Steps 14-15)
         self._set_family_support_types()
 
+        # Step 13.6: Augment effective_family from family-cert groups
+        # Onionoo doesn't include family-cert members in effective_family until the
+        # consensus activates use-family-ids (requires consensus method 34+, currently 33).
+        # Bridge the gap by injecting family-cert group members into effective_family
+        # and updating the sorted["family"] categorization.
+        self._augment_families_from_family_cert()
+
         # Steps 14-15: Pre-compute page data (depends on ALL above)
         self._precompute_all_contact_page_data()
         self._precompute_all_family_page_data()
@@ -926,9 +933,10 @@ class Relays:
         self._descriptor_coverage_hours = coverage_hours
 
         # Build family-cert group caches filtered to relays in current dataset.
-        # Onionoo effective_family includes both MyFamily AND Happy Families members
-        # (for Tor 0.4.9+); family-cert groups come from shared Ed25519 family keys
-        # parsed from server descriptors.
+        # Family-cert groups come from shared Ed25519 family keys parsed from
+        # server descriptors. Onionoo effective_family currently only reflects
+        # MyFamily (consensus method 33); _augment_families_from_family_cert()
+        # bridges the gap until use-family-ids is activated (method 34+).
         valid_fps = {r.get("fingerprint", "").upper() for r in self.json["relays"]}
         self._family_key_to_fps = {}
         for key, fps in raw_groups.items():
@@ -979,6 +987,144 @@ class Relays:
                 relay['family_support_type'] = 'my_family'
             else:
                 relay['family_support_type'] = 'none'
+
+    def _augment_families_from_family_cert(self):
+        """
+        Augment effective_family using family-cert groups from CollecTor descriptors.
+
+        Onionoo computes effective_family from mutual MyFamily declarations only.
+        Until the consensus activates use-family-ids (consensus method 34+),
+        relays using only family-cert (Happy Families / Proposal 321) will have
+        effective_family = [self] even though their shared signing key cryptographically
+        proves family membership.
+
+        This method bridges the gap by:
+        1. For each family-cert group, merging group members into each relay's effective_family
+        2. Adding new family entries to sorted["family"] so family pages are generated
+
+        Runs after categorization and finalize_unique_as_counts(), so we manipulate
+        sorted["family"] directly instead of calling sort_relay() (which expects
+        unique_as_set that has already been converted to unique_as_count).
+        """
+        if not self._family_key_to_fps:
+            return
+
+        fp_to_idx = {}
+        for idx, relay in enumerate(self.json["relays"]):
+            fp_to_idx[relay.get("fingerprint", "").upper()] = idx
+
+        if "family" not in self.json["sorted"]:
+            self.json["sorted"]["family"] = {}
+        family_sorted = self.json["sorted"]["family"]
+
+        augmented_count = 0
+        new_family_entries = 0
+
+        for family_key, group_fps in self._family_key_to_fps.items():
+            if len(group_fps) < 2:
+                continue
+
+            group_fps_upper = [fp.upper() for fp in group_fps]
+            group_set = set(group_fps_upper)
+
+            for fp in group_fps_upper:
+                idx = fp_to_idx.get(fp)
+                if idx is None:
+                    continue
+                relay = self.json["relays"][idx]
+
+                existing_ef = set(f.upper() for f in relay.get("effective_family", []))
+                new_members = group_set - existing_ef
+                if not new_members:
+                    continue
+
+                merged = sorted(existing_ef | group_set)
+                relay["effective_family"] = merged
+                augmented_count += 1
+
+                bw = relay.get("observed_bandwidth", 0)
+                cw = relay.get("consensus_weight", 0)
+                total_cw = getattr(self, '_total_network_cw', 0)
+                api_fraction = relay.get("consensus_weight_fraction")
+                if api_fraction is not None:
+                    cw_fraction = api_fraction
+                elif total_cw > 0:
+                    cw_fraction = cw / total_cw
+                else:
+                    cw_fraction = 0.0
+
+                # Add relay to sorted["family"] for ALL merged members, not just new ones.
+                # Before augmentation, the relay had effective_family=[self] (len=1) so it
+                # was excluded from family categorization entirely. Now it needs entries
+                # for every member in the merged list.
+                all_members = existing_ef | group_set
+                for member_fp in all_members:
+                    if member_fp not in family_sorted:
+                        family_sorted[member_fp] = {
+                            "relays": [],
+                            "bandwidth": 0,
+                            "guard_bandwidth": 0,
+                            "middle_bandwidth": 0,
+                            "exit_bandwidth": 0,
+                            "exit_count": 0,
+                            "guard_count": 0,
+                            "middle_count": 0,
+                            "consensus_weight": 0,
+                            "consensus_weight_fraction": 0.0,
+                            "guard_consensus_weight": 0,
+                            "middle_consensus_weight": 0,
+                            "exit_consensus_weight": 0,
+                            "unique_as_count": 0,
+                            "measured_count": 0,
+                            "contact": relay.get("contact", ""),
+                            "contact_md5": relay.get("contact_md5", ""),
+                            "aroi_domain": relay.get("aroi_domain", ""),
+                            "first_seen": relay.get("first_seen", ""),
+                        }
+
+                    entry = family_sorted[member_fp]
+                    if idx not in entry["relays"]:
+                        entry["relays"].append(idx)
+                        entry["bandwidth"] += bw
+                        entry["consensus_weight"] += cw
+                        entry["consensus_weight_fraction"] += cw_fraction
+                        if relay.get("measured"):
+                            entry["measured_count"] += 1
+
+                        relay_as = relay.get("as")
+                        if relay_as:
+                            existing_count = entry.get("unique_as_count", 0)
+                            as_set = entry.get("_tmp_as_set")
+                            if as_set is None:
+                                as_set = set()
+                                entry["_tmp_as_set"] = as_set
+                            as_set.add(relay_as)
+                            entry["unique_as_count"] = len(as_set)
+
+                        if "Exit" in relay.get("flags", []):
+                            entry["exit_count"] += 1
+                            entry["exit_bandwidth"] += bw
+                            entry["exit_consensus_weight"] += cw
+                        elif "Guard" in relay.get("flags", []):
+                            entry["guard_count"] += 1
+                            entry["guard_bandwidth"] += bw
+                            entry["guard_consensus_weight"] += cw
+                        else:
+                            entry["middle_count"] += 1
+                            entry["middle_bandwidth"] += bw
+                            entry["middle_consensus_weight"] += cw
+
+                    new_family_entries += 1
+
+        # Clean up temporary AS sets
+        for entry in family_sorted.values():
+            entry.pop("_tmp_as_set", None)
+
+        if augmented_count > 0 and self.progress:
+            self._log_progress(
+                f"augmented effective_family for {augmented_count} relays "
+                f"from family-cert groups ({new_family_entries} new family entries)"
+            )
 
     def _precompute_all_contact_page_data(self):
         """
