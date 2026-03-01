@@ -212,6 +212,11 @@ COLLECTOR_TIMEOUT_STALE_CACHE = 300   # 5 minutes when no cache exists
 DESCRIPTORS_CACHE_MAX_AGE_HOURS = 1   # Cache older than this is considered stale (1 hour)
 DESCRIPTORS_TIMEOUT_FRESH_CACHE = 60  # 60 seconds per file when cache available (typically 1 new file)
 DESCRIPTORS_TIMEOUT_STALE_CACHE = 300 # 5 minutes when no cache exists (first run: ~18 files)
+DESCRIPTORS_SOURCE_FRESH_MAX_HOURS = 2
+DESCRIPTORS_SOURCE_DEGRADED_MAX_HOURS = 5
+DESCRIPTORS_SOURCE_CRITICAL_MAX_HOURS = 12
+DESCRIPTORS_DOWNGRADE_CONFIRM_RUNS = 2
+DESCRIPTORS_DOWNGRADE_MIN_PUBLISHED_DELTA_HOURS = 20
 # ============================================================================
 
 
@@ -1021,6 +1026,61 @@ def fetch_collector_data(progress_logger=None):
     return fetch_collector_consensus_data(progress_logger=progress_logger)
 
 
+def _parse_descriptor_listing_timestamp(filename):
+    """Parse recent descriptor filename timestamp."""
+    if not filename:
+        return None
+    try:
+        ts_str = filename.replace('-server-descriptors', '')
+        return datetime.strptime(ts_str, '%Y-%m-%d-%H-%M-%S')
+    except (ValueError, TypeError):
+        return None
+
+
+def _classify_descriptor_freshness(source_age_hours):
+    """Classify descriptor source freshness by age in hours."""
+    if source_age_hours is None:
+        return 'unknown'
+    if source_age_hours <= DESCRIPTORS_SOURCE_FRESH_MAX_HOURS:
+        return 'fresh'
+    if source_age_hours <= DESCRIPTORS_SOURCE_DEGRADED_MAX_HOURS:
+        return 'degraded'
+    return 'stale'
+
+
+def _flatten_family_key_groups(family_cert_groups):
+    """Flatten family key groups to fp->family_key mapping."""
+    fp_to_key = {}
+    if not isinstance(family_cert_groups, dict):
+        return fp_to_key
+    for key, fps in family_cert_groups.items():
+        if not key or not isinstance(fps, (list, tuple, set)):
+            continue
+        for fp in fps:
+            if not fp:
+                continue
+            fp_to_key[str(fp).upper()] = key
+    return fp_to_key
+
+
+def _group_family_keys(fp_to_key):
+    """Build family_key -> sorted fingerprints from fp->key map."""
+    family_groups = {}
+    for fp, key in fp_to_key.items():
+        family_groups.setdefault(key, []).append(fp)
+    return {k: sorted(v) for k, v in family_groups.items() if v}
+
+
+def _parse_descriptor_published(value):
+    """Parse server descriptor published timestamp."""
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, '%Y-%m-%d %H:%M:%S')
+    except (ValueError, TypeError):
+        return None
+
+
 def fetch_collector_descriptors(progress_logger=None):
     """
     Fetch CollecTor server-descriptors covering the last 18 hours and extract
@@ -1112,19 +1172,35 @@ def fetch_collector_descriptors(progress_logger=None):
             _mark_stale(api_name, "No descriptor files found")
             return cached_data if has_valid_cache else None
         
+        # Freshness gate: classify the source itself before recomputing.
+        latest_recent_file_ts = _parse_descriptor_listing_timestamp(all_files[-1])
+        source_age_hours = None
+        if latest_recent_file_ts is not None:
+            source_age_hours = (datetime.utcnow() - latest_recent_file_ts).total_seconds() / 3600
+        source_freshness = _classify_descriptor_freshness(source_age_hours)
+        is_critical_stale = (
+            source_age_hours is not None
+            and source_age_hours > DESCRIPTORS_SOURCE_CRITICAL_MAX_HOURS
+        )
+        if source_freshness == 'stale' and has_valid_cache:
+            lag_msg = (
+                f"descriptor source is stale ({source_age_hours:.1f}h old), "
+                f"keeping prior cached status"
+            )
+            if is_critical_stale:
+                lag_msg += " [critical]"
+            log_progress(lag_msg)
+            _mark_stale(api_name, lag_msg)
+            return cached_data
+
         # Step 2: Select files from the last COVERAGE_HOURS by parsing timestamps
         # Filename format: YYYY-MM-DD-HH-MM-SS-server-descriptors
         cutoff = datetime.utcnow() - timedelta(hours=COVERAGE_HOURS)
         target_files = []
         for fname in all_files:
-            try:
-                # Parse "2026-02-21-14-19-00" from filename
-                ts_str = fname.replace('-server-descriptors', '')
-                file_time = datetime.strptime(ts_str, '%Y-%m-%d-%H-%M-%S')
-                if file_time >= cutoff:
-                    target_files.append(fname)
-            except ValueError:
-                continue
+            file_time = _parse_descriptor_listing_timestamp(fname)
+            if file_time and file_time >= cutoff:
+                target_files.append(fname)
         
         if not target_files:
             # Fallback: if no files match the time window, take the latest 24
@@ -1136,16 +1212,14 @@ def fetch_collector_descriptors(progress_logger=None):
         # Step 4: Download and parse only NEW files; reuse cached results
         files_downloaded = 0
         files_from_cache = 0
-        all_cert_fps = set()
         all_seen_fps = set()
         
         for filename in target_files:
             if filename in file_cache and 'cert_keys' in file_cache[filename]:
                 # Reuse cached parse result for this file
                 file_result = file_cache[filename]
-                all_cert_fps.update(file_result.get('cert', []))
-                all_seen_fps.update(file_result.get('cert', []))
-                all_seen_fps.update(file_result.get('no_cert', []))
+                all_seen_fps.update(fp.upper() for fp in file_result.get('cert', []))
+                all_seen_fps.update(fp.upper() for fp in file_result.get('no_cert', []))
                 files_from_cache += 1
             else:
                 # Download and parse this new file (with total timeout + retry)
@@ -1165,13 +1239,16 @@ def fetch_collector_descriptors(progress_logger=None):
                     cert_fps = set()
                     no_cert_fps = set()
                     fp_to_family_key = {}
+                    cert_published = {}
+                    no_cert_published = {}
                     current_fp = None
                     has_cert = False
                     in_cert_block = False
                     cert_b64_lines = []
                     current_family_key = None
+                    current_published = None
                     
-                    for line in content.split('\n'):
+                    for line in content.splitlines():
                         if in_cert_block:
                             if line.startswith('-----END'):
                                 in_cert_block = False
@@ -1185,11 +1262,12 @@ def fetch_collector_descriptors(progress_logger=None):
                                         for _ in range(n_ext):
                                             if off + 4 > len(cert_bytes):
                                                 break
-                                            ext_len = int.from_bytes(cert_bytes[off:off+2], 'big')
-                                            ext_type = cert_bytes[off+2]
-                                            # ext_flags = cert_bytes[off+3]
-                                            if ext_type == 0x04:
-                                                current_family_key = cert_bytes[off+4:off+4+ext_len].hex().upper()
+                                            ext_len = int.from_bytes(cert_bytes[off:off + 2], 'big')
+                                            ext_type = cert_bytes[off + 2]
+                                            if off + 4 + ext_len > len(cert_bytes):
+                                                break
+                                            if ext_type == 0x04 and ext_len == 32:
+                                                current_family_key = cert_bytes[off + 4:off + 4 + 32].hex().upper()
                                                 break
                                             off += 4 + ext_len
                                 except (IndexError, ValueError) as e:
@@ -1205,13 +1283,20 @@ def fetch_collector_descriptors(progress_logger=None):
                                     cert_fps.add(current_fp)
                                     if current_family_key:
                                         fp_to_family_key[current_fp] = current_family_key
+                                    if current_published:
+                                        cert_published[current_fp] = current_published
                                 else:
                                     no_cert_fps.add(current_fp)
+                                    if current_published:
+                                        no_cert_published[current_fp] = current_published
                             current_fp = None
                             has_cert = False
                             current_family_key = None
+                            current_published = None
                         elif line.startswith('fingerprint '):
                             current_fp = line[12:].replace(' ', '').upper()
+                        elif line.startswith('published '):
+                            current_published = line[10:].strip()
                         elif line.rstrip() == 'family-cert':
                             has_cert = True
                             in_cert_block = True
@@ -1222,19 +1307,24 @@ def fetch_collector_descriptors(progress_logger=None):
                             cert_fps.add(current_fp)
                             if current_family_key:
                                 fp_to_family_key[current_fp] = current_family_key
+                            if current_published:
+                                cert_published[current_fp] = current_published
                         else:
                             no_cert_fps.add(current_fp)
+                            if current_published:
+                                no_cert_published[current_fp] = current_published
                     
                     # Cache this file's parsed result
                     file_cache[filename] = {
                         'cert': list(cert_fps),
                         'no_cert': list(no_cert_fps),
                         'cert_keys': fp_to_family_key,
+                        'cert_published': cert_published,
+                        'no_cert_published': no_cert_published,
                     }
                     
-                    all_cert_fps.update(cert_fps)
-                    all_seen_fps.update(cert_fps)
-                    all_seen_fps.update(no_cert_fps)
+                    all_seen_fps.update(fp.upper() for fp in cert_fps)
+                    all_seen_fps.update(fp.upper() for fp in no_cert_fps)
                     files_downloaded += 1
                     
                 except Exception as e:
@@ -1246,39 +1336,137 @@ def fetch_collector_descriptors(progress_logger=None):
             _mark_stale(api_name, "No descriptors parsed")
             return cached_data if has_valid_cache else None
         
-        # Step 5: When a relay appears in multiple files, the latest file wins.
-        # Since we process files chronologically (sorted), later files overwrite earlier.
-        # A relay with family-cert in an older file but without in a newer file
-        # should NOT be counted. Rebuild from chronological order:
-        final_cert_fps = set()
-        final_seen_fps = set()
-        merged_fp_to_key = {}
+        # Step 5: Build raw latest-file-wins result from chronological file list.
+        raw_line_cert_fps = set()
+        raw_seen_fps = set()
+        raw_fp_to_key = {}
+        raw_cert_published = {}
+        raw_no_cert_published = {}
         for filename in target_files:
             if filename in file_cache:
                 file_result = file_cache[filename]
-                cert_in_file = set(file_result.get('cert', []))
-                no_cert_in_file = set(file_result.get('no_cert', []))
-                # Later files override earlier: add certs, remove non-certs
-                final_cert_fps.update(cert_in_file)
-                final_cert_fps -= no_cert_in_file
-                final_seen_fps.update(cert_in_file)
-                final_seen_fps.update(no_cert_in_file)
-                # Merge fp→family_key (later files override)
-                for fp, key in file_result.get('cert_keys', {}).items():
-                    merged_fp_to_key[fp] = key
-                # Remove key mapping for relays that lost cert in later file
+                cert_in_file = {fp.upper() for fp in file_result.get('cert', [])}
+                no_cert_in_file = {fp.upper() for fp in file_result.get('no_cert', [])}
+                cert_keys_in_file = {fp.upper(): key for fp, key in file_result.get('cert_keys', {}).items()}
+                cert_published_in_file = {
+                    fp.upper(): val
+                    for fp, val in file_result.get('cert_published', {}).items()
+                }
+                no_cert_published_in_file = {
+                    fp.upper(): val
+                    for fp, val in file_result.get('no_cert_published', {}).items()
+                }
+
+                # Later files override earlier.
+                raw_line_cert_fps.update(cert_in_file)
+                raw_line_cert_fps -= no_cert_in_file
+                raw_seen_fps.update(cert_in_file)
+                raw_seen_fps.update(no_cert_in_file)
+
+                for fp, key in cert_keys_in_file.items():
+                    raw_fp_to_key[fp] = key
                 for fp in no_cert_in_file:
-                    merged_fp_to_key.pop(fp, None)
-        
-        # Build family_cert_groups: family_key → [fingerprints]
-        from collections import defaultdict
-        family_groups = defaultdict(list)
-        for fp in final_cert_fps:
-            key = merged_fp_to_key.get(fp)
-            if key:
-                family_groups[key].append(fp)
-        family_cert_groups = {k: sorted(v) for k, v in family_groups.items()}
-        
+                    raw_fp_to_key.pop(fp, None)
+
+                for fp, published in cert_published_in_file.items():
+                    raw_cert_published[fp] = published
+                    raw_no_cert_published.pop(fp, None)
+                for fp, published in no_cert_published_in_file.items():
+                    raw_no_cert_published[fp] = published
+                    raw_cert_published.pop(fp, None)
+
+        # Policy overlay: default to raw output, then preserve prior status as needed.
+        final_line_cert_fps = set(raw_line_cert_fps)
+        final_seen_fps = set(raw_seen_fps)
+        final_fp_to_key = dict(raw_fp_to_key)
+        pending_no_cert = {}
+        last_cert_published = {}
+        now_iso = datetime.utcnow().isoformat()
+
+        if has_valid_cache:
+            prior_line_cert_fps = {fp.upper() for fp in cached_data.get('family_cert_fingerprints', [])}
+            prior_seen_fps = {fp.upper() for fp in cached_data.get('all_seen_fingerprints', [])}
+            prior_fp_to_key = _flatten_family_key_groups(cached_data.get('family_cert_groups', {}))
+
+            prev_state = cached_data.get('hf_transition_state', {})
+            if isinstance(prev_state, dict):
+                for fp, entry in (prev_state.get('pending_no_cert', {}) or {}).items():
+                    if isinstance(entry, dict):
+                        try:
+                            count = int(entry.get('count', 0))
+                        except (TypeError, ValueError):
+                            count = 0
+                        pending_no_cert[str(fp).upper()] = {
+                            'count': max(0, count),
+                            'first_seen': entry.get('first_seen'),
+                            'last_seen': entry.get('last_seen'),
+                        }
+                for fp, published in (prev_state.get('last_cert_published', {}) or {}).items():
+                    if isinstance(published, str):
+                        last_cert_published[str(fp).upper()] = published
+
+            for fp, published in raw_cert_published.items():
+                if published:
+                    last_cert_published[fp] = published
+
+            if source_freshness in {'degraded', 'unknown'}:
+                # Degraded source: keep prior status, but allow upgrades.
+                final_line_cert_fps.update(prior_line_cert_fps)
+                final_seen_fps.update(prior_seen_fps)
+                final_fp_to_key = dict(prior_fp_to_key)
+                final_fp_to_key.update(raw_fp_to_key)
+                for fp in raw_line_cert_fps:
+                    pending_no_cert.pop(fp, None)
+            elif source_freshness == 'fresh':
+                # Fresh source: apply downgrade confirmation.
+                downgrade_candidates = (
+                    (prior_line_cert_fps - raw_line_cert_fps)
+                    | (set(prior_fp_to_key.keys()) - set(raw_fp_to_key.keys()))
+                )
+                for fp in downgrade_candidates:
+                    prev = pending_no_cert.get(fp, {})
+                    count = int(prev.get('count', 0)) + 1
+                    pending_no_cert[fp] = {
+                        'count': count,
+                        'first_seen': prev.get('first_seen') or now_iso,
+                        'last_seen': now_iso,
+                    }
+                    is_confirmed = count >= DESCRIPTORS_DOWNGRADE_CONFIRM_RUNS
+                    if not is_confirmed:
+                        no_cert_published = raw_no_cert_published.get(fp)
+                        if no_cert_published:
+                            cert_ts = _parse_descriptor_published(last_cert_published.get(fp))
+                            no_cert_ts = _parse_descriptor_published(no_cert_published)
+                            if cert_ts and no_cert_ts:
+                                delta_hours = (no_cert_ts - cert_ts).total_seconds() / 3600
+                                if delta_hours >= DESCRIPTORS_DOWNGRADE_MIN_PUBLISHED_DELTA_HOURS:
+                                    is_confirmed = True
+                    if is_confirmed:
+                        pending_no_cert.pop(fp, None)
+                    else:
+                        final_line_cert_fps.add(fp)
+                        if fp in prior_fp_to_key:
+                            final_fp_to_key[fp] = prior_fp_to_key[fp]
+                for fp in raw_line_cert_fps:
+                    pending_no_cert.pop(fp, None)
+
+        # Build final family_cert_groups from final fp->family_key map.
+        family_cert_groups = _group_family_keys(final_fp_to_key)
+
+        # Prune transition metadata to relevant relays.
+        pending_keys = set(pending_no_cert.keys())
+        keep_last_cert_keys = set(final_line_cert_fps) | pending_keys
+        last_cert_published = {
+            fp: published
+            for fp, published in last_cert_published.items()
+            if fp in keep_last_cert_keys and isinstance(published, str)
+        }
+
+        transition_state = {
+            'pending_no_cert': pending_no_cert,
+            'last_cert_published': last_cert_published,
+        }
+
         # Step 6: Prune file cache — remove files older than our window
         target_set = set(target_files)
         stale_keys = [k for k in file_cache if k not in target_set]
@@ -1289,24 +1477,36 @@ def fetch_collector_descriptors(progress_logger=None):
         _save_cache(file_cache_name, file_cache)
         
         data = {
-            'family_cert_fingerprints': list(final_cert_fps),
-            'all_seen_fingerprints': list(final_seen_fps),
+            'family_cert_fingerprints': sorted(final_line_cert_fps),
+            'all_seen_fingerprints': sorted(final_seen_fps),
             'family_cert_groups': family_cert_groups,
             'coverage_hours': COVERAGE_HOURS,
             'fetched_at': datetime.utcnow().isoformat(),
+            'source_latest_file_ts': latest_recent_file_ts.isoformat() if latest_recent_file_ts else None,
+            'source_age_hours': round(source_age_hours, 3) if source_age_hours is not None else None,
+            'source_freshness': source_freshness,
+            'source_critical_stale': is_critical_stale,
+            'hf_transition_state': transition_state,
         }
         _save_cache(api_name, data)
         _mark_ready(api_name)
         
         fetch_elapsed = time.time() - fetch_start
-        cert_without_key = len(final_cert_fps) - len(merged_fp_to_key)
-        key_info = f", {len(merged_fp_to_key)} with verified key"
+        verified_cert_fps = set(final_fp_to_key.keys())
+        cert_without_key = len(set(final_line_cert_fps) - verified_cert_fps)
+        key_info = f", {len(verified_cert_fps)} with verified key"
         if cert_without_key > 0:
             key_info += f", {cert_without_key} cert-present-but-key-not-extracted"
+        freshness_info = (
+            f"{source_freshness}"
+            if source_age_hours is None
+            else f"{source_freshness}, source_age={source_age_hours:.1f}h"
+        )
         log_progress(
-            f"{len(final_seen_fps)} relays tracked ({len(final_cert_fps)} with family-cert{key_info}) "
+            f"{len(final_seen_fps)} relays tracked ({len(final_line_cert_fps)} with family-cert{key_info}) "
             f"from {len(target_files)} hourly files "
-            f"({files_downloaded} downloaded, {files_from_cache} cached) in {fetch_elapsed:.1f}s"
+            f"({files_downloaded} downloaded, {files_from_cache} cached) in {fetch_elapsed:.1f}s "
+            f"[{freshness_info}]"
         )
         return data
         

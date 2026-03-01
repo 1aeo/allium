@@ -2,6 +2,8 @@
 
 This directory contains **proposals and enhancement plans** for features that are **not yet implemented** in Allium.
 
+> Looking for behavior that is already shipped? See `docs/features/implemented/`.
+
 ## 🚀 Status
 
 These features represent the **roadmap** for future development. They are:
