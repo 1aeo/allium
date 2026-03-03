@@ -290,7 +290,7 @@ class TestAROIPaginationSystem(unittest.TestCase):
         self.assertIn('[id$="-1-10"]', aroi_content)
         
         # Verify :has() selector is wrapped in @supports for progressive enhancement
-        self.assertIn('@supports selector(:has(a))', aroi_content)
+        self.assertIn('@supports selector(:has(*))', aroi_content)
         self.assertIn(':has(.pagination-section:target)', aroi_content)
         
         # Verify all champion badge classes have CSS definitions

@@ -287,10 +287,12 @@
 .pagination-section h4 { margin-top: 20px; margin-bottom: 15px; }
 
 /* :has() progressive enhancement — hide non-targeted sections when a section is targeted.
-   Browsers without :has() (Firefox <121, older Safari) fall back to the baseline rules above,
-   which show both the default first page and any :target page simultaneously — acceptable
-   degradation since clicking a new page link scrolls to and shows the correct section. */
-@supports selector(:has(a)) {
+   Browsers without :has() fall back to the baseline rules above, which show both the
+   default first page and any :target page simultaneously. This is acceptable degradation:
+   the browser scrolls to the targeted section, and the duplicate default page is above
+   (scrolled past). Affected: Tor Browser 13.x (Firefox ESR 115, :has() requires FF 121+).
+   Tor Browser 14+ (Firefox ESR 128+) gets full single-page pagination behavior. */
+@supports selector(:has(*)) {
     .aroi-section:has(.pagination-section:target) .pagination-section:not(:target) {
         display: none !important;
     }
