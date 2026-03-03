@@ -289,6 +289,14 @@ class TestAROIPaginationSystem(unittest.TestCase):
         # using attribute selectors like [id$="-1-10"]
         self.assertIn('[id$="-1-10"]', aroi_content)
         
+        # Verify :has() selector is wrapped in @supports for progressive enhancement
+        self.assertIn('@supports selector(:has(a))', aroi_content)
+        self.assertIn(':has(.pagination-section:target)', aroi_content)
+        
+        # Verify all champion badge classes have CSS definitions
+        self.assertIn('.aroi-champion-total-data', aroi_content)
+        self.assertIn('.aroi-champion-validation', aroi_content)
+        
         # Verify skeleton.html has the page_css block mechanism
         skeleton_path = os.path.join(os.path.dirname(__file__), '..', '..', 'allium', 'templates', 'skeleton.html')
         with open(skeleton_path, 'r') as f:

@@ -163,6 +163,20 @@
     box-shadow: 0 2px 6px rgba(139, 69, 19, 0.25);
 }
 
+/* Total Data Champions (Blue/Teal spectrum) */
+.aroi-champion-total-data {
+    background: linear-gradient(45deg, #0984e3, #00b894);
+    color: #fff;
+    box-shadow: 0 2px 6px rgba(9, 132, 227, 0.25);
+}
+
+/* AROI Validation Champions (Green verification spectrum) */
+.aroi-champion-validation {
+    background: linear-gradient(45deg, #00b894, #28a745);
+    color: #fff;
+    box-shadow: 0 2px 6px rgba(0, 184, 148, 0.25);
+}
+
 /* Enhanced hover effects for all badges */
 .aroi-champion-badge .panel-body {
     transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -269,9 +283,18 @@
 .pagination-section { display: none; }
 [id$="-1-10"].pagination-section { display: block; }
 .pagination-section:target { display: block; }
-.aroi-section:has(.pagination-section:target) .pagination-section:not(:target) { display: none !important; }
 .pagination-section { scroll-margin-top: 80px; }
 .pagination-section h4 { margin-top: 20px; margin-bottom: 15px; }
+
+/* :has() progressive enhancement — hide non-targeted sections when a section is targeted.
+   Browsers without :has() (Firefox <121, older Safari) fall back to the baseline rules above,
+   which show both the default first page and any :target page simultaneously — acceptable
+   degradation since clicking a new page link scrolls to and shows the correct section. */
+@supports selector(:has(a)) {
+    .aroi-section:has(.pagination-section:target) .pagination-section:not(:target) {
+        display: none !important;
+    }
+}
 
 /* Compact table styling */
 .aroi-rankings-table.aroi-standard-table td,
