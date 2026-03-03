@@ -11,7 +11,10 @@ Each API source is classified by freshness:
   - unavailable: API disabled or no data
 """
 
+import logging
 import time
+
+logger = logging.getLogger(__name__)
 
 from .workers import (
     get_all_worker_status,
@@ -389,7 +392,11 @@ def _is_api_enabled(api_name, enabled_apis):
         try:
             from .consensus import is_consensus_evaluation_enabled
             return is_consensus_evaluation_enabled()
-        except Exception:
+        except Exception as e:
+            logger.error(
+                "Failed to check is_consensus_evaluation_enabled for %s: %s",
+                api_name, e,
+            )
             return False
     return True
 
