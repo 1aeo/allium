@@ -15,7 +15,6 @@ from allium.lib.api_diagnostics import (
     _format_age,
     _format_time_ago,
     _format_timestamp,
-    _short_name,
     _worst_freshness,
     _is_api_enabled,
     collect_api_diagnostics,
@@ -155,18 +154,20 @@ class TestFormatTimestamp:
 
 
 class TestShortName:
-    """Test short name mapping."""
+    """Test short name mapping in API_METADATA."""
 
     def test_known_apis(self):
-        assert _short_name("onionoo_details") == "Details"
-        assert _short_name("onionoo_uptime") == "Uptime"
-        assert _short_name("onionoo_bandwidth") == "Bandwidth"
-        assert _short_name("aroi_validation") == "AROI Validation"
-        assert _short_name("collector_consensus") == "Consensus"
-        assert _short_name("collector_descriptors") == "Descriptors"
+        assert API_METADATA["onionoo_details"]["short_name"] == "Details"
+        assert API_METADATA["onionoo_uptime"]["short_name"] == "Uptime"
+        assert API_METADATA["onionoo_bandwidth"]["short_name"] == "Bandwidth"
+        assert API_METADATA["aroi_validation"]["short_name"] == "AROI Validation"
+        assert API_METADATA["collector_consensus"]["short_name"] == "Consensus"
+        assert API_METADATA["collector_descriptors"]["short_name"] == "Descriptors"
 
-    def test_unknown_api(self):
-        assert _short_name("unknown_api") == "unknown_api"
+    def test_all_apis_have_short_name(self):
+        for api_name, metadata in API_METADATA.items():
+            assert "short_name" in metadata, f"{api_name} missing short_name"
+            assert len(metadata["short_name"]) > 0, f"{api_name} has empty short_name"
 
 
 class TestWorstFreshness:
@@ -229,8 +230,9 @@ class TestMetadataRegistry:
 
     def test_required_fields_present(self):
         required_fields = [
-            "display_name", "owner", "default_url", "expected_frequency",
-            "cache_max_age_hours", "count_field", "count_label", "affected_sections",
+            "display_name", "short_name", "owner", "default_url", "expected_frequency",
+            "cache_max_age_hours", "cache_max_age_display", "relay_set_attr",
+            "count_field", "count_label", "affected_sections",
         ]
         for api_name, metadata in API_METADATA.items():
             for field in required_fields:
