@@ -269,21 +269,31 @@ class TestAROIPaginationSystem(unittest.TestCase):
         self.assertIn('Operator (AROI)', rendered)  # Standard header from macro
 
     def test_skeleton_css_integration(self):
-        """Test that pagination system integrates with skeleton.html CSS."""
-        # Read skeleton.html to verify CSS classes are defined
-        skeleton_path = os.path.join(os.path.dirname(__file__), '..', '..', 'allium', 'templates', 'skeleton.html')
-        with open(skeleton_path, 'r') as f:
-            skeleton_content = f.read()
+        """Test that pagination CSS is defined in aroi-leaderboards.html page_css block.
         
-        # Verify key CSS classes for pagination are defined
-        self.assertIn('.pagination-section', skeleton_content)
-        self.assertIn('.pagination-nav-bottom', skeleton_content)
-        self.assertIn(':target', skeleton_content)
+        Note: Pagination CSS was moved from skeleton.html to aroi-leaderboards.html
+        as part of CSS inheritance optimization — it's only needed by AROI pages.
+        """
+        # Read aroi-leaderboards.html to verify CSS classes are defined
+        aroi_path = os.path.join(os.path.dirname(__file__), '..', '..', 'allium', 'templates', 'aroi-leaderboards.html')
+        with open(aroi_path, 'r') as f:
+            aroi_content = f.read()
+        
+        # Verify key CSS classes for pagination are defined in AROI template
+        self.assertIn('.pagination-section', aroi_content)
+        self.assertIn('.pagination-nav-bottom', aroi_content)
+        self.assertIn(':target', aroi_content)
         
         # Verify CSS uses dynamic patterns for category-specific targeting
         # The template generates IDs like #bandwidth-1-10, but CSS targets them
         # using attribute selectors like [id$="-1-10"]
-        self.assertIn('[id$="-1-10"]', skeleton_content)
+        self.assertIn('[id$="-1-10"]', aroi_content)
+        
+        # Verify skeleton.html has the page_css block mechanism
+        skeleton_path = os.path.join(os.path.dirname(__file__), '..', '..', 'allium', 'templates', 'skeleton.html')
+        with open(skeleton_path, 'r') as f:
+            skeleton_content = f.read()
+        self.assertIn('{% block page_css %}', skeleton_content)
 
     def test_pagination_performance_structure(self):
         """Test that pagination structure is optimized for performance."""
