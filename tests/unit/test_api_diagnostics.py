@@ -296,11 +296,11 @@ class TestCollectApiDiagnostics:
         return args
 
     @patch("allium.lib.api_diagnostics.get_all_worker_status")
-    @patch("allium.lib.api_diagnostics._cache_manager")
-    def test_returns_correct_structure(self, mock_cache, mock_status):
+    @patch("allium.lib.api_diagnostics.get_cache_age")
+    def test_returns_correct_structure(self, mock_cache_age, mock_status):
         """Verify the returned dict has all expected top-level keys."""
         mock_status.return_value = {}
-        mock_cache.get_cache_age.return_value = 60  # 1 minute old
+        mock_cache_age.return_value = 60  # 1 minute old
 
         result = collect_api_diagnostics(self._make_mock_relay_set(), self._make_mock_args())
 
@@ -314,32 +314,32 @@ class TestCollectApiDiagnostics:
         assert "apis_mode" in result
 
     @patch("allium.lib.api_diagnostics.get_all_worker_status")
-    @patch("allium.lib.api_diagnostics._cache_manager")
-    def test_six_apis_returned(self, mock_cache, mock_status):
+    @patch("allium.lib.api_diagnostics.get_cache_age")
+    def test_six_apis_returned(self, mock_cache_age, mock_status):
         """Should return diagnostics for all 6 APIs."""
         mock_status.return_value = {}
-        mock_cache.get_cache_age.return_value = 60
+        mock_cache_age.return_value = 60
 
         result = collect_api_diagnostics(self._make_mock_relay_set(), self._make_mock_args())
         assert len(result["apis"]) == 6
 
     @patch("allium.lib.api_diagnostics.get_all_worker_status")
-    @patch("allium.lib.api_diagnostics._cache_manager")
-    def test_all_fresh_when_cache_young(self, mock_cache, mock_status):
+    @patch("allium.lib.api_diagnostics.get_cache_age")
+    def test_all_fresh_when_cache_young(self, mock_cache_age, mock_status):
         """All APIs fresh when cache is very young."""
         mock_status.return_value = {
             name: {"status": "ready", "timestamp": time.time(), "error": None}
             for name in API_METADATA
         }
-        mock_cache.get_cache_age.return_value = 60  # 1 minute
+        mock_cache_age.return_value = 60  # 1 minute
 
         result = collect_api_diagnostics(self._make_mock_relay_set(), self._make_mock_args())
         assert result["overall_status"] == "fresh"
         assert "ALL SYSTEMS FRESH" in result["overall_status_label"]
 
     @patch("allium.lib.api_diagnostics.get_all_worker_status")
-    @patch("allium.lib.api_diagnostics._cache_manager")
-    def test_stale_when_worker_stale(self, mock_cache, mock_status):
+    @patch("allium.lib.api_diagnostics.get_cache_age")
+    def test_stale_when_worker_stale(self, mock_cache_age, mock_status):
         """Overall should be stale if any worker is stale."""
         statuses = {
             name: {"status": "ready", "timestamp": time.time(), "error": None}
@@ -349,18 +349,18 @@ class TestCollectApiDiagnostics:
             "status": "stale", "timestamp": time.time(), "error": "timeout"
         }
         mock_status.return_value = statuses
-        mock_cache.get_cache_age.return_value = 60
+        mock_cache_age.return_value = 60
 
         result = collect_api_diagnostics(self._make_mock_relay_set(), self._make_mock_args())
         assert result["overall_status"] == "stale"
         assert "STALE" in result["overall_status_label"]
 
     @patch("allium.lib.api_diagnostics.get_all_worker_status")
-    @patch("allium.lib.api_diagnostics._cache_manager")
-    def test_per_api_fields(self, mock_cache, mock_status):
+    @patch("allium.lib.api_diagnostics.get_cache_age")
+    def test_per_api_fields(self, mock_cache_age, mock_status):
         """Each API diagnostic should have all required display fields."""
         mock_status.return_value = {}
-        mock_cache.get_cache_age.return_value = 120
+        mock_cache_age.return_value = 120
 
         result = collect_api_diagnostics(self._make_mock_relay_set(), self._make_mock_args())
 
@@ -374,11 +374,11 @@ class TestCollectApiDiagnostics:
                 assert field in api, f"API '{api['name']}' missing field '{field}'"
 
     @patch("allium.lib.api_diagnostics.get_all_worker_status")
-    @patch("allium.lib.api_diagnostics._cache_manager")
-    def test_section_dependencies_populated(self, mock_cache, mock_status):
+    @patch("allium.lib.api_diagnostics.get_cache_age")
+    def test_section_dependencies_populated(self, mock_cache_age, mock_status):
         """Section dependencies should be populated with freshness data."""
         mock_status.return_value = {}
-        mock_cache.get_cache_age.return_value = 60
+        mock_cache_age.return_value = 60
 
         result = collect_api_diagnostics(self._make_mock_relay_set(), self._make_mock_args())
 
@@ -392,11 +392,11 @@ class TestCollectApiDiagnostics:
                 assert "freshness" in api
 
     @patch("allium.lib.api_diagnostics.get_all_worker_status")
-    @patch("allium.lib.api_diagnostics._cache_manager")
-    def test_disabled_apis_marked_unavailable(self, mock_cache, mock_status):
+    @patch("allium.lib.api_diagnostics.get_cache_age")
+    def test_disabled_apis_marked_unavailable(self, mock_cache_age, mock_status):
         """APIs not enabled by --apis mode should be marked unavailable."""
         mock_status.return_value = {}
-        mock_cache.get_cache_age.return_value = 60
+        mock_cache_age.return_value = 60
 
         args = self._make_mock_args()
         args.enabled_apis = "details"  # Only details mode

@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 from .workers import (
     get_all_worker_status,
-    _cache_manager,
+    get_cache_age,
     DETAILS_CACHE_MAX_AGE_HOURS,
     UPTIME_CACHE_MAX_AGE_HOURS,
     BANDWIDTH_CACHE_MAX_AGE_HOURS,
@@ -454,7 +454,7 @@ def collect_api_diagnostics(relay_set, args):
         url = url or metadata["default_url"]
 
         # Get cache age and worker status
-        cache_age = _cache_manager.get_cache_age(api_name)
+        cache_age = get_cache_age(api_name)
         ws = worker_statuses.get(api_name) or {}
         worker_status = ws.get("status")
         worker_error = ws.get("error")
