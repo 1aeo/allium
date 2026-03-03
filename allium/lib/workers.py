@@ -403,6 +403,22 @@ def get_all_worker_status():
         return _worker_status.copy()
 
 
+def get_cache_age(api_name):
+    """
+    Get cache file age in seconds for the given API.
+    
+    Public accessor that wraps the internal cache manager so external
+    modules don't need to import the private ``_cache_manager`` symbol.
+    
+    Args:
+        api_name: Internal API name (e.g., 'onionoo_details')
+        
+    Returns:
+        float: Age in seconds, or None if cache file does not exist
+    """
+    return _cache_manager.get_cache_age(api_name)
+
+
 @handle_file_io_errors("save timestamp", context="")
 def _write_timestamp(api_name, timestamp_str):
     """

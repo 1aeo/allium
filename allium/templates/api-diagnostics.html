@@ -1,0 +1,204 @@
+{% from "macros.html" import navigation %}
+{% extends "skeleton.html" -%}
+
+{% block title -%}
+API Diagnostics
+{% endblock -%}
+
+{% block body -%}
+
+<div class="aroi-center-text aroi-subsection">
+    <h1>API Diagnostics</h1>
+    <p class="lead"><strong>Data Source Health &amp; Freshness Monitor</strong></p>
+    <p style="color: #6c757d; font-size: 13px;">
+        At-a-glance view of all data sources powering this site.
+        If something is stale, see which site sections are affected below.
+    </p>
+</div>
+
+{{ navigation('diagnostics', page_ctx, show_breadcrumbs=false) }}
+
+{% set diag = relays.api_diagnostics %}
+
+{# ================================================================ #}
+{# OVERALL STATUS BANNER                                            #}
+{# ================================================================ #}
+<div class="diag-overall-banner diag-overall-{{ diag.overall_status }}">
+    <div class="diag-overall-status">
+        {{ diag.overall_status_label }}
+    </div>
+    <div class="diag-overall-meta">
+        <div><strong>Site Generated:</strong> {{ diag.site_generated }}</div>
+        <div><strong>APIs Enabled:</strong> {{ diag.apis_mode }} ({{ diag.enabled_count }}/{{ diag.total_count }} sources active)</div>
+    </div>
+</div>
+
+{# ================================================================ #}
+{# API SOURCE STATUS CARDS (3-column grid)                          #}
+{# ================================================================ #}
+<h3 class="diag-section-header">API Source Status</h3>
+
+<div class="diag-grid">
+    {% for api in diag.apis %}
+    <div class="diag-card diag-card-border-{{ api.freshness }}">
+        <div class="diag-card-header">
+            <h4>{{ api.display_name }}</h4>
+            <span class="diag-badge diag-badge-{{ api.freshness }}">{{ api.freshness|upper }}</span>
+        </div>
+        <div class="diag-card-body">
+            <dl>
+                <dt>URL</dt>
+                <dd>
+                    <a href="{{ api.url }}" target="_blank" rel="noopener">{{ api.url|replace('https://', '') }}</a>
+                    {% if api.url_note %}<span style="color:#6c757d;"> ({{ api.url_note }})</span>{% endif %}
+                </dd>
+                <dt>Owner</dt>
+                <dd>{{ api.owner }}</dd>
+                <dt>Expected Update</dt>
+                <dd>{{ api.expected_frequency }}</dd>
+                {% if api.enabled %}
+                <dt>Cache Age</dt>
+                <dd>
+                    {% if api.freshness == 'stale' and api.cache_exceeded %}
+                        <span class="status-danger">{{ api.cache_age_display }}</span>
+                        <span style="color:#6c757d;">/ max {{ api.cache_max_age_display }}</span>
+                        <span class="status-danger">EXCEEDED</span>
+                    {% elif api.freshness == 'aging' %}
+                        <span class="status-warning">{{ api.cache_age_display }}</span>
+                        <span style="color:#6c757d;">/ max {{ api.cache_max_age_display }}</span>
+                    {% elif api.cache_age_seconds is not none %}
+                        {{ api.cache_age_display }}
+                        <span style="color:#6c757d;">/ max {{ api.cache_max_age_display }}</span>
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </dd>
+                <dt>Worker Status</dt>
+                <dd>
+                    {% if api.worker_status == 'ready' %}
+                        <span class="status-success">{{ api.worker_status }}</span>
+                    {% elif api.worker_status == 'stale' %}
+                        <span class="status-danger">{{ api.worker_status }}</span>
+                    {% else %}
+                        {{ api.worker_status }}
+                    {% endif %}
+                </dd>
+                {% if api.worker_error %}
+                <dt>Error</dt>
+                <dd><span class="status-danger">{{ api.worker_error }}</span></dd>
+                {% endif %}
+                <dt>Items Loaded</dt>
+                <dd>
+                    {{ api.item_count_display }} {{ api.count_label }}
+                    {% if api.extra_info %}
+                        <span style="color:#6c757d;">({{ api.extra_info }})</span>
+                    {% endif %}
+                </dd>
+                {% else %}
+                <dt>Status</dt>
+                <dd><span class="status-muted">Disabled (--apis={{ diag.apis_mode }})</span></dd>
+                {% endif %}
+            </dl>
+
+            {% if api.enabled %}
+            <div class="diag-progress-bar">
+                <div class="diag-progress-fill diag-progress-{{ api.freshness }}" style="width: {{ api.cache_pct }}%;"></div>
+            </div>
+            {% endif %}
+
+            <div class="diag-affected {% if api.freshness == 'stale' %}diag-affected-stale{% endif %}">
+                {% if api.freshness == 'stale' %}
+                <strong>Affected sections (may show stale data):</strong>
+                {% else %}
+                <strong>Affects:</strong>
+                {% endif %}
+                {% for section in api.affected_sections %}
+                    <span class="diag-affected-tag {% if api.freshness == 'stale' %}diag-affected-tag-stale{% endif %}">{{ section }}</span>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+
+{# ================================================================ #}
+{# SITE SECTION DEPENDENCY MAP TABLE                                #}
+{# ================================================================ #}
+<h3 class="diag-section-header">Site Section &rarr; Data Source Dependency Map</h3>
+<p style="color: #6c757d; font-size: 13px; margin-bottom: 12px;">
+    If an API source is stale, this table shows which parts of the site will have stale information.
+    Status column shows the worst freshness among all dependencies for that section.
+</p>
+
+<div class="table-responsive">
+    <table class="diag-dep-table">
+        <thead>
+            <tr>
+                <th style="width:28%;">Site Section</th>
+                <th style="width:42%;">Depends On</th>
+                <th style="width:15%;">Status</th>
+                <th style="width:15%;">Link</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for dep in diag.section_dependencies %}
+            <tr>
+                <td><strong>{{ dep.section }}</strong></td>
+                <td>
+                    {% for api in dep.apis %}
+                        <span class="diag-api-pill diag-api-pill-{{ api.freshness }}">{{ api.short_name }}</span>
+                    {% endfor %}
+                </td>
+                <td>
+                    <span class="diag-dep-dot diag-dot-{{ dep.worst_freshness }}"></span>
+                    {% if dep.worst_freshness == 'stale' %}
+                        <strong class="status-danger">Stale</strong>
+                    {% elif dep.worst_freshness == 'aging' %}
+                        <span class="status-warning">Aging</span>
+                    {% elif dep.worst_freshness == 'fresh' %}
+                        <span class="status-success">Fresh</span>
+                    {% else %}
+                        <span class="status-muted">N/A</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if dep.link %}
+                        <a href="{{ page_ctx.path_prefix }}{{ dep.link }}">{{ dep.link }}</a>
+                    {% elif dep.link_label %}
+                        <span style="color:#6c757d;">{{ dep.link_label }}</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+
+{# ================================================================ #}
+{# FRESHNESS COLOR LEGEND                                           #}
+{# ================================================================ #}
+<div class="diag-legend">
+    <h5>Freshness Color Legend</h5>
+    <div class="diag-legend-items">
+        <div class="diag-legend-item">
+            <span class="diag-dep-dot diag-dot-fresh"></span>
+            <strong>Fresh</strong> &mdash; Cache age &lt; 50% of max age. Data is current.
+        </div>
+        <div class="diag-legend-item">
+            <span class="diag-dep-dot diag-dot-aging"></span>
+            <strong>Aging</strong> &mdash; Cache age 50&ndash;100% of max age. Still valid but approaching refresh.
+        </div>
+        <div class="diag-legend-item">
+            <span class="diag-dep-dot diag-dot-stale"></span>
+            <strong>Stale</strong> &mdash; Cache age &gt; max age OR fetch failed. Data may be outdated.
+        </div>
+        <div class="diag-legend-item">
+            <span class="diag-dep-dot diag-dot-unavailable"></span>
+            <strong>N/A</strong> &mdash; API disabled (--apis mode) or data not available.
+        </div>
+    </div>
+</div>
+
+{% endblock -%}

@@ -189,7 +189,7 @@ if __name__ == "__main__":
 
     start_time = time.time()
     
-    # Progress step breakdown (total: 53 steps):
+    # Progress step breakdown (total: 57 steps):
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # Setup (4 steps):
     #   1. Starting allium
@@ -213,7 +213,7 @@ if __name__ == "__main__":
     #   - Relay set created (1)
     #   - Section end (1)
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # Page Generation (31 steps):
+    # Page Generation (33 steps):
     #   - Details API data loaded (1)
     #   - Section start (1)
     #   - Index page (generating + generated) x2
@@ -221,8 +221,9 @@ if __name__ == "__main__":
     #   - All relays page x2
     #   - AROI leaderboards page x2
     #   - Network health dashboard x2
-    #   - Miscellaneous sorted pages x2
     #   - Directory authorities x2
+    #   - API diagnostics page x2
+    #   - Miscellaneous sorted pages x2
     #   - 7 key type pages complete (family, contact, as, country, flag, platform, first_seen)
     #   - Individual relay pages x2
     #   - Static files x2
@@ -233,8 +234,8 @@ if __name__ == "__main__":
     
     setup_steps = 4
     coordinator_steps = 20  # API Fetching (16) + Data Processing (4)
-    page_generation_steps = 31  # Page generation and completion
-    total_steps = setup_steps + coordinator_steps + page_generation_steps  # 55 total steps
+    page_generation_steps = 33  # Page generation and completion
+    total_steps = setup_steps + coordinator_steps + page_generation_steps  # 57 total steps
 
     # Create unified progress logger
     progress_logger = create_progress_logger(start_time, 0, total_steps, args.progress)
