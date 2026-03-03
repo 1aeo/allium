@@ -233,8 +233,8 @@ if __name__ == "__main__":
     
     setup_steps = 4
     coordinator_steps = 20  # API Fetching (16) + Data Processing (4)
-    page_generation_steps = 31  # Page generation and completion
-    total_steps = setup_steps + coordinator_steps + page_generation_steps  # 55 total steps
+    page_generation_steps = 33  # Page generation and completion (+2 for API diagnostics page)
+    total_steps = setup_steps + coordinator_steps + page_generation_steps  # 57 total steps
 
     # Create unified progress logger
     progress_logger = create_progress_logger(start_time, 0, total_steps, args.progress)

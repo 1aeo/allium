@@ -1432,6 +1432,263 @@
                         display: block !important;
                     }
                 }
+
+                /* ============================================================
+                   API Diagnostics Page Styles
+                   ============================================================ */
+
+                /* Overall status banner */
+                .diag-overall-banner {
+                    padding: 18px 24px;
+                    border-radius: 8px;
+                    margin-bottom: 24px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    flex-wrap: wrap;
+                    gap: 12px;
+                }
+                .diag-overall-fresh {
+                    background: linear-gradient(135deg, #d4edda, #c3e6cb);
+                    border: 2px solid #28a745;
+                }
+                .diag-overall-aging {
+                    background: linear-gradient(135deg, #fff3cd, #ffeeba);
+                    border: 2px solid #ffc107;
+                }
+                .diag-overall-stale {
+                    background: linear-gradient(135deg, #f8d7da, #f5c6cb);
+                    border: 2px solid #dc3545;
+                }
+                .diag-overall-unavailable {
+                    background: linear-gradient(135deg, #e9ecef, #dee2e6);
+                    border: 2px solid #6c757d;
+                }
+                .diag-overall-status {
+                    font-size: 20px;
+                    font-weight: 700;
+                    color: #2c3e50;
+                }
+                .diag-overall-meta {
+                    font-size: 13px;
+                    color: #495057;
+                    text-align: right;
+                }
+                .diag-overall-meta div { margin-bottom: 2px; }
+
+                /* API cards grid - 3 columns matching network health ribbon */
+                .diag-grid {
+                    display: grid;
+                    grid-template-columns: repeat(3, 1fr);
+                    gap: 16px;
+                    margin-bottom: 30px;
+                }
+
+                .diag-card {
+                    background: #fff;
+                    border-radius: 8px;
+                    border: 2px solid #e1e8ed;
+                    padding: 0;
+                    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+                    transition: all 0.2s ease;
+                    overflow: hidden;
+                }
+                .diag-card:hover {
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                    transform: translateY(-1px);
+                }
+
+                /* Colored left border per freshness */
+                .diag-card-border-fresh { border-left: 4px solid #28a745; }
+                .diag-card-border-aging { border-left: 4px solid #ffc107; }
+                .diag-card-border-stale { border-left: 4px solid #dc3545; }
+                .diag-card-border-unavailable { border-left: 4px solid #6c757d; }
+
+                .diag-card-header {
+                    padding: 12px 16px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    border-bottom: 1px solid #f0f4f8;
+                }
+                .diag-card-header h4 {
+                    margin: 0;
+                    font-size: 15px;
+                    font-weight: 600;
+                    color: #2c3e50;
+                }
+
+                /* Freshness badges */
+                .diag-badge {
+                    display: inline-block;
+                    padding: 3px 10px;
+                    border-radius: 20px;
+                    font-size: 11px;
+                    font-weight: 700;
+                    letter-spacing: 0.5px;
+                    text-transform: uppercase;
+                }
+                .diag-badge-fresh { background-color: #d4edda; color: #155724; border: 1px solid #28a745; }
+                .diag-badge-aging { background-color: #fff3cd; color: #856404; border: 1px solid #ffc107; }
+                .diag-badge-stale { background-color: #f8d7da; color: #721c24; border: 1px solid #dc3545; }
+                .diag-badge-unavailable { background-color: #e9ecef; color: #495057; border: 1px solid #6c757d; }
+
+                .diag-card-body {
+                    padding: 10px 16px 14px;
+                }
+                .diag-card-body dl {
+                    margin: 0;
+                    display: grid;
+                    grid-template-columns: 110px 1fr;
+                    gap: 3px 8px;
+                    font-size: 12px;
+                }
+                .diag-card-body dt { color: #6c757d; font-weight: 600; }
+                .diag-card-body dd { margin: 0; color: #343a40; word-break: break-all; }
+                .diag-card-body dd a { color: #337ab7; text-decoration: none; }
+                .diag-card-body dd a:hover { text-decoration: underline; }
+
+                /* Text color classes */
+                .diag-text-fresh { color: #28a745; font-weight: 600; }
+                .diag-text-aging { color: #856404; font-weight: 600; }
+                .diag-text-stale { color: #dc3545; font-weight: 600; }
+                .diag-text-unavailable { color: #6c757d; font-weight: 600; }
+
+                /* Progress bar */
+                .diag-progress-bar {
+                    height: 6px;
+                    background: #e9ecef;
+                    border-radius: 3px;
+                    margin-top: 8px;
+                    overflow: hidden;
+                }
+                .diag-progress-fill {
+                    height: 100%;
+                    border-radius: 3px;
+                    transition: width 0.3s ease;
+                }
+                .diag-progress-fresh { background: #28a745; }
+                .diag-progress-aging { background: #ffc107; }
+                .diag-progress-stale { background: #dc3545; }
+
+                /* Affected sections tags */
+                .diag-affected {
+                    margin-top: 10px;
+                    padding-top: 8px;
+                    border-top: 1px solid #f0f4f8;
+                    font-size: 12px;
+                    color: #6c757d;
+                }
+                .diag-affected strong { color: #495057; }
+                .diag-affected-stale strong { color: #721c24; }
+                .diag-affected-tag {
+                    display: inline-block;
+                    background: #f0f4f8;
+                    padding: 2px 8px;
+                    border-radius: 3px;
+                    margin: 2px 3px 2px 0;
+                    font-size: 11px;
+                    color: #495057;
+                }
+                .diag-affected-tag-stale {
+                    background: #f8d7da;
+                    color: #721c24;
+                }
+
+                /* Section header */
+                .diag-section-header {
+                    font-size: 18px;
+                    font-weight: 600;
+                    color: #2c3e50;
+                    margin: 30px 0 16px 0;
+                    padding-bottom: 8px;
+                    border-bottom: 2px solid #e1e8ed;
+                }
+
+                /* Dependency map table */
+                .diag-dep-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    font-size: 13px;
+                }
+                .diag-dep-table thead th {
+                    background: #f8f9fa;
+                    padding: 10px 14px;
+                    text-align: left;
+                    font-weight: 600;
+                    color: #495057;
+                    border-bottom: 2px solid #dee2e6;
+                }
+                .diag-dep-table tbody td {
+                    padding: 10px 14px;
+                    border-bottom: 1px solid #f0f4f8;
+                    vertical-align: middle;
+                }
+                .diag-dep-table tbody tr:hover { background-color: #f8f9fa; }
+
+                /* Status dots */
+                .diag-dep-dot {
+                    display: inline-block;
+                    width: 10px;
+                    height: 10px;
+                    border-radius: 50%;
+                    margin-right: 6px;
+                    vertical-align: middle;
+                }
+                .diag-dot-fresh { background: #28a745; }
+                .diag-dot-aging { background: #ffc107; }
+                .diag-dot-stale { background: #dc3545; }
+                .diag-dot-unavailable { background: #6c757d; }
+
+                /* API pills in dependency table */
+                .diag-api-pill {
+                    display: inline-block;
+                    padding: 2px 8px;
+                    border-radius: 10px;
+                    font-size: 11px;
+                    margin: 1px 3px;
+                    font-weight: 500;
+                }
+                .diag-api-pill-fresh { background: #d4edda; color: #155724; }
+                .diag-api-pill-aging { background: #fff3cd; color: #856404; }
+                .diag-api-pill-stale { background: #f8d7da; color: #721c24; }
+                .diag-api-pill-unavailable { background: #e9ecef; color: #495057; }
+
+                /* Legend box */
+                .diag-legend {
+                    background: #f8f9fa;
+                    border-radius: 8px;
+                    padding: 16px 20px;
+                    margin-top: 24px;
+                }
+                .diag-legend h5 {
+                    margin-top: 0;
+                    margin-bottom: 10px;
+                    font-size: 14px;
+                    color: #495057;
+                }
+                .diag-legend-items {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 20px;
+                    font-size: 13px;
+                }
+                .diag-legend-item {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                }
+
+                /* Responsive: 2 columns on medium, 1 on small */
+                @media (max-width: 1200px) {
+                    .diag-grid { grid-template-columns: repeat(2, 1fr); }
+                }
+                @media (max-width: 768px) {
+                    .diag-grid { grid-template-columns: 1fr; }
+                    .diag-overall-banner { flex-direction: column; text-align: center; }
+                    .diag-overall-meta { text-align: center; }
+                    .diag-card-body dl { grid-template-columns: 100px 1fr; }
+                }
             </style>
         </head>
     {% endblock %}
