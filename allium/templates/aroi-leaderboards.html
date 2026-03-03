@@ -279,24 +279,36 @@
 .aroi-fixed-nav { position: fixed; bottom: 20px; right: 20px; z-index: 1000; }
 .aroi-footer-section { margin-top: 50px; border-top: 2px solid #ccc; padding-top: 30px; }
 
-/* AROI Pagination Styles using :target selector */
-.pagination-section { display: none; }
-[id$="-1-10"].pagination-section { display: block; }
-.pagination-section:target { display: block; }
-.pagination-section { scroll-margin-top: 80px; }
+/* AROI Pagination — pure CSS, no JavaScript, backward-compatible.
+   Works on all browsers with flexbox + :target support (Firefox 20+, all Tor Browser versions).
+   
+   Strategy: DOM order puts the default page (1-10) LAST among siblings so the CSS ~ general
+   sibling combinator can hide it when any preceding sibling is :target. Flexbox `order` 
+   restores the correct visual sequence (1-10 first, 11-20 second, 21-25 third). */
+
+/* Flex container for visual reordering */
+.pagination-container {
+    display: flex;
+    flex-direction: column;
+}
+
+/* All pagination sections hidden by default */
+.pagination-section { display: none; scroll-margin-top: 80px; }
 .pagination-section h4 { margin-top: 20px; margin-bottom: 15px; }
 
-/* :has() progressive enhancement — hide non-targeted sections when a section is targeted.
-   Browsers without :has() fall back to the baseline rules above, which show both the
-   default first page and any :target page simultaneously. This is acceptable degradation:
-   the browser scrolls to the targeted section, and the duplicate default page is above
-   (scrolled past). Affected: Tor Browser 13.x (Firefox ESR 115, :has() requires FF 121+).
-   Tor Browser 14+ (Firefox ESR 128+) gets full single-page pagination behavior. */
-@supports selector(:has(*)) {
-    .aroi-section:has(.pagination-section:target) .pagination-section:not(:target) {
-        display: none !important;
-    }
-}
+/* Default: show first page (1-10) — last in DOM, first visually via order */
+[id$="-1-10"].pagination-section { display: block; order: 1; }
+[id$="-11-20"].pagination-section { order: 2; }
+[id$="-21-25"].pagination-section { order: 3; }
+
+/* Show any targeted pagination section */
+.pagination-section:target { display: block; }
+
+/* Hide ALL non-targeted sections when any section is :target.
+   Works because default page (1-10) is LAST in DOM order — the ~ combinator
+   reaches it from any :target preceding sibling. Non-default pages that precede
+   the :target in DOM are already display:none and unaffected. */
+.pagination-section:target ~ .pagination-section:not(:target) { display: none !important; }
 
 /* Compact table styling */
 .aroi-rankings-table.aroi-standard-table td,

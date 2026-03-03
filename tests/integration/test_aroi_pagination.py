@@ -289,9 +289,12 @@ class TestAROIPaginationSystem(unittest.TestCase):
         # using attribute selectors like [id$="-1-10"]
         self.assertIn('[id$="-1-10"]', aroi_content)
         
-        # Verify :has() selector is wrapped in @supports for progressive enhancement
-        self.assertIn('@supports selector(:has(*))', aroi_content)
-        self.assertIn(':has(.pagination-section:target)', aroi_content)
+        # Verify backward-compatible pagination approach:
+        # - Flex container for visual reordering (DOM order != visual order)
+        self.assertIn('.pagination-container', aroi_content)
+        # - Sibling combinator hides default page when another is :target
+        #   (no :has() needed — works on all Tor Browser versions)
+        self.assertIn('.pagination-section:target ~ .pagination-section:not(:target)', aroi_content)
         
         # Verify all champion badge classes have CSS definitions
         self.assertIn('.aroi-champion-total-data', aroi_content)
