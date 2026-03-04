@@ -51,6 +51,7 @@
     <th title="Flag-specific uptime percentages showing the reliability of this relay when operating in its primary network role. Priority: Exit > Guard > Fast > Running flags.">Flag Uptime (1M/6M/1Y/5Y)</th>
     <th>IPv4</th>
     <th>Flags</th>
+    <th title="Exit DNS Health: DNS resolution status of exit relays. Source: exitdnshealth.1aeo.com">DNS</th>
     <th title="Family membership method: Happy Families (family-cert), MyFamily (legacy), Both, or None. Green = has family-cert (Happy Families and Both), Red = MyFamily only.">Family</th>
     <th>Country</th>
     <th>AS Number</th>
@@ -92,14 +93,6 @@
                 {{- aroi_validation_icon(relay['fingerprint'], relay['aroi_domain'], validated_fps, unauthorized_fps, misconfigured_fps) }}
             {% endif -%}
         {% endif -%}
-        {# DNS Health indicator for exit relays #}
-        {% if relay.get('exit_dns_health_status') == 'success' %}
-            <span style="color: #28a745; margin-left: 4px;" title="DNS Healthy">&#9679;</span>
-        {% elif relay.get('exit_dns_health_status') == 'fail' %}
-            <span style="color: #dc3545; margin-left: 4px;" title="DNS Failing: {{ relay.get('exit_dns_health_detail', 'unknown')|escape }}">&#9679;</span>
-        {% elif relay.get('exit_dns_health_status') == 'untested' %}
-            <span style="color: #6c757d; margin-left: 4px;" title="DNS: Not tested">&#9675;</span>
-        {% endif %}
     </td>
     {% if relay['effective_family']|length > 1 -%}
         <td title="{{ relay['nickname']|escape }}">
@@ -165,6 +158,7 @@
     </td>
     {# PERF: Use pre-rendered flags HTML from Python (eliminates Jinja2 loop) - THE KEY OPTIMIZATION #}
     <td>{{ relay['_flags_html']|replace('{path}', page_ctx.path_prefix)|safe }}</td>
+    <td>{% if relay.get('exit_dns_health_status') == 'success' %}<span style="color: #28a745;" title="DNS resolution healthy">Ok</span>{% elif relay.get('exit_dns_health_status') == 'fail' %}<span style="color: #dc3545;" title="DNS resolution failing">Fail</span>{% elif relay.get('exit_dns_health_status') == 'untested' %}<span style="color: #6c757d;" title="Not yet tested">-</span>{% else %}<span style="color: #6c757d;">NA</span>{% endif %}</td>
     <td>
         {% if relay.get('family_support_type') == 'both' -%}
             <span style="color: #28a745;" title="Has both Happy Families (family-cert) and MyFamily declarations">Both</span>

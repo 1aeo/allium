@@ -104,9 +104,9 @@
                     
                     {% if exit_dns_health_summary %}
                     <li><strong><span title="Exit DNS Health: DNS resolution capability of this operator's exit relays. Source: exitdnshealth.1aeo.com">Exit DNS Health</span>:</strong>
-                        <span style="color: #28a745;">{{ exit_dns_health_summary.healthy }}</span> healthy,
-                        {% if exit_dns_health_summary.failing > 0 %}<span style="color: #dc3545;">{{ exit_dns_health_summary.failing }}</span> failing{% else %}0 failing{% endif %}{% if exit_dns_health_summary.untested > 0 %}, {{ exit_dns_health_summary.untested }} untested{% endif %}
-                        ({{ exit_dns_health_summary.exit_count }} exit{{ 's' if exit_dns_health_summary.exit_count != 1 }} total)
+                        <span style="color: #28a745;">{{ exit_dns_health_summary.healthy }} healthy ({{ exit_dns_health_summary.healthy_pct }}%)</span>,
+                        {% if exit_dns_health_summary.failing > 0 %}<span style="color: #dc3545;">{{ exit_dns_health_summary.failing }} failing ({{ exit_dns_health_summary.failing_pct }}%)</span>{% else %}0 failing{% endif %}{% if exit_dns_health_summary.untested > 0 %}, {{ exit_dns_health_summary.untested }} untested ({{ exit_dns_health_summary.untested_pct }}%){% endif %}
+                        of {{ exit_dns_health_summary.exit_count }} exit{{ 's' if exit_dns_health_summary.exit_count != 1 }} total
                     </li>
                     {% endif %}
 

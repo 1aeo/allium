@@ -37,6 +37,7 @@
     <th>Country</th>
     <th>Platform</th>
     <th class="visible-md visible-lg">Flags</th>
+    <th class="visible-md visible-lg" title="Exit DNS Health: DNS resolution status of exit relays. Source: exitdnshealth.1aeo.com">DNS</th>
     <th class="visible-md visible-lg">First Seen</th>
     {% if key and not is_index -%}
     <th class="visible-md visible-lg">Last Restarted</th>
@@ -168,7 +169,8 @@
 		    <td>{{ relay['platform']|truncate(length=10)|escape }}</td>
 		{% endif -%}
 		{# PERF: Use pre-rendered flags HTML from Python (eliminates Jinja2 loop) - THE KEY OPTIMIZATION #}
-		<td class="visible-md visible-lg">{{ relay['_flags_html']|replace('{path}', page_ctx.path_prefix)|safe }}{% if relay.get('exit_dns_health_status') == 'success' %}<span style="color: #28a745; font-size: 9px;" title="DNS healthy">&#9679;</span>{% elif relay.get('exit_dns_health_status') == 'fail' %}<span style="color: #dc3545; font-size: 9px;" title="DNS failing">&#9679;</span>{% endif %}</td>
+		<td class="visible-md visible-lg">{{ relay['_flags_html']|replace('{path}', page_ctx.path_prefix)|safe }}</td>
+		<td class="visible-md visible-lg">{% if relay.get('exit_dns_health_status') == 'success' %}<span style="color: #28a745;" title="DNS resolution healthy">Ok</span>{% elif relay.get('exit_dns_health_status') == 'fail' %}<span style="color: #dc3545;" title="DNS resolution failing">Fail</span>{% elif relay.get('exit_dns_health_status') == 'untested' %}<span style="color: #6c757d;" title="Not yet tested">-</span>{% else %}<span style="color: #6c757d;">NA</span>{% endif %}</td>
 		{# PERF: Use pre-computed first_seen_date_escaped from _preprocess_template_data() #}
 		{% if key != 'first_seen' -%}
 		    <td class="visible-md visible-lg">

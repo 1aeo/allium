@@ -34,16 +34,10 @@
     {% endif %}
     {% if exit_dns_health_summary %}
     <li><strong><span title="DNS resolution health of exit relays in this country. Source: exitdnshealth.1aeo.com">Exit DNS Health</span>:</strong>
-        {% if exit_dns_health_summary.all_healthy %}
-            <span style="color: #28a745;">✓ All {{ exit_dns_health_summary.exit_count }} exit relay{{ 's' if exit_dns_health_summary.exit_count != 1 else '' }} healthy</span>
-        {% elif exit_dns_health_summary.any_failing %}
-            <span style="color: #28a745;">{{ exit_dns_health_summary.healthy }} healthy</span>,
-            <span style="color: #dc3545;">{{ exit_dns_health_summary.failing }} failing</span>
-            {% if exit_dns_health_summary.untested > 0 %}, {{ exit_dns_health_summary.untested }} untested{% endif %}
-            (of {{ exit_dns_health_summary.exit_count }} exit relays)
-        {% else %}
-            <span style="color: #6c757d;">{{ exit_dns_health_summary.exit_count }} exit relay{{ 's' if exit_dns_health_summary.exit_count != 1 else '' }}, {{ exit_dns_health_summary.untested }} untested</span>
-        {% endif %}
+        <span style="color: #28a745;">{{ exit_dns_health_summary.healthy }} healthy ({{ exit_dns_health_summary.healthy_pct }}%)</span>{% if exit_dns_health_summary.failing > 0 %},
+            <span style="color: #dc3545;">{{ exit_dns_health_summary.failing }} failing ({{ exit_dns_health_summary.failing_pct }}%)</span>{% endif %}{% if exit_dns_health_summary.untested > 0 %},
+            {{ exit_dns_health_summary.untested }} untested ({{ exit_dns_health_summary.untested_pct }}%){% endif %}
+            of {{ exit_dns_health_summary.exit_count }} exit relay{{ 's' if exit_dns_health_summary.exit_count != 1 else '' }}
     </li>
     {% endif %}
     <li><a href="https://routefluxmap.1aeo.com/#CC={{ country_abbr }}" target="_blank" rel="noopener" title="View {{ country_name }} on RouteFluxMap interactive visualization">🗺️ View on Interactive Map</a></li>

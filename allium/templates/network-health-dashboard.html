@@ -1052,34 +1052,72 @@ Network Health Dashboard
                     </div>
                     <div class="metric-item" title="Exit relays that failed DNS resolution (all failure types combined).">
                         <span class="metric-value" style="color: #dc3545;">{{ relays.json.network_health.exit_dns_health_total_failures_formatted }}</span>
-                        <span class="metric-label">DNS Failing</span>
+                        <span class="metric-label">DNS Unhealthy</span>
                     </div>
                     <div class="metric-item" title="Exit relays unreachable during testing.">
                         <span class="metric-value">{{ relays.json.network_health.exit_dns_health_unreachable_formatted }}</span>
                         <span class="metric-label">Unreachable</span>
                     </div>
                 </div>
-                <div class="metric-grid" style="grid-template-columns: repeat(4, 1fr);">
-                    <div class="metric-item" title="DNS queries that returned a failure response.">
+                <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
+                    <div class="metric-item" title="Exit relays tested out of total consensus exits.">
+                        <span class="metric-value">{{ relays.json.network_health.exit_dns_health_tested_formatted }} / {{ relays.json.network_health.exit_dns_health_consensus_exits_formatted }}</span>
+                        <span class="metric-label">Tested / Consensus Exits</span>
+                    </div>
+                    <div class="metric-item" title="Percentage of consensus exit relays that were reachable during testing.">
+                        <span class="metric-value" style="color: {% if relays.json.network_health.exit_dns_health_reachability_rate >= 95 %}#28a745{% elif relays.json.network_health.exit_dns_health_reachability_rate >= 80 %}#856404{% else %}#dc3545{% endif %};">{{ "%.1f%%"|format(relays.json.network_health.exit_dns_health_reachability_rate) }}</span>
+                        <span class="metric-label">Reachability Rate</span>
+                    </div>
+                    <div class="metric-item" title="Cross-validation instances used per relay during testing.">
+                        <span class="metric-value">4</span>
+                        <span class="metric-label">CV Instances</span>
+                    </div>
+                </div>
+                <div class="metric-grid" style="grid-template-columns: repeat(5, 1fr);">
+                    <div class="metric-item" title="DNS resolver returned NXDOMAIN (domain not found). Indicates a broken, misconfigured, or censoring resolver.">
                         <span class="metric-value" style="color: #dc3545;">{{ relays.json.network_health.exit_dns_health_fail_formatted }}</span>
-                        <span class="metric-label">DNS Fail</span>
+                        <span class="metric-label">Domain Not Found</span>
                     </div>
-                    <div class="metric-item" title="DNS queries that timed out.">
+                    <div class="metric-item" title="DNS queries that timed out before receiving a response.">
                         <span class="metric-value" style="color: #856404;">{{ relays.json.network_health.exit_dns_health_timeout_formatted }}</span>
-                        <span class="metric-label">Timeout</span>
+                        <span class="metric-label">Query Timeout</span>
                     </div>
-                    <div class="metric-item" title="DNS queries that returned incorrect IP. May indicate DNS manipulation.">
+                    <div class="metric-item" title="DNS queries that returned an incorrect IP address. May indicate DNS manipulation or hijacking.">
                         <span class="metric-value" style="color: #dc3545;">{{ relays.json.network_health.exit_dns_health_wrong_ip_formatted }}</span>
-                        <span class="metric-label">Wrong IP</span>
+                        <span class="metric-label">Returned Wrong IP</span>
                     </div>
-                    <div class="metric-item" title="SOCKS or network errors during DNS testing.">
-                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.exit_dns_health_socks_error + relays.json.network_health.exit_dns_health_network_error) }}</span>
-                        <span class="metric-label">Connection Errors</span>
+                    <div class="metric-item" title="SOCKS proxy errors during DNS testing.">
+                        <span class="metric-value">{{ relays.json.network_health.exit_dns_health_socks_error }}</span>
+                        <span class="metric-label">SOCKS Error</span>
+                    </div>
+                    <div class="metric-item" title="Network-level errors during DNS testing.">
+                        <span class="metric-value">{{ relays.json.network_health.exit_dns_health_network_error }}</span>
+                        <span class="metric-label">Network Error</span>
+                    </div>
+                </div>
+                <div class="metric-grid" style="grid-template-columns: repeat(5, 1fr);">
+                    <div class="metric-item" title="Relay could not be reached via Tor circuit — circuit build timed out.">
+                        <span class="metric-value">{{ relays.json.network_health.exit_dns_health_circuit_timeout }}</span>
+                        <span class="metric-label">Circuit Timeout</span>
+                    </div>
+                    <div class="metric-item" title="Tor circuit was destroyed by the relay during testing.">
+                        <span class="metric-value">{{ relays.json.network_health.exit_dns_health_circuit_destroyed }}</span>
+                        <span class="metric-label">Circuit Destroyed</span>
+                    </div>
+                    <div class="metric-item" title="Tor circuit channel was closed unexpectedly.">
+                        <span class="metric-value">{{ relays.json.network_health.exit_dns_health_circuit_channel_closed }}</span>
+                        <span class="metric-label">Channel Closed</span>
+                    </div>
+                    <div class="metric-item" title="Could not connect to the relay to build a circuit.">
+                        <span class="metric-value">{{ relays.json.network_health.exit_dns_health_circuit_connect_failed }}</span>
+                        <span class="metric-label">Connect Failed</span>
+                    </div>
+                    <div class="metric-item" title="Other circuit-level failures not categorized above.">
+                        <span class="metric-value">{{ relays.json.network_health.exit_dns_health_circuit_other }}</span>
+                        <span class="metric-label">Other Circuit</span>
                     </div>
                 </div>
                 <div style="font-size: 11px; color: #666; margin-top: 4px;">
-                    {{ relays.json.network_health.exit_dns_health_tested_formatted }} of {{ relays.json.network_health.exit_dns_health_consensus_exits_formatted }} exit relays tested.
-                    Reachability: {{ "%.1f%%"|format(relays.json.network_health.exit_dns_health_reachability_rate) }}.
                     Source: <a href="https://exitdnshealth.1aeo.com" target="_blank">exitdnshealth.1aeo.com</a>.
                     Last scan: {{ relays.json.network_health.exit_dns_health_timestamp }}.
                 </div>

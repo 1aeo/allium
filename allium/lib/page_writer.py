@@ -57,6 +57,18 @@ ENV.filters['split'] = lambda s, sep='/': s.split(sep) if s else []
 ENV.filters['format_timestamp'] = format_timestamp
 ENV.filters['format_timestamp_ago'] = format_timestamp_ago
 
+def _format_unix_timestamp(ts):
+    if not ts:
+        return ''
+    from datetime import datetime, timezone
+    try:
+        dt = datetime.fromtimestamp(float(ts), tz=timezone.utc)
+        return dt.strftime('%Y-%m-%d %H:%M:%S UTC')
+    except (ValueError, TypeError, OSError):
+        return str(ts)
+
+ENV.filters['format_unix_timestamp'] = _format_unix_timestamp
+
 # ============================================================================
 # HELPER: Partition effective_family by family-cert status
 # ============================================================================

@@ -166,6 +166,7 @@ class Relays:
         if exit_dns_health_data and self.json.get('relays'):
             try:
                 self._attach_exit_dns_health_data()
+                self._aggregate_dns_health_to_groups()
                 self._calculate_network_health_metrics()
             except Exception as e:
                 print(f"Warning: Exit DNS Health processing failed ({e}), continuing without DNS health data")
@@ -672,6 +673,25 @@ class Relays:
                 if "display" in group_data:
                     group_data["display"]["total_data_formatted"] = format_data_volume_with_unit(total)
                     group_data["display"]["total_data_pct"] = compute_total_data_pct(total, used_period, net_by_period) if used_period else ""
+
+    def _aggregate_dns_health_to_groups(self):
+        """Aggregate per-relay DNS health into sorted groups for misc listing pages.
+        
+        Called after _attach_exit_dns_health_data() so per-relay exit_dns_health_status
+        is already set. Follows same pattern as _aggregate_total_data_to_groups().
+        Stores summary dict in group_data['display']['exit_dns_health_summary'].
+        """
+        from .exit_dns_health import get_operator_exit_dns_health_summary
+        relays = self.json["relays"]
+        
+        for category in self.json.get("sorted", {}):
+            for key, group_data in self.json["sorted"][category].items():
+                members = [relays[idx] for idx in group_data.get("relays", [])]
+                summary = get_operator_exit_dns_health_summary(
+                    members, exit_count=group_data.get("exit_count", 0))
+                if "display" not in group_data:
+                    group_data["display"] = {}
+                group_data["display"]["exit_dns_health_summary"] = summary
 
     def _reprocess_collector_data(self):
         """
