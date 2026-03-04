@@ -13,7 +13,7 @@
             <link rel="stylesheet" href="{{ page_ctx.path_prefix }}static/css/bootstrap.min.css">
             <!--source: metrics.torproject.org-->
             <style>
-                /* 1AEO Brand Design Tokens */
+                /* ========== 1. DESIGN TOKENS (CSS Custom Properties) ========== */
                 :root {
                     --aeo-green: #00ff7f;
                     --aeo-green-dim: #00cc66;
@@ -63,7 +63,7 @@
                     --color-highlight-border: #ffe69c;
                 }
 
-                /* 1AEO Cross-Site Navigation Bar */
+                /* ========== 2. 1AEO CROSS-SITE NAVIGATION ========== */
                 .aeo-cross-nav {
                     background-color: var(--aeo-dark-surface);
                     padding: 10px 0;
@@ -131,12 +131,12 @@
                     }
                 }
 
-                /* Breadcrumb links - no underline */
+                /* ========== 3. BREADCRUMBS ========== */
                 .breadcrumb a {
                     text-decoration: none;
                 }
                 
-                /* 1AEO Footer */
+                /* ========== 4. 1AEO FOOTER ========== */
                 .aeo-footer {
                     background-color: var(--aeo-dark-surface);
                     color: var(--aeo-text-muted);
@@ -174,6 +174,7 @@
                     color: var(--aeo-text-dim);
                     margin-top: 10px;
                 }
+                /* ========== 5. RELAY STATUS INDICATORS ========== */
                 .circle {
                     display: inline-block;
                     vertical-align: middle;
@@ -195,7 +196,7 @@
                    section-box, subsection-card, subsection-header, and
                    status-note moved to relay-info.html (only consumer) */
 
-                /* Dynamic text truncation for contact information */
+                /* ========== 6. CONTACT & TEXT TRUNCATION ========== */
                 .contact-text {
                     display: inline-block;
                     white-space: nowrap;
@@ -224,7 +225,7 @@
                     text-overflow: ellipsis;
                 }
 
-                /* Table styles */
+                /* ========== 7. TABLE STYLES ========== */
                 .table {
                     width: 100%;
                     margin-bottom: 1rem;
@@ -239,7 +240,7 @@
                     letter-spacing: 0.05em; /* Slight spacing for readability */
                 }
 
-                /* Container breakpoint */
+                /* ========== 8. LAYOUT (Container, column overflow) ========== */
                 @media (min-width: 1400px) {
                     .container {
                         width: 95%;
@@ -269,14 +270,14 @@
                     word-wrap: break-word;
                 }
 
-                /* AROI shared utility classes (used by both aroi-leaderboards and network-health) */
+                /* ========== 9. AROI SHARED UTILITIES ========== */
                 .aroi-center-text { text-align: center; }
                 .aroi-subsection { margin-bottom: 30px; }
 
                 /* AROI Leaderboard CSS moved to aroi-leaderboards.html (only consumer) */
                 /* Network Health CSS moved to network-health-dashboard.html (only consumer) */
 
-                /* Mobile-friendly tooltips - CSS-only solution */
+                /* ========== 10. CSS-ONLY TOOLTIPS ========== */
                 /* Base tooltip styling for elements with title attributes */
                 [title] {
                     position: relative;
@@ -387,7 +388,7 @@
                     margin-top: 0;
                 }
 
-                /* CSS-only navbar collapse using checkbox hack */
+                /* ========== 11. CSS-ONLY NAVBAR (Hamburger menu) ========== */
                 .navbar-toggle {
                     display: none;
                     background-color: transparent;
@@ -507,7 +508,7 @@
                     }
                 }
 
-                /* Allium Search Form Styles */
+                /* ========== 12. SEARCH FORM ========== */
                 .navbar-form.navbar-right {
                     margin-left: 15px;
                     padding-top: 8px;
