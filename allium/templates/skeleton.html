@@ -284,7 +284,7 @@
                 }
 
                 /* Create tooltip content using title attribute */
-                [title]:before {
+                [title]::before {
                     content: attr(title);
                     position: absolute;
                     background: rgba(0, 0, 0, 0.9);
@@ -310,7 +310,7 @@
                 }
 
                 /* Tooltip arrow */
-                [title]:after {
+                [title]::after {
                     content: '';
                     position: absolute;
                     border: 6px solid transparent;
@@ -329,12 +329,12 @@
                 }
 
                 /* Show tooltip on hover (desktop) and focus/active (mobile) */
-                [title]:hover:before,
-                [title]:focus:before,
-                [title]:active:before,
-                [title]:hover:after,
-                [title]:focus:after,
-                [title]:active:after {
+                [title]:hover::before,
+                [title]:focus::before,
+                [title]:active::before,
+                [title]:hover::after,
+                [title]:focus::after,
+                [title]:active::after {
                     opacity: 1;
                     visibility: visible;
                 }
@@ -353,7 +353,7 @@
                     }
                     
                     /* Ensure tooltip fits on mobile screens */
-                    [title]:before {
+                    [title]::before {
                         max-width: 280px;
                         left: 0;
                         right: 0;
@@ -362,23 +362,23 @@
                         margin-right: auto;
                     }
                     
-                    [title]:after {
+                    [title]::after {
                         left: 50%;
                         transform: translateX(-50%);
                     }
                 }
 
                 /* Special positioning for table cells and small elements */
-                td[title]:before,
-                th[title]:before {
+                td[title]::before,
+                th[title]::before {
                     bottom: 100%;       /* position tooltip above cell */
                     top: auto;
                     margin-bottom: 8px; /* spacing between cell and tooltip */
                     margin-top: 0;
                 }
 
-                td[title]:after,
-                th[title]:after {
+                td[title]::after,
+                th[title]::after {
                     bottom: 100%;
                     top: auto;
                     border-top-color: rgba(0, 0, 0, 0.9); /* arrow points down */
