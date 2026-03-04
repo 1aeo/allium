@@ -43,6 +43,24 @@
 
                     /* Link Color */
                     --color-link: #337ab7;
+                    --color-link-hover: #23527c;
+
+                    /* Navbar Colors */
+                    --color-nav-text: #777;
+                    --color-nav-active-text: #333;
+                    --color-nav-active-bg: #e7e7e7;
+                    --color-nav-active-bg-mobile: #f5f5f5;
+
+                    /* Secondary Text */
+                    --color-text-secondary: #666;
+
+                    /* Hostname Verification (relay pages) */
+                    --color-hostname-verified: #68b030;
+                    --color-hostname-unverified: #FE9F30;
+
+                    /* Highlight/Target (anchor navigation) */
+                    --color-highlight-bg: #fff3cd;
+                    --color-highlight-border: #ffe69c;
                 }
 
                 /* 1AEO Cross-Site Navigation Bar */
@@ -159,18 +177,18 @@
                 .circle {
                     display: inline-block;
                     vertical-align: middle;
-                    background: #999999;
+                    background: var(--color-muted);
                     width: 7px;
                     height: 7px;
                     border-radius: 50%;
                 }
 
                 .circle-online {
-                    background: #25d918;
+                    background: var(--color-success);
                 }
 
                 .circle-offline {
-                    background: #ff1515;
+                    background: var(--color-danger);
                 }
 
                 /* verified-hostname, unverified-hostname, status classes,
@@ -375,7 +393,7 @@
                     display: none;
                     background-color: transparent;
                     background-image: none;
-                    border: 1px solid #ddd;
+                    border: 1px solid var(--color-border-light);
                     border-radius: 4px;
                     padding: 9px 10px;
                     margin-top: 8px;
@@ -387,14 +405,14 @@
 
                 .navbar-toggle:hover,
                 .navbar-toggle:focus {
-                    background-color: #ddd;
+                    background-color: var(--color-border-light);
                 }
 
                 .navbar-toggle .icon-bar {
                     display: block;
                     width: 22px;
                     height: 2px;
-                    background-color: #888;
+                    background-color: var(--aeo-text-dim);
                     border-radius: 1px;
                     margin: 4px 0;
                 }
@@ -428,7 +446,7 @@
                     .nav.navbar-nav > li > a {
                         padding-top: 15px;
                         padding-bottom: 15px;
-                        color: #777;
+                        color: var(--color-nav-text);
                         text-decoration: none;
                         padding-left: 15px;
                         padding-right: 15px;
@@ -437,8 +455,8 @@
                     .nav.navbar-nav > li.active > a,
                     .nav.navbar-nav > li > a:hover,
                     .nav.navbar-nav > li > a:focus {
-                        color: #333;
-                        background-color: #e7e7e7;
+                        color: var(--color-nav-active-text);
+                        background-color: var(--color-nav-active-bg);
                     }
                     
                     .navbar-brand {
@@ -457,7 +475,7 @@
                         clear: both;
                         width: 100%;
                         margin-top: 50px;
-                        border-top: 1px solid #e7e7e7;
+                        border-top: 1px solid var(--color-border-subtle);
                         padding-top: 10px;
                     }
                     
@@ -473,9 +491,9 @@
                     .nav.navbar-nav > li > a {
                         display: block;
                         padding: 12px 20px;
-                        color: #777;
+                        color: var(--color-nav-text);
                         text-decoration: none;
-                        border-bottom: 1px solid #e7e7e7;
+                        border-bottom: 1px solid var(--color-border-subtle);
                     }
                     
                     .nav.navbar-nav > li:last-child > a {
@@ -485,8 +503,8 @@
                     .nav.navbar-nav > li.active > a,
                     .nav.navbar-nav > li > a:hover,
                     .nav.navbar-nav > li > a:focus {
-                        color: #333;
-                        background-color: #f5f5f5;
+                        color: var(--color-nav-active-text);
+                        background-color: var(--color-nav-active-bg-mobile);
                     }
                 }
 
@@ -511,12 +529,12 @@
                 }
 
                 .allium-mobile-search {
-                    background: #f8f9fa;
+                    background: var(--color-bg-light);
                     padding: 8px 15px;
                     margin-top: -20px; /* Pull up to sit flush with navbar */
                     margin-bottom: 15px;
                     border-radius: 0 0 4px 4px; /* Only round bottom corners */
-                    border: 1px solid #e7e7e7;
+                    border: 1px solid var(--color-border-subtle);
                     border-top: none;
                 }
 
