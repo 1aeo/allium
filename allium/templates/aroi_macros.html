@@ -1041,6 +1041,11 @@
         {{ generic_ranking_table_paginated(category_key, data_slice, page_ctx, use_bits) }}
     {% elif table_macro_name == 'ipv4_ipv6_table_paginated' %}
         {{ ipv4_ipv6_table_paginated(category_key, data_slice, page_ctx, use_bits) }}
+    {% else %}
+        <!-- ERROR: render_table_slice unknown table_macro_name="{{ table_macro_name }}" category_key="{{ category_key }}" -->
+        <div style="background:#f8d7da;color:#721c24;padding:10px;border:2px solid #dc3545;border-radius:4px;margin:10px 0;">
+            <strong>Template Error:</strong> Unknown table macro "{{ table_macro_name }}" for category "{{ category_key }}".
+        </div>
     {% endif %}
 {%- endmacro %}
 
