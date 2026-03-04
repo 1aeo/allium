@@ -1018,6 +1018,32 @@
     </div>
 {% endmacro %} 
 
+{# =============================================================================
+   RENDER TABLE SLICE — DRY helper that dispatches to the correct table macro.
+   Used by pagination_section to avoid triplicating the 9-way if/elif block.
+   ============================================================================= #}
+{% macro render_table_slice(table_macro_name, category_key, data_slice, use_bits, page_ctx) -%}
+    {% if table_macro_name == 'bandwidth_table_complete' %}
+        {{ bandwidth_table_complete(data_slice, use_bits, page_ctx) }}
+    {% elif table_macro_name == 'consensus_weight_table_complete' %}
+        {{ consensus_weight_table_complete(data_slice, use_bits, page_ctx) }}
+    {% elif table_macro_name == 'exit_authority_table_complete' %}
+        {{ exit_authority_table_complete(data_slice, use_bits, page_ctx) }}
+    {% elif table_macro_name == 'guard_authority_table_complete' %}
+        {{ guard_authority_table_complete(data_slice, use_bits, page_ctx) }}
+    {% elif table_macro_name == 'exit_operators_table_complete' %}
+        {{ exit_operators_table_complete(data_slice, use_bits, page_ctx) }}
+    {% elif table_macro_name == 'guard_operators_table_complete' %}
+        {{ guard_operators_table_complete(data_slice, use_bits, page_ctx) }}
+    {% elif table_macro_name == 'validated_relays_table_complete' %}
+        {{ validated_relays_table_complete(data_slice, use_bits, page_ctx) }}
+    {% elif table_macro_name == 'generic_ranking_table_paginated' %}
+        {{ generic_ranking_table_paginated(category_key, data_slice, page_ctx, use_bits) }}
+    {% elif table_macro_name == 'ipv4_ipv6_table_paginated' %}
+        {{ ipv4_ipv6_table_paginated(category_key, data_slice, page_ctx, use_bits) }}
+    {% endif %}
+{%- endmacro %}
+
 {# Universal Pagination Section Macro - Eliminates 12x duplicate pagination blocks in aroi-leaderboards.html #}
 {# This macro creates the standard 3-section pagination pattern (1-10, 11-20, 21-25) used throughout the template #}
 {% macro pagination_section(category_key, emoji, category_data, table_macro_name, page_ctx, use_bits=false) %}
@@ -1033,25 +1059,7 @@
     {% if category_data|length > 10 %}
     <div id="{{ category_key }}-11-20" class="pagination-section">
         <h4>{{ emoji }} Ranks 11-20</h4>
-        {% if table_macro_name == 'bandwidth_table_complete' %}
-            {{ bandwidth_table_complete(category_data[10:20], use_bits, page_ctx) }}
-        {% elif table_macro_name == 'consensus_weight_table_complete' %}
-            {{ consensus_weight_table_complete(category_data[10:20], use_bits, page_ctx) }}
-        {% elif table_macro_name == 'exit_authority_table_complete' %}
-            {{ exit_authority_table_complete(category_data[10:20], use_bits, page_ctx) }}
-        {% elif table_macro_name == 'guard_authority_table_complete' %}
-            {{ guard_authority_table_complete(category_data[10:20], use_bits, page_ctx) }}
-        {% elif table_macro_name == 'exit_operators_table_complete' %}
-            {{ exit_operators_table_complete(category_data[10:20], use_bits, page_ctx) }}
-        {% elif table_macro_name == 'guard_operators_table_complete' %}
-            {{ guard_operators_table_complete(category_data[10:20], use_bits, page_ctx) }}
-        {% elif table_macro_name == 'validated_relays_table_complete' %}
-            {{ validated_relays_table_complete(category_data[10:20], use_bits, page_ctx) }}
-        {% elif table_macro_name == 'generic_ranking_table_paginated' %}
-            {{ generic_ranking_table_paginated(category_key, category_data[10:20], page_ctx, use_bits) }}
-        {% elif table_macro_name == 'ipv4_ipv6_table_paginated' %}
-            {{ ipv4_ipv6_table_paginated(category_key, category_data[10:20], page_ctx, use_bits) }}
-        {% endif %}
+        {{ render_table_slice(table_macro_name, category_key, category_data[10:20], use_bits, page_ctx) }}
     </div>
     {% endif %}
     
@@ -1059,50 +1067,14 @@
     {% if category_data|length > 20 %}
     <div id="{{ category_key }}-21-25" class="pagination-section">
         <h4>{{ emoji }} Ranks 21-25</h4>
-        {% if table_macro_name == 'bandwidth_table_complete' %}
-            {{ bandwidth_table_complete(category_data[20:25], use_bits, page_ctx) }}
-        {% elif table_macro_name == 'consensus_weight_table_complete' %}
-            {{ consensus_weight_table_complete(category_data[20:25], use_bits, page_ctx) }}
-        {% elif table_macro_name == 'exit_authority_table_complete' %}
-            {{ exit_authority_table_complete(category_data[20:25], use_bits, page_ctx) }}
-        {% elif table_macro_name == 'guard_authority_table_complete' %}
-            {{ guard_authority_table_complete(category_data[20:25], use_bits, page_ctx) }}
-        {% elif table_macro_name == 'exit_operators_table_complete' %}
-            {{ exit_operators_table_complete(category_data[20:25], use_bits, page_ctx) }}
-        {% elif table_macro_name == 'guard_operators_table_complete' %}
-            {{ guard_operators_table_complete(category_data[20:25], use_bits, page_ctx) }}
-        {% elif table_macro_name == 'validated_relays_table_complete' %}
-            {{ validated_relays_table_complete(category_data[20:25], use_bits, page_ctx) }}
-        {% elif table_macro_name == 'generic_ranking_table_paginated' %}
-            {{ generic_ranking_table_paginated(category_key, category_data[20:25], page_ctx, use_bits) }}
-        {% elif table_macro_name == 'ipv4_ipv6_table_paginated' %}
-            {{ ipv4_ipv6_table_paginated(category_key, category_data[20:25], page_ctx, use_bits) }}
-        {% endif %}
+        {{ render_table_slice(table_macro_name, category_key, category_data[20:25], use_bits, page_ctx) }}
     </div>
     {% endif %}
     
     <!-- Page 1: Ranks 1-10 (DOM last, visually first via CSS order) -->
     <div id="{{ category_key }}-1-10" class="pagination-section">
         <h4>{{ emoji }} Ranks 1-10</h4>
-        {% if table_macro_name == 'bandwidth_table_complete' %}
-            {{ bandwidth_table_complete(category_data[:10], use_bits, page_ctx) }}
-        {% elif table_macro_name == 'consensus_weight_table_complete' %}
-            {{ consensus_weight_table_complete(category_data[:10], use_bits, page_ctx) }}
-        {% elif table_macro_name == 'exit_authority_table_complete' %}
-            {{ exit_authority_table_complete(category_data[:10], use_bits, page_ctx) }}
-        {% elif table_macro_name == 'guard_authority_table_complete' %}
-            {{ guard_authority_table_complete(category_data[:10], use_bits, page_ctx) }}
-        {% elif table_macro_name == 'exit_operators_table_complete' %}
-            {{ exit_operators_table_complete(category_data[:10], use_bits, page_ctx) }}
-        {% elif table_macro_name == 'guard_operators_table_complete' %}
-            {{ guard_operators_table_complete(category_data[:10], use_bits, page_ctx) }}
-        {% elif table_macro_name == 'validated_relays_table_complete' %}
-            {{ validated_relays_table_complete(category_data[:10], use_bits, page_ctx) }}
-        {% elif table_macro_name == 'generic_ranking_table_paginated' %}
-            {{ generic_ranking_table_paginated(category_key, category_data[:10], page_ctx, use_bits) }}
-        {% elif table_macro_name == 'ipv4_ipv6_table_paginated' %}
-            {{ ipv4_ipv6_table_paginated(category_key, category_data[:10], page_ctx, use_bits) }}
-        {% endif %}
+        {{ render_table_slice(table_macro_name, category_key, category_data[:10], use_bits, page_ctx) }}
     </div>
     
     </div>
