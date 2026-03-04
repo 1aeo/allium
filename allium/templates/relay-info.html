@@ -34,6 +34,55 @@
 {% endblock -%}
 {% block body -%}
 <style>
+/* === Relay-info-only CSS (moved from skeleton.html — only relay pages use these) === */
+
+/* Hostname verification status */
+.verified-hostname { color: #68b030; }
+.unverified-hostname { color: #FE9F30; }
+
+/* Section box - gray background container for major sections */
+.section-box {
+    margin: 20px 0;
+    padding: 15px;
+    background: var(--color-bg-light);
+    border-radius: 8px;
+}
+
+/* Subsection cards - visual containers for Level 2 content */
+.subsection-card {
+    background: #ffffff;
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 12px;
+}
+.subsection-card dl { margin-bottom: 0; }
+
+/* Subsection headers - Level 2 in information hierarchy */
+.subsection-header {
+    margin-top: 0;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--color-text-dark);
+    border-bottom: 2px solid var(--color-border-light);
+}
+
+/* Reusable status color classes */
+.status-success { color: var(--color-success); }
+.status-danger  { color: var(--color-danger); }
+.status-warning { color: var(--color-warning-text); }
+.status-muted   { color: var(--color-muted); }
+.status-note    { font-size: 11px; font-weight: normal; color: var(--color-muted); }
+.status-info    { color: var(--color-info); }
+.status-success-bold { color: var(--color-success); font-weight: bold; }
+.status-danger-bold  { color: var(--color-danger); font-weight: bold; }
+.status-warning-bold { color: var(--color-warning-text); font-weight: bold; }
+.text-small-muted { font-size: 11px; color: #666; }
+.text-small-note  { font-size: 12px; color: #666; }
+
+/* === Relay-info page-specific CSS === */
+
 .section-header {
     position: relative;
     display: inline-block;
@@ -86,7 +135,7 @@ dt:target {
 .health-status-grid dt {
     width: 100px;
     font-weight: bold;
-    color: #495057;
+    color: var(--color-text-dark);
     flex-shrink: 0;
 }
 
@@ -106,25 +155,13 @@ dt:target {
 .relay-section {
     margin-top: 15px;
     padding: 15px;
-    background: #f8f9fa;
+    background: var(--color-bg-light);
     border-radius: 8px;
 }
 .relay-section > h4:first-child {
     margin-top: 0;
     margin-bottom: 12px;
 }
-
-/* Reusable status color classes (DRY: replaces inline style="color: #hex" attributes) */
-.status-success { color: #28a745; }
-.status-danger  { color: #dc3545; }
-.status-warning { color: #856404; }
-.status-note    { color: #6c757d; }
-.status-info    { color: #17a2b8; }
-.status-success-bold { color: #28a745; font-weight: bold; }
-.status-danger-bold  { color: #dc3545; font-weight: bold; }
-.status-warning-bold { color: #856404; font-weight: bold; }
-.text-small-muted { font-size: 11px; color: #666; }
-.text-small-note  { font-size: 12px; color: #666; }
 
 </style>
 <div id="content">

@@ -45,6 +45,9 @@ STANDALONE_PAGES = [
     # Directory Authorities
     {"template": "misc-authorities.html", "output": "misc/authorities.html",
      "context": "misc", "context_name": "Directory Authorities", "label": "directory authorities monitoring page"},
+    # API Diagnostics
+    {"template": "api-diagnostics.html", "output": "misc/diagnostics.html",
+     "context": "misc", "context_name": "API Diagnostics", "label": "API diagnostics page"},
 ]
 
 # Sorted-by variants for miscellaneous listing pages
@@ -111,6 +114,10 @@ def generate_site(relay_set, args, progress_logger):
     allium_pkg_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     
     progress_logger.log(f"Details API data loaded successfully - found {len(relay_set.json.get('relays', []))} relays")
+
+    # Compute API diagnostics data before page generation
+    from .api_diagnostics import collect_api_diagnostics
+    relay_set.api_diagnostics = collect_api_diagnostics(relay_set, args)
 
     # Start page generation section
     progress_logger.start_section("Page Generation")

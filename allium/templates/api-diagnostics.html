@@ -1,0 +1,457 @@
+{% from "macros.html" import navigation %}
+{% extends "skeleton.html" -%}
+
+{% block page_css %}
+/* =============================================================================
+   API Diagnostics Page Styles (page-specific — only loaded on diagnostics page)
+   ============================================================================= */
+
+/* Overall status banner */
+.diag-overall-banner {
+    padding: 18px 24px;
+    border-radius: 8px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+.diag-overall-fresh {
+    background: linear-gradient(135deg, #d4edda, #c3e6cb);
+    border: 2px solid var(--color-success);
+}
+.diag-overall-aging {
+    background: linear-gradient(135deg, #fff3cd, #ffeeba);
+    border: 2px solid var(--color-warning-bg);
+}
+.diag-overall-stale {
+    background: linear-gradient(135deg, #f8d7da, #f5c6cb);
+    border: 2px solid var(--color-danger);
+}
+.diag-overall-unavailable {
+    background: linear-gradient(135deg, #e9ecef, #dee2e6);
+    border: 2px solid var(--color-muted);
+}
+.diag-overall-status {
+    font-size: 20px;
+    font-weight: 700;
+    color: #2c3e50;
+}
+.diag-overall-meta {
+    font-size: 13px;
+    color: var(--color-text-dark);
+    text-align: right;
+}
+.diag-overall-meta div { margin-bottom: 2px; }
+
+/* API cards grid - 3 columns matching network health ribbon */
+.diag-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 30px;
+}
+
+.diag-card {
+    background: #fff;
+    border-radius: 8px;
+    border: 2px solid #e1e8ed;
+    padding: 0;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+    transition: all 0.2s ease;
+    overflow: hidden;
+}
+.diag-card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    transform: translateY(-1px);
+}
+
+/* Colored left border per freshness */
+.diag-card-border-fresh { border-left: 4px solid var(--color-success); }
+.diag-card-border-aging { border-left: 4px solid var(--color-warning-bg); }
+.diag-card-border-stale { border-left: 4px solid var(--color-danger); }
+.diag-card-border-unavailable { border-left: 4px solid var(--color-muted); }
+
+.diag-card-header {
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #f0f4f8;
+}
+.diag-card-header h4 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+/* Freshness badges */
+.diag-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+.diag-badge-fresh { background-color: #d4edda; color: #155724; border: 1px solid var(--color-success); }
+.diag-badge-aging { background-color: #fff3cd; color: var(--color-warning-text); border: 1px solid var(--color-warning-bg); }
+.diag-badge-stale { background-color: #f8d7da; color: #721c24; border: 1px solid var(--color-danger); }
+.diag-badge-unavailable { background-color: #e9ecef; color: var(--color-text-dark); border: 1px solid var(--color-muted); }
+
+.diag-card-body {
+    padding: 10px 16px 14px;
+}
+.diag-card-body dl {
+    margin: 0;
+    display: grid;
+    grid-template-columns: 110px 1fr;
+    gap: 3px 8px;
+    font-size: 12px;
+}
+.diag-card-body dt { color: var(--color-muted); font-weight: 600; }
+.diag-card-body dd { margin: 0; color: #343a40; word-break: break-all; }
+.diag-card-body dd a { color: var(--color-link); text-decoration: none; }
+.diag-card-body dd a:hover { text-decoration: underline; }
+
+/* Progress bar */
+.diag-progress-bar {
+    height: 6px;
+    background: #e9ecef;
+    border-radius: 3px;
+    margin-top: 8px;
+    overflow: hidden;
+}
+.diag-progress-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+.diag-progress-fresh { background: var(--color-success); }
+.diag-progress-aging { background: var(--color-warning-bg); }
+.diag-progress-stale { background: var(--color-danger); }
+
+/* Affected sections tags */
+.diag-affected {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid #f0f4f8;
+    font-size: 12px;
+    color: var(--color-muted);
+}
+.diag-affected strong { color: var(--color-text-dark); }
+.diag-affected-stale strong { color: #721c24; }
+.diag-affected-tag {
+    display: inline-block;
+    background: #f0f4f8;
+    padding: 2px 8px;
+    border-radius: 3px;
+    margin: 2px 3px 2px 0;
+    font-size: 11px;
+    color: var(--color-text-dark);
+}
+.diag-affected-tag-stale {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+/* Section header */
+.diag-section-header {
+    font-size: 18px;
+    font-weight: 600;
+    color: #2c3e50;
+    margin: 30px 0 16px 0;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #e1e8ed;
+}
+
+/* Dependency map table */
+.diag-dep-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+.diag-dep-table thead th {
+    background: var(--color-bg-light);
+    padding: 10px 14px;
+    text-align: left;
+    font-weight: 600;
+    color: var(--color-text-dark);
+    border-bottom: 2px solid var(--color-border-light);
+}
+.diag-dep-table tbody td {
+    padding: 10px 14px;
+    border-bottom: 1px solid #f0f4f8;
+    vertical-align: middle;
+}
+.diag-dep-table tbody tr:hover { background-color: var(--color-bg-light); }
+
+/* Status dots */
+.diag-dep-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: middle;
+}
+.diag-dot-fresh { background: var(--color-success); }
+.diag-dot-aging { background: var(--color-warning-bg); }
+.diag-dot-stale { background: var(--color-danger); }
+.diag-dot-unavailable { background: var(--color-muted); }
+
+/* API pills in dependency table */
+.diag-api-pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    margin: 1px 3px;
+    font-weight: 500;
+}
+.diag-api-pill-fresh { background: #d4edda; color: #155724; }
+.diag-api-pill-aging { background: #fff3cd; color: var(--color-warning-text); }
+.diag-api-pill-stale { background: #f8d7da; color: #721c24; }
+.diag-api-pill-unavailable { background: #e9ecef; color: var(--color-text-dark); }
+
+/* Legend box */
+.diag-legend {
+    background: var(--color-bg-light);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-top: 24px;
+}
+.diag-legend h5 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 14px;
+    color: var(--color-text-dark);
+}
+.diag-legend-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    font-size: 13px;
+}
+.diag-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Responsive: 2 columns on medium, 1 on small */
+@media (max-width: 1200px) {
+    .diag-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 768px) {
+    .diag-grid { grid-template-columns: 1fr; }
+    .diag-overall-banner { flex-direction: column; text-align: center; }
+    .diag-overall-meta { text-align: center; }
+    .diag-card-body dl { grid-template-columns: 100px 1fr; }
+}
+{% endblock %}
+
+{% block title -%}
+API Diagnostics
+{% endblock -%}
+
+{% block body -%}
+
+<div class="aroi-center-text aroi-subsection">
+    <h1>API Diagnostics</h1>
+    <p class="lead"><strong>Data Source Health &amp; Freshness Monitor</strong></p>
+    <p style="color: #6c757d; font-size: 13px;">
+        At-a-glance view of all data sources powering this site.
+        If something is stale, see which site sections are affected below.
+    </p>
+</div>
+
+{{ navigation('diagnostics', page_ctx, show_breadcrumbs=false) }}
+
+{% set diag = relays.api_diagnostics %}
+
+{# ================================================================ #}
+{# OVERALL STATUS BANNER                                            #}
+{# ================================================================ #}
+<div class="diag-overall-banner diag-overall-{{ diag.overall_status }}">
+    <div class="diag-overall-status">
+        {{ diag.overall_status_label }}
+    </div>
+    <div class="diag-overall-meta">
+        <div><strong>Site Generated:</strong> {{ diag.site_generated }}</div>
+        <div><strong>APIs Enabled:</strong> {{ diag.apis_mode }} ({{ diag.enabled_count }}/{{ diag.total_count }} sources active)</div>
+    </div>
+</div>
+
+{# ================================================================ #}
+{# API SOURCE STATUS CARDS (3-column grid)                          #}
+{# ================================================================ #}
+<h3 class="diag-section-header">API Source Status</h3>
+
+<div class="diag-grid">
+    {% for api in diag.apis %}
+    <div class="diag-card diag-card-border-{{ api.freshness }}">
+        <div class="diag-card-header">
+            <h4>{{ api.display_name }}</h4>
+            <span class="diag-badge diag-badge-{{ api.freshness }}">{{ api.freshness|upper }}</span>
+        </div>
+        <div class="diag-card-body">
+            <dl>
+                <dt>URL</dt>
+                <dd>
+                    <a href="{{ api.url }}" target="_blank" rel="noopener">{{ api.url|replace('https://', '') }}</a>
+                    {% if api.url_note %}<span style="color:#6c757d;"> ({{ api.url_note }})</span>{% endif %}
+                </dd>
+                <dt>Owner</dt>
+                <dd>{{ api.owner }}</dd>
+                <dt>Expected Update</dt>
+                <dd>{{ api.expected_frequency }}</dd>
+                {% if api.enabled %}
+                <dt>Cache Age</dt>
+                <dd>
+                    {% if api.freshness == 'stale' and api.cache_exceeded %}
+                        <span class="status-danger">{{ api.cache_age_display }}</span>
+                        <span style="color:#6c757d;">/ max {{ api.cache_max_age_display }}</span>
+                        <span class="status-danger">EXCEEDED</span>
+                    {% elif api.freshness == 'aging' %}
+                        <span class="status-warning">{{ api.cache_age_display }}</span>
+                        <span style="color:#6c757d;">/ max {{ api.cache_max_age_display }}</span>
+                    {% elif api.cache_age_seconds is not none %}
+                        {{ api.cache_age_display }}
+                        <span style="color:#6c757d;">/ max {{ api.cache_max_age_display }}</span>
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </dd>
+                <dt>Worker Status</dt>
+                <dd>
+                    {% if api.worker_status == 'ready' %}
+                        <span class="status-success">{{ api.worker_status }}</span>
+                    {% elif api.worker_status == 'stale' %}
+                        <span class="status-danger">{{ api.worker_status }}</span>
+                    {% else %}
+                        {{ api.worker_status }}
+                    {% endif %}
+                </dd>
+                {% if api.worker_error %}
+                <dt>Error</dt>
+                <dd><span class="status-danger">{{ api.worker_error }}</span></dd>
+                {% endif %}
+                <dt>Items Loaded</dt>
+                <dd>
+                    {{ api.item_count_display }} {{ api.count_label }}
+                    {% if api.extra_info %}
+                        <span style="color:#6c757d;">({{ api.extra_info }})</span>
+                    {% endif %}
+                </dd>
+                {% else %}
+                <dt>Status</dt>
+                <dd><span class="status-muted">Disabled (--apis={{ diag.apis_mode }})</span></dd>
+                {% endif %}
+            </dl>
+
+            {% if api.enabled %}
+            <div class="diag-progress-bar">
+                <div class="diag-progress-fill diag-progress-{{ api.freshness }}" style="width: {{ api.cache_pct }}%;"></div>
+            </div>
+            {% endif %}
+
+            <div class="diag-affected {% if api.freshness == 'stale' %}diag-affected-stale{% endif %}">
+                {% if api.freshness == 'stale' %}
+                <strong>Affected sections (may show stale data):</strong>
+                {% else %}
+                <strong>Affects:</strong>
+                {% endif %}
+                {% for section in api.affected_sections %}
+                    <span class="diag-affected-tag {% if api.freshness == 'stale' %}diag-affected-tag-stale{% endif %}">{{ section }}</span>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+
+{# ================================================================ #}
+{# SITE SECTION DEPENDENCY MAP TABLE                                #}
+{# ================================================================ #}
+<h3 class="diag-section-header">Site Section &rarr; Data Source Dependency Map</h3>
+<p style="color: #6c757d; font-size: 13px; margin-bottom: 12px;">
+    If an API source is stale, this table shows which parts of the site will have stale information.
+    Status column shows the worst freshness among all dependencies for that section.
+</p>
+
+<div class="table-responsive">
+    <table class="diag-dep-table">
+        <thead>
+            <tr>
+                <th style="width:28%;">Site Section</th>
+                <th style="width:42%;">Depends On</th>
+                <th style="width:15%;">Status</th>
+                <th style="width:15%;">Link</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for dep in diag.section_dependencies %}
+            <tr>
+                <td><strong>{{ dep.section }}</strong></td>
+                <td>
+                    {% for api in dep.apis %}
+                        <span class="diag-api-pill diag-api-pill-{{ api.freshness }}">{{ api.short_name }}</span>
+                    {% endfor %}
+                </td>
+                <td>
+                    <span class="diag-dep-dot diag-dot-{{ dep.worst_freshness }}"></span>
+                    {% if dep.worst_freshness == 'stale' %}
+                        <strong class="status-danger">Stale</strong>
+                    {% elif dep.worst_freshness == 'aging' %}
+                        <span class="status-warning">Aging</span>
+                    {% elif dep.worst_freshness == 'fresh' %}
+                        <span class="status-success">Fresh</span>
+                    {% else %}
+                        <span class="status-muted">N/A</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if dep.link %}
+                        <a href="{{ page_ctx.path_prefix }}{{ dep.link }}">{{ dep.link }}</a>
+                    {% elif dep.link_label %}
+                        <span style="color:#6c757d;">{{ dep.link_label }}</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+
+{# ================================================================ #}
+{# FRESHNESS COLOR LEGEND                                           #}
+{# ================================================================ #}
+<div class="diag-legend">
+    <h5>Freshness Color Legend</h5>
+    <div class="diag-legend-items">
+        <div class="diag-legend-item">
+            <span class="diag-dep-dot diag-dot-fresh"></span>
+            <strong>Fresh</strong> &mdash; Cache age &lt; 50% of max age. Data is current.
+        </div>
+        <div class="diag-legend-item">
+            <span class="diag-dep-dot diag-dot-aging"></span>
+            <strong>Aging</strong> &mdash; Cache age 50&ndash;100% of max age. Still valid but approaching refresh.
+        </div>
+        <div class="diag-legend-item">
+            <span class="diag-dep-dot diag-dot-stale"></span>
+            <strong>Stale</strong> &mdash; Cache age &gt; max age OR fetch failed. Data may be outdated.
+        </div>
+        <div class="diag-legend-item">
+            <span class="diag-dep-dot diag-dot-unavailable"></span>
+            <strong>N/A</strong> &mdash; API disabled (--apis mode) or data not available.
+        </div>
+    </div>
+</div>
+
+{% endblock -%}
