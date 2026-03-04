@@ -6,17 +6,14 @@
    Network Health Dashboard CSS (page-specific — only loaded on health dashboard)
    ============================================================================= */
 
-/* Dashboard Design Tokens (page-scoped) */
+/* Dashboard Design Tokens (page-scoped; shared tokens in skeleton.html :root) */
 :root {
-    --nh-text-heading: #2c3e50;
     --nh-text-label: #64748b;
     --nh-text-value: #374151;
     --nh-text-label-secondary: #6b7280;
     --nh-text-footer: #9ca3af;
     --nh-metric-primary-color: #000000;
     --nh-bg-metric: #f8fafc;
-    --nh-border-divider: #f0f4f8;
-    --nh-border-card: #e1e8ed;
     --nh-border-footer: #e5e7eb;
 }
 
@@ -38,7 +35,7 @@
     border-radius: 6px;
     padding: 10px;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
-    border: 1px solid var(--nh-border-card);
+    border: 1px solid var(--color-border-card);
     transition: all 0.3s ease;
     min-height: 90px;
 }
@@ -51,13 +48,13 @@
 .ribbon-card .card-header {
     margin-bottom: 7px;
     padding-bottom: 5px;
-    border-bottom: 1px solid var(--nh-border-divider);
+    border-bottom: 1px solid var(--color-border-divider);
 }
 
 .ribbon-card .card-header h4 {
     margin: 0;
     font-size: 1.65rem;
-    color: var(--nh-text-heading);
+    color: var(--color-text-heading);
     font-weight: 600;
 }
 
@@ -78,7 +75,7 @@
     display: block;
     font-size: 3.3rem;
     font-weight: bold;
-    color: var(--nh-text-heading);
+    color: var(--color-text-heading);
     line-height: 1.0;
 }
 
