@@ -552,6 +552,10 @@
                  * Search bar responsive behavior:
                  * - Below 1600px: Always show full-width search bar below navbar
                  * - At 1600px+: Show compact search in navbar (enough room for all nav items + search)
+                 *
+                 * !important is required here to override Bootstrap's .hidden-xs/.visible-xs
+                 * utility classes which also use !important. The HTML uses both Bootstrap
+                 * responsive classes AND these custom breakpoint rules for the 1600px threshold.
                  */
                 
                 /* Default: show full-width search, hide navbar search */
