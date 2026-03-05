@@ -33,9 +33,33 @@ ABS_PATH = os.path.dirname(os.path.abspath(__file__))
 def _sanitize_path_component(value):
     """Sanitize a string for safe use as a filesystem path component.
     
-    Prevents directory traversal attacks and invalid path characters.
+    Guards against directory traversal, path injection, and OS-specific edge cases:
+    - Strips Windows drive prefixes (e.g. "C:") and backslashes
+    - Removes control characters and null bytes
+    - Replaces characters outside a safe whitelist with underscores
+    - Trims leading/trailing dots and underscores to avoid "." / ".." results
+    - Returns "_" if the result is empty or still equals "." / ".."
+    - Truncates to 255 characters (common filesystem limit)
     """
-    return value.replace("..", "").replace("/", "_")
+    import re
+    # Strip Windows drive letter prefix (e.g. "C:", "D:")
+    if len(value) >= 2 and value[1] == ':' and value[0].isalpha():
+        value = value[2:]
+    # Remove backslashes, forward slashes, null bytes, and control characters
+    value = value.replace('\\', '_').replace('/', '_').replace('\x00', '')
+    value = re.sub(r'[\x00-\x1f\x7f]', '', value)
+    # Remove traversal sequences
+    value = value.replace('..', '')
+    # Replace any character not in safe whitelist (letters, digits, hyphen, underscore, dot)
+    value = re.sub(r'[^A-Za-z0-9_.\-]', '_', value)
+    # Trim leading/trailing dots and underscores
+    value = value.strip('._')
+    # Truncate to filesystem limit
+    value = value[:255]
+    # Final safety: reject empty or traversal results
+    if not value or value in ('.', '..'):
+        return '_'
+    return value
 
 
 

@@ -170,20 +170,21 @@ def format_bandwidth_with_unit(bandwidth_bytes, unit, decimal_places=2):
     return _formatter_bytes.format_bandwidth_with_unit(bandwidth_bytes, unit, decimal_places)
 
 
-def determine_unit_filter(bandwidth_bytes, use_bits=False):
+def determine_unit_filter(bandwidth_bytes, use_bits=False):  # noqa: FBT002
     """Jinja2 filter version of determine_unit.
     
-    Note: use_bits remains positional because Jinja2 filter syntax
+    Note: use_bits must remain positional because Jinja2 filter syntax
     ``value|determine_unit(relays.use_bits)`` passes it positionally.
+    See _get_formatter for the keyword-only internal API.
     """
     return _get_formatter(use_bits=use_bits).determine_unit(bandwidth_bytes)
 
 
-def format_bandwidth_filter(bandwidth_bytes, unit=None, use_bits=False, decimal_places=2):
+def format_bandwidth_filter(bandwidth_bytes, unit=None, use_bits=False, decimal_places=2):  # noqa: FBT002
     """Jinja2 filter for formatting bandwidth with optional unit specification.
     
-    Note: use_bits remains positional because Jinja2 filter syntax passes
-    arguments positionally.
+    Note: use_bits must remain positional because Jinja2 filter syntax passes
+    arguments positionally. See _get_formatter for the keyword-only internal API.
     """
     return _get_formatter(use_bits=use_bits).format_bandwidth(bandwidth_bytes, unit, decimal_places)
 
