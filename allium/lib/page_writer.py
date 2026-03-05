@@ -97,6 +97,26 @@ ENV.filters['split'] = lambda s, sep='/': s.split(sep) if s else []
 ENV.filters['format_timestamp'] = format_timestamp
 ENV.filters['format_timestamp_ago'] = format_timestamp_ago
 
+from datetime import datetime as _dt, timezone as _tz
+
+def _format_unix_timestamp(ts):
+    if ts is None or ts == '':
+        return ''
+    try:
+        return _dt.fromtimestamp(float(ts), tz=_tz.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
+    except (ValueError, TypeError, OSError):
+        return str(ts)
+
+def _ordinal(n):
+    try:
+        n = int(n)
+    except (TypeError, ValueError):
+        return str(n) if n is not None else ''
+    return f"{n}{'th' if 11 <= n % 100 <= 13 else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')}"
+
+ENV.filters['format_unix_timestamp'] = _format_unix_timestamp
+ENV.filters['ordinal'] = _ordinal
+
 # ============================================================================
 # HELPER: Partition effective_family by family-cert status
 # ============================================================================
@@ -138,6 +158,22 @@ def _get_family_support_counts(k, contact_display_data, i):
     elif k == "family":
         return i.get("family_support_counts", {})
     return {}
+
+
+def _get_exit_dns_health_summary(k, i, members):
+    """Get exit DNS health summary — precomputed for contacts/families, on-the-fly for others.
+
+    DRY helper used by both sequential (write_pages_by_key) and parallel (build_template_args) paths.
+    OPTIMIZATION: Uses i["exit_count"] fast bail-out to skip groups with no exit relays.
+    """
+    from .exit_dns_health import get_operator_exit_dns_health_summary
+
+    # For contact and family pages, use precomputed data
+    if k in ("contact", "family"):
+        return i.get("exit_dns_health_summary")
+
+    # For all other page types, compute on-the-fly with exit_count bail-out
+    return get_operator_exit_dns_health_summary(members, exit_count=i.get("exit_count", 0))
 
 
 # Multiprocessing globals (initialized via fork for copy-on-write memory sharing)
@@ -255,7 +291,12 @@ def _compute_contact_predata(relay_set, contact_hash, aroi_validation_timestamp,
     aroi_domain = members[0].get("aroi_domain") if members else None
     is_validated_aroi = (aroi_domain and aroi_domain != "none" and
                         aroi_domain in validated_aroi_domains)
-    
+
+    # Exit DNS health summary — uses exit_count bail-out, reads pre-attached relay fields
+    from .exit_dns_health import get_operator_exit_dns_health_summary
+    exit_dns_health_summary = get_operator_exit_dns_health_summary(
+        members, exit_count=contact_data.get("exit_count", 0))
+
     return {
         "contact_rankings": contact_rankings,
         "operator_reliability": operator_reliability,
@@ -265,6 +306,7 @@ def _compute_contact_predata(relay_set, contact_hash, aroi_validation_timestamp,
         "is_validated_aroi": is_validated_aroi,
         "precomputed_bandwidth_unit": bandwidth_unit,
         "aroi_domain": aroi_domain,
+        "exit_dns_health_summary": exit_dns_health_summary,
     }
 
 
@@ -309,16 +351,37 @@ def _compute_family_predata(relay_set, family_hash):
         family_data["guard_count"], family_data["middle_count"],
         family_data["exit_count"], len(members))
     
-    # Family support type counts (reads pre-computed field, no fingerprint lookups)
+    # Family support type counts + Exit DNS health counts
+    # Piggyback DNS health counting on same loop (avoid second iteration)
     family_support_counts = {'both': 0, 'happy_families': 0, 'my_family': 0, 'none': 0}
+    exit_dns_healthy = 0
+    exit_dns_failing = 0
+    exit_dns_untested = 0
+    exit_dns_total = 0
     for relay in members:
         fst = relay.get('family_support_type', 'none')
         family_support_counts[fst] = family_support_counts.get(fst, 0) + 1
-    
+        edh = relay.get('exit_dns_health_status')
+        if edh is not None:
+            exit_dns_total += 1
+            if edh == 'success':
+                exit_dns_healthy += 1
+            elif edh == 'fail':
+                exit_dns_failing += 1
+            else:
+                exit_dns_untested += 1
+
+    from .exit_dns_health import _build_dns_summary_dict
+    exit_dns_health_summary = (
+        _build_dns_summary_dict(exit_dns_total, exit_dns_healthy, exit_dns_failing, exit_dns_untested)
+        if exit_dns_total > 0 else None
+    )
+
     return {
         "contact_validation_status": contact_validation_status,
         "network_position": network_position,
         "family_support_counts": family_support_counts,
+        "exit_dns_health_summary": exit_dns_health_summary,
     }
 
 
@@ -800,7 +863,8 @@ def write_pages_by_key(relay_set, k):
         
         # Family support counts for summary bullet (DRY helper)
         family_support_counts = _get_family_support_counts(k, contact_display_data, i)
-        
+        exit_dns_health_summary = _get_exit_dns_health_summary(k, i, members)
+
         # Time the template rendering
         render_start = time.time()
         rendered = template.render(
@@ -863,7 +927,9 @@ def write_pages_by_key(relay_set, k):
             # Base URL for vanity URLs
             base_url=relay_set.base_url,
             # Family support counts for summary bullets
-            family_support_counts=family_support_counts
+            family_support_counts=family_support_counts,
+            # Exit DNS Health summary for operator/group pages
+            exit_dns_health_summary=exit_dns_health_summary
         )
         render_time += time.time() - render_start
 
@@ -951,7 +1017,9 @@ def build_template_args(relay_set, k, v, i, the_prefixed, validated_aroi_domains
     
     # Family support counts for summary bullet (DRY helper)
     family_support_counts = _get_family_support_counts(k, contact_display_data, i)
-    
+    # Exit DNS Health summary (DRY helper - precomputed for contacts/families, on-the-fly for others)
+    exit_dns_health_summary = _get_exit_dns_health_summary(k, i, members)
+
     display = i.get("display", {})
     
     return {
@@ -1004,6 +1072,7 @@ def build_template_args(relay_set, k, v, i, the_prefixed, validated_aroi_domains
         'validated_aroi_domains': validated_aroi_domains,
         'base_url': relay_set.base_url,
         'family_support_counts': family_support_counts,
+        'exit_dns_health_summary': exit_dns_health_summary,
     }
 
 def write_pages_parallel(relay_set, k, sorted_values, template, output_path, the_prefixed, start_time):

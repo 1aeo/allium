@@ -98,7 +98,8 @@ class Relays:
         # The function runs in enrich_with_api_data() after uptime and/or bandwidth processing.
 
     def enrich_with_api_data(self, uptime_data=None, bandwidth_data=None,
-                             aroi_validation_data=None, collector_consensus_data=None,
+                             aroi_validation_data=None, exit_dns_health_data=None,
+                             collector_consensus_data=None,
                              consensus_health_data=None, collector_descriptors_data=None):
         """
         Enrich relay data with secondary API sources.
@@ -129,6 +130,7 @@ class Relays:
         self.uptime_data = uptime_data
         self.bandwidth_data = bandwidth_data
         self.aroi_validation_data = aroi_validation_data
+        self.exit_dns_health_data = exit_dns_health_data
         self.collector_consensus_data = collector_consensus_data
         self.consensus_health_data = consensus_health_data
         self.collector_descriptors_data = collector_descriptors_data
@@ -162,13 +164,22 @@ class Relays:
         # (depends on collector_descriptors_data from Step 7, consumed by Steps 14-15)
         self._set_family_support_types()
 
+        # Step 14: Exit DNS Health enrichment (before precompute since contact pages read relay fields)
+        if exit_dns_health_data and self.json.get('relays'):
+            try:
+                self._attach_exit_dns_health_data()
+                self._aggregate_dns_health_to_groups()
+                self._calculate_network_health_metrics()
+            except Exception as e:
+                print(f"Warning: Exit DNS Health processing failed ({e}), continuing without DNS health data")
+
         # Ensure network health metrics are calculated at least once.
         # Normally called after uptime and/or bandwidth processing above,
         # but if neither data source was available, we need the fallback.
         if 'network_health' not in self.json:
             self._calculate_network_health_metrics()
 
-        # Steps 14-15: Pre-compute page data (depends on ALL above)
+        # Steps 15-16: Pre-compute page data (depends on ALL above)
         self._precompute_all_contact_page_data()
         self._precompute_all_family_page_data()
 
@@ -664,6 +675,38 @@ class Relays:
                     group_data["display"]["total_data_formatted"] = format_data_volume_with_unit(total)
                     group_data["display"]["total_data_pct"] = compute_total_data_pct(total, used_period, net_by_period) if used_period else ""
 
+    def _aggregate_dns_health_to_groups(self):
+        """Aggregate per-relay DNS health into sorted groups for misc listing pages.
+
+        Iterates relay indices directly to avoid materializing member lists.
+        Fast bail-out via exit_count skips groups with no exit relays.
+        Uses shared _build_dns_summary_dict for consistent dict shape (DRY).
+        """
+        from .exit_dns_health import _build_dns_summary_dict
+        relays = self.json["relays"]
+        for category in self.json.get("sorted", {}):
+            for _key, group_data in self.json["sorted"][category].items():
+                exit_count = group_data.get("exit_count", 0)
+                display = group_data.setdefault("display", {})
+                if exit_count == 0:
+                    display["exit_dns_health_summary"] = None
+                    continue
+                healthy = failing = untested = total = 0
+                for idx in group_data.get("relays", []):
+                    status = relays[idx].get('exit_dns_health_status')
+                    if status is None:
+                        continue
+                    total += 1
+                    if status == 'success':
+                        healthy += 1
+                    elif status == 'fail':
+                        failing += 1
+                    else:
+                        untested += 1
+                display["exit_dns_health_summary"] = (
+                    _build_dns_summary_dict(total, healthy, failing, untested) if total > 0 else None
+                )
+
     def _reprocess_collector_data(self):
         """
         Process CollecTor consensus data for per-relay consensus evaluation.
@@ -979,6 +1022,18 @@ class Relays:
                 relay['family_support_type'] = 'my_family'
             else:
                 relay['family_support_type'] = 'none'
+
+    def _attach_exit_dns_health_data(self):
+        """Attach per-relay DNS health status for exit relays.
+
+        Builds fingerprint map once from API data, then iterates relays to set
+        flat fields (exit_dns_health_status, exit_dns_health_detail, etc.).
+        Non-exit relays get exit_dns_health_status=None.
+        """
+        from .exit_dns_health import build_exit_dns_health_map, attach_exit_dns_health_to_relays
+        self._exit_dns_health_map = build_exit_dns_health_map(
+            getattr(self, 'exit_dns_health_data', None))
+        attach_exit_dns_health_to_relays(self.json.get('relays', []), self._exit_dns_health_map)
 
     def _precompute_all_contact_page_data(self):
         """

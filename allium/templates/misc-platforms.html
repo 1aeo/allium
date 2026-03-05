@@ -1,4 +1,4 @@
-{% from "macros.html" import navigation %}
+{% from "macros.html" import navigation, network_dns_health_bullet %}
 {% extends "skeleton.html" -%}
 {% set sorted_by_label = sorted_by.split(',')[0].split('.')[1] -%}
 {% block title -%}
@@ -42,6 +42,7 @@
             </ul>
         </li>
         <li><strong>Software Diversity</strong>: {{ relays.json.smart_context.concentration_patterns.template_optimized.platforms_linux_percentage }}% Linux | {{ relays.json.smart_context.concentration_patterns.template_optimized.platforms_windows_percentage }}% Windows | {{ relays.json.smart_context.concentration_patterns.template_optimized.platforms_bsd_percentage }}% BSD variants</li>
+        {{ network_dns_health_bullet(relays.json.network_health) }}
         <li><strong>Sorted by</strong>: {{ sorted_by_label|replace('_', ' ')|replace('bandwidth', 'observed bandwidth') }}</li>
                     <li><strong>Key</strong>: BW = Observed Bandwidth Capacity, CW = Consensus Weight, AS = Autonomous System (network provider)</li>
     </ul>
@@ -122,6 +123,7 @@
                     <a href="platforms-by-total-data.html">Total Data</a>
                 </th>
             {% endif -%}
+            <th title="Exit DNS Health: healthy / unhealthy exit relay counts. Source: exitdnshealth.1aeo.com">DNS Health</th>
         </tr>
         <tbody>
             {% for k, v in relays.json['sorted'].get('platform', {}).items()|sort(attribute=sorted_by,
@@ -142,6 +144,7 @@
                     <td>{{ v['unique_family_count'] }}</td>
                     <td>{{ v['unique_as_count'] }}</td>
                     <td>{{ d.total_data_formatted }}</td>
+                    <td>{% if d.exit_dns_health_summary and (d.exit_dns_health_summary.healthy > 0 or d.exit_dns_health_summary.failing > 0) %}<span style="color: #28a745;">{{ d.exit_dns_health_summary.healthy }}</span> / <span style="color: #dc3545;">{{ d.exit_dns_health_summary.failing }}</span>{% else %}<span style="color: #6c757d;">—</span>{% endif %}</td>
                 </tr>
             {% endfor -%}
         </tbody>

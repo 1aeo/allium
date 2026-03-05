@@ -1,4 +1,4 @@
-{% from "macros.html" import navigation %}
+{% from "macros.html" import navigation, network_dns_health_bullet %}
 {% extends "skeleton.html" -%}
 {% set sorted_by_label = sorted_by.split(',')[0].split('.')[1] -%}
 {% block title -%}
@@ -44,6 +44,7 @@
         <li><strong>Geographic Diversity</strong>: {{ relays.json.smart_context.concentration_patterns.template_optimized.countries_top_3_percentage }}% in top 3 countries | {{ relays.json.smart_context.concentration_patterns.template_optimized.countries_significant_count }} countries have >1% of network | {{ relays.json.smart_context.concentration_patterns.template_optimized.countries_five_eyes_percentage }}% in Five Eyes countries</li>
 <li><strong>Jurisdiction Analysis</strong>: {{ relays.json.smart_context.geographic_clustering.template_optimized.five_eyes_influence }}% Five Eyes influence | {{ relays.json.smart_context.geographic_clustering.template_optimized.fourteen_eyes_influence }}% Fourteen Eyes</li>
 <li><strong>Regional Clustering</strong>: {{ relays.json.smart_context.geographic_clustering.template_optimized.concentration_hhi_interpretation }} regional concentration (<span title="{{ relays.json.smart_context.geographic_clustering.template_optimized.hhi_tooltip }}">HHI: {{ relays.json.smart_context.geographic_clustering.template_optimized.regional_hhi }}</span>) | <span title="{{ relays.json.smart_context.geographic_clustering.template_optimized.regional_concentration_tooltip }}">Top regions: {{ relays.json.smart_context.geographic_clustering.template_optimized.top_3_regions }}</span></li>
+        {{ network_dns_health_bullet(relays.json.network_health) }}
         <li><strong>Sorted by</strong>: {{ sorted_by_label|replace('_', ' ')|replace('bandwidth', 'observed bandwidth') }}</li>
                     <li><strong>Key</strong>: BW = Observed Bandwidth Capacity, CW = Consensus Weight, AS = Autonomous System (network provider)</li>
     </ul>
@@ -124,6 +125,7 @@
                     <a href="countries-by-total-data.html">Total Data</a>
                 </th>
             {% endif -%}
+            <th title="Exit DNS Health: healthy / unhealthy exit relay counts. Source: exitdnshealth.1aeo.com">DNS Health</th>
         </tr>
         <tbody>
             {% for k, v in relays.json['sorted'].get('country', {}).items()|sort(attribute=sorted_by,
@@ -148,6 +150,7 @@
                     <td>{{ v['unique_family_count'] }}</td>
                     <td>{{ v['unique_as_count'] }}</td>
                     <td>{{ d.total_data_formatted }}</td>
+                    <td>{% if d.exit_dns_health_summary and (d.exit_dns_health_summary.healthy > 0 or d.exit_dns_health_summary.failing > 0) %}<span style="color: #28a745;">{{ d.exit_dns_health_summary.healthy }}</span> / <span style="color: #dc3545;">{{ d.exit_dns_health_summary.failing }}</span>{% else %}<span style="color: #6c757d;">—</span>{% endif %}</td>
                 </tr>
             {% endfor -%}
         </tbody>

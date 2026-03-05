@@ -1,4 +1,4 @@
-{% from "macros.html" import navigation %}
+{% from "macros.html" import navigation, network_dns_health_bullet %}
 {% extends "skeleton.html" -%}
 {% set sorted_by_label = sorted_by.split(',')[0].split('.')[1] -%}
 {% block title -%}
@@ -62,6 +62,7 @@
                 </li>
             </ul>
         </li>
+        {{ network_dns_health_bullet(relays.json.network_health) }}
         <li><strong>Sorted by</strong>: {{ sorted_by_label|replace('_', ' ')|replace('bandwidth', 'observed bandwidth') }}</li>
                     <li><strong>Key</strong>: BW = Observed Bandwidth Capacity, CW = Consensus Weight, AS = Autonomous System (network provider)</li>
     </ul>
@@ -137,6 +138,7 @@
                     <a href="families-by-total-data.html">Total Data</a>
                 </th>
             {% endif -%}
+            <th title="Exit DNS Health: healthy / unhealthy exit relay counts. Source: exitdnshealth.1aeo.com">DNS Health</th>
         </tr>
         <tbody>
             {% set processed = dict() -%}
@@ -174,6 +176,7 @@
                         <a href="{{ page_ctx.path_prefix }}first_seen/{{ d.first_seen_date|escape }}">{{ d.first_seen_date|escape }}</a>
                     </td>
                         <td>{{ d.total_data_formatted }}</td>
+                        <td>{% if d.exit_dns_health_summary and (d.exit_dns_health_summary.healthy > 0 or d.exit_dns_health_summary.failing > 0) %}<span style="color: #28a745;">{{ d.exit_dns_health_summary.healthy }}</span> / <span style="color: #dc3545;">{{ d.exit_dns_health_summary.failing }}</span>{% else %}<span style="color: #6c757d;">—</span>{% endif %}</td>
                         {% for r in v['relays'] -%}
                             {% set _dummy = processed.update({relay_subset[r]['fingerprint']:
                             None}) -%}
