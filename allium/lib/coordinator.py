@@ -10,12 +10,11 @@ import threading
 import time
 from .workers import (
     fetch_onionoo_details, fetch_onionoo_uptime, fetch_onionoo_bandwidth,
-    fetch_aroi_validation, fetch_collector_consensus_data, fetch_consensus_health,
+    fetch_aroi_validation, fetch_collector_consensus_data,
     fetch_collector_descriptors,
     get_worker_status, get_all_worker_status
 )
 from .relays import Relays
-from .progress import log_progress
 from .progress_logger import ProgressLogger
 from .error_handlers import handle_worker_errors, handle_calculation_errors
 
@@ -98,43 +97,49 @@ class Coordinator:
     #   2. Add one entry here
     #   3. Handle the data in Relays.enrich_with_api_data()
     # =========================================================================
+    # The last element in each args_fn list is a progress logger placeholder.
+    # _run_worker() replaces it with an API-specific logger before calling the
+    # worker function. We use a no-op callable so the placeholder is safe to
+    # call if _run_worker replacement is ever skipped (e.g., in tests).
+    _noop_logger = staticmethod(lambda *args, **kwargs: None)
+
     API_WORKER_REGISTRY = [
         {
             "name": "onionoo_details",
             "fetch_fn": fetch_onionoo_details,
             "group": "details",  # Included in both 'details' and 'all' modes
-            "args_fn": lambda self: [self.onionoo_details_url, self._log_progress],
+            "args_fn": lambda self: [self.onionoo_details_url, self._noop_logger],
         },
         {
             "name": "onionoo_uptime",
             "fetch_fn": fetch_onionoo_uptime,
             "group": "all",
-            "args_fn": lambda self: [self.onionoo_uptime_url, self._log_progress],
+            "args_fn": lambda self: [self.onionoo_uptime_url, self._noop_logger],
         },
         {
             "name": "onionoo_bandwidth",
             "fetch_fn": fetch_onionoo_bandwidth,
             "group": "all",
-            "args_fn": lambda self: [self.onionoo_bandwidth_url, self.bandwidth_cache_hours, self._log_progress],
+            "args_fn": lambda self: [self.onionoo_bandwidth_url, self.bandwidth_cache_hours, self._noop_logger],
         },
         {
             "name": "aroi_validation",
             "fetch_fn": fetch_aroi_validation,
             "group": "all",
-            "args_fn": lambda self: [self.aroi_url, self._log_progress],
+            "args_fn": lambda self: [self.aroi_url, self._noop_logger],
         },
         {
             "name": "collector_consensus",
             "fetch_fn": fetch_collector_consensus_data,
             "group": "all",
-            "args_fn": lambda self: [None, self._log_progress],
+            "args_fn": lambda self: [None, self._noop_logger],
             "enabled_fn": None,  # Checked dynamically in _build_api_workers
         },
         {
             "name": "collector_descriptors",
             "fetch_fn": fetch_collector_descriptors,
             "group": "all",
-            "args_fn": lambda self: [self._log_progress],
+            "args_fn": lambda self: [self._noop_logger],
             "enabled_fn": None,  # Checked dynamically in _build_api_workers
         },
     ]
@@ -166,10 +171,6 @@ class Coordinator:
                 ))
         return workers
         
-    def _log_progress(self, message):
-        """Log progress message using shared progress utility"""
-        log_progress(message, self.start_time, self.progress_step, self.total_steps, self.progress)
-    
     def _run_worker(self, api_name, worker_func, args):
         """Run a single API worker in a thread"""
         try:
@@ -240,6 +241,14 @@ class Coordinator:
             self._log_progress_without_increment(formatted_message)
         
         return api_logger
+
+    def _log_progress(self, message):
+        """Log progress message with step increment.
+        
+        Compatibility wrapper preserving the original _log_progress interface.
+        Forwards to _log_progress_with_step_increment for consistent behavior.
+        """
+        self._log_progress_with_step_increment(message)
 
     def _log_progress_without_increment(self, message):
         """Log progress message without incrementing progress step (for intermediate messages)"""

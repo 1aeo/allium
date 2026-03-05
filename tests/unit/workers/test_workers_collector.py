@@ -3,7 +3,7 @@ Tests for lib/workers.py collector-related functions.
 """
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch, MagicMock
 
 from allium.lib.workers import (
@@ -35,7 +35,7 @@ class TestFetchCollectorConsensusData:
                     'flag_thresholds': {},
                     'bw_authorities': [],
                     'ipv6_authorities': [],
-                    'fetched_at': datetime.utcnow().isoformat(),
+                    'fetched_at': datetime.now(timezone.utc).isoformat(),
                 }
                 MockFetcher.return_value = mock_instance
                 
@@ -56,7 +56,7 @@ class TestFetchCollectorConsensusData:
         cached_data = {
             'votes': {'moria1': {}},
             'relay_index': {'ABC123': {}},
-            'fetched_at': datetime.utcnow().isoformat(),
+            'fetched_at': datetime.now(timezone.utc).isoformat(),
             'consensus_method_info': {
                 'total_voters': 9,
                 'current_method': 34,
@@ -111,7 +111,7 @@ class TestValidateCollectorCache:
         valid_data = {
             'votes': {'moria1': {'relay_index': {}}},
             'relay_index': {'ABC123': {}},
-            'fetched_at': datetime.utcnow().isoformat(),
+            'fetched_at': datetime.now(timezone.utc).isoformat(),
             'consensus_method_info': {'total_voters': 9, 'current_method': 34},
         }
         assert _validate_collector_cache(valid_data) == True
@@ -126,7 +126,7 @@ class TestValidateCollectorCache:
         # Missing 'relay_index' key
         data = {
             'votes': {},
-            'fetched_at': datetime.utcnow().isoformat(),
+            'fetched_at': datetime.now(timezone.utc).isoformat(),
         }
         assert _validate_collector_cache(data) == False
     
@@ -135,7 +135,7 @@ class TestValidateCollectorCache:
         data = {
             'votes': {'moria1': {}},
             'relay_index': {},
-            'fetched_at': datetime.utcnow().isoformat(),
+            'fetched_at': datetime.now(timezone.utc).isoformat(),
         }
         assert _validate_collector_cache(data) == False
     
@@ -144,7 +144,7 @@ class TestValidateCollectorCache:
         data = {
             'votes': {'moria1': {}},
             'relay_index': {},
-            'fetched_at': datetime.utcnow().isoformat(),
+            'fetched_at': datetime.now(timezone.utc).isoformat(),
             'consensus_method_info': {},
         }
         assert _validate_collector_cache(data) == False
@@ -154,14 +154,14 @@ class TestValidateCollectorCache:
         data = {
             'votes': {'moria1': {}},
             'relay_index': {},
-            'fetched_at': datetime.utcnow().isoformat(),
+            'fetched_at': datetime.now(timezone.utc).isoformat(),
             'consensus_method_info': {'total_voters': 0},
         }
         assert _validate_collector_cache(data) == False
     
     def test_validate_old_cache(self):
         """Test validation rejects cache older than 3 hours."""
-        old_time = (datetime.utcnow() - timedelta(hours=4)).isoformat()
+        old_time = (datetime.now(timezone.utc) - timedelta(hours=4)).isoformat()
         data = {
             'votes': {'moria1': {}},
             'relay_index': {},
@@ -172,7 +172,7 @@ class TestValidateCollectorCache:
     
     def test_validate_recent_cache(self):
         """Test validation accepts cache less than 3 hours old."""
-        recent_time = (datetime.utcnow() - timedelta(hours=1)).isoformat()
+        recent_time = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
         data = {
             'votes': {'moria1': {}},
             'relay_index': {},

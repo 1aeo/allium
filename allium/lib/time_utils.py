@@ -45,8 +45,12 @@ def parse_onionoo_timestamp(timestamp_str):
 
 
 def create_time_thresholds():
-    """Create common time threshold calculations used across the codebase"""
-    now = datetime.utcnow()
+    """Create common time threshold calculations used across the codebase.
+    
+    Returns timezone-aware UTC datetimes for safe comparison with
+    parse_onionoo_timestamp() results (which are also timezone-aware).
+    """
+    now = datetime.now(timezone.utc)
     return {
         'now': now,
         'day_ago': now - timedelta(days=1),

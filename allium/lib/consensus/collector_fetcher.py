@@ -16,7 +16,7 @@ import urllib.error
 import socket
 import concurrent.futures
 from typing import Dict, List, Optional, Tuple, Any, Callable
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 import time
 
@@ -288,7 +288,7 @@ class CollectorFetcher:
             'flag_thresholds': {},
             'bw_authorities': [],
             'ipv6_testing_authorities': [],
-            'fetched_at': datetime.utcnow().isoformat(),  # Note: uses UTC for consistency
+            'fetched_at': datetime.now(timezone.utc).isoformat(),
             'errors': [],
             'timings': {},
         }

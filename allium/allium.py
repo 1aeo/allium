@@ -259,7 +259,7 @@ if __name__ == "__main__":
     
     try:
         RELAY_SET = create_relay_set_with_coordinator(args, progress_logger=progress_logger)
-        if RELAY_SET is None or RELAY_SET.json == None:
+        if RELAY_SET is None or RELAY_SET.json is None:
             # Progress-style error context message (conditional on progress flag)
             progress_logger.log("No onionoo data available, exiting gracefully")
             # Error messages always shown (not conditional)

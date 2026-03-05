@@ -14,14 +14,28 @@ import threading
 # Thread-safe lock for print output to prevent interleaved messages
 _print_lock = threading.Lock()
 
+# Memory usage cache — avoids re-reading /proc/self/status on every progress log
+# (57+ calls per run). Memory changes slowly; a 2-second cache is invisible in practice.
+_memory_cache_value = None
+_memory_cache_time = 0
+
 
 def get_memory_usage():
     """
     Get current memory usage information.
     
+    Caches the result for 2 seconds to avoid repeated /proc/self/status reads
+    (called 57+ times per run).
+    
     Returns:
         str: Formatted memory usage string
     """
+    global _memory_cache_value, _memory_cache_time
+    
+    now = time.time()
+    if _memory_cache_value is not None and (now - _memory_cache_time) < 2.0:
+        return _memory_cache_value
+    
     try:
         usage = resource.getrusage(resource.RUSAGE_SELF)
         peak_kb = usage.ru_maxrss
@@ -42,11 +56,15 @@ def get_memory_usage():
         peak_mb = peak_kb / 1024
         
         if current_rss_kb and current_rss_kb != peak_kb:
-            return f"RSS: {current_mb:.1f}MB, Peak: {peak_mb:.1f}MB"
+            result = f"RSS: {current_mb:.1f}MB, Peak: {peak_mb:.1f}MB"
         else:
-            return f"Peak RSS: {peak_mb:.1f}MB"
+            result = f"Peak RSS: {peak_mb:.1f}MB"
     except Exception as e:
-        return f"Memory: unavailable ({e})"
+        result = f"Memory: unavailable ({e})"
+    
+    _memory_cache_value = result
+    _memory_cache_time = now
+    return result
 
 
 def log_progress(message, start_time, progress_step, total_steps, progress_enabled=True):
