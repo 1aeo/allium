@@ -251,13 +251,13 @@ jobs:
         chmod +x setup.sh
         
         # Run setup script with timeout to prevent hanging
-        timeout 600 bash setup.sh
+        timeout 900 bash setup.sh
         setup_exit_code=$?
         
         if [ $setup_exit_code -eq 0 ]; then
           echo "✅ Setup script completed successfully"
         elif [ $setup_exit_code -eq 124 ]; then
-          echo "❌ Setup script timed out after 10 minutes"
+          echo "❌ Setup script timed out after 15 minutes"
           echo "🔧 This might be due to network issues or slow API responses"
           exit 1
         else

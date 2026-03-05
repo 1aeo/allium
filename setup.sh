@@ -52,7 +52,7 @@ else
         echo "⚠️  Directory 'allium' already exists. Removing it..."
         rm -rf allium
     fi
-    git clone https://github.com/1aeo/allium.git
+    git clone --depth 1 https://github.com/1aeo/allium.git
     cd allium
     ALLIUM_ROOT="."
     IN_REPO=false
