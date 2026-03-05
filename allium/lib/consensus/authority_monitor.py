@@ -11,7 +11,7 @@ import socket
 import time
 import concurrent.futures
 from typing import Dict, List, Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 
 logger = logging.getLogger(__name__)
@@ -65,7 +65,7 @@ class AuthorityMonitor:
         """
         # Use cached data if recent (within 5 minutes)
         if not force and self._cached_status and self._last_check:
-            cache_age = (datetime.utcnow() - self._last_check).total_seconds()
+            cache_age = (datetime.now(timezone.utc) - self._last_check).total_seconds()
             if cache_age < 300:  # 5 minutes
                 return self._cached_status
         
@@ -92,11 +92,11 @@ class AuthorityMonitor:
                         'online': False,
                         'latency_ms': None,
                         'error': str(e),
-                        'checked_at': datetime.utcnow().isoformat(),
+                        'checked_at': datetime.now(timezone.utc).isoformat(),
                     }
         
         self._cached_status = status
-        self._last_check = datetime.utcnow()
+        self._last_check = datetime.now(timezone.utc)
         
         return status
     
@@ -155,7 +155,7 @@ class AuthorityMonitor:
                     'latency_ms': round(latency_ms, 1),
                     'status_code': None,
                     'error': None,
-                    'checked_at': datetime.utcnow().isoformat(),
+                    'checked_at': datetime.now(timezone.utc).isoformat(),
                 }
             else:
                 return {
@@ -163,7 +163,7 @@ class AuthorityMonitor:
                     'latency_ms': round(latency_ms, 1),
                     'status_code': None,
                     'error': f"Connection refused (code {result})",
-                    'checked_at': datetime.utcnow().isoformat(),
+                    'checked_at': datetime.now(timezone.utc).isoformat(),
                 }
                 
         except socket.timeout:
@@ -172,7 +172,7 @@ class AuthorityMonitor:
                 'latency_ms': None,
                 'status_code': None,
                 'error': 'Connection timed out',
-                'checked_at': datetime.utcnow().isoformat(),
+                'checked_at': datetime.now(timezone.utc).isoformat(),
             }
             
         except socket.gaierror as e:
@@ -181,7 +181,7 @@ class AuthorityMonitor:
                 'latency_ms': None,
                 'status_code': None,
                 'error': f"DNS resolution failed: {e}",
-                'checked_at': datetime.utcnow().isoformat(),
+                'checked_at': datetime.now(timezone.utc).isoformat(),
             }
             
         except Exception as e:
@@ -190,7 +190,7 @@ class AuthorityMonitor:
                 'latency_ms': None,
                 'status_code': None,
                 'error': str(e),
-                'checked_at': datetime.utcnow().isoformat(),
+                'checked_at': datetime.now(timezone.utc).isoformat(),
             }
     
     def get_summary(self, status: Optional[Dict[str, dict]] = None) -> dict:

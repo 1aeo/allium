@@ -30,7 +30,7 @@ from .time_utils import (
     format_timestamp_gmt,
     format_time_ago,
 )
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
 
@@ -213,7 +213,7 @@ class Relays:
             return
         
         # Combined filtering + bandwidth fix - single pass
-        cutoff_time = datetime.utcnow() - timedelta(days=self.filter_downtime_days)
+        cutoff_time = datetime.now(timezone.utc) - timedelta(days=self.filter_downtime_days)
         
         def should_keep_relay(relay):
             # Fix bandwidth while we're processing
@@ -230,7 +230,7 @@ class Relays:
                 return False  # No last_seen data
             
             last_seen_dt = parse_onionoo_timestamp(last_seen)
-            return last_seen_dt and last_seen_dt.replace(tzinfo=None) >= cutoff_time
+            return last_seen_dt and last_seen_dt >= cutoff_time
         
         # Filter in-place
         self.json["relays"] = [r for r in self.json["relays"] if should_keep_relay(r)]
@@ -744,7 +744,6 @@ class Relays:
                 last_restarted = relay.get('last_restarted')
                 if last_restarted:
                     try:
-                        from datetime import datetime, timezone
                         # Handle ISO format with optional timezone
                         if last_restarted.endswith('Z'):
                             restart_time = datetime.fromisoformat(last_restarted.replace('Z', '+00:00'))
