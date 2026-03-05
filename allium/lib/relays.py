@@ -677,10 +677,12 @@ class Relays:
 
     def _aggregate_dns_health_to_groups(self):
         """Aggregate per-relay DNS health into sorted groups for misc listing pages.
-        
+
         Iterates relay indices directly to avoid materializing member lists.
         Fast bail-out via exit_count skips groups with no exit relays.
+        Uses shared _build_dns_summary_dict for consistent dict shape (DRY).
         """
+        from .exit_dns_health import _build_dns_summary_dict
         relays = self.json["relays"]
         for category in self.json.get("sorted", {}):
             for key, group_data in self.json["sorted"][category].items():
@@ -701,18 +703,9 @@ class Relays:
                         failing += 1
                     else:
                         untested += 1
-                if total == 0:
-                    display["exit_dns_health_summary"] = None
-                else:
-                    display["exit_dns_health_summary"] = {
-                        'exit_count': total, 'healthy': healthy,
-                        'failing': failing, 'untested': untested,
-                        'healthy_pct': round(100 * healthy / total),
-                        'failing_pct': round(100 * failing / total),
-                        'untested_pct': round(100 * untested / total),
-                        'all_healthy': failing == 0 and untested == 0 and healthy > 0,
-                        'any_failing': failing > 0,
-                    }
+                display["exit_dns_health_summary"] = (
+                    _build_dns_summary_dict(total, healthy, failing, untested) if total > 0 else None
+                )
 
     def _reprocess_collector_data(self):
         """

@@ -100,7 +100,7 @@ ENV.filters['format_timestamp_ago'] = format_timestamp_ago
 from datetime import datetime as _dt, timezone as _tz
 
 def _format_unix_timestamp(ts):
-    if not ts:
+    if ts is None or ts == '':
         return ''
     try:
         return _dt.fromtimestamp(float(ts), tz=_tz.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
@@ -108,7 +108,10 @@ def _format_unix_timestamp(ts):
         return str(ts)
 
 def _ordinal(n):
-    n = int(n)
+    try:
+        n = int(n)
+    except (TypeError, ValueError):
+        return str(n) if n is not None else ''
     return f"{n}{'th' if 11 <= n % 100 <= 13 else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')}"
 
 ENV.filters['format_unix_timestamp'] = _format_unix_timestamp
@@ -368,14 +371,11 @@ def _compute_family_predata(relay_set, family_hash):
             else:
                 exit_dns_untested += 1
 
-    exit_dns_health_summary = None
-    if exit_dns_total > 0:
-        exit_dns_health_summary = {
-            'exit_count': exit_dns_total, 'healthy': exit_dns_healthy,
-            'failing': exit_dns_failing, 'untested': exit_dns_untested,
-            'all_healthy': exit_dns_failing == 0 and exit_dns_untested == 0 and exit_dns_healthy > 0,
-            'any_failing': exit_dns_failing > 0,
-        }
+    from .exit_dns_health import _build_dns_summary_dict
+    exit_dns_health_summary = (
+        _build_dns_summary_dict(exit_dns_total, exit_dns_healthy, exit_dns_failing, exit_dns_untested)
+        if exit_dns_total > 0 else None
+    )
 
     return {
         "contact_validation_status": contact_validation_status,

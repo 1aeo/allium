@@ -244,14 +244,19 @@ def get_operator_exit_dns_health_summary(members: List[Dict], exit_count: int = 
     if total_exits == 0:
         return None
 
+    return _build_dns_summary_dict(total_exits, healthy, failing, untested)
+
+
+def _build_dns_summary_dict(total, healthy, failing, untested):
+    """Build the standard DNS health summary dict. Single source of truth for dict shape."""
     return {
-        'exit_count': total_exits,
+        'exit_count': total,
         'healthy': healthy,
         'failing': failing,
         'untested': untested,
-        'healthy_pct': round(100 * healthy / total_exits),
-        'failing_pct': round(100 * failing / total_exits),
-        'untested_pct': round(100 * untested / total_exits),
+        'healthy_pct': round(100 * healthy / total) if total > 0 else 0,
+        'failing_pct': round(100 * failing / total) if total > 0 else 0,
+        'untested_pct': round(100 * untested / total) if total > 0 else 0,
         'all_healthy': failing == 0 and untested == 0 and healthy > 0,
         'any_failing': failing > 0,
     }

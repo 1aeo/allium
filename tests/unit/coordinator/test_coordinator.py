@@ -506,6 +506,7 @@ class TestCoordinatorMultiAPI:
         assert "onionoo_uptime" in api_names
         assert "onionoo_bandwidth" in api_names
         assert "aroi_validation" in api_names
+        assert "exit_dns_health" in api_names
         assert "collector_consensus" in api_names
         assert "collector_descriptors" in api_names
         
@@ -806,6 +807,7 @@ class TestCoordinatorThreading:
         assert "onionoo_uptime" in api_names
         assert "onionoo_bandwidth" in api_names
         assert "aroi_validation" in api_names
+        assert "exit_dns_health" in api_names
         assert "collector_consensus" in api_names
         assert "collector_descriptors" in api_names
     

@@ -905,13 +905,21 @@ def fetch_aroi_validation(aroi_url="https://aroivalidator.1aeo.com/latest.json",
     )
 
 
-def _validate_exit_dns_health_response(data: dict) -> bool:
-    """Validator for Exit DNS Health API response structure."""
-    required_keys = ['metadata', 'results']
-    if not all(key in data for key in required_keys):
+def _validate_exit_dns_health_response(data) -> bool:
+    """Validator for Exit DNS Health API response structure with type checks."""
+    if not isinstance(data, dict):
         return False
-    metadata = data.get('metadata', {})
-    return 'timestamp' in metadata and 'dns_success_rate_percent' in metadata
+    metadata = data.get('metadata')
+    results = data.get('results')
+    if not isinstance(metadata, dict) or not isinstance(results, list):
+        return False
+    if 'timestamp' not in metadata or 'dns_success_rate_percent' not in metadata:
+        return False
+    # Spot-check result entries are dicts (check first few to avoid O(n) scan)
+    for entry in results[:5]:
+        if not isinstance(entry, dict):
+            return False
+    return True
 
 
 @handle_http_errors("Exit DNS Health", _load_cache, _save_cache, _mark_ready, _mark_stale,

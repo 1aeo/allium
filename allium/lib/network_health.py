@@ -381,7 +381,7 @@ def _integrate_aroi_validation(health_metrics, relay_set, total_relays_count):
         })
 
 
-def _integrate_exit_dns_health(health_metrics, relay_set, total_relays_count):
+def _integrate_exit_dns_health(health_metrics, relay_set):
     """Integrate Exit DNS Health metrics into health dashboard.
 
     Network-wide stats come from the API response metadata (pre-computed by the API).
@@ -392,7 +392,9 @@ def _integrate_exit_dns_health(health_metrics, relay_set, total_relays_count):
         exit_dns_health_data = getattr(relay_set, 'exit_dns_health_data', None)
         health_metrics.update(calculate_exit_dns_health_metrics(exit_dns_health_data))
     except Exception as e:
-        health_metrics['exit_dns_health_available'] = False
+        # Merge full default shape so all expected keys exist for templates
+        from .exit_dns_health import calculate_exit_dns_health_metrics
+        health_metrics.update(calculate_exit_dns_health_metrics(None))
 
 
 def calculate_network_health_metrics(relay_set):
@@ -1380,7 +1382,7 @@ def calculate_network_health_metrics(relay_set):
     _integrate_aroi_validation(health_metrics, relay_set, total_relays_count)
 
     # === EXIT DNS HEALTH METRICS ===
-    _integrate_exit_dns_health(health_metrics, relay_set, total_relays_count)
+    _integrate_exit_dns_health(health_metrics, relay_set)
 
     # === HAPPY FAMILY KEY MIGRATION METRICS ===
     # DA readiness, family-cert counts, and operator_desc_counts were all
