@@ -1,4 +1,4 @@
-{% from "macros.html" import navigation %}
+{% from "macros.html" import navigation, network_dns_health_bullet %}
 {% extends "skeleton.html" -%}
 {% set sorted_by_label = sorted_by.split(',')[0].split('.')[1] -%}
 {% block title -%}
@@ -62,9 +62,7 @@
                 </li>
             </ul>
         </li>
-        {% if relays.json.network_health.exit_dns_health_available %}
-        <li><strong>Exit DNS Health</strong>: <span style="color: #28a745;">{{ relays.json.network_health.exit_dns_health_success_formatted }} healthy</span> / <span style="color: #dc3545;">{{ relays.json.network_health.exit_dns_health_total_failures_formatted }} unhealthy</span> ({{ "%.1f"|format(relays.json.network_health.exit_dns_health_success_rate) }}% success rate, {{ relays.json.network_health.exit_dns_health_tested_formatted }} of {{ relays.json.network_health.exit_dns_health_consensus_exits_formatted }} exits tested)</li>
-        {% endif %}
+        {{ network_dns_health_bullet(relays.json.network_health) }}
         <li><strong>Sorted by</strong>: {{ sorted_by_label|replace('_', ' ')|replace('bandwidth', 'observed bandwidth') }}</li>
                     <li><strong>Key</strong>: BW = Observed Bandwidth Capacity, CW = Consensus Weight, AS = Autonomous System (network provider)</li>
     </ul>

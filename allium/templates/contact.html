@@ -1,5 +1,5 @@
 {% extends "contact-relay-list.html" %}
-{% from "macros.html" import navigation, detail_summary, aroi_validation_badge, aroi_sub_bullets, family_support_inline %}
+{% from "macros.html" import navigation, detail_summary, aroi_validation_badge, aroi_sub_bullets, family_support_inline, dns_health_bullet %}
 {% set contact_hash = relay_subset[0]['contact_md5'] %}
 {% if relay_subset[0]['contact'] %}
     {% set contact = relay_subset[0]['contact']|escape %}

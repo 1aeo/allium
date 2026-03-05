@@ -1,5 +1,5 @@
 {% extends "relay-list.html" %}
-{% from "macros.html" import navigation, detail_summary %}
+{% from "macros.html" import navigation, detail_summary, dns_health_bullet %}
 {% set country_orig = relay_subset[0]['country_name']|escape %}
 {% set country_abbr = relay_subset[0]['country']|escape %}
 {% if country_orig in sp_countries %}

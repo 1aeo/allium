@@ -273,7 +273,7 @@ Country: unknown
             <dd>
                 {% if relay.exit_dns_health_status == 'success' %}
                     <span class="status-success" title="This exit relay successfully resolved DNS queries.">Healthy</span>
-                    {% if relay.exit_dns_health_timing_ms %}<span class="text-small-muted">({{ "%.1f"|format(relay.exit_dns_health_timing_ms / 1000) }}s{% if relay.exit_dns_health_timing_percentile is not none %}, {{ relay.exit_dns_health_timing_percentile }}{{ 'st' if relay.exit_dns_health_timing_percentile % 10 == 1 and relay.exit_dns_health_timing_percentile != 11 else ('nd' if relay.exit_dns_health_timing_percentile % 10 == 2 and relay.exit_dns_health_timing_percentile != 12 else ('rd' if relay.exit_dns_health_timing_percentile % 10 == 3 and relay.exit_dns_health_timing_percentile != 13 else 'th')) }} percentile)</span>{% else %})</span>{% endif %}{% endif %}
+                    {% if relay.exit_dns_health_timing_ms %}<span class="text-small-muted">({{ "%.1f"|format(relay.exit_dns_health_timing_ms / 1000) }}s{% if relay.exit_dns_health_timing_percentile is not none %}, {{ relay.exit_dns_health_timing_percentile|ordinal }} percentile)</span>{% else %})</span>{% endif %}{% endif %}
                 {% elif relay.exit_dns_health_status == 'fail' %}
                     {% if relay.exit_dns_health_detail == 'dns_fail' %}
                         <span class="status-danger" title="The relay's DNS resolver returned NXDOMAIN (domain not found). Likely a broken, misconfigured, or censoring resolver.{% if relay.exit_dns_health_error %} Detail: {{ relay.exit_dns_health_error|escape }}{% endif %}">DNS Lookup Failed</span>
@@ -963,7 +963,7 @@ Country: unknown
                 <dt>Status</dt>
                 <dd>
                     {% if general_ts %}
-                        <span style="color: #dc3545; font-weight: bold;">Reported</span>
+                        <span class="status-danger-bold">Reported</span>
                     {% else %}
                         <span style="color: #28a745;">Not Reported</span>
                     {% endif %}
@@ -983,7 +983,7 @@ Country: unknown
                 <dt>Status</dt>
                 <dd>
                     {% if fd_exhausted %}
-                        <span style="color: #dc3545; font-weight: bold;">Reported</span>
+                        <span class="status-danger-bold">Reported</span>
                         {% if fd_exhausted.get('timestamp') %}
                          — {{ fd_exhausted['timestamp']|format_timestamp }} UTC ({{ fd_exhausted['timestamp']|format_timestamp_ago }})
                         {% endif %}
@@ -1298,25 +1298,25 @@ Country: unknown
             <dt>Status</dt>
             <dd>
                 {% if relay.exit_dns_health_status == 'success' %}
-                    <span style="color: #28a745; font-weight: bold;">Healthy</span>
+                    <span class="status-success-bold">Healthy</span>
                     {% if relay.exit_dns_health_timing_ms %}
-                        <span style="color: #666;">(avg. {{ "%.1f"|format(relay.exit_dns_health_timing_ms / 1000) }}s{% if relay.exit_dns_health_timing_percentile is not none %}, {{ relay.exit_dns_health_timing_percentile }}{{ 'st' if relay.exit_dns_health_timing_percentile % 10 == 1 and relay.exit_dns_health_timing_percentile != 11 else ('nd' if relay.exit_dns_health_timing_percentile % 10 == 2 and relay.exit_dns_health_timing_percentile != 12 else ('rd' if relay.exit_dns_health_timing_percentile % 10 == 3 and relay.exit_dns_health_timing_percentile != 13 else 'th')) }} percentile{% endif %})</span>
+                        <span class="text-small-muted">(avg. {{ "%.1f"|format(relay.exit_dns_health_timing_ms / 1000) }}s{% if relay.exit_dns_health_timing_percentile is not none %}, {{ relay.exit_dns_health_timing_percentile|ordinal }} percentile{% endif %})</span>
                     {% endif %}
                 {% elif relay.exit_dns_health_status == 'fail' %}
-                    <span style="color: #dc3545; font-weight: bold;">
+                    <span class="status-danger-bold">
                         {% if relay.exit_dns_health_detail == 'dns_fail' %}DNS Lookup Failed{% elif relay.exit_dns_health_detail == 'timeout' %}DNS Query Timeout{% elif relay.exit_dns_health_detail == 'relay_unreachable' %}Relay Unreachable{% elif relay.exit_dns_health_detail == 'dns_wrong_ip' %}DNS Returned Wrong IP{% else %}{{ relay.exit_dns_health_detail|escape }}{% endif %}
                     </span>
                     {% if relay.exit_dns_health_consecutive_failures > 0 %}
-                        <span style="color: #666;">(failed last {{ relay.exit_dns_health_consecutive_failures }} scan{{ 's' if relay.exit_dns_health_consecutive_failures != 1 }})</span>
+                        <span class="text-small-muted">(failed last {{ relay.exit_dns_health_consecutive_failures }} scan{{ 's' if relay.exit_dns_health_consecutive_failures != 1 }})</span>
                     {% endif %}
                 {% else %}
-                    <span style="color: #856404;">Not Tested</span>
+                    <span class="status-warning">Not Tested</span>
                 {% endif %}
             </dd>
 
             {% if relay.exit_dns_health_error %}
             <dt>Error</dt>
-            <dd><code style="color: #dc3545;">{{ relay.exit_dns_health_error|escape }}</code></dd>
+            <dd><code class="status-danger">{{ relay.exit_dns_health_error|escape }}</code></dd>
             {% endif %}
 
             {% if relay.exit_dns_health_query_domain %}
@@ -1329,14 +1329,14 @@ Country: unknown
             <dd>
                 {% if relay.exit_dns_health_resolved_ip %}
                     {% if relay.exit_dns_health_expected_ip and relay.exit_dns_health_resolved_ip == relay.exit_dns_health_expected_ip %}
-                        <span style="color: #28a745;">Resolved to <code>{{ relay.exit_dns_health_resolved_ip|escape }}</code></span>
+                        <span class="status-success">Resolved to <code>{{ relay.exit_dns_health_resolved_ip|escape }}</code></span>
                     {% elif relay.exit_dns_health_expected_ip %}
-                        <span style="color: #dc3545;">Resolved to <code>{{ relay.exit_dns_health_resolved_ip|escape }}</code> (expected <code>{{ relay.exit_dns_health_expected_ip|escape }}</code>)</span>
+                        <span class="status-danger">Resolved to <code>{{ relay.exit_dns_health_resolved_ip|escape }}</code> (expected <code>{{ relay.exit_dns_health_expected_ip|escape }}</code>)</span>
                     {% else %}
                         Resolved to <code>{{ relay.exit_dns_health_resolved_ip|escape }}</code>
                     {% endif %}
                 {% else %}
-                    <span style="color: #dc3545;">No Response</span>{% if relay.exit_dns_health_expected_ip %} <span style="color: #666;">(expected <code>{{ relay.exit_dns_health_expected_ip|escape }}</code>)</span>{% endif %}
+                    <span class="status-danger">No Response</span>{% if relay.exit_dns_health_expected_ip %} <span class="text-small-muted">(expected <code>{{ relay.exit_dns_health_expected_ip|escape }}</code>)</span>{% endif %}
                 {% endif %}
             </dd>
             {% endif %}
@@ -1345,11 +1345,11 @@ Country: unknown
             <dt title="Each relay is tested through multiple independent Tor circuits built via different guard relays. A relay is only marked as failing if all instances agree. If any instance succeeds, the relay is marked healthy (cross-validation recovery).">Cross-Validation</dt>
             <dd>
                 {% if relay.exit_dns_health_status == 'success' %}
-                    <span style="color: #28a745;">{{ relay.exit_dns_health_cv_success }}/{{ relay.exit_dns_health_cv_total }}</span> instances succeeded
+                    <span class="status-success">{{ relay.exit_dns_health_cv_success }}/{{ relay.exit_dns_health_cv_total }}</span> instances succeeded
                 {% else %}
-                    <span style="color: #dc3545;">{{ relay.exit_dns_health_cv_success }}/{{ relay.exit_dns_health_cv_total }}</span> instances succeeded
+                    <span class="status-danger">{{ relay.exit_dns_health_cv_success }}/{{ relay.exit_dns_health_cv_total }}</span> instances succeeded
                 {% endif %}
-                {% if relay.exit_dns_health_cv_improved %}<span style="color: #28a745;">(improved by cross-validation)</span>{% endif %}
+                {% if relay.exit_dns_health_cv_improved %}<span class="status-success">(improved by cross-validation)</span>{% endif %}
             </dd>
             {% endif %}
 
@@ -1377,9 +1377,9 @@ Country: unknown
                     <tr>
                         <td style="padding-right: 8px;" title="Cross-validation instance {{ cv_counter[0] }}, {{ inst_name }} — independent Tor circuit used to verify DNS resolution">Cross Validation Attempt {{ cv_counter[0] }}:</td>
                         <td style="padding-right: 8px;">
-                            {% if inst_data.status == 'success' %}<span style="color: #28a745;">Success</span>{% elif inst_data.status == 'dns_fail' %}<span style="color: #dc3545;">DNS Fail</span>{% elif inst_data.status == 'timeout' %}<span style="color: #856404;">Timeout</span>{% else %}<span style="color: #dc3545;">{{ inst_data.status|escape|title }}</span>{% endif %}{% if inst_data.timing %}, {{ "%.1f"|format(inst_data.timing.total_ms / 1000) }}s{% endif %}
+                            {% if inst_data.status == 'success' %}<span class="status-success">Success</span>{% elif inst_data.status == 'dns_fail' %}<span class="status-danger">DNS Fail</span>{% elif inst_data.status == 'timeout' %}<span class="status-warning">Timeout</span>{% else %}<span style="color: #dc3545;">{{ inst_data.status|escape|title }}</span>{% endif %}{% if inst_data.timing %}, {{ "%.1f"|format(inst_data.timing.total_ms / 1000) }}s{% endif %}
                         </td>
-                        <td style="font-size: 11px; color: #666;">({{ inst_name|escape }})</td>
+                        <td class="text-small-muted">({{ inst_name|escape }})</td>
                     </tr>
                 {% endfor %}
                 </table>
@@ -1387,9 +1387,9 @@ Country: unknown
             {% endif %}
         </dl>
         {% if relay.exit_dns_health_timestamp %}
-        <div style="font-size: 11px; color: #888;">Tested: {{ relay.exit_dns_health_timestamp|format_unix_timestamp }}</div>
+        <div class="text-small-muted">Tested: {{ relay.exit_dns_health_timestamp|format_unix_timestamp }}</div>
         {% endif %}
-        <div style="font-size: 11px; color: #888;">Source: <a href="https://exitdnshealth.1aeo.com" target="_blank" rel="noopener">exitdnshealth.1aeo.com</a></div>
+        <div class="text-small-muted">Source: <a href="https://exitdnshealth.1aeo.com" target="_blank" rel="noopener">exitdnshealth.1aeo.com</a></div>
         {% else %}
         <span style="color: #6c757d;">Not an exit relay — DNS health testing does not apply.</span>
         {% endif %}

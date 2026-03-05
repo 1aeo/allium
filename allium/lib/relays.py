@@ -677,21 +677,41 @@ class Relays:
     def _aggregate_dns_health_to_groups(self):
         """Aggregate per-relay DNS health into sorted groups for misc listing pages.
         
-        Called after _attach_exit_dns_health_data() so per-relay exit_dns_health_status
-        is already set. Follows same pattern as _aggregate_total_data_to_groups().
-        Stores summary dict in group_data['display']['exit_dns_health_summary'].
+        Iterates relay indices directly to avoid materializing member lists.
+        Fast bail-out via exit_count skips groups with no exit relays.
         """
-        from .exit_dns_health import get_operator_exit_dns_health_summary
         relays = self.json["relays"]
-        
         for category in self.json.get("sorted", {}):
             for key, group_data in self.json["sorted"][category].items():
-                members = [relays[idx] for idx in group_data.get("relays", [])]
-                summary = get_operator_exit_dns_health_summary(
-                    members, exit_count=group_data.get("exit_count", 0))
-                if "display" not in group_data:
-                    group_data["display"] = {}
-                group_data["display"]["exit_dns_health_summary"] = summary
+                exit_count = group_data.get("exit_count", 0)
+                display = group_data.setdefault("display", {})
+                if exit_count == 0:
+                    display["exit_dns_health_summary"] = None
+                    continue
+                healthy = failing = untested = total = 0
+                for idx in group_data.get("relays", []):
+                    status = relays[idx].get('exit_dns_health_status')
+                    if status is None:
+                        continue
+                    total += 1
+                    if status == 'success':
+                        healthy += 1
+                    elif status == 'fail':
+                        failing += 1
+                    else:
+                        untested += 1
+                if total == 0:
+                    display["exit_dns_health_summary"] = None
+                else:
+                    display["exit_dns_health_summary"] = {
+                        'exit_count': total, 'healthy': healthy,
+                        'failing': failing, 'untested': untested,
+                        'healthy_pct': round(100 * healthy / total),
+                        'failing_pct': round(100 * failing / total),
+                        'untested_pct': round(100 * untested / total),
+                        'all_healthy': failing == 0 and untested == 0 and healthy > 0,
+                        'any_failing': failing > 0,
+                    }
 
     def _reprocess_collector_data(self):
         """
