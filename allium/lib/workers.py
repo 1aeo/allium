@@ -1025,11 +1025,15 @@ def _validate_collector_cache(data):
     if fetched_at:
         try:
             fetch_time = datetime.fromisoformat(fetched_at.replace('Z', '+00:00'))
+            # Normalize to aware UTC datetime to prevent naive/aware TypeError
+            if fetch_time.tzinfo is None:
+                fetch_time = fetch_time.replace(tzinfo=timezone.utc)
             age_hours = (datetime.now(timezone.utc) - fetch_time).total_seconds() / 3600
             if age_hours > 3:
                 return False
         except Exception:
-            pass
+            # Fail closed: unparseable or invalid timestamps invalidate the cache
+            return False
     
     return True
 

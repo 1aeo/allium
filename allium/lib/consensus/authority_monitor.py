@@ -65,7 +65,13 @@ class AuthorityMonitor:
         """
         # Use cached data if recent (within 5 minutes)
         if not force and self._cached_status and self._last_check:
-            cache_age = (datetime.now(timezone.utc) - self._last_check).total_seconds()
+            # Normalize _last_check to aware UTC datetime to prevent TypeError
+            # when subtracting from datetime.now(timezone.utc). _last_check may be
+            # naive if set externally (e.g., by tests or legacy code).
+            last_check = self._last_check
+            if last_check.tzinfo is None:
+                last_check = last_check.replace(tzinfo=timezone.utc)
+            cache_age = (datetime.now(timezone.utc) - last_check).total_seconds()
             if cache_age < 300:  # 5 minutes
                 return self._cached_status
         

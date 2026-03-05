@@ -99,44 +99,47 @@ class Coordinator:
     # =========================================================================
     # The last element in each args_fn list is a progress logger placeholder.
     # _run_worker() replaces it with an API-specific logger before calling the
-    # worker function, so the actual value here doesn't matter — use None.
+    # worker function. We use a no-op callable so the placeholder is safe to
+    # call if _run_worker replacement is ever skipped (e.g., in tests).
+    _noop_logger = staticmethod(lambda *args, **kwargs: None)
+
     API_WORKER_REGISTRY = [
         {
             "name": "onionoo_details",
             "fetch_fn": fetch_onionoo_details,
             "group": "details",  # Included in both 'details' and 'all' modes
-            "args_fn": lambda self: [self.onionoo_details_url, None],
+            "args_fn": lambda self: [self.onionoo_details_url, self._noop_logger],
         },
         {
             "name": "onionoo_uptime",
             "fetch_fn": fetch_onionoo_uptime,
             "group": "all",
-            "args_fn": lambda self: [self.onionoo_uptime_url, None],
+            "args_fn": lambda self: [self.onionoo_uptime_url, self._noop_logger],
         },
         {
             "name": "onionoo_bandwidth",
             "fetch_fn": fetch_onionoo_bandwidth,
             "group": "all",
-            "args_fn": lambda self: [self.onionoo_bandwidth_url, self.bandwidth_cache_hours, None],
+            "args_fn": lambda self: [self.onionoo_bandwidth_url, self.bandwidth_cache_hours, self._noop_logger],
         },
         {
             "name": "aroi_validation",
             "fetch_fn": fetch_aroi_validation,
             "group": "all",
-            "args_fn": lambda self: [self.aroi_url, None],
+            "args_fn": lambda self: [self.aroi_url, self._noop_logger],
         },
         {
             "name": "collector_consensus",
             "fetch_fn": fetch_collector_consensus_data,
             "group": "all",
-            "args_fn": lambda self: [None, None],
+            "args_fn": lambda self: [None, self._noop_logger],
             "enabled_fn": None,  # Checked dynamically in _build_api_workers
         },
         {
             "name": "collector_descriptors",
             "fetch_fn": fetch_collector_descriptors,
             "group": "all",
-            "args_fn": lambda self: [None],
+            "args_fn": lambda self: [self._noop_logger],
             "enabled_fn": None,  # Checked dynamically in _build_api_workers
         },
     ]
@@ -238,6 +241,14 @@ class Coordinator:
             self._log_progress_without_increment(formatted_message)
         
         return api_logger
+
+    def _log_progress(self, message):
+        """Log progress message with step increment.
+        
+        Compatibility wrapper preserving the original _log_progress interface.
+        Forwards to _log_progress_with_step_increment for consistent behavior.
+        """
+        self._log_progress_with_step_increment(message)
 
     def _log_progress_without_increment(self, message):
         """Log progress message without incrementing progress step (for intermediate messages)"""

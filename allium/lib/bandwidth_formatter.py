@@ -149,15 +149,15 @@ _formatter_bits = BandwidthFormatter(use_bits=True)
 _formatter_bytes = BandwidthFormatter(use_bits=False)
 
 
-def _get_formatter(use_bits=False):
+def _get_formatter(*, use_bits: bool = False) -> BandwidthFormatter:
     """Get cached formatter instance for the given use_bits setting."""
     return _formatter_bits if use_bits else _formatter_bytes
 
 
 # Convenience functions for backwards compatibility and Jinja2 filters
-def determine_unit(bandwidth_bytes, use_bits=False):
+def determine_unit(bandwidth_bytes, *, use_bits: bool = False):
     """Convenience function that determines appropriate bandwidth unit."""
-    return _get_formatter(use_bits).determine_unit(bandwidth_bytes)
+    return _get_formatter(use_bits=use_bits).determine_unit(bandwidth_bytes)
 
 
 def get_divisor_for_unit(unit):
@@ -171,13 +171,21 @@ def format_bandwidth_with_unit(bandwidth_bytes, unit, decimal_places=2):
 
 
 def determine_unit_filter(bandwidth_bytes, use_bits=False):
-    """Jinja2 filter version of determine_unit."""
-    return _get_formatter(use_bits).determine_unit(bandwidth_bytes)
+    """Jinja2 filter version of determine_unit.
+    
+    Note: use_bits remains positional because Jinja2 filter syntax
+    ``value|determine_unit(relays.use_bits)`` passes it positionally.
+    """
+    return _get_formatter(use_bits=use_bits).determine_unit(bandwidth_bytes)
 
 
 def format_bandwidth_filter(bandwidth_bytes, unit=None, use_bits=False, decimal_places=2):
-    """Jinja2 filter for formatting bandwidth with optional unit specification."""
-    return _get_formatter(use_bits).format_bandwidth(bandwidth_bytes, unit, decimal_places)
+    """Jinja2 filter for formatting bandwidth with optional unit specification.
+    
+    Note: use_bits remains positional because Jinja2 filter syntax passes
+    arguments positionally.
+    """
+    return _get_formatter(use_bits=use_bits).format_bandwidth(bandwidth_bytes, unit, decimal_places)
 
 
 # =============================================================================

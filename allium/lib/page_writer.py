@@ -690,17 +690,17 @@ def write_pages_by_key(relay_set, k):
     page_count = render_time = io_time = 0
     
     for v in sorted_values:
-        # Sanitize the value to prevent directory traversal attacks
-        v = _sanitize_path_component(v)
         i = relay_set.json["sorted"][k][v]
         members = []
 
         for m_relay in i["relays"]:
             members.append(relay_set.json["relays"][m_relay])
+        # Sanitize for filesystem paths only (raw v used for data lookup above)
+        v_safe = _sanitize_path_component(v)
         if k == "flag":
-            dir_path = os.path.join(output_path, v.lower())
+            dir_path = os.path.join(output_path, v_safe.lower())
         else:
-            dir_path = os.path.join(output_path, v)
+            dir_path = os.path.join(output_path, v_safe)
 
         os.makedirs(dir_path, exist_ok=True)
         # relay_subset passed directly to template for thread safety (no shared state)
@@ -986,12 +986,14 @@ def write_pages_parallel(relay_set, k, sorted_values, template, output_path, the
     vanity_url_tasks = []  # Collect vanity URL tasks for post-processing
     
     for v in sorted_values:
-        v = _sanitize_path_component(v)
         i = relay_set.json["sorted"][k][v]
-        dir_path = os.path.join(output_path, v.lower() if k == "flag" else v)
+        # Sanitize for filesystem paths only (raw v used for data lookup above and by workers)
+        v_safe = _sanitize_path_component(v)
+        dir_path = os.path.join(output_path, v_safe.lower() if k == "flag" else v_safe)
         os.makedirs(dir_path, exist_ok=True)
         html_path = os.path.join(dir_path, "index.html")
         # OPTIMIZED: Pass only (html_path, value) - workers build template args from forked memory
+        # Raw v is passed so workers can look up data in relay_set.json["sorted"][k][v]
         page_args.append((html_path, v))
         
         # Collect vanity URL tasks for contact pages (to be processed after parallel generation)
