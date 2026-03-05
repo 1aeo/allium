@@ -915,8 +915,8 @@ def _validate_exit_dns_health_response(data) -> bool:
         return False
     if 'timestamp' not in metadata or 'dns_success_rate_percent' not in metadata:
         return False
-    # Spot-check result entries are dicts (check first few to avoid O(n) scan)
-    for entry in results[:5]:
+    # Validate all result entries are dicts
+    for entry in results:
         if not isinstance(entry, dict):
             return False
     return True

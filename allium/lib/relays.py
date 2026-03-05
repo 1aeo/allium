@@ -685,7 +685,7 @@ class Relays:
         from .exit_dns_health import _build_dns_summary_dict
         relays = self.json["relays"]
         for category in self.json.get("sorted", {}):
-            for key, group_data in self.json["sorted"][category].items():
+            for _key, group_data in self.json["sorted"][category].items():
                 exit_count = group_data.get("exit_count", 0)
                 display = group_data.setdefault("display", {})
                 if exit_count == 0:

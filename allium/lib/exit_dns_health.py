@@ -33,8 +33,16 @@ _UNTESTED_DEFAULTS.update({
     'exit_dns_health_status': 'untested',
     'exit_dns_health_detail': 'untested',
     'exit_dns_health_consecutive_failures': 0,
-    'exit_dns_health_cv_per_instance': {},
+    # NOTE: exit_dns_health_cv_per_instance is set to a fresh {} per relay
+    # in _make_untested_defaults() to avoid shared mutable state.
 })
+
+
+def _make_untested_defaults():
+    """Return a fresh copy of untested defaults with a new dict for cv_per_instance."""
+    d = _UNTESTED_DEFAULTS.copy()
+    d['exit_dns_health_cv_per_instance'] = {}
+    return d
 
 # Mapping from API metadata keys → metrics dict keys for calculate_exit_dns_health_metrics.
 # Simple 1:1 integer fields that just need metadata.get(api_key, 0).
@@ -76,25 +84,30 @@ def build_exit_dns_health_map(exit_dns_health_data: Optional[Dict]) -> Dict[str,
 
     health_map = {}
     for result in exit_dns_health_data.get('results', []):
+        if not isinstance(result, dict):
+            continue
         fp = result.get('exit_fingerprint')
-        if fp:
-            cv = result.get('cv') or {}
-            health_map[fp.upper()] = {
-                'status': result.get('status', 'unknown'),
-                'error': result.get('error'),
-                'consecutive_failures': result.get('consecutive_failures', 0),
-                'timing_ms': (result.get('timing') or {}).get('total_ms'),
-                'query_domain': result.get('query_domain'),
-                'first_hop': result.get('first_hop'),
-                'exit_address': result.get('exit_address'),
-                'resolved_ip': result.get('resolved_ip'),
-                'expected_ip': result.get('expected_ip'),
-                'cv_instances_success': cv.get('instances_success'),
-                'cv_instances_total': cv.get('instances_total'),
-                'cv_improved': cv.get('improved', False),
-                'cv_per_instance': cv.get('per_instance', {}),
-                'timestamp': result.get('timestamp'),
-            }
+        if not fp:
+            continue
+        cv = result.get('cv')
+        if not isinstance(cv, dict):
+            cv = {}
+        health_map[str(fp).upper()] = {
+            'status': result.get('status', 'unknown'),
+            'error': result.get('error'),
+            'consecutive_failures': result.get('consecutive_failures', 0),
+            'timing_ms': (result.get('timing') or {}).get('total_ms'),
+            'query_domain': result.get('query_domain'),
+            'first_hop': result.get('first_hop'),
+            'exit_address': result.get('exit_address'),
+            'resolved_ip': result.get('resolved_ip'),
+            'expected_ip': result.get('expected_ip'),
+            'cv_instances_success': cv.get('instances_success'),
+            'cv_instances_total': cv.get('instances_total'),
+            'cv_improved': cv.get('improved', False),
+            'cv_per_instance': cv.get('per_instance', {}),
+            'timestamp': result.get('timestamp'),
+        }
     return health_map
 
 
@@ -135,7 +148,7 @@ def attach_exit_dns_health_to_relays(relays: List[Dict], health_map: Dict[str, D
         fp = relay.get('fingerprint', '').upper()
         entry = health_map.get(fp)
         if not entry:
-            relay.update(_UNTESTED_DEFAULTS)
+            relay.update(_make_untested_defaults())
             continue
 
         status = entry['status']

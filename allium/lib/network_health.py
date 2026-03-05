@@ -391,7 +391,7 @@ def _integrate_exit_dns_health(health_metrics, relay_set):
         from .exit_dns_health import calculate_exit_dns_health_metrics
         exit_dns_health_data = getattr(relay_set, 'exit_dns_health_data', None)
         health_metrics.update(calculate_exit_dns_health_metrics(exit_dns_health_data))
-    except Exception as e:
+    except Exception:
         # Merge full default shape so all expected keys exist for templates
         from .exit_dns_health import calculate_exit_dns_health_metrics
         health_metrics.update(calculate_exit_dns_health_metrics(None))
