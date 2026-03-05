@@ -552,6 +552,8 @@ class CollectorFetcher:
             'has_bandwidth_file_headers': False,
             'consensus_methods': [],  # Methods this authority supports (from header)
             'params': {},  # Voted consensus params (from header)
+            'published': None,  # When this vote was published (UTC)
+            'valid_after': None,  # Consensus period this vote is for (UTC)
         }
         
         lines = content.split('\n')
@@ -567,6 +569,12 @@ class CollectorFetcher:
             # Check for bandwidth-file-headers (indicates bandwidth authority)
             elif line.startswith('bandwidth-file-headers'):
                 vote['has_bandwidth_file_headers'] = True
+            
+            # Parse vote header timestamps (before relay entries)
+            elif line.startswith('published ') and not current_relay:
+                vote['published'] = line[len('published '):]
+            elif line.startswith('valid-after ') and not current_relay:
+                vote['valid_after'] = line[len('valid-after '):]
             
             # Parse consensus-methods header (methods this authority supports)
             elif line.startswith('consensus-methods '):
@@ -857,9 +865,18 @@ class CollectorFetcher:
         
         total_voters = len(per_authority)
         
+        # Track the latest vote valid-after timestamp across all authorities.
+        # When CollecTor lags behind the live network, this lets templates show
+        # how old the vote data actually is.
+        vote_valid_afters = []
+        for auth_name, vote_data in self.votes.items():
+            if vote_data and vote_data.get('valid_after'):
+                vote_valid_afters.append(vote_data['valid_after'])
+        latest_vote_valid_after = max(vote_valid_afters) if vote_valid_afters else None
+        
         # Get the ACTUAL current consensus method from the consensus document
         # This is the authoritative source — we never compute it ourselves
-        current_method = self._fetch_current_consensus_method()
+        current_method, consensus_valid_after = self._fetch_current_consensus_method()
         
         # Max method any authority supports (shows what's coming next)
         all_methods = [m for methods in per_authority.values() for m in methods]
@@ -885,17 +902,22 @@ class CollectorFetcher:
             'per_authority': per_authority,
             'method_support_counts': dict(method_counts),
             'family_params_votes': family_params,
+            'consensus_valid_after': consensus_valid_after,
+            'latest_vote_valid_after': latest_vote_valid_after,
         }
     
-    def _fetch_current_consensus_method(self) -> Optional[int]:
+    def _fetch_current_consensus_method(self) -> Tuple[Optional[int], Optional[str]]:
         """
-        Fetch the actual consensus-method from the latest CollecTor consensus document.
+        Fetch the actual consensus-method and valid-after from the latest
+        CollecTor consensus document.
         
         Only reads the first few lines of the consensus header to extract
-        the 'consensus-method' line. This is the authoritative value from Tor.
+        the 'consensus-method' and 'valid-after' lines. These are the
+        authoritative values from Tor.
         
         Returns:
-            int: The current consensus method number, or None on failure.
+            Tuple of (consensus_method, valid_after_timestamp).
+            Either or both may be None on failure.
         """
         try:
             # Get listing of consensus files
@@ -906,14 +928,15 @@ class CollectorFetcher:
             matches = consensus_pattern.findall(html)
             if not matches:
                 logger.warning("No consensus files found on CollecTor")
-                return None
+                return None, None
             
             latest_file = max(matches)
             url = f"{COLLECTOR_BASE}/recent/relay-descriptors/consensuses/{latest_file}"
             
-            # Fetch only the first 4KB — consensus-method is in the first 5 lines.
-            # We intentionally read only 4KB (not the full ~30MB consensus document),
-            # so socket-level timeout is safe here (one small read, not a slow-drip risk).
+            # Fetch only the first 4KB — consensus-method and valid-after are
+            # in the first 5 lines. We intentionally read only 4KB (not the
+            # full ~30MB consensus document), so socket-level timeout is safe
+            # here (one small read, not a slow-drip risk).
             # Wrapped in retry for transient connection failures.
             def _fetch_header():
                 req = urllib.request.Request(url, headers={'User-Agent': 'Allium/1.0'})
@@ -927,16 +950,26 @@ class CollectorFetcher:
                 operation_name="consensus method header",
             )
             
+            method = None
+            valid_after = None
             for line in header_text.split('\n'):
                 if line.startswith('consensus-method '):
-                    return int(line.split()[1])
+                    try:
+                        method = int(line.split()[1])
+                    except (ValueError, IndexError):
+                        pass
+                elif line.startswith('valid-after '):
+                    valid_after = line[len('valid-after '):]
+                if method is not None and valid_after is not None:
+                    break
             
-            logger.warning("consensus-method line not found in consensus header")
-            return None
+            if method is None:
+                logger.warning("consensus-method line not found in consensus header")
+            return method, valid_after
             
         except Exception as e:
             logger.warning(f"Failed to fetch consensus method from consensus document: {e}")
-            return None
+            return None, None
     
     def _validate_fingerprint(self, fingerprint: str) -> bool:
         """Validate fingerprint is 40 hex characters."""

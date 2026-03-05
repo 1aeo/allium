@@ -1458,6 +1458,9 @@ def calculate_network_health_metrics(relay_set):
         # Consensus params (None = not voted on yet, auto-populates when they appear)
         'hf_use_family_ids': hf_use_family_ids,
         'hf_use_family_lists': hf_use_family_lists,
+        # Data freshness timestamps from CollecTor (helps identify stale data)
+        'hf_consensus_valid_after': cm_info.get('consensus_valid_after'),
+        'hf_vote_valid_after': cm_info.get('latest_vote_valid_after'),
     })
     
     # OPTIMIZATION: Pre-format all template strings to eliminate Jinja2 formatting overhead
