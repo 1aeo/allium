@@ -474,6 +474,23 @@ def collect_api_diagnostics(relay_set, args):
         item_count = _get_item_count(relay_set, metadata) if enabled else None
         extra_info = _get_extra_info(relay_set, metadata) if enabled else None
 
+        # Extract upstream data timestamps for CollecTor APIs.
+        # Cache age tracks when WE last fetched; these track how old the
+        # UPSTREAM data is (CollecTor can lag hours behind the live network).
+        upstream_data_timestamps = {}
+        if enabled and api_name == "collector_consensus":
+            data = _get_api_data(relay_set, metadata)
+            if data:
+                cm_info = data.get('consensus_method_info', {})
+                upstream_data_timestamps = {
+                    'vote_valid_after': cm_info.get('latest_vote_valid_after'),
+                    'consensus_valid_after': cm_info.get('consensus_valid_after'),
+                    'consensus_method': cm_info.get('current_method'),
+                    'max_method': cm_info.get('max_method'),
+                    'max_method_support': cm_info.get('max_method_support'),
+                    'total_voters': cm_info.get('total_voters'),
+                }
+
         api_diagnostics.append({
             "name": api_name,
             "display_name": metadata["display_name"],
@@ -499,6 +516,7 @@ def collect_api_diagnostics(relay_set, args):
             "extra_info": extra_info,
             "enabled": enabled,
             "affected_sections": metadata["affected_sections"],
+            "upstream_data": upstream_data_timestamps,
         })
 
     # Build section dependencies with freshness propagation

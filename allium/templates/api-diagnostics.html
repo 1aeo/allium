@@ -347,6 +347,23 @@ API Diagnostics
                         <span style="color:#6c757d;">({{ api.extra_info }})</span>
                     {% endif %}
                 </dd>
+                {% if api.upstream_data and api.upstream_data.vote_valid_after %}
+                <dt>Upstream Vote Data</dt>
+                <dd>
+                    {{ api.upstream_data.vote_valid_after }} UTC
+                    <span style="color:#6c757d;" title="The valid-after timestamp from the latest CollecTor vote file. CollecTor can lag hours behind the live Tor network — this shows the actual age of the vote data, not just when we cached it.">(CollecTor may lag behind live network)</span>
+                </dd>
+                {% if api.upstream_data.consensus_valid_after %}
+                <dt>Upstream Consensus</dt>
+                <dd>
+                    {{ api.upstream_data.consensus_valid_after }} UTC
+                    · Method <strong>{{ api.upstream_data.consensus_method|default('?', true) }}</strong>
+                    {% if api.upstream_data.max_method and api.upstream_data.consensus_method and api.upstream_data.max_method > api.upstream_data.consensus_method %}
+                        <span style="color:#6c757d;">· Max {{ api.upstream_data.max_method }} ({{ api.upstream_data.max_method_support }}/{{ api.upstream_data.total_voters }} DAs)</span>
+                    {% endif %}
+                </dd>
+                {% endif %}
+                {% endif %}
                 {% else %}
                 <dt>Status</dt>
                 <dd><span class="status-muted">Disabled (--apis={{ diag.apis_mode }})</span></dd>
