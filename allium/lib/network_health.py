@@ -663,20 +663,19 @@ def calculate_network_health_metrics(relay_set):
         if first_seen_str:
             first_seen = parse_onionoo_timestamp(first_seen_str)
             if first_seen:
-                # Convert to naive datetime for comparison (since time_thresholds use naive datetimes)
-                first_seen_naive = first_seen.replace(tzinfo=None)
-                age_days = (now - first_seen_naive).days
+                # Both now and first_seen are timezone-aware UTC datetimes
+                age_days = (now - first_seen).days
                 if age_days >= 0:  # Sanity check
                     relay_ages_days.append(age_days)
                     
                     # Count new relays for existing metrics
-                    if first_seen_naive >= day_ago:
+                    if first_seen >= day_ago:
                         new_relays_24h += 1
-                    if first_seen_naive >= month_ago:
+                    if first_seen >= month_ago:
                         new_relays_30d += 1
-                    if first_seen_naive >= year_ago:
+                    if first_seen >= year_ago:
                         new_relays_1y += 1
-                    if first_seen_naive >= six_months_ago:
+                    if first_seen >= six_months_ago:
                         new_relays_6m += 1
         
         # Platform tracking

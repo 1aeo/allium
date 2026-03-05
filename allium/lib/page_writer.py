@@ -30,6 +30,46 @@ from .time_utils import format_time_ago, format_timestamp, format_timestamp_ago
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
 
 
+def _sanitize_path_component(value: str) -> str:
+    """Sanitize a string for safe use as a filesystem path component.
+    
+    Guards against directory traversal, path injection, and OS-specific edge cases:
+    - Strips Windows drive prefixes (e.g. "C:") and backslashes
+    - Removes control characters and null bytes
+    - Replaces characters outside a safe whitelist with underscores
+    - Trims leading/trailing dots and underscores to avoid "." / ".." results
+    - Returns "_" if the result is empty or still equals "." / ".."
+    - Appends a short hash suffix when normalization changes the value, preventing
+      distinct raw inputs (e.g. "A B", "A/B", "A_B") from colliding on disk
+    - Truncates to 255 characters (common filesystem limit)
+    """
+    import hashlib
+    import re
+    raw_value = str(value)
+    # Strip Windows drive letter prefix (e.g. "C:", "D:")
+    if len(value) >= 2 and value[1] == ':' and value[0].isalpha():
+        value = value[2:]
+    # Remove backslashes, forward slashes, null bytes, and control characters
+    value = value.replace('\\', '_').replace('/', '_').replace('\x00', '')
+    value = re.sub(r'[\x00-\x1f\x7f]', '', value)
+    # Remove traversal sequences
+    value = value.replace('..', '')
+    # Replace any character not in safe whitelist (letters, digits, hyphen, underscore, dot)
+    value = re.sub(r'[^A-Za-z0-9_.\-]', '_', value)
+    # Trim leading/trailing dots and underscores
+    value = value.strip('._')
+    # Keep room for deterministic suffix when normalization changes value
+    value = value[:240]
+    # Final safety: reject empty or traversal-like results
+    if not value or value in ('.', '..'):
+        value = '_'
+    # Prevent collisions when different raw inputs normalize to the same component
+    if value != raw_value:
+        suffix = hashlib.sha1(raw_value.encode("utf-8")).hexdigest()[:10]
+        value = f"{value}-{suffix}"
+    return value[:255]
+
+
 
 # Template bytecode cache directory for improved rendering performance
 TEMPLATE_CACHE_DIR = os.path.join(os.path.dirname(ABS_PATH), ".jinja2_cache")
@@ -745,17 +785,17 @@ def write_pages_by_key(relay_set, k):
     page_count = render_time = io_time = 0
     
     for v in sorted_values:
-        # Sanitize the value to prevent directory traversal attacks
-        v = v.replace("..", "").replace("/", "_")
         i = relay_set.json["sorted"][k][v]
         members = []
 
         for m_relay in i["relays"]:
             members.append(relay_set.json["relays"][m_relay])
+        # Sanitize for filesystem paths only (raw v used for data lookup above)
+        v_safe = _sanitize_path_component(v)
         if k == "flag":
-            dir_path = os.path.join(output_path, v.lower())
+            dir_path = os.path.join(output_path, v_safe.lower())
         else:
-            dir_path = os.path.join(output_path, v)
+            dir_path = os.path.join(output_path, v_safe)
 
         os.makedirs(dir_path, exist_ok=True)
         # relay_subset passed directly to template for thread safety (no shared state)
@@ -906,18 +946,14 @@ def write_pages_by_key(relay_set, k):
             aroi_domain = members[0].get("aroi_domain")
             if aroi_domain and aroi_domain != "none" and aroi_domain in relay_set.validated_aroi_domains:
                 # Lowercase domain for case-insensitive URLs
-                safe_domain = aroi_domain.lower().replace("..", "").replace("/", "_")
+                safe_domain = _sanitize_path_component(aroi_domain.lower())
                 # Use parent directory (root level) instead of output_path (contact subdirectory)
                 vanity_dir = os.path.join(os.path.dirname(output_path), safe_domain)
                 try:
                     os.makedirs(vanity_dir, exist_ok=True)
-                    # Read the HTML and adjust paths for different directory depth
-                    # Contact pages are depth 2 (../../) but vanity URLs are depth 1 (../)
-                    with open(html_path, 'r', encoding='utf8') as f:
-                        html_content = f.read()
-                    # Adjust path prefix from depth 2 to depth 1
-                    adjusted_html = html_content.replace('href="../../', 'href="../').replace('src="../../', 'src="../')
-                    # Write adjusted HTML to vanity URL directory
+                    # Adjust path prefix from depth 2 (../../) to depth 1 (../)
+                    # Uses the in-memory rendered string to avoid reading the file back from disk
+                    adjusted_html = rendered.replace('href="../../', 'href="../').replace('src="../../', 'src="../')
                     with open(os.path.join(vanity_dir, "index.html"), 'w', encoding='utf8') as f:
                         f.write(adjusted_html)
                 except OSError:
@@ -1051,12 +1087,14 @@ def write_pages_parallel(relay_set, k, sorted_values, template, output_path, the
     vanity_url_tasks = []  # Collect vanity URL tasks for post-processing
     
     for v in sorted_values:
-        v = v.replace("..", "").replace("/", "_")
         i = relay_set.json["sorted"][k][v]
-        dir_path = os.path.join(output_path, v.lower() if k == "flag" else v)
+        # Sanitize for filesystem paths only (raw v used for data lookup above and by workers)
+        v_safe = _sanitize_path_component(v)
+        dir_path = os.path.join(output_path, v_safe.lower() if k == "flag" else v_safe)
         os.makedirs(dir_path, exist_ok=True)
         html_path = os.path.join(dir_path, "index.html")
         # OPTIMIZED: Pass only (html_path, value) - workers build template args from forked memory
+        # Raw v is passed so workers can look up data in relay_set.json["sorted"][k][v]
         page_args.append((html_path, v))
         
         # Collect vanity URL tasks for contact pages (to be processed after parallel generation)
@@ -1080,7 +1118,7 @@ def write_pages_parallel(relay_set, k, sorted_values, template, output_path, the
         if vanity_url_tasks:
             for html_path, aroi_domain, contact_output_path in vanity_url_tasks:
                 try:
-                    safe_domain = aroi_domain.lower().replace("..", "").replace("/", "_")
+                    safe_domain = _sanitize_path_component(aroi_domain.lower())
                     vanity_dir = os.path.join(os.path.dirname(contact_output_path), safe_domain)
                     os.makedirs(vanity_dir, exist_ok=True)
                     with open(html_path, 'r', encoding='utf8') as f:

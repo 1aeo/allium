@@ -2,7 +2,7 @@
 
 import base64
 import copy
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 from allium.lib.workers import fetch_collector_descriptors
@@ -42,7 +42,7 @@ def _descriptor_text(fingerprint, published, with_family_cert=False, family_key_
 
 
 def _recent_filename(hours_ago, minutes_offset=0):
-    ts = datetime.utcnow() - timedelta(hours=hours_ago, minutes=minutes_offset)
+    ts = datetime.now(timezone.utc) - timedelta(hours=hours_ago, minutes=minutes_offset)
     return ts.strftime("%Y-%m-%d-%H-%M-%S") + "-server-descriptors"
 
 
@@ -57,7 +57,7 @@ def _base_cache(fingerprint, family_key):
         "all_seen_fingerprints": [fingerprint],
         "family_cert_groups": {family_key: [fingerprint]},
         "coverage_hours": 36,
-        "fetched_at": datetime.utcnow().isoformat(),
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -126,7 +126,7 @@ def test_degraded_source_allows_upgrades_but_freezes_downgrades():
     fp_new = "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
     key_old = "11" * 32
     key_new = "22" * 32
-    published = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    published = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
     cache = _base_cache(fp_old, key_old)
     filename = _recent_filename(hours_ago=3, minutes_offset=5)
@@ -157,7 +157,7 @@ def test_degraded_source_allows_upgrades_but_freezes_downgrades():
 def test_fresh_source_first_no_cert_observation_stays_pending():
     fp_old = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
     key_old = "11" * 32
-    published = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    published = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
     cache = _base_cache(fp_old, key_old)
     filename = _recent_filename(hours_ago=1, minutes_offset=0)
@@ -183,7 +183,7 @@ def test_fresh_source_first_no_cert_observation_stays_pending():
 def test_fresh_source_second_no_cert_observation_confirms_downgrade():
     fp_old = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
     key_old = "11" * 32
-    published = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    published = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
     cache = _base_cache(fp_old, key_old)
     filename = _recent_filename(hours_ago=1, minutes_offset=0)
@@ -216,8 +216,8 @@ def test_fresh_source_second_no_cert_observation_confirms_downgrade():
 def test_fresh_source_large_published_delta_confirms_on_first_observation():
     fp_old = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
     key_old = "11" * 32
-    old_cert_published = (datetime.utcnow() - timedelta(hours=30)).strftime("%Y-%m-%d %H:%M:%S")
-    no_cert_published = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    old_cert_published = (datetime.now(timezone.utc) - timedelta(hours=30)).strftime("%Y-%m-%d %H:%M:%S")
+    no_cert_published = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
     cache = _base_cache(fp_old, key_old)
     cache["hf_transition_state"] = {
@@ -247,7 +247,7 @@ def test_fresh_source_large_published_delta_confirms_on_first_observation():
 def test_stale_source_without_prior_cache_uses_raw_data():
     fp_new = "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
     key_new = "22" * 32
-    published = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    published = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
     filename = _recent_filename(hours_ago=8, minutes_offset=0)
     url = f"{BASE_URL}{filename}"
@@ -317,7 +317,7 @@ def test_backward_compatible_file_cache_without_published_maps():
 def test_fresh_degraded_fresh_sequence_preserves_pending_then_confirms():
     fp_old = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
     key_old = "11" * 32
-    published = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    published = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     cache = _base_cache(fp_old, key_old)
 
     fresh_filename = _recent_filename(hours_ago=1, minutes_offset=0)

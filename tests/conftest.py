@@ -273,7 +273,6 @@ def patch_relays_methods():
             _sort_by_observed_bandwidth=MagicMock(),
             _trim_platform=MagicMock(),
             _add_hashed_contact=MagicMock(),
-            _process_aroi_contacts=MagicMock(),
             _preprocess_template_data=MagicMock(),
             _categorize=MagicMock(),
             _generate_aroi_leaderboards=MagicMock(),

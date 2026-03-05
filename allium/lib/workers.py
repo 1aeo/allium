@@ -17,7 +17,7 @@ import urllib.error
 import socket
 import threading
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from .error_handlers import handle_file_io_errors, handle_http_errors, handle_json_errors
 
@@ -1084,11 +1084,15 @@ def _validate_collector_cache(data):
     if fetched_at:
         try:
             fetch_time = datetime.fromisoformat(fetched_at.replace('Z', '+00:00'))
-            age_hours = (datetime.utcnow() - fetch_time.replace(tzinfo=None)).total_seconds() / 3600
+            # Normalize to aware UTC datetime to prevent naive/aware TypeError
+            if fetch_time.tzinfo is None:
+                fetch_time = fetch_time.replace(tzinfo=timezone.utc)
+            age_hours = (datetime.now(timezone.utc) - fetch_time).total_seconds() / 3600
             if age_hours > 3:
                 return False
         except Exception:
-            pass
+            # Fail closed: unparseable or invalid timestamps invalidate the cache
+            return False
     
     return True
 
@@ -1102,12 +1106,16 @@ def fetch_collector_data(progress_logger=None):
 
 
 def _parse_descriptor_listing_timestamp(filename):
-    """Parse recent descriptor filename timestamp."""
+    """Parse recent descriptor filename timestamp.
+    
+    Returns timezone-aware UTC datetime for safe comparison with other
+    timezone-aware datetimes throughout the codebase.
+    """
     if not filename:
         return None
     try:
         ts_str = filename.replace('-server-descriptors', '')
-        return datetime.strptime(ts_str, '%Y-%m-%d-%H-%M-%S')
+        return datetime.strptime(ts_str, '%Y-%m-%d-%H-%M-%S').replace(tzinfo=timezone.utc)
     except (ValueError, TypeError):
         return None
 
@@ -1251,7 +1259,7 @@ def fetch_collector_descriptors(progress_logger=None):
         latest_recent_file_ts = _parse_descriptor_listing_timestamp(all_files[-1])
         source_age_hours = None
         if latest_recent_file_ts is not None:
-            source_age_hours = (datetime.utcnow() - latest_recent_file_ts).total_seconds() / 3600
+            source_age_hours = (datetime.now(timezone.utc) - latest_recent_file_ts).total_seconds() / 3600
         source_freshness = _classify_descriptor_freshness(source_age_hours)
         is_critical_stale = (
             source_age_hours is not None
@@ -1270,7 +1278,7 @@ def fetch_collector_descriptors(progress_logger=None):
 
         # Step 2: Select files from the last COVERAGE_HOURS by parsing timestamps
         # Filename format: YYYY-MM-DD-HH-MM-SS-server-descriptors
-        cutoff = datetime.utcnow() - timedelta(hours=COVERAGE_HOURS)
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=COVERAGE_HOURS)
         target_files = []
         for fname in all_files:
             file_time = _parse_descriptor_listing_timestamp(fname)
@@ -1456,7 +1464,7 @@ def fetch_collector_descriptors(progress_logger=None):
         final_fp_to_key = dict(raw_fp_to_key)
         pending_no_cert = {}
         last_cert_published = {}
-        now_iso = datetime.utcnow().isoformat()
+        now_iso = datetime.now(timezone.utc).isoformat()
 
         if has_valid_cache:
             prior_line_cert_fps = {fp.upper() for fp in cached_data.get('family_cert_fingerprints', [])}
@@ -1556,7 +1564,7 @@ def fetch_collector_descriptors(progress_logger=None):
             'all_seen_fingerprints': sorted(final_seen_fps),
             'family_cert_groups': family_cert_groups,
             'coverage_hours': COVERAGE_HOURS,
-            'fetched_at': datetime.utcnow().isoformat(),
+            'fetched_at': datetime.now(timezone.utc).isoformat(),
             'source_latest_file_ts': latest_recent_file_ts.isoformat() if latest_recent_file_ts else None,
             'source_age_hours': round(source_age_hours, 3) if source_age_hours is not None else None,
             'source_freshness': source_freshness,

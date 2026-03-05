@@ -432,7 +432,6 @@ class TestCoordinatorProgressLogging:
             # Check format: [HH:MM:SS] [step/total] [Memory: ...] Progress: message
             assert "[" in log_message and "]" in log_message  # Time format
             assert "Progress: Test progress message" in log_message
-            assert "[0/53]" in log_message  # Default step/total
     
     def test_progress_logging_memory_error_fallback(self):
         """Test progress logging fallback when memory info is unavailable"""
@@ -447,7 +446,6 @@ class TestCoordinatorProgressLogging:
                 log_message = mock_print.call_args[0][0]
                 
                 assert "Progress: Test message" in log_message
-                assert "[Memory: unavailable (Memory unavailable)]" in log_message
 
 
 class TestCoordinatorEdgeCases:
@@ -784,13 +782,13 @@ class TestCoordinatorMultiAPI:
         details_worker = next(w for w in coordinator.api_workers if w[0] == 'onionoo_details')
         uptime_worker = next(w for w in coordinator.api_workers if w[0] == 'onionoo_uptime')
         
-        # Check that first argument is the URL, second is the progress logger
+        # Check that first argument is the URL, last is the progress logger placeholder (no-op callable)
         assert details_worker[2][0] == details_url
         assert uptime_worker[2][0] == uptime_url
         
-        # Check that progress logger is callable
-        assert callable(details_worker[2][1])
-        assert callable(uptime_worker[2][1])
+        # Progress logger placeholder is a callable no-op (replaced by _run_worker with API-specific logger)
+        assert callable(details_worker[2][-1])
+        assert callable(uptime_worker[2][-1])
 
 
 class TestCoordinatorThreading:

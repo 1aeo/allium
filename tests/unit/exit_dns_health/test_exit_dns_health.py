@@ -14,6 +14,28 @@ from allium.lib.exit_dns_health import (
 )
 
 
+def _make_health_entry(status='success', error=None, consecutive_failures=0,
+                       timing_ms=None, first_hop=None, query_domain=None,
+                       exit_address=None, resolved_ip=None, expected_ip=None):
+    """Helper to build a complete health map entry with all required fields."""
+    return {
+        'status': status,
+        'error': error,
+        'consecutive_failures': consecutive_failures,
+        'timing_ms': timing_ms,
+        'first_hop': first_hop,
+        'query_domain': query_domain,
+        'exit_address': exit_address,
+        'resolved_ip': resolved_ip,
+        'expected_ip': expected_ip,
+        'cv_instances_success': None,
+        'cv_instances_total': None,
+        'cv_improved': False,
+        'cv_per_instance': {},
+        'timestamp': None,
+    }
+
+
 class TestBuildMap(unittest.TestCase):
     """Test build_exit_dns_health_map()."""
 
@@ -58,6 +80,21 @@ class TestBuildMap(unittest.TestCase):
         self.assertIn('ABCDEF', m)
         self.assertNotIn('abcdef', m)
 
+    def test_build_map_preserves_cv_data(self):
+        """Cross-validation data is preserved in map entries."""
+        data = {
+            'metadata': {},
+            'results': [
+                {'exit_fingerprint': 'AAA', 'status': 'success',
+                 'error': None, 'consecutive_failures': 0, 'timing': {'total_ms': 100},
+                 'cv': {'instances_success': 3, 'instances_total': 4, 'improved': True}},
+            ],
+        }
+        m = build_exit_dns_health_map(data)
+        self.assertEqual(m['AAA']['cv_instances_success'], 3)
+        self.assertEqual(m['AAA']['cv_instances_total'], 4)
+        self.assertTrue(m['AAA']['cv_improved'])
+
 
 class TestAttachToRelays(unittest.TestCase):
     """Test attach_exit_dns_health_to_relays()."""
@@ -68,8 +105,7 @@ class TestAttachToRelays(unittest.TestCase):
     def test_attach_exit_success(self):
         """Exit relay with success status gets status='success'."""
         relays = [self._make_relay('AAA', ['Exit', 'Fast'])]
-        health_map = {'AAA': {'status': 'success', 'error': None,
-                              'consecutive_failures': 0, 'timing_ms': 1234}}
+        health_map = {'AAA': _make_health_entry('success', timing_ms=1234)}
         attach_exit_dns_health_to_relays(relays, health_map)
         self.assertEqual(relays[0]['exit_dns_health_status'], 'success')
         self.assertEqual(relays[0]['exit_dns_health_detail'], 'success')
@@ -78,8 +114,8 @@ class TestAttachToRelays(unittest.TestCase):
     def test_attach_exit_dns_fail(self):
         """Exit relay with dns_fail gets status='fail', detail='dns_fail'."""
         relays = [self._make_relay('BBB', ['Exit'])]
-        health_map = {'BBB': {'status': 'dns_fail', 'error': 'NXDOMAIN',
-                              'consecutive_failures': 5, 'timing_ms': None}}
+        health_map = {'BBB': _make_health_entry('dns_fail', error='NXDOMAIN',
+                                                 consecutive_failures=5)}
         attach_exit_dns_health_to_relays(relays, health_map)
         self.assertEqual(relays[0]['exit_dns_health_status'], 'fail')
         self.assertEqual(relays[0]['exit_dns_health_detail'], 'dns_fail')
@@ -89,8 +125,8 @@ class TestAttachToRelays(unittest.TestCase):
     def test_attach_exit_timeout(self):
         """Exit relay with timeout gets status='fail', detail='timeout'."""
         relays = [self._make_relay('CCC', ['Exit'])]
-        health_map = {'CCC': {'status': 'timeout', 'error': 'timed out',
-                              'consecutive_failures': 1, 'timing_ms': None}}
+        health_map = {'CCC': _make_health_entry('timeout', error='timed out',
+                                                 consecutive_failures=1)}
         attach_exit_dns_health_to_relays(relays, health_map)
         self.assertEqual(relays[0]['exit_dns_health_status'], 'fail')
         self.assertEqual(relays[0]['exit_dns_health_detail'], 'timeout')
@@ -105,12 +141,23 @@ class TestAttachToRelays(unittest.TestCase):
     def test_attach_non_exit(self):
         """Non-exit relay gets exit_dns_health_status=None."""
         relays = [self._make_relay('EEE', ['Guard', 'Fast'])]
-        health_map = {'EEE': {'status': 'success', 'error': None,
-                              'consecutive_failures': 0, 'timing_ms': 100}}
+        health_map = {'EEE': _make_health_entry('success', timing_ms=100)}
         attach_exit_dns_health_to_relays(relays, health_map)
         self.assertIsNone(relays[0]['exit_dns_health_status'])
         # Non-exit relay should NOT have detail fields
         self.assertNotIn('exit_dns_health_detail', relays[0])
+
+    def test_attach_first_hop_info(self):
+        """First hop nickname and country are resolved from relay list."""
+        relays = [
+            self._make_relay('AAA', ['Exit']),
+            {'fingerprint': 'GUARD1', 'flags': ['Guard'], 'nickname': 'MyGuard', 'country': 'DE'},
+        ]
+        health_map = {'AAA': _make_health_entry('success', first_hop='GUARD1', timing_ms=500)}
+        attach_exit_dns_health_to_relays(relays, health_map)
+        self.assertEqual(relays[0]['exit_dns_health_first_hop'], 'GUARD1')
+        self.assertEqual(relays[0]['exit_dns_health_first_hop_nickname'], 'MyGuard')
+        self.assertEqual(relays[0]['exit_dns_health_first_hop_country'], 'DE')
 
 
 class TestCalculateMetrics(unittest.TestCase):
