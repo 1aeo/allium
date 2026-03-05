@@ -322,6 +322,9 @@ class Relays:
             domain_to_relays[group_key].append((idx, relay, contact))
         
         # Create hashes for each group
+        # NOTE: MD5 is used here for deterministic URL-safe grouping of contacts,
+        # not for security purposes. Changing the algorithm would break all existing
+        # contact page URLs. The hash is not used for authentication or integrity.
         for group_key, relay_group in domain_to_relays.items():
             if group_key.startswith("aroi_domain:"):
                 # AROI domain group - use unified hash based on domain
