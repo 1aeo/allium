@@ -937,15 +937,19 @@ Network Health Dashboard
                 </div>
                 {% endif %}
                 
-                <!-- Row 4: Family-cert adoption from server descriptors -->
-                <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
-                    <div class="metric-item" title="Relays publishing a family-cert entry in their server descriptor, proving family membership via an ed25519 family key (Proposal 321). Source: CollecTor server descriptors, last 18 hourly files. Tracking {{ "{:,}".format(relays.json.network_health.hf_family_cert_seen_total) }} relays.">
-                        <span class="metric-value" style="color: #28a745; font-weight: 600;">{{ relays.json.network_health.hf_family_cert_count_formatted }}</span>
-                        <span class="metric-label">Relays with family-cert</span>
+                <!-- Row 4: DA-validated family membership from microdescriptors (method 35+) -->
+                <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
+                    <div class="metric-item" title="Relays with DA-validated family-ids in microdescriptors (consensus method 35+). This is what Tor clients actually use for path selection — the authoritative source for Happy Family membership. Source: CollecTor microdescriptors.">
+                        <span class="metric-value" style="color: #28a745; font-weight: 600;">{{ relays.json.network_health.hf_family_ids_count_formatted }}</span>
+                        <span class="metric-label">DA-Validated family-ids</span>
                     </div>
-                    <div class="metric-item" title="Relays seen in server descriptors without a family-cert entry. Operators can add one with 'tor --keygen-family' (requires Tor ≥0.4.9.2-alpha). Source: CollecTor server descriptors.">
-                        <span class="metric-value" style="color: #dc3545;">{{ relays.json.network_health.hf_family_no_cert_count_formatted }}</span>
-                        <span class="metric-label">Relays without family-cert</span>
+                    <div class="metric-item" title="Relays still using legacy MyFamily declarations in microdescriptors (large $fingerprint lists). These will be deprecated when use-family-lists=0 is set in consensus params. Source: CollecTor microdescriptors.">
+                        <span class="metric-value" style="color: #cc9900;">{{ relays.json.network_health.hf_legacy_family_count_formatted }}</span>
+                        <span class="metric-label">Legacy MyFamily</span>
+                    </div>
+                    <div class="metric-item" title="Unique ed25519 family keys seen in DA-validated microdescriptor family-ids lines. Each key represents one Happy Family group. Source: CollecTor microdescriptors.">
+                        <span class="metric-value" style="color: #17a2b8; font-weight: 600;">{{ relays.json.network_health.hf_unique_families_formatted }}</span>
+                        <span class="metric-label">Unique Happy Families</span>
                     </div>
                 </div>
                 

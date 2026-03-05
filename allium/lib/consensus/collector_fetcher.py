@@ -344,6 +344,19 @@ class CollectorFetcher:
             result['errors'].append(f"consensus_method_info: {e}")
             result['consensus_method_info'] = {}
         
+        # Fetch DA-validated family-ids from microdescriptors (method 35+).
+        # This is the authoritative source for Happy Family membership — it's
+        # what clients actually use for path selection.  Server descriptor
+        # family-cert is self-declared; microdescriptor family-ids is DA-verified.
+        try:
+            start_time = time.time()
+            result['microdesc_family'] = self._fetch_microdesc_family_ids()
+            self._timings['microdesc_family'] = time.time() - start_time
+        except Exception as e:
+            logger.error(f"Failed to fetch microdesc family-ids: {e}")
+            result['errors'].append(f"microdesc_family: {e}")
+            result['microdesc_family'] = {}
+        
         result['bw_authorities'] = list(self.bw_authorities)
         result['ipv6_testing_authorities'] = list(self.ipv6_testing_authorities)
         result['timings'] = self._timings
@@ -1059,6 +1072,85 @@ class CollectorFetcher:
                 break
         return method, valid_after
     
+    # Pre-compiled pattern for microdescriptor family-ids lines
+    _FAMILY_IDS_PATTERN = re.compile(r'^family-ids (.+)$', re.MULTILINE)
+    _LEGACY_FAMILY_PATTERN = re.compile(r'^family \$', re.MULTILINE)
+
+    def _fetch_microdesc_family_ids(self) -> dict:
+        """
+        Fetch DA-validated family-ids from CollecTor microdescriptor files.
+
+        Microdescriptors are the authoritative source for Happy Family
+        membership — they contain ``family-ids`` lines only for relays whose
+        ``family-cert`` the DAs verified and accepted (consensus method 35+).
+        This is what clients actually use for path selection.
+
+        Returns a dict with:
+          family_ids_count      – relays with DA-validated family-ids
+          legacy_family_count   – relays with old-style MyFamily ``family``
+          unique_family_keys    – sorted list of unique ed25519 family key IDs
+          total_microdescs      – total microdescriptors scanned
+        """
+        empty = {
+            'family_ids_count': 0,
+            'legacy_family_count': 0,
+            'unique_family_keys': [],
+            'total_microdescs': 0,
+        }
+
+        try:
+            listing_url = f"{COLLECTOR_BASE}/recent/relay-descriptors/microdescs/micro/"
+            html = self._fetch_url(listing_url)
+            file_pattern = re.compile(
+                r'href="([0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-micro-[^"]+)"'
+            )
+            files = sorted(file_pattern.findall(html))
+            if not files:
+                logger.info("No microdescriptor files found on CollecTor")
+                return empty
+
+            # The first file each day is the bulk file (thousands of microdescs);
+            # subsequent files are small incrementals.  Use the LATEST date's
+            # bulk file for the most complete single-file picture, then layer
+            # that date's incrementals on top.
+            latest_date = files[-1][:10]  # YYYY-MM-DD of most recent file
+            target_files = [f for f in files if f[:10] == latest_date]
+
+            all_family_keys = set()
+            total_fids = 0
+            total_legacy = 0
+            total_microdescs = 0
+
+            for fname in target_files:
+                url = f"{listing_url}{fname}"
+                content = self._fetch_url(url)
+
+                total_microdescs += content.count('onion-key')
+                fid_matches = self._FAMILY_IDS_PATTERN.findall(content)
+                total_fids += len(fid_matches)
+                total_legacy += len(self._LEGACY_FAMILY_PATTERN.findall(content))
+
+                for line in fid_matches:
+                    for key in line.strip().split():
+                        all_family_keys.add(key)
+
+            logger.info(
+                f"Microdesc family-ids: {total_fids} DA-validated, "
+                f"{total_legacy} legacy, {len(all_family_keys)} unique families, "
+                f"{total_microdescs} total microdescs from {len(target_files)} files"
+            )
+
+            return {
+                'family_ids_count': total_fids,
+                'legacy_family_count': total_legacy,
+                'unique_family_keys': sorted(all_family_keys),
+                'total_microdescs': total_microdescs,
+            }
+
+        except Exception as e:
+            logger.warning(f"Failed to fetch microdesc family-ids: {e}")
+            return empty
+
     def _validate_fingerprint(self, fingerprint: str) -> bool:
         """Validate fingerprint is 40 hex characters."""
         if not fingerprint:

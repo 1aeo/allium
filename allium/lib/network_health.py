@@ -115,6 +115,7 @@ def preformat_network_health_template_strings(health_metrics):
         'hf_ready_authorities', 'hf_some_operators', 'hf_all_operators',
         'hf_not_ready_relays', 'hf_total_validated_operators',
         'hf_family_cert_count', 'hf_family_no_cert_count',
+        'hf_family_ids_count', 'hf_legacy_family_count', 'hf_unique_families',
     ]
     
     for key in integer_format_keys:
@@ -1368,8 +1369,10 @@ def calculate_network_health_metrics(relay_set):
     # Consensus method + family params from collector consensus data
     collector_data_hf = getattr(relay_set, 'collector_consensus_data', None)
     cm_info = {}
+    microdesc_family = {}
     if collector_data_hf and isinstance(collector_data_hf, dict):
         cm_info = collector_data_hf.get('consensus_method_info', {})
+        microdesc_family = collector_data_hf.get('microdesc_family', {})
     
     desc_seen_total = len(all_seen_fps)
     
@@ -1439,7 +1442,14 @@ def calculate_network_health_metrics(relay_set):
         'hf_not_ready_relays_percentage': _pct(total_relays_count - family_key_ready_relays, total_relays_count),
         'hf_ready_exit_relays': family_key_ready_exit_relays,
         'hf_ready_guard_relays': family_key_ready_guard_relays,
-        # Family-cert adoption from server descriptors (18-hour window, full coverage)
+        # DA-validated family-ids from microdescriptors (method 35+ authoritative source).
+        # This is what clients actually use for path selection — more authoritative than
+        # server descriptor family-cert which is self-declared and may include invalid certs.
+        'hf_family_ids_count': microdesc_family.get('family_ids_count', 0),
+        'hf_legacy_family_count': microdesc_family.get('legacy_family_count', 0),
+        'hf_unique_families': len(microdesc_family.get('unique_family_keys', [])),
+        'hf_microdesc_total': microdesc_family.get('total_microdescs', 0),
+        # Server descriptor family-cert (kept as secondary/diagnostic signal)
         'hf_family_cert_count': family_cert_count,
         'hf_family_no_cert_count': family_no_cert_count,
         'hf_family_cert_seen_total': desc_seen_total,
