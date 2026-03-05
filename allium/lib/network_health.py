@@ -450,24 +450,37 @@ def calculate_network_health_metrics(relay_set):
     # authorities like Serge have the Authority flag but don't produce votes.
     voting_authority_nicknames = {n.lower() for n in get_voting_authority_names()}
     
-    # Pre-compute Happy Family descriptor sets before main loop (enables single-pass counting)
+    # Pre-compute Happy Family sets before main loop (enables single-pass counting).
+    # PRIMARY source: DA-validated microdescriptor family-ids (method 35+).
+    # FALLBACK: server descriptor family-cert (pre-method-35 or microdesc unavailable).
+    collector_consensus_for_hf = getattr(relay_set, 'collector_consensus_data', None)
+    microdesc_family_hf = {}
+    if collector_consensus_for_hf and isinstance(collector_consensus_for_hf, dict):
+        microdesc_family_hf = collector_consensus_for_hf.get('microdesc_family', {})
+
+    microdesc_groups = microdesc_family_hf.get('family_key_groups', {})
+    using_microdesc_for_hf = bool(microdesc_groups)
+
+    if using_microdesc_for_hf:
+        # DA-validated family-ids: authoritative source
+        verified_family_fps = set()
+        for group_fps in microdesc_groups.values():
+            verified_family_fps.update(fp.upper() for fp in group_fps)
+    else:
+        # Fallback: server descriptor family-cert groups
+        collector_descs = getattr(relay_set, 'collector_descriptors_data', None)
+        verified_family_fps = set()
+        if collector_descs and isinstance(collector_descs, dict):
+            for group_fps in collector_descs.get('family_cert_groups', {}).values():
+                verified_family_fps.update(fp.upper() for fp in group_fps)
+
+    # Server descriptor coverage data (kept for descriptors-seen tracking)
     collector_descs = getattr(relay_set, 'collector_descriptors_data', None)
     family_cert_fps = set()
     all_seen_fps = set()
     if collector_descs and isinstance(collector_descs, dict):
         family_cert_fps = set(collector_descs.get('family_cert_fingerprints', []))
         all_seen_fps = set(collector_descs.get('all_seen_fingerprints', []))
-    
-    # Verified-key set: relays with EXTRACTED Ed25519 family signing key (strong check).
-    # Built directly from family_cert_groups (same source as _fp_to_family_key in relays.py)
-    # rather than reading relay_set._fp_to_family_key, because _calculate_network_health_metrics
-    # may run before _set_family_support_types() which builds that map.
-    # Used for operator relationship claims (hf_some_operators, hf_all_operators).
-    # family_cert_fps (line-presence) is kept for the informational relay adoption count.
-    verified_family_cert_fps = set()
-    if collector_descs and isinstance(collector_descs, dict):
-        for group_fps in collector_descs.get('family_cert_groups', {}).values():
-            verified_family_cert_fps.update(fp.upper() for fp in group_fps)
     
     # Initialize all counters and collectors for SINGLE LOOP
     authority_count = bad_exit_count = 0
@@ -851,15 +864,14 @@ def calculate_network_health_metrics(relay_set):
         elif fp in all_seen_fps:
             family_no_cert_count += 1
         
-        # Happy Family: per-operator descriptor counts (merged into main loop)
-        # Uses verified_family_cert_fps (extracted Ed25519 key) for the 'cert' count
-        # because operator metrics (hf_some_operators, hf_all_operators) are relationship
-        # claims — "operator X has relays IN a happy family" — not just line-presence.
+        # Happy Family: per-operator counts (merged into main loop)
+        # Uses verified_family_fps (DA-validated microdescriptor family-ids when
+        # available, server descriptor fallback otherwise) for the 'cert' count.
         if aroi_domain and aroi_domain != 'none' and fp in all_seen_fps:
             if aroi_domain not in operator_desc_counts:
                 operator_desc_counts[aroi_domain] = {'cert': 0, 'seen': 0}
             operator_desc_counts[aroi_domain]['seen'] += 1
-            if fp in verified_family_cert_fps:
+            if fp in verified_family_fps:
                 operator_desc_counts[aroi_domain]['cert'] += 1
     
     # Total data transferred metrics

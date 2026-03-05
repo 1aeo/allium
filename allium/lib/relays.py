@@ -8,11 +8,14 @@ timestamp
 import bisect
 import functools
 import hashlib
+import logging
 import multiprocessing as mp
 import os
 import re
 import time
 from .aroileaders import _calculate_aroi_leaderboards
+
+logger = logging.getLogger(__name__)
 from .ip_utils import safe_parse_ip_address as _safe_parse_ip_address
 from .progress_logger import ProgressLogger
 from .bandwidth_formatter import (
@@ -890,45 +893,66 @@ class Relays:
         precompute_display_values(self)
 
     def _set_family_support_types(self):
-        """Set per-relay family_support_type and cache descriptor sets for downstream consumers.
+        """Set per-relay family_support_type and cache family data for downstream consumers.
 
-        Uses the EXTRACTED Ed25519 signing key as the single source of truth for
-        Happy Families classification. A relay is only classified as 'happy_families'
-        if we can actually extract and verify its family signing key from the cert.
-        This ensures consistency between relay pages and contact/operator pages.
+        Uses DA-validated microdescriptor family-ids as the PRIMARY source of truth
+        for Happy Families classification (consensus method 35+).  Falls back to
+        server descriptor family-cert groups when microdescriptor data is unavailable.
 
-        Data flow (single source of truth):
-          _fp_to_family_key (extracted Ed25519 key)
+        Microdescriptors are authoritative because DAs independently verify each
+        relay's family-cert before including family-ids in the microdescriptor.
+        Server descriptors are self-declared and may include invalid certs that
+        DAs reject.
+
+        Data flow (primary: microdescriptors, fallback: server descriptors):
+          _fp_to_family_key
             ├── family_support_type     → contact/operator page counts
             ├── _family_cert_fps_cache  → _partition_family_lists (_mf_effective)
             └── _family_key_to_fps      → _partition_family_lists (_hf_effective)
-
-        The weaker 'family_cert_fingerprints' (line-presence only) is kept for
-        network_health.py informational dashboard stats, but NOT used for
-        relay classification.
 
         Sets relay['family_support_type'] to one of: 'both', 'happy_families', 'my_family', 'none'.
 
         Called at Step 13.5 in enrich_with_api_data() — after all API data is attached,
         before precomputation (Steps 14-15). Runs exactly once, unconditionally.
         """
+        # --- Determine family group data source (microdescriptors > server descriptors) ---
+        collector_consensus = getattr(self, 'collector_consensus_data', None)
+        microdesc_family = {}
+        if collector_consensus and isinstance(collector_consensus, dict):
+            microdesc_family = collector_consensus.get('microdesc_family', {})
+
+        microdesc_groups = microdesc_family.get('family_key_groups', {})
+        using_microdesc = bool(microdesc_groups)
+
+        if using_microdesc:
+            raw_groups = microdesc_groups
+            logger.info(f"Family classification using DA-validated microdescriptor family-ids "
+                        f"({len(microdesc_family.get('family_ids_fps', []))} relays, "
+                        f"{len(microdesc_groups)} families)")
+        else:
+            # Fallback to server descriptors (pre-method-35 or microdesc fetch failed)
+            collector_descs = getattr(self, 'collector_descriptors_data', None)
+            if collector_descs and isinstance(collector_descs, dict):
+                raw_groups = collector_descs.get('family_cert_groups', {})
+            else:
+                raw_groups = {}
+            logger.info(f"Family classification using server descriptor family-cert "
+                        f"(microdescriptor data unavailable, fallback)")
+
+        # Server descriptor metadata (kept for coverage tracking and per-relay diagnostics)
         collector_descs = getattr(self, 'collector_descriptors_data', None)
         if collector_descs and isinstance(collector_descs, dict):
             all_seen_fps = set(collector_descs.get('all_seen_fingerprints', []))
             coverage_hours = collector_descs.get('coverage_hours', 0)
-            raw_groups = collector_descs.get('family_cert_groups', {})
         else:
             all_seen_fps = set()
             coverage_hours = 0
-            raw_groups = {}
 
         self._all_seen_fps_cache = all_seen_fps
         self._descriptor_coverage_hours = coverage_hours
+        self._family_source = 'microdesc' if using_microdesc else 'server_descriptor'
 
-        # Build family-cert group caches filtered to relays in current dataset.
-        # Onionoo effective_family includes both MyFamily AND Happy Families members
-        # (for Tor 0.4.9+); family-cert groups come from shared Ed25519 family keys
-        # parsed from server descriptors.
+        # Build family group caches filtered to relays in current dataset.
         valid_fps = {r.get("fingerprint", "").upper() for r in self.json["relays"]}
         self._family_key_to_fps = {}
         for key, fps in raw_groups.items():
@@ -940,9 +964,7 @@ class Relays:
             for fp in fps:
                 self._fp_to_family_key[fp.upper()] = key
 
-        # Cache the verified-key fingerprint set for page_writer.py (_partition_family_lists).
-        # Uses extracted-key set (strong check) — NOT the line-presence set.
-        # This ensures _mf_effective correctly excludes only verified Happy Families members.
+        # Cache the verified fingerprint set for page_writer.py (_partition_family_lists).
         verified_cert_fps = set(self._fp_to_family_key.keys())
         self._family_cert_fps_cache = verified_cert_fps
 

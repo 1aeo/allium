@@ -1078,73 +1078,154 @@ class CollectorFetcher:
 
     def _fetch_microdesc_family_ids(self) -> dict:
         """
-        Fetch DA-validated family-ids from CollecTor microdescriptor files.
+        Fetch DA-validated family-ids with per-relay fingerprint mapping.
 
         Microdescriptors are the authoritative source for Happy Family
         membership — they contain ``family-ids`` lines only for relays whose
         ``family-cert`` the DAs verified and accepted (consensus method 35+).
         This is what clients actually use for path selection.
 
+        Builds the per-relay mapping by:
+          1. Parsing the microdesc consensus for relay fingerprint → microdesc
+             digest pairs (the ``r`` and ``m`` lines).
+          2. Fetching ALL available microdesc files from CollecTor (incremental
+             files over several days give near-complete coverage).
+          3. SHA256-hashing each microdescriptor entry (raw bytes, from
+             ``onion-key`` to end) and matching against the consensus digests.
+          4. Extracting ``family-ids`` and legacy ``family`` lines and mapping
+             them back to relay fingerprints.
+
         Returns a dict with:
           family_ids_count      – relays with DA-validated family-ids
-          legacy_family_count   – relays with old-style MyFamily ``family``
+          family_ids_fps        – sorted list of relay fingerprints with family-ids
+          family_key_groups     – dict: family_key → sorted list of relay fingerprints
+          legacy_family_count   – relays with old-style MyFamily
           unique_family_keys    – sorted list of unique ed25519 family key IDs
-          total_microdescs      – total microdescriptors scanned
+          total_microdescs      – total microdescriptors matched to consensus
         """
+        import hashlib
+
         empty = {
             'family_ids_count': 0,
+            'family_ids_fps': [],
+            'family_key_groups': {},
             'legacy_family_count': 0,
             'unique_family_keys': [],
             'total_microdescs': 0,
         }
 
         try:
+            # --- Step 1: Build digest→fingerprint map from microdesc consensus ---
+            mc_listing_url = f"{COLLECTOR_BASE}/recent/relay-descriptors/microdescs/consensus-microdesc/"
+            mc_html = self._fetch_url(mc_listing_url)
+            mc_pattern = re.compile(
+                r'href="([0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-consensus-microdesc)"'
+            )
+            mc_matches = sorted(mc_pattern.findall(mc_html))
+            if not mc_matches:
+                logger.info("No microdesc consensus files found on CollecTor")
+                return empty
+
+            latest_mc = mc_matches[-1]
+            mc_url = f"{mc_listing_url}{latest_mc}"
+            mc_content = self._fetch_url(mc_url)
+
+            digest_to_fp = {}
+            current_fp = None
+            for line in mc_content.split('\n'):
+                if line.startswith('r '):
+                    parts = line.split()
+                    if len(parts) >= 3:
+                        ib64 = parts[2]
+                        pad = 4 - len(ib64) % 4
+                        if pad != 4:
+                            ib64 += '=' * pad
+                        try:
+                            current_fp = base64.b64decode(ib64).hex().upper()
+                        except Exception:
+                            current_fp = None
+                elif line.startswith('m ') and current_fp:
+                    digest_to_fp[line.split()[1]] = current_fp
+                    current_fp = None
+
+            if not digest_to_fp:
+                logger.warning("Could not parse any relay→digest pairs from microdesc consensus")
+                return empty
+
+            logger.info(f"Microdesc consensus: {len(digest_to_fp)} relay→digest mappings")
+
+            # --- Step 2: Fetch ALL microdesc files and build per-relay mapping ---
             listing_url = f"{COLLECTOR_BASE}/recent/relay-descriptors/microdescs/micro/"
             html = self._fetch_url(listing_url)
             file_pattern = re.compile(
                 r'href="([0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-micro-[^"]+)"'
             )
-            files = sorted(file_pattern.findall(html))
-            if not files:
+            all_files = sorted(file_pattern.findall(html))
+            if not all_files:
                 logger.info("No microdescriptor files found on CollecTor")
                 return empty
 
-            # The first file each day is the bulk file (thousands of microdescs);
-            # subsequent files are small incrementals.  Use the LATEST date's
-            # bulk file for the most complete single-file picture, then layer
-            # that date's incrementals on top.
-            latest_date = files[-1][:10]  # YYYY-MM-DD of most recent file
-            target_files = [f for f in files if f[:10] == latest_date]
+            family_ids_fps = set()
+            family_key_groups = {}  # key → set of fps
+            legacy_family_fps = set()
+            total_matched = 0
 
-            all_family_keys = set()
-            total_fids = 0
-            total_legacy = 0
-            total_microdescs = 0
-
-            for fname in target_files:
+            # Use a longer timeout for microdesc files — the bulk file can be 28+ MB
+            microdesc_timeout = max(self.timeout, 60)
+            for fname in all_files:
                 url = f"{listing_url}{fname}"
-                content = self._fetch_url(url)
+                try:
+                    raw_bytes = _fetch_url_with_total_timeout(
+                        url, microdesc_timeout, {'User-Agent': 'Allium/1.0'}
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to fetch microdesc file {fname}: {e}")
+                    continue
 
-                total_microdescs += content.count('onion-key')
-                fid_matches = self._FAMILY_IDS_PATTERN.findall(content)
-                total_fids += len(fid_matches)
-                total_legacy += len(self._LEGACY_FAMILY_PATTERN.findall(content))
+                entries = raw_bytes.split(b'@type microdescriptor 1.0\n')
+                for entry in entries:
+                    ok_idx = entry.find(b'onion-key')
+                    if ok_idx < 0:
+                        continue
+                    hashable = entry[ok_idx:]
+                    if not hashable.endswith(b'\n'):
+                        hashable += b'\n'
 
-                for line in fid_matches:
-                    for key in line.strip().split():
-                        all_family_keys.add(key)
+                    h = hashlib.sha256(hashable).digest()
+                    d64 = base64.b64encode(h).decode('ascii').rstrip('=')
+
+                    fp = digest_to_fp.get(d64)
+                    if not fp:
+                        continue
+                    total_matched += 1
+
+                    entry_text = entry.decode('ascii', errors='replace')
+                    fid_match = self._FAMILY_IDS_PATTERN.search(entry_text)
+                    if fid_match:
+                        family_ids_fps.add(fp)
+                        for key in fid_match.group(1).strip().split():
+                            if key not in family_key_groups:
+                                family_key_groups[key] = set()
+                            family_key_groups[key].add(fp)
+                    elif self._LEGACY_FAMILY_PATTERN.search(entry_text):
+                        legacy_family_fps.add(fp)
+
+            # Convert sets to sorted lists for JSON serialization
+            serializable_groups = {k: sorted(v) for k, v in family_key_groups.items()}
 
             logger.info(
-                f"Microdesc family-ids: {total_fids} DA-validated, "
-                f"{total_legacy} legacy, {len(all_family_keys)} unique families, "
-                f"{total_microdescs} total microdescs from {len(target_files)} files"
+                f"Microdesc family-ids: {len(family_ids_fps)} DA-validated, "
+                f"{len(legacy_family_fps)} legacy, {len(family_key_groups)} unique families, "
+                f"{total_matched} microdescs matched from {len(all_files)} files"
             )
 
             return {
-                'family_ids_count': total_fids,
-                'legacy_family_count': total_legacy,
-                'unique_family_keys': sorted(all_family_keys),
-                'total_microdescs': total_microdescs,
+                'family_ids_count': len(family_ids_fps),
+                'family_ids_fps': sorted(family_ids_fps),
+                'family_key_groups': serializable_groups,
+                'legacy_family_count': len(legacy_family_fps),
+                'unique_family_keys': sorted(family_key_groups.keys()),
+                'total_microdescs': total_matched,
             }
 
         except Exception as e:
