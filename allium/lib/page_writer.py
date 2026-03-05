@@ -30,6 +30,14 @@ from .time_utils import format_time_ago, format_timestamp, format_timestamp_ago
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
 
 
+def _sanitize_path_component(value):
+    """Sanitize a string for safe use as a filesystem path component.
+    
+    Prevents directory traversal attacks and invalid path characters.
+    """
+    return value.replace("..", "").replace("/", "_")
+
+
 
 # Template bytecode cache directory for improved rendering performance
 TEMPLATE_CACHE_DIR = os.path.join(os.path.dirname(ABS_PATH), ".jinja2_cache")
@@ -683,7 +691,7 @@ def write_pages_by_key(relay_set, k):
     
     for v in sorted_values:
         # Sanitize the value to prevent directory traversal attacks
-        v = v.replace("..", "").replace("/", "_")
+        v = _sanitize_path_component(v)
         i = relay_set.json["sorted"][k][v]
         members = []
 
@@ -840,18 +848,14 @@ def write_pages_by_key(relay_set, k):
             aroi_domain = members[0].get("aroi_domain")
             if aroi_domain and aroi_domain != "none" and aroi_domain in relay_set.validated_aroi_domains:
                 # Lowercase domain for case-insensitive URLs
-                safe_domain = aroi_domain.lower().replace("..", "").replace("/", "_")
+                safe_domain = _sanitize_path_component(aroi_domain.lower())
                 # Use parent directory (root level) instead of output_path (contact subdirectory)
                 vanity_dir = os.path.join(os.path.dirname(output_path), safe_domain)
                 try:
                     os.makedirs(vanity_dir, exist_ok=True)
-                    # Read the HTML and adjust paths for different directory depth
-                    # Contact pages are depth 2 (../../) but vanity URLs are depth 1 (../)
-                    with open(html_path, 'r', encoding='utf8') as f:
-                        html_content = f.read()
-                    # Adjust path prefix from depth 2 to depth 1
-                    adjusted_html = html_content.replace('href="../../', 'href="../').replace('src="../../', 'src="../')
-                    # Write adjusted HTML to vanity URL directory
+                    # Adjust path prefix from depth 2 (../../) to depth 1 (../)
+                    # Uses the in-memory rendered string to avoid reading the file back from disk
+                    adjusted_html = rendered.replace('href="../../', 'href="../').replace('src="../../', 'src="../')
                     with open(os.path.join(vanity_dir, "index.html"), 'w', encoding='utf8') as f:
                         f.write(adjusted_html)
                 except OSError:
@@ -982,7 +986,7 @@ def write_pages_parallel(relay_set, k, sorted_values, template, output_path, the
     vanity_url_tasks = []  # Collect vanity URL tasks for post-processing
     
     for v in sorted_values:
-        v = v.replace("..", "").replace("/", "_")
+        v = _sanitize_path_component(v)
         i = relay_set.json["sorted"][k][v]
         dir_path = os.path.join(output_path, v.lower() if k == "flag" else v)
         os.makedirs(dir_path, exist_ok=True)
@@ -1011,7 +1015,7 @@ def write_pages_parallel(relay_set, k, sorted_values, template, output_path, the
         if vanity_url_tasks:
             for html_path, aroi_domain, contact_output_path in vanity_url_tasks:
                 try:
-                    safe_domain = aroi_domain.lower().replace("..", "").replace("/", "_")
+                    safe_domain = _sanitize_path_component(aroi_domain.lower())
                     vanity_dir = os.path.join(os.path.dirname(contact_output_path), safe_domain)
                     os.makedirs(vanity_dir, exist_ok=True)
                     with open(html_path, 'r', encoding='utf8') as f:

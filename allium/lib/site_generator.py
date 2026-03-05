@@ -136,9 +136,9 @@ def generate_site(relay_set, args, progress_logger):
 
     # --- Miscellaneous sorted pages ---
     progress_logger.log("Generating miscellaneous sorted pages...")
+    standard_contexts = StandardTemplateContexts(relay_set)
     for suffix, sorted_by in SORTED_BY_VARIANTS.items():
         for page_type, page_title in MISC_SORTED_PAGE_TYPES:
-            standard_contexts = StandardTemplateContexts(relay_set)
             page_ctx = standard_contexts.get_misc_page_context(
                 f"misc-{page_type}.html", page_title, sorted_by=sorted_by
             )

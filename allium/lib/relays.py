@@ -87,13 +87,15 @@ class Relays:
         self._sort_by_observed_bandwidth()
         self._trim_platform()
         self._add_hashed_contact()
-        self._process_aroi_contacts()  # Process AROI display info first
         self._preprocess_template_data()  # Pre-compute template optimization data
         self._categorize()  # Then build categories with processed relay objects
         self._propagate_as_rarity()  # Copy AS rarity scores to each relay for templates
         self._generate_aroi_leaderboards()  # Generate AROI operator leaderboards
         self._generate_smart_context()  # Generate intelligence analysis (needed for CW/BW ratios)
-        self._calculate_network_health_metrics()  # Calculate network health dashboard metrics (regenerated after uptime data)
+        # NOTE: _calculate_network_health_metrics() is NOT called here because uptime/bandwidth
+        # data hasn't been fetched yet (it arrives via enrich_with_api_data). Calling it here
+        # would iterate all ~7K relays with 200+ counters producing only zero-value results.
+        # The function runs in enrich_with_api_data() after uptime and/or bandwidth processing.
 
     def enrich_with_api_data(self, uptime_data=None, bandwidth_data=None,
                              aroi_validation_data=None, collector_consensus_data=None,
@@ -159,6 +161,12 @@ class Relays:
         # Step 13.5: Set per-relay family support type and cache descriptor sets
         # (depends on collector_descriptors_data from Step 7, consumed by Steps 14-15)
         self._set_family_support_types()
+
+        # Ensure network health metrics are calculated at least once.
+        # Normally called after uptime and/or bandwidth processing above,
+        # but if neither data source was available, we need the fallback.
+        if 'network_health' not in self.json:
+            self._calculate_network_health_metrics()
 
         # Steps 14-15: Pre-compute page data (depends on ALL above)
         self._precompute_all_contact_page_data()
@@ -286,16 +294,6 @@ class Relays:
         
         return "none"
 
-    def _process_aroi_contacts(self):
-        """
-        Process all relay contacts to extract AROI domain information.
-        
-        NOTE: This is now a no-op because _add_hashed_contact() already stores
-        relay["aroi_domain"] during its loop (avoiding double regex parsing).
-        Kept for backward compatibility in case external code calls it.
-        """
-        pass
-
     def _add_hashed_contact(self):
         """
         Adds a hashed contact key/value for every relay.
@@ -311,7 +309,7 @@ class Relays:
             contact = relay.get("contact", "")
             aroi_domain = self._simple_aroi_parsing(contact)
             
-            # Store AROI domain on relay now to avoid re-parsing in _process_aroi_contacts
+            # Store AROI domain on relay (extracted during contact hashing for efficiency)
             relay["aroi_domain"] = aroi_domain
             
             # Use AROI domain as key if available, otherwise use contact hash as key

@@ -144,36 +144,40 @@ class BandwidthFormatter:
         return f"{value} {unit}"
 
 
+# Cached formatter instances (BandwidthFormatter has no mutable state, safe to reuse)
+_formatter_bits = BandwidthFormatter(use_bits=True)
+_formatter_bytes = BandwidthFormatter(use_bits=False)
+
+
+def _get_formatter(use_bits=False):
+    """Get cached formatter instance for the given use_bits setting."""
+    return _formatter_bits if use_bits else _formatter_bytes
+
+
 # Convenience functions for backwards compatibility and Jinja2 filters
 def determine_unit(bandwidth_bytes, use_bits=False):
-    """Convenience function that creates a formatter and determines unit."""
-    formatter = BandwidthFormatter(use_bits=use_bits)
-    return formatter.determine_unit(bandwidth_bytes)
+    """Convenience function that determines appropriate bandwidth unit."""
+    return _get_formatter(use_bits).determine_unit(bandwidth_bytes)
 
 
 def get_divisor_for_unit(unit):
     """Convenience function that gets divisor for a unit."""
-    # Use a dummy formatter since divisors are static
-    formatter = BandwidthFormatter()
-    return formatter.get_divisor_for_unit(unit)
+    return _formatter_bytes.get_divisor_for_unit(unit)
 
 
 def format_bandwidth_with_unit(bandwidth_bytes, unit, decimal_places=2):
     """Convenience function that formats bandwidth with specified unit."""
-    # Use a dummy formatter since this doesn't depend on use_bits
-    formatter = BandwidthFormatter()
-    return formatter.format_bandwidth_with_unit(bandwidth_bytes, unit, decimal_places)
+    return _formatter_bytes.format_bandwidth_with_unit(bandwidth_bytes, unit, decimal_places)
 
 
 def determine_unit_filter(bandwidth_bytes, use_bits=False):
     """Jinja2 filter version of determine_unit."""
-    return determine_unit(bandwidth_bytes, use_bits)
+    return _get_formatter(use_bits).determine_unit(bandwidth_bytes)
 
 
 def format_bandwidth_filter(bandwidth_bytes, unit=None, use_bits=False, decimal_places=2):
     """Jinja2 filter for formatting bandwidth with optional unit specification."""
-    formatter = BandwidthFormatter(use_bits=use_bits)
-    return formatter.format_bandwidth(bandwidth_bytes, unit, decimal_places)
+    return _get_formatter(use_bits).format_bandwidth(bandwidth_bytes, unit, decimal_places)
 
 
 # =============================================================================
