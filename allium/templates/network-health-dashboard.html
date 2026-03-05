@@ -875,6 +875,13 @@ Network Health Dashboard
                     </div>
                 </div>
                 
+                <!-- Data freshness note for CollecTor vote/consensus data -->
+                {% if relays.json.network_health.hf_vote_valid_after or relays.json.network_health.hf_consensus_valid_after %}
+                <div style="font-size: 0.75em; color: #6c757d; text-align: center; margin: 2px 0 4px 0; line-height: 1.3;" title="CollecTor data may lag behind the live network by several hours. DA version counts come from Onionoo (live); method support counts come from CollecTor vote files (may be stale).">
+                    Votes from {{ relays.json.network_health.hf_vote_valid_after|default('N/A', true) }}{% if relays.json.network_health.hf_consensus_valid_after %} · Consensus from {{ relays.json.network_health.hf_consensus_valid_after }}{% endif %} (CollecTor)
+                </div>
+                {% endif %}
+                
                 <!-- Row 3: Consensus Parameters (hidden when data unavailable, auto-populates when authorities vote on them) -->
                 {% if relays.json.network_health.hf_use_family_ids is not none or relays.json.network_health.hf_use_family_lists is not none %}
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">

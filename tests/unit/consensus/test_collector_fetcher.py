@@ -1161,8 +1161,8 @@ class TestConsensusMethodInference:
                 'params': {},
             }
         
-        # Mock _fetch_current_consensus_method to return None (simulates failure)
-        with patch.object(fetcher, '_fetch_current_consensus_method', return_value=None):
+        # Mock _fetch_current_consensus_method to return (None, None) (simulates failure)
+        with patch.object(fetcher, '_fetch_current_consensus_method', return_value=(None, None)):
             result = fetcher._compute_consensus_method_info()
         
         # Should infer method 34 (highest with 9/9 support, threshold = 7)
@@ -1190,7 +1190,7 @@ class TestConsensusMethodInference:
                 'params': {},
             }
         
-        with patch.object(fetcher, '_fetch_current_consensus_method', return_value=None):
+        with patch.object(fetcher, '_fetch_current_consensus_method', return_value=(None, None)):
             result = fetcher._compute_consensus_method_info()
         
         # Method 35 only has 2 supporters (below threshold of 7)
@@ -1212,18 +1212,19 @@ class TestConsensusMethodInference:
         }
         
         # Mock returns actual method (not None)
-        with patch.object(fetcher, '_fetch_current_consensus_method', return_value=32):
+        with patch.object(fetcher, '_fetch_current_consensus_method', return_value=(32, '2026-03-05 06:00:00')):
             result = fetcher._compute_consensus_method_info()
         
         # Should use the actual method, not infer
         assert result['current_method'] == 32
+        assert result['consensus_valid_after'] == '2026-03-05 06:00:00'
     
     def test_no_inference_when_no_votes(self):
         """Test that inference doesn't crash when no votes available."""
         fetcher = CollectorFetcher()
         fetcher.votes = {}
         
-        with patch.object(fetcher, '_fetch_current_consensus_method', return_value=None):
+        with patch.object(fetcher, '_fetch_current_consensus_method', return_value=(None, None)):
             result = fetcher._compute_consensus_method_info()
         
         # No votes = no inference possible
@@ -1248,13 +1249,75 @@ class TestConsensusMethodInference:
             },
         }
         
-        with patch.object(fetcher, '_fetch_current_consensus_method', return_value=None):
+        with patch.object(fetcher, '_fetch_current_consensus_method', return_value=(None, None)):
             result = fetcher._compute_consensus_method_info()
         
         # Family params should be extracted regardless of inference
         assert 'use-family-ids' in result['family_params_votes']
         assert result['family_params_votes']['use-family-ids']['moria1'] == 1
         assert result['family_params_votes']['use-family-ids']['tor26'] == 1
+
+
+class TestVoteTimestampParsing:
+    """Tests for vote published/valid-after timestamp parsing."""
+    
+    def test_parse_vote_extracts_timestamps(self):
+        """Test that _parse_vote extracts published and valid-after from vote header."""
+        fetcher = CollectorFetcher()
+        
+        vote_content = """network-status-version 3
+vote-status vote
+consensus-methods 32 33 34 35
+published 2026-03-05 05:50:00
+valid-after 2026-03-05 06:00:00
+fresh-until 2026-03-05 07:00:00
+valid-until 2026-03-05 09:00:00
+params AuthDirMaxServersPerAddr=8
+dir-source dannenberg 0232AF901C31A04EE9848595AF9BB7620D4C5B2E
+"""
+        result = fetcher._parse_vote(vote_content, '0232AF901C31A04EE9848595AF9BB7620D4C5B2E')
+        
+        assert result['published'] == '2026-03-05 05:50:00'
+        assert result['valid_after'] == '2026-03-05 06:00:00'
+        assert result['consensus_methods'] == [32, 33, 34, 35]
+    
+    def test_parse_vote_missing_timestamps(self):
+        """Test that missing timestamps default to None."""
+        fetcher = CollectorFetcher()
+        
+        vote_content = """network-status-version 3
+consensus-methods 28 29 30
+"""
+        result = fetcher._parse_vote(vote_content, 'ABCD1234')
+        
+        assert result['published'] is None
+        assert result['valid_after'] is None
+    
+    def test_consensus_method_info_includes_timestamps(self):
+        """Test that _compute_consensus_method_info includes vote and consensus timestamps."""
+        fetcher = CollectorFetcher()
+        
+        fetcher.votes = {
+            'moria1': {
+                'consensus_methods': [32, 33, 34, 35],
+                'relays': {},
+                'params': {},
+                'valid_after': '2026-03-04 08:00:00',
+            },
+            'gabelmoo': {
+                'consensus_methods': [32, 33, 34, 35],
+                'relays': {},
+                'params': {},
+                'valid_after': '2026-03-04 08:00:00',
+            },
+        }
+        
+        with patch.object(fetcher, '_fetch_current_consensus_method',
+                          return_value=(35, '2026-03-05 06:00:00')):
+            result = fetcher._compute_consensus_method_info()
+        
+        assert result['consensus_valid_after'] == '2026-03-05 06:00:00'
+        assert result['latest_vote_valid_after'] == '2026-03-04 08:00:00'
 
 
 class TestMiddleOnlyFlagTracking:
