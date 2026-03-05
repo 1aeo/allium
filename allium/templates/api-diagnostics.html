@@ -11,6 +11,8 @@
     --diag-text-body: #343a40;
     --diag-text-stale: #721c24;
     --diag-text-fresh: #155724;
+    --diag-bg-fresh: #d4edda;
+    --diag-bg-stale: #f8d7da;
 }
 
 /* Overall status banner */
@@ -25,7 +27,7 @@
     gap: 12px;
 }
 .diag-overall-fresh {
-    background: linear-gradient(135deg, #d4edda, #c3e6cb);
+    background: linear-gradient(135deg, var(--diag-bg-fresh), #c3e6cb);
     border: 2px solid var(--color-success);
 }
 .diag-overall-aging {
@@ -33,7 +35,7 @@
     border: 2px solid var(--color-warning-bg);
 }
 .diag-overall-stale {
-    background: linear-gradient(135deg, #f8d7da, #f5c6cb);
+    background: linear-gradient(135deg, var(--diag-bg-stale), #f5c6cb);
     border: 2px solid var(--color-danger);
 }
 .diag-overall-unavailable {
@@ -104,9 +106,9 @@
     letter-spacing: 0.5px;
     text-transform: uppercase;
 }
-.diag-badge-fresh { background-color: #d4edda; color: var(--diag-text-fresh); border: 1px solid var(--color-success); }
+.diag-badge-fresh { background-color: var(--diag-bg-fresh); color: var(--diag-text-fresh); border: 1px solid var(--color-success); }
 .diag-badge-aging { background-color: #fff3cd; color: var(--color-warning-text); border: 1px solid var(--color-warning-bg); }
-.diag-badge-stale { background-color: #f8d7da; color: var(--diag-text-stale); border: 1px solid var(--color-danger); }
+.diag-badge-stale { background-color: var(--diag-bg-stale); color: var(--diag-text-stale); border: 1px solid var(--color-danger); }
 .diag-badge-unavailable { background-color: #e9ecef; color: var(--color-text-dark); border: 1px solid var(--color-muted); }
 
 .diag-card-body {
@@ -161,7 +163,7 @@
     color: var(--color-text-dark);
 }
 .diag-affected-tag-stale {
-    background: #f8d7da;
+    background: var(--diag-bg-stale);
     color: var(--diag-text-stale);
 }
 
@@ -219,9 +221,9 @@
     margin: 1px 3px;
     font-weight: 500;
 }
-.diag-api-pill-fresh { background: #d4edda; color: var(--diag-text-fresh); }
+.diag-api-pill-fresh { background: var(--diag-bg-fresh); color: var(--diag-text-fresh); }
 .diag-api-pill-aging { background: #fff3cd; color: var(--color-warning-text); }
-.diag-api-pill-stale { background: #f8d7da; color: var(--diag-text-stale); }
+.diag-api-pill-stale { background: var(--diag-bg-stale); color: var(--diag-text-stale); }
 .diag-api-pill-unavailable { background: #e9ecef; color: var(--color-text-dark); }
 
 /* Legend box */
