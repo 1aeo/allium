@@ -209,7 +209,6 @@ class TestPatchingHelpers:
              patch.object(Relays, '_sort_by_observed_bandwidth'), \
              patch.object(Relays, '_trim_platform'), \
              patch.object(Relays, '_add_hashed_contact'), \
-             patch.object(Relays, '_process_aroi_contacts'), \
              patch.object(Relays, '_preprocess_template_data'), \
              patch.object(Relays, '_categorize'), \
              patch.object(Relays, '_generate_aroi_leaderboards'), \

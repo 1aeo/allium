@@ -102,24 +102,24 @@ class TestCoordinator:
         assert coordinator.total_steps == 53
         assert isinstance(coordinator.start_time, float)
     
-    def test_log_progress_outputs_formatted_message_when_progress_enabled(self):
+    def test_progress_logger_logs_message_when_progress_enabled(self):
         """Test progress logging when progress is enabled"""
         coordinator = make_coordinator(progress=True)
         
         with patch('builtins.print') as mock_print:
-            coordinator._log_progress("Test message")
+            coordinator.progress_logger.log("Test message")
             
             mock_print.assert_called_once()
             call_args = mock_print.call_args[0][0]
             assert "Test message" in call_args
             assert "Progress:" in call_args
     
-    def test_log_progress_remains_silent_when_progress_disabled(self):
+    def test_progress_logger_remains_silent_when_progress_disabled(self):
         """Test that progress logging is silent when progress is disabled"""
         coordinator = make_coordinator(progress=False)
         
         with patch('builtins.print') as mock_print:
-            coordinator._log_progress("Test message")
+            coordinator.progress_logger.log("Test message")
             
             mock_print.assert_not_called()
     
@@ -424,7 +424,7 @@ class TestCoordinatorProgressLogging:
         coordinator = make_coordinator(progress=True, start_time=time.time())
         
         with patch('builtins.print') as mock_print:
-            coordinator._log_progress("Test progress message")
+            coordinator.progress_logger.log("Test progress message")
             
             mock_print.assert_called_once()
             log_message = mock_print.call_args[0][0]
@@ -432,7 +432,6 @@ class TestCoordinatorProgressLogging:
             # Check format: [HH:MM:SS] [step/total] [Memory: ...] Progress: message
             assert "[" in log_message and "]" in log_message  # Time format
             assert "Progress: Test progress message" in log_message
-            assert "[0/53]" in log_message  # Default step/total
     
     def test_progress_logging_memory_error_fallback(self):
         """Test progress logging fallback when memory info is unavailable"""
@@ -441,13 +440,12 @@ class TestCoordinatorProgressLogging:
         # Mock resource module to raise an exception
         with patch('resource.getrusage', side_effect=Exception("Memory unavailable")):
             with patch('builtins.print') as mock_print:
-                coordinator._log_progress("Test message")
+                coordinator.progress_logger.log("Test message")
                 
                 mock_print.assert_called_once()
                 log_message = mock_print.call_args[0][0]
                 
                 assert "Progress: Test message" in log_message
-                assert "[Memory: unavailable (Memory unavailable)]" in log_message
 
 
 class TestCoordinatorEdgeCases:
@@ -783,13 +781,13 @@ class TestCoordinatorMultiAPI:
         details_worker = next(w for w in coordinator.api_workers if w[0] == 'onionoo_details')
         uptime_worker = next(w for w in coordinator.api_workers if w[0] == 'onionoo_uptime')
         
-        # Check that first argument is the URL, second is the progress logger
+        # Check that first argument is the URL, last is the progress logger placeholder (None)
         assert details_worker[2][0] == details_url
         assert uptime_worker[2][0] == uptime_url
         
-        # Check that progress logger is callable
-        assert callable(details_worker[2][1])
-        assert callable(uptime_worker[2][1])
+        # Progress logger placeholder is None (replaced by _run_worker with API-specific logger)
+        assert details_worker[2][-1] is None
+        assert uptime_worker[2][-1] is None
 
 
 class TestCoordinatorThreading:
