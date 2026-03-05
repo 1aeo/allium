@@ -30,7 +30,7 @@ from .time_utils import format_time_ago, format_timestamp, format_timestamp_ago
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
 
 
-def _sanitize_path_component(value):
+def _sanitize_path_component(value: str) -> str:
     """Sanitize a string for safe use as a filesystem path component.
     
     Guards against directory traversal, path injection, and OS-specific edge cases:
