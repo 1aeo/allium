@@ -908,68 +908,156 @@ class CollectorFetcher:
     
     def _fetch_current_consensus_method(self) -> Tuple[Optional[int], Optional[str]]:
         """
-        Fetch the actual consensus-method and valid-after from the latest
-        CollecTor consensus document.
-        
-        Only reads the first few lines of the consensus header to extract
-        the 'consensus-method' and 'valid-after' lines. These are the
-        authoritative values from Tor.
-        
+        Fetch the actual consensus-method and valid-after, preferring the
+        freshest source available.
+
+        Tries three sources in order, keeping the result with the newest
+        valid-after:
+          1. CollecTor regular consensus  (cached on CollecTor, can lag hours)
+          2. CollecTor microdesc consensus (often fresher than #1)
+          3. Direct DA fetch              (real-time, used as fallback)
+
         Returns:
             Tuple of (consensus_method, valid_after_timestamp).
             Either or both may be None on failure.
         """
+        best_method, best_valid_after = None, None
+
+        # --- Source 1: CollecTor regular consensus ---
+        m, va = self._fetch_consensus_method_from_collector(
+            f"{COLLECTOR_BASE}/recent/relay-descriptors/consensuses/",
+            r'href="([0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}-[0-9]{{2}}-[0-9]{{2}}-[0-9]{{2}}-consensus)"',
+            "CollecTor consensus",
+        )
+        if m is not None:
+            best_method, best_valid_after = m, va
+
+        # --- Source 2: CollecTor microdesc consensus (often fresher) ---
+        m2, va2 = self._fetch_consensus_method_from_collector(
+            f"{COLLECTOR_BASE}/recent/relay-descriptors/microdescs/consensus-microdesc/",
+            r'href="([0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}-[0-9]{{2}}-[0-9]{{2}}-[0-9]{{2}}-consensus-microdesc)"',
+            "CollecTor microdesc consensus",
+        )
+        if m2 is not None and (best_valid_after is None or (va2 and va2 > best_valid_after)):
+            best_method, best_valid_after = m2, va2
+
+        # --- Source 3: Direct DA fetch (real-time fallback) ---
+        # Only attempted when CollecTor data is missing or older than 2 hours,
+        # which means CollecTor is lagging behind the live network.
+        stale_threshold_hours = 2
+        collector_is_stale = best_valid_after is None
+        if not collector_is_stale:
+            try:
+                from datetime import datetime
+                va_dt = datetime.strptime(best_valid_after, "%Y-%m-%d %H:%M:%S")
+                age_seconds = (datetime.utcnow() - va_dt).total_seconds()
+                collector_is_stale = age_seconds > stale_threshold_hours * 3600
+            except (ValueError, TypeError):
+                collector_is_stale = True
+
+        if collector_is_stale:
+            m3, va3 = self._fetch_consensus_method_from_da()
+            if m3 is not None and (best_valid_after is None or (va3 and va3 > best_valid_after)):
+                best_method, best_valid_after = m3, va3
+                logger.info(f"Using direct DA consensus: method {m3}, valid-after {va3}")
+
+        if best_method is None:
+            logger.warning("Could not determine consensus method from any source")
+        else:
+            logger.info(f"Consensus method {best_method} (valid-after {best_valid_after})")
+
+        return best_method, best_valid_after
+
+    def _fetch_consensus_method_from_collector(
+        self, listing_url: str, pattern: str, source_name: str
+    ) -> Tuple[Optional[int], Optional[str]]:
+        """Fetch consensus-method and valid-after from a CollecTor consensus listing."""
         try:
-            # Get listing of consensus files
-            html = self._fetch_url(f"{COLLECTOR_BASE}/recent/relay-descriptors/consensuses/")
-            consensus_pattern = re.compile(
-                r'href="([0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-consensus)"'
-            )
-            matches = consensus_pattern.findall(html)
+            html = self._fetch_url(listing_url)
+            matches = re.compile(pattern).findall(html)
             if not matches:
-                logger.warning("No consensus files found on CollecTor")
                 return None, None
-            
+
             latest_file = max(matches)
-            url = f"{COLLECTOR_BASE}/recent/relay-descriptors/consensuses/{latest_file}"
-            
-            # Fetch only the first 4KB — consensus-method and valid-after are
-            # in the first 5 lines. We intentionally read only 4KB (not the
-            # full ~30MB consensus document), so socket-level timeout is safe
-            # here (one small read, not a slow-drip risk).
-            # Wrapped in retry for transient connection failures.
+            url = f"{listing_url}{latest_file}"
+
             def _fetch_header():
                 req = urllib.request.Request(url, headers={'User-Agent': 'Allium/1.0'})
                 with urllib.request.urlopen(req, timeout=self.timeout) as response:
                     return response.read(4096).decode('utf-8', errors='replace')
-            
+
             header_text = _retry_with_backoff(
                 fetch_fn=_fetch_header,
                 retry_count=self.retry_count,
                 retry_delay_base=self.retry_delay_base,
-                operation_name="consensus method header",
+                operation_name=f"{source_name} header",
             )
-            
-            method = None
-            valid_after = None
-            for line in header_text.split('\n'):
-                if line.startswith('consensus-method '):
-                    try:
-                        method = int(line.split()[1])
-                    except (ValueError, IndexError):
-                        pass
-                elif line.startswith('valid-after '):
-                    valid_after = line[len('valid-after '):]
-                if method is not None and valid_after is not None:
-                    break
-            
-            if method is None:
-                logger.warning("consensus-method line not found in consensus header")
-            return method, valid_after
-            
+            return self._parse_consensus_header(header_text)
+
         except Exception as e:
-            logger.warning(f"Failed to fetch consensus method from consensus document: {e}")
+            logger.warning(f"Failed to fetch from {source_name}: {e}")
             return None, None
+
+    def _fetch_consensus_method_from_da(self) -> Tuple[Optional[int], Optional[str]]:
+        """
+        Fetch the live consensus-method directly from a directory authority.
+
+        Tries multiple DAs (using Onionoo-discovered data when available,
+        falling back to well-known addresses).  Returns on the first
+        successful fetch.  Only reads the first 4 KB of the response.
+        """
+        da_endpoints = []
+
+        for auth in self.authorities:
+            addr = auth.get('address', '')
+            port = auth.get('dir_port', '80')
+            if addr:
+                da_endpoints.append((auth.get('nickname', addr), addr, port))
+
+        if not da_endpoints:
+            da_endpoints = [
+                ('gabelmoo', '131.188.40.189', '80'),
+                ('maatuska', '171.25.193.9', '443'),
+                ('dannenberg', '193.23.244.244', '80'),
+            ]
+
+        for nickname, addr, port in da_endpoints:
+            try:
+                url = f"http://{addr}:{port}/tor/status-vote/current/consensus"
+
+                def _fetch_header():
+                    req = urllib.request.Request(url, headers={'User-Agent': 'Allium/1.0'})
+                    with urllib.request.urlopen(req, timeout=min(self.timeout, 10)) as resp:
+                        return resp.read(4096).decode('utf-8', errors='replace')
+
+                header_text = _fetch_header()
+                m, va = self._parse_consensus_header(header_text)
+                if m is not None:
+                    logger.info(f"Got consensus method {m} directly from DA {nickname}")
+                    return m, va
+            except Exception as e:
+                logger.debug(f"DA {nickname} ({addr}:{port}) unreachable: {e}")
+                continue
+
+        logger.warning("Could not fetch consensus from any DA directly")
+        return None, None
+
+    @staticmethod
+    def _parse_consensus_header(header_text: str) -> Tuple[Optional[int], Optional[str]]:
+        """Extract consensus-method and valid-after from the first few lines of a consensus."""
+        method = None
+        valid_after = None
+        for line in header_text.split('\n'):
+            if line.startswith('consensus-method '):
+                try:
+                    method = int(line.split()[1])
+                except (ValueError, IndexError):
+                    pass
+            elif line.startswith('valid-after '):
+                valid_after = line[len('valid-after '):]
+            if method is not None and valid_after is not None:
+                break
+        return method, valid_after
     
     def _validate_fingerprint(self, fingerprint: str) -> bool:
         """Validate fingerprint is 40 hex characters."""
