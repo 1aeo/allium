@@ -39,9 +39,13 @@ def _sanitize_path_component(value: str) -> str:
     - Replaces characters outside a safe whitelist with underscores
     - Trims leading/trailing dots and underscores to avoid "." / ".." results
     - Returns "_" if the result is empty or still equals "." / ".."
+    - Appends a short hash suffix when normalization changes the value, preventing
+      distinct raw inputs (e.g. "A B", "A/B", "A_B") from colliding on disk
     - Truncates to 255 characters (common filesystem limit)
     """
+    import hashlib
     import re
+    raw_value = str(value)
     # Strip Windows drive letter prefix (e.g. "C:", "D:")
     if len(value) >= 2 and value[1] == ':' and value[0].isalpha():
         value = value[2:]
@@ -54,12 +58,16 @@ def _sanitize_path_component(value: str) -> str:
     value = re.sub(r'[^A-Za-z0-9_.\-]', '_', value)
     # Trim leading/trailing dots and underscores
     value = value.strip('._')
-    # Truncate to filesystem limit
-    value = value[:255]
-    # Final safety: reject empty or traversal results
+    # Keep room for deterministic suffix when normalization changes value
+    value = value[:240]
+    # Final safety: reject empty or traversal-like results
     if not value or value in ('.', '..'):
-        return '_'
-    return value
+        value = '_'
+    # Prevent collisions when different raw inputs normalize to the same component
+    if value != raw_value:
+        suffix = hashlib.sha1(raw_value.encode("utf-8")).hexdigest()[:10]
+        value = f"{value}-{suffix}"
+    return value[:255]
 
 
 
