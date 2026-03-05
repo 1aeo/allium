@@ -134,6 +134,7 @@
             <th title="Source: CollecTor | Has 'bandwidth-file-headers' line = runs sbws scanner">BW Auth</th>
             <th title="TCP connection test to authority's directory port | Response time in milliseconds">Latency (ms)</th>
             <th title="Source: CollecTor | Consensus method this authority supports (from consensus-methods line in vote)">Consensus Method</th>
+            <th title="Source: CollecTor | The valid-after timestamp from this authority's vote file. Color-coded: green = matches latest consensus period, red = older than other authorities (CollecTor may be lagging or authority missed a vote).">Vote Time (UTC)</th>
             {# Existing columns #}
             <th title="Source: Onionoo | File: details | Field: as">AS Number</th>
             <th title="Source: Onionoo | File: details | Field: as_name">AS Name</th>
@@ -211,6 +212,23 @@
                         <span style="{% if network_max and auth_max >= network_max %}color: #28a745; font-weight: bold;{% elif auth_max %}color: #dc3545;{% endif %}" title="This authority supports consensus method {{ auth_max }}{% if network_max and auth_max < network_max %} (network highest: {{ network_max }}){% endif %}">{{ auth_max }}</span>
                     {% else %}
                         <span style="color: #6c757d;" title="No vote data available">—</span>
+                    {% endif %}
+                </td>
+                
+                {# Per-authority vote valid-after timestamp, color-coded against latest #}
+                <td style="white-space: nowrap; font-size: 12px;">
+                    {% if authority.collector_data and authority.collector_data.vote_valid_after %}
+                        {% set auth_vote_time = authority.collector_data.vote_valid_after %}
+                        {% set latest_vote_time = relays.consensus_method_info.latest_vote_valid_after if relays.consensus_method_info else None %}
+                        {% if latest_vote_time and auth_vote_time == latest_vote_time %}
+                            <span style="color: #28a745;" title="Vote from latest consensus period ({{ auth_vote_time }})">{{ auth_vote_time }}</span>
+                        {% elif latest_vote_time and auth_vote_time < latest_vote_time %}
+                            <span style="color: #dc3545; font-weight: bold;" title="Vote is OLDER than other authorities ({{ auth_vote_time }} vs latest {{ latest_vote_time }}). This authority may have missed a vote or CollecTor is missing its latest vote.">{{ auth_vote_time }}</span>
+                        {% else %}
+                            <span title="Vote valid-after: {{ auth_vote_time }}">{{ auth_vote_time }}</span>
+                        {% endif %}
+                    {% else %}
+                        <span style="color: #6c757d;" title="No vote timestamp available (non-voting authority or no vote data)">—</span>
                     {% endif %}
                 </td>
                 

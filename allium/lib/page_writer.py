@@ -470,11 +470,22 @@ def get_directory_authorities_data(relay_set):
                     auth_consensus_methods = auth_methods
                     auth_max_method = max(auth_methods) if auth_methods else None
             
+            # Extract per-authority vote timestamps (published/valid_after)
+            vote_published = None
+            vote_valid_after = None
+            if vote_tuple:
+                vote_data_dict = vote_tuple[0]
+                if isinstance(vote_data_dict, dict):
+                    vote_published = vote_data_dict.get('published')
+                    vote_valid_after = vote_data_dict.get('valid_after')
+            
             authority['collector_data'] = {
                 'voted': voted,
                 'is_bw_authority': is_bw,
                 'relay_count': relay_count,
                 'max_consensus_method': auth_max_method,
+                'vote_published': vote_published,
+                'vote_valid_after': vote_valid_after,
             }
     
     # Perform latency checks on authorities
