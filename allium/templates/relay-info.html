@@ -37,8 +37,8 @@
 /* === Relay-info-only CSS (moved from skeleton.html — only relay pages use these) === */
 
 /* Hostname verification status */
-.verified-hostname { color: #68b030; }
-.unverified-hostname { color: #FE9F30; }
+.verified-hostname { color: var(--color-hostname-verified); }
+.unverified-hostname { color: var(--color-hostname-unverified); }
 
 /* Section box - gray background container for major sections */
 .section-box {
@@ -78,8 +78,8 @@
 .status-success-bold { color: var(--color-success); font-weight: bold; }
 .status-danger-bold  { color: var(--color-danger); font-weight: bold; }
 .status-warning-bold { color: var(--color-warning-text); font-weight: bold; }
-.text-small-muted { font-size: 11px; color: #666; }
-.text-small-note  { font-size: 12px; color: #666; }
+.text-small-muted { font-size: 11px; color: var(--color-text-secondary); }
+.text-small-note  { font-size: 12px; color: var(--color-text-secondary); }
 
 /* === Relay-info page-specific CSS === */
 
@@ -95,9 +95,9 @@
 
 /* Highlight section when targeted (outline avoids layout shift/overlap) */
 :target {
-    background-color: #fff3cd !important;
+    background-color: var(--color-highlight-bg) !important;
     border-radius: 4px;
-    outline: 3px solid #ffe69c;
+    outline: 3px solid var(--color-highlight-border);
     outline-offset: 4px;
     transition: background-color 0.3s;
 }

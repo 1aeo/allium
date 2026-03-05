@@ -6,6 +6,15 @@
    API Diagnostics Page Styles (page-specific — only loaded on diagnostics page)
    ============================================================================= */
 
+/* Diagnostics Design Tokens (page-scoped; shared tokens in skeleton.html :root) */
+:root {
+    --diag-text-body: #343a40;
+    --diag-text-stale: #721c24;
+    --diag-text-fresh: #155724;
+    --diag-bg-fresh: #d4edda;
+    --diag-bg-stale: #f8d7da;
+}
+
 /* Overall status banner */
 .diag-overall-banner {
     padding: 18px 24px;
@@ -18,7 +27,7 @@
     gap: 12px;
 }
 .diag-overall-fresh {
-    background: linear-gradient(135deg, #d4edda, #c3e6cb);
+    background: linear-gradient(135deg, var(--diag-bg-fresh), #c3e6cb);
     border: 2px solid var(--color-success);
 }
 .diag-overall-aging {
@@ -26,7 +35,7 @@
     border: 2px solid var(--color-warning-bg);
 }
 .diag-overall-stale {
-    background: linear-gradient(135deg, #f8d7da, #f5c6cb);
+    background: linear-gradient(135deg, var(--diag-bg-stale), #f5c6cb);
     border: 2px solid var(--color-danger);
 }
 .diag-overall-unavailable {
@@ -36,7 +45,7 @@
 .diag-overall-status {
     font-size: 20px;
     font-weight: 700;
-    color: #2c3e50;
+    color: var(--color-text-heading);
 }
 .diag-overall-meta {
     font-size: 13px;
@@ -56,7 +65,7 @@
 .diag-card {
     background: #fff;
     border-radius: 8px;
-    border: 2px solid #e1e8ed;
+    border: 2px solid var(--color-border-card);
     padding: 0;
     box-shadow: 0 2px 6px rgba(0,0,0,0.06);
     transition: all 0.2s ease;
@@ -78,13 +87,13 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    border-bottom: 1px solid #f0f4f8;
+    border-bottom: 1px solid var(--color-border-divider);
 }
 .diag-card-header h4 {
     margin: 0;
     font-size: 15px;
     font-weight: 600;
-    color: #2c3e50;
+    color: var(--color-text-heading);
 }
 
 /* Freshness badges */
@@ -97,9 +106,9 @@
     letter-spacing: 0.5px;
     text-transform: uppercase;
 }
-.diag-badge-fresh { background-color: #d4edda; color: #155724; border: 1px solid var(--color-success); }
+.diag-badge-fresh { background-color: var(--diag-bg-fresh); color: var(--diag-text-fresh); border: 1px solid var(--color-success); }
 .diag-badge-aging { background-color: #fff3cd; color: var(--color-warning-text); border: 1px solid var(--color-warning-bg); }
-.diag-badge-stale { background-color: #f8d7da; color: #721c24; border: 1px solid var(--color-danger); }
+.diag-badge-stale { background-color: var(--diag-bg-stale); color: var(--diag-text-stale); border: 1px solid var(--color-danger); }
 .diag-badge-unavailable { background-color: #e9ecef; color: var(--color-text-dark); border: 1px solid var(--color-muted); }
 
 .diag-card-body {
@@ -113,14 +122,14 @@
     font-size: 12px;
 }
 .diag-card-body dt { color: var(--color-muted); font-weight: 600; }
-.diag-card-body dd { margin: 0; color: #343a40; word-break: break-all; }
+.diag-card-body dd { margin: 0; color: var(--diag-text-body); word-break: break-all; }
 .diag-card-body dd a { color: var(--color-link); text-decoration: none; }
 .diag-card-body dd a:hover { text-decoration: underline; }
 
 /* Progress bar */
 .diag-progress-bar {
     height: 6px;
-    background: #e9ecef;
+    background: var(--color-border-subtle);
     border-radius: 3px;
     margin-top: 8px;
     overflow: hidden;
@@ -138,15 +147,15 @@
 .diag-affected {
     margin-top: 10px;
     padding-top: 8px;
-    border-top: 1px solid #f0f4f8;
+    border-top: 1px solid var(--color-border-divider);
     font-size: 12px;
     color: var(--color-muted);
 }
 .diag-affected strong { color: var(--color-text-dark); }
-.diag-affected-stale strong { color: #721c24; }
+.diag-affected-stale strong { color: var(--diag-text-stale); }
 .diag-affected-tag {
     display: inline-block;
-    background: #f0f4f8;
+    background: var(--color-border-divider);
     padding: 2px 8px;
     border-radius: 3px;
     margin: 2px 3px 2px 0;
@@ -154,18 +163,18 @@
     color: var(--color-text-dark);
 }
 .diag-affected-tag-stale {
-    background: #f8d7da;
-    color: #721c24;
+    background: var(--diag-bg-stale);
+    color: var(--diag-text-stale);
 }
 
 /* Section header */
 .diag-section-header {
     font-size: 18px;
     font-weight: 600;
-    color: #2c3e50;
+    color: var(--color-text-heading);
     margin: 30px 0 16px 0;
     padding-bottom: 8px;
-    border-bottom: 2px solid #e1e8ed;
+    border-bottom: 2px solid var(--color-border-card);
 }
 
 /* Dependency map table */
@@ -184,7 +193,7 @@
 }
 .diag-dep-table tbody td {
     padding: 10px 14px;
-    border-bottom: 1px solid #f0f4f8;
+    border-bottom: 1px solid var(--color-border-divider);
     vertical-align: middle;
 }
 .diag-dep-table tbody tr:hover { background-color: var(--color-bg-light); }
@@ -212,9 +221,9 @@
     margin: 1px 3px;
     font-weight: 500;
 }
-.diag-api-pill-fresh { background: #d4edda; color: #155724; }
+.diag-api-pill-fresh { background: var(--diag-bg-fresh); color: var(--diag-text-fresh); }
 .diag-api-pill-aging { background: #fff3cd; color: var(--color-warning-text); }
-.diag-api-pill-stale { background: #f8d7da; color: #721c24; }
+.diag-api-pill-stale { background: var(--diag-bg-stale); color: var(--diag-text-stale); }
 .diag-api-pill-unavailable { background: #e9ecef; color: var(--color-text-dark); }
 
 /* Legend box */
