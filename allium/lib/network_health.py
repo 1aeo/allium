@@ -14,7 +14,7 @@ from .string_utils import format_percentage_from_fraction
 from .consensus.consensus_evaluation import _port_in_rules
 from .country_utils import is_eu_political, is_frontier_country, get_rare_countries_weighted_with_existing_data
 from .uptime_utils import find_relay_uptime_data, calculate_relay_uptime_average
-from .consensus.collector_fetcher import get_voting_authority_names, get_voting_authority_count
+from .consensus.collector_fetcher import get_voting_authority_names, get_voting_authority_count, get_best_family_groups
 
 
 def _pct(numerator, denominator):
@@ -451,28 +451,12 @@ def calculate_network_health_metrics(relay_set):
     voting_authority_nicknames = {n.lower() for n in get_voting_authority_names()}
     
     # Pre-compute Happy Family sets before main loop (enables single-pass counting).
-    # PRIMARY source: DA-validated microdescriptor family-ids (method 35+).
-    # FALLBACK: server descriptor family-cert (pre-method-35 or microdesc unavailable).
-    collector_consensus_for_hf = getattr(relay_set, 'collector_consensus_data', None)
-    microdesc_family_hf = {}
-    if collector_consensus_for_hf and isinstance(collector_consensus_for_hf, dict):
-        microdesc_family_hf = collector_consensus_for_hf.get('microdesc_family', {})
-
-    microdesc_groups = microdesc_family_hf.get('family_key_groups', {})
-    using_microdesc_for_hf = bool(microdesc_groups)
-
-    if using_microdesc_for_hf:
-        # DA-validated family-ids: authoritative source
-        verified_family_fps = set()
-        for group_fps in microdesc_groups.values():
-            verified_family_fps.update(fp.upper() for fp in group_fps)
-    else:
-        # Fallback: server descriptor family-cert groups
-        collector_descs = getattr(relay_set, 'collector_descriptors_data', None)
-        verified_family_fps = set()
-        if collector_descs and isinstance(collector_descs, dict):
-            for group_fps in collector_descs.get('family_cert_groups', {}).values():
-                verified_family_fps.update(fp.upper() for fp in group_fps)
+    # Uses shared helper: DA-validated microdescriptor family-ids (method 35+) preferred,
+    # falls back to server descriptor family-cert when unavailable.
+    best_groups, _family_source = get_best_family_groups(relay_set)
+    verified_family_fps = set()
+    for group_fps in best_groups.values():
+        verified_family_fps.update(fp.upper() for fp in group_fps)
 
     # Server descriptor coverage data (kept for descriptors-seen tracking)
     collector_descs = getattr(relay_set, 'collector_descriptors_data', None)
@@ -1379,12 +1363,12 @@ def calculate_network_health_metrics(relay_set):
     # computed in the main relay loop above (eliminates 3 extra relay passes).
     
     # Consensus method + family params from collector consensus data
-    collector_data_hf = getattr(relay_set, 'collector_consensus_data', None)
+    collector_consensus_data = getattr(relay_set, 'collector_consensus_data', None)
     cm_info = {}
     microdesc_family = {}
-    if collector_data_hf and isinstance(collector_data_hf, dict):
-        cm_info = collector_data_hf.get('consensus_method_info', {})
-        microdesc_family = collector_data_hf.get('microdesc_family', {})
+    if collector_consensus_data and isinstance(collector_consensus_data, dict):
+        cm_info = collector_consensus_data.get('consensus_method_info', {})
+        microdesc_family = collector_consensus_data.get('microdesc_family', {})
     
     desc_seen_total = len(all_seen_fps)
     

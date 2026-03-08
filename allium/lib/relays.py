@@ -915,31 +915,11 @@ class Relays:
         Called at Step 13.5 in enrich_with_api_data() — after all API data is attached,
         before precomputation (Steps 14-15). Runs exactly once, unconditionally.
         """
-        # --- Determine family group data source (microdescriptors > server descriptors) ---
-        collector_consensus = getattr(self, 'collector_consensus_data', None)
-        microdesc_family = {}
-        if collector_consensus and isinstance(collector_consensus, dict):
-            microdesc_family = collector_consensus.get('microdesc_family', {})
+        from .consensus.collector_fetcher import get_best_family_groups
+        raw_groups, family_source = get_best_family_groups(self)
+        logger.info(f"Family classification using {family_source} "
+                    f"({len(raw_groups)} groups)")
 
-        microdesc_groups = microdesc_family.get('family_key_groups', {})
-        using_microdesc = bool(microdesc_groups)
-
-        if using_microdesc:
-            raw_groups = microdesc_groups
-            logger.info(f"Family classification using DA-validated microdescriptor family-ids "
-                        f"({len(microdesc_family.get('family_ids_fps', []))} relays, "
-                        f"{len(microdesc_groups)} families)")
-        else:
-            # Fallback to server descriptors (pre-method-35 or microdesc fetch failed)
-            collector_descs = getattr(self, 'collector_descriptors_data', None)
-            if collector_descs and isinstance(collector_descs, dict):
-                raw_groups = collector_descs.get('family_cert_groups', {})
-            else:
-                raw_groups = {}
-            logger.info(f"Family classification using server descriptor family-cert "
-                        f"(microdescriptor data unavailable, fallback)")
-
-        # Server descriptor metadata (kept for coverage tracking and per-relay diagnostics)
         collector_descs = getattr(self, 'collector_descriptors_data', None)
         if collector_descs and isinstance(collector_descs, dict):
             all_seen_fps = set(collector_descs.get('all_seen_fingerprints', []))
@@ -950,7 +930,7 @@ class Relays:
 
         self._all_seen_fps_cache = all_seen_fps
         self._descriptor_coverage_hours = coverage_hours
-        self._family_source = 'microdesc' if using_microdesc else 'server_descriptor'
+        self._family_source = family_source
 
         # Build family group caches filtered to relays in current dataset.
         valid_fps = {r.get("fingerprint", "").upper() for r in self.json["relays"]}

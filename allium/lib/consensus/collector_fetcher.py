@@ -11,10 +11,12 @@ Data sources:
 
 import re
 import base64
+import hashlib
 import urllib.request
 import urllib.error
 import socket
 import concurrent.futures
+from collections import defaultdict
 from typing import Dict, List, Optional, Tuple, Any, Callable
 from datetime import datetime
 import logging
@@ -856,9 +858,10 @@ class CollectorFetcher:
         """
         from collections import Counter
         
-        per_authority = {}  # auth_name -> sorted list of supported methods
+        per_authority = {}
         method_counts = Counter()
-        family_params = {}  # param_name -> {auth_name: value}
+        family_params = {}
+        vote_valid_afters = []
         
         for auth_name, vote_data in self.votes.items():
             if not vote_data:
@@ -868,23 +871,16 @@ class CollectorFetcher:
             for m in methods:
                 method_counts[m] += 1
             
-            # Extract family-related consensus params from this authority's vote
             params = vote_data.get('params', {})
             for key in ('use-family-ids', 'use-family-lists'):
                 if key in params:
-                    if key not in family_params:
-                        family_params[key] = {}
-                    family_params[key][auth_name] = params[key]
+                    family_params.setdefault(key, {})[auth_name] = params[key]
+            
+            va = vote_data.get('valid_after')
+            if va:
+                vote_valid_afters.append(va)
         
         total_voters = len(per_authority)
-        
-        # Track the latest vote valid-after timestamp across all authorities.
-        # When CollecTor lags behind the live network, this lets templates show
-        # how old the vote data actually is.
-        vote_valid_afters = []
-        for auth_name, vote_data in self.votes.items():
-            if vote_data and vote_data.get('valid_after'):
-                vote_valid_afters.append(vote_data['valid_after'])
         latest_vote_valid_after = max(vote_valid_afters) if vote_valid_afters else None
         
         # Get the ACTUAL current consensus method from the consensus document
@@ -939,7 +935,7 @@ class CollectorFetcher:
         # --- Source 1: CollecTor regular consensus ---
         m, va = self._fetch_consensus_method_from_collector(
             f"{COLLECTOR_BASE}/recent/relay-descriptors/consensuses/",
-            r'href="([0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}-[0-9]{{2}}-[0-9]{{2}}-[0-9]{{2}}-consensus)"',
+            self._CONSENSUS_FILE_PATTERN,
             "CollecTor consensus",
         )
         if m is not None:
@@ -948,7 +944,7 @@ class CollectorFetcher:
         # --- Source 2: CollecTor microdesc consensus (often fresher) ---
         m2, va2 = self._fetch_consensus_method_from_collector(
             f"{COLLECTOR_BASE}/recent/relay-descriptors/microdescs/consensus-microdesc/",
-            r'href="([0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}-[0-9]{{2}}-[0-9]{{2}}-[0-9]{{2}}-consensus-microdesc)"',
+            self._MICRODESC_CONSENSUS_FILE_PATTERN,
             "CollecTor microdesc consensus",
         )
         if m2 is not None and (best_valid_after is None or (va2 and va2 > best_valid_after)):
@@ -961,7 +957,6 @@ class CollectorFetcher:
         collector_is_stale = best_valid_after is None
         if not collector_is_stale:
             try:
-                from datetime import datetime
                 va_dt = datetime.strptime(best_valid_after, "%Y-%m-%d %H:%M:%S")
                 age_seconds = (datetime.utcnow() - va_dt).total_seconds()
                 collector_is_stale = age_seconds > stale_threshold_hours * 3600
@@ -982,12 +977,12 @@ class CollectorFetcher:
         return best_method, best_valid_after
 
     def _fetch_consensus_method_from_collector(
-        self, listing_url: str, pattern: str, source_name: str
+        self, listing_url: str, pattern: 're.Pattern', source_name: str
     ) -> Tuple[Optional[int], Optional[str]]:
         """Fetch consensus-method and valid-after from a CollecTor consensus listing."""
         try:
             html = self._fetch_url(listing_url)
-            matches = re.compile(pattern).findall(html)
+            matches = pattern.findall(html)
             if not matches:
                 return None, None
 
@@ -1034,16 +1029,13 @@ class CollectorFetcher:
                 ('dannenberg', '193.23.244.244', '80'),
             ]
 
+        da_timeout = min(self.timeout, 10)
         for nickname, addr, port in da_endpoints:
             try:
                 url = f"http://{addr}:{port}/tor/status-vote/current/consensus"
-
-                def _fetch_header():
-                    req = urllib.request.Request(url, headers={'User-Agent': 'Allium/1.0'})
-                    with urllib.request.urlopen(req, timeout=min(self.timeout, 10)) as resp:
-                        return resp.read(4096).decode('utf-8', errors='replace')
-
-                header_text = _fetch_header()
+                req = urllib.request.Request(url, headers={'User-Agent': 'Allium/1.0'})
+                with urllib.request.urlopen(req, timeout=da_timeout) as resp:
+                    header_text = resp.read(4096).decode('utf-8', errors='replace')
                 m, va = self._parse_consensus_header(header_text)
                 if m is not None:
                     logger.info(f"Got consensus method {m} directly from DA {nickname}")
@@ -1072,9 +1064,22 @@ class CollectorFetcher:
                 break
         return method, valid_after
     
-    # Pre-compiled pattern for microdescriptor family-ids lines
+    # Pre-compiled patterns for microdescriptor parsing
     _FAMILY_IDS_PATTERN = re.compile(r'^family-ids (.+)$', re.MULTILINE)
     _LEGACY_FAMILY_PATTERN = re.compile(r'^family \$', re.MULTILINE)
+    # Byte-level markers for fast pre-filtering before regex (avoids decode + regex on entries without family data)
+    _FAMILY_IDS_BYTES = b'\nfamily-ids '
+    _LEGACY_FAMILY_BYTES = b'\nfamily $'
+    # Pre-compiled CollecTor listing patterns (reused across consensus method and microdesc fetches)
+    _CONSENSUS_FILE_PATTERN = re.compile(
+        r'href="([0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-consensus)"'
+    )
+    _MICRODESC_CONSENSUS_FILE_PATTERN = re.compile(
+        r'href="([0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-consensus-microdesc)"'
+    )
+    _MICRODESC_FILE_PATTERN = re.compile(
+        r'href="([0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-micro-[^"]+)"'
+    )
 
     def _fetch_microdesc_family_ids(self) -> dict:
         """
@@ -1103,8 +1108,6 @@ class CollectorFetcher:
           unique_family_keys    – sorted list of unique ed25519 family key IDs
           total_microdescs      – total microdescriptors matched to consensus
         """
-        import hashlib
-
         empty = {
             'family_ids_count': 0,
             'family_ids_fps': [],
@@ -1118,10 +1121,7 @@ class CollectorFetcher:
             # --- Step 1: Build digest→fingerprint map from microdesc consensus ---
             mc_listing_url = f"{COLLECTOR_BASE}/recent/relay-descriptors/microdescs/consensus-microdesc/"
             mc_html = self._fetch_url(mc_listing_url)
-            mc_pattern = re.compile(
-                r'href="([0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-consensus-microdesc)"'
-            )
-            mc_matches = sorted(mc_pattern.findall(mc_html))
+            mc_matches = sorted(self._MICRODESC_CONSENSUS_FILE_PATTERN.findall(mc_html))
             if not mc_matches:
                 logger.info("No microdesc consensus files found on CollecTor")
                 return empty
@@ -1157,21 +1157,20 @@ class CollectorFetcher:
             # --- Step 2: Fetch ALL microdesc files and build per-relay mapping ---
             listing_url = f"{COLLECTOR_BASE}/recent/relay-descriptors/microdescs/micro/"
             html = self._fetch_url(listing_url)
-            file_pattern = re.compile(
-                r'href="([0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-micro-[^"]+)"'
-            )
-            all_files = sorted(file_pattern.findall(html))
+            all_files = sorted(self._MICRODESC_FILE_PATTERN.findall(html))
             if not all_files:
                 logger.info("No microdescriptor files found on CollecTor")
                 return empty
 
             family_ids_fps = set()
-            family_key_groups = {}  # key → set of fps
+            family_key_groups = defaultdict(set)
             legacy_family_fps = set()
             total_matched = 0
 
-            # Use a longer timeout for microdesc files — the bulk file can be 28+ MB
             microdesc_timeout = max(self.timeout, 60)
+            fid_marker = self._FAMILY_IDS_BYTES
+            legacy_marker = self._LEGACY_FAMILY_BYTES
+
             for fname in all_files:
                 url = f"{listing_url}{fname}"
                 try:
@@ -1182,8 +1181,7 @@ class CollectorFetcher:
                     logger.warning(f"Failed to fetch microdesc file {fname}: {e}")
                     continue
 
-                entries = raw_bytes.split(b'@type microdescriptor 1.0\n')
-                for entry in entries:
+                for entry in raw_bytes.split(b'@type microdescriptor 1.0\n'):
                     ok_idx = entry.find(b'onion-key')
                     if ok_idx < 0:
                         continue
@@ -1191,26 +1189,22 @@ class CollectorFetcher:
                     if not hashable.endswith(b'\n'):
                         hashable += b'\n'
 
-                    h = hashlib.sha256(hashable).digest()
-                    d64 = base64.b64encode(h).decode('ascii').rstrip('=')
-
+                    d64 = base64.b64encode(hashlib.sha256(hashable).digest()).decode('ascii').rstrip('=')
                     fp = digest_to_fp.get(d64)
                     if not fp:
                         continue
                     total_matched += 1
 
-                    entry_text = entry.decode('ascii', errors='replace')
-                    fid_match = self._FAMILY_IDS_PATTERN.search(entry_text)
-                    if fid_match:
+                    # Byte-level pre-filter avoids decoding + regex on entries without family data
+                    if fid_marker in entry:
                         family_ids_fps.add(fp)
-                        for key in fid_match.group(1).strip().split():
-                            if key not in family_key_groups:
-                                family_key_groups[key] = set()
+                        fid_line_start = entry.find(fid_marker) + len(fid_marker)
+                        fid_line_end = entry.find(b'\n', fid_line_start)
+                        for key in entry[fid_line_start:fid_line_end].decode('ascii').strip().split():
                             family_key_groups[key].add(fp)
-                    elif self._LEGACY_FAMILY_PATTERN.search(entry_text):
+                    elif legacy_marker in entry:
                         legacy_family_fps.add(fp)
 
-            # Convert sets to sorted lists for JSON serialization
             serializable_groups = {k: sorted(v) for k, v in family_key_groups.items()}
 
             logger.info(
@@ -1604,6 +1598,32 @@ def discover_authorities(relays: list, update_registry: bool = True) -> list:
         logger.info(f"discover_authorities: Found {len(authorities)} authorities from Onionoo")
     
     return authorities
+
+
+def get_best_family_groups(relay_set) -> Tuple[dict, str]:
+    """
+    Get the best available family group data, preferring DA-validated
+    microdescriptor family-ids over server descriptor family-cert.
+
+    Returns:
+        Tuple of (groups_dict, source_name) where groups_dict maps
+        family_key → list of relay fingerprints, and source_name is
+        'microdesc' or 'server_descriptor'.
+    """
+    collector_consensus = getattr(relay_set, 'collector_consensus_data', None)
+    if collector_consensus and isinstance(collector_consensus, dict):
+        md_family = collector_consensus.get('microdesc_family', {})
+        groups = md_family.get('family_key_groups', {})
+        if groups:
+            return groups, 'microdesc'
+
+    collector_descs = getattr(relay_set, 'collector_descriptors_data', None)
+    if collector_descs and isinstance(collector_descs, dict):
+        groups = collector_descs.get('family_cert_groups', {})
+        if groups:
+            return groups, 'server_descriptor'
+
+    return {}, 'none'
 
 
 def calculate_consensus_requirement(authority_count: int) -> dict:
