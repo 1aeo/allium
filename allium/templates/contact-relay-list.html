@@ -36,7 +36,7 @@
 
 {# Determine if we should use the 4-section layout #}
 {% set use_sections = contact_validation_status and contact_validation_status.has_aroi and contact_validation_status.validation_status != 'not_configured' -%}
-{% set is_contact_sortable = sortable_scope == 'contact' -%}
+{% set is_contact_sortable = sortable_scope == 'contact' and contact_sort_enabled -%}
 
 {# =============================================================================
    MACRO: Render relay table header (DRY - used by all sections)
@@ -45,7 +45,7 @@
 <th{% if title %} title="{{ title }}"{% endif %}>
     {% if is_contact_sortable -%}
         {% if contact_sort_mode == sort_mode -%}
-            {{ label|safe }}
+            <strong>{{ label|safe }} ▾</strong>
         {% else -%}
             <a href="{{ contact_sort_links.get(sort_mode, 'index.html')|escape }}">{{ label|safe }}</a>
         {% endif -%}

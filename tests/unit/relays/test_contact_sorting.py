@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from allium.lib.page_writer import (
+from allium.lib.contact_sorting import (
     CONTACT_SORT_MODES,
     CONTACT_SORT_FILE_MAP,
     _sort_contact_relays,
@@ -166,6 +166,109 @@ def test_selected_sort_mode_expected_first_rows():
     assert _sort_contact_relays(relays, "first_seen")[0]["nickname"] == "beta"  # newest first
     assert _sort_contact_relays(relays, "last_restarted")[0]["nickname"] == "beta"  # newest first
     assert _sort_contact_relays(relays, "ipv6")[0]["nickname"] == "beta"
+
+
+def test_ipv4_sorting_is_numeric_not_lexicographic():
+    relays = [
+        _relay(
+            "A" * 40, "r1", True, 1, 1, 50, -1, "192.168.1.1", "", ["Running"], "untested", "none",
+            "US", "AS1", "ASN1", "Linux", "2025-01-01 00:00:00", None, "2026-03-08 00:00:00"
+        ),
+        _relay(
+            "B" * 40, "r2", True, 1, 1, 50, -1, "9.9.9.9", "", ["Running"], "untested", "none",
+            "US", "AS1", "ASN1", "Linux", "2025-01-01 00:00:00", None, "2026-03-08 00:00:00"
+        ),
+        _relay(
+            "C" * 40, "r3", True, 1, 1, 50, -1, "2.2.2.2", "", ["Running"], "untested", "none",
+            "US", "AS1", "ASN1", "Linux", "2025-01-01 00:00:00", None, "2026-03-08 00:00:00"
+        ),
+        _relay(
+            "D" * 40, "r4", True, 1, 1, 50, -1, "1.1.1.1", "", ["Running"], "untested", "none",
+            "US", "AS1", "ASN1", "Linux", "2025-01-01 00:00:00", None, "2026-03-08 00:00:00"
+        ),
+    ]
+
+    sorted_ipv4 = [relay["or_addresses"][0].split(":")[0] for relay in _sort_contact_relays(relays, "ipv4")]
+    assert sorted_ipv4 == ["1.1.1.1", "2.2.2.2", "9.9.9.9", "192.168.1.1"]
+
+
+def test_ipv6_sorting_is_numeric_not_lexicographic():
+    relays = [
+        _relay(
+            "A" * 40, "r1", True, 1, 1, 50, -1, "1.1.1.1", "2001:db8::100", ["Running"], "untested", "none",
+            "US", "AS1", "ASN1", "Linux", "2025-01-01 00:00:00", None, "2026-03-08 00:00:00"
+        ),
+        _relay(
+            "B" * 40, "r2", True, 1, 1, 50, -1, "1.1.1.2", "2001:db8::9", ["Running"], "untested", "none",
+            "US", "AS1", "ASN1", "Linux", "2025-01-01 00:00:00", None, "2026-03-08 00:00:00"
+        ),
+        _relay(
+            "C" * 40, "r3", True, 1, 1, 50, -1, "1.1.1.3", "2001:db8::10", ["Running"], "untested", "none",
+            "US", "AS1", "ASN1", "Linux", "2025-01-01 00:00:00", None, "2026-03-08 00:00:00"
+        ),
+    ]
+
+    sorted_ipv6 = [
+        relay["or_addresses"][1].split("]")[0].lstrip("[")
+        for relay in _sort_contact_relays(relays, "ipv6")
+    ]
+    assert sorted_ipv6 == ["2001:db8::9", "2001:db8::10", "2001:db8::100"]
+
+
+def test_flag_uptime_sort_uses_current_flags_only():
+    historical_exit = _relay(
+        "A" * 40,
+        "alpha",
+        True,
+        1,
+        1,
+        50,
+        -1,
+        "1.1.1.1",
+        "",
+        ["Guard", "Running"],
+        "success",
+        "none",
+        "US",
+        "AS1",
+        "ASN1",
+        "Linux",
+        "2025-01-01 00:00:00",
+        "2026-03-01 00:00:00",
+        "2026-03-08 00:00:00",
+    )
+    historical_exit["_flag_uptime_data"] = {
+        "Exit": {"6_months": {"uptime": 99.0, "data_points": 30}},
+        "Guard": {"6_months": {"uptime": 10.0, "data_points": 30}},
+    }
+
+    guard_only = _relay(
+        "B" * 40,
+        "beta",
+        True,
+        1,
+        1,
+        50,
+        -1,
+        "1.1.1.2",
+        "",
+        ["Guard", "Running"],
+        "success",
+        "none",
+        "US",
+        "AS1",
+        "ASN1",
+        "Linux",
+        "2025-01-01 00:00:00",
+        "2026-03-01 00:00:00",
+        "2026-03-08 00:00:00",
+    )
+    guard_only["_flag_uptime_data"] = {
+        "Guard": {"6_months": {"uptime": 50.0, "data_points": 30}},
+    }
+
+    sorted_relays = _sort_contact_relays([historical_exit, guard_only], "flag_uptime")
+    assert [relay["nickname"] for relay in sorted_relays] == ["beta", "alpha"]
 
 
 def test_contact_sort_tie_breaker_uses_fingerprint():

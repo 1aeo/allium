@@ -504,6 +504,7 @@ class TestContactTemplateIntegration(unittest.TestCase):
         context['relays']['json']['relay_subset'][0]['or_addresses'] = ['192.168.1.1:9001', '[2001:db8::1]:9001']
         context['sortable_scope'] = 'contact'
         context['contact_sort_mode'] = 'bandwidth'
+        context['contact_sort_enabled'] = True
         context['contact_sort_links'] = CONTACT_SORT_FILE_MAP
 
         template = self.jinja_env.get_template('contact.html')
@@ -767,8 +768,8 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
         self.assertIn("aroi_domain", contact_data, 
                      "aroi_domain should be stored for efficient vanity URL generation")
 
-    def test_contact_page_generation_creates_sort_variant_files(self):
-        """Contact page writer should emit index + by-*.html variants (no by-bandwidth)."""
+    def test_contact_page_generation_with_two_or_fewer_relays_only_writes_index(self):
+        """Contacts with <=2 relays should only get index.html (no sort variants)."""
         relay_set = Relays(
             output_dir=self.temp_dir,
             onionoo_url="https://test.example.com",
@@ -784,6 +785,85 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
         self.assertGreater(len(contact_hashes), 0)
         contact_dir = os.path.join(self.temp_dir, "contact", contact_hashes[0])
 
+        self.assertTrue(os.path.exists(os.path.join(contact_dir, "index.html")))
+        self.assertFalse(os.path.exists(os.path.join(contact_dir, "by-status.html")))
+        self.assertFalse(os.path.exists(os.path.join(contact_dir, "by-bandwidth.html")))
+
+    def test_contact_page_generation_creates_variants_for_three_relay_contact(self):
+        """Contacts with >=3 relays should emit full variant set."""
+        relay_data = {
+            "relays": [
+                {
+                    "fingerprint": "AAA1111BBBB2222CCCC3333DDDD4444EEEE5555",
+                    "nickname": "TestRelay1",
+                    "contact": "same@example.org",
+                    "country": "us",
+                    "country_name": "United States",
+                    "as": "AS7922",
+                    "as_name": "Comcast",
+                    "observed_bandwidth": 5000000,
+                    "consensus_weight": 1000,
+                    "flags": ["Running", "Valid", "Guard"],
+                    "running": True,
+                    "measured": True,
+                    "first_seen": "2023-01-01 00:00:00",
+                    "or_addresses": ["192.168.1.1:9001"],
+                    "platform": "Tor 0.4.7.8 on Linux",
+                    "effective_family": [],
+                },
+                {
+                    "fingerprint": "FFF6666777788889999AAAABBBBCCCCDDDDEEEE",
+                    "nickname": "TestRelay2",
+                    "contact": "same@example.org",
+                    "country": "de",
+                    "country_name": "Germany",
+                    "as": "AS3320",
+                    "as_name": "Deutsche Telekom",
+                    "observed_bandwidth": 3000000,
+                    "consensus_weight": 800,
+                    "flags": ["Running", "Valid", "Exit"],
+                    "running": True,
+                    "measured": True,
+                    "first_seen": "2023-06-01 00:00:00",
+                    "or_addresses": ["10.0.0.1:9001"],
+                    "platform": "Tor 0.4.7.8 on FreeBSD",
+                    "effective_family": [],
+                },
+                {
+                    "fingerprint": "1111222233334444555566667777888899990000",
+                    "nickname": "TestRelay3",
+                    "contact": "same@example.org",
+                    "country": "fr",
+                    "country_name": "France",
+                    "as": "AS1234",
+                    "as_name": "ExampleNet",
+                    "observed_bandwidth": 2000000,
+                    "consensus_weight": 700,
+                    "flags": ["Running", "Valid", "Guard"],
+                    "running": True,
+                    "measured": True,
+                    "first_seen": "2024-01-01 00:00:00",
+                    "or_addresses": ["[2001:db8::1]:9001"],
+                    "platform": "Tor 0.4.8.0 on Linux",
+                    "effective_family": [],
+                },
+            ]
+        }
+
+        relay_set = Relays(
+            output_dir=self.temp_dir,
+            onionoo_url="https://test.example.com",
+            relay_data=relay_data,
+            use_bits=False,
+            progress=False,
+            mp_workers=0,
+        )
+
+        relay_set.write_pages_by_key("contact")
+
+        contact_hashes = list(relay_set.json["sorted"]["contact"].keys())
+        self.assertEqual(len(contact_hashes), 1)
+        contact_dir = os.path.join(self.temp_dir, "contact", contact_hashes[0])
         expected_files = [
             "index.html",
             "by-status.html",
@@ -804,14 +884,12 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
             "by-last-restarted.html",
             "by-ipv6.html",
         ]
-
         for filename in expected_files:
             self.assertTrue(os.path.exists(os.path.join(contact_dir, filename)), f"missing {filename}")
-
         self.assertFalse(os.path.exists(os.path.join(contact_dir, "by-bandwidth.html")))
 
-    def test_contact_page_generation_creates_vanity_sort_variants_when_validated(self):
-        """Validated AROI contacts should get vanity index + by-*.html variants."""
+    def test_contact_page_generation_creates_vanity_index_only_for_small_contacts(self):
+        """Validated AROI contact with <=2 relays should only get vanity index.html."""
         relay_set = Relays(
             output_dir=self.temp_dir,
             onionoo_url="https://test.example.com",
@@ -833,29 +911,8 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
 
         vanity_dir = os.path.join(self.temp_dir, "example.org")
         self.assertTrue(os.path.isdir(vanity_dir))
-
-        expected_files = [
-            "index.html",
-            "by-status.html",
-            "by-nickname.html",
-            "by-total-data.html",
-            "by-uptime.html",
-            "by-uptime-percentage.html",
-            "by-flag-uptime.html",
-            "by-ipv4.html",
-            "by-flags.html",
-            "by-dns.html",
-            "by-family.html",
-            "by-country.html",
-            "by-as-number.html",
-            "by-as-name.html",
-            "by-platform.html",
-            "by-first-seen.html",
-            "by-last-restarted.html",
-            "by-ipv6.html",
-        ]
-        for filename in expected_files:
-            self.assertTrue(os.path.exists(os.path.join(vanity_dir, filename)), f"missing vanity {filename}")
+        self.assertTrue(os.path.exists(os.path.join(vanity_dir, "index.html")))
+        self.assertFalse(os.path.exists(os.path.join(vanity_dir, "by-status.html")))
 
 
 if __name__ == '__main__':
