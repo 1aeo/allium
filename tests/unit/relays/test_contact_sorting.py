@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 
-from allium.lib.page_writer import (
+from allium.lib.contact_sorting import (
     CONTACT_SORT_MODES,
     CONTACT_SORT_FILE_MAP,
-    _sort_contact_relays,
-    _sort_contact_section_entries,
+    sort_contact_relays,
+    sort_contact_section_entries,
 )
 
 
@@ -146,7 +146,7 @@ def test_contact_sorting_produces_deterministic_order_for_all_modes():
     relays = _sample_relays()
 
     for mode in CONTACT_SORT_MODES:
-        sorted_relays = _sort_contact_relays(relays, mode)
+        sorted_relays = sort_contact_relays(relays, mode)
         fingerprints = [relay["fingerprint"] for relay in sorted_relays]
         assert sorted(fingerprints) == sorted([relay["fingerprint"] for relay in relays]), mode
 
@@ -154,18 +154,18 @@ def test_contact_sorting_produces_deterministic_order_for_all_modes():
 def test_selected_sort_mode_expected_first_rows():
     relays = _sample_relays()
 
-    assert _sort_contact_relays(relays, "bandwidth")[0]["nickname"] == "beta"
-    assert _sort_contact_relays(relays, "total_data")[0]["nickname"] == "beta"
-    assert _sort_contact_relays(relays, "nickname")[0]["nickname"] == "alpha"
-    assert _sort_contact_relays(relays, "uptime")[0]["nickname"] == "alpha"  # longest running uptime first
-    assert _sort_contact_relays(relays, "uptime_percentage")[0]["nickname"] == "beta"
-    assert _sort_contact_relays(relays, "flag_uptime")[0]["nickname"] == "beta"
-    assert _sort_contact_relays(relays, "ipv4")[0]["nickname"] == "beta"
-    assert _sort_contact_relays(relays, "dns")[0]["nickname"] == "beta"
-    assert _sort_contact_relays(relays, "family")[0]["nickname"] == "beta"
-    assert _sort_contact_relays(relays, "first_seen")[0]["nickname"] == "beta"  # newest first
-    assert _sort_contact_relays(relays, "last_restarted")[0]["nickname"] == "beta"  # newest first
-    assert _sort_contact_relays(relays, "ipv6")[0]["nickname"] == "beta"
+    assert sort_contact_relays(relays, "bandwidth")[0]["nickname"] == "beta"
+    assert sort_contact_relays(relays, "total_data")[0]["nickname"] == "beta"
+    assert sort_contact_relays(relays, "nickname")[0]["nickname"] == "alpha"
+    assert sort_contact_relays(relays, "uptime")[0]["nickname"] == "alpha"  # longest running uptime first
+    assert sort_contact_relays(relays, "uptime_percentage")[0]["nickname"] == "beta"
+    assert sort_contact_relays(relays, "flag_uptime")[0]["nickname"] == "beta"
+    assert sort_contact_relays(relays, "ipv4")[0]["nickname"] == "beta"
+    assert sort_contact_relays(relays, "dns")[0]["nickname"] == "beta"
+    assert sort_contact_relays(relays, "family")[0]["nickname"] == "beta"
+    assert sort_contact_relays(relays, "first_seen")[0]["nickname"] == "beta"  # newest first
+    assert sort_contact_relays(relays, "last_restarted")[0]["nickname"] == "beta"  # newest first
+    assert sort_contact_relays(relays, "ipv6")[0]["nickname"] == "beta"
 
 
 def test_contact_sort_tie_breaker_uses_fingerprint():
@@ -212,7 +212,7 @@ def test_contact_sort_tie_breaker_uses_fingerprint():
         "2026-03-08 00:00:00",
     )
 
-    sorted_relays = _sort_contact_relays([relay_2, relay_1], "nickname")
+    sorted_relays = sort_contact_relays([relay_2, relay_1], "nickname")
     assert [relay["fingerprint"] for relay in sorted_relays] == [
         "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
         "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
@@ -222,5 +222,5 @@ def test_contact_sort_tie_breaker_uses_fingerprint():
 def test_section_wrapper_sorting_uses_embedded_relay():
     relays = _sample_relays()
     wrapped = [{"relay": relay} for relay in relays]
-    sorted_wrapped = _sort_contact_section_entries(wrapped, "bandwidth")
+    sorted_wrapped = sort_contact_section_entries(wrapped, "bandwidth")
     assert sorted_wrapped[0]["relay"]["nickname"] == "beta"

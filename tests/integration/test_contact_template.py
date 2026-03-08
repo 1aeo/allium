@@ -495,7 +495,7 @@ class TestContactTemplateIntegration(unittest.TestCase):
     def test_contact_template_sort_links_for_all_columns(self):
         """Contact pages should expose static no-JS sort links."""
         import copy
-        from allium.lib.page_writer import CONTACT_SORT_FILE_MAP
+        from allium.lib.contact_sorting import CONTACT_SORT_FILE_MAP
 
         context = copy.deepcopy(self.template_context)
         context['relay_subset'][0]['ipv6_support'] = 'both'
