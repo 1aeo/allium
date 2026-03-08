@@ -274,7 +274,6 @@ class CollectorFetcher:
         self.bw_authorities = set()  # Authorities that run bandwidth scanners
         self.ipv6_testing_authorities = set()  # Authorities that test IPv6
         self._timings = {}
-        self._microdesc_consensus_cache = None  # Reused between consensus method + family-ids fetches
     
     def fetch_all(self) -> dict:
         """
@@ -339,21 +338,33 @@ class CollectorFetcher:
             
             self._timings['index'] = time.time() - start_time
         
-        # Compute consensus method info from per-authority vote data (zero extra I/O)
+        # Fetch and parse the microdesc consensus ONCE — both the consensus
+        # method info and the family-ids mapping need this data.  One fetch,
+        # one parse, two consumers.
+        start_time = time.time()
+        mc_method, mc_valid_after, digest_to_fp = None, None, {}
         try:
-            result['consensus_method_info'] = self._compute_consensus_method_info()
+            mc_method, mc_valid_after, digest_to_fp = self._fetch_and_parse_microdesc_consensus()
+        except Exception as e:
+            logger.warning(f"Failed to fetch microdesc consensus: {e}")
+            result['errors'].append(f"microdesc_consensus: {e}")
+        self._timings['microdesc_consensus'] = time.time() - start_time
+        
+        # Compute consensus method info (uses microdesc result + vote data + fallbacks)
+        try:
+            result['consensus_method_info'] = self._compute_consensus_method_info(
+                mc_method, mc_valid_after
+            )
         except Exception as e:
             logger.error(f"Failed to compute consensus method info: {e}")
             result['errors'].append(f"consensus_method_info: {e}")
             result['consensus_method_info'] = {}
         
-        # Fetch DA-validated family-ids from microdescriptors (method 35+).
-        # This is the authoritative source for Happy Family membership — it's
-        # what clients actually use for path selection.  Server descriptor
-        # family-cert is self-declared; microdescriptor family-ids is DA-verified.
+        # Build DA-validated family-ids mapping from microdesc files,
+        # using the digest→fingerprint map from the microdesc consensus.
         try:
             start_time = time.time()
-            result['microdesc_family'] = self._fetch_microdesc_family_ids()
+            result['microdesc_family'] = self._fetch_microdesc_family_ids(digest_to_fp)
             self._timings['microdesc_family'] = time.time() - start_time
         except Exception as e:
             logger.error(f"Failed to fetch microdesc family-ids: {e}")
@@ -842,20 +853,17 @@ class CollectorFetcher:
         
         logger.info(f"Indexed {len(self.relay_index)} relays from votes, {len(self.flag_thresholds)} authority thresholds")
     
-    def _compute_consensus_method_info(self) -> dict:
+    def _compute_consensus_method_info(
+        self,
+        mc_method: Optional[int] = None,
+        mc_valid_after: Optional[str] = None,
+    ) -> dict:
         """
-        Get the current consensus method from the actual consensus document
-        and extract per-authority method support from votes.
-        
-        The current_method is read directly from the CollecTor consensus document
-        (the 'consensus-method' line) — NOT computed from votes. Only Tor itself
-        determines what the active consensus method is.
-        
-        Per-authority consensus-methods lists from votes are used to show which
-        authorities support which methods (e.g., how many support method 35).
-        
-        Also extracts family-related consensus params from votes
-        (use-family-ids, use-family-lists) for Happy Family migration tracking.
+        Combine per-authority vote data with the pre-fetched consensus method.
+
+        Args:
+            mc_method: Consensus method from microdesc consensus (pre-fetched).
+            mc_valid_after: Valid-after from microdesc consensus (pre-fetched).
         """
         from collections import Counter
         
@@ -884,19 +892,17 @@ class CollectorFetcher:
         total_voters = len(per_authority)
         latest_vote_valid_after = max(vote_valid_afters) if vote_valid_afters else None
         
-        # Get the ACTUAL current consensus method from the consensus document
-        # This is the authoritative source — we never compute it ourselves
-        current_method, consensus_valid_after = self._fetch_current_consensus_method()
+        # Start with microdesc consensus result (pre-fetched in fetch_all),
+        # then try CollecTor regular consensus and direct DA for fresher data.
+        current_method, consensus_valid_after = self._best_consensus_method(
+            mc_method, mc_valid_after
+        )
         
-        # Max method any authority supports (shows what's coming next)
         all_methods = [m for methods in per_authority.values() for m in methods]
         max_method = max(all_methods) if all_methods else None
         max_method_support = method_counts.get(max_method, 0) if max_method else 0
         
-        # Infer consensus method from vote data if consensus document fetch failed.
-        # Uses the same supermajority algorithm as Tor's dirvote.c:
-        #   threshold = floor(n * 2 / 3) + 1  (strictly more than 2/3)
-        # The active consensus method is the highest method supported by >= threshold voters.
+        # Infer from votes if all document fetches failed (dirvote.c algorithm).
         if current_method is None and method_counts and total_voters > 0:
             threshold = (total_voters * 2) // 3 + 1
             for method in sorted(method_counts.keys(), reverse=True):
@@ -915,111 +921,101 @@ class CollectorFetcher:
             'consensus_valid_after': consensus_valid_after,
             'latest_vote_valid_after': latest_vote_valid_after,
         }
-    
-    def _fetch_current_consensus_method(self) -> Tuple[Optional[int], Optional[str]]:
-        """
-        Fetch the actual consensus-method and valid-after, preferring the
-        freshest source available.
 
-        Tries three sources in order, keeping the result with the newest
-        valid-after:
-          1. CollecTor regular consensus  (cached on CollecTor, can lag hours)
-          2. CollecTor microdesc consensus (often fresher than #1)
-          3. Direct DA fetch              (real-time, used as fallback)
+    def _best_consensus_method(
+        self,
+        mc_method: Optional[int] = None,
+        mc_valid_after: Optional[str] = None,
+    ) -> Tuple[Optional[int], Optional[str]]:
+        """
+        Determine the freshest consensus method across up to 3 sources:
+          1. Microdesc consensus (already fetched, passed in as args)
+          2. CollecTor regular consensus (4KB header fetch)
+          3. Direct DA fetch (only if both CollecTor sources are >2h stale)
+        """
+        best_method, best_va = mc_method, mc_valid_after
+
+        # CollecTor regular consensus — may be fresher than microdesc consensus
+        try:
+            html = self._fetch_url(f"{COLLECTOR_BASE}/recent/relay-descriptors/consensuses/")
+            matches = self._CONSENSUS_FILE_PATTERN.findall(html)
+            if matches:
+                url = f"{COLLECTOR_BASE}/recent/relay-descriptors/consensuses/{max(matches)}"
+                req = urllib.request.Request(url, headers={'User-Agent': 'Allium/1.0'})
+                with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                    header = resp.read(4096).decode('utf-8', errors='replace')
+                m, va = self._parse_consensus_header(header)
+                if m is not None and (best_va is None or (va and va > best_va)):
+                    best_method, best_va = m, va
+        except Exception as e:
+            logger.debug(f"CollecTor regular consensus unavailable: {e}")
+
+        # Direct DA — only when CollecTor data is stale (>2h)
+        stale = best_va is None
+        if not stale:
+            try:
+                age = (datetime.utcnow() - datetime.strptime(best_va, "%Y-%m-%d %H:%M:%S")).total_seconds()
+                stale = age > 7200
+            except (ValueError, TypeError):
+                stale = True
+        if stale:
+            m, va = self._fetch_consensus_method_from_da()
+            if m is not None and (best_va is None or (va and va > best_va)):
+                best_method, best_va = m, va
+                logger.info(f"Using direct DA consensus: method {m}, valid-after {va}")
+
+        if best_method:
+            logger.info(f"Consensus method {best_method} (valid-after {best_va})")
+        else:
+            logger.warning("Could not determine consensus method from any source")
+        return best_method, best_va
+
+    def _fetch_and_parse_microdesc_consensus(self) -> Tuple[Optional[int], Optional[str], Dict[str, str]]:
+        """
+        Fetch the latest microdesc consensus from CollecTor, parse it ONCE,
+        and return both the consensus method and the digest→fingerprint map.
 
         Returns:
-            Tuple of (consensus_method, valid_after_timestamp).
-            Either or both may be None on failure.
-        """
-        best_method, best_valid_after = None, None
-
-        # --- Source 1: CollecTor regular consensus ---
-        m, va = self._fetch_consensus_method_from_collector(
-            f"{COLLECTOR_BASE}/recent/relay-descriptors/consensuses/",
-            self._CONSENSUS_FILE_PATTERN,
-            "CollecTor consensus",
-        )
-        if m is not None:
-            best_method, best_valid_after = m, va
-
-        # --- Source 2: CollecTor microdesc consensus (often fresher) ---
-        # cache_full_content=True: downloads the full file so
-        # _fetch_microdesc_family_ids() can reuse it (saves one HTTP request).
-        m2, va2 = self._fetch_consensus_method_from_collector(
-            f"{COLLECTOR_BASE}/recent/relay-descriptors/microdescs/consensus-microdesc/",
-            self._MICRODESC_CONSENSUS_FILE_PATTERN,
-            "CollecTor microdesc consensus",
-            cache_full_content=True,
-        )
-        if m2 is not None and (best_valid_after is None or (va2 and va2 > best_valid_after)):
-            best_method, best_valid_after = m2, va2
-
-        # --- Source 3: Direct DA fetch (real-time fallback) ---
-        # Only attempted when CollecTor data is missing or older than 2 hours,
-        # which means CollecTor is lagging behind the live network.
-        stale_threshold_hours = 2
-        collector_is_stale = best_valid_after is None
-        if not collector_is_stale:
-            try:
-                va_dt = datetime.strptime(best_valid_after, "%Y-%m-%d %H:%M:%S")
-                age_seconds = (datetime.utcnow() - va_dt).total_seconds()
-                collector_is_stale = age_seconds > stale_threshold_hours * 3600
-            except (ValueError, TypeError):
-                collector_is_stale = True
-
-        if collector_is_stale:
-            m3, va3 = self._fetch_consensus_method_from_da()
-            if m3 is not None and (best_valid_after is None or (va3 and va3 > best_valid_after)):
-                best_method, best_valid_after = m3, va3
-                logger.info(f"Using direct DA consensus: method {m3}, valid-after {va3}")
-
-        if best_method is None:
-            logger.warning("Could not determine consensus method from any source")
-        else:
-            logger.info(f"Consensus method {best_method} (valid-after {best_valid_after})")
-
-        return best_method, best_valid_after
-
-    def _fetch_consensus_method_from_collector(
-        self, listing_url: str, pattern: 're.Pattern', source_name: str,
-        cache_full_content: bool = False,
-    ) -> Tuple[Optional[int], Optional[str]]:
-        """Fetch consensus-method and valid-after from a CollecTor consensus listing.
-
-        When cache_full_content=True, downloads the entire file (not just
-        the header) and stores it in self._microdesc_consensus_cache so
-        _fetch_microdesc_family_ids() can reuse it without a second HTTP request.
+            (method, valid_after, digest_to_fp) where digest_to_fp maps
+            base64 microdesc SHA256 digests to relay fingerprints.
         """
         try:
+            listing_url = f"{COLLECTOR_BASE}/recent/relay-descriptors/microdescs/consensus-microdesc/"
             html = self._fetch_url(listing_url)
-            matches = pattern.findall(html)
+            matches = sorted(self._MICRODESC_CONSENSUS_FILE_PATTERN.findall(html))
             if not matches:
-                return None, None
+                return None, None, {}
 
-            latest_file = max(matches)
-            url = f"{listing_url}{latest_file}"
+            mc_url = f"{listing_url}{matches[-1]}"
+            content = self._fetch_url(mc_url)
 
-            if cache_full_content:
-                full_text = self._fetch_url(url)
-                self._microdesc_consensus_cache = full_text
-                return self._parse_consensus_header(full_text)
-            else:
-                def _fetch_header():
-                    req = urllib.request.Request(url, headers={'User-Agent': 'Allium/1.0'})
-                    with urllib.request.urlopen(req, timeout=self.timeout) as response:
-                        return response.read(4096).decode('utf-8', errors='replace')
+            method, valid_after = self._parse_consensus_header(content)
 
-                header_text = _retry_with_backoff(
-                    fetch_fn=_fetch_header,
-                    retry_count=self.retry_count,
-                    retry_delay_base=self.retry_delay_base,
-                    operation_name=f"{source_name} header",
-                )
-                return self._parse_consensus_header(header_text)
+            digest_to_fp = {}
+            current_fp = None
+            for line in content.split('\n'):
+                if line.startswith('r '):
+                    parts = line.split()
+                    if len(parts) >= 3:
+                        ib64 = parts[2]
+                        pad = 4 - len(ib64) % 4
+                        if pad != 4:
+                            ib64 += '=' * pad
+                        try:
+                            current_fp = base64.b64decode(ib64).hex().upper()
+                        except Exception:
+                            current_fp = None
+                elif line.startswith('m ') and current_fp:
+                    digest_to_fp[line.split()[1]] = current_fp
+                    current_fp = None
+
+            logger.info(f"Microdesc consensus: method {method}, valid-after {valid_after}, "
+                        f"{len(digest_to_fp)} relay→digest mappings")
+            return method, valid_after, digest_to_fp
 
         except Exception as e:
-            logger.warning(f"Failed to fetch from {source_name}: {e}")
-            return None, None
+            logger.warning(f"Failed to fetch microdesc consensus: {e}")
+            return None, None, {}
 
     def _fetch_consensus_method_from_da(self) -> Tuple[Optional[int], Optional[str]]:
         """
@@ -1096,32 +1092,17 @@ class CollectorFetcher:
         r'href="([0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-micro-[^"]+)"'
     )
 
-    def _fetch_microdesc_family_ids(self) -> dict:
+    def _fetch_microdesc_family_ids(self, digest_to_fp: Dict[str, str]) -> dict:
         """
-        Fetch DA-validated family-ids with per-relay fingerprint mapping.
+        Fetch microdesc files and build the DA-validated family-ids mapping.
 
-        Microdescriptors are the authoritative source for Happy Family
-        membership — they contain ``family-ids`` lines only for relays whose
-        ``family-cert`` the DAs verified and accepted (consensus method 35+).
-        This is what clients actually use for path selection.
+        Uses the pre-parsed digest→fingerprint map (from the microdesc
+        consensus, fetched once in fetch_all) to join microdescriptor
+        entries back to relay fingerprints via SHA256 digest matching.
 
-        Builds the per-relay mapping by:
-          1. Parsing the microdesc consensus for relay fingerprint → microdesc
-             digest pairs (the ``r`` and ``m`` lines).
-          2. Fetching ALL available microdesc files from CollecTor (incremental
-             files over several days give near-complete coverage).
-          3. SHA256-hashing each microdescriptor entry (raw bytes, from
-             ``onion-key`` to end) and matching against the consensus digests.
-          4. Extracting ``family-ids`` and legacy ``family`` lines and mapping
-             them back to relay fingerprints.
-
-        Returns a dict with:
-          family_ids_count      – relays with DA-validated family-ids
-          family_ids_fps        – sorted list of relay fingerprints with family-ids
-          family_key_groups     – dict: family_key → sorted list of relay fingerprints
-          legacy_family_count   – relays with old-style MyFamily
-          unique_family_keys    – sorted list of unique ed25519 family key IDs
-          total_microdescs      – total microdescriptors matched to consensus
+        Args:
+            digest_to_fp: Map of base64 microdesc SHA256 digest → relay fingerprint,
+                          from _fetch_and_parse_microdesc_consensus().
         """
         empty = {
             'family_ids_count': 0,
@@ -1132,46 +1113,10 @@ class CollectorFetcher:
             'total_microdescs': 0,
         }
 
+        if not digest_to_fp:
+            return empty
+
         try:
-            # --- Step 1: Build digest→fingerprint map from microdesc consensus ---
-            # Reuse content cached by _fetch_current_consensus_method() if available
-            # (saves one listing fetch + one ~2MB consensus download).
-            mc_content = self._microdesc_consensus_cache
-            if not mc_content:
-                mc_listing_url = f"{COLLECTOR_BASE}/recent/relay-descriptors/microdescs/consensus-microdesc/"
-                mc_html = self._fetch_url(mc_listing_url)
-                mc_matches = sorted(self._MICRODESC_CONSENSUS_FILE_PATTERN.findall(mc_html))
-                if not mc_matches:
-                    logger.info("No microdesc consensus files found on CollecTor")
-                    return empty
-                mc_url = f"{mc_listing_url}{mc_matches[-1]}"
-                mc_content = self._fetch_url(mc_url)
-
-            digest_to_fp = {}
-            current_fp = None
-            for line in mc_content.split('\n'):
-                if line.startswith('r '):
-                    parts = line.split()
-                    if len(parts) >= 3:
-                        ib64 = parts[2]
-                        pad = 4 - len(ib64) % 4
-                        if pad != 4:
-                            ib64 += '=' * pad
-                        try:
-                            current_fp = base64.b64decode(ib64).hex().upper()
-                        except Exception:
-                            current_fp = None
-                elif line.startswith('m ') and current_fp:
-                    digest_to_fp[line.split()[1]] = current_fp
-                    current_fp = None
-
-            if not digest_to_fp:
-                logger.warning("Could not parse any relay→digest pairs from microdesc consensus")
-                return empty
-
-            logger.info(f"Microdesc consensus: {len(digest_to_fp)} relay→digest mappings")
-
-            # --- Step 2: Fetch ALL microdesc files and build per-relay mapping ---
             listing_url = f"{COLLECTOR_BASE}/recent/relay-descriptors/microdescs/micro/"
             html = self._fetch_url(listing_url)
             all_files = sorted(self._MICRODESC_FILE_PATTERN.findall(html))

@@ -1142,7 +1142,7 @@ class TestParseStatsLineEdgeCases:
 class TestConsensusMethodInference:
     """Tests for consensus method inference from vote data.
     
-    When _fetch_current_consensus_method() fails (consensus document HTTP
+    When _best_consensus_method() fails (consensus document HTTP
     requests fail), the consensus method should be inferred from vote data
     using Tor's supermajority algorithm (highest method with >2/3 support).
     """
@@ -1162,7 +1162,7 @@ class TestConsensusMethodInference:
             }
         
         # Mock _fetch_current_consensus_method to return (None, None) (simulates failure)
-        with patch.object(fetcher, '_fetch_current_consensus_method', return_value=(None, None)):
+        with patch.object(fetcher, '_best_consensus_method', return_value=(None, None)):
             result = fetcher._compute_consensus_method_info()
         
         # Should infer method 34 (highest with 9/9 support, threshold = 7)
@@ -1190,7 +1190,7 @@ class TestConsensusMethodInference:
                 'params': {},
             }
         
-        with patch.object(fetcher, '_fetch_current_consensus_method', return_value=(None, None)):
+        with patch.object(fetcher, '_best_consensus_method', return_value=(None, None)):
             result = fetcher._compute_consensus_method_info()
         
         # Method 35 only has 2 supporters (below threshold of 7)
@@ -1212,7 +1212,7 @@ class TestConsensusMethodInference:
         }
         
         # Mock returns actual method (not None)
-        with patch.object(fetcher, '_fetch_current_consensus_method', return_value=(32, '2026-03-05 06:00:00')):
+        with patch.object(fetcher, '_best_consensus_method', return_value=(32, '2026-03-05 06:00:00')):
             result = fetcher._compute_consensus_method_info()
         
         # Should use the actual method, not infer
@@ -1224,7 +1224,7 @@ class TestConsensusMethodInference:
         fetcher = CollectorFetcher()
         fetcher.votes = {}
         
-        with patch.object(fetcher, '_fetch_current_consensus_method', return_value=(None, None)):
+        with patch.object(fetcher, '_best_consensus_method', return_value=(None, None)):
             result = fetcher._compute_consensus_method_info()
         
         # No votes = no inference possible
@@ -1249,7 +1249,7 @@ class TestConsensusMethodInference:
             },
         }
         
-        with patch.object(fetcher, '_fetch_current_consensus_method', return_value=(None, None)):
+        with patch.object(fetcher, '_best_consensus_method', return_value=(None, None)):
             result = fetcher._compute_consensus_method_info()
         
         # Family params should be extracted regardless of inference
@@ -1312,7 +1312,7 @@ consensus-methods 28 29 30
             },
         }
         
-        with patch.object(fetcher, '_fetch_current_consensus_method',
+        with patch.object(fetcher, '_best_consensus_method',
                           return_value=(35, '2026-03-05 06:00:00')):
             result = fetcher._compute_consensus_method_info()
         
