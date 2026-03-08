@@ -810,6 +810,53 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
 
         self.assertFalse(os.path.exists(os.path.join(contact_dir, "by-bandwidth.html")))
 
+    def test_contact_page_generation_creates_vanity_sort_variants_when_validated(self):
+        """Validated AROI contacts should get vanity index + by-*.html variants."""
+        relay_set = Relays(
+            output_dir=self.temp_dir,
+            onionoo_url="https://test.example.com",
+            relay_data=self.relay_data,
+            use_bits=False,
+            progress=False,
+            mp_workers=0,
+            base_url="https://metrics.1aeo.com",
+        )
+
+        contact_hashes = list(relay_set.json["sorted"]["contact"].keys())
+        self.assertGreater(len(contact_hashes), 0)
+        contact_hash = contact_hashes[0]
+        contact_data = relay_set.json["sorted"]["contact"][contact_hash]
+        contact_data["is_validated_aroi"] = True
+        contact_data["aroi_domain"] = "example.org"
+
+        relay_set.write_pages_by_key("contact")
+
+        vanity_dir = os.path.join(self.temp_dir, "example.org")
+        self.assertTrue(os.path.isdir(vanity_dir))
+
+        expected_files = [
+            "index.html",
+            "by-status.html",
+            "by-nickname.html",
+            "by-total-data.html",
+            "by-uptime.html",
+            "by-uptime-percentage.html",
+            "by-flag-uptime.html",
+            "by-ipv4.html",
+            "by-flags.html",
+            "by-dns.html",
+            "by-family.html",
+            "by-country.html",
+            "by-as-number.html",
+            "by-as-name.html",
+            "by-platform.html",
+            "by-first-seen.html",
+            "by-last-restarted.html",
+            "by-ipv6.html",
+        ]
+        for filename in expected_files:
+            self.assertTrue(os.path.exists(os.path.join(vanity_dir, filename)), f"missing vanity {filename}")
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -57,25 +57,48 @@
 
 {% macro relay_table_header(table_has_ipv6) -%}
 <tr>
-    {{ sort_header('Status' if is_contact_sortable else '', 'status', 'Relay online/offline status') }}
-    {{ sort_header('Nickname', 'nickname') }}
-    {{ sort_header('BW Cap (' ~ bandwidth ~ ' ' ~ bandwidth_unit ~ ')', 'bandwidth', 'Observed bandwidth capacity: An estimate of the capacity this relay can handle. The relay remembers the max bandwidth sustained output over any ten second period in the past 5 days, and another sustained input. The observed value is the lesser of these two numbers.') }}
-    {{ sort_header('Total Data', 'total_data', 'Total data transferred by this relay (read + write, 5yr). Source: Onionoo /bandwidth.') }}
-    {{ sort_header('Uptime/Downtime', 'uptime') }}
-    {{ sort_header('Uptime (1M/6M/1Y/5Y)', 'uptime_percentage', contact_display_data.outliers.tooltip if contact_display_data and contact_display_data.outliers and contact_display_data.outliers.tooltip else 'Statistical outliers: ≥2σ from average') }}
-    {{ sort_header('Flag Uptime (1M/6M/1Y/5Y)', 'flag_uptime', 'Flag-specific uptime percentages showing the reliability of this relay when operating in its primary network role. Priority: Exit > Guard > Fast > Running flags.') }}
-    {{ sort_header('IPv4', 'ipv4') }}
-    {{ sort_header('Flags', 'flags') }}
-    {{ sort_header('DNS', 'dns', 'Exit DNS Health: DNS resolution status of exit relays. Source: exitdnshealth.1aeo.com') }}
-    {{ sort_header('Family', 'family', 'Family membership method: Happy Families (family-cert), MyFamily (legacy), Both, or None. Green = has family-cert (Happy Families and Both), Red = MyFamily only.') }}
-    {{ sort_header('Country', 'country') }}
-    {{ sort_header('AS Number', 'as_number') }}
-    {{ sort_header('AS Name', 'as_name') }}
-    {{ sort_header('Platform', 'platform') }}
-    {{ sort_header('First Seen', 'first_seen') }}
-    {{ sort_header('Last Restarted', 'last_restarted') }}
+    {% if is_contact_sortable -%}
+        {{ sort_header('Status', 'status', 'Relay online/offline status') }}
+        {{ sort_header('Nickname', 'nickname') }}
+        {{ sort_header('BW Cap (' ~ bandwidth ~ ' ' ~ bandwidth_unit ~ ')', 'bandwidth', 'Observed bandwidth capacity: An estimate of the capacity this relay can handle. The relay remembers the max bandwidth sustained output over any ten second period in the past 5 days, and another sustained input. The observed value is the lesser of these two numbers.') }}
+        {{ sort_header('Total Data', 'total_data', 'Total data transferred by this relay (read + write, 5yr). Source: Onionoo /bandwidth.') }}
+        {{ sort_header('Uptime/Downtime', 'uptime') }}
+        {{ sort_header('Uptime (1M/6M/1Y/5Y)', 'uptime_percentage', contact_display_data.outliers.tooltip if contact_display_data and contact_display_data.outliers and contact_display_data.outliers.tooltip else 'Statistical outliers: ≥2σ from average') }}
+        {{ sort_header('Flag Uptime (1M/6M/1Y/5Y)', 'flag_uptime', 'Flag-specific uptime percentages showing the reliability of this relay when operating in its primary network role. Priority: Exit > Guard > Fast > Running flags.') }}
+        {{ sort_header('IPv4', 'ipv4') }}
+        {{ sort_header('Flags', 'flags') }}
+        {{ sort_header('DNS', 'dns', 'Exit DNS Health: DNS resolution status of exit relays. Source: exitdnshealth.1aeo.com') }}
+        {{ sort_header('Family', 'family', 'Family membership method: Happy Families (family-cert), MyFamily (legacy), Both, or None. Green = has family-cert (Happy Families and Both), Red = MyFamily only.') }}
+        {{ sort_header('Country', 'country') }}
+        {{ sort_header('AS Number', 'as_number') }}
+        {{ sort_header('AS Name', 'as_name') }}
+        {{ sort_header('Platform', 'platform') }}
+        {{ sort_header('First Seen', 'first_seen') }}
+        {{ sort_header('Last Restarted', 'last_restarted') }}
+        {% if table_has_ipv6 -%}
+        {{ sort_header('IPv6', 'ipv6') }}
+        {% endif -%}
+    {% else -%}
+    <th></th>
+    <th>Nickname</th>
+    <th title="Observed bandwidth capacity: An estimate of the capacity this relay can handle. The relay remembers the max bandwidth sustained output over any ten second period in the past 5 days, and another sustained input. The observed value is the lesser of these two numbers.">BW Cap ({{ bandwidth }} {{ bandwidth_unit }})</th>
+    <th title="Total data transferred by this relay (read + write, 5yr). Source: Onionoo /bandwidth.">Total Data</th>
+    <th>Uptime/Downtime</th>
+    <th title="{% if contact_display_data and contact_display_data.outliers and contact_display_data.outliers.tooltip %}{{ contact_display_data.outliers.tooltip }}{% else %}Statistical outliers: ≥2σ from average{% endif %}">Uptime (1M/6M/1Y/5Y)</th>
+    <th title="Flag-specific uptime percentages showing the reliability of this relay when operating in its primary network role. Priority: Exit > Guard > Fast > Running flags.">Flag Uptime (1M/6M/1Y/5Y)</th>
+    <th>IPv4</th>
+    <th>Flags</th>
+    <th title="Exit DNS Health: DNS resolution status of exit relays. Source: exitdnshealth.1aeo.com">DNS</th>
+    <th title="Family membership method: Happy Families (family-cert), MyFamily (legacy), Both, or None. Green = has family-cert (Happy Families and Both), Red = MyFamily only.">Family</th>
+    <th>Country</th>
+    <th>AS Number</th>
+    <th>AS Name</th>
+    <th>Platform</th>
+    <th>First Seen</th>
+    <th>Last Restarted</th>
     {% if table_has_ipv6 -%}
-    {{ sort_header('IPv6', 'ipv6') }}
+    <th>IPv6</th>
+    {% endif -%}
     {% endif -%}
 </tr>
 {%- endmacro %}
