@@ -159,17 +159,17 @@
 {% macro family_support_inline(fsc) -%}
 {% set fsc_total = fsc.get('both', 0) + fsc.get('happy_families', 0) + fsc.get('my_family', 0) + fsc.get('none', 0) -%}
 {% if fsc_total > 0 -%}
-{% if fsc.get('both', 0) > 0 %}<span style="color: #28a745;">{{ fsc.both }} Both, Happy Families and MyFamily ({{ (fsc.both / fsc_total * 100)|round(0)|int }}%)</span>{% if fsc.get('happy_families', 0) > 0 or fsc.get('my_family', 0) > 0 or fsc.get('none', 0) > 0 %}, {% endif %}{% endif -%}
-{% if fsc.get('happy_families', 0) > 0 %}<span style="color: #28a745;">{{ fsc.happy_families }} Happy Families ({{ (fsc.happy_families / fsc_total * 100)|round(0)|int }}%)</span>{% if fsc.get('my_family', 0) > 0 or fsc.get('none', 0) > 0 %}, {% endif %}{% endif -%}
-{% if fsc.get('my_family', 0) > 0 %}<span style="color: #dc3545;">{{ fsc.my_family }} MyFamily ({{ (fsc.my_family / fsc_total * 100)|round(0)|int }}%)</span>{% if fsc.get('none', 0) > 0 %}, {% endif %}{% endif -%}
-{% if fsc.get('none', 0) > 0 %}<span style="color: #6c757d;">{{ fsc.none }} None ({{ (fsc.none / fsc_total * 100)|round(0)|int }}%)</span>{% endif -%}
+{% if fsc.get('both', 0) > 0 %}<span class="al-status-success">{{ fsc.both }} Both, Happy Families and MyFamily ({{ (fsc.both / fsc_total * 100)|round(0)|int }}%)</span>{% if fsc.get('happy_families', 0) > 0 or fsc.get('my_family', 0) > 0 or fsc.get('none', 0) > 0 %}, {% endif %}{% endif -%}
+{% if fsc.get('happy_families', 0) > 0 %}<span class="al-status-success">{{ fsc.happy_families }} Happy Families ({{ (fsc.happy_families / fsc_total * 100)|round(0)|int }}%)</span>{% if fsc.get('my_family', 0) > 0 or fsc.get('none', 0) > 0 %}, {% endif %}{% endif -%}
+{% if fsc.get('my_family', 0) > 0 %}<span class="al-status-danger">{{ fsc.my_family }} MyFamily ({{ (fsc.my_family / fsc_total * 100)|round(0)|int }}%)</span>{% if fsc.get('none', 0) > 0 %}, {% endif %}{% endif -%}
+{% if fsc.get('none', 0) > 0 %}<span class="al-status-muted">{{ fsc.none }} None ({{ (fsc.none / fsc_total * 100)|round(0)|int }}%)</span>{% endif -%}
 {% endif -%}
 {%- endmacro %}
 
 {# DRY: DNS health summary bullet — used by detail_summary, contact.html, country.html #}
 {%- macro dns_health_bullet(summary, label="exit relays") -%}
-<span style="color: #28a745;">{{ summary.healthy }} healthy ({{ summary.healthy_pct }}%)</span>
-{%- if summary.failing > 0 %}, <span style="color: #dc3545;">{{ summary.failing }} failing ({{ summary.failing_pct }}%)</span>{% endif %}
+<span class="al-status-success">{{ summary.healthy }} healthy ({{ summary.healthy_pct }}%)</span>
+{%- if summary.failing > 0 %}, <span class="al-status-danger">{{ summary.failing }} failing ({{ summary.failing_pct }}%)</span>{% endif %}
 {%- if summary.untested > 0 %}, {{ summary.untested }} untested ({{ summary.untested_pct }}%){% endif %}
  of {{ summary.exit_count }} {{ label }}
 {%- endmacro -%}
@@ -177,7 +177,7 @@
 {# DRY: Network-wide DNS health bullet — used by all 5 misc listing pages #}
 {%- macro network_dns_health_bullet(nh) -%}
 {% if nh.exit_dns_health_available %}
-<li><strong>Exit DNS Health</strong>: <span style="color: #28a745;">{{ nh.exit_dns_health_success_formatted }} healthy</span> / <span style="color: #dc3545;">{{ nh.exit_dns_health_total_failures_formatted }} unhealthy</span> ({{ "%.1f"|format(nh.exit_dns_health_success_rate) }}% success rate, {{ nh.exit_dns_health_tested_formatted }} of {{ nh.exit_dns_health_consensus_exits_formatted }} exits tested)</li>
+<li><strong>Exit DNS Health</strong>: <span class="al-status-success">{{ nh.exit_dns_health_success_formatted }} healthy</span> / <span class="al-status-danger">{{ nh.exit_dns_health_total_failures_formatted }} unhealthy</span> ({{ "%.1f"|format(nh.exit_dns_health_success_rate) }}% success rate, {{ nh.exit_dns_health_tested_formatted }} of {{ nh.exit_dns_health_consensus_exits_formatted }} exits tested)</li>
 {% endif %}
 {%- endmacro -%}
 
@@ -211,8 +211,8 @@
     {%- endif %}
     {%- if exit_dns_health_summary %}
     <li><strong><span title="DNS resolution health of exit relays in this group. Source: exitdnshealth.1aeo.com">Exit DNS Health</span>:</strong>
-        <span style="color: #28a745;">{{ exit_dns_health_summary.healthy }} healthy ({{ exit_dns_health_summary.healthy_pct }}%)</span>
-        {%- if exit_dns_health_summary.failing > 0 %}, <span style="color: #dc3545;">{{ exit_dns_health_summary.failing }} failing ({{ exit_dns_health_summary.failing_pct }}%)</span>{% endif %}
+        <span class="al-status-success">{{ exit_dns_health_summary.healthy }} healthy ({{ exit_dns_health_summary.healthy_pct }}%)</span>
+        {%- if exit_dns_health_summary.failing > 0 %}, <span class="al-status-danger">{{ exit_dns_health_summary.failing }} failing ({{ exit_dns_health_summary.failing_pct }}%)</span>{% endif %}
         {%- if exit_dns_health_summary.untested > 0 %}, {{ exit_dns_health_summary.untested }} untested ({{ exit_dns_health_summary.untested_pct }}%){% endif %}
         of {{ exit_dns_health_summary.exit_count }} exit relay{{ 's' if exit_dns_health_summary.exit_count != 1 else '' }}
     </li>
@@ -374,9 +374,9 @@
             <strong><a href="{{ page_ctx.path_prefix }}relay/{{ relay_info.fingerprint }}/">{{ relay_info.nickname|escape }}</a></strong>
             <span style="color: #666;">•</span>
             {% if relay_info.error -%}
-                <span style="color: #dc3545;">{{ relay_info.error|escape }}</span>
+                <span class="al-status-danger">{{ relay_info.error|escape }}</span>
             {% elif relay_info.missing -%}
-                <span style="color: #856404;">{{ relay_info.missing|escape }}</span>
+                <span class="al-status-warning">{{ relay_info.missing|escape }}</span>
             {% endif -%}
             {% if relay_info.proof_type and relay_info.proof_type != 'unknown' %}
                 <span style="color: #666;">• Proof: {{ relay_info.proof_type }}</span>

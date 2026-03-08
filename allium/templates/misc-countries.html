@@ -150,7 +150,7 @@
                     <td>{{ v['unique_family_count'] }}</td>
                     <td>{{ v['unique_as_count'] }}</td>
                     <td>{{ d.total_data_formatted }}</td>
-                    <td>{% if d.exit_dns_health_summary and (d.exit_dns_health_summary.healthy > 0 or d.exit_dns_health_summary.failing > 0) %}<span style="color: #28a745;">{{ d.exit_dns_health_summary.healthy }}</span> / <span style="color: #dc3545;">{{ d.exit_dns_health_summary.failing }}</span>{% else %}<span style="color: #6c757d;">—</span>{% endif %}</td>
+                    <td>{% if d.exit_dns_health_summary and (d.exit_dns_health_summary.healthy > 0 or d.exit_dns_health_summary.failing > 0) %}<span class="al-status-success">{{ d.exit_dns_health_summary.healthy }}</span> / <span class="al-status-danger">{{ d.exit_dns_health_summary.failing }}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
                 </tr>
             {% endfor -%}
         </tbody>

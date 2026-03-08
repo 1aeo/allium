@@ -136,10 +136,10 @@
                     <td class="contact-cell">
                         {% if v['aroi_domain'] and v['aroi_domain'] != 'none' -%}
                             {% if v.get('aroi_validation_status') == 'validated' -%}
-                            <span title="All relays validated" style="color: #28a745;">✓</span> {% elif v.get('aroi_validation_status') == 'unauthorized' -%}
-                            <span title="Unauthorized: fingerprints not in proof file" style="color: #dc3545;">🚫</span> {% elif v.get('aroi_validation_status') == 'misconfigured' -%}
-                            <span title="Misconfigured: validation errors" style="color: #ffc107;">⚠</span> {% elif v.get('aroi_validation_status') == 'incomplete' -%}
-                            <span title="Incomplete: missing AROI fields" style="color: #6c757d;">⚬</span> {% endif -%}
+                            <span title="All relays validated" class="al-status-success">✓</span> {% elif v.get('aroi_validation_status') == 'unauthorized' -%}
+                            <span title="Unauthorized: fingerprints not in proof file" class="al-status-danger">🚫</span> {% elif v.get('aroi_validation_status') == 'misconfigured' -%}
+                            <span title="Misconfigured: validation errors" class="al-status-warning">⚠</span> {% elif v.get('aroi_validation_status') == 'incomplete' -%}
+                            <span title="Incomplete: missing AROI fields" class="al-status-muted">⚬</span> {% endif -%}
                             {% if base_url and v['aroi_domain'] in validated_aroi_domains -%}
                             <a href="{{ base_url }}/{{ v['aroi_domain']|lower|escape }}/" title="Contact: {{ v['contact']|escape }}" style="text-decoration: underline;">{{ d.display_name|escape }}</a>
                             {% else -%}
@@ -165,7 +165,7 @@
                         <a href="{{ page_ctx.path_prefix }}first_seen/{{ d.first_seen_date|escape }}">{{ d.first_seen_date|escape }}</a>
                     </td>
                     <td>{{ d.total_data_formatted }}</td>
-                    <td>{% if d.exit_dns_health_summary and (d.exit_dns_health_summary.healthy > 0 or d.exit_dns_health_summary.failing > 0) %}<span style="color: #28a745;">{{ d.exit_dns_health_summary.healthy }}</span> / <span style="color: #dc3545;">{{ d.exit_dns_health_summary.failing }}</span>{% else %}<span style="color: #6c757d;">—</span>{% endif %}</td>
+                    <td>{% if d.exit_dns_health_summary and (d.exit_dns_health_summary.healthy > 0 or d.exit_dns_health_summary.failing > 0) %}<span class="al-status-success">{{ d.exit_dns_health_summary.healthy }}</span> / <span class="al-status-danger">{{ d.exit_dns_health_summary.failing }}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
                 </tr>
             {% endfor -%}
         </tbody>
