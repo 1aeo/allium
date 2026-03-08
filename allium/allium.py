@@ -102,7 +102,9 @@ def validate_url_arguments(args):
             continue
         # --base-url accepts root-relative paths (e.g., "/metrics") in addition
         # to http/https URLs; all other URL arguments require a full URL.
-        if attr == 'base_url' and url.startswith('/'):
+        # Reject scheme-relative URLs like "//evil.example/..." which would
+        # inherit the page's protocol and redirect to an attacker-controlled host.
+        if attr == 'base_url' and url.startswith('/') and not url.startswith('//'):
             continue
         scheme = urllib.parse.urlsplit(url).scheme.lower()
         if scheme not in ('http', 'https'):
