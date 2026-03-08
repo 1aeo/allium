@@ -11,6 +11,8 @@
 {% set aroi_domain = relay_subset[0]['aroi_domain'] if relay_subset[0]['aroi_domain'] else 'none' %}
 {% if base_url and aroi_domain and aroi_domain != 'none' and is_validated_aroi %}
 <link rel="canonical" href="{{ base_url }}/{{ aroi_domain|lower|escape }}/" />
+{% elif contact_sort_mode is defined and contact_sort_mode and contact_sort_mode != 'bandwidth' %}
+<link rel="canonical" href="index.html" />
 {% endif %}
 {% endblock %}
 {% block header %}
