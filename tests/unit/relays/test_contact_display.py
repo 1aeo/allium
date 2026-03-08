@@ -452,7 +452,7 @@ class TestContactDisplayData(unittest.TestCase):
         version_status = intelligence['version_status']
         
         # Should only show recommended with "All" status indicator (non-zero count)
-        expected_status = '<span class="al-rating-great">All</span>, <span title="Recommended versions: 0.4.8.7, 0.4.8.8" style="cursor: help;">2 (100%) recommended</span>'
+        expected_status = '<span class="al-rating-great">All</span>, <span title="Recommended versions: 0.4.8.7, 0.4.8.8">2 (100%) recommended</span>'
         self.assertEqual(version_status, expected_status)
         self.assertNotIn('experimental', version_status)
         self.assertNotIn('obsolete', version_status)
@@ -551,7 +551,7 @@ class TestContactDisplayData(unittest.TestCase):
         # version_status: None=2 (missing fields), recommended=1
         expected = '<span class="al-rating-poor">Poor</span>, 1 (33%) compliant, 2 (67%) unknown'
         self.assertEqual(intelligence['version_compliance'], expected)
-        expected_status = '<span class="al-rating-poor">Poor</span>, <span title="Recommended versions: 0.4.8.8" style="cursor: help;">1 (33%) recommended</span>'
+        expected_status = '<span class="al-rating-poor">Poor</span>, <span title="Recommended versions: 0.4.8.8">1 (33%) recommended</span>'
         self.assertEqual(intelligence['version_status'], expected_status)
         
         # Should include tooltip for the one valid recommended relay
@@ -659,7 +659,7 @@ class TestContactDisplayData(unittest.TestCase):
         
         # Should show green "All" when all relays have recommended status
         self.assertIn('version_status', intelligence)
-        expected = '<span class="al-rating-great">All</span>, <span title="Recommended versions: 0.4.8.7, 0.4.8.8, 0.4.8.9" style="cursor: help;">3 (100%) recommended</span>'
+        expected = '<span class="al-rating-great">All</span>, <span title="Recommended versions: 0.4.8.7, 0.4.8.8, 0.4.8.9">3 (100%) recommended</span>'
         self.assertEqual(intelligence['version_status'], expected)
 
     def test_compute_contact_display_data_version_status_partial_recommended(self):
@@ -680,7 +680,7 @@ class TestContactDisplayData(unittest.TestCase):
         
         # Should show orange "Partial" when >50% but not 100% have recommended status
         self.assertIn('version_status', intelligence)
-        expected = '<span class="al-rating-okay">Partial</span>, <span title="Recommended versions: 0.4.8.7, 0.4.8.8, 0.4.8.9" style="cursor: help;">3 (75%) recommended</span>, <span title="Obsolete versions: 0.4.6.10" style="cursor: help;">1 (25%) obsolete</span>'
+        expected = '<span class="al-rating-okay">Partial</span>, <span title="Recommended versions: 0.4.8.7, 0.4.8.8, 0.4.8.9">3 (75%) recommended</span>, <span title="Obsolete versions: 0.4.6.10">1 (25%) obsolete</span>'
         self.assertEqual(intelligence['version_status'], expected)
 
     def test_compute_contact_display_data_version_status_poor_recommended(self):
@@ -701,7 +701,7 @@ class TestContactDisplayData(unittest.TestCase):
         
         # Should show red "Poor" when ≤50% have recommended status
         self.assertIn('version_status', intelligence)
-        expected = '<span class="al-rating-poor">Poor</span>, <span title="Recommended versions: 0.4.8.7" style="cursor: help;">1 (25%) recommended</span>, <span title="Experimental versions: 0.4.9.0-alpha" style="cursor: help;">1 (25%) experimental</span>, <span title="Obsolete versions: 0.4.6.10, 0.4.6.11" style="cursor: help;">2 (50%) obsolete</span>'
+        expected = '<span class="al-rating-poor">Poor</span>, <span title="Recommended versions: 0.4.8.7">1 (25%) recommended</span>, <span title="Experimental versions: 0.4.9.0-alpha">1 (25%) experimental</span>, <span title="Obsolete versions: 0.4.6.10, 0.4.6.11">2 (50%) obsolete</span>'
         self.assertEqual(intelligence['version_status'], expected)
 
     def test_compute_contact_display_data_version_status_zero_recommended(self):
@@ -721,7 +721,7 @@ class TestContactDisplayData(unittest.TestCase):
         
         # Should show red "Poor" when 0% have recommended status
         self.assertIn('version_status', intelligence)
-        expected = '<span class="al-rating-poor">Poor</span>, <span title="Recommended versions" style="cursor: help;">0 (0%) recommended</span>, <span title="Experimental versions: 0.4.9.0-alpha" style="cursor: help;">1 (33%) experimental</span>, <span title="Obsolete versions: 0.4.6.10" style="cursor: help;">1 (33%) obsolete</span>, <span title="Unrecommended versions: 0.4.7.5" style="cursor: help;">1 (33%) unrecommended</span>'
+        expected = '<span class="al-rating-poor">Poor</span>, <span title="Recommended versions">0 (0%) recommended</span>, <span title="Experimental versions: 0.4.9.0-alpha">1 (33%) experimental</span>, <span title="Obsolete versions: 0.4.6.10">1 (33%) obsolete</span>, <span title="Unrecommended versions: 0.4.7.5">1 (33%) unrecommended</span>'
         self.assertEqual(intelligence['version_status'], expected)
 
 
