@@ -8,6 +8,7 @@ Extracted from relays.py for better modularity.
 """
 
 import functools
+import ipaddress as _ipaddress
 import multiprocessing as mp
 import os
 import time
@@ -15,6 +16,7 @@ from shutil import rmtree
 
 from jinja2 import Environment, FileSystemLoader, FileSystemBytecodeCache
 
+from .flag_analysis import FLAG_PRIORITY as _FLAG_PRIORITY
 from .ip_utils import safe_parse_ip_address as _safe_parse_ip_address
 from .bandwidth_formatter import (
     BandwidthFormatter,
@@ -292,35 +294,50 @@ def _best_total_data_bytes(relay):
     return 0
 
 
-def _extract_ipv4(relay):
+def _extract_ipv4_numeric(relay):
+    """Extract first IPv4 address as packed bytes for numeric sort ordering."""
     for addr in relay.get('or_addresses') or []:
         parsed_ip, _ = _safe_parse_ip_address(addr)
         if parsed_ip and '.' in parsed_ip:
-            return parsed_ip
-    return ''
+            try:
+                return _ipaddress.ip_address(parsed_ip).packed
+            except (ValueError, TypeError):
+                pass
+    return None
 
 
-def _extract_ipv6(relay):
+def _extract_ipv6_numeric(relay):
+    """Extract first IPv6 address as packed bytes for numeric sort ordering."""
     for addr in relay.get('or_addresses') or []:
         if ':' in addr and addr.count(':') > 1:
-            return addr.split(']')[0].lstrip('[').lower()
-    return ''
+            ip_str = addr.split(']')[0].lstrip('[')
+            try:
+                return _ipaddress.ip_address(ip_str).packed
+            except (ValueError, TypeError):
+                pass
+    return None
 
 
 def _prioritized_flag_uptime_6m(relay):
-    from .flag_analysis import FLAG_PRIORITY
+    """Return 6-month uptime for the relay's prioritized *current* flag.
 
+    Must mirror the display-layer flag selection in flag_analysis.py:
+    only consider flags the relay currently has (Exit > Guard > Fast > Running).
+    """
+    relay_flags = set(relay.get('flags', []))
     flag_data = relay.get('_flag_uptime_data') or {}
-    if not flag_data:
+    if not flag_data or not relay_flags:
         return -1.0
 
     selected_flag = None
     best_priority = float('inf')
     for flag in flag_data.keys():
-        priority = FLAG_PRIORITY.get(flag)
-        if priority and priority < best_priority:
-            best_priority = priority
-            selected_flag = flag
+        # Only consider flags the relay CURRENTLY has (mirrors display logic)
+        if flag in relay_flags:
+            priority = _FLAG_PRIORITY.get(flag)
+            if priority and priority < best_priority:
+                best_priority = priority
+                selected_flag = flag
 
     if not selected_flag:
         return -1.0
@@ -383,8 +400,8 @@ def _relay_sort_key(relay, sort_mode):
     if sort_mode == 'flag_uptime':
         return (-_prioritized_flag_uptime_6m(relay), fingerprint)
     if sort_mode == 'ipv4':
-        ip = _extract_ipv4(relay)
-        return (0 if ip else 1, _safe_lower(ip) if ip else 'zzzz', fingerprint)
+        ip_packed = _extract_ipv4_numeric(relay)
+        return (0 if ip_packed else 1, ip_packed if ip_packed else b'\xff' * 4, fingerprint)
     if sort_mode == 'flags':
         flags = relay.get('flags') or []
         role_rank = 0 if 'Exit' in flags else 1 if 'Guard' in flags else 2
@@ -412,8 +429,8 @@ def _relay_sort_key(relay, sort_mode):
         epoch = _parse_epoch(relay.get('last_restarted'))
         return (-(epoch if epoch is not None else -1), 0 if epoch is not None else 1, fingerprint)
     if sort_mode == 'ipv6':
-        ip6 = _extract_ipv6(relay)
-        return (0 if ip6 else 1, ip6 if ip6 else 'zzzz', fingerprint)
+        ip6_packed = _extract_ipv6_numeric(relay)
+        return (0 if ip6_packed else 1, ip6_packed if ip6_packed else b'\xff' * 16, fingerprint)
 
     return (-int(relay.get('observed_bandwidth', 0) or 0), fingerprint)
 
@@ -1120,6 +1137,7 @@ def _write_contact_pages_parallel(relay_set, sorted_values, template, output_pat
                     time.sleep(0.1)
 
         _write_contact_pages_sequential(relay_set, sorted_values, template, output_path, the_prefixed, start_time)
+
 
 def write_pages_by_key(relay_set, k):
     """Render and write sorted HTML relay listings to disk"""
