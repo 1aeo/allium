@@ -19,6 +19,7 @@ Per Tor spec proposal 328, overload status remains for 72 hours after
 the last detected overload event.
 """
 
+import html as _html
 import time
 from datetime import datetime, timezone
 from typing import List, Optional
@@ -489,7 +490,7 @@ def generate_issues_from_consensus(
             'severity': 'warning',
             'category': 'version',
             'title': 'Tor version not recommended',
-            'description': f'Running Tor version {version} which is not on the recommended list.',
+            'description': f'Running Tor version {_html.escape(str(version))} which is not on the recommended list.',
             'suggestion': 'Update to the latest stable Tor version. Outdated versions may have security vulnerabilities and could eventually be rejected by the network. See <a href="https://www.torproject.org/download/tor/">torproject.org/download</a> for latest releases.',
             'doc_ref': 'https://www.torproject.org/download/tor/',
         })
