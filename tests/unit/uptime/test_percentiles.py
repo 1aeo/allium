@@ -147,17 +147,16 @@ class TestNetworkUptimePercentiles(unittest.TestCase):
             self.assertIn('80%', display_low)
         
     def test_format_network_percentiles_display_color_coding(self):
-        """Test color coding in display formatting."""
+        """Test CSS class coding in display formatting."""
         percentiles = calculate_network_uptime_percentiles(self.mock_uptime_data, '6_months')
         
-        # Test high performer (should be green)
+        # Test high performer (should use al-rating-great class)
         display_high = format_network_percentiles_display(percentiles, 99.0)
-        self.assertIn('#2e7d2e', display_high)  # Green color
+        self.assertIn('al-rating-great', display_high)
         
-        # Test low performer
+        # Test low performer (should use al-rating-poor or al-rating-okay class)
         display_low = format_network_percentiles_display(percentiles, 70.0)
-        # Should have some color coding
-        self.assertIn('color:', display_low)
+        self.assertTrue('al-rating-' in display_low)  # Should have some rating class
         
     def test_calculate_relay_uptime_average(self):
         """Test individual relay uptime average calculation."""
