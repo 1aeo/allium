@@ -70,6 +70,32 @@ def check_dependencies(show_progress=False):
 
 
 
+def validate_url_arguments(args):
+    """
+    Validate that all URL arguments use http:// or https:// scheme.
+    Prevents potential SSRF via arbitrary URL schemes (e.g., file://, ftp://).
+    
+    Args:
+        args: argparse namespace with URL arguments
+        
+    Raises:
+        SystemExit: If any URL argument uses an invalid scheme
+    """
+    url_fields = [
+        ('onionoo_details_url', '--onionoo-details-url'),
+        ('onionoo_uptime_url', '--onionoo-uptime-url'),
+        ('onionoo_bandwidth_url', '--onionoo-bandwidth-url'),
+        ('aroi_url', '--aroi-url'),
+        ('exit_dns_health_url', '--exit-dns-health-url'),
+    ]
+    for attr, flag_name in url_fields:
+        url = getattr(args, attr, '')
+        if url and not url.startswith(('http://', 'https://')):
+            print(f"❌ Error: {flag_name} must use http:// or https:// scheme")
+            print(f"   Got: {url}")
+            sys.exit(1)
+
+
 if __name__ == "__main__":
     desc = "allium: generate static tor relay metrics and statistics"
     parser = argparse.ArgumentParser(description=desc)
@@ -197,6 +223,9 @@ if __name__ == "__main__":
         required=False,
     )
     args = parser.parse_args()
+
+    # Validate URL arguments use safe schemes (defense-in-depth against SSRF)
+    validate_url_arguments(args)
 
     start_time = time.time()
     

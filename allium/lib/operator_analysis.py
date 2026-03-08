@@ -6,6 +6,7 @@ flag analysis, downtime alerts, and leaderboard rankings.
 Extracted from relays.py for better modularity.
 """
 
+import html as _html
 import statistics
 
 from .time_utils import format_time_ago, PERIOD_SHORT_NAMES, PERIOD_DISPLAY_NAMES
@@ -672,7 +673,7 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
             versions = sorted(list(version_status_versions[status]))
             if versions:
                 tooltip_status = status_display.capitalize()
-                version_status_tooltips[status] = f"{tooltip_status} versions: {', '.join(versions)}"
+                version_status_tooltips[status] = f"{tooltip_status} versions: {', '.join(_html.escape(v) for v in versions)}"
             else:
                 version_status_tooltips[status] = f"{status_display.capitalize()} versions: (no version data)"
     
