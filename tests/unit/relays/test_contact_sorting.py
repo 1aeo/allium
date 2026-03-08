@@ -224,3 +224,118 @@ def test_section_wrapper_sorting_uses_embedded_relay():
     wrapped = [{"relay": relay} for relay in relays]
     sorted_wrapped = sort_contact_section_entries(wrapped, "bandwidth")
     assert sorted_wrapped[0]["relay"]["nickname"] == "beta"
+
+
+# =============================================================================
+# NUMERIC IP SORT ORDERING (bug fix validation)
+# =============================================================================
+
+def test_ipv4_sort_is_numeric_not_lexicographic():
+    """IPv4 addresses must sort by numeric value, not string comparison.
+
+    Lexicographic: '1.1.1.1' < '192.168.1.1' < '9.9.9.9' (WRONG)
+    Numeric:       '1.1.1.1' < '2.2.2.2' < '9.9.9.9' < '192.168.1.1' (CORRECT)
+    """
+    relays = [
+        _relay("FP_192", "relay_192", True, 100, 0, 50, -1, "192.168.1.1", "", ["Running"], "success", "none", "US", "", "", "Linux", "2025-01-01 00:00:00", "2026-03-01 00:00:00", "2026-03-08 00:00:00"),
+        _relay("FP_009", "relay_9", True, 100, 0, 50, -1, "9.9.9.9", "", ["Running"], "success", "none", "US", "", "", "Linux", "2025-01-01 00:00:00", "2026-03-01 00:00:00", "2026-03-08 00:00:00"),
+        _relay("FP_001", "relay_1", True, 100, 0, 50, -1, "1.1.1.1", "", ["Running"], "success", "none", "US", "", "", "Linux", "2025-01-01 00:00:00", "2026-03-01 00:00:00", "2026-03-08 00:00:00"),
+        _relay("FP_002", "relay_2", True, 100, 0, 50, -1, "2.2.2.2", "", ["Running"], "success", "none", "US", "", "", "Linux", "2025-01-01 00:00:00", "2026-03-01 00:00:00", "2026-03-08 00:00:00"),
+    ]
+    sorted_relays = sort_contact_relays(relays, "ipv4")
+    ips = [r["nickname"] for r in sorted_relays]
+    assert ips == ["relay_1", "relay_2", "relay_9", "relay_192"]
+
+
+def test_ipv6_sort_is_numeric_not_lexicographic():
+    """IPv6 addresses must sort by numeric value."""
+    relays = [
+        _relay("FP_B", "relay_b", True, 100, 0, 50, -1, "1.1.1.1", "2001:db8::b", ["Running"], "success", "none", "US", "", "", "Linux", "2025-01-01 00:00:00", "2026-03-01 00:00:00", "2026-03-08 00:00:00"),
+        _relay("FP_A", "relay_a", True, 100, 0, 50, -1, "1.1.1.2", "2001:db8::a", ["Running"], "success", "none", "US", "", "", "Linux", "2025-01-01 00:00:00", "2026-03-01 00:00:00", "2026-03-08 00:00:00"),
+        _relay("FP_1", "relay_1", True, 100, 0, 50, -1, "1.1.1.3", "2001:db8::1", ["Running"], "success", "none", "US", "", "", "Linux", "2025-01-01 00:00:00", "2026-03-01 00:00:00", "2026-03-08 00:00:00"),
+    ]
+    sorted_relays = sort_contact_relays(relays, "ipv6")
+    names = [r["nickname"] for r in sorted_relays]
+    assert names == ["relay_1", "relay_a", "relay_b"]
+
+
+def test_ip_sort_missing_goes_to_end():
+    """Relays with no IP address sort to the end."""
+    relay_with_ip = _relay("FP_A", "has_ip", True, 100, 0, 50, -1, "10.0.0.1", "", ["Running"], "success", "none", "US", "", "", "Linux", "2025-01-01 00:00:00", "2026-03-01 00:00:00", "2026-03-08 00:00:00")
+    relay_no_ip = _relay("FP_B", "no_ip", True, 100, 0, 50, -1, "10.0.0.2", "", ["Running"], "success", "none", "US", "", "", "Linux", "2025-01-01 00:00:00", "2026-03-01 00:00:00", "2026-03-08 00:00:00")
+    relay_no_ip["or_addresses"] = []  # Force no IPv4
+    sorted_relays = sort_contact_relays([relay_no_ip, relay_with_ip], "ipv4")
+    assert sorted_relays[0]["nickname"] == "has_ip"
+    assert sorted_relays[1]["nickname"] == "no_ip"
+
+
+# =============================================================================
+# FLAG-UPTIME CURRENT-FLAGS PARITY (bug fix validation)
+# =============================================================================
+
+def test_flag_uptime_sort_uses_current_flags_not_historical():
+    """Flag-uptime sort must use only flags the relay currently has.
+
+    A relay with historical Exit uptime data but only current Guard flag
+    should sort by Guard uptime, not Exit uptime.
+    """
+    # Relay has historical Exit data (95%) and Guard data (40%), but only current Guard flag
+    relay_guard_only = {
+        "fingerprint": "FP_GUARD",
+        "nickname": "guard_relay",
+        "running": True,
+        "observed_bandwidth": 100,
+        "flags": ["Guard", "Running"],  # No Exit flag currently
+        "_flag_uptime_data": {
+            "Exit": {"6_months": {"uptime": 95.0, "data_points": 30}},
+            "Guard": {"6_months": {"uptime": 40.0, "data_points": 30}},
+        },
+        "or_addresses": ["1.1.1.1:9001"],
+    }
+    # Relay with current Exit flag and 60% uptime
+    relay_exit = {
+        "fingerprint": "FP_EXIT",
+        "nickname": "exit_relay",
+        "running": True,
+        "observed_bandwidth": 100,
+        "flags": ["Exit", "Running"],
+        "_flag_uptime_data": {
+            "Exit": {"6_months": {"uptime": 60.0, "data_points": 30}},
+        },
+        "or_addresses": ["2.2.2.2:9001"],
+    }
+
+    sorted_relays = sort_contact_relays([relay_guard_only, relay_exit], "flag_uptime")
+    # exit_relay (60% Exit) should sort before guard_relay (40% Guard)
+    # If bug were present, guard_relay would sort first (95% historical Exit)
+    assert sorted_relays[0]["nickname"] == "exit_relay"
+    assert sorted_relays[1]["nickname"] == "guard_relay"
+
+
+def test_flag_uptime_no_current_flags_returns_negative():
+    """Relay with no matching current flags gets -1.0 (sorts to end)."""
+    from allium.lib.contact_sorting import prioritized_flag_uptime_6m
+
+    relay = {
+        "flags": ["Running"],  # No Exit/Guard/Fast
+        "_flag_uptime_data": {
+            "Exit": {"6_months": {"uptime": 99.0, "data_points": 30}},
+        },
+    }
+    assert prioritized_flag_uptime_6m(relay) == -1.0
+
+
+# =============================================================================
+# SORT-MODE FILE MAP INVARIANTS
+# =============================================================================
+
+def test_no_by_bandwidth_html_in_file_map():
+    """Bandwidth sort maps to index.html; there must never be a by-bandwidth.html."""
+    assert CONTACT_SORT_FILE_MAP["bandwidth"] == "index.html"
+    assert "by-bandwidth.html" not in CONTACT_SORT_FILE_MAP.values()
+
+
+def test_all_sort_modes_have_file_mapping():
+    """Every sort mode has a corresponding file."""
+    for mode in CONTACT_SORT_MODES:
+        assert mode in CONTACT_SORT_FILE_MAP, f"missing file for mode: {mode}"
