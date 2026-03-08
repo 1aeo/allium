@@ -492,6 +492,44 @@ class TestContactTemplateIntegration(unittest.TestCase):
         # Should include statistical tooltips
         self.assertIn('≥2σ 97.8% from average μ 99.9%', rendered)
 
+    def test_contact_template_sort_links_for_all_columns(self):
+        """Contact pages should expose static no-JS sort links."""
+        import copy
+        from allium.lib.page_writer import CONTACT_SORT_FILE_MAP
+
+        context = copy.deepcopy(self.template_context)
+        context['relay_subset'][0]['ipv6_support'] = 'both'
+        context['relay_subset'][0]['or_addresses'] = ['192.168.1.1:9001', '[2001:db8::1]:9001']
+        context['relays']['json']['relay_subset'][0]['ipv6_support'] = 'both'
+        context['relays']['json']['relay_subset'][0]['or_addresses'] = ['192.168.1.1:9001', '[2001:db8::1]:9001']
+        context['sortable_scope'] = 'contact'
+        context['contact_sort_mode'] = 'bandwidth'
+        context['contact_sort_links'] = CONTACT_SORT_FILE_MAP
+
+        template = self.jinja_env.get_template('contact.html')
+        rendered = template.render(**context)
+
+        # Non-default sort links should point to by-*.html pages
+        self.assertIn('href="by-nickname.html"', rendered)
+        self.assertIn('href="by-total-data.html"', rendered)
+        self.assertIn('href="by-uptime-percentage.html"', rendered)
+        self.assertIn('href="by-flag-uptime.html"', rendered)
+        self.assertIn('href="by-ipv4.html"', rendered)
+        self.assertIn('href="by-flags.html"', rendered)
+        self.assertIn('href="by-dns.html"', rendered)
+        self.assertIn('href="by-family.html"', rendered)
+        self.assertIn('href="by-country.html"', rendered)
+        self.assertIn('href="by-as-number.html"', rendered)
+        self.assertIn('href="by-as-name.html"', rendered)
+        self.assertIn('href="by-platform.html"', rendered)
+        self.assertIn('href="by-first-seen.html"', rendered)
+        self.assertIn('href="by-last-restarted.html"', rendered)
+        self.assertIn('href="by-ipv6.html"', rendered)
+
+        # Bandwidth mode is default index page (no by-bandwidth file)
+        self.assertNotIn('href="by-bandwidth.html"', rendered)
+        self.assertIn('BW Cap', rendered)
+
 
 class TestContactMultiprocessingRegression(unittest.TestCase):
     """Regression tests for contact page generation under multiprocessing.
@@ -728,6 +766,49 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
         # Verify aroi_domain is stored (used for vanity URL generation without re-fetching members)
         self.assertIn("aroi_domain", contact_data, 
                      "aroi_domain should be stored for efficient vanity URL generation")
+
+    def test_contact_page_generation_creates_sort_variant_files(self):
+        """Contact page writer should emit index + by-*.html variants (no by-bandwidth)."""
+        relay_set = Relays(
+            output_dir=self.temp_dir,
+            onionoo_url="https://test.example.com",
+            relay_data=self.relay_data,
+            use_bits=False,
+            progress=False,
+            mp_workers=0,
+        )
+
+        relay_set.write_pages_by_key("contact")
+
+        contact_hashes = list(relay_set.json["sorted"]["contact"].keys())
+        self.assertGreater(len(contact_hashes), 0)
+        contact_dir = os.path.join(self.temp_dir, "contact", contact_hashes[0])
+
+        expected_files = [
+            "index.html",
+            "by-status.html",
+            "by-nickname.html",
+            "by-total-data.html",
+            "by-uptime.html",
+            "by-uptime-percentage.html",
+            "by-flag-uptime.html",
+            "by-ipv4.html",
+            "by-flags.html",
+            "by-dns.html",
+            "by-family.html",
+            "by-country.html",
+            "by-as-number.html",
+            "by-as-name.html",
+            "by-platform.html",
+            "by-first-seen.html",
+            "by-last-restarted.html",
+            "by-ipv6.html",
+        ]
+
+        for filename in expected_files:
+            self.assertTrue(os.path.exists(os.path.join(contact_dir, filename)), f"missing {filename}")
+
+        self.assertFalse(os.path.exists(os.path.join(contact_dir, "by-bandwidth.html")))
 
 
 if __name__ == '__main__':
