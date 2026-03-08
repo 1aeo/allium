@@ -1128,44 +1128,56 @@ class CollectorFetcher:
             family_key_groups = defaultdict(set)
             legacy_family_fps = set()
             total_matched = 0
+            matched_digests = set()
 
             microdesc_timeout = max(self.timeout, 60)
             fid_marker = self._FAMILY_IDS_BYTES
             legacy_marker = self._LEGACY_FAMILY_BYTES
+            headers = {'User-Agent': 'Allium/1.0'}
 
-            for fname in all_files:
+            def _fetch_file(fname):
                 url = f"{listing_url}{fname}"
-                try:
-                    raw_bytes = _fetch_url_with_total_timeout(
-                        url, microdesc_timeout, {'User-Agent': 'Allium/1.0'}
-                    )
-                except Exception as e:
-                    logger.warning(f"Failed to fetch microdesc file {fname}: {e}")
-                    continue
+                return _fetch_url_with_total_timeout(url, microdesc_timeout, headers)
 
-                for entry in raw_bytes.split(b'@type microdescriptor 1.0\n'):
-                    ok_idx = entry.find(b'onion-key')
-                    if ok_idx < 0:
+            # Fetch files in parallel — the sequential loop was 22s, network I/O bound
+            with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
+                future_to_fname = {executor.submit(_fetch_file, f): f for f in all_files}
+                for future in concurrent.futures.as_completed(future_to_fname):
+                    fname = future_to_fname[future]
+                    try:
+                        raw_bytes = future.result()
+                    except Exception as e:
+                        logger.warning(f"Failed to fetch microdesc file {fname}: {e}")
                         continue
-                    hashable = entry[ok_idx:]
-                    if not hashable.endswith(b'\n'):
-                        hashable += b'\n'
 
-                    d64 = base64.b64encode(hashlib.sha256(hashable).digest()).decode('ascii').rstrip('=')
-                    fp = digest_to_fp.get(d64)
-                    if not fp:
-                        continue
-                    total_matched += 1
+                    for entry in raw_bytes.split(b'@type microdescriptor 1.0\n'):
+                        ok_idx = entry.find(b'onion-key')
+                        if ok_idx < 0:
+                            continue
+                        hashable = entry[ok_idx:]
+                        if not hashable.endswith(b'\n'):
+                            hashable += b'\n'
 
-                    # Byte-level pre-filter avoids decoding + regex on entries without family data
-                    if fid_marker in entry:
-                        family_ids_fps.add(fp)
-                        fid_line_start = entry.find(fid_marker) + len(fid_marker)
-                        fid_line_end = entry.find(b'\n', fid_line_start)
-                        for key in entry[fid_line_start:fid_line_end].decode('ascii').strip().split():
-                            family_key_groups[key].add(fp)
-                    elif legacy_marker in entry:
-                        legacy_family_fps.add(fp)
+                        d64 = base64.b64encode(hashlib.sha256(hashable).digest()).decode('ascii').rstrip('=')
+
+                        # Skip already-matched digests (same microdesc in multiple incremental files)
+                        if d64 in matched_digests:
+                            continue
+
+                        fp = digest_to_fp.get(d64)
+                        if not fp:
+                            continue
+                        matched_digests.add(d64)
+                        total_matched += 1
+
+                        if fid_marker in entry:
+                            family_ids_fps.add(fp)
+                            fid_line_start = entry.find(fid_marker) + len(fid_marker)
+                            fid_line_end = entry.find(b'\n', fid_line_start)
+                            for key in entry[fid_line_start:fid_line_end].decode('ascii').strip().split():
+                                family_key_groups[key].add(fp)
+                        elif legacy_marker in entry:
+                            legacy_family_fps.add(fp)
 
             serializable_groups = {k: sorted(v) for k, v in family_key_groups.items()}
 
