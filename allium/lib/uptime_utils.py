@@ -388,19 +388,19 @@ def format_network_percentiles_display(network_percentiles, operator_uptime):
     insert_after = position_info['insert_after']
     percentile_range = position_info.get('percentile_range', 'unknown')
     
-    # Determine operator color coding based on percentile position
+    # Determine operator rating class based on percentile position
     if percentile_range == '<5th':
-        # Below 5th percentile: Red (Poor performance)
-        operator_color = '#c82333'
+        # Below 5th percentile: Poor performance
+        operator_class = 'al-rating-poor'
     elif operator_uptime >= percentiles.get('50th', 0):
-        # Above median: Green (Good performance)
-        operator_color = '#2e7d2e'
+        # Above median: Good performance
+        operator_class = 'al-rating-great'
     else:
-        # Below median but above 5th percentile: Dark yellow (Okay performance)
-        operator_color = '#cc9900'
+        # Below median but above 5th percentile: Okay performance
+        operator_class = 'al-rating-okay'
     
-    # Format operator entry with color coding
-    operator_entry = f'<span style="color: {operator_color}; font-weight: bold;">Operator: {operator_uptime:.0f}%</span>'
+    # Format operator entry with CSS class
+    operator_entry = f'<span class="{operator_class}">Operator: {operator_uptime:.0f}%</span>'
     
     # Build the ordered percentile parts
     parts = []
