@@ -322,11 +322,11 @@ API Diagnostics
                 <dt>Cache Age</dt>
                 <dd>
                     {% if api.freshness == 'stale' and api.cache_exceeded %}
-                        <span class="status-danger">{{ api.cache_age_display }}</span>
+                        <span class="al-status-danger">{{ api.cache_age_display }}</span>
                         <span style="color:#6c757d;">/ max {{ api.cache_max_age_display }}</span>
-                        <span class="status-danger">EXCEEDED</span>
+                        <span class="al-status-danger">EXCEEDED</span>
                     {% elif api.freshness == 'aging' %}
-                        <span class="status-warning">{{ api.cache_age_display }}</span>
+                        <span class="al-status-warning">{{ api.cache_age_display }}</span>
                         <span style="color:#6c757d;">/ max {{ api.cache_max_age_display }}</span>
                     {% elif api.cache_age_seconds is not none %}
                         {{ api.cache_age_display }}
@@ -338,16 +338,16 @@ API Diagnostics
                 <dt>Worker Status</dt>
                 <dd>
                     {% if api.worker_status == 'ready' %}
-                        <span class="status-success">{{ api.worker_status }}</span>
+                        <span class="al-status-success">{{ api.worker_status }}</span>
                     {% elif api.worker_status == 'stale' %}
-                        <span class="status-danger">{{ api.worker_status }}</span>
+                        <span class="al-status-danger">{{ api.worker_status }}</span>
                     {% else %}
                         {{ api.worker_status }}
                     {% endif %}
                 </dd>
                 {% if api.worker_error %}
                 <dt>Error</dt>
-                <dd><span class="status-danger">{{ api.worker_error }}</span></dd>
+                <dd><span class="al-status-danger">{{ api.worker_error }}</span></dd>
                 {% endif %}
                 <dt>Items Loaded</dt>
                 <dd>
@@ -358,7 +358,7 @@ API Diagnostics
                 </dd>
                 {% else %}
                 <dt>Status</dt>
-                <dd><span class="status-muted">Disabled (--apis={{ diag.apis_mode }})</span></dd>
+                <dd><span class="al-status-muted">Disabled (--apis={{ diag.apis_mode }})</span></dd>
                 {% endif %}
             </dl>
 
@@ -415,13 +415,13 @@ API Diagnostics
                 <td>
                     <span class="diag-dep-dot diag-dot-{{ dep.worst_freshness }}"></span>
                     {% if dep.worst_freshness == 'stale' %}
-                        <strong class="status-danger">Stale</strong>
+                        <strong class="al-status-danger">Stale</strong>
                     {% elif dep.worst_freshness == 'aging' %}
-                        <span class="status-warning">Aging</span>
+                        <span class="al-status-warning">Aging</span>
                     {% elif dep.worst_freshness == 'fresh' %}
-                        <span class="status-success">Fresh</span>
+                        <span class="al-status-success">Fresh</span>
                     {% else %}
-                        <span class="status-muted">N/A</span>
+                        <span class="al-status-muted">N/A</span>
                     {% endif %}
                 </td>
                 <td>

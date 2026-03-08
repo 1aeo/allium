@@ -584,6 +584,36 @@
                 }
                 /* API Diagnostics CSS moved to api-diagnostics.html (only consumer) */
 
+                /* ========== 13. SHARED SEMANTIC CLASSES (al- namespaced) ========== */
+                /*
+                 * Shared classes promoted from relay-info.html for global reuse.
+                 * All prefixed with al- to avoid collisions with Bootstrap
+                 * (.text-muted, .text-success, .alert-warning, etc.).
+                 */
+
+                /* Status text colors — replace inline style="color: #hexval;" */
+                .al-status-success      { color: var(--color-success); }
+                .al-status-danger       { color: var(--color-danger); }
+                .al-status-warning      { color: var(--color-warning-text); }
+                .al-status-muted        { color: var(--color-muted); }
+                .al-status-info         { color: var(--color-info); }
+
+                /* Status text colors + bold — replace inline style="color: #hex; font-weight: bold;" */
+                .al-status-success-bold { color: var(--color-success); font-weight: bold; }
+                .al-status-danger-bold  { color: var(--color-danger); font-weight: bold; }
+                .al-status-warning-bold { color: var(--color-warning-text); font-weight: bold; }
+
+                /* Status note — placeholder text in bold contexts (resets font-weight) */
+                .al-status-note         { font-size: 11px; font-weight: normal; color: var(--color-muted); }
+
+                /* Text size helpers */
+                .al-text-small-muted    { font-size: 11px; color: var(--color-text-secondary); }
+                .al-text-small-note     { font-size: 12px; color: var(--color-text-secondary); }
+
+                /* Utility classes */
+                .al-link-plain          { text-decoration: none; }
+                .al-section-title       { margin-top: 0; margin-bottom: 12px; }
+
                 {% block page_css %}{% endblock %}
             </style>
         </head>
