@@ -13,6 +13,7 @@ import argparse
 import os
 import sys
 import time
+import urllib.parse
 from lib.coordinator import create_relay_set_with_coordinator
 from lib.progress_logger import create_progress_logger
 from lib.site_generator import generate_site
@@ -68,6 +69,48 @@ def check_dependencies(show_progress=False):
         print("💡 Please upgrade Python or use a virtual environment with Python 3.8+")
         sys.exit(1)
 
+
+
+def validate_url_arguments(args):
+    """
+    Validate that all URL arguments use http:// or https:// scheme.
+    Prevents potential SSRF via arbitrary URL schemes (e.g., file://, ftp://).
+    
+    Uses urllib.parse.urlsplit for robust scheme parsing rather than string
+    prefix matching, which could be bypassed with schemes like "httpx://".
+    
+    --base-url is special: it accepts empty strings (the default), root-relative
+    paths (starting with '/'), and http/https URLs for vanity URL generation.
+    
+    Args:
+        args: argparse namespace with URL arguments
+        
+    Raises:
+        SystemExit: If any URL argument uses an invalid scheme
+    """
+    url_fields = [
+        ('onionoo_details_url', '--onionoo-details-url'),
+        ('onionoo_uptime_url', '--onionoo-uptime-url'),
+        ('onionoo_bandwidth_url', '--onionoo-bandwidth-url'),
+        ('aroi_url', '--aroi-url'),
+        ('exit_dns_health_url', '--exit-dns-health-url'),
+        ('base_url', '--base-url'),
+    ]
+    for attr, flag_name in url_fields:
+        url = getattr(args, attr, '')
+        if not url:
+            continue
+        # --base-url accepts root-relative paths (e.g., "/metrics") in addition
+        # to http/https URLs; all other URL arguments require a full URL.
+        # Reject scheme-relative URLs like "//evil.example/..." which would
+        # inherit the page's protocol and redirect to an attacker-controlled host.
+        if attr == 'base_url' and url.startswith('/') and not url.startswith('//'):
+            continue
+        scheme = urllib.parse.urlsplit(url).scheme.lower()
+        if scheme not in ('http', 'https'):
+            print(f"❌ Error: {flag_name} must use http:// or https:// scheme")
+            print(f"   Got: {url}")
+            sys.exit(1)
 
 
 if __name__ == "__main__":
@@ -197,6 +240,9 @@ if __name__ == "__main__":
         required=False,
     )
     args = parser.parse_args()
+
+    # Validate URL arguments use safe schemes (defense-in-depth against SSRF)
+    validate_url_arguments(args)
 
     start_time = time.time()
     

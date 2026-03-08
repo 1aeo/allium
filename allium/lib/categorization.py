@@ -6,6 +6,7 @@ AS rarity scoring, contact derived data, and display value precomputation.
 Extracted from relays.py for better modularity.
 """
 
+import html as _html
 import re
 
 from .string_utils import extract_contact_display_name
@@ -578,18 +579,22 @@ def finalize_unique_as_counts(relay_set):
                     aroi_map = data.get("aroi_to_contact_map", {})
                     
                     # Add AROI domain links first
+                    # HTML-escape AROI domains and base_url to prevent XSS
+                    # (domains shouldn't contain HTML chars, but defense-in-depth)
                     for aroi in sorted(unique_aroi_domains):
                         if aroi and aroi != "none":
+                            safe_aroi = _html.escape(aroi)
                             contact_hash = aroi_map.get(aroi, "")
                             if contact_hash:
                                 # Use vanity URL if base_url is configured and domain is validated
                                 if relay_set.base_url and hasattr(relay_set, 'validated_aroi_domains') and aroi in relay_set.validated_aroi_domains:
-                                    aroi_contact_html_items.append(f'<a href="{relay_set.base_url}/{aroi.lower()}/">{aroi}</a>')
+                                    safe_base = _html.escape(relay_set.base_url)
+                                    aroi_contact_html_items.append(f'<a href="{safe_base}/{safe_aroi.lower()}/">{safe_aroi}</a>')
                                 else:
-                                    aroi_contact_html_items.append(f'<a href="../../contact/{contact_hash}/">{aroi}</a>')
+                                    aroi_contact_html_items.append(f'<a href="../../contact/{contact_hash}/">{safe_aroi}</a>')
                                 used_contacts.add(contact_hash)
                             else:
-                                aroi_contact_html_items.append(aroi)
+                                aroi_contact_html_items.append(safe_aroi)
                     
                     # Add non-AROI contact links (truncated to 8 characters)
                     for contact_hash in sorted(unique_contact_hashes):
