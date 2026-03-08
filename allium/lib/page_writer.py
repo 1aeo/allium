@@ -435,6 +435,10 @@ def get_directory_authorities_data(relay_set):
         bw_auth_fingerprints = {a.upper() for a in bw_authorities if len(a) == 40}
         bw_auth_prefixes = {a.upper()[:8] for a in bw_authorities if len(a) >= 8}
         
+        # Extract once before loop — same for all authorities
+        cm_per_auth = (collector_data.get('consensus_method_info', {}).get('per_authority', {})
+                       if collector_data else {})
+        
         for authority in authorities:
             auth_nickname = authority.get('nickname', '').lower()
             auth_fingerprint = authority.get('fingerprint', '').upper()
@@ -459,12 +463,9 @@ def get_directory_authorities_data(relay_set):
                 auth_nickname in bw_auth_nicknames
             )
             
-            # Get per-authority consensus methods from consensus_method_info
             auth_consensus_methods = None
             auth_max_method = None
-            if collector_data:
-                cm_per_auth = collector_data.get('consensus_method_info', {}).get('per_authority', {})
-                # Try matching by nickname (vote auth names are lowercase)
+            if cm_per_auth:
                 auth_methods = cm_per_auth.get(auth_nickname)
                 if auth_methods:
                     auth_consensus_methods = auth_methods

@@ -274,6 +274,7 @@ class CollectorFetcher:
         self.bw_authorities = set()  # Authorities that run bandwidth scanners
         self.ipv6_testing_authorities = set()  # Authorities that test IPv6
         self._timings = {}
+        self._microdesc_consensus_cache = None  # Reused between consensus method + family-ids fetches
     
     def fetch_all(self) -> dict:
         """
@@ -942,10 +943,13 @@ class CollectorFetcher:
             best_method, best_valid_after = m, va
 
         # --- Source 2: CollecTor microdesc consensus (often fresher) ---
+        # cache_full_content=True: downloads the full file so
+        # _fetch_microdesc_family_ids() can reuse it (saves one HTTP request).
         m2, va2 = self._fetch_consensus_method_from_collector(
             f"{COLLECTOR_BASE}/recent/relay-descriptors/microdescs/consensus-microdesc/",
             self._MICRODESC_CONSENSUS_FILE_PATTERN,
             "CollecTor microdesc consensus",
+            cache_full_content=True,
         )
         if m2 is not None and (best_valid_after is None or (va2 and va2 > best_valid_after)):
             best_method, best_valid_after = m2, va2
@@ -977,9 +981,15 @@ class CollectorFetcher:
         return best_method, best_valid_after
 
     def _fetch_consensus_method_from_collector(
-        self, listing_url: str, pattern: 're.Pattern', source_name: str
+        self, listing_url: str, pattern: 're.Pattern', source_name: str,
+        cache_full_content: bool = False,
     ) -> Tuple[Optional[int], Optional[str]]:
-        """Fetch consensus-method and valid-after from a CollecTor consensus listing."""
+        """Fetch consensus-method and valid-after from a CollecTor consensus listing.
+
+        When cache_full_content=True, downloads the entire file (not just
+        the header) and stores it in self._microdesc_consensus_cache so
+        _fetch_microdesc_family_ids() can reuse it without a second HTTP request.
+        """
         try:
             html = self._fetch_url(listing_url)
             matches = pattern.findall(html)
@@ -989,18 +999,23 @@ class CollectorFetcher:
             latest_file = max(matches)
             url = f"{listing_url}{latest_file}"
 
-            def _fetch_header():
-                req = urllib.request.Request(url, headers={'User-Agent': 'Allium/1.0'})
-                with urllib.request.urlopen(req, timeout=self.timeout) as response:
-                    return response.read(4096).decode('utf-8', errors='replace')
+            if cache_full_content:
+                full_text = self._fetch_url(url)
+                self._microdesc_consensus_cache = full_text
+                return self._parse_consensus_header(full_text)
+            else:
+                def _fetch_header():
+                    req = urllib.request.Request(url, headers={'User-Agent': 'Allium/1.0'})
+                    with urllib.request.urlopen(req, timeout=self.timeout) as response:
+                        return response.read(4096).decode('utf-8', errors='replace')
 
-            header_text = _retry_with_backoff(
-                fetch_fn=_fetch_header,
-                retry_count=self.retry_count,
-                retry_delay_base=self.retry_delay_base,
-                operation_name=f"{source_name} header",
-            )
-            return self._parse_consensus_header(header_text)
+                header_text = _retry_with_backoff(
+                    fetch_fn=_fetch_header,
+                    retry_count=self.retry_count,
+                    retry_delay_base=self.retry_delay_base,
+                    operation_name=f"{source_name} header",
+                )
+                return self._parse_consensus_header(header_text)
 
         except Exception as e:
             logger.warning(f"Failed to fetch from {source_name}: {e}")
@@ -1119,16 +1134,18 @@ class CollectorFetcher:
 
         try:
             # --- Step 1: Build digest→fingerprint map from microdesc consensus ---
-            mc_listing_url = f"{COLLECTOR_BASE}/recent/relay-descriptors/microdescs/consensus-microdesc/"
-            mc_html = self._fetch_url(mc_listing_url)
-            mc_matches = sorted(self._MICRODESC_CONSENSUS_FILE_PATTERN.findall(mc_html))
-            if not mc_matches:
-                logger.info("No microdesc consensus files found on CollecTor")
-                return empty
-
-            latest_mc = mc_matches[-1]
-            mc_url = f"{mc_listing_url}{latest_mc}"
-            mc_content = self._fetch_url(mc_url)
+            # Reuse content cached by _fetch_current_consensus_method() if available
+            # (saves one listing fetch + one ~2MB consensus download).
+            mc_content = self._microdesc_consensus_cache
+            if not mc_content:
+                mc_listing_url = f"{COLLECTOR_BASE}/recent/relay-descriptors/microdescs/consensus-microdesc/"
+                mc_html = self._fetch_url(mc_listing_url)
+                mc_matches = sorted(self._MICRODESC_CONSENSUS_FILE_PATTERN.findall(mc_html))
+                if not mc_matches:
+                    logger.info("No microdesc consensus files found on CollecTor")
+                    return empty
+                mc_url = f"{mc_listing_url}{mc_matches[-1]}"
+                mc_content = self._fetch_url(mc_url)
 
             digest_to_fp = {}
             current_fp = None
