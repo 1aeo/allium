@@ -86,19 +86,19 @@ class TestContactDisplayData(unittest.TestCase):
     def test_format_intelligence_rating_poor(self):
         """Test color-coded formatting for Poor intelligence ratings."""
         result = self.relays._format_intelligence_rating('Poor, 1 network')
-        expected = '<span style="color: #c82333; font-weight: bold;">Poor</span>, 1 network'
+        expected = '<span class="al-rating-poor">Poor</span>, 1 network'
         self.assertEqual(result, expected)
 
     def test_format_intelligence_rating_okay(self):
         """Test color-coded formatting for Okay intelligence ratings.""" 
         result = self.relays._format_intelligence_rating('Okay, 2 countries')
-        expected = '<span style="color: #cc9900; font-weight: bold;">Okay</span>, 2 countries'
+        expected = '<span class="al-rating-okay">Okay</span>, 2 countries'
         self.assertEqual(result, expected)
 
     def test_format_intelligence_rating_great(self):
         """Test color-coded formatting for Great intelligence ratings."""
         result = self.relays._format_intelligence_rating('Great, 4 networks (2 rare)')
-        expected = '<span style="color: #2e7d2e; font-weight: bold;">Great</span>, 4 networks (2 rare)'
+        expected = '<span class="al-rating-great">Great</span>, 4 networks (2 rare)'
         self.assertEqual(result, expected)
 
     def test_format_intelligence_rating_invalid_format(self):
@@ -187,8 +187,7 @@ class TestContactDisplayData(unittest.TestCase):
         )
         
         uptime_formatted = result['uptime_formatted']['6_months']['display']
-        self.assertIn('color: #28a745', uptime_formatted)  # Should be green highlighted
-        self.assertIn('font-weight: bold', uptime_formatted)
+        self.assertIn('al-status-success-bold', uptime_formatted)  # Should be green highlighted
 
     def test_compute_contact_display_data_uptime_highlighting_near_100(self):
         """Test uptime highlighting for near-100% values (99.99%)."""
@@ -200,7 +199,7 @@ class TestContactDisplayData(unittest.TestCase):
         )
         
         uptime_formatted = result['uptime_formatted']['6_months']['display']
-        self.assertIn('color: #28a745', uptime_formatted)  # Should be green highlighted
+        self.assertIn('al-status-success-bold', uptime_formatted)  # Should be green highlighted
 
     def test_compute_contact_display_data_uptime_highlighting_below_threshold(self):
         """Test uptime highlighting for values below highlighting threshold."""
@@ -212,7 +211,7 @@ class TestContactDisplayData(unittest.TestCase):
         )
         
         uptime_formatted = result['uptime_formatted']['6_months']['display']
-        self.assertNotIn('color: #28a745', uptime_formatted)  # Should not be highlighted
+        self.assertNotIn('al-status-success-bold', uptime_formatted)  # Should not be highlighted
 
     def test_compute_contact_display_data_outliers_calculation(self):
         """Test statistical outliers calculation and tooltip generation."""
@@ -261,15 +260,15 @@ class TestContactDisplayData(unittest.TestCase):
         
         # Should format network diversity with color coding
         self.assertIn('network_diversity', intelligence)
-        self.assertIn('<span style="color: #2e7d2e', intelligence['network_diversity'])  # Great = green
+        self.assertIn('<span class="al-rating-great', intelligence['network_diversity'])  # Great = green
         
         # Should format geographic diversity with color coding
         self.assertIn('geographic_diversity', intelligence)
-        self.assertIn('<span style="color: #cc9900', intelligence['geographic_diversity'])  # Okay = orange
+        self.assertIn('<span class="al-rating-okay', intelligence['geographic_diversity'])  # Okay = orange
         
         # Should format infrastructure diversity with color coding
         self.assertIn('infrastructure_diversity', intelligence)
-        self.assertIn('<span style="color: #c82333', intelligence['infrastructure_diversity'])  # Poor = red (1 platform)
+        self.assertIn('<span class="al-rating-poor', intelligence['infrastructure_diversity'])  # Poor = red (1 platform)
 
     def test_compute_contact_display_data_no_intelligence_data(self):
         """Test handling when no intelligence data is available."""
@@ -362,7 +361,7 @@ class TestContactDisplayData(unittest.TestCase):
         
         # Should count version compliance correctly (2/5 = 40% compliant, which is ≤50% so "Poor")
         self.assertIn('version_compliance', intelligence)
-        expected = '<span style="color: #c82333; font-weight: bold;">Poor</span>, 2 (40%) compliant, 2 (40%) not compliant, 1 (20%) unknown'
+        expected = '<span class="al-rating-poor">Poor</span>, 2 (40%) compliant, 2 (40%) not compliant, 1 (20%) unknown'
         self.assertEqual(intelligence['version_compliance'], expected)
         
         # Should include version status tooltips
@@ -386,7 +385,7 @@ class TestContactDisplayData(unittest.TestCase):
         intelligence = result['operator_intelligence']
         
         # Should show green "All" for fully compliant operator
-        expected = '<span style="color: #2e7d2e; font-weight: bold;">All</span>, 3 (100%) compliant'
+        expected = '<span class="al-rating-great">All</span>, 3 (100%) compliant'
         self.assertEqual(intelligence['version_compliance'], expected)
         self.assertNotIn('not compliant', intelligence['version_compliance'])
         self.assertNotIn('unknown', intelligence['version_compliance'])
@@ -414,7 +413,7 @@ class TestContactDisplayData(unittest.TestCase):
         version_status = intelligence['version_status']
         
         # Check that it shows "Poor" indicator since only 2/6 = 33% are recommended (≤50%)
-        self.assertIn('<span style="color: #c82333; font-weight: bold;">Poor</span>', version_status)
+        self.assertIn('<span class="al-rating-poor">Poor</span>', version_status)
         self.assertIn('2 (33%) recommended', version_status)
         self.assertIn('1 (17%) experimental', version_status)
         self.assertIn('1 (17%) obsolete', version_status)
@@ -453,7 +452,7 @@ class TestContactDisplayData(unittest.TestCase):
         version_status = intelligence['version_status']
         
         # Should only show recommended with "All" status indicator (non-zero count)
-        expected_status = '<span style="color: #2e7d2e; font-weight: bold;">All</span>, <span title="Recommended versions: 0.4.8.7, 0.4.8.8" style="cursor: help;">2 (100%) recommended</span>'
+        expected_status = '<span class="al-rating-great">All</span>, <span title="Recommended versions: 0.4.8.7, 0.4.8.8" style="cursor: help;">2 (100%) recommended</span>'
         self.assertEqual(version_status, expected_status)
         self.assertNotIn('experimental', version_status)
         self.assertNotIn('obsolete', version_status)
@@ -481,7 +480,7 @@ class TestContactDisplayData(unittest.TestCase):
         intelligence = result['operator_intelligence']
         
         # Should show green "All" for fully compliant operator
-        expected = '<span style="color: #2e7d2e; font-weight: bold;">All</span>, 3 (100%) compliant'
+        expected = '<span class="al-rating-great">All</span>, 3 (100%) compliant'
         self.assertEqual(intelligence['version_compliance'], expected)
         self.assertNotIn('not compliant', intelligence['version_compliance'])
         self.assertNotIn('unknown', intelligence['version_compliance'])
@@ -550,9 +549,9 @@ class TestContactDisplayData(unittest.TestCase):
         # Should handle missing fields gracefully (1/3 = 33% compliant, which is ≤50% so "Poor")
         # recommended_version: None=2 (missing fields treated as None), True=1, False=0 
         # version_status: None=2 (missing fields), recommended=1
-        expected = '<span style="color: #c82333; font-weight: bold;">Poor</span>, 1 (33%) compliant, 2 (67%) unknown'
+        expected = '<span class="al-rating-poor">Poor</span>, 1 (33%) compliant, 2 (67%) unknown'
         self.assertEqual(intelligence['version_compliance'], expected)
-        expected_status = '<span style="color: #c82333; font-weight: bold;">Poor</span>, <span title="Recommended versions: 0.4.8.8" style="cursor: help;">1 (33%) recommended</span>'
+        expected_status = '<span class="al-rating-poor">Poor</span>, <span title="Recommended versions: 0.4.8.8" style="cursor: help;">1 (33%) recommended</span>'
         self.assertEqual(intelligence['version_status'], expected_status)
         
         # Should include tooltip for the one valid recommended relay
@@ -577,7 +576,7 @@ class TestContactDisplayData(unittest.TestCase):
         
         # Should show orange "Partial" when >50% but not 100% are compliant
         self.assertIn('version_compliance', intelligence)
-        expected = '<span style="color: #cc9900; font-weight: bold;">Partial</span>, 3 (75%) compliant, 1 (25%) not compliant'
+        expected = '<span class="al-rating-okay">Partial</span>, 3 (75%) compliant, 1 (25%) not compliant'
         self.assertEqual(intelligence['version_compliance'], expected)
 
     def test_compute_contact_display_data_version_compliance_exactly_50_percent(self):
@@ -598,7 +597,7 @@ class TestContactDisplayData(unittest.TestCase):
         
         # Should show red "Poor" when exactly 50% are compliant (not >50%)
         self.assertIn('version_compliance', intelligence)
-        expected = '<span style="color: #c82333; font-weight: bold;">Poor</span>, 2 (50%) compliant, 2 (50%) not compliant'
+        expected = '<span class="al-rating-poor">Poor</span>, 2 (50%) compliant, 2 (50%) not compliant'
         self.assertEqual(intelligence['version_compliance'], expected)
 
     def test_compute_contact_display_data_version_compliance_just_over_50_percent(self):
@@ -620,7 +619,7 @@ class TestContactDisplayData(unittest.TestCase):
         
         # Should show orange "Partial" when just over 50% are compliant
         self.assertIn('version_compliance', intelligence)
-        expected = '<span style="color: #cc9900; font-weight: bold;">Partial</span>, 3 (60%) compliant, 1 (20%) not compliant, 1 (20%) unknown'
+        expected = '<span class="al-rating-okay">Partial</span>, 3 (60%) compliant, 1 (20%) not compliant, 1 (20%) unknown'
         self.assertEqual(intelligence['version_compliance'], expected)
 
     def test_compute_contact_display_data_version_compliance_zero_compliant(self):
@@ -640,7 +639,7 @@ class TestContactDisplayData(unittest.TestCase):
         
         # Should show red "Poor" when 0% are compliant
         self.assertIn('version_compliance', intelligence)
-        expected = '<span style="color: #c82333; font-weight: bold;">Poor</span>, 0 (0%) compliant, 2 (67%) not compliant, 1 (33%) unknown'
+        expected = '<span class="al-rating-poor">Poor</span>, 0 (0%) compliant, 2 (67%) not compliant, 1 (33%) unknown'
         self.assertEqual(intelligence['version_compliance'], expected)
 
     def test_compute_contact_display_data_version_status_all_recommended(self):
@@ -660,7 +659,7 @@ class TestContactDisplayData(unittest.TestCase):
         
         # Should show green "All" when all relays have recommended status
         self.assertIn('version_status', intelligence)
-        expected = '<span style="color: #2e7d2e; font-weight: bold;">All</span>, <span title="Recommended versions: 0.4.8.7, 0.4.8.8, 0.4.8.9" style="cursor: help;">3 (100%) recommended</span>'
+        expected = '<span class="al-rating-great">All</span>, <span title="Recommended versions: 0.4.8.7, 0.4.8.8, 0.4.8.9" style="cursor: help;">3 (100%) recommended</span>'
         self.assertEqual(intelligence['version_status'], expected)
 
     def test_compute_contact_display_data_version_status_partial_recommended(self):
@@ -681,7 +680,7 @@ class TestContactDisplayData(unittest.TestCase):
         
         # Should show orange "Partial" when >50% but not 100% have recommended status
         self.assertIn('version_status', intelligence)
-        expected = '<span style="color: #cc9900; font-weight: bold;">Partial</span>, <span title="Recommended versions: 0.4.8.7, 0.4.8.8, 0.4.8.9" style="cursor: help;">3 (75%) recommended</span>, <span title="Obsolete versions: 0.4.6.10" style="cursor: help;">1 (25%) obsolete</span>'
+        expected = '<span class="al-rating-okay">Partial</span>, <span title="Recommended versions: 0.4.8.7, 0.4.8.8, 0.4.8.9" style="cursor: help;">3 (75%) recommended</span>, <span title="Obsolete versions: 0.4.6.10" style="cursor: help;">1 (25%) obsolete</span>'
         self.assertEqual(intelligence['version_status'], expected)
 
     def test_compute_contact_display_data_version_status_poor_recommended(self):
@@ -702,7 +701,7 @@ class TestContactDisplayData(unittest.TestCase):
         
         # Should show red "Poor" when ≤50% have recommended status
         self.assertIn('version_status', intelligence)
-        expected = '<span style="color: #c82333; font-weight: bold;">Poor</span>, <span title="Recommended versions: 0.4.8.7" style="cursor: help;">1 (25%) recommended</span>, <span title="Experimental versions: 0.4.9.0-alpha" style="cursor: help;">1 (25%) experimental</span>, <span title="Obsolete versions: 0.4.6.10, 0.4.6.11" style="cursor: help;">2 (50%) obsolete</span>'
+        expected = '<span class="al-rating-poor">Poor</span>, <span title="Recommended versions: 0.4.8.7" style="cursor: help;">1 (25%) recommended</span>, <span title="Experimental versions: 0.4.9.0-alpha" style="cursor: help;">1 (25%) experimental</span>, <span title="Obsolete versions: 0.4.6.10, 0.4.6.11" style="cursor: help;">2 (50%) obsolete</span>'
         self.assertEqual(intelligence['version_status'], expected)
 
     def test_compute_contact_display_data_version_status_zero_recommended(self):
@@ -722,7 +721,7 @@ class TestContactDisplayData(unittest.TestCase):
         
         # Should show red "Poor" when 0% have recommended status
         self.assertIn('version_status', intelligence)
-        expected = '<span style="color: #c82333; font-weight: bold;">Poor</span>, <span title="Recommended versions" style="cursor: help;">0 (0%) recommended</span>, <span title="Experimental versions: 0.4.9.0-alpha" style="cursor: help;">1 (33%) experimental</span>, <span title="Obsolete versions: 0.4.6.10" style="cursor: help;">1 (33%) obsolete</span>, <span title="Unrecommended versions: 0.4.7.5" style="cursor: help;">1 (33%) unrecommended</span>'
+        expected = '<span class="al-rating-poor">Poor</span>, <span title="Recommended versions" style="cursor: help;">0 (0%) recommended</span>, <span title="Experimental versions: 0.4.9.0-alpha" style="cursor: help;">1 (33%) experimental</span>, <span title="Obsolete versions: 0.4.6.10" style="cursor: help;">1 (33%) obsolete</span>, <span title="Unrecommended versions: 0.4.7.5" style="cursor: help;">1 (33%) unrecommended</span>'
         self.assertEqual(intelligence['version_status'], expected)
 
 
