@@ -72,7 +72,8 @@ class TestAnchorLinks:
         """Test that CSS target highlighting is present in relay-info page CSS"""
         # CSS was extracted to external file in Phase 5
         css_path = Path(__file__).parent.parent.parent.parent / "allium" / "static" / "css" / "relay-info.css"
-        css_content = css_path.read_text() if css_path.exists() else template_content
+        assert css_path.exists(), f"External CSS file missing: {css_path}"
+        css_content = css_path.read_text()
         
         target_css = ':target {'
         assert target_css in css_content, "Missing CSS target highlighting"

@@ -689,7 +689,7 @@ Network Health Dashboard
             <div class="card-metrics">
                 <!-- Row 1: DA Readiness (primary) -->
                 <div class="metric-item primary" title="Voting directory authorities running Tor ≥0.4.9.x, which implements Proposal 321 (Happy Families) with family-cert support.">
-                    <span class="metric-value" style="{% if relays.json.network_health.hf_consensus_total_voters > 0 and relays.json.network_health.hf_ready_authorities == relays.json.network_health.hf_consensus_total_voters %}color: #28a745;{% elif relays.json.network_health.hf_ready_authorities > 0 %}color: #ff8c00;{% else %}color: #dc3545;{% endif %} font-weight: 700;">
+                    <span class="metric-value {% if relays.json.network_health.hf_consensus_total_voters > 0 and relays.json.network_health.hf_ready_authorities == relays.json.network_health.hf_consensus_total_voters %}al-status-success-bold{% elif relays.json.network_health.hf_ready_authorities > 0 %}al-status-warning-bold{% else %}al-status-danger-bold{% endif %}">
                         {{ relays.json.network_health.hf_ready_authorities }}/{{ relays.json.network_health.hf_consensus_total_voters }}
                     </span>
                     <span class="metric-label">Voting Dir Authorities on v0.4.9.x+</span>
@@ -698,13 +698,13 @@ Network Health Dashboard
                 <!-- Row 2: Consensus Method + DAs Support Max Method -->
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
                     <div class="metric-item" title="Current consensus-method from the consensus document (dir-spec §3.4.1). Must advance to minimum method {{ relays.json.network_health.hf_consensus_method_max|default('?', true) }} for family-ids to appear in microdescriptors.">
-                        <span class="metric-value" style="{% if relays.json.network_health.hf_consensus_method and relays.json.network_health.hf_consensus_method_max and relays.json.network_health.hf_consensus_method >= relays.json.network_health.hf_consensus_method_max %}color: #28a745;{% elif relays.json.network_health.hf_consensus_method %}color: #dc3545;{% else %}color: #6c757d;{% endif %} font-weight: 600;">
+                        <span class="metric-value {% if relays.json.network_health.hf_consensus_method and relays.json.network_health.hf_consensus_method_max and relays.json.network_health.hf_consensus_method >= relays.json.network_health.hf_consensus_method_max %}al-status-success-bold{% elif relays.json.network_health.hf_consensus_method %}al-status-danger-bold{% else %}al-status-muted{% endif %}">
                             {{ relays.json.network_health.hf_consensus_method|default('N/A', true) }}
                         </span>
                         <span class="metric-label">Consensus Method{% if relays.json.network_health.hf_consensus_method_max %} ≥{{ relays.json.network_health.hf_consensus_method_max }}{% endif %}</span>
                     </div>
                     <div class="metric-item" title="Authorities advertising method {{ relays.json.network_health.hf_consensus_method_max|default('?', true) }} in their consensus-methods vote header. Per dirvote.c, a 2/3 supermajority (>⌊n×2/3⌋) is required to activate a new method.">
-                        <span class="metric-value" style="{% if relays.json.network_health.hf_max_method_support >= relays.json.network_health.hf_method_threshold and relays.json.network_health.hf_method_threshold > 0 %}color: #28a745;{% elif relays.json.network_health.hf_max_method_support > 0 %}color: #cc9900;{% else %}color: #dc3545;{% endif %}">
+                        <span class="metric-value {% if relays.json.network_health.hf_max_method_support >= relays.json.network_health.hf_method_threshold and relays.json.network_health.hf_method_threshold > 0 %}al-status-success{% elif relays.json.network_health.hf_max_method_support > 0 %}al-status-warning{% else %}al-status-danger{% endif %}">
                             {{ relays.json.network_health.hf_max_method_support }}/{{ relays.json.network_health.hf_consensus_total_voters }}
                         </span>
                         <span class="metric-label">DAs Support Method {{ relays.json.network_health.hf_consensus_method_max|default('?', true) }} (Need {{ relays.json.network_health.hf_method_threshold }} for Majority)</span>

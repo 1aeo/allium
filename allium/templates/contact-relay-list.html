@@ -82,13 +82,13 @@
         {# Show validation icon based on category #}
         {% if show_validation_icon -%}
             {% if validation_icon_type == 'validated' -%}
-                <span style="color: #28a745; margin-left: 4px;" title="AROI Validated: This relay's fingerprint has been cryptographically verified via the operator's AROI proof">✓</span>
+                <span class="al-status-success" style="margin-left: 4px;" title="AROI Validated: This relay's fingerprint has been cryptographically verified via the operator's AROI proof">✓</span>
             {% elif validation_icon_type == 'unauthorized' -%}
-                <span style="color: #dc3545; margin-left: 4px;" title="Unauthorized Relay: This relay claims the domain but fingerprint is NOT in the AROI proof file">🚫</span>
+                <span class="al-status-danger" style="margin-left: 4px;" title="Unauthorized Relay: This relay claims the domain but fingerprint is NOT in the AROI proof file">🚫</span>
             {% elif validation_icon_type == 'misconfigured' -%}
-                <span style="color: #ffc107; margin-left: 4px;" title="AROI Misconfigured: Validation failed due to DNS/SSL/connection errors">⚠</span>
+                <span class="al-status-warning" style="margin-left: 4px;" title="AROI Misconfigured: Validation failed due to DNS/SSL/connection errors">⚠</span>
             {% elif validation_icon_type == 'not_configured' -%}
-                <span style="color: #6c757d; margin-left: 4px;" title="Not Configured: No AROI validation configured for this relay">○</span>
+                <span class="al-status-muted" style="margin-left: 4px;" title="Not Configured: No AROI validation configured for this relay">○</span>
             {% else -%}
                 {{- aroi_validation_icon(relay['fingerprint'], relay['aroi_domain'], validated_fps, unauthorized_fps, misconfigured_fps) }}
             {% endif -%}
