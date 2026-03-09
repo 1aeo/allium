@@ -77,8 +77,11 @@
     display: block;
     font-size: 3.3rem;
     font-weight: bold;
-    color: var(--color-text-heading);
     line-height: 1.0;
+}
+/* Default color only when no al-status-* class overrides it */
+.metric-item.primary .metric-value:not([class*="al-status-"]) {
+    color: var(--color-text-heading);
 }
 
 .metric-item.primary .metric-label {
@@ -108,8 +111,11 @@
     display: block;
     font-size: 1.65rem;
     font-weight: 600;
-    color: var(--nh-text-value);
     line-height: 1.0;
+}
+/* Default color only when no al-status-* class overrides it */
+.metric-grid .metric-value:not([class*="al-status-"]) {
+    color: var(--nh-text-value);
 }
 
 .metric-grid .metric-label {
@@ -121,7 +127,8 @@
 }
 
 /* DRY: collapsed 11 identical card-specific rules into 1 */
-.ribbon-card .metric-item.primary .metric-value {
+/* Default color only when no al-status-* class overrides it */
+.ribbon-card .metric-item.primary .metric-value:not([class*="al-status-"]) {
     color: var(--nh-metric-primary-color);
 }
 
