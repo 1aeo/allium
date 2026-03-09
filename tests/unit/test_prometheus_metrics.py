@@ -321,12 +321,14 @@ class TestDnsHealthMetrics(unittest.TestCase):
                                      validated_domains={"example.com"})
         # AAAA is valid — should have the label
         self.assertIn('aeo1_exit_relay_info{fingerprint="AAAA"', content)
-        aaaa_line = [line for line in content.split("\n")
-                     if line.startswith('aeo1_exit_relay_info{fingerprint="AAAA"')][0]
+        aaaa_line = next((line for line in content.split("\n")
+                          if line.startswith('aeo1_exit_relay_info{fingerprint="AAAA"')), None)
+        self.assertIsNotNone(aaaa_line, "Expected aeo1_exit_relay_info line for AAAA")
         self.assertIn('verifiedaroi="example.com"', aaaa_line)
         # BBBB is invalid — must NOT inherit
-        bbbb_line = [line for line in content.split("\n")
-                     if line.startswith('aeo1_exit_relay_info{fingerprint="BBBB"')][0]
+        bbbb_line = next((line for line in content.split("\n")
+                          if line.startswith('aeo1_exit_relay_info{fingerprint="BBBB"')), None)
+        self.assertIsNotNone(bbbb_line, "Expected aeo1_exit_relay_info line for BBBB")
         self.assertIn('verifiedaroi=""', bbbb_line)
 
     def test_aggregates_ratio_format(self):

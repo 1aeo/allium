@@ -13,7 +13,7 @@ See docs/prometheus/README.md for the full schema reference.
 import math
 import os
 import time
-from typing import Dict, List, Optional, Set
+from typing import Callable, Dict, List, Optional, Set
 
 from .aroi_validation import _check_aroi_fields
 
@@ -218,7 +218,7 @@ def _write_meta_section(lines: List[str], relay_set) -> None:
 # ---------------------------------------------------------------------------
 
 def _write_dns_health_section(lines: List[str], relay_set,
-                              fp_to_family: callable,
+                              fp_to_family: Callable[[str], str],
                               aroi_map: Dict[str, dict],
                               validated_domains: Set[str]) -> int:
     """Emit DNS health aggregates and per-relay metrics. Returns exit relay count."""
@@ -367,7 +367,7 @@ def _write_dns_health_section(lines: List[str], relay_set,
 # ---------------------------------------------------------------------------
 
 def _write_aroi_section(lines: List[str], relay_set,
-                        fp_to_family: callable,
+                        fp_to_family: Callable[[str], str],
                         aroi_map: Dict[str, dict]) -> int:
     """Emit AROI aggregates and per-relay metrics. Returns configured relay count."""
     aroi_data = getattr(relay_set, "aroi_validation_data", None)
