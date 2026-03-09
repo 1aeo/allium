@@ -169,8 +169,8 @@
 
 @media (max-width: 480px) {
     .ribbon-card .card-header h4 { font-size: 1.2rem; }
-    .metric-item.primary .metric-value { font-size: 3.2rem; }
-    .metric-item.primary .metric-label { font-size: 1.4rem; }
-    .metric-grid .metric-value { font-size: 1.6rem; }
-    .metric-grid .metric-label { font-size: 1.2rem; }
+    .metric-item.primary .metric-value { font-size: 2.2rem; }
+    .metric-item.primary .metric-label { font-size: 1.1rem; }
+    .metric-grid .metric-value { font-size: 1.2rem; }
+    .metric-grid .metric-label { font-size: 0.95rem; }
 }
