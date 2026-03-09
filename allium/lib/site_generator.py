@@ -182,6 +182,20 @@ def generate_site(relay_set, args, progress_logger):
         f"{search_stats['family_count']} families, {search_stats['file_size_kb']} KB"
     )
 
+    # --- Prometheus metrics ---
+    progress_logger.log("Generating Prometheus metrics...")
+    from .prometheus_metrics import generate_prometheus_metrics
+    prom_stats = generate_prometheus_metrics(relay_set, args.output_dir)
+    prom_msg = (
+        f"Generated Prometheus metrics: {prom_stats['exit_relays']} exits, "
+        f"{prom_stats['aroi_relays']} AROI, {prom_stats['file_size_kb']} KB"
+    )
+    if not prom_stats["dns_available"]:
+        prom_msg += " [DNS source unavailable]"
+    if not prom_stats["aroi_available"]:
+        prom_msg += " [AROI source unavailable]"
+    progress_logger.log(prom_msg)
+
     # End page generation section
     progress_logger.end_section("Page Generation")
     progress_logger.log("Allium static site generation completed successfully!")
