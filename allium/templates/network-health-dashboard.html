@@ -189,11 +189,11 @@ Network Health Dashboard
         <!-- CARD 1: RELAY COUNTS -->
         <div class="ribbon-card relay-counts">
             <div class="card-header" id="relay-counts">
-                <h4><a href="#relay-counts" style="color: inherit; text-decoration: none;">📊 Relay Counts</a></h4>
+                <h4><a href="#relay-counts" class="al-link-plain" style="color: inherit;">📊 Relay Counts</a></h4>
             </div>
             <div class="card-metrics">
                 <div class="metric-item primary" title="Total number of Tor relays currently running in the network. Calculated by counting all active relays from Onionoo API.">
-                    <span class="metric-value"><a href="{{ page_ctx.path_prefix }}misc/all.html" style="color: inherit; text-decoration: none;">{{ relays.json.network_health.relays_total_formatted }}</a></span>
+                    <span class="metric-value"><a href="{{ page_ctx.path_prefix }}misc/all.html" class="al-link-plain" style="color: inherit;">{{ relays.json.network_health.relays_total_formatted }}</a></span>
                     <span class="metric-label">Total Relays</span>
                 </div>
                 <div class="metric-grid">
@@ -305,7 +305,7 @@ Network Health Dashboard
         <!-- CARD 2: BANDWIDTH AVAILABILITY -->
                     <div class="ribbon-card bandwidth-counts">
                 <div class="card-header" id="bandwidth-capacity">
-                    <h4><a href="#bandwidth-capacity" style="color: inherit; text-decoration: none;">⚡ Bandwidth Capacity Availability</a></h4>
+                    <h4><a href="#bandwidth-capacity" class="al-link-plain" style="color: inherit;">⚡ Bandwidth Capacity Availability</a></h4>
                 </div>
             <div class="card-metrics">
                 <div class="metric-item primary" title="Total observed bandwidth capacity across all relays. Sum of observed_bandwidth from all active relays.">
@@ -410,7 +410,7 @@ Network Health Dashboard
         <!-- CARD 3: RELAY UPTIME -->
         <div class="ribbon-card relay-uptime">
             <div class="card-header" id="relay-uptime">
-                <h4><a href="#relay-uptime" style="color: inherit; text-decoration: none;">⏰ Relay Uptime</a></h4>
+                <h4><a href="#relay-uptime" class="al-link-plain" style="color: inherit;">⏰ Relay Uptime</a></h4>
             </div>
             <div class="card-metrics">
                 <div class="metric-item primary" title="Average uptime percentage across all relays over the last month. Higher is better for network stability. 1mo Mean by category: Exit {{ relays.json.network_health.exit_uptime_1_month_mean_formatted }}, Guard {{ relays.json.network_health.guard_uptime_1_month_mean_formatted }}, Middle {{ relays.json.network_health.middle_uptime_1_month_mean_formatted }}, Other {{ relays.json.network_health.other_uptime_1_month_mean_formatted }}.">
@@ -480,13 +480,13 @@ Network Health Dashboard
         <!-- CARD 4: OPERATOR PARTICIPATION -->
         <div class="ribbon-card operator-participation">
             <div class="card-header" id="operator-participation">
-                <h4><a href="#operator-participation" style="color: inherit; text-decoration: none;">👥 Operator Participation</a></h4>
+                <h4><a href="#operator-participation" class="al-link-plain" style="color: inherit;">👥 Operator Participation</a></h4>
             </div>
             <div class="card-metrics">
                 <!-- AROI Coverage - Dual Focus (matches Bandwidth Utilization style) -->
                 <div class="metric-item primary" style="font-size: 18px; font-weight: 600;" title="AROI Authentication: {{ "{:,}".format(relays.json.network_health.unique_aroi_domains_count) }} unique operators using AROI domain verification across {{ "{:,}".format(relays.json.network_health.total_relays_with_aroi) }} relays ({{ "%.1f%%"|format(relays.json.network_health.total_relays_with_aroi_percentage) }} of network). Top operators: {{ relays.json.network_health.top_operators_text }}. Average: {{ relays.json.network_health.avg_relays_per_aroi_operator }} relays per operator.">
                     <span class="metric-value">
-                        <a href="{{ page_ctx.path_prefix }}misc/contacts-by-bandwidth.html" style="color: inherit; text-decoration: none;">
+                        <a href="{{ page_ctx.path_prefix }}misc/contacts-by-bandwidth.html" class="al-link-plain" style="color: inherit;">
                             {{ "{:,}".format(relays.json.network_health.unique_aroi_domains_count) }} domains
                         </a> | 
                         {{ "{:,}".format(relays.json.network_health.total_relays_with_aroi) }} relays 
@@ -502,18 +502,18 @@ Network Health Dashboard
                             {{ "{:,}".format(relays.json.network_health.validated_aroi_domains_count) }}
                         </span>
                         <span class="metric-label">Validated AROI Operators</span>
-                        <div style="font-size: 11px; color: #666; margin-top: 2px;">
+                        <div class="al-text-small-muted" style="margin-top: 2px;">
                             {{ "%.1f%%"|format(relays.json.network_health.validated_aroi_domains_percentage) }} of AROI
                         </div>
                     </div>
                     <div class="metric-item" title="Unique operators with no successfully validated relays ({{ "%.1f%%"|format(relays.json.network_health.invalid_aroi_domains_percentage) }} of AROI operators). These operators have AROI configuration but all their relays failed validation. This metric counts operators, not individual relays.{% if relays.json.network_health.operator_error_top5 %}
 &#10;&#10;Top failure reasons (operator count):{% for error, count in relays.json.network_health.operator_error_top5 %}
 &#10;• {{ error }} — {{ "{:,}".format(count) }} operators{% endfor %}{% endif %}">
-                        <span class="metric-value" style="color: #dc3545;">
+                        <span class="metric-value" class="al-status-danger">
                             {{ "{:,}".format(relays.json.network_health.invalid_aroi_domains_count) }}
                         </span>
                         <span class="metric-label">Failed Validation</span>
-                        <div style="font-size: 11px; color: #666; margin-top: 2px;">
+                        <div class="al-text-small-muted" style="margin-top: 2px;">
                             {{ "%.1f%%"|format(relays.json.network_health.invalid_aroi_domains_percentage) }} of AROI
                         </div>
                     </div>
@@ -522,23 +522,23 @@ Network Health Dashboard
                 <!-- AROI Validation Quality (Relay-level) -->
                 <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
                     <div class="metric-item" title="Relays with confirmed valid AROI proof of domain ownership via DNS-RSA or URI-RSA verification. These operators have successfully proven control of their claimed domain through cryptographic proofs. Shows {{ "%.1f%%"|format(relays.json.network_health.aroi_validated_percentage) }} of all relays and {{ "%.1f%%"|format(relays.json.network_health.aroi_validated_percentage_of_aroi) }} of relays with AROI configured.">
-                        <span class="metric-value" style="color: #28a745;">{{ "{:,}".format(relays.json.network_health.aroi_validated_count) }}</span>
+                        <span class="metric-value" class="al-status-success">{{ "{:,}".format(relays.json.network_health.aroi_validated_count) }}</span>
                         <span class="metric-label">Validated AROI Relays</span>
-                        <div style="font-size: 11px; color: #666; margin-top: 2px;">{{ "%.1f%%"|format(relays.json.network_health.aroi_validated_percentage) }} all, {{ "%.1f%%"|format(relays.json.network_health.aroi_validated_percentage_of_aroi) }} AROI</div>
+                        <div class="al-text-small-muted" style="margin-top: 2px;">{{ "%.1f%%"|format(relays.json.network_health.aroi_validated_percentage) }} all, {{ "%.1f%%"|format(relays.json.network_health.aroi_validated_percentage_of_aroi) }} AROI</div>
                     </div>
                     <div class="metric-item" title="Relays with AROI configured but validation failed ({{ "%.1f%%"|format(relays.json.network_health.aroi_invalid_percentage_of_aroi) }} of AROI relays).{% if relays.json.network_health.relay_error_top5 %}
 &#10;&#10;Top validation failure reasons (relay count):{% for error, count in relays.json.network_health.relay_error_top5 %}
 &#10;• {{ error }} — {{ "{:,}".format(count) }} relays{% endfor %}{% endif %}">
-                        <span class="metric-value" style="color: #dc3545;">{{ "{:,}".format(relays.json.network_health.aroi_unvalidated_count) }}</span>
+                        <span class="metric-value" class="al-status-danger">{{ "{:,}".format(relays.json.network_health.aroi_unvalidated_count) }}</span>
                         <span class="metric-label">Invalid AROI</span>
-                        <div style="font-size: 11px; color: #666; margin-top: 2px;">{{ "%.1f%%"|format(relays.json.network_health.aroi_unvalidated_percentage) }} all, {{ "%.1f%%"|format(relays.json.network_health.aroi_invalid_percentage_of_aroi) }} AROI</div>
+                        <div class="al-text-small-muted" style="margin-top: 2px;">{{ "%.1f%%"|format(relays.json.network_health.aroi_unvalidated_percentage) }} all, {{ "%.1f%%"|format(relays.json.network_health.aroi_invalid_percentage_of_aroi) }} AROI</div>
                     </div>
                     <div class="metric-item" title="Relays without AROI configuration ({{ "%.1f%%"|format(relays.json.network_health.relays_without_aroi_percentage) }} of network). These relays lack one or more required AROI fields.{% if relays.json.network_health.no_aroi_reasons_top5 %}
 &#10;&#10;Top missing-field reasons:{% for reason, count in relays.json.network_health.no_aroi_reasons_top5 %}
 &#10;• {{ reason }} — {{ "{:,}".format(count) }} relays{% endfor %}{% endif %}">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.relays_without_aroi) }}</span>
                         <span class="metric-label">No AROI</span>
-                        <div style="font-size: 11px; color: #666; margin-top: 2px;">{{ "%.1f%%"|format(relays.json.network_health.relays_without_aroi_percentage) }} of all relays</div>
+                        <div class="al-text-small-muted" style="margin-top: 2px;">{{ "%.1f%%"|format(relays.json.network_health.relays_without_aroi_percentage) }} of all relays</div>
                     </div>
                 </div>
                 <!-- DNS-RSA and URI-RSA Validation Rates -->
@@ -559,7 +559,7 @@ Network Health Dashboard
                 <!-- Contact Row (moved before Family) -->
                 <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
                     <div class="metric-item" title="Total number of unique contact addresses provided by relay operators.">
-                        <span class="metric-value"><a href="{{ page_ctx.path_prefix }}misc/contacts-by-bandwidth.html" style="color: inherit; text-decoration: none;">{{ "{:,}".format(relays.json.network_health.unique_contacts_count) }}</a></span>
+                        <span class="metric-value"><a href="{{ page_ctx.path_prefix }}misc/contacts-by-bandwidth.html" class="al-link-plain" style="color: inherit;">{{ "{:,}".format(relays.json.network_health.unique_contacts_count) }}</a></span>
                         <span class="metric-label">Total Contacts</span>
                     </div>
                     <div class="metric-item" title="Relays with contact information provided. Important for network communication and accountability.">
@@ -574,7 +574,7 @@ Network Health Dashboard
                 <!-- Family Row (moved after Contact) -->
                 <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
                     <div class="metric-item" title="Total number of unique relay families - distinct groups of relays operated by the same entity.">
-                        <span class="metric-value"><a href="{{ page_ctx.path_prefix }}misc/families-by-bandwidth.html" style="color: inherit; text-decoration: none;">{{ "{:,}".format(relays.json.network_health.families_count) }}</a></span>
+                        <span class="metric-value"><a href="{{ page_ctx.path_prefix }}misc/families-by-bandwidth.html" class="al-link-plain" style="color: inherit;">{{ "{:,}".format(relays.json.network_health.families_count) }}</a></span>
                         <span class="metric-label">Total Families</span>
                     </div>
                     <div class="metric-item" title="Relays with family configuration. Family configuration helps prevent path selection issues.">
@@ -603,11 +603,11 @@ Network Health Dashboard
         <!-- CARD 5: GEOGRAPHIC PARTICIPATION -->
         <div class="ribbon-card geographic-participation">
             <div class="card-header" id="geographic-participation">
-                <h4><a href="#geographic-participation" style="color: inherit; text-decoration: none;">🌍 Geographic Participation</a></h4>
+                <h4><a href="#geographic-participation" class="al-link-plain" style="color: inherit;">🌍 Geographic Participation</a></h4>
             </div>
             <div class="card-metrics">
                 <div class="metric-item primary" title="Number of countries hosting Tor relays. Higher geographic diversity improves censorship resistance and network resilience.">
-                    <span class="metric-value"><a href="{{ page_ctx.path_prefix }}misc/countries-by-bandwidth.html" style="color: inherit; text-decoration: none;">{{ "{:,}".format(relays.json.network_health.countries_count) }}</a></span>
+                    <span class="metric-value"><a href="{{ page_ctx.path_prefix }}misc/countries-by-bandwidth.html" class="al-link-plain" style="color: inherit;">{{ "{:,}".format(relays.json.network_health.countries_count) }}</a></span>
                     <span class="metric-label">Unique Countries</span>
                 </div>
                 <!-- NEW: Top 3 Countries by Consensus Weight -->
@@ -673,11 +673,11 @@ Network Health Dashboard
         <!-- CARD 6: PROVIDER PARTICIPATION -->
         <div class="ribbon-card provider-participation">
             <div class="card-header" id="provider-participation">
-                <h4><a href="#provider-participation" style="color: inherit; text-decoration: none;">🏢 Provider Participation</a></h4>
+                <h4><a href="#provider-participation" class="al-link-plain" style="color: inherit;">🏢 Provider Participation</a></h4>
             </div>
             <div class="card-metrics">
                 <div class="metric-item primary" title="Unique Autonomous Systems hosting relays. Higher AS diversity reduces single points of failure and improves network resilience.">
-                    <span class="metric-value"><a href="{{ page_ctx.path_prefix }}misc/networks-by-bandwidth.html" style="color: inherit; text-decoration: none;">{{ "{:,}".format(relays.json.network_health.unique_as_count) }}</a></span>
+                    <span class="metric-value"><a href="{{ page_ctx.path_prefix }}misc/networks-by-bandwidth.html" class="al-link-plain" style="color: inherit;">{{ "{:,}".format(relays.json.network_health.unique_as_count) }}</a></span>
                     <span class="metric-label">Unique AS</span>
                 </div>
                 <!-- NEW: Top 3 AS by Consensus Weight -->
@@ -740,7 +740,7 @@ Network Health Dashboard
         <!-- CARD 8: BANDWIDTH UTILIZATION -->
         <div class="ribbon-card bandwidth-utilization">
             <div class="card-header" id="bandwidth-utilization">
-                <h4><a href="#bandwidth-utilization" style="color: inherit; text-decoration: none;">📈 Bandwidth Utilization</a></h4>
+                <h4><a href="#bandwidth-utilization" class="al-link-plain" style="color: inherit;">📈 Bandwidth Utilization</a></h4>
             </div>
             <div class="card-metrics">
                 <div class="metric-item primary" title="Network-wide CW/BW ratio mean and median across all relays. CW/BW ratio = Consensus Weight ÷ Bandwidth Capacity × 1,000,000. Higher ratios indicate better network utilization per bandwidth capacity contributed. Same calculation as Performance Insights in contact operator pages.">
@@ -787,7 +787,7 @@ Network Health Dashboard
         <!-- CARD 9: VERSION COMPLIANCE -->
         <div class="ribbon-card version-compliance">
             <div class="card-header" id="version-compliance">
-                <h4><a href="#version-compliance" style="color: inherit; text-decoration: none;">🔄 Version Compliance</a></h4>
+                <h4><a href="#version-compliance" class="al-link-plain" style="color: inherit;">🔄 Version Compliance</a></h4>
             </div>
             <div class="card-metrics">
                 <div class="metric-item primary" title="Percentage of relays running Tor versions recommended by directory authorities. Higher is better for security.">
@@ -818,7 +818,7 @@ Network Health Dashboard
         <!-- CARD 7: UNIQUE OPERATING SYSTEMS -->
         <div class="ribbon-card platform-counts">
             <div class="card-header" id="operating-systems">
-                <h4><a href="#operating-systems" style="color: inherit; text-decoration: none;">💻 Unique Operating Systems</a></h4>
+                <h4><a href="#operating-systems" class="al-link-plain" style="color: inherit;">💻 Unique Operating Systems</a></h4>
             </div>
             <div class="card-metrics">
                 <div class="metric-item primary" title="Number of unique platform strings reported by relays. Shows diversity of operating systems and Tor versions.">
@@ -848,7 +848,7 @@ Network Health Dashboard
         <!-- CARD 11: HAPPY FAMILY KEY MIGRATION -->
         <div class="ribbon-card happy-family-migration">
             <div class="card-header" id="happy-families">
-                <h4><a href="#happy-families" style="color: inherit; text-decoration: none;">🔑 Happy Families Key Migration</a></h4>
+                <h4><a href="#happy-families" class="al-link-plain" style="color: inherit;">🔑 Happy Families Key Migration</a></h4>
             </div>
             <div class="card-metrics">
                 <!-- Row 1: DA Readiness (primary) -->
@@ -912,7 +912,7 @@ Network Health Dashboard
                         <span class="metric-label">Relays with family-cert</span>
                     </div>
                     <div class="metric-item" title="Relays seen in server descriptors without a family-cert entry. Operators can add one with 'tor --keygen-family' (requires Tor ≥0.4.9.2-alpha). Source: CollecTor server descriptors.">
-                        <span class="metric-value" style="color: #dc3545;">{{ relays.json.network_health.hf_family_no_cert_count_formatted }}</span>
+                        <span class="metric-value" class="al-status-danger">{{ relays.json.network_health.hf_family_no_cert_count_formatted }}</span>
                         <span class="metric-label">Relays without family-cert</span>
                     </div>
                 </div>
@@ -920,7 +920,7 @@ Network Health Dashboard
                 <!-- Row 5: Operator adoption from server descriptors (AROI validated) -->
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
                     <div class="metric-item" title="Validated AROI operators with at least one relay publishing family-cert. Source: CollecTor server descriptors matched against AROI-validated operator domains. Percentage of {{ "{:,}".format(relays.json.network_health.hf_total_validated_operators) }} validated operators.">
-                        <span class="metric-value" style="color: #28a745;">{{ relays.json.network_health.hf_some_operators_formatted }} ({{ relays.json.network_health.hf_some_operators_percentage_formatted }})</span>
+                        <span class="metric-value" class="al-status-success">{{ relays.json.network_health.hf_some_operators_formatted }} ({{ relays.json.network_health.hf_some_operators_percentage_formatted }})</span>
                         <span class="metric-label">Operators with ≥1 family-cert</span>
                     </div>
                     <div class="metric-item" title="Validated AROI operators where every relay publishes family-cert. Fully transitioned to Proposal 321. Source: CollecTor server descriptors. Percentage of {{ "{:,}".format(relays.json.network_health.hf_total_validated_operators) }} validated operators.">
@@ -932,11 +932,11 @@ Network Health Dashboard
                 <!-- Row 6: Relay Version Adoption -->
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
                     <div class="metric-item" title="Relays running Tor ≥0.4.9.1-alpha, the first version implementing Proposal 321 family-cert support. Source: Onionoo details API version field.">
-                        <span class="metric-value" style="color: #28a745;">{{ relays.json.network_health.hf_ready_relays_formatted }} ({{ relays.json.network_health.hf_ready_relays_percentage_formatted }})</span>
+                        <span class="metric-value" class="al-status-success">{{ relays.json.network_health.hf_ready_relays_formatted }} ({{ relays.json.network_health.hf_ready_relays_percentage_formatted }})</span>
                         <span class="metric-label">Relays on v0.4.9.x+</span>
                     </div>
                     <div class="metric-item" title="Relays running Tor <0.4.9.x without Proposal 321 support. Must upgrade before they can publish family-cert. Source: Onionoo details API version field.">
-                        <span class="metric-value" style="color: #dc3545;">{{ relays.json.network_health.hf_not_ready_relays_formatted }} ({{ relays.json.network_health.hf_not_ready_relays_percentage_formatted }})</span>
+                        <span class="metric-value" class="al-status-danger">{{ relays.json.network_health.hf_not_ready_relays_formatted }} ({{ relays.json.network_health.hf_not_ready_relays_percentage_formatted }})</span>
                         <span class="metric-label">Relays on Older Versions</span>
                     </div>
                 </div>
@@ -970,7 +970,7 @@ Network Health Dashboard
         <!-- CARD 10: EXIT POLICIES -->
         <div class="ribbon-card exit-policies">
             <div class="card-header" id="exit-policies">
-                <h4><a href="#exit-policies" style="color: inherit; text-decoration: none;">🚪 Exit Policies</a></h4>
+                <h4><a href="#exit-policies" class="al-link-plain" style="color: inherit;">🚪 Exit Policies</a></h4>
             </div>
             <div class="card-metrics">
                 <div class="metric-item primary" title="Number and percentage of exit relays without ANY restrictions - neither port restrictions nor public IP address restrictions. These relays provide maximum utility for Tor users, allowing unrestricted access to all public internet resources.">
@@ -1010,7 +1010,7 @@ Network Health Dashboard
         {% if relays.json.network_health.exit_dns_health_available %}
         <div class="ribbon-card exit-dns-health">
             <div class="card-header" id="exit-dns-health">
-                <h4><a href="#exit-dns-health" style="color: inherit; text-decoration: none;">🔍 Exit DNS Health</a></h4>
+                <h4><a href="#exit-dns-health" class="al-link-plain" style="color: inherit;">🔍 Exit DNS Health</a></h4>
             </div>
             <div class="card-metrics">
                 <div class="metric-item primary"
@@ -1022,11 +1022,11 @@ Network Health Dashboard
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
                     <div class="metric-item" title="Exit relays that successfully resolved DNS queries.">
-                        <span class="metric-value" style="color: #28a745;">{{ relays.json.network_health.exit_dns_health_success_formatted }}</span>
+                        <span class="metric-value" class="al-status-success">{{ relays.json.network_health.exit_dns_health_success_formatted }}</span>
                         <span class="metric-label">DNS Healthy</span>
                     </div>
                     <div class="metric-item" title="Exit relays that failed DNS resolution (all failure types combined).">
-                        <span class="metric-value" style="color: #dc3545;">{{ relays.json.network_health.exit_dns_health_total_failures_formatted }}</span>
+                        <span class="metric-value" class="al-status-danger">{{ relays.json.network_health.exit_dns_health_total_failures_formatted }}</span>
                         <span class="metric-label">DNS Unhealthy</span>
                     </div>
                     <div class="metric-item" title="Exit relays unreachable during testing.">
@@ -1050,15 +1050,15 @@ Network Health Dashboard
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(5, 1fr);">
                     <div class="metric-item" title="DNS resolver returned NXDOMAIN (domain not found). Indicates a broken, misconfigured, or censoring resolver.">
-                        <span class="metric-value" style="color: #dc3545;">{{ relays.json.network_health.exit_dns_health_fail_formatted }}</span>
+                        <span class="metric-value" class="al-status-danger">{{ relays.json.network_health.exit_dns_health_fail_formatted }}</span>
                         <span class="metric-label">Domain Not Found</span>
                     </div>
                     <div class="metric-item" title="DNS queries that timed out before receiving a response.">
-                        <span class="metric-value" style="color: #856404;">{{ relays.json.network_health.exit_dns_health_timeout_formatted }}</span>
+                        <span class="metric-value" class="al-status-warning">{{ relays.json.network_health.exit_dns_health_timeout_formatted }}</span>
                         <span class="metric-label">Query Timeout</span>
                     </div>
                     <div class="metric-item" title="DNS queries that returned an incorrect IP address. May indicate DNS manipulation or hijacking.">
-                        <span class="metric-value" style="color: #dc3545;">{{ relays.json.network_health.exit_dns_health_wrong_ip_formatted }}</span>
+                        <span class="metric-value" class="al-status-danger">{{ relays.json.network_health.exit_dns_health_wrong_ip_formatted }}</span>
                         <span class="metric-label">Returned Wrong IP</span>
                     </div>
                     <div class="metric-item" title="SOCKS proxy errors during DNS testing.">
