@@ -558,7 +558,3 @@ class TestMetaAndFile(unittest.TestCase):
             with open(os.path.join(td, "metrics")) as f:
                 content = f.read()
         self.assertIn("# EOF", content)
-
-
-if __name__ == "__main__":
-    unittest.main(verbosity=2)
