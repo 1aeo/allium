@@ -285,13 +285,14 @@ if __name__ == "__main__":
     #   - Individual relay pages x2
     #   - Static files x2
     #   - Search index x2
+    #   - Prometheus metrics x2
     #   - Section end (1)
     #   - Completion message (1)
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     
     setup_steps = 4
     coordinator_steps = 22  # API Fetching (18) + Data Processing (4)
-    page_generation_steps = 33  # Page generation and completion
+    page_generation_steps = 35  # Page generation and completion (+2 for Prometheus metrics)
     total_steps = setup_steps + coordinator_steps + page_generation_steps  # 59 total steps
 
     # Create unified progress logger
