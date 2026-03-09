@@ -1,0 +1,96 @@
+# 1AEO AROI Monitoring + Freshness Alerts
+# Schema: v1
+# Install: copy to /etc/prometheus/rules/ and reload Prometheus
+# Customize: replace YOUR_FAMILY_ID with your Ed25519 family key (64-char hex)
+#            replace YOUR_DOMAIN with your AROI domain (e.g., www.1aeo.com)
+#
+# Source: https://github.com/1aeo/allium/docs/prometheus/
+# Metrics endpoint: https://metrics.1aeo.com/metrics
+
+groups:
+  - name: aeo1_aroi_monitoring
+    interval: 1m
+    rules:
+
+      # AROI configured but validation failing (proof file removed? DNS changed?)
+      - alert: AroiValidationLost
+        expr: >
+          aeo1_aroi_valid{familyid="YOUR_FAMILY_ID"} == 0
+          and on(fingerprint) aeo1_aroi_relay_info{domain="YOUR_DOMAIN"}
+        for: 1h
+        labels:
+          severity: critical
+        annotations:
+          summary: "AROI validation FAILED for {{ $labels.nick }}"
+          description: "Check proof file at {{ $labels.domain }}"
+          dashboard: "https://metrics.1aeo.com/relay/{{ $labels.fingerprint }}/"
+
+      # Multiple relays failing for same domain (proof server or DNS down)
+      - alert: AroiDomainOutage
+        expr: >
+          count(
+            aeo1_aroi_valid == 0
+            and on(fingerprint) aeo1_aroi_relay_info{domain="YOUR_DOMAIN"}
+          ) > 5
+        for: 30m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $value }} relays failing AROI validation for YOUR_DOMAIN"
+
+  - name: aeo1_freshness
+    interval: 1m
+    rules:
+
+      # Metrics file not regenerated (allium hasn't run)
+      - alert: MetricsFileStale
+        expr: time() - aeo1_generation_timestamp_seconds > 3600
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus metrics file is stale (last generated {{ $value | humanizeDuration }} ago)"
+
+      # Metrics endpoint completely unreachable
+      - alert: MetricsEndpointDown
+        expr: absent(aeo1_build_info)
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Cannot reach metrics.1aeo.com/metrics"
+
+      # Exit DNS health source data unavailable
+      - alert: DnsHealthSourceDown
+        expr: aeo1_source_up{source="exitdnshealth"} == 0
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Exit DNS health data source unavailable"
+
+      # AROI validation source data unavailable
+      - alert: AroiSourceDown
+        expr: aeo1_source_up{source="aroi"} == 0
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "AROI validation data source unavailable"
+
+      # DNS health scan hasn't run in 24 hours
+      - alert: DnsHealthScanStale
+        expr: time() - aeo1_exit_scan_timestamp_seconds > 86400
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "DNS health scan is stale (last ran {{ $value | humanizeDuration }} ago)"
+
+      # AROI validation scan hasn't run in 24 hours
+      - alert: AroiScanStale
+        expr: time() - aeo1_aroi_scan_timestamp_seconds > 86400
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "AROI validation scan is stale (last ran {{ $value | humanizeDuration }} ago)"

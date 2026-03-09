@@ -1,0 +1,61 @@
+# 1AEO Exit DNS Health Alerts
+# Schema: v1
+# Install: copy to /etc/prometheus/rules/ and reload Prometheus
+# Customize: replace YOUR_FAMILY_ID with your Ed25519 family key (64-char hex)
+#            or use verifiedaroi label via info metric joins
+#
+# Source: https://github.com/1aeo/allium/docs/prometheus/
+# Metrics endpoint: https://metrics.1aeo.com/metrics
+
+groups:
+  - name: aeo1_exit_dns_health
+    interval: 1m
+    rules:
+
+      # Any relay in my family failing DNS
+      - alert: ExitDnsFailure
+        expr: >
+          aeo1_exit_dns_failed{familyid="YOUR_FAMILY_ID"} == 1
+          and on(fingerprint) aeo1_exit_relay_info
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Exit {{ $labels.nick }} DNS failure ({{ $labels.status }})"
+          dashboard: "https://metrics.1aeo.com/relay/{{ $labels.fingerprint }}/"
+
+      # Relay failing 5+ consecutive scans (persistent broken resolver)
+      - alert: ExitDnsPersistentFailure
+        expr: aeo1_exit_dns_consecutive_failures{familyid="YOUR_FAMILY_ID"} > 5
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.fingerprint }} failing {{ $value }} consecutive DNS scans"
+          dashboard: "https://metrics.1aeo.com/relay/{{ $labels.fingerprint }}/"
+
+      # 3+ relays in my family failing at once (systemic issue)
+      - alert: ExitDnsFamilyOutage
+        expr: count(aeo1_exit_dns_failed{familyid="YOUR_FAMILY_ID"} == 1) > 3
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $value }} relays in family failing DNS simultaneously"
+
+      # DNS latency exceeding 25 seconds
+      - alert: ExitDnsHighLatency
+        expr: aeo1_exit_dns_latency_ms{familyid="YOUR_FAMILY_ID"} > 25000
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Relay {{ $labels.fingerprint }} DNS latency {{ $value }}ms"
+
+      # Network-wide DNS success rate drop
+      - alert: NetworkDnsSuccessRateLow
+        expr: aeo1_exit_dns_success_ratio < 0.95
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Network DNS success rate {{ $value | humanizePercentage }}"
