@@ -152,7 +152,7 @@ def _parse_timestamp_epoch(ts_str) -> float:
         s = str(ts_str).replace("Z", "+00:00")
         dt = datetime.fromisoformat(s)
         return dt.timestamp()
-    except Exception:
+    except (ValueError, TypeError):
         # Maybe it's already numeric
         try:
             return float(ts_str)
@@ -386,7 +386,6 @@ def _write_aroi_section(lines: List[str], relay_set,
     # --- Aggregates ---
     total_relays = metadata.get("total_relays", 0)
     valid_relays = metadata.get("valid_relays", 0)
-    invalid_relays = metadata.get("invalid_relays", 0)
 
     _emit_help_type(lines, "aeo1_aroi_network_relays_count",
                     "Total relays observed in network snapshot")
