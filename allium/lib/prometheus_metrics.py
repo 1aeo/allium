@@ -10,6 +10,7 @@ Schema v1. Metric names and frozen label keys are the public API contract.
 See docs/prometheus/README.md for the full schema reference.
 """
 
+import math
 import os
 import time
 from typing import Dict, List, Optional, Set
@@ -53,9 +54,26 @@ def _format_labels(labels: Dict[str, str]) -> str:
     return "{" + ",".join(parts) + "}"
 
 
+def _safe_numeric(value) -> str:
+    """Coerce a metric value to a safe numeric string.
+
+    Prevents metric-line injection if upstream API fields unexpectedly
+    contain attacker-controlled strings instead of numbers.
+    """
+    if isinstance(value, int) and not isinstance(value, bool):
+        return str(value)
+    try:
+        f = float(value)
+    except (TypeError, ValueError):
+        return "0"
+    if math.isnan(f) or math.isinf(f):
+        return "0"
+    return str(f)
+
+
 def _emit(lines: List[str], name: str, labels: Dict[str, str], value) -> None:
     """Append a single metric line."""
-    lines.append(f"{name}{_format_labels(labels)} {value}")
+    lines.append(f"{name}{_format_labels(labels)} {_safe_numeric(value)}")
 
 
 def _emit_help_type(lines: List[str], name: str, help_text: str, type_name: str = "gauge") -> None:

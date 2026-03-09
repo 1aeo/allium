@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'allium')
 
 from lib.prometheus_metrics import (
     _sanitize_prom_label,
+    _safe_numeric,
     _format_labels,
     _get_family_id,
     _is_aroi_configured,
@@ -155,6 +156,49 @@ class TestFormatLabels(unittest.TestCase):
     def test_escaping_in_values(self):
         result = _format_labels({"nick": 'say "hi"'})
         self.assertEqual(result, '{nick="say \\"hi\\""}')
+
+
+# ---------------------------------------------------------------------------
+# Tests: numeric coercion
+# ---------------------------------------------------------------------------
+
+class TestSafeNumeric(unittest.TestCase):
+
+    def test_int(self):
+        self.assertEqual(_safe_numeric(42), "42")
+
+    def test_zero(self):
+        self.assertEqual(_safe_numeric(0), "0")
+
+    def test_float(self):
+        self.assertEqual(_safe_numeric(3.14), "3.14")
+
+    def test_string_number(self):
+        self.assertEqual(_safe_numeric("99"), "99.0")
+
+    def test_non_numeric_string(self):
+        self.assertEqual(_safe_numeric("hello"), "0")
+
+    def test_injection_attempt(self):
+        self.assertEqual(_safe_numeric("1\naeo1_injected_metric 42"), "0")
+
+    def test_none(self):
+        self.assertEqual(_safe_numeric(None), "0")
+
+    def test_nan(self):
+        self.assertEqual(_safe_numeric(float("nan")), "0")
+
+    def test_inf(self):
+        self.assertEqual(_safe_numeric(float("inf")), "0")
+
+    def test_negative_inf(self):
+        self.assertEqual(_safe_numeric(float("-inf")), "0")
+
+    def test_bool_false(self):
+        self.assertEqual(_safe_numeric(False), "0.0")
+
+    def test_bool_true(self):
+        self.assertEqual(_safe_numeric(True), "1.0")
 
 
 # ---------------------------------------------------------------------------
