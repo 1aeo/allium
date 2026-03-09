@@ -5,6 +5,7 @@ from allium.lib.contact_sorting import (
     CONTACT_SORT_FILE_MAP,
     sort_contact_relays,
     sort_contact_section_entries,
+    contact_relay_count,
 )
 
 
@@ -339,3 +340,22 @@ def test_all_sort_modes_have_file_mapping():
     """Every sort mode has a corresponding file."""
     for mode in CONTACT_SORT_MODES:
         assert mode in CONTACT_SORT_FILE_MAP, f"missing file for mode: {mode}"
+
+
+# =============================================================================
+# CONTACT RELAY COUNT (AROI section fallback)
+# =============================================================================
+
+def test_contact_relay_count_falls_back_to_section_wrappers():
+    """When relay_subset is empty, count relays across AROI sections."""
+    base_template_args = {
+        "relay_subset": [],
+        "contact_validation_status": {
+            "validated_relays": [{"relay": _sample_relays()[0]}],
+            "misconfigured_relays": [],
+            "unauthorized_relays": [{"relay": _sample_relays()[1]}],
+            "incomplete_relays": [],
+            "not_configured_relays": [{"relay": _sample_relays()[2]}],
+        },
+    }
+    assert contact_relay_count(base_template_args) == 3

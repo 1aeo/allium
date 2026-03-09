@@ -555,6 +555,23 @@ class TestContactTemplateIntegration(unittest.TestCase):
         self.assertIn('Nickname', rendered)
         self.assertIn('BW Cap', rendered)
 
+    def test_contact_template_non_default_variant_has_index_canonical(self):
+        """Non-default contact variants should canonicalize to index.html when no vanity canonical applies."""
+        import copy
+        from allium.lib.contact_sorting import CONTACT_SORT_FILE_MAP
+
+        context = copy.deepcopy(self.template_context)
+        context['sortable_scope'] = 'contact'
+        context['contact_sort_mode'] = 'nickname'
+        context['contact_sort_enabled'] = True
+        context['contact_sort_links'] = CONTACT_SORT_FILE_MAP
+        context['base_url'] = None
+        context['is_validated_aroi'] = False
+
+        template = self.jinja_env.get_template('contact.html')
+        rendered = template.render(**context)
+        self.assertIn('<link rel="canonical" href="index.html" />', rendered)
+
 
 class TestContactMultiprocessingRegression(unittest.TestCase):
     """Regression tests for contact page generation under multiprocessing.
@@ -879,6 +896,46 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
         # Should NOT have sort variant files
         self.assertFalse(os.path.exists(os.path.join(contact_dir, "by-status.html")))
         self.assertFalse(os.path.exists(os.path.join(contact_dir, "by-nickname.html")))
+
+    def test_contact_page_generation_omits_ipv6_variant_when_not_visible(self):
+        """Contacts with ≥3 relays but no IPv6 visibility should not emit by-ipv6.html."""
+        contact = "no-ipv6-operator@example.org"
+        relay_data = {"relays": [
+            {"fingerprint": "A" * 40, "nickname": "R1", "contact": contact,
+             "country": "us", "country_name": "United States", "as": "AS1", "as_name": "Net1",
+             "observed_bandwidth": 5000000, "consensus_weight": 1000,
+             "flags": ["Running", "Valid", "Guard"], "running": True, "measured": True,
+             "first_seen": "2023-01-01 00:00:00", "or_addresses": ["192.168.1.1:9001"],
+             "platform": "Tor 0.4.7.8 on Linux", "effective_family": []},
+            {"fingerprint": "B" * 40, "nickname": "R2", "contact": contact,
+             "country": "de", "country_name": "Germany", "as": "AS2", "as_name": "Net2",
+             "observed_bandwidth": 3000000, "consensus_weight": 800,
+             "flags": ["Running", "Valid", "Exit"], "running": True, "measured": True,
+             "first_seen": "2023-06-01 00:00:00", "or_addresses": ["10.0.0.1:9001"],
+             "platform": "Tor 0.4.7.8 on FreeBSD", "effective_family": []},
+            {"fingerprint": "C" * 40, "nickname": "R3", "contact": contact,
+             "country": "fr", "country_name": "France", "as": "AS3", "as_name": "Net3",
+             "observed_bandwidth": 2000000, "consensus_weight": 700,
+             "flags": ["Running", "Valid"], "running": True, "measured": True,
+             "first_seen": "2024-01-01 00:00:00", "or_addresses": ["172.16.0.1:9001"],
+             "platform": "Tor 0.4.8.0 on Linux", "effective_family": []},
+        ]}
+        relay_set = Relays(
+            output_dir=self.temp_dir,
+            onionoo_url="https://test.example.com",
+            relay_data=relay_data,
+            use_bits=False,
+            progress=False,
+            mp_workers=0,
+        )
+        relay_set.write_pages_by_key("contact")
+        contact_hashes = list(relay_set.json["sorted"]["contact"].keys())
+        self.assertEqual(len(contact_hashes), 1)
+        contact_dir = os.path.join(self.temp_dir, "contact", contact_hashes[0])
+
+        # Should have other variants but NOT by-ipv6.html (no IPv6 relays)
+        self.assertTrue(os.path.exists(os.path.join(contact_dir, "by-status.html")))
+        self.assertFalse(os.path.exists(os.path.join(contact_dir, "by-ipv6.html")))
 
     def test_contact_page_generation_creates_vanity_sort_variants_when_validated(self):
         """Validated AROI contacts with ≥3 relays should get vanity sort variants."""

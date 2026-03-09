@@ -26,7 +26,6 @@ from .contact_sorting import (
     contact_has_ipv6 as _contact_has_ipv6,
     contact_relay_count as _contact_relay_count,
 )
-from .ip_utils import safe_parse_ip_address as _safe_parse_ip_address
 from .bandwidth_formatter import (
     BandwidthFormatter,
     determine_unit,
@@ -1258,7 +1257,7 @@ def build_template_args(relay_set, k, v, i, the_prefixed, validated_aroi_domains
         'sortable_scope': 'contact' if k == 'contact' else 'none',
         'contact_sort_mode': CONTACT_DEFAULT_SORT_MODE if k == 'contact' else None,
         'contact_sort_links': _contact_sort_links() if k == 'contact' else {},
-        'contact_sort_enabled': True if k == 'contact' else False,
+        'contact_sort_enabled': (k == 'contact' and len(members) > 2),
         'contact_has_ipv6': True,  # Default; _render_contact_variants overrides per-contact
     }
 
