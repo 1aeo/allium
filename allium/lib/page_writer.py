@@ -23,8 +23,8 @@ from .contact_sorting import (
     adjust_vanity_paths as _adjust_vanity_paths,
     contact_sort_links as _contact_sort_links,
     build_contact_variant_args as _build_contact_variant_args,
-    sort_contact_relays as _sort_contact_relays,
-    sort_contact_section_entries as _sort_contact_section_entries,
+    contact_has_ipv6 as _contact_has_ipv6,
+    contact_relay_count as _contact_relay_count,
 )
 from .ip_utils import safe_parse_ip_address as _safe_parse_ip_address
 from .bandwidth_formatter import (
@@ -770,41 +770,6 @@ def get_detail_page_context(relay_set, category, value):
     return get_detail_page_context(category, value)
 
 
-def _contact_has_ipv6(base_template_args):
-    """Check if any relay in the contact context has IPv6 support.
-
-    Checks both single-table mode (relay_subset) and 4-section AROI mode
-    (contact_validation_status sections).  Returns True if any relay has
-    ipv6_support in ('both', 'ipv6_only').
-    """
-    # Single-table mode
-    for relay in base_template_args.get('relay_subset', []):
-        if relay.get('ipv6_support') in ('both', 'ipv6_only'):
-            return True
-    # 4-section AROI mode — check section wrapper entries
-    cvs = base_template_args.get('contact_validation_status')
-    if isinstance(cvs, dict):
-        for section_key in CONTACT_SECTION_KEYS:
-            for entry in cvs.get(section_key, []):
-                relay = entry.get('relay', {}) if isinstance(entry, dict) else {}
-                if relay.get('ipv6_support') in ('both', 'ipv6_only'):
-                    return True
-    return False
-
-
-def _contact_relay_count(base_template_args):
-    """Return total relay count for a contact (across all sections if AROI)."""
-    count = len(base_template_args.get('relay_subset', []))
-    # In 4-section mode the relay_subset may be the flat list, but to be safe
-    # also count section entries if they exist and the flat list is empty.
-    if count == 0:
-        cvs = base_template_args.get('contact_validation_status')
-        if isinstance(cvs, dict):
-            for section_key in CONTACT_SECTION_KEYS:
-                count += len(cvs.get(section_key, []))
-    return count
-
-
 def _render_contact_variants(template, relay_set, base_template_args, dir_path, contact_data, output_root):
     """Render all static sort variants for one contact page.
 
@@ -838,8 +803,11 @@ def _render_contact_variants(template, relay_set, base_template_args, dir_path, 
 
     for sort_mode in modes_to_render:
         filename = CONTACT_SORT_FILE_MAP[sort_mode]
-        template_args = _build_contact_variant_args(base_template_args, sort_mode)
-        template_args['contact_sort_enabled'] = sort_enabled
+        template_args = _build_contact_variant_args(
+            base_template_args, sort_mode,
+            contact_sort_enabled=sort_enabled,
+            enabled_modes=modes_to_render,
+        )
         template_args['contact_has_ipv6'] = has_ipv6
         rendered = template.render(relays=relay_set, **template_args)
 

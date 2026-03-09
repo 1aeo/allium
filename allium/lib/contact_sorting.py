@@ -65,9 +65,16 @@ def adjust_vanity_paths(rendered_html: str) -> str:
     return rendered_html.replace('href="../../', 'href="../').replace('src="../../', 'src="../')
 
 
-def contact_sort_links():
-    """Return static link map used by contact page sortable headers."""
-    return CONTACT_SORT_FILE_MAP
+def contact_sort_links(enabled_modes=None):
+    """Return link map for contact page sortable headers.
+
+    When *enabled_modes* is provided, only those modes appear in the map.
+    This prevents dead links when sort variants are not generated (e.g.,
+    IPv6 not emitted, or sort disabled for small contacts).
+    """
+    if enabled_modes is None:
+        return dict(CONTACT_SORT_FILE_MAP)
+    return {mode: CONTACT_SORT_FILE_MAP[mode] for mode in enabled_modes if mode in CONTACT_SORT_FILE_MAP}
 
 
 # =============================================================================
@@ -100,10 +107,13 @@ def best_total_data_bytes(relay):
 
 
 def extract_ipv4_numeric(relay):
-    """Extract first IPv4 address as packed bytes for numeric sort ordering."""
+    """Extract first IPv4 address as packed bytes for numeric sort ordering.
+
+    Uses safe_parse_ip_address ip_version return for robust detection.
+    """
     for addr in relay.get('or_addresses') or []:
-        parsed_ip, _ = _safe_parse_ip_address(addr)
-        if parsed_ip and '.' in parsed_ip:
+        parsed_ip, ip_version = _safe_parse_ip_address(addr)
+        if parsed_ip and ip_version == 4:
             try:
                 return _ipaddress.ip_address(parsed_ip).packed
             except (ValueError, TypeError):
@@ -112,12 +122,15 @@ def extract_ipv4_numeric(relay):
 
 
 def extract_ipv6_numeric(relay):
-    """Extract first IPv6 address as packed bytes for numeric sort ordering."""
+    """Extract first IPv6 address as packed bytes for numeric sort ordering.
+
+    Uses safe_parse_ip_address ip_version return for robust detection.
+    """
     for addr in relay.get('or_addresses') or []:
-        if ':' in addr and addr.count(':') > 1:
-            ip_str = addr.split(']')[0].lstrip('[')
+        parsed_ip, ip_version = _safe_parse_ip_address(addr)
+        if parsed_ip and ip_version == 6:
             try:
-                return _ipaddress.ip_address(ip_str).packed
+                return _ipaddress.ip_address(parsed_ip).packed
             except (ValueError, TypeError):
                 pass
     return None
@@ -139,8 +152,8 @@ def prioritized_flag_uptime_6m(relay):
     for flag in flag_data.keys():
         # Only consider flags the relay CURRENTLY has (mirrors display logic)
         if flag in relay_flags:
-            priority = _FLAG_PRIORITY.get(flag)
-            if priority and priority < best_priority:
+            priority = _FLAG_PRIORITY.get(flag, float('inf'))
+            if priority < best_priority:
                 best_priority = priority
                 selected_flag = flag
 
@@ -265,12 +278,82 @@ def sort_contact_section_entries(entries, sort_mode):
     return sorted(entries, key=lambda entry: relay_sort_key(entry.get('relay', {}), sort_mode))
 
 
-def build_contact_variant_args(base_template_args, sort_mode):
-    """Build per-variant template args from a shared contact-page base args dict."""
+# =============================================================================
+# IPv6 DETECTION + RELAY COUNT (used by rendering to gate variant emission)
+# =============================================================================
+
+def relay_has_ipv6(relay):
+    """Determine whether a relay should be treated as IPv6-capable.
+
+    Checks ipv6_support attribute first, then falls back to parsing
+    or_addresses for IPv6 entries (handles relays where the attribute
+    isn't set but IPv6 addresses exist).
+    """
+    ipv6_support = relay.get('ipv6_support')
+    if ipv6_support in ('both', 'ipv6_only'):
+        return True
+    for addr in relay.get('or_addresses') or []:
+        _, ip_version = _safe_parse_ip_address(addr)
+        if ip_version == 6:
+            return True
+    return False
+
+
+def contact_has_ipv6(base_template_args):
+    """Check if any relay in the contact context has IPv6 support.
+
+    Checks both single-table mode (relay_subset) and 4-section AROI mode
+    (contact_validation_status sections).  Returns True if any relay has IPv6.
+    """
+    # Single-table mode
+    for relay in base_template_args.get('relay_subset', []):
+        if relay_has_ipv6(relay):
+            return True
+    # 4-section AROI mode — check section wrapper entries
+    cvs = base_template_args.get('contact_validation_status')
+    if isinstance(cvs, dict):
+        for section_key in CONTACT_SECTION_KEYS:
+            for entry in cvs.get(section_key, []):
+                relay = entry.get('relay', {}) if isinstance(entry, dict) else {}
+                if relay_has_ipv6(relay):
+                    return True
+    return False
+
+
+def contact_relay_count(base_template_args):
+    """Return total relay count for a contact (across all sections if AROI).
+
+    In 4-section AROI mode, relay_subset may be the flat list, but to be
+    safe also count section entries if they exist and the flat list is empty.
+    """
+    count = len(base_template_args.get('relay_subset', []))
+    if count == 0:
+        cvs = base_template_args.get('contact_validation_status')
+        if isinstance(cvs, dict):
+            for section_key in CONTACT_SECTION_KEYS:
+                count += len(cvs.get(section_key, []))
+    return count
+
+
+# =============================================================================
+# VARIANT BUILDER
+# =============================================================================
+
+def build_contact_variant_args(base_template_args, sort_mode, contact_sort_enabled=True, enabled_modes=None):
+    """Build per-variant template args from a shared contact-page base args dict.
+
+    Args:
+        base_template_args: Shared template args for this contact.
+        sort_mode: The active sort mode for this variant.
+        contact_sort_enabled: Whether sort UI is active (False for ≤2 relays).
+        enabled_modes: Sequence of modes that were generated. Used to filter
+            the link map so only existing files are linked.
+    """
     variant_args = dict(base_template_args)
     variant_args['relay_subset'] = sort_contact_relays(base_template_args.get('relay_subset', []), sort_mode)
     variant_args['contact_sort_mode'] = sort_mode
-    variant_args['contact_sort_links'] = contact_sort_links()
+    variant_args['contact_sort_enabled'] = bool(contact_sort_enabled)
+    variant_args['contact_sort_links'] = contact_sort_links(enabled_modes if contact_sort_enabled else (sort_mode,))
     variant_args['sortable_scope'] = 'contact'
 
     contact_validation_status = base_template_args.get('contact_validation_status')
