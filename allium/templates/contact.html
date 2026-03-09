@@ -65,7 +65,7 @@
                     {% if primary_country_data %}
                     <li><strong>Countries:</strong> 
                         {% for country_info in primary_country_data.all_countries %}
-                            <a href="{{ page_ctx.path_prefix }}country/{{ country_info.country }}/" style="text-decoration: none;">
+                            <a href="{{ page_ctx.path_prefix }}country/{{ country_info.country }}/" class="al-link-plain">
                                 <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ country_info.country|lower }}.png" 
                                      title="{{ primary_country_data.tooltip }}" 
                                      alt="{{ country_info.country_name }}" 
@@ -76,7 +76,7 @@
                     </li>
                     {% elif relay_subset[0]['country'] %}
                     <li><strong>Countries:</strong> 
-                        <a href="{{ page_ctx.path_prefix }}country/{{ relay_subset[0]['country'] }}/" style="text-decoration: none;">
+                        <a href="{{ page_ctx.path_prefix }}country/{{ relay_subset[0]['country'] }}/" class="al-link-plain">
                             <img src="{{ page_ctx.path_prefix }}static/images/cc/{{ relay_subset[0]['country']|lower }}.png" 
                                  title="{{ relay_subset[0]['country_name'] if relay_subset[0]['country_name'] else relay_subset[0]['country'] }}" 
                                  alt="{{ relay_subset[0]['country_name'] if relay_subset[0]['country_name'] else relay_subset[0]['country'] }}" 
@@ -104,8 +104,8 @@
                     
                     {% if exit_dns_health_summary %}
                     <li><strong><span title="Exit DNS Health: DNS resolution capability of this operator's exit relays. Source: exitdnshealth.1aeo.com">Exit DNS Health</span>:</strong>
-                        <span style="color: #28a745;">{{ exit_dns_health_summary.healthy }} healthy ({{ exit_dns_health_summary.healthy_pct }}%)</span>,
-                        {% if exit_dns_health_summary.failing > 0 %}<span style="color: #dc3545;">{{ exit_dns_health_summary.failing }} failing ({{ exit_dns_health_summary.failing_pct }}%)</span>{% else %}0 failing{% endif %}{% if exit_dns_health_summary.untested > 0 %}, {{ exit_dns_health_summary.untested }} untested ({{ exit_dns_health_summary.untested_pct }}%){% endif %}
+                        <span class="al-status-success">{{ exit_dns_health_summary.healthy }} healthy ({{ exit_dns_health_summary.healthy_pct }}%)</span>,
+                        {% if exit_dns_health_summary.failing > 0 %}<span class="al-status-danger">{{ exit_dns_health_summary.failing }} failing ({{ exit_dns_health_summary.failing_pct }}%)</span>{% else %}0 failing{% endif %}{% if exit_dns_health_summary.untested > 0 %}, {{ exit_dns_health_summary.untested }} untested ({{ exit_dns_health_summary.untested_pct }}%){% endif %}
                         of {{ exit_dns_health_summary.exit_count }} exit{{ 's' if exit_dns_health_summary.exit_count != 1 }} total
                     </li>
                     {% endif %}
@@ -145,13 +145,13 @@
                 {% endif %}
                 
                 {% if intelligence.performance_operator_overall_ratio %}
-                <li><strong><span title="Network efficiency analysis comparing operator performance to network averages. CW/BW ratio = Consensus Weight ÷ Bandwidth Capacity × 1,000,000. Higher ratios indicate better network utilization per bandwidth capacity contributed.">Performance Insights</span>:</strong> Overall CW/BW: {% set overall_pct = intelligence.performance_operator_overall_pct|int %}{% set overall_diff = ((intelligence.performance_operator_overall_ratio|float - intelligence.performance_network_overall_ratio|float) / intelligence.performance_network_overall_ratio|float * 100)|round(0)|int %}{% if overall_pct <= 10 %}<span style="color: #c82333; font-weight: bold;">{{ intelligence.performance_operator_overall_ratio }}</span>{% elif overall_pct >= 85 %}<span style="color: #2e7d2e; font-weight: bold;">{{ intelligence.performance_operator_overall_ratio }}</span>{% elif overall_pct < 50 %}<span style="color: #cc9900; font-weight: bold;">{{ intelligence.performance_operator_overall_ratio }}</span>{% else %}{{ intelligence.performance_operator_overall_ratio }}{% endif %}. {% if overall_diff > 0 %}+{{ overall_diff }}% higher{% elif overall_diff < 0 %}{{ overall_diff }}% lower{% else %}Equal to{% endif %} than {{ intelligence.performance_network_overall_ratio }} network average. {{ intelligence.performance_operator_overall_pct }}th percentile with {{ intelligence.performance_network_overall_median }} median.
+                <li><strong><span title="Network efficiency analysis comparing operator performance to network averages. CW/BW ratio = Consensus Weight ÷ Bandwidth Capacity × 1,000,000. Higher ratios indicate better network utilization per bandwidth capacity contributed.">Performance Insights</span>:</strong> Overall CW/BW: {% set overall_pct = intelligence.performance_operator_overall_pct|int %}{% set overall_diff = ((intelligence.performance_operator_overall_ratio|float - intelligence.performance_network_overall_ratio|float) / intelligence.performance_network_overall_ratio|float * 100)|round(0)|int %}{% if overall_pct <= 10 %}<span class="al-rating-poor">{{ intelligence.performance_operator_overall_ratio }}</span>{% elif overall_pct >= 85 %}<span class="al-rating-great">{{ intelligence.performance_operator_overall_ratio }}</span>{% elif overall_pct < 50 %}<span class="al-rating-okay">{{ intelligence.performance_operator_overall_ratio }}</span>{% else %}{{ intelligence.performance_operator_overall_ratio }}{% endif %}. {% if overall_diff > 0 %}+{{ overall_diff }}% higher{% elif overall_diff < 0 %}{{ overall_diff }}% lower{% else %}Equal to{% endif %} than {{ intelligence.performance_network_overall_ratio }} network average. {{ intelligence.performance_operator_overall_pct }}th percentile with {{ intelligence.performance_network_overall_median }} median.
                     <ul style="list-style-type: disc; padding-left: 20px; margin-top: 0px; margin-bottom: 0;">
                         {% if intelligence.performance_operator_guard_ratio %}
-                        <li><strong><span title="Guard position performance: CW/BW ratio for relays with Guard flag. Performance compared to other guard relays network-wide.">Guard CW/BW</span>:</strong> {% set guard_pct = intelligence.performance_operator_guard_pct|int %}{% set guard_diff = ((intelligence.performance_operator_guard_ratio|float - intelligence.performance_network_guard_ratio|float) / intelligence.performance_network_guard_ratio|float * 100)|round(0)|int %}{% if guard_pct <= 10 %}<span style="color: #c82333; font-weight: bold;">{{ intelligence.performance_operator_guard_ratio }}</span>{% elif guard_pct >= 85 %}<span style="color: #2e7d2e; font-weight: bold;">{{ intelligence.performance_operator_guard_ratio }}</span>{% elif guard_pct < 50 %}<span style="color: #cc9900; font-weight: bold;">{{ intelligence.performance_operator_guard_ratio }}</span>{% else %}{{ intelligence.performance_operator_guard_ratio }}{% endif %}. {% if guard_diff > 0 %}+{{ guard_diff }}% higher{% elif guard_diff < 0 %}{{ guard_diff }}% lower{% else %}Equal to{% endif %} than {{ intelligence.performance_network_guard_ratio }} network average. {{ intelligence.performance_operator_guard_pct }}th percentile with {{ intelligence.performance_network_guard_median }} median.</li>
+                        <li><strong><span title="Guard position performance: CW/BW ratio for relays with Guard flag. Performance compared to other guard relays network-wide.">Guard CW/BW</span>:</strong> {% set guard_pct = intelligence.performance_operator_guard_pct|int %}{% set guard_diff = ((intelligence.performance_operator_guard_ratio|float - intelligence.performance_network_guard_ratio|float) / intelligence.performance_network_guard_ratio|float * 100)|round(0)|int %}{% if guard_pct <= 10 %}<span class="al-rating-poor">{{ intelligence.performance_operator_guard_ratio }}</span>{% elif guard_pct >= 85 %}<span class="al-rating-great">{{ intelligence.performance_operator_guard_ratio }}</span>{% elif guard_pct < 50 %}<span class="al-rating-okay">{{ intelligence.performance_operator_guard_ratio }}</span>{% else %}{{ intelligence.performance_operator_guard_ratio }}{% endif %}. {% if guard_diff > 0 %}+{{ guard_diff }}% higher{% elif guard_diff < 0 %}{{ guard_diff }}% lower{% else %}Equal to{% endif %} than {{ intelligence.performance_network_guard_ratio }} network average. {{ intelligence.performance_operator_guard_pct }}th percentile with {{ intelligence.performance_network_guard_median }} median.</li>
                         {% endif %}
                         {% if intelligence.performance_operator_exit_ratio %}
-                        <li><strong><span title="Exit position performance: CW/BW ratio for relays with Exit flag. Performance compared to other exit relays network-wide.">Exit CW/BW</span>:</strong> {% set exit_pct = intelligence.performance_operator_exit_pct|int %}{% set exit_diff = ((intelligence.performance_operator_exit_ratio|float - intelligence.performance_network_exit_ratio|float) / intelligence.performance_network_exit_ratio|float * 100)|round(0)|int %}{% if exit_pct <= 10 %}<span style="color: #c82333; font-weight: bold;">{{ intelligence.performance_operator_exit_ratio }}</span>{% elif exit_pct >= 85 %}<span style="color: #2e7d2e; font-weight: bold;">{{ intelligence.performance_operator_exit_ratio }}</span>{% elif exit_pct < 50 %}<span style="color: #cc9900; font-weight: bold;">{{ intelligence.performance_operator_exit_ratio }}</span>{% else %}{{ intelligence.performance_operator_exit_ratio }}{% endif %}. {% if exit_diff > 0 %}+{{ exit_diff }}% higher{% elif exit_diff < 0 %}{{ exit_diff }}% lower{% else %}Equal to{% endif %} than {{ intelligence.performance_network_exit_ratio }} network average. {{ intelligence.performance_operator_exit_pct }}th percentile with {{ intelligence.performance_network_exit_median }} median.</li>
+                        <li><strong><span title="Exit position performance: CW/BW ratio for relays with Exit flag. Performance compared to other exit relays network-wide.">Exit CW/BW</span>:</strong> {% set exit_pct = intelligence.performance_operator_exit_pct|int %}{% set exit_diff = ((intelligence.performance_operator_exit_ratio|float - intelligence.performance_network_exit_ratio|float) / intelligence.performance_network_exit_ratio|float * 100)|round(0)|int %}{% if exit_pct <= 10 %}<span class="al-rating-poor">{{ intelligence.performance_operator_exit_ratio }}</span>{% elif exit_pct >= 85 %}<span class="al-rating-great">{{ intelligence.performance_operator_exit_ratio }}</span>{% elif exit_pct < 50 %}<span class="al-rating-okay">{{ intelligence.performance_operator_exit_ratio }}</span>{% else %}{{ intelligence.performance_operator_exit_ratio }}{% endif %}. {% if exit_diff > 0 %}+{{ exit_diff }}% higher{% elif exit_diff < 0 %}{{ exit_diff }}% lower{% else %}Equal to{% endif %} than {{ intelligence.performance_network_exit_ratio }} network average. {{ intelligence.performance_operator_exit_pct }}th percentile with {{ intelligence.performance_network_exit_median }} median.</li>
                         {% endif %}
                         {% if intelligence.performance_underutilized > 0 %}
                         <li><strong><span title="Underutilized relays with high bandwidth capacity (>10MB/s) but low consensus weight (<0.05% of bandwidth capacity ratio). These relays may benefit from configuration optimization, better connectivity, or address/port changes to improve network contribution.">Underutilized</span>:</strong> {{ intelligence.performance_underutilized }} relays ({{ intelligence.performance_underutilized_percentage }}% of total)</li>
@@ -206,10 +206,10 @@
                     <ul style="list-style-type: circle; padding-left: 20px; margin-top: 3px; margin-bottom: 0;">
                         {% if outliers.total_count %}
                         <li><strong>Outlier ({{ outliers.tooltip }}):</strong>
-                            <span style="color: #000; font-weight: normal;">{{ outliers.total_count }} relays out of {{ outliers.total_relays }} relays ({{ outliers.percentage }}%)</span>{% if outliers.low_count %}, <span style="color: #dc3545; font-weight: bold;">Low:</span> <span title="{{ outliers.low_tooltip }}">{{ outliers.low_count }} relay{{ 's' if outliers.low_count != 1 else '' }}</span>{% endif %}{% if outliers.high_count %}{% if outliers.low_count %}, {% endif %}<span style="color: #28a745; font-weight: bold;">Exceptional:</span> <span title="{{ outliers.high_tooltip }}">{{ outliers.high_count }} relay{{ 's' if outliers.high_count != 1 else '' }}</span>{% endif %}
+                            <span class="al-status-note">{{ outliers.total_count }} relays out of {{ outliers.total_relays }} relays ({{ outliers.percentage }}%)</span>{% if outliers.low_count %}, <span class="al-status-danger-bold">Low:</span> <span title="{{ outliers.low_tooltip }}">{{ outliers.low_count }} relay{{ 's' if outliers.low_count != 1 else '' }}</span>{% endif %}{% if outliers.high_count %}{% if outliers.low_count %}, {% endif %}<span class="al-status-success-bold">Exceptional:</span> <span title="{{ outliers.high_tooltip }}">{{ outliers.high_count }} relay{{ 's' if outliers.high_count != 1 else '' }}</span>{% endif %}
                         </li>
                         {% elif outliers.none_detected %}
-                        <li><span style="color: #28a745;">✅ No statistical outliers detected - consistent performance across all relays</span></li>
+                        <li><span class="al-status-success">✅ No statistical outliers detected - consistent performance across all relays</span></li>
                         {% endif %}
                         
                         {# Network Uptime Percentiles - new metric for 6-month period #}
@@ -227,7 +227,7 @@
                 {% set alerts = contact_display_data.downtime_alerts %}
                 {% if alerts.has_offline_relays %}
                 {% set total_offline = alerts.offline_counts.guard + alerts.offline_counts.middle + alerts.offline_counts.exit %}
-                <li><strong><span style="color: #dc3545;">🚨 Offline ({{ total_offline }})</span>:</strong>
+                <li><strong><span class="al-status-danger">🚨 Offline ({{ total_offline }})</span>:</strong>
                     {% if alerts.offline_counts.guard > 0 %}
                         <span title="{% for relay in alerts.offline_relay_details.guard_relays %}{{ relay.display_text }}{% if not loop.last %}, {% endif %}{% endfor %}">{{ alerts.offline_counts.guard }} guard ({{ "%.1f"|format(alerts.traffic_percentages.guard) }}% of observed traffic)</span>{% if alerts.offline_counts.middle > 0 or alerts.offline_counts.exit > 0 %}, {% endif %}
                     {% endif %}
@@ -238,7 +238,7 @@
                         <span title="{% for relay in alerts.offline_relay_details.exit_relays %}{{ relay.display_text }}{% if not loop.last %}, {% endif %}{% endfor %}">{{ alerts.offline_counts.exit }} exit ({{ "%.1f"|format(alerts.traffic_percentages.exit) }}% of observed traffic)</span>
                     {% endif %}
                     <ul style="list-style-type: disc; padding-left: 20px; margin-top: 0; margin-bottom: 0;">
-                        <li style="font-size: 13px; color: #856404;"><strong style="color: #dc3545;">Impact:</strong> {{ alerts.offline_bandwidth_impact.total_offline_bandwidth_formatted }} {{ bandwidth_unit }} ({{ "%.1f"|format(alerts.offline_bandwidth_impact.offline_bandwidth_percentage) }}% of {{ alerts.offline_bandwidth_impact.total_operator_bandwidth_formatted }} {{ bandwidth_unit }}){% if alerts.offline_consensus_weight_impact.total_operator_cw_percentage > 0 %} and {{ "%.3f"|format(alerts.offline_consensus_weight_impact.total_offline_cw_percentage) }}% ({{ "%.1f"|format(alerts.offline_consensus_weight_impact.offline_cw_percentage_of_operator) }}% of {{ "%.2f"|format(alerts.offline_consensus_weight_impact.total_operator_cw_percentage) }}%) consensus weight{% endif %}</li>
+                        <li style="font-size: 13px; color: #856404;"><strong class="al-status-danger">Impact:</strong> {{ alerts.offline_bandwidth_impact.total_offline_bandwidth_formatted }} {{ bandwidth_unit }} ({{ "%.1f"|format(alerts.offline_bandwidth_impact.offline_bandwidth_percentage) }}% of {{ alerts.offline_bandwidth_impact.total_operator_bandwidth_formatted }} {{ bandwidth_unit }}){% if alerts.offline_consensus_weight_impact.total_operator_cw_percentage > 0 %} and {{ "%.3f"|format(alerts.offline_consensus_weight_impact.total_offline_cw_percentage) }}% ({{ "%.1f"|format(alerts.offline_consensus_weight_impact.offline_cw_percentage_of_operator) }}% of {{ "%.2f"|format(alerts.offline_consensus_weight_impact.total_operator_cw_percentage) }}%) consensus weight{% endif %}</li>
                     </ul>
                 </li>
                 {% else %}
@@ -273,7 +273,7 @@
 
                     {% else %}
                     <ul style="list-style-type: circle; padding-left: 20px; margin-top: 3px; margin-bottom: 0;">
-                        <li><span style="color: #28a745;">No bandwidth outliers detected</span></li>
+                        <li><span class="al-status-success">No bandwidth outliers detected</span></li>
                     </ul>
                     {% endif %}
                 </li>
@@ -313,7 +313,7 @@
                             {% set total_bw_outliers = (bw_outliers.low_outliers|length) + (bw_outliers.high_outliers|length) %}
                             {% set bw_6mo_stats = operator_reliability.overall_bandwidth.get('6_months', {}) %}
                             <li><strong><span title="Statistical outliers detected using ±2σ (standard deviation) from operator mean across this operator's relays in current 6mo period. Operator mean (μ): {{ bw_6mo_stats.average_formatted if bw_6mo_stats.average_formatted else 'N/A' }}, Operator std dev (σ): {% if bw_6mo_stats.std_dev and bw_6mo_stats.std_dev > 0 %}{{ "%.1f"|format(bw_6mo_stats.std_dev / 1000000) }} Mbit/s{% else %}N/A{% endif %}. Low outliers: ≤2σ below mean, High outliers: ≥2σ above mean. Only current outliers shown for actionable insights.">Bandwidth Outliers:</span></strong>
-                                <span style="color: #000; font-weight: normal;">{{ total_bw_outliers }} relay{{ 's' if total_bw_outliers != 1 else '' }} with unusual bandwidth patterns</span>{% if bw_outliers.low_outliers or bw_outliers.high_outliers %}, {% endif %}{% if bw_outliers.low_outliers %}<span style="color: #dc3545; font-weight: bold;">Low:</span> {% for outlier in bw_outliers.low_outliers %}<a href="{{ page_ctx.path_prefix }}relay/{{ outlier.fingerprint }}/" title="{{ outlier.nickname }} ({{ outlier.value_formatted }})" style="color: #dc3545; text-decoration: none;">{{ outlier.nickname }}</a>{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}{% if bw_outliers.high_outliers %}{% if bw_outliers.low_outliers %}, {% endif %}<span style="color: #28a745; font-weight: bold;">High:</span> {% for outlier in bw_outliers.high_outliers %}<a href="{{ page_ctx.path_prefix }}relay/{{ outlier.fingerprint }}/" title="{{ outlier.nickname }} ({{ outlier.value_formatted }})" style="color: #28a745; text-decoration: none;">{{ outlier.nickname }}</a>{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}
+                                <span class="al-status-note">{{ total_bw_outliers }} relay{{ 's' if total_bw_outliers != 1 else '' }} with unusual bandwidth patterns</span>{% if bw_outliers.low_outliers or bw_outliers.high_outliers %}, {% endif %}{% if bw_outliers.low_outliers %}<span class="al-status-danger-bold">Low:</span> {% for outlier in bw_outliers.low_outliers %}<a href="{{ page_ctx.path_prefix }}relay/{{ outlier.fingerprint }}/" title="{{ outlier.nickname }} ({{ outlier.value_formatted }})" style="color: #dc3545; text-decoration: none;">{{ outlier.nickname }}</a>{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}{% if bw_outliers.high_outliers %}{% if bw_outliers.low_outliers %}, {% endif %}<span class="al-status-success-bold">High:</span> {% for outlier in bw_outliers.high_outliers %}<a href="{{ page_ctx.path_prefix }}relay/{{ outlier.fingerprint }}/" title="{{ outlier.nickname }} ({{ outlier.value_formatted }})" style="color: #28a745; text-decoration: none;">{{ outlier.nickname }}</a>{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}
                             </li>
                         {% endif %}
                         
@@ -349,10 +349,10 @@
             {# Bandwidth Reliability Color Legend #}
             <div style="font-size: 12px; color: #666; margin-top: 10px;">
                 <strong>Bandwidth Stability:</strong> 
-                <span style="color: #28a745;">Great (Top 25% most stable)</span>, 
+                <span class="al-status-success">Great (Top 25% most stable)</span>, 
                 <span style="color: #007bff;">Good (25-50% most stable)</span>, 
                 <span style="color: #ffc107;">Variable (25-50% most stable)</span>, 
-                <span style="color: #dc3545;">Extreme (Bottom 10% most variable)</span>
+                <span class="al-status-danger">Extreme (Bottom 10% most variable)</span>
                 
             </div>
             
@@ -404,10 +404,10 @@
                     <ul style="list-style-type: circle; padding-left: 20px; margin-top: 3px; margin-bottom: 0;">
                         {% if outliers.total_count %}
                         <li><strong>Outlier ({{ outliers.tooltip }}):</strong>
-                            <span style="color: #000; font-weight: normal;">{{ outliers.total_count }} relays out of {{ outliers.total_relays }} relays ({{ outliers.percentage }}%)</span>{% if outliers.low_count %}, <span style="color: #dc3545; font-weight: bold;">Low:</span> <span title="{{ outliers.low_tooltip }}">{{ outliers.low_count }} relay{{ 's' if outliers.low_count != 1 else '' }}</span>{% endif %}{% if outliers.high_count %}{% if outliers.low_count %}, {% endif %}<span style="color: #28a745; font-weight: bold;">Exceptional:</span> <span title="{{ outliers.high_tooltip }}">{{ outliers.high_count }} relay{{ 's' if outliers.high_count != 1 else '' }}</span>{% endif %}
+                            <span class="al-status-note">{{ outliers.total_count }} relays out of {{ outliers.total_relays }} relays ({{ outliers.percentage }}%)</span>{% if outliers.low_count %}, <span class="al-status-danger-bold">Low:</span> <span title="{{ outliers.low_tooltip }}">{{ outliers.low_count }} relay{{ 's' if outliers.low_count != 1 else '' }}</span>{% endif %}{% if outliers.high_count %}{% if outliers.low_count %}, {% endif %}<span class="al-status-success-bold">Exceptional:</span> <span title="{{ outliers.high_tooltip }}">{{ outliers.high_count }} relay{{ 's' if outliers.high_count != 1 else '' }}</span>{% endif %}
                         </li>
                         {% elif outliers.none_detected %}
-                        <li><span style="color: #28a745;">✅ No statistical outliers detected - consistent performance across all relays</span></li>
+                        <li><span class="al-status-success">✅ No statistical outliers detected - consistent performance across all relays</span></li>
                         {% endif %}
                         
                         {# Network Uptime Percentiles - new metric for 6-month period #}
@@ -425,7 +425,7 @@
                 {% set alerts = contact_display_data.downtime_alerts %}
                 {% if alerts.has_offline_relays %}
                 {% set total_offline = alerts.offline_counts.guard + alerts.offline_counts.middle + alerts.offline_counts.exit %}
-                <li><strong><span style="color: #dc3545;">🚨 Offline ({{ total_offline }})</span>:</strong>
+                <li><strong><span class="al-status-danger">🚨 Offline ({{ total_offline }})</span>:</strong>
                     {% if alerts.offline_counts.guard > 0 %}
                         <span title="{% for relay in alerts.offline_relay_details.guard_relays %}{{ relay.display_text }}{% if not loop.last %}, {% endif %}{% endfor %}">{{ alerts.offline_counts.guard }} guard ({{ "%.1f"|format(alerts.traffic_percentages.guard) }}% of observed traffic)</span>{% if alerts.offline_counts.middle > 0 or alerts.offline_counts.exit > 0 %}, {% endif %}
                     {% endif %}
@@ -436,7 +436,7 @@
                         <span title="{% for relay in alerts.offline_relay_details.exit_relays %}{{ relay.display_text }}{% if not loop.last %}, {% endif %}{% endfor %}">{{ alerts.offline_counts.exit }} exit ({{ "%.1f"|format(alerts.traffic_percentages.exit) }}% of observed traffic)</span>
                     {% endif %}
                     <ul style="list-style-type: disc; padding-left: 20px; margin-top: 0; margin-bottom: 0;">
-                        <li style="font-size: 13px; color: #856404;"><strong style="color: #dc3545;">Impact:</strong> {{ alerts.offline_bandwidth_impact.total_offline_bandwidth_formatted }} {{ bandwidth_unit }} ({{ "%.1f"|format(alerts.offline_bandwidth_impact.offline_bandwidth_percentage) }}% of {{ alerts.offline_bandwidth_impact.total_operator_bandwidth_formatted }} {{ bandwidth_unit }}){% if alerts.offline_consensus_weight_impact.total_operator_cw_percentage > 0 %} and {{ "%.3f"|format(alerts.offline_consensus_weight_impact.total_offline_cw_percentage) }}% ({{ "%.1f"|format(alerts.offline_consensus_weight_impact.offline_cw_percentage_of_operator) }}% of {{ "%.2f"|format(alerts.offline_consensus_weight_impact.total_operator_cw_percentage) }}%) consensus weight{% endif %}</li>
+                        <li style="font-size: 13px; color: #856404;"><strong class="al-status-danger">Impact:</strong> {{ alerts.offline_bandwidth_impact.total_offline_bandwidth_formatted }} {{ bandwidth_unit }} ({{ "%.1f"|format(alerts.offline_bandwidth_impact.offline_bandwidth_percentage) }}% of {{ alerts.offline_bandwidth_impact.total_operator_bandwidth_formatted }} {{ bandwidth_unit }}){% if alerts.offline_consensus_weight_impact.total_operator_cw_percentage > 0 %} and {{ "%.3f"|format(alerts.offline_consensus_weight_impact.total_offline_cw_percentage) }}% ({{ "%.1f"|format(alerts.offline_consensus_weight_impact.offline_cw_percentage_of_operator) }}% of {{ "%.2f"|format(alerts.offline_consensus_weight_impact.total_operator_cw_percentage) }}%) consensus weight{% endif %}</li>
                     </ul>
                 </li>
                 {% else %}
@@ -493,9 +493,9 @@
             {% endif %}
             
             <div style="font-size: 12px; color: #666; margin-top: 10px;">
-                <span style="color: #28a745;">Excellent (>99%)</span>, 
+                <span class="al-status-success">Excellent (>99%)</span>, 
                 <span style="color: #cc9900;">Below average (<μ of network)</span>, 
-                <span style="color: #dc3545;">Poor (≥2σ from network μ)</span>
+                <span class="al-status-danger">Poor (≥2σ from network μ)</span>
                 {% if contact_display_data and contact_display_data.uptime_timestamp %}, from {{ contact_display_data.uptime_timestamp }}{% endif %}
             </div>
         </div>
@@ -543,9 +543,9 @@
             {% endif %}
             
             <div style="font-size: 12px; color: #666; margin-top: 10px;">
-                <span style="color: #28a745;">High performance (>1.5x μ)</span>, 
+                <span class="al-status-success">High performance (>1.5x μ)</span>, 
                 <span style="color: #cc9900;">Below average (<μ of network)</span>, 
-                <span style="color: #dc3545;">Poor (≥2σ from network μ)</span>
+                <span class="al-status-danger">Poor (≥2σ from network μ)</span>
                 {% if contact_display_data and contact_display_data.bandwidth_timestamp %}, from {{ contact_display_data.bandwidth_timestamp }}{% endif %}
             </div>
         </div>
