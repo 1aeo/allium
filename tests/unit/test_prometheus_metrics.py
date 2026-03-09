@@ -306,6 +306,29 @@ class TestDnsHealthMetrics(unittest.TestCase):
                                      validated_domains={"example.com"})
         self.assertIn('verifiedaroi="example.com"', content)
 
+    def test_verifiedaroi_not_inherited_from_other_relay(self):
+        """Relay claiming a domain validated by a *different* relay must not inherit the label."""
+        relays = [
+            _make_relay("AAAA", aroi_domain="example.com"),
+            _make_relay("BBBB", aroi_domain="example.com"),
+        ]
+        aroi_data = _sample_aroi_data()
+        aroi_data["results"] = [
+            {"fingerprint": "AAAA", "valid": True, "domain": "example.com", "proof_type": "uri-rsa"},
+            {"fingerprint": "BBBB", "valid": False, "domain": "example.com", "proof_type": "uri-rsa"},
+        ]
+        content, _ = self._generate(relays, aroi_data=aroi_data,
+                                     validated_domains={"example.com"})
+        # AAAA is valid — should have the label
+        self.assertIn('aeo1_exit_relay_info{fingerprint="AAAA"', content)
+        aaaa_line = [l for l in content.split("\n")
+                     if l.startswith('aeo1_exit_relay_info{fingerprint="AAAA"')][0]
+        self.assertIn('verifiedaroi="example.com"', aaaa_line)
+        # BBBB is invalid — must NOT inherit
+        bbbb_line = [l for l in content.split("\n")
+                     if l.startswith('aeo1_exit_relay_info{fingerprint="BBBB"')][0]
+        self.assertIn('verifiedaroi=""', bbbb_line)
+
     def test_aggregates_ratio_format(self):
         relays = [_make_relay("AAAA")]
         content, _ = self._generate(relays)
@@ -443,6 +466,19 @@ class TestSourceAvailability(unittest.TestCase):
                 content = f.read()
         self.assertIn('aeo1_source_last_success_timestamp_seconds{source="exitdnshealth"} 0', content)
         self.assertIn('aeo1_source_last_success_timestamp_seconds{source="aroi"} 0', content)
+
+    def test_available_flags_reflect_source_presence_not_count(self):
+        """dns_available/aroi_available must be True when source exists, even with 0 matching relays."""
+        rs = _make_relay_set(
+            [_make_relay("AAAA", flags=["Guard", "Running"])],  # no Exit flag
+            exit_dns_health_data=_sample_dns_metadata(),
+            aroi_validation_data=_sample_aroi_data(),
+        )
+        with tempfile.TemporaryDirectory() as td:
+            stats = generate_prometheus_metrics(rs, td)
+        self.assertTrue(stats["dns_available"], "dns_available should be True when source data exists")
+        self.assertTrue(stats["aroi_available"], "aroi_available should be True when source data exists")
+        self.assertEqual(stats["exit_relays"], 0)
 
 
 # ---------------------------------------------------------------------------

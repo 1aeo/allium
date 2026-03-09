@@ -126,9 +126,19 @@ def _build_aroi_map(relay_set) -> Dict[str, dict]:
 
 def _get_verified_aroi(relay: dict, aroi_map: Dict[str, dict],
                        validated_domains: Set[str]) -> str:
-    """Determine the verified AROI domain for a relay, or empty string."""
+    """Determine the verified AROI domain for a relay, or empty string.
+
+    Requires all three conditions:
+      1. The relay claims an aroi_domain (not "none"/empty)
+      2. That domain is in the global validated_domains set
+      3. This specific relay has a valid entry in aroi_map for that domain
+    """
     aroi_domain = relay.get("aroi_domain", "none")
-    if aroi_domain and aroi_domain != "none" and aroi_domain in validated_domains:
+    if not aroi_domain or aroi_domain == "none" or aroi_domain not in validated_domains:
+        return ""
+    fp = relay.get("fingerprint", "").upper()
+    entry = aroi_map.get(fp, {})
+    if entry.get("valid") and entry.get("domain") == aroi_domain:
         return aroi_domain
     return ""
 
@@ -484,11 +494,11 @@ def generate_prometheus_metrics(relay_set, output_dir: str) -> dict:
     # DNS Health — conditional
     exit_count = _write_dns_health_section(
         lines, relay_set, fp_to_family, aroi_map, validated_domains)
-    dns_available = exit_count > 0
+    dns_available = bool(getattr(relay_set, "exit_dns_health_data", None))
 
     # AROI — conditional
     aroi_count = _write_aroi_section(lines, relay_set, fp_to_family, aroi_map)
-    aroi_available = aroi_count > 0
+    aroi_available = bool(getattr(relay_set, "aroi_validation_data", None))
 
     # Trailing newline + EOF
     lines.append("# EOF")
@@ -502,7 +512,7 @@ def generate_prometheus_metrics(relay_set, output_dir: str) -> dict:
     final_path = os.path.join(output_dir, "metrics")
     with open(tmp_path, "w", encoding="utf-8") as f:
         f.write(content)
-    os.rename(tmp_path, final_path)
+    os.replace(tmp_path, final_path)
 
     file_size_kb = round(len(content.encode("utf-8")) / 1024, 1)
 
