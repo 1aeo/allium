@@ -54,6 +54,12 @@
     font-weight: 600;
 }
 
+/* Links within ribbon cards inherit parent color (metric values, headers) */
+.ribbon-card .al-link-plain { color: inherit; }
+
+/* Repeated sub-metric spacing for small text under metric values */
+.metric-subtext { margin-top: 2px; }
+
 .card-metrics {
     display: flex;
     flex-direction: column;
