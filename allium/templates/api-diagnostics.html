@@ -52,7 +52,7 @@ API Diagnostics
                 <dt>URL</dt>
                 <dd>
                     <a href="{{ api.url }}" target="_blank" rel="noopener">{{ api.url|replace('https://', '') }}</a>
-                    {% if api.url_note %}<span style="color:#6c757d;"> ({{ api.url_note }})</span>{% endif %}
+                    {% if api.url_note %}<span class="al-status-muted"> ({{ api.url_note }})</span>{% endif %}
                 </dd>
                 <dt>Owner</dt>
                 <dd>{{ api.owner }}</dd>
@@ -63,14 +63,14 @@ API Diagnostics
                 <dd>
                     {% if api.freshness == 'stale' and api.cache_exceeded %}
                         <span class="al-status-danger">{{ api.cache_age_display }}</span>
-                        <span style="color:#6c757d;">/ max {{ api.cache_max_age_display }}</span>
+                        <span class="al-status-muted">/ max {{ api.cache_max_age_display }}</span>
                         <span class="al-status-danger">EXCEEDED</span>
                     {% elif api.freshness == 'aging' %}
                         <span class="al-status-warning">{{ api.cache_age_display }}</span>
-                        <span style="color:#6c757d;">/ max {{ api.cache_max_age_display }}</span>
+                        <span class="al-status-muted">/ max {{ api.cache_max_age_display }}</span>
                     {% elif api.cache_age_seconds is not none %}
                         {{ api.cache_age_display }}
-                        <span style="color:#6c757d;">/ max {{ api.cache_max_age_display }}</span>
+                        <span class="al-status-muted">/ max {{ api.cache_max_age_display }}</span>
                     {% else %}
                         N/A
                     {% endif %}
@@ -93,7 +93,7 @@ API Diagnostics
                 <dd>
                     {{ api.item_count_display }} {{ api.count_label }}
                     {% if api.extra_info %}
-                        <span style="color:#6c757d;">({{ api.extra_info }})</span>
+                        <span class="al-status-muted">({{ api.extra_info }})</span>
                     {% endif %}
                 </dd>
                 {% else %}
@@ -168,7 +168,7 @@ API Diagnostics
                     {% if dep.link %}
                         <a href="{{ page_ctx.path_prefix }}{{ dep.link }}">{{ dep.link }}</a>
                     {% elif dep.link_label %}
-                        <span style="color:#6c757d;">{{ dep.link_label }}</span>
+                        <span class="al-status-muted">{{ dep.link_label }}</span>
                     {% endif %}
                 </td>
             </tr>

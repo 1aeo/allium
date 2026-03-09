@@ -54,6 +54,12 @@
     font-weight: 600;
 }
 
+/* Links within ribbon cards inherit parent color (metric values, headers) */
+.ribbon-card .al-link-plain { color: inherit; }
+
+/* Repeated sub-metric spacing for small text under metric values */
+.metric-subtext { margin-top: 2px; }
+
 .card-metrics {
     display: flex;
     flex-direction: column;
@@ -71,8 +77,11 @@
     display: block;
     font-size: 3.3rem;
     font-weight: bold;
-    color: var(--color-text-heading);
     line-height: 1.0;
+}
+/* Default color only when no al-status-* class overrides it */
+.metric-item.primary .metric-value:not([class*="al-status-"]) {
+    color: var(--color-text-heading);
 }
 
 .metric-item.primary .metric-label {
@@ -102,8 +111,11 @@
     display: block;
     font-size: 1.65rem;
     font-weight: 600;
-    color: var(--nh-text-value);
     line-height: 1.0;
+}
+/* Default color only when no al-status-* class overrides it */
+.metric-grid .metric-value:not([class*="al-status-"]) {
+    color: var(--nh-text-value);
 }
 
 .metric-grid .metric-label {
@@ -115,7 +127,8 @@
 }
 
 /* DRY: collapsed 11 identical card-specific rules into 1 */
-.ribbon-card .metric-item.primary .metric-value {
+/* Default color only when no al-status-* class overrides it */
+.ribbon-card .metric-item.primary .metric-value:not([class*="al-status-"]) {
     color: var(--nh-metric-primary-color);
 }
 
@@ -156,8 +169,8 @@
 
 @media (max-width: 480px) {
     .ribbon-card .card-header h4 { font-size: 1.2rem; }
-    .metric-item.primary .metric-value { font-size: 3.2rem; }
-    .metric-item.primary .metric-label { font-size: 1.4rem; }
-    .metric-grid .metric-value { font-size: 1.6rem; }
-    .metric-grid .metric-label { font-size: 1.2rem; }
+    .metric-item.primary .metric-value { font-size: 2.2rem; }
+    .metric-item.primary .metric-label { font-size: 1.1rem; }
+    .metric-grid .metric-value { font-size: 1.2rem; }
+    .metric-grid .metric-label { font-size: 0.95rem; }
 }

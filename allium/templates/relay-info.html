@@ -386,13 +386,13 @@ Country: unknown
     {%- set reach = diag.reachability_summary -%}
     <dt>IPv4</dt>
     <dd>
-        <span class="status-{{ reach.ipv4.status_class }}">{{ reach.ipv4.reachable_count }}/{{ reach.ipv4.total }}</span>
+        <span class="al-status-{{ reach.ipv4.status_class }}">{{ reach.ipv4.reachable_count }}/{{ reach.ipv4.total }}</span>
     </dd>
     {# IPv6: Use ipv6.total > 0 check (same as Health Status line 212) - no new loop needed #}
     {% if reach.ipv6.total > 0 %}
     <dt>IPv6</dt>
     <dd>
-        <span class="status-{{ reach.ipv6.status_class }}">{{ reach.ipv6.reachable_count }}/{{ reach.ipv6.total }}</span>{% if reach.ipv6.not_tested %} <span class="al-status-note">({{ reach.ipv6.not_tested|length }} don't test)</span>{% endif %}
+        <span class="al-status-{{ reach.ipv6.status_class }}">{{ reach.ipv6.reachable_count }}/{{ reach.ipv6.total }}</span>{% if reach.ipv6.not_tested %} <span class="al-status-note">({{ reach.ipv6.not_tested|length }} don't test)</span>{% endif %}
     </dd>
     {% endif %}
     {% else %}
@@ -699,7 +699,7 @@ Country: unknown
     <div class="col-md-6">
         <h5 class="subsection-header">Uptime Metrics</h5>
         <dl>
-            <dt id="uptime-downtime" title="Current uptime or downtime duration based on relay's running status and last_restarted timestamp."><a href="#uptime-downtime" class="anchor-link" class="al-link-plain" style="color: inherit;">Current Status</a></dt>
+            <dt id="uptime-downtime" title="Current uptime or downtime duration based on relay's running status and last_restarted timestamp."><a href="#uptime-downtime" class="anchor-link al-link-plain" style="color: inherit;">Current Status</a></dt>
             <dd>
                 {% if relay.get('uptime_display') -%}
                     {% if relay['uptime_display'].startswith('DOWN') -%}
@@ -712,7 +712,7 @@ Country: unknown
                 {% endif -%}
             </dd>
 
-            <dt id="uptime-history" title="{% if contact_display_data and contact_display_data.outliers and contact_display_data.outliers.tooltip %}{{ contact_display_data.outliers.tooltip }}{% else %}Percentage of time relay had Running flag over 1 Month / 6 Months / 1 Year / 5 Years. Source: Onionoo uptime API.{% endif %}"><a href="#uptime-history" class="anchor-link" class="al-link-plain" style="color: inherit;">Overall Uptime (1M/6M/1Y/5Y)</a></dt>
+            <dt id="uptime-history" title="{% if contact_display_data and contact_display_data.outliers and contact_display_data.outliers.tooltip %}{{ contact_display_data.outliers.tooltip }}{% else %}Percentage of time relay had Running flag over 1 Month / 6 Months / 1 Year / 5 Years. Source: Onionoo uptime API.{% endif %}"><a href="#uptime-history" class="anchor-link al-link-plain" style="color: inherit;">Overall Uptime (1M/6M/1Y/5Y)</a></dt>
             <dd>
                 {% if relay.get('uptime_api_display') -%}
                     {{ relay['uptime_api_display']|safe }}
@@ -721,7 +721,7 @@ Country: unknown
                 {% endif -%}
             </dd>
 
-            <dt id="flag-uptime" title="{{ relay.get('flag_uptime_tooltip', 'Flag-specific uptime percentages showing reliability in primary network role.')|escape }}"><a href="#flag-uptime" class="anchor-link" class="al-link-plain" style="color: inherit;">Flag Uptime (1M/6M/1Y/5Y)</a></dt>
+            <dt id="flag-uptime" title="{{ relay.get('flag_uptime_tooltip', 'Flag-specific uptime percentages showing reliability in primary network role.')|escape }}"><a href="#flag-uptime" class="anchor-link al-link-plain" style="color: inherit;">Flag Uptime (1M/6M/1Y/5Y)</a></dt>
             <dd>
                 {% if relay.get('flag_uptime_display') and relay['flag_uptime_display'] != 'N/A' -%}
                     {% if relay['flag_uptime_display'] == 'Match' -%}

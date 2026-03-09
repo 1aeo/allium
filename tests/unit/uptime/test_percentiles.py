@@ -154,9 +154,9 @@ class TestNetworkUptimePercentiles(unittest.TestCase):
         display_high = format_network_percentiles_display(percentiles, 99.0)
         self.assertIn('al-rating-great', display_high)
         
-        # Test low performer (should use al-rating-poor or al-rating-okay class)
+        # Test low performer (should use al-rating-poor class — below 5th percentile)
         display_low = format_network_percentiles_display(percentiles, 70.0)
-        self.assertTrue('al-rating-' in display_low)  # Should have some rating class
+        self.assertIn('al-rating-poor', display_low)
         
     def test_calculate_relay_uptime_average(self):
         """Test individual relay uptime average calculation."""

@@ -291,8 +291,8 @@
                         {# Bandwidth Stability #}
                         {% if bw_6m.bandwidth_stability %}
                         <li><strong><span title="Coefficient of Variation: Standard deviation divided by mean bandwidth. Lower values indicate more consistent performance. Great: Top 25%, Good: 50-75%, Variable: 25-50%, Extreme: Bottom 10%. σ = {{ bw_6m.bandwidth_stability.std_dev_formatted }} {{ bw_6m.bandwidth_stability.std_dev_unit }}, μ = {{ bw_6m.bandwidth_stability.mean_formatted }} {{ bw_6m.bandwidth_stability.mean_unit }}">Stability</span>:</strong>
-                            {% set color_map = {'great': '#28a745', 'good': '#007bff', 'variable': '#ffc107', 'extreme': '#dc3545'} %}
-                            <span style="color: {{ color_map.get(bw_6m.bandwidth_stability.color, '#000') }}; font-weight: bold;">{{ bw_6m.bandwidth_stability.category }}</span>
+                            {% set class_map = {'great': 'al-status-success-bold', 'good': 'al-status-info al-font-bold', 'variable': 'al-status-warning-bold', 'extreme': 'al-status-danger-bold'} %}
+                            <span class="{{ class_map.get(bw_6m.bandwidth_stability.color, '') }}">{{ bw_6m.bandwidth_stability.category }}</span>
                             (Coefficient of Variation: {{ bw_6m.bandwidth_stability.coefficient_of_variation|round(1) }}% = {{ bw_6m.bandwidth_stability.std_dev_formatted }} {{ bw_6m.bandwidth_stability.std_dev_unit }} σ / {{ bw_6m.bandwidth_stability.mean_formatted }} {{ bw_6m.bandwidth_stability.mean_unit }} μ)
                         </li>
                         {% endif %}
@@ -469,17 +469,17 @@
                 {% for period in flag_data.available_periods %}
                     {% if period in flag_info.periods %}
                         {% set period_data = flag_info.periods[period] %}
-                        {% set color_style = '' %}
+                        {% set css_class = '' %}
                         {% if period_data.color_class == 'high-performance' %}
-                            {% set color_style = 'color: #28a745; font-weight: bold;' %}
+                            {% set css_class = 'al-status-success-bold' %}
                         {% elif period_data.color_class == 'statistical-outlier-low' %}
-                            {% set color_style = 'color: #dc3545; font-weight: bold;' %}
+                            {% set css_class = 'al-status-danger-bold' %}
                         {% elif period_data.color_class == 'statistical-outlier-high' %}
-                            {% set color_style = 'color: #dc3545; font-weight: bold;' %}
+                            {% set css_class = 'al-status-danger-bold' %}
                         {% elif period_data.color_class == 'below-mean' %}
-                            {% set color_style = 'color: #cc9900; font-weight: bold;' %}
+                            {% set css_class = 'al-status-warning-bold' %}
                         {% endif %}
-                        {% set formatted_value %}<span title="{{ period_data.tooltip }}" style="{{ color_style }}">{{ "%.1f"|format(period_data.value) }}%</span>{% endset %}
+                        {% set formatted_value %}<span title="{{ period_data.tooltip }}"{% if css_class %} class="{{ css_class }}"{% endif %}>{{ "%.1f"|format(period_data.value) }}%</span>{% endset %}
                         {% set _ = period_values.append(formatted_value) %}
                     {% endif %}
                 {% endfor %}
@@ -487,7 +487,7 @@
             </div>
             {% endfor %}
             {% else %}
-            <div style="color: #6c757d; font-style: italic;">
+            <div class="al-status-muted" style="font-style: italic;">
                 No flag reliability data available for this operator.
             </div>
             {% endif %}
@@ -519,17 +519,17 @@
                 {% for period in flag_bw_data.available_periods %}
                     {% if period in flag_info.periods %}
                         {% set period_data = flag_info.periods[period] %}
-                        {% set color_style = '' %}
+                        {% set css_class = '' %}
                         {% if period_data.color_class == 'high-performance' %}
-                            {% set color_style = 'color: #28a745; font-weight: bold;' %}
+                            {% set css_class = 'al-status-success-bold' %}
                         {% elif period_data.color_class == 'statistical-outlier-low' %}
-                            {% set color_style = 'color: #dc3545; font-weight: bold;' %}
+                            {% set css_class = 'al-status-danger-bold' %}
                         {% elif period_data.color_class == 'statistical-outlier-high' %}
-                            {% set color_style = 'color: #dc3545; font-weight: bold;' %}
+                            {% set css_class = 'al-status-danger-bold' %}
                         {% elif period_data.color_class == 'below-mean' %}
-                            {% set color_style = 'color: #cc9900; font-weight: bold;' %}
+                            {% set css_class = 'al-status-warning-bold' %}
                         {% endif %}
-                        {% set formatted_value %}<span title="{{ period_data.tooltip }}" style="{{ color_style }}">{{ period_data.value_display }}</span>{% endset %}
+                        {% set formatted_value %}<span title="{{ period_data.tooltip }}"{% if css_class %} class="{{ css_class }}"{% endif %}>{{ period_data.value_display }}</span>{% endset %}
                         {% set _ = period_values.append(formatted_value) %}
                     {% endif %}
                 {% endfor %}
@@ -537,7 +537,7 @@
             </div>
             {% endfor %}
             {% else %}
-            <div style="color: #6c757d; font-style: italic;">
+            <div class="al-status-muted" style="font-style: italic;">
                 No flag bandwidth data available for this operator.
             </div>
             {% endif %}
