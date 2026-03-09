@@ -345,7 +345,7 @@ Network Health Dashboard
                     <div class="metric-item" title="Unique operators with no successfully validated relays ({{ "%.1f%%"|format(relays.json.network_health.invalid_aroi_domains_percentage) }} of AROI operators). These operators have AROI configuration but all their relays failed validation. This metric counts operators, not individual relays.{% if relays.json.network_health.operator_error_top5 %}
 &#10;&#10;Top failure reasons (operator count):{% for error, count in relays.json.network_health.operator_error_top5 %}
 &#10;• {{ error }} — {{ "{:,}".format(count) }} operators{% endfor %}{% endif %}">
-                        <span class="metric-value" class="al-status-danger">
+                        <span class="metric-value al-status-danger">
                             {{ "{:,}".format(relays.json.network_health.invalid_aroi_domains_count) }}
                         </span>
                         <span class="metric-label">Failed Validation</span>
@@ -358,14 +358,14 @@ Network Health Dashboard
                 <!-- AROI Validation Quality (Relay-level) -->
                 <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
                     <div class="metric-item" title="Relays with confirmed valid AROI proof of domain ownership via DNS-RSA or URI-RSA verification. These operators have successfully proven control of their claimed domain through cryptographic proofs. Shows {{ "%.1f%%"|format(relays.json.network_health.aroi_validated_percentage) }} of all relays and {{ "%.1f%%"|format(relays.json.network_health.aroi_validated_percentage_of_aroi) }} of relays with AROI configured.">
-                        <span class="metric-value" class="al-status-success">{{ "{:,}".format(relays.json.network_health.aroi_validated_count) }}</span>
+                        <span class="metric-value al-status-success">{{ "{:,}".format(relays.json.network_health.aroi_validated_count) }}</span>
                         <span class="metric-label">Validated AROI Relays</span>
                         <div class="al-text-small-muted" style="margin-top: 2px;">{{ "%.1f%%"|format(relays.json.network_health.aroi_validated_percentage) }} all, {{ "%.1f%%"|format(relays.json.network_health.aroi_validated_percentage_of_aroi) }} AROI</div>
                     </div>
                     <div class="metric-item" title="Relays with AROI configured but validation failed ({{ "%.1f%%"|format(relays.json.network_health.aroi_invalid_percentage_of_aroi) }} of AROI relays).{% if relays.json.network_health.relay_error_top5 %}
 &#10;&#10;Top validation failure reasons (relay count):{% for error, count in relays.json.network_health.relay_error_top5 %}
 &#10;• {{ error }} — {{ "{:,}".format(count) }} relays{% endfor %}{% endif %}">
-                        <span class="metric-value" class="al-status-danger">{{ "{:,}".format(relays.json.network_health.aroi_unvalidated_count) }}</span>
+                        <span class="metric-value al-status-danger">{{ "{:,}".format(relays.json.network_health.aroi_unvalidated_count) }}</span>
                         <span class="metric-label">Invalid AROI</span>
                         <div class="al-text-small-muted" style="margin-top: 2px;">{{ "%.1f%%"|format(relays.json.network_health.aroi_unvalidated_percentage) }} all, {{ "%.1f%%"|format(relays.json.network_health.aroi_invalid_percentage_of_aroi) }} AROI</div>
                     </div>
@@ -748,7 +748,7 @@ Network Health Dashboard
                         <span class="metric-label">Relays with family-cert</span>
                     </div>
                     <div class="metric-item" title="Relays seen in server descriptors without a family-cert entry. Operators can add one with 'tor --keygen-family' (requires Tor ≥0.4.9.2-alpha). Source: CollecTor server descriptors.">
-                        <span class="metric-value" class="al-status-danger">{{ relays.json.network_health.hf_family_no_cert_count_formatted }}</span>
+                        <span class="metric-value al-status-danger">{{ relays.json.network_health.hf_family_no_cert_count_formatted }}</span>
                         <span class="metric-label">Relays without family-cert</span>
                     </div>
                 </div>
@@ -756,7 +756,7 @@ Network Health Dashboard
                 <!-- Row 5: Operator adoption from server descriptors (AROI validated) -->
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
                     <div class="metric-item" title="Validated AROI operators with at least one relay publishing family-cert. Source: CollecTor server descriptors matched against AROI-validated operator domains. Percentage of {{ "{:,}".format(relays.json.network_health.hf_total_validated_operators) }} validated operators.">
-                        <span class="metric-value" class="al-status-success">{{ relays.json.network_health.hf_some_operators_formatted }} ({{ relays.json.network_health.hf_some_operators_percentage_formatted }})</span>
+                        <span class="metric-value al-status-success">{{ relays.json.network_health.hf_some_operators_formatted }} ({{ relays.json.network_health.hf_some_operators_percentage_formatted }})</span>
                         <span class="metric-label">Operators with ≥1 family-cert</span>
                     </div>
                     <div class="metric-item" title="Validated AROI operators where every relay publishes family-cert. Fully transitioned to Proposal 321. Source: CollecTor server descriptors. Percentage of {{ "{:,}".format(relays.json.network_health.hf_total_validated_operators) }} validated operators.">
@@ -768,11 +768,11 @@ Network Health Dashboard
                 <!-- Row 6: Relay Version Adoption -->
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
                     <div class="metric-item" title="Relays running Tor ≥0.4.9.1-alpha, the first version implementing Proposal 321 family-cert support. Source: Onionoo details API version field.">
-                        <span class="metric-value" class="al-status-success">{{ relays.json.network_health.hf_ready_relays_formatted }} ({{ relays.json.network_health.hf_ready_relays_percentage_formatted }})</span>
+                        <span class="metric-value al-status-success">{{ relays.json.network_health.hf_ready_relays_formatted }} ({{ relays.json.network_health.hf_ready_relays_percentage_formatted }})</span>
                         <span class="metric-label">Relays on v0.4.9.x+</span>
                     </div>
                     <div class="metric-item" title="Relays running Tor <0.4.9.x without Proposal 321 support. Must upgrade before they can publish family-cert. Source: Onionoo details API version field.">
-                        <span class="metric-value" class="al-status-danger">{{ relays.json.network_health.hf_not_ready_relays_formatted }} ({{ relays.json.network_health.hf_not_ready_relays_percentage_formatted }})</span>
+                        <span class="metric-value al-status-danger">{{ relays.json.network_health.hf_not_ready_relays_formatted }} ({{ relays.json.network_health.hf_not_ready_relays_percentage_formatted }})</span>
                         <span class="metric-label">Relays on Older Versions</span>
                     </div>
                 </div>
@@ -858,11 +858,11 @@ Network Health Dashboard
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
                     <div class="metric-item" title="Exit relays that successfully resolved DNS queries.">
-                        <span class="metric-value" class="al-status-success">{{ relays.json.network_health.exit_dns_health_success_formatted }}</span>
+                        <span class="metric-value al-status-success">{{ relays.json.network_health.exit_dns_health_success_formatted }}</span>
                         <span class="metric-label">DNS Healthy</span>
                     </div>
                     <div class="metric-item" title="Exit relays that failed DNS resolution (all failure types combined).">
-                        <span class="metric-value" class="al-status-danger">{{ relays.json.network_health.exit_dns_health_total_failures_formatted }}</span>
+                        <span class="metric-value al-status-danger">{{ relays.json.network_health.exit_dns_health_total_failures_formatted }}</span>
                         <span class="metric-label">DNS Unhealthy</span>
                     </div>
                     <div class="metric-item" title="Exit relays unreachable during testing.">
@@ -886,15 +886,15 @@ Network Health Dashboard
                 </div>
                 <div class="metric-grid" style="grid-template-columns: repeat(5, 1fr);">
                     <div class="metric-item" title="DNS resolver returned NXDOMAIN (domain not found). Indicates a broken, misconfigured, or censoring resolver.">
-                        <span class="metric-value" class="al-status-danger">{{ relays.json.network_health.exit_dns_health_fail_formatted }}</span>
+                        <span class="metric-value al-status-danger">{{ relays.json.network_health.exit_dns_health_fail_formatted }}</span>
                         <span class="metric-label">Domain Not Found</span>
                     </div>
                     <div class="metric-item" title="DNS queries that timed out before receiving a response.">
-                        <span class="metric-value" class="al-status-warning">{{ relays.json.network_health.exit_dns_health_timeout_formatted }}</span>
+                        <span class="metric-value al-status-warning">{{ relays.json.network_health.exit_dns_health_timeout_formatted }}</span>
                         <span class="metric-label">Query Timeout</span>
                     </div>
                     <div class="metric-item" title="DNS queries that returned an incorrect IP address. May indicate DNS manipulation or hijacking.">
-                        <span class="metric-value" class="al-status-danger">{{ relays.json.network_health.exit_dns_health_wrong_ip_formatted }}</span>
+                        <span class="metric-value al-status-danger">{{ relays.json.network_health.exit_dns_health_wrong_ip_formatted }}</span>
                         <span class="metric-label">Returned Wrong IP</span>
                     </div>
                     <div class="metric-item" title="SOCKS proxy errors during DNS testing.">
