@@ -1,0 +1,259 @@
+/* =============================================================================
+   API Diagnostics Page Styles (page-specific — only loaded on diagnostics page)
+   ============================================================================= */
+
+/* Diagnostics Design Tokens (page-scoped; shared tokens in skeleton.html :root) */
+:root {
+    --diag-text-body: #343a40;
+    --diag-text-stale: #721c24;
+    --diag-text-fresh: #155724;
+    --diag-bg-fresh: #d4edda;
+    --diag-bg-stale: #f8d7da;
+}
+
+/* Overall status banner */
+.diag-overall-banner {
+    padding: 18px 24px;
+    border-radius: 8px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+.diag-overall-fresh {
+    background: linear-gradient(135deg, var(--diag-bg-fresh), #c3e6cb);
+    border: 2px solid var(--color-success);
+}
+.diag-overall-aging {
+    background: linear-gradient(135deg, #fff3cd, #ffeeba);
+    border: 2px solid var(--color-warning-bg);
+}
+.diag-overall-stale {
+    background: linear-gradient(135deg, var(--diag-bg-stale), #f5c6cb);
+    border: 2px solid var(--color-danger);
+}
+.diag-overall-unavailable {
+    background: linear-gradient(135deg, #e9ecef, #dee2e6);
+    border: 2px solid var(--color-muted);
+}
+.diag-overall-status {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--color-text-heading);
+}
+.diag-overall-meta {
+    font-size: 13px;
+    color: var(--color-text-dark);
+    text-align: right;
+}
+.diag-overall-meta div { margin-bottom: 2px; }
+
+/* API cards grid - 3 columns matching network health ribbon */
+.diag-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 30px;
+}
+
+.diag-card {
+    background: #fff;
+    border-radius: 8px;
+    border: 2px solid var(--color-border-card);
+    padding: 0;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+    transition: all 0.2s ease;
+    overflow: hidden;
+}
+.diag-card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    transform: translateY(-1px);
+}
+
+/* Colored left border per freshness */
+.diag-card-border-fresh { border-left: 4px solid var(--color-success); }
+.diag-card-border-aging { border-left: 4px solid var(--color-warning-bg); }
+.diag-card-border-stale { border-left: 4px solid var(--color-danger); }
+.diag-card-border-unavailable { border-left: 4px solid var(--color-muted); }
+
+.diag-card-header {
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--color-border-divider);
+}
+.diag-card-header h4 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--color-text-heading);
+}
+
+/* Freshness badges */
+.diag-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+.diag-badge-fresh { background-color: var(--diag-bg-fresh); color: var(--diag-text-fresh); border: 1px solid var(--color-success); }
+.diag-badge-aging { background-color: #fff3cd; color: var(--color-warning-text); border: 1px solid var(--color-warning-bg); }
+.diag-badge-stale { background-color: var(--diag-bg-stale); color: var(--diag-text-stale); border: 1px solid var(--color-danger); }
+.diag-badge-unavailable { background-color: #e9ecef; color: var(--color-text-dark); border: 1px solid var(--color-muted); }
+
+.diag-card-body {
+    padding: 10px 16px 14px;
+}
+.diag-card-body dl {
+    margin: 0;
+    display: grid;
+    grid-template-columns: 110px 1fr;
+    gap: 3px 8px;
+    font-size: 12px;
+}
+.diag-card-body dt { color: var(--color-muted); font-weight: 600; }
+.diag-card-body dd { margin: 0; color: var(--diag-text-body); word-break: break-all; }
+.diag-card-body dd a { color: var(--color-link); text-decoration: none; }
+.diag-card-body dd a:hover { text-decoration: underline; }
+
+/* Progress bar */
+.diag-progress-bar {
+    height: 6px;
+    background: var(--color-border-subtle);
+    border-radius: 3px;
+    margin-top: 8px;
+    overflow: hidden;
+}
+.diag-progress-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+.diag-progress-fresh { background: var(--color-success); }
+.diag-progress-aging { background: var(--color-warning-bg); }
+.diag-progress-stale { background: var(--color-danger); }
+
+/* Affected sections tags */
+.diag-affected {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid var(--color-border-divider);
+    font-size: 12px;
+    color: var(--color-muted);
+}
+.diag-affected strong { color: var(--color-text-dark); }
+.diag-affected-stale strong { color: var(--diag-text-stale); }
+.diag-affected-tag {
+    display: inline-block;
+    background: var(--color-border-divider);
+    padding: 2px 8px;
+    border-radius: 3px;
+    margin: 2px 3px 2px 0;
+    font-size: 11px;
+    color: var(--color-text-dark);
+}
+.diag-affected-tag-stale {
+    background: var(--diag-bg-stale);
+    color: var(--diag-text-stale);
+}
+
+/* Section header */
+.diag-section-header {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--color-text-heading);
+    margin: 30px 0 16px 0;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--color-border-card);
+}
+
+/* Dependency map table */
+.diag-dep-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+.diag-dep-table thead th {
+    background: var(--color-bg-light);
+    padding: 10px 14px;
+    text-align: left;
+    font-weight: 600;
+    color: var(--color-text-dark);
+    border-bottom: 2px solid var(--color-border-light);
+}
+.diag-dep-table tbody td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--color-border-divider);
+    vertical-align: middle;
+}
+.diag-dep-table tbody tr:hover { background-color: var(--color-bg-light); }
+
+/* Status dots */
+.diag-dep-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: middle;
+}
+.diag-dot-fresh { background: var(--color-success); }
+.diag-dot-aging { background: var(--color-warning-bg); }
+.diag-dot-stale { background: var(--color-danger); }
+.diag-dot-unavailable { background: var(--color-muted); }
+
+/* API pills in dependency table */
+.diag-api-pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    margin: 1px 3px;
+    font-weight: 500;
+}
+.diag-api-pill-fresh { background: var(--diag-bg-fresh); color: var(--diag-text-fresh); }
+.diag-api-pill-aging { background: #fff3cd; color: var(--color-warning-text); }
+.diag-api-pill-stale { background: var(--diag-bg-stale); color: var(--diag-text-stale); }
+.diag-api-pill-unavailable { background: #e9ecef; color: var(--color-text-dark); }
+
+/* Legend box */
+.diag-legend {
+    background: var(--color-bg-light);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-top: 24px;
+}
+.diag-legend h5 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 14px;
+    color: var(--color-text-dark);
+}
+.diag-legend-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    font-size: 13px;
+}
+.diag-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Responsive: 2 columns on medium, 1 on small */
+@media (max-width: 1200px) {
+    .diag-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 768px) {
+    .diag-grid { grid-template-columns: 1fr; }
+    .diag-overall-banner { flex-direction: column; text-align: center; }
+    .diag-overall-meta { text-align: center; }
+    .diag-card-body dl { grid-template-columns: 100px 1fr; }
+}
