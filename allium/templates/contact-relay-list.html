@@ -36,7 +36,7 @@
 
 {# Determine if we should use the 4-section layout #}
 {% set use_sections = contact_validation_status and contact_validation_status.has_aroi and contact_validation_status.validation_status != 'not_configured' -%}
-{% set is_contact_sortable = sortable_scope == 'contact' and contact_sort_enabled -%}
+{% set is_contact_sortable = sortable_scope == 'contact' and contact_sort_enabled is defined and contact_sort_enabled -%}
 
 {# =============================================================================
    MACRO: Render relay table header (DRY - used by all sections)

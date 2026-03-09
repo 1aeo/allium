@@ -3,6 +3,7 @@
 from allium.lib.contact_sorting import (
     CONTACT_SORT_MODES,
     CONTACT_SORT_FILE_MAP,
+    _contact_relay_count,
     _sort_contact_relays,
     _sort_contact_section_entries,
 )
@@ -327,3 +328,18 @@ def test_section_wrapper_sorting_uses_embedded_relay():
     wrapped = [{"relay": relay} for relay in relays]
     sorted_wrapped = _sort_contact_section_entries(wrapped, "bandwidth")
     assert sorted_wrapped[0]["relay"]["nickname"] == "beta"
+
+
+def test_contact_relay_count_falls_back_to_section_wrappers():
+    base_template_args = {
+        "relay_subset": [],
+        "contact_validation_status": {
+            "validated_relays": [{"relay": _sample_relays()[0]}],
+            "misconfigured_relays": [],
+            "unauthorized_relays": [{"relay": _sample_relays()[1]}],
+            "incomplete_relays": [],
+            "not_configured_relays": [{"relay": _sample_relays()[2]}],
+        },
+    }
+
+    assert _contact_relay_count(base_template_args) == 3

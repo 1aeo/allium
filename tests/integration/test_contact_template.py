@@ -495,7 +495,7 @@ class TestContactTemplateIntegration(unittest.TestCase):
     def test_contact_template_sort_links_for_all_columns(self):
         """Contact pages should expose static no-JS sort links."""
         import copy
-        from allium.lib.page_writer import CONTACT_SORT_FILE_MAP
+        from allium.lib.contact_sorting import CONTACT_SORT_FILE_MAP
 
         context = copy.deepcopy(self.template_context)
         context['relay_subset'][0]['ipv6_support'] = 'both'
@@ -530,6 +530,41 @@ class TestContactTemplateIntegration(unittest.TestCase):
         # Bandwidth mode is default index page (no by-bandwidth file)
         self.assertNotIn('href="by-bandwidth.html"', rendered)
         self.assertIn('BW Cap', rendered)
+
+    def test_contact_template_sort_links_hidden_for_small_contacts(self):
+        """Contact pages with <=2 relays should not render sort links."""
+        import copy
+        from allium.lib.contact_sorting import CONTACT_SORT_FILE_MAP
+
+        context = copy.deepcopy(self.template_context)
+        context['sortable_scope'] = 'contact'
+        context['contact_sort_mode'] = 'bandwidth'
+        context['contact_sort_enabled'] = False
+        context['contact_sort_links'] = CONTACT_SORT_FILE_MAP
+
+        template = self.jinja_env.get_template('contact.html')
+        rendered = template.render(**context)
+
+        self.assertNotIn('href="by-nickname.html"', rendered)
+        self.assertNotIn('href="by-status.html"', rendered)
+        self.assertIn('Nickname', rendered)
+
+    def test_contact_template_non_default_variant_has_index_canonical(self):
+        """Non-default contact variants should canonicalize to index.html when no vanity canonical applies."""
+        import copy
+        from allium.lib.contact_sorting import CONTACT_SORT_FILE_MAP
+
+        context = copy.deepcopy(self.template_context)
+        context['sortable_scope'] = 'contact'
+        context['contact_sort_mode'] = 'nickname'
+        context['contact_sort_enabled'] = True
+        context['contact_sort_links'] = CONTACT_SORT_FILE_MAP
+        context['base_url'] = None
+        context['is_validated_aroi'] = False
+
+        template = self.jinja_env.get_template('contact.html')
+        rendered = template.render(**context)
+        self.assertIn('<link rel="canonical" href="index.html" />', rendered)
 
 
 class TestContactMultiprocessingRegression(unittest.TestCase):
@@ -887,6 +922,85 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
         for filename in expected_files:
             self.assertTrue(os.path.exists(os.path.join(contact_dir, filename)), f"missing {filename}")
         self.assertFalse(os.path.exists(os.path.join(contact_dir, "by-bandwidth.html")))
+
+    def test_contact_page_generation_omits_ipv6_variant_when_not_visible(self):
+        """Contacts with >=3 relays but no IPv6 visibility should not emit by-ipv6.html."""
+        relay_data = {
+            "relays": [
+                {
+                    "fingerprint": "AAA1111BBBB2222CCCC3333DDDD4444EEEE5555",
+                    "nickname": "TestRelay1",
+                    "contact": "same-no-ipv6@example.org",
+                    "country": "us",
+                    "country_name": "United States",
+                    "as": "AS7922",
+                    "as_name": "Comcast",
+                    "observed_bandwidth": 5000000,
+                    "consensus_weight": 1000,
+                    "flags": ["Running", "Valid", "Guard"],
+                    "running": True,
+                    "measured": True,
+                    "first_seen": "2023-01-01 00:00:00",
+                    "or_addresses": ["192.168.1.1:9001"],
+                    "platform": "Tor 0.4.7.8 on Linux",
+                    "effective_family": [],
+                },
+                {
+                    "fingerprint": "FFF6666777788889999AAAABBBBCCCCDDDDEEEE",
+                    "nickname": "TestRelay2",
+                    "contact": "same-no-ipv6@example.org",
+                    "country": "de",
+                    "country_name": "Germany",
+                    "as": "AS3320",
+                    "as_name": "Deutsche Telekom",
+                    "observed_bandwidth": 3000000,
+                    "consensus_weight": 800,
+                    "flags": ["Running", "Valid", "Exit"],
+                    "running": True,
+                    "measured": True,
+                    "first_seen": "2023-06-01 00:00:00",
+                    "or_addresses": ["10.0.0.1:9001"],
+                    "platform": "Tor 0.4.7.8 on FreeBSD",
+                    "effective_family": [],
+                },
+                {
+                    "fingerprint": "1111222233334444555566667777888899990000",
+                    "nickname": "TestRelay3",
+                    "contact": "same-no-ipv6@example.org",
+                    "country": "fr",
+                    "country_name": "France",
+                    "as": "AS1234",
+                    "as_name": "ExampleNet",
+                    "observed_bandwidth": 2000000,
+                    "consensus_weight": 700,
+                    "flags": ["Running", "Valid", "Guard"],
+                    "running": True,
+                    "measured": True,
+                    "first_seen": "2024-01-01 00:00:00",
+                    "or_addresses": ["172.16.0.1:9001"],
+                    "platform": "Tor 0.4.8.0 on Linux",
+                    "effective_family": [],
+                },
+            ]
+        }
+
+        relay_set = Relays(
+            output_dir=self.temp_dir,
+            onionoo_url="https://test.example.com",
+            relay_data=relay_data,
+            use_bits=False,
+            progress=False,
+            mp_workers=0,
+        )
+
+        relay_set.write_pages_by_key("contact")
+
+        contact_hashes = list(relay_set.json["sorted"]["contact"].keys())
+        self.assertEqual(len(contact_hashes), 1)
+        contact_dir = os.path.join(self.temp_dir, "contact", contact_hashes[0])
+
+        self.assertTrue(os.path.exists(os.path.join(contact_dir, "by-status.html")))
+        self.assertFalse(os.path.exists(os.path.join(contact_dir, "by-ipv6.html")))
 
     def test_contact_page_generation_creates_vanity_index_only_for_small_contacts(self):
         """Validated AROI contact with <=2 relays should only get vanity index.html."""

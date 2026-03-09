@@ -32,6 +32,7 @@ from .contact_sorting import (
     _adjust_vanity_paths,
     _build_contact_variant_args,
     _contact_has_ipv6,
+    _contact_relay_count,
     _contact_sort_links,
 )
 
@@ -771,7 +772,7 @@ def _render_contact_variants(template, relay_set, base_template_args, dir_path, 
     """Render all static sort variants for one contact page."""
     files_written = 0
     vanity_dir = None
-    relay_count = len(base_template_args.get('relay_subset', []) or [])
+    relay_count = _contact_relay_count(base_template_args)
     contact_sort_enabled = relay_count > 2
     contact_has_ipv6 = _contact_has_ipv6(base_template_args)
     sort_modes = [CONTACT_DEFAULT_SORT_MODE] if not contact_sort_enabled else list(CONTACT_SORT_MODES)
@@ -912,6 +913,7 @@ def _write_contact_pages_parallel(relay_set, sorted_values, template, output_pat
                     time.sleep(0.1)
 
         _write_contact_pages_sequential(relay_set, sorted_values, template, output_path, the_prefixed, start_time)
+
 
 def write_pages_by_key(relay_set, k):
     """Render and write sorted HTML relay listings to disk"""

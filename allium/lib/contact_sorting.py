@@ -253,6 +253,20 @@ def _contact_has_ipv6(base_template_args):
     return False
 
 
+def _contact_relay_count(base_template_args):
+    """Return total relay count for a contact across supported render modes."""
+    relay_subset = base_template_args.get('relay_subset') or []
+    count = len(relay_subset)
+    if count:
+        return count
+
+    contact_validation_status = base_template_args.get('contact_validation_status')
+    if isinstance(contact_validation_status, dict):
+        for section_key in CONTACT_SECTION_KEYS:
+            count += len(contact_validation_status.get(section_key, []) or [])
+    return count
+
+
 def _build_contact_variant_args(base_template_args, sort_mode, contact_sort_enabled=True, enabled_modes=None):
     """Build per-variant template args from a shared contact-page base args dict."""
     variant_args = dict(base_template_args)
