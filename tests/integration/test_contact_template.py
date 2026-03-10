@@ -511,25 +511,25 @@ class TestContactTemplateIntegration(unittest.TestCase):
         template = self.jinja_env.get_template('contact.html')
         rendered = template.render(**context)
 
-        # Non-default sort links should point to by-*.html pages
-        self.assertIn('href="by-nickname.html"', rendered)
-        self.assertIn('href="by-total-data.html"', rendered)
-        self.assertIn('href="by-uptime-percentage.html"', rendered)
-        self.assertIn('href="by-flag-uptime.html"', rendered)
-        self.assertIn('href="by-ipv4.html"', rendered)
-        self.assertIn('href="by-flags.html"', rendered)
-        self.assertIn('href="by-dns.html"', rendered)
-        self.assertIn('href="by-family.html"', rendered)
-        self.assertIn('href="by-country.html"', rendered)
-        self.assertIn('href="by-as-number.html"', rendered)
-        self.assertIn('href="by-as-name.html"', rendered)
-        self.assertIn('href="by-platform.html"', rendered)
-        self.assertIn('href="by-first-seen.html"', rendered)
-        self.assertIn('href="by-last-restarted.html"', rendered)
-        self.assertIn('href="by-ipv6.html"', rendered)
+        # Non-default sort links should point to by-*.html pages with #relay-table anchor
+        self.assertIn('href="by-nickname.html#relay-table"', rendered)
+        self.assertIn('href="by-total-data.html#relay-table"', rendered)
+        self.assertIn('href="by-uptime-percentage.html#relay-table"', rendered)
+        self.assertIn('href="by-flag-uptime.html#relay-table"', rendered)
+        self.assertIn('href="by-ipv4.html#relay-table"', rendered)
+        self.assertIn('href="by-flags.html#relay-table"', rendered)
+        self.assertIn('href="by-dns.html#relay-table"', rendered)
+        self.assertIn('href="by-family.html#relay-table"', rendered)
+        self.assertIn('href="by-country.html#relay-table"', rendered)
+        self.assertIn('href="by-as-number.html#relay-table"', rendered)
+        self.assertIn('href="by-as-name.html#relay-table"', rendered)
+        self.assertIn('href="by-platform.html#relay-table"', rendered)
+        self.assertIn('href="by-first-seen.html#relay-table"', rendered)
+        self.assertIn('href="by-last-restarted.html#relay-table"', rendered)
+        self.assertIn('href="by-ipv6.html#relay-table"', rendered)
 
         # Bandwidth mode is default index page (no by-bandwidth file)
-        self.assertNotIn('href="by-bandwidth.html"', rendered)
+        self.assertNotIn('href="by-bandwidth.html', rendered)
         # Active sort column should have bold indicator
         self.assertIn('▾', rendered)
 
@@ -549,8 +549,8 @@ class TestContactTemplateIntegration(unittest.TestCase):
         rendered = template.render(**context)
 
         # Should NOT have sort links
-        self.assertNotIn('href="by-nickname.html"', rendered)
-        self.assertNotIn('href="by-status.html"', rendered)
+        self.assertNotIn('href="by-nickname.html', rendered)
+        self.assertNotIn('href="by-status.html', rendered)
         # Should still show headers (just not clickable)
         self.assertIn('Nickname', rendered)
         self.assertIn('BW Cap', rendered)
