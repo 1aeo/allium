@@ -673,7 +673,7 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
             versions = sorted(list(version_status_versions[status]))
             if versions:
                 tooltip_status = status_display.capitalize()
-                version_status_tooltips[status] = f"{tooltip_status} versions: {', '.join(_html.escape(v) for v in versions)}"
+                version_status_tooltips[status] = f"{tooltip_status} versions: {', '.join(_html.escape(ver) for ver in versions)}"
             else:
                 version_status_tooltips[status] = f"{status_display.capitalize()} versions: (no version data)"
     

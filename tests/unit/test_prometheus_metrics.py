@@ -21,6 +21,7 @@ from lib.prometheus_metrics import (
     _get_family_id,
     _is_aroi_configured,
     _build_aroi_map,
+    _parse_timestamp_epoch,
     generate_prometheus_metrics,
     SCHEMA_VERSION,
 )
@@ -558,3 +559,63 @@ class TestMetaAndFile(unittest.TestCase):
             with open(os.path.join(td, "metrics")) as f:
                 content = f.read()
         self.assertIn("# EOF", content)
+
+
+# ---------------------------------------------------------------------------
+# Regression tests for bugs found in PR review
+# ---------------------------------------------------------------------------
+
+class TestParseTimestampEpoch(unittest.TestCase):
+    """Regression: _parse_timestamp_epoch must treat bare timestamps as UTC."""
+
+    def test_z_suffix(self):
+        from datetime import datetime, timezone
+        expected = datetime(2026, 3, 8, 12, 0, 0, tzinfo=timezone.utc).timestamp()
+        self.assertEqual(_parse_timestamp_epoch("2026-03-08T12:00:00Z"), expected)
+
+    def test_offset_suffix(self):
+        from datetime import datetime, timezone
+        expected = datetime(2026, 3, 8, 12, 0, 0, tzinfo=timezone.utc).timestamp()
+        self.assertEqual(_parse_timestamp_epoch("2026-03-08T12:00:00+00:00"), expected)
+
+    def test_naive_timestamp_assumed_utc(self):
+        """Bare ISO timestamp without tz info must be treated as UTC, not local time."""
+        from datetime import datetime, timezone
+        expected = datetime(2026, 3, 8, 12, 0, 0, tzinfo=timezone.utc).timestamp()
+        result = _parse_timestamp_epoch("2026-03-08T12:00:00")
+        self.assertEqual(result, expected)
+
+    def test_empty_returns_zero(self):
+        self.assertEqual(_parse_timestamp_epoch(""), 0)
+        self.assertEqual(_parse_timestamp_epoch(None), 0)
+
+    def test_numeric_passthrough(self):
+        self.assertEqual(_parse_timestamp_epoch("1234567890"), 1234567890.0)
+
+
+class TestDnsErrorTypesComplete(unittest.TestCase):
+    """Regression: all upstream error types must be emitted in Prometheus metrics."""
+
+    def test_dns_error_and_unknown_emitted(self):
+        """dns_error and dns_unknown from exit_dns_health metadata must not be silently dropped."""
+        rs = _make_relay_set(
+            [_make_relay("AAAA")],
+            exit_dns_health_data={
+                "metadata": {
+                    "timestamp": "2026-03-08T08:00:00Z",
+                    "consensus_relays": 100, "tested_relays": 95,
+                    "unreachable_relays": 5, "dns_success": 80,
+                    "dns_fail": 3, "dns_timeout": 1, "dns_wrong_ip": 1,
+                    "dns_socks_error": 0, "dns_network_error": 0,
+                    "dns_error": 7, "dns_exception": 0, "dns_unknown": 3,
+                    "timing": {"total": {}},
+                }
+            },
+        )
+        with tempfile.TemporaryDirectory() as td:
+            generate_prometheus_metrics(rs, td)
+            with open(os.path.join(td, "metrics")) as f:
+                content = f.read()
+
+        self.assertIn('aeo1_exit_dns_errors_count{error_type="error"} 7', content)
+        self.assertIn('aeo1_exit_dns_errors_count{error_type="unknown"} 3', content)
