@@ -29,6 +29,8 @@
    2. When operator has no AROI (not_configured): Single table (original behavior)
    ============================================================================= #}
 
+<div id="relay-table"></div>
+
 {# Pre-compute fingerprint sets for O(1) lookups #}
 {% set validated_fps = contact_validation_status.validated_fingerprints if contact_validation_status else {} -%}
 {% set unauthorized_fps = contact_validation_status.unauthorized_fingerprints if contact_validation_status else {} -%}
@@ -47,7 +49,7 @@
         {% if contact_sort_mode == sort_mode -%}
             <strong>{{ label|safe }}</strong> ▾
         {% else -%}
-            <a href="{{ contact_sort_links.get(sort_mode, 'index.html')|escape }}">{{ label|safe }}</a>
+            <a href="{{ contact_sort_links.get(sort_mode, 'index.html')|escape }}#relay-table">{{ label|safe }}</a>
         {% endif -%}
     {% else -%}
         {{ label|safe }}

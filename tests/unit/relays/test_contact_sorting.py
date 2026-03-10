@@ -314,16 +314,17 @@ def test_flag_uptime_sort_uses_current_flags_not_historical():
 
 
 def test_flag_uptime_no_current_flags_returns_negative():
-    """Relay with no matching current flags gets -1.0 (sorts to end)."""
-    from allium.lib.contact_sorting import prioritized_flag_uptime_6m
+    """Relay with no matching current flags gets all 1.0 tuple (sorts to end)."""
+    from allium.lib.contact_sorting import prioritized_flag_uptime_tuple
 
     relay = {
-        "flags": ["Running"],  # No Exit/Guard/Fast
+        "flags": ["Running"],  # No Exit/Guard/Fast in _flag_uptime_data
         "_flag_uptime_data": {
             "Exit": {"6_months": {"uptime": 99.0, "data_points": 30}},
         },
     }
-    assert prioritized_flag_uptime_6m(relay) == -1.0
+    result = prioritized_flag_uptime_tuple(relay)
+    assert all(v == 1.0 for v in result), f"Expected all 1.0, got {result}"
 
 
 # =============================================================================

@@ -136,36 +136,57 @@ def extract_ipv6_numeric(relay):
     return None
 
 
-def prioritized_flag_uptime_6m(relay):
-    """Return 6-month uptime for the relay's prioritized *current* flag.
+def _select_prioritized_flag(relay):
+    """Select the highest-priority current flag for a relay.
 
-    Must mirror the display-layer flag selection in flag_analysis.py:
+    Mirrors the display-layer flag selection in flag_analysis.py:
     only consider flags the relay currently has (Exit > Guard > Fast > Running).
+    Returns (selected_flag, flag_data) or (None, {}).
     """
     relay_flags = set(relay.get('flags', []))
     flag_data = relay.get('_flag_uptime_data') or {}
     if not flag_data or not relay_flags:
-        return -1.0
+        return None, {}
 
     selected_flag = None
     best_priority = float('inf')
     for flag in flag_data.keys():
-        # Only consider flags the relay CURRENTLY has (mirrors display logic)
         if flag in relay_flags:
             priority = _FLAG_PRIORITY.get(flag, float('inf'))
             if priority < best_priority:
                 best_priority = priority
                 selected_flag = flag
 
+    return selected_flag, flag_data
+
+
+def _extract_flag_period_uptime(flag_data, selected_flag, period):
+    """Extract uptime value for a specific flag+period, returning -1.0 on missing."""
     if not selected_flag:
         return -1.0
-
-    period_data = flag_data.get(selected_flag, {}).get('6_months')
+    period_data = flag_data.get(selected_flag, {}).get(period)
     if isinstance(period_data, dict):
         uptime = period_data.get('uptime')
         if isinstance(uptime, (int, float)):
             return float(uptime)
     return -1.0
+
+
+def prioritized_flag_uptime_tuple(relay):
+    """Return tiered compound sort key for the relay's prioritized flag uptime.
+
+    Tier 0 (top): all four periods present and all ≥99.95% (perfect 100/100/100/100).
+    Tier 1: everything else, sorted descending by (6M, 1M, 1Y, 5Y).
+    Missing periods (-1.0) naturally fail the ≥99.95 check, placing incomplete
+    relays in tier 1 regardless of their available values.
+    """
+    selected_flag, flag_data = _select_prioritized_flag(relay)
+    values = tuple(
+        _extract_flag_period_uptime(flag_data, selected_flag, p)
+        for p in ('6_months', '1_month', '1_year', '5_years')
+    )
+    all_perfect = all(v >= 99.95 for v in values)
+    return (0 if all_perfect else 1, *tuple(-v for v in values))
 
 
 def as_number_sort_value(relay):
@@ -222,7 +243,7 @@ def relay_sort_key(relay, sort_mode):
             fingerprint,
         )
     if sort_mode == 'flag_uptime':
-        return (-prioritized_flag_uptime_6m(relay), fingerprint)
+        return (*prioritized_flag_uptime_tuple(relay), fingerprint)
     if sort_mode == 'ipv4':
         ip_packed = extract_ipv4_numeric(relay)
         return (0 if ip_packed else 1, ip_packed if ip_packed else b'\xff' * 4, fingerprint)
