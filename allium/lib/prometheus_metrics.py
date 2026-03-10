@@ -151,6 +151,8 @@ def _parse_timestamp_epoch(ts_str) -> float:
         from datetime import datetime, timezone
         s = str(ts_str).replace("Z", "+00:00")
         dt = datetime.fromisoformat(s)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
         return dt.timestamp()
     except (ValueError, TypeError):
         # Maybe it's already numeric
@@ -273,7 +275,7 @@ def _write_dns_health_section(lines: List[str], relay_set,
     # Error counts by type
     _emit_help_type(lines, "aeo1_exit_dns_errors_count",
                     "DNS error snapshot count by error type in latest scan")
-    for error_type in ("fail", "timeout", "wrong_ip", "socks_error", "network_error", "exception"):
+    for error_type in ("fail", "timeout", "wrong_ip", "socks_error", "network_error", "error", "exception", "unknown"):
         key = f"dns_{error_type}"
         _emit(lines, "aeo1_exit_dns_errors_count",
               {"error_type": error_type}, metadata.get(key, 0))
