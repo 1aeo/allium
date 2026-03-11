@@ -13,7 +13,7 @@ To add a new sorted-by variant (e.g., "by-latency"):
 """
 
 import os
-from shutil import copytree
+from shutil import copy2
 
 from .page_context import get_page_context, get_misc_page_context, StandardTemplateContexts
 
@@ -160,14 +160,11 @@ def generate_site(relay_set, args, progress_logger):
     progress_logger.log(f"Generated individual pages for {len(relay_set.json.get('relays', []))} relays")
 
     # --- Static files ---
-    progress_logger.log("Copying static files...")
+    progress_logger.log("Syncing static files...")
     static_src = os.path.join(allium_pkg_dir, "static")
     static_dst = os.path.join(args.output_dir, "static")
-    if not os.path.exists(static_dst):
-        copytree(static_src, static_dst)
-        progress_logger.log("Copied static files to output directory")
-    else:
-        progress_logger.log("Static files already exist, skipping copy")
+    copied, skipped = _sync_static_files(static_src, static_dst)
+    progress_logger.log(f"Static files: {copied} updated, {skipped} unchanged")
 
     # --- Search index ---
     progress_logger.log("Generating search index...")
@@ -199,6 +196,36 @@ def generate_site(relay_set, args, progress_logger):
     # End page generation section
     progress_logger.end_section("Page Generation")
     progress_logger.log("Allium static site generation completed successfully!")
+
+
+def _sync_static_files(src_dir, dst_dir):
+    """Copy only new or changed files from src_dir to dst_dir.
+
+    A file is copied when the destination is missing, the size differs,
+    or the source mtime is newer.  Returns (copied, skipped) counts.
+    """
+    copied = skipped = 0
+    for dirpath, _dirnames, filenames in os.walk(src_dir):
+        rel_dir = os.path.relpath(dirpath, src_dir)
+        dst_subdir = os.path.join(dst_dir, rel_dir)
+        os.makedirs(dst_subdir, exist_ok=True)
+
+        for fname in filenames:
+            src_file = os.path.join(dirpath, fname)
+            dst_file = os.path.join(dst_subdir, fname)
+
+            if os.path.exists(dst_file):
+                src_stat = os.stat(src_file)
+                dst_stat = os.stat(dst_file)
+                if (src_stat.st_size == dst_stat.st_size
+                        and src_stat.st_mtime <= dst_stat.st_mtime):
+                    skipped += 1
+                    continue
+
+            copy2(src_file, dst_file)
+            copied += 1
+
+    return copied, skipped
 
 
 def _build_page_context(page_def, relay_set):
