@@ -15,7 +15,17 @@ from shutil import rmtree
 
 from jinja2 import Environment, FileSystemLoader, FileSystemBytecodeCache
 
-from .ip_utils import safe_parse_ip_address as _safe_parse_ip_address
+from .contact_sorting import (
+    CONTACT_SORT_FILE_MAP,
+    CONTACT_SORT_MODES,
+    CONTACT_DEFAULT_SORT_MODE,
+    CONTACT_SECTION_KEYS,
+    adjust_vanity_paths as _adjust_vanity_paths,
+    contact_sort_links as _contact_sort_links,
+    build_contact_variant_args as _build_contact_variant_args,
+    contact_has_ipv6 as _contact_has_ipv6,
+    contact_relay_count as _contact_relay_count,
+)
 from .bandwidth_formatter import (
     BandwidthFormatter,
     determine_unit,
@@ -182,16 +192,18 @@ _mp_template = None
 _mp_page_type = None
 _mp_the_prefixed = None
 _mp_validated_aroi_domains = None
+_mp_output_root = None
 
 
-def _init_mp_worker(relay_set, template, page_type=None, the_prefixed=None, validated_aroi_domains=None):
+def _init_mp_worker(relay_set, template, page_type=None, the_prefixed=None, validated_aroi_domains=None, output_root=None):
     """Initialize worker with shared data via fork"""
-    global _mp_relay_set, _mp_template, _mp_page_type, _mp_the_prefixed, _mp_validated_aroi_domains
+    global _mp_relay_set, _mp_template, _mp_page_type, _mp_the_prefixed, _mp_validated_aroi_domains, _mp_output_root
     _mp_relay_set = relay_set
     _mp_template = template
     _mp_page_type = page_type
     _mp_the_prefixed = the_prefixed if the_prefixed is not None else []
     _mp_validated_aroi_domains = validated_aroi_domains if validated_aroi_domains is not None else set()
+    _mp_output_root = output_root
 
 
 def _render_page_mp(args):
@@ -216,6 +228,11 @@ def _render_page_mp(args):
     with open(html_path, "w", encoding="utf8") as f:
         f.write(rendered)
     return True
+
+
+
+# Contact sorting constants and helpers are in contact_sorting.py.
+# Rendering orchestration functions below use them via imports at the top.
 
 
 # =============================================================================
@@ -751,6 +768,189 @@ def get_detail_page_context(relay_set, category, value):
     from .page_context import get_detail_page_context
     return get_detail_page_context(category, value)
 
+
+def _cleanup_vanity_sort_files(vanity_dir):
+    """Remove all contact sort variant files from a vanity directory.
+
+    Prevents stale pages when sort modes change (e.g. IPv6 relays removed)
+    or an operator loses AROI validation between generations.
+    """
+    if not os.path.isdir(vanity_dir):
+        return
+    for filename in CONTACT_SORT_FILE_MAP.values():
+        filepath = os.path.join(vanity_dir, filename)
+        try:
+            os.remove(filepath)
+        except FileNotFoundError:
+            pass
+    try:
+        os.rmdir(vanity_dir)
+    except OSError:
+        pass
+
+
+def _render_contact_variants(template, relay_set, base_template_args, dir_path, contact_data, output_root):
+    """Render all static sort variants for one contact page.
+
+    Respects two gating rules:
+    - Threshold: operators with ≤2 relays get only index.html (no sort links).
+    - IPv6: by-ipv6.html is only emitted when IPv6 is visible in the contact.
+
+    Vanity cleanup: removes stale vanity files when an operator loses
+    validation or when sort modes change between generations.
+    """
+    files_written = 0
+
+    aroi_domain = contact_data.get('aroi_domain')
+    has_vanity_domain = aroi_domain and aroi_domain != 'none' and output_root
+    vanity_dir = None
+
+    if has_vanity_domain:
+        safe_domain = _sanitize_path_component(aroi_domain.lower())
+        potential_vanity_dir = os.path.join(output_root, safe_domain)
+
+        if relay_set.base_url and base_template_args.get('is_validated_aroi'):
+            _cleanup_vanity_sort_files(potential_vanity_dir)
+            vanity_dir = potential_vanity_dir
+            os.makedirs(vanity_dir, exist_ok=True)
+        else:
+            _cleanup_vanity_sort_files(potential_vanity_dir)
+
+    # Determine which sort modes to generate
+    relay_count = _contact_relay_count(base_template_args)
+    has_ipv6 = _contact_has_ipv6(base_template_args)
+    sort_enabled = relay_count >= 3
+
+    if sort_enabled:
+        modes_to_render = [m for m in CONTACT_SORT_MODES if m != 'ipv6' or has_ipv6]
+    else:
+        modes_to_render = [CONTACT_DEFAULT_SORT_MODE]
+
+    for sort_mode in modes_to_render:
+        filename = CONTACT_SORT_FILE_MAP[sort_mode]
+        template_args = _build_contact_variant_args(
+            base_template_args, sort_mode,
+            contact_sort_enabled=sort_enabled,
+            enabled_modes=modes_to_render,
+        )
+        template_args['contact_has_ipv6'] = has_ipv6
+        rendered = template.render(relays=relay_set, **template_args)
+
+        with open(os.path.join(dir_path, filename), "w", encoding="utf8") as html:
+            html.write(rendered)
+        files_written += 1
+
+        if vanity_dir:
+            adjusted_html = _adjust_vanity_paths(rendered)
+            with open(os.path.join(vanity_dir, filename), "w", encoding="utf8") as vanity_html:
+                vanity_html.write(adjusted_html)
+
+    return files_written
+
+
+def _render_contact_batch_mp(args):
+    """Render all contact sort variants for one contact in a worker."""
+    dir_path, value = args
+    page_data = _mp_relay_set.json["sorted"]["contact"][value]
+    base_template_args = _mp_relay_set._build_template_args(
+        "contact", value, page_data, _mp_the_prefixed, _mp_validated_aroi_domains
+    )
+    return _render_contact_variants(
+        _mp_template, _mp_relay_set, base_template_args, dir_path, page_data, _mp_output_root
+    )
+
+
+def _write_contact_pages_sequential(relay_set, sorted_values, template, output_path, the_prefixed, start_time):
+    """Sequential contact generation that writes all contact sort variants."""
+    validated_aroi_domains = getattr(relay_set, 'validated_aroi_domains', set())
+    output_root = os.path.dirname(output_path)
+    page_count = 0
+    rendered_file_count = 0
+    render_time = 0.0
+
+    for v in sorted_values:
+        contact_data = relay_set.json["sorted"]["contact"][v]
+        v_safe = _sanitize_path_component(v)
+        dir_path = os.path.join(output_path, v_safe)
+        os.makedirs(dir_path, exist_ok=True)
+
+        base_template_args = relay_set._build_template_args(
+            "contact", v, contact_data, the_prefixed, validated_aroi_domains
+        )
+
+        render_start = time.time()
+        rendered_file_count += _render_contact_variants(
+            template, relay_set, base_template_args, dir_path, contact_data, output_root
+        )
+        render_time += time.time() - render_start
+        page_count += 1
+
+        if page_count % 500 == 0:
+            relay_set._log_progress(f"Processed {page_count}/{len(sorted_values)} contact pages...")
+
+    total_time = time.time() - start_time
+    relay_set.progress_logger.log(
+        f"contact page generation complete - Generated {page_count} contacts, {rendered_file_count} files in {total_time:.2f}s"
+    )
+    if relay_set.progress and rendered_file_count:
+        print(f"    🎨 Contact variant render time: {render_time:.2f}s ({render_time/total_time*100:.1f}%)")
+        print(f"    ⚡ Average per rendered file: {total_time/rendered_file_count*1000:.1f}ms")
+
+
+def _write_contact_pages_parallel(relay_set, sorted_values, template, output_path, the_prefixed, start_time):
+    """Parallel contact generation with one worker task per contact."""
+    validated_aroi_domains = getattr(relay_set, 'validated_aroi_domains', set())
+    page_args = []
+    output_root = os.path.dirname(output_path)
+
+    for v in sorted_values:
+        v_safe = _sanitize_path_component(v)
+        dir_path = os.path.join(output_path, v_safe)
+        os.makedirs(dir_path, exist_ok=True)
+        page_args.append((dir_path, v))
+
+    pool = None
+    try:
+        ctx = mp.get_context('fork')
+        pool = ctx.Pool(
+            relay_set.mp_workers,
+            _init_mp_worker,
+            (relay_set, template, "contact", the_prefixed, validated_aroi_domains, output_root),
+        )
+        rendered_counts = pool.map(_render_contact_batch_mp, page_args)
+        pool.close()
+        pool.join()
+
+        total_time = time.time() - start_time
+        total_files = sum(rendered_counts)
+        relay_set.progress_logger.log(
+            f"contact page generation complete - Generated {len(page_args)} contacts, {total_files} files in {total_time:.2f}s"
+        )
+        if relay_set.progress and total_files:
+            print(f"    🚀 Parallel: {relay_set.mp_workers} workers, {total_time/total_files*1000:.1f}ms/rendered file avg")
+    except Exception as e:
+        if pool is not None:
+            try:
+                pool.terminate()
+                pool.join()
+            except Exception:
+                pass
+
+        relay_set._log_progress(f"Contact multiprocessing failed ({e}), falling back to sequential...")
+        relay_set.mp_workers = 0
+        for retry in range(3):
+            try:
+                if os.path.exists(output_path):
+                    rmtree(output_path)
+                os.makedirs(output_path)
+                break
+            except OSError:
+                if retry < 2:
+                    time.sleep(0.1)
+
+        _write_contact_pages_sequential(relay_set, sorted_values, template, output_path, the_prefixed, start_time)
+
+
 def write_pages_by_key(relay_set, k):
     """Render and write sorted HTML relay listings to disk"""
     start_time = time.time()
@@ -774,9 +974,16 @@ def write_pages_by_key(relay_set, k):
     sorted_values = sorted(relay_set.json["sorted"][k].keys()) if k == "first_seen" else list(relay_set.json["sorted"][k].keys())
     
     # Use multiprocessing for large page sets on systems with fork()
-    # Contact pages now use precomputed data so they can be parallelized too
     use_mp = (relay_set.mp_workers > 0 and len(sorted_values) >= 100 and 
               hasattr(mp, 'get_context'))
+
+    # Contact pages use dedicated variant-aware renderers (17 by-*.html + index default)
+    if k == "contact":
+        if use_mp:
+            _write_contact_pages_parallel(relay_set, sorted_values, template, output_path, the_prefixed, start_time)
+        else:
+            _write_contact_pages_sequential(relay_set, sorted_values, template, output_path, the_prefixed, start_time)
+        return
     
     if use_mp:
         write_pages_parallel(relay_set, k, sorted_values, template, output_path, the_prefixed, start_time)
@@ -1073,6 +1280,11 @@ def build_template_args(relay_set, k, v, i, the_prefixed, validated_aroi_domains
         'base_url': relay_set.base_url,
         'family_support_counts': family_support_counts,
         'exit_dns_health_summary': exit_dns_health_summary,
+        'sortable_scope': 'contact' if k == 'contact' else 'none',
+        'contact_sort_mode': CONTACT_DEFAULT_SORT_MODE if k == 'contact' else None,
+        'contact_sort_links': _contact_sort_links() if k == 'contact' else {},
+        'contact_sort_enabled': (k == 'contact' and len(members) > 2),
+        'contact_has_ipv6': True,  # Default; _render_contact_variants overrides per-contact
     }
 
 def write_pages_parallel(relay_set, k, sorted_values, template, output_path, the_prefixed, start_time):

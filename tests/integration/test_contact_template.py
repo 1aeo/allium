@@ -492,6 +492,86 @@ class TestContactTemplateIntegration(unittest.TestCase):
         # Should include statistical tooltips
         self.assertIn('≥2σ 97.8% from average μ 99.9%', rendered)
 
+    def test_contact_template_sort_links_for_all_columns(self):
+        """Contact pages with ≥3 relays should expose static no-JS sort links."""
+        import copy
+        from allium.lib.contact_sorting import CONTACT_SORT_FILE_MAP
+
+        context = copy.deepcopy(self.template_context)
+        context['relay_subset'][0]['ipv6_support'] = 'both'
+        context['relay_subset'][0]['or_addresses'] = ['192.168.1.1:9001', '[2001:db8::1]:9001']
+        context['relays']['json']['relay_subset'][0]['ipv6_support'] = 'both'
+        context['relays']['json']['relay_subset'][0]['or_addresses'] = ['192.168.1.1:9001', '[2001:db8::1]:9001']
+        context['sortable_scope'] = 'contact'
+        context['contact_sort_mode'] = 'bandwidth'
+        context['contact_sort_links'] = CONTACT_SORT_FILE_MAP
+        context['contact_sort_enabled'] = True
+        context['contact_has_ipv6'] = True
+
+        template = self.jinja_env.get_template('contact.html')
+        rendered = template.render(**context)
+
+        # Non-default sort links should point to by-*.html pages with #relay-table anchor
+        self.assertIn('href="by-nickname.html#relay-table"', rendered)
+        self.assertIn('href="by-total-data.html#relay-table"', rendered)
+        self.assertIn('href="by-uptime-percentage.html#relay-table"', rendered)
+        self.assertIn('href="by-flag-uptime.html#relay-table"', rendered)
+        self.assertIn('href="by-ipv4.html#relay-table"', rendered)
+        self.assertIn('href="by-flags.html#relay-table"', rendered)
+        self.assertIn('href="by-dns.html#relay-table"', rendered)
+        self.assertIn('href="by-family.html#relay-table"', rendered)
+        self.assertIn('href="by-country.html#relay-table"', rendered)
+        self.assertIn('href="by-as-number.html#relay-table"', rendered)
+        self.assertIn('href="by-as-name.html#relay-table"', rendered)
+        self.assertIn('href="by-platform.html#relay-table"', rendered)
+        self.assertIn('href="by-first-seen.html#relay-table"', rendered)
+        self.assertIn('href="by-last-restarted.html#relay-table"', rendered)
+        self.assertIn('href="by-ipv6.html#relay-table"', rendered)
+
+        # Bandwidth mode is default index page (no by-bandwidth file)
+        self.assertNotIn('href="by-bandwidth.html', rendered)
+        # Active sort column should have bold indicator
+        self.assertIn('▾', rendered)
+
+    def test_contact_template_sort_links_hidden_for_small_contacts(self):
+        """Contact pages with ≤2 relays should NOT show sort links."""
+        import copy
+        from allium.lib.contact_sorting import CONTACT_SORT_FILE_MAP
+
+        context = copy.deepcopy(self.template_context)
+        context['sortable_scope'] = 'contact'
+        context['contact_sort_mode'] = 'bandwidth'
+        context['contact_sort_links'] = CONTACT_SORT_FILE_MAP
+        context['contact_sort_enabled'] = False  # ≤2 relays
+        context['contact_has_ipv6'] = False
+
+        template = self.jinja_env.get_template('contact.html')
+        rendered = template.render(**context)
+
+        # Should NOT have sort links
+        self.assertNotIn('href="by-nickname.html', rendered)
+        self.assertNotIn('href="by-status.html', rendered)
+        # Should still show headers (just not clickable)
+        self.assertIn('Nickname', rendered)
+        self.assertIn('BW Cap', rendered)
+
+    def test_contact_template_non_default_variant_has_index_canonical(self):
+        """Non-default contact variants should canonicalize to index.html when no vanity canonical applies."""
+        import copy
+        from allium.lib.contact_sorting import CONTACT_SORT_FILE_MAP
+
+        context = copy.deepcopy(self.template_context)
+        context['sortable_scope'] = 'contact'
+        context['contact_sort_mode'] = 'nickname'
+        context['contact_sort_enabled'] = True
+        context['contact_sort_links'] = CONTACT_SORT_FILE_MAP
+        context['base_url'] = None
+        context['is_validated_aroi'] = False
+
+        template = self.jinja_env.get_template('contact.html')
+        rendered = template.render(**context)
+        self.assertIn('<link rel="canonical" href="index.html" />', rendered)
+
 
 class TestContactMultiprocessingRegression(unittest.TestCase):
     """Regression tests for contact page generation under multiprocessing.
@@ -728,6 +808,211 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
         # Verify aroi_domain is stored (used for vanity URL generation without re-fetching members)
         self.assertIn("aroi_domain", contact_data, 
                      "aroi_domain should be stored for efficient vanity URL generation")
+
+    def test_contact_page_generation_creates_sort_variant_files(self):
+        """Contact page writer should emit index + by-*.html variants for ≥3 relay contacts."""
+        # Build test data with 3 relays sharing the same contact (above threshold)
+        contact = "operator@example.com"
+        relay_data = {"relays": [
+            {"fingerprint": "A" * 40, "nickname": "Relay1", "contact": contact,
+             "country": "us", "country_name": "United States", "as": "AS1", "as_name": "Net1",
+             "observed_bandwidth": 5000000, "consensus_weight": 1000,
+             "flags": ["Running", "Valid", "Guard"], "running": True, "measured": True,
+             "first_seen": "2023-01-01 00:00:00", "or_addresses": ["1.1.1.1:9001", "[2001:db8::1]:9001"],
+             "platform": "Tor 0.4.7.8 on Linux", "effective_family": [], "ipv6_support": "both"},
+            {"fingerprint": "B" * 40, "nickname": "Relay2", "contact": contact,
+             "country": "de", "country_name": "Germany", "as": "AS2", "as_name": "Net2",
+             "observed_bandwidth": 3000000, "consensus_weight": 800,
+             "flags": ["Running", "Valid", "Exit"], "running": True, "measured": True,
+             "first_seen": "2023-06-01 00:00:00", "or_addresses": ["2.2.2.2:9001"],
+             "platform": "Tor 0.4.7.8 on FreeBSD", "effective_family": []},
+            {"fingerprint": "C" * 40, "nickname": "Relay3", "contact": contact,
+             "country": "fr", "country_name": "France", "as": "AS3", "as_name": "Net3",
+             "observed_bandwidth": 2000000, "consensus_weight": 600,
+             "flags": ["Running", "Valid"], "running": True, "measured": True,
+             "first_seen": "2024-01-01 00:00:00", "or_addresses": ["3.3.3.3:9001"],
+             "platform": "Tor 0.4.7.8 on Linux", "effective_family": []},
+        ]}
+        relay_set = Relays(
+            output_dir=self.temp_dir,
+            onionoo_url="https://test.example.com",
+            relay_data=relay_data,
+            use_bits=False,
+            progress=False,
+            mp_workers=0,
+        )
+
+        relay_set.write_pages_by_key("contact")
+
+        contact_hashes = list(relay_set.json["sorted"]["contact"].keys())
+        self.assertGreater(len(contact_hashes), 0)
+        contact_dir = os.path.join(self.temp_dir, "contact", contact_hashes[0])
+
+        expected_files = [
+            "index.html",
+            "by-status.html",
+            "by-nickname.html",
+            "by-total-data.html",
+            "by-uptime.html",
+            "by-uptime-percentage.html",
+            "by-flag-uptime.html",
+            "by-ipv4.html",
+            "by-flags.html",
+            "by-dns.html",
+            "by-family.html",
+            "by-country.html",
+            "by-as-number.html",
+            "by-as-name.html",
+            "by-platform.html",
+            "by-first-seen.html",
+            "by-last-restarted.html",
+            "by-ipv6.html",  # Relay1 has IPv6 → by-ipv6.html emitted
+        ]
+
+        for filename in expected_files:
+            self.assertTrue(os.path.exists(os.path.join(contact_dir, filename)), f"missing {filename}")
+
+        self.assertFalse(os.path.exists(os.path.join(contact_dir, "by-bandwidth.html")))
+
+    def test_contact_page_generation_threshold_small_contacts(self):
+        """Contacts with ≤2 relays should get only index.html (no sort variants)."""
+        relay_set = Relays(
+            output_dir=self.temp_dir,
+            onionoo_url="https://test.example.com",
+            relay_data=self.relay_data,  # Original test data: 1 relay per contact
+            use_bits=False,
+            progress=False,
+            mp_workers=0,
+        )
+
+        relay_set.write_pages_by_key("contact")
+
+        contact_hashes = list(relay_set.json["sorted"]["contact"].keys())
+        self.assertGreater(len(contact_hashes), 0)
+
+        for contact_hash in contact_hashes:
+            contact_dir = os.path.join(self.temp_dir, "contact", contact_hash)
+            self.assertTrue(
+                os.path.exists(os.path.join(contact_dir, "index.html")),
+                f"missing index.html for contact {contact_hash}")
+            self.assertFalse(
+                os.path.exists(os.path.join(contact_dir, "by-status.html")),
+                f"stale by-status.html for contact {contact_hash}")
+            self.assertFalse(
+                os.path.exists(os.path.join(contact_dir, "by-nickname.html")),
+                f"stale by-nickname.html for contact {contact_hash}")
+
+    def test_contact_page_generation_omits_ipv6_variant_when_not_visible(self):
+        """Contacts with ≥3 relays but no IPv6 visibility should not emit by-ipv6.html."""
+        contact = "no-ipv6-operator@example.org"
+        relay_data = {"relays": [
+            {"fingerprint": "A" * 40, "nickname": "R1", "contact": contact,
+             "country": "us", "country_name": "United States", "as": "AS1", "as_name": "Net1",
+             "observed_bandwidth": 5000000, "consensus_weight": 1000,
+             "flags": ["Running", "Valid", "Guard"], "running": True, "measured": True,
+             "first_seen": "2023-01-01 00:00:00", "or_addresses": ["192.168.1.1:9001"],
+             "platform": "Tor 0.4.7.8 on Linux", "effective_family": []},
+            {"fingerprint": "B" * 40, "nickname": "R2", "contact": contact,
+             "country": "de", "country_name": "Germany", "as": "AS2", "as_name": "Net2",
+             "observed_bandwidth": 3000000, "consensus_weight": 800,
+             "flags": ["Running", "Valid", "Exit"], "running": True, "measured": True,
+             "first_seen": "2023-06-01 00:00:00", "or_addresses": ["10.0.0.1:9001"],
+             "platform": "Tor 0.4.7.8 on FreeBSD", "effective_family": []},
+            {"fingerprint": "C" * 40, "nickname": "R3", "contact": contact,
+             "country": "fr", "country_name": "France", "as": "AS3", "as_name": "Net3",
+             "observed_bandwidth": 2000000, "consensus_weight": 700,
+             "flags": ["Running", "Valid"], "running": True, "measured": True,
+             "first_seen": "2024-01-01 00:00:00", "or_addresses": ["172.16.0.1:9001"],
+             "platform": "Tor 0.4.8.0 on Linux", "effective_family": []},
+        ]}
+        relay_set = Relays(
+            output_dir=self.temp_dir,
+            onionoo_url="https://test.example.com",
+            relay_data=relay_data,
+            use_bits=False,
+            progress=False,
+            mp_workers=0,
+        )
+        relay_set.write_pages_by_key("contact")
+        contact_hashes = list(relay_set.json["sorted"]["contact"].keys())
+        self.assertEqual(len(contact_hashes), 1)
+        contact_dir = os.path.join(self.temp_dir, "contact", contact_hashes[0])
+
+        # Should have other variants but NOT by-ipv6.html (no IPv6 relays)
+        self.assertTrue(os.path.exists(os.path.join(contact_dir, "by-status.html")))
+        self.assertFalse(os.path.exists(os.path.join(contact_dir, "by-ipv6.html")))
+
+    def test_contact_page_generation_creates_vanity_sort_variants_when_validated(self):
+        """Validated AROI contacts with ≥3 relays should get vanity sort variants."""
+        # Build test data with 3 relays under same contact (above threshold)
+        contact = "operator@example.org"
+        relay_data = {"relays": [
+            {"fingerprint": "D" * 40, "nickname": "V1", "contact": contact,
+             "country": "us", "country_name": "United States", "as": "AS1", "as_name": "Net1",
+             "observed_bandwidth": 5000000, "consensus_weight": 1000,
+             "flags": ["Running", "Valid", "Guard"], "running": True, "measured": True,
+             "first_seen": "2023-01-01 00:00:00", "or_addresses": ["1.1.1.1:9001"],
+             "platform": "Tor 0.4.7.8 on Linux", "effective_family": []},
+            {"fingerprint": "E" * 40, "nickname": "V2", "contact": contact,
+             "country": "de", "country_name": "Germany", "as": "AS2", "as_name": "Net2",
+             "observed_bandwidth": 3000000, "consensus_weight": 800,
+             "flags": ["Running", "Valid", "Exit"], "running": True, "measured": True,
+             "first_seen": "2023-06-01 00:00:00", "or_addresses": ["2.2.2.2:9001"],
+             "platform": "Tor 0.4.7.8 on FreeBSD", "effective_family": []},
+            {"fingerprint": "F" * 40, "nickname": "V3", "contact": contact,
+             "country": "fr", "country_name": "France", "as": "AS3", "as_name": "Net3",
+             "observed_bandwidth": 2000000, "consensus_weight": 600,
+             "flags": ["Running", "Valid"], "running": True, "measured": True,
+             "first_seen": "2024-01-01 00:00:00", "or_addresses": ["3.3.3.3:9001"],
+             "platform": "Tor 0.4.7.8 on Linux", "effective_family": []},
+        ]}
+        relay_set = Relays(
+            output_dir=self.temp_dir,
+            onionoo_url="https://test.example.com",
+            relay_data=relay_data,
+            use_bits=False,
+            progress=False,
+            mp_workers=0,
+            base_url="https://metrics.1aeo.com",
+        )
+
+        contact_hashes = list(relay_set.json["sorted"]["contact"].keys())
+        self.assertGreater(len(contact_hashes), 0)
+        contact_hash = contact_hashes[0]
+        contact_data = relay_set.json["sorted"]["contact"][contact_hash]
+        contact_data["is_validated_aroi"] = True
+        contact_data["aroi_domain"] = "example.org"
+
+        relay_set.write_pages_by_key("contact")
+
+        vanity_dir = os.path.join(self.temp_dir, "example.org")
+        self.assertTrue(os.path.isdir(vanity_dir))
+
+        # Check canonical variants exist (by-ipv6 excluded — no IPv6 in test data)
+        expected_files = [
+            "index.html",
+            "by-status.html",
+            "by-nickname.html",
+            "by-total-data.html",
+            "by-uptime.html",
+            "by-uptime-percentage.html",
+            "by-flag-uptime.html",
+            "by-ipv4.html",
+            "by-flags.html",
+            "by-dns.html",
+            "by-family.html",
+            "by-country.html",
+            "by-as-number.html",
+            "by-as-name.html",
+            "by-platform.html",
+            "by-first-seen.html",
+            "by-last-restarted.html",
+        ]
+        for filename in expected_files:
+            self.assertTrue(os.path.exists(os.path.join(vanity_dir, filename)), f"missing vanity {filename}")
+
+        # by-ipv6.html should NOT exist (no IPv6 in test data)
+        self.assertFalse(os.path.exists(os.path.join(vanity_dir, "by-ipv6.html")))
 
 
 if __name__ == '__main__':
