@@ -69,12 +69,17 @@ class TestAnchorLinks:
                 f'class="{css_class} ' in template_content), f"Missing CSS class: {css_class}"
 
     def test_css_target_highlighting(self, template_content):
-        """Test that CSS target highlighting is present"""
+        """Test that CSS target highlighting is present in relay-info page CSS"""
+        # CSS was extracted to external file in Phase 5
+        css_path = Path(__file__).parent.parent.parent.parent / "allium" / "static" / "css" / "relay-info.css"
+        assert css_path.exists(), f"External CSS file missing: {css_path}"
+        css_content = css_path.read_text()
+        
         target_css = ':target {'
-        assert target_css in template_content, "Missing CSS target highlighting"
+        assert target_css in css_content, "Missing CSS target highlighting"
         
         # Check for highlight properties
-        assert 'background-color:' in template_content, "Missing background color for target highlighting"
+        assert 'background-color:' in css_content, "Missing background color for target highlighting"
     
     def test_anchor_accessibility(self, template_content):
         """Test that anchor links are accessible"""

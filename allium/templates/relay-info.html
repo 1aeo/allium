@@ -11,7 +11,7 @@
 {%- endmacro -%}
 {# DRY macro: percentile badge #}
 {%- macro pctile(value, label) -%}
-{% if value is not none %}<span style="color: {% if value >= 90 %}#28a745{% elif value >= 50 %}#495057{% else %}#856404{% endif %};" title="This relay's {{ label }} is higher than {{ value }}% of all relays on the network.">({{ value|round(0)|int }}th pctl)</span>{% endif %}
+{% if value is not none %}<span class="{% if value >= 90 %}al-status-success{% elif value >= 50 %}{% else %}al-status-warning{% endif %}" title="This relay's {{ label }} is higher than {{ value }}% of all relays on the network.">({{ value|round(0)|int }}th pctl)</span>{% endif %}
 {%- endmacro -%}
 {# DRY macro: render a family member fingerprint list (replaces 3 near-identical inline <pre> blocks) #}
 {%- macro family_member_list(members, relay_fp, show_self=false) -%}
@@ -26,144 +26,14 @@
 {%- endfor -%}
 </pre>
 {%- else -%}
-<span style="color: #6c757d;">none</span>
+<span class="al-status-muted">none</span>
 {%- endif -%}
 {%- endmacro -%}
 {% block title -%}
 	Tor Relays :: {{ relay['nickname']|escape }}
 {% endblock -%}
+{% block page_css_link %}<link rel="stylesheet" href="{{ page_ctx.path_prefix }}static/css/relay-info.css">{% endblock -%}
 {% block body -%}
-<style>
-/* === Relay-info-only CSS (moved from skeleton.html — only relay pages use these) === */
-
-/* Hostname verification status */
-.verified-hostname { color: var(--color-hostname-verified); }
-.unverified-hostname { color: var(--color-hostname-unverified); }
-
-/* Section box - gray background container for major sections */
-.section-box {
-    margin: 20px 0;
-    padding: 15px;
-    background: var(--color-bg-light);
-    border-radius: 8px;
-}
-
-/* Subsection cards - visual containers for Level 2 content */
-.subsection-card {
-    background: #ffffff;
-    border-radius: 6px;
-    padding: 12px;
-    margin-bottom: 12px;
-}
-.subsection-card dl { margin-bottom: 0; }
-
-/* Subsection headers - Level 2 in information hierarchy */
-.subsection-header {
-    margin-top: 0;
-    margin-bottom: 10px;
-    padding-bottom: 6px;
-    font-weight: 600;
-    font-size: 15px;
-    color: var(--color-text-dark);
-    border-bottom: 2px solid var(--color-border-light);
-}
-
-/* Reusable status color classes */
-.status-success { color: var(--color-success); }
-.status-danger  { color: var(--color-danger); }
-.status-warning { color: var(--color-warning-text); }
-.status-muted   { color: var(--color-muted); }
-.status-note    { font-size: 11px; font-weight: normal; color: var(--color-muted); }
-.status-info    { color: var(--color-info); }
-.status-success-bold { color: var(--color-success); font-weight: bold; }
-.status-danger-bold  { color: var(--color-danger); font-weight: bold; }
-.status-warning-bold { color: var(--color-warning-text); font-weight: bold; }
-.text-small-muted { font-size: 11px; color: var(--color-text-secondary); }
-.text-small-note  { font-size: 12px; color: var(--color-text-secondary); }
-
-/* === Relay-info page-specific CSS === */
-
-.section-header {
-    position: relative;
-    display: inline-block;
-}
-
-.anchor-link {
-    text-decoration: none;
-    color: inherit;
-}
-
-/* Highlight section when targeted (outline avoids layout shift/overlap) */
-:target {
-    background-color: var(--color-highlight-bg) !important;
-    border-radius: 4px;
-    outline: 3px solid var(--color-highlight-border);
-    outline-offset: 4px;
-    transition: background-color 0.3s;
-}
-dt:target {
-    padding: 4px 6px;
-    margin: -4px -6px 6px;
-}
-
-/* Backward-compat anchor aliases: invisible but still scrollable */
-.compat-anchor {
-    display: block;
-    height: 0;
-    overflow: hidden;
-    visibility: hidden;
-}
-
-/* Health Status Grid Layout */
-.health-status-grid {
-    display: grid;
-    grid-template-columns: 1.2fr 1fr;  /* 60/40 split */
-    gap: 8px 24px;
-}
-
-.health-status-grid dl {
-    margin: 0;
-    font-size: 14px;
-}
-
-.health-status-grid .health-row {
-    display: flex;
-    align-items: baseline;
-    margin-bottom: 8px;
-}
-
-.health-status-grid dt {
-    width: 100px;
-    font-weight: bold;
-    color: var(--color-text-dark);
-    flex-shrink: 0;
-}
-
-.health-status-grid dd {
-    margin: 0;
-    flex: 1;
-}
-
-/* Responsive: Stack on mobile */
-@media (max-width: 767px) {
-    .health-status-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
-/* Shared section styling for new consolidated sections (#bandwidth, #uptime, #operator, etc.) */
-.relay-section {
-    margin-top: 15px;
-    padding: 15px;
-    background: var(--color-bg-light);
-    border-radius: 8px;
-}
-.relay-section > h4:first-child {
-    margin-top: 0;
-    margin-bottom: 12px;
-}
-
-</style>
 <div id="content">
 <h2 id="nickname">View Relay "{{ relay['nickname'] }}"</h2>
 {{ navigation('all', page_ctx) }}
@@ -238,17 +108,17 @@ Country: unknown
             <dd>
                 {% if diag -%}
                     {% if diag.in_consensus -%}
-                        <span style="color: #28a745;" title="Relay IS in the network consensus. Tor clients will use this relay.">In Consensus</span>
+                        <span class="al-status-success" title="Relay IS in the network consensus. Tor clients will use this relay.">In Consensus</span>
                         <span title="Number of Directory Authorities that voted for this relay. Need majority ({{ diag.majority_required }}/{{ diag.total_authorities }}) for consensus.">({{ diag.vote_count }}/{{ diag.total_authorities }} Directory Auths)</span>
                     {% else -%}
-                        <span style="color: #dc3545;" title="Relay is NOT in the network consensus. Tor clients will NOT use this relay.">Not In Consensus</span>
+                        <span class="al-status-danger" title="Relay is NOT in the network consensus. Tor clients will NOT use this relay.">Not In Consensus</span>
                         <span title="Number of Directory Authorities that voted for this relay. Need majority ({{ diag.majority_required }}/{{ diag.total_authorities }}) for consensus.">({{ diag.vote_count }}/{{ diag.total_authorities }} Directory Auths, need {{ diag.majority_required }})</span>
                     {% endif -%}
                 {% elif 'Running' in relay['flags'] -%}
-                    <span style="color: #28a745;" title="Relay IS in the network consensus. Tor clients will use this relay.">In Consensus</span>
+                    <span class="al-status-success" title="Relay IS in the network consensus. Tor clients will use this relay.">In Consensus</span>
                     <span title="Inferred from Running flag in Onionoo data.">(has Running flag)</span>
                 {% else -%}
-                    <span style="color: #dc3545;" title="Relay is NOT in the network consensus. Tor clients will NOT use this relay.">Not In Consensus</span>
+                    <span class="al-status-danger" title="Relay is NOT in the network consensus. Tor clients will NOT use this relay.">Not In Consensus</span>
                 {% endif -%}
             </dd>
         </div>
@@ -272,25 +142,25 @@ Country: unknown
             <dt title="DNS resolution health tested by exitdnshealth.1aeo.com."><a href="#exit-dns-health" class="anchor-link">DNS Health</a></dt>
             <dd>
                 {% if relay.exit_dns_health_status == 'success' %}
-                    <span class="status-success" title="This exit relay successfully resolved DNS queries.">Healthy</span>
-                    {% if relay.exit_dns_health_timing_ms %}<span class="text-small-muted">({{ "%.1f"|format(relay.exit_dns_health_timing_ms / 1000) }}s{% if relay.exit_dns_health_timing_percentile is not none %}, {{ relay.exit_dns_health_timing_percentile|ordinal }} percentile)</span>{% else %})</span>{% endif %}{% endif %}
+                    <span class="al-status-success" title="This exit relay successfully resolved DNS queries.">Healthy</span>
+                    {% if relay.exit_dns_health_timing_ms %}<span class="al-text-small-muted">({{ "%.1f"|format(relay.exit_dns_health_timing_ms / 1000) }}s{% if relay.exit_dns_health_timing_percentile is not none %}, {{ relay.exit_dns_health_timing_percentile|ordinal }} percentile)</span>{% else %})</span>{% endif %}{% endif %}
                 {% elif relay.exit_dns_health_status == 'fail' %}
                     {% if relay.exit_dns_health_detail == 'dns_fail' %}
-                        <span class="status-danger" title="The relay's DNS resolver returned NXDOMAIN (domain not found). Likely a broken, misconfigured, or censoring resolver.{% if relay.exit_dns_health_error %} Detail: {{ relay.exit_dns_health_error|escape }}{% endif %}">DNS Lookup Failed</span>
+                        <span class="al-status-danger" title="The relay's DNS resolver returned NXDOMAIN (domain not found). Likely a broken, misconfigured, or censoring resolver.{% if relay.exit_dns_health_error %} Detail: {{ relay.exit_dns_health_error|escape }}{% endif %}">DNS Lookup Failed</span>
                     {% elif relay.exit_dns_health_detail == 'timeout' %}
-                        <span class="status-warning" title="DNS query did not receive a response within the timeout period.">DNS Query Timeout</span>
+                        <span class="al-status-warning" title="DNS query did not receive a response within the timeout period.">DNS Query Timeout</span>
                     {% elif relay.exit_dns_health_detail == 'relay_unreachable' %}
-                        <span class="status-warning" title="Could not establish a circuit through this relay to test DNS resolution.">Relay Unreachable</span>
+                        <span class="al-status-warning" title="Could not establish a circuit through this relay to test DNS resolution.">Relay Unreachable</span>
                     {% elif relay.exit_dns_health_detail == 'dns_wrong_ip' %}
-                        <span class="status-danger" title="DNS query returned an incorrect IP address. May indicate DNS manipulation or hijacking.">DNS Returned Wrong IP</span>
+                        <span class="al-status-danger" title="DNS query returned an incorrect IP address. May indicate DNS manipulation or hijacking.">DNS Returned Wrong IP</span>
                     {% else %}
-                        <span class="status-danger" title="DNS test failed: {{ relay.exit_dns_health_detail|escape }}">DNS {{ relay.exit_dns_health_detail|escape }}</span>
+                        <span class="al-status-danger" title="DNS test failed: {{ relay.exit_dns_health_detail|escape }}">DNS {{ relay.exit_dns_health_detail|escape }}</span>
                     {% endif %}
-                    {% if relay.exit_dns_health_consecutive_failures > 1 %}<span class="text-small-muted">(failed last {{ relay.exit_dns_health_consecutive_failures }} scans)</span>{% endif %}
+                    {% if relay.exit_dns_health_consecutive_failures > 1 %}<span class="al-text-small-muted">(failed last {{ relay.exit_dns_health_consecutive_failures }} scans)</span>{% endif %}
                 {% elif relay.exit_dns_health_status == 'untested' %}
-                    <span class="status-warning" title="This relay was not included in the latest DNS health scan.{% if not relay['running'] %} Relay is currently offline and will not be scanned.{% else %} May be too new to have been scanned yet.{% endif %}">Not Tested</span>
+                    <span class="al-status-warning" title="This relay was not included in the latest DNS health scan.{% if not relay['running'] %} Relay is currently offline and will not be scanned.{% else %} May be too new to have been scanned yet.{% endif %}">Not Tested</span>
                 {% endif %}
-                <span class="text-small-muted">(via <a href="https://exitdnshealth.1aeo.com" target="_blank">exitdnshealth.1aeo.com</a>)</span>
+                <span class="al-text-small-muted">(via <a href="https://exitdnshealth.1aeo.com" target="_blank">exitdnshealth.1aeo.com</a>)</span>
             </dd>
         </div>
         {% endif %}
@@ -305,11 +175,11 @@ Country: unknown
 <span title="Median bandwidth measurement from bandwidth authorities. Used to calculate consensus weight.">{{ diag.bandwidth_summary.median_int }} {{ diag.bandwidth_summary.median_unit }} Median</span>
                     {% endif -%}
                 {% elif relay['measured'] -%}
-<span style="color: #28a745;" title="Relay has been measured by bandwidth authorities.">Measured</span>
+<span class="al-status-success" title="Relay has been measured by bandwidth authorities.">Measured</span>
                 {% elif relay['measured'] is none -%}
-<span style="color: #6c757d;">Unknown</span>
+<span class="al-status-muted">Unknown</span>
                 {% else -%}
-<span style="color: #856404;" title="Relay has not been measured by bandwidth authorities yet.">Not Measured</span>
+<span class="al-status-warning" title="Relay has not been measured by bandwidth authorities yet.">Not Measured</span>
                 {% endif -%}
             </dd>
         </div>
@@ -318,22 +188,22 @@ Country: unknown
         <div class="health-row">
             <dt title="Relay stability: overload status and uptime."><a href="#uptime" class="anchor-link">Stability</a></dt>
             <dd>
-                <a href="#overload" title="{{ relay['stability_tooltip']|escape }}" style="text-decoration: none;">
+                <a href="#overload" title="{{ relay['stability_tooltip']|escape }}" class="al-link-plain">
                     <span style="color: {{ relay['stability_color'] }};">{{ relay['stability_text'] }}</span>
                 </a>
-                <span style="color: #6c757d;"> | </span>
+                <span class="al-status-muted"> | </span>
                 {% if relay.get('uptime_display') -%}
                     {% if relay['uptime_display'].startswith('DOWN') -%}
-                        <span style="color: #dc3545;" title="Relay is currently offline.">{{ relay['uptime_display']|escape }}</span>
+                        <span class="al-status-danger" title="Relay is currently offline.">{{ relay['uptime_display']|escape }}</span>
                     {% else -%}
-                        <span style="color: #28a745;" title="Time since last restart. Source: relay descriptor.">{{ relay['uptime_display']|escape }}</span>
+                        <span class="al-status-success" title="Time since last restart. Source: relay descriptor.">{{ relay['uptime_display']|escape }}</span>
                     {% endif -%}
                 {% else -%}
-                    <span style="color: #6c757d;">Unknown</span>
+                    <span class="al-status-muted">Unknown</span>
                 {% endif -%}
                 {% set uptime_1m = relay.get('uptime_percentages', {}).get('1_month', 0) -%}
                 {% if uptime_1m > 0 -%}
-                    | <span style="color: {% if uptime_1m >= 100 %}#28a745{% elif uptime_1m >= 90 %}#856404{% else %}#dc3545{% endif %};" title="Percentage of time relay had Running flag in last month. 100%=always up, <90%=reliability concerns.">UP {{ uptime_1m|int }}%</span> <span title="1 Month availability percentage.">(1M)</span>
+                    | <span class="{% if uptime_1m >= 100 %}al-status-success{% elif uptime_1m >= 90 %}al-status-warning{% else %}al-status-danger{% endif %}" title="Percentage of time relay had Running flag in last month. 100%=always up, <90%=reliability concerns.">UP {{ uptime_1m|int }}%</span> <span title="1 Month availability percentage.">(1M)</span>
                 {% endif -%}
             </dd>
         </div>
@@ -346,13 +216,13 @@ Country: unknown
             <dt title="Directory Auths connectivity to relay's OR port."><a href="#connectivity" class="anchor-link">Reachability</a></dt>
             <dd>
                 {% if diag and diag.reachability_summary -%}
-                    <span title="Number of Directory Authorities that successfully connected to relay's IPv4 OR port.">IPv4: <span style="color: {% if diag.reachability_summary.ipv4.status_class == 'success' %}#28a745{% else %}#dc3545{% endif %};">{{ diag.reachability_summary.ipv4.reachable_count }}/{{ diag.reachability_summary.ipv4.total }}</span></span>
+                    <span title="Number of Directory Authorities that successfully connected to relay's IPv4 OR port.">IPv4: <span class="{% if diag.reachability_summary.ipv4.status_class == 'success' %}al-status-success{% else %}al-status-danger{% endif %}">{{ diag.reachability_summary.ipv4.reachable_count }}/{{ diag.reachability_summary.ipv4.total }}</span></span>
                     {% if diag.reachability_summary.ipv6.total > 0 -%}
-                        | <span title="Number of Directory Authorities that successfully connected to relay's IPv6 OR port.">v6: <span style="color: {% if diag.reachability_summary.ipv6.status_class == 'success' %}#28a745{% elif diag.reachability_summary.ipv6.status_class == 'muted' %}#6c757d{% else %}#dc3545{% endif %};">{{ diag.reachability_summary.ipv6.reachable_count }}/{{ diag.reachability_summary.ipv6.total }}</span></span>
+                        | <span title="Number of Directory Authorities that successfully connected to relay's IPv6 OR port.">v6: <span class="{% if diag.reachability_summary.ipv6.status_class == 'success' %}al-status-success{% elif diag.reachability_summary.ipv6.status_class == 'muted' %}al-status-muted{% else %}al-status-danger{% endif %}">{{ diag.reachability_summary.ipv6.reachable_count }}/{{ diag.reachability_summary.ipv6.total }}</span></span>
                     {% endif -%}
                     <span title="Reachability tested by Directory Authorities.">(Directory Auths)</span>
                 {% else -%}
-                    <span style="color: #6c757d;">N/A</span>
+                    <span class="al-status-muted">N/A</span>
                 {% endif -%}
             </dd>
         </div>
@@ -364,7 +234,7 @@ Country: unknown
                 {% if relay['first_seen'] -%}
                     <a href="{{ page_ctx.path_prefix }}first_seen/{{ relay['first_seen'].split(' ', 1)[0]|escape }}/" title="Date relay first appeared in consensus. Newer relays have restrictions (Guard flag requires ~8 days).">{{ relay['first_seen_ago'] }}</a>
                 {% else -%}
-                    <span style="color: #6c757d;">Unknown</span>
+                    <span class="al-status-muted">Unknown</span>
                 {% endif -%}
             </dd>
         </div>
@@ -392,15 +262,15 @@ Country: unknown
                 {% if relay['version'] -%}
                     {% if relay['recommended_version'] is not none -%}
                         {% if relay['recommended_version'] -%}
-                            <span style="color: #28a745;" title="This Tor version is on the recommended list. Safe to use.">{{ relay['version']|escape }} Recommended</span>
+                            <span class="al-status-success" title="This Tor version is on the recommended list. Safe to use.">{{ relay['version']|escape }} Recommended</span>
                         {% else -%}
-                            <span style="color: #dc3545;" title="This Tor version is outdated. May have security issues or be rejected by the network.">{{ relay['version']|escape }} Not Recommended</span>
+                            <span class="al-status-danger" title="This Tor version is outdated. May have security issues or be rejected by the network.">{{ relay['version']|escape }} Not Recommended</span>
                         {% endif -%}
                     {% else -%}
                         <span title="Version recommendation status unknown.">{{ relay['version']|escape }}</span>
                     {% endif -%}
                 {% else -%}
-                    <span style="color: #6c757d;">Unknown</span>
+                    <span class="al-status-muted">Unknown</span>
                 {% endif -%}
             </dd>
         </div>
@@ -416,11 +286,11 @@ Country: unknown
 
 {% if real_issues %}
 <div style="margin-top: 12px; padding: 10px; background: #fff3cd; border-radius: 4px; border-left: 3px solid #ffc107;">
-    <strong style="color: #856404;">Issues Detected:</strong>
+    <strong class="al-status-warning">Issues Detected:</strong>
     <ul style="margin: 5px 0 0 0; padding-left: 20px;">
     {% for issue in real_issues %}
         <li style="margin-bottom: 5px;">
-            <span style="color: {% if issue.severity == 'error' %}#dc3545{% else %}#856404{% endif %}; font-weight: bold;">
+            <span class="{% if issue.severity == 'error' %}al-status-danger-bold{% else %}al-status-warning-bold{% endif %}">
                 {{ issue.title }}
             </span>: {{ issue.description|safe }}
             {% if issue.suggestion %}
@@ -434,7 +304,7 @@ Country: unknown
 
 {% if info_notes %}
 <div style="margin-top: 10px; padding: 10px; background: #d1ecf1; border-radius: 4px; border-left: 3px solid #17a2b8;">
-    <strong style="color: #0c5460;">Notes:</strong>
+    <strong class="al-status-info">Notes:</strong>
     <ul style="margin: 5px 0 0 0; padding-left: 20px;">
     {% for note in info_notes %}
         <li style="font-size: 12px;">{{ note.title }}: {{ note.description }}</li>
@@ -446,7 +316,7 @@ Country: unknown
 {# No issues found - show green box if we have diagnostics data #}
 {% if relay.diagnostics or diag %}
 <div style="margin-top: 12px; padding: 10px; background: #d4edda; border-radius: 4px; border-left: 3px solid #28a745;">
-    <span style="color: #155724;"><strong>No issues detected.</strong> Relay appears to be operating normally.</span>
+    <span class="al-status-success"><strong>No issues detected.</strong> Relay appears to be operating normally.</span>
 </div>
 {% endif %}
 {% endif %}
@@ -498,11 +368,11 @@ Country: unknown
     {% endif %}
     
     {% if relay.get('unreachable_or_addresses') %}
-    <dt style="color: #dc3545;" title="OR addresses declared in relay descriptor but found unreachable by the directory authorities. May indicate firewall issues, misconfigured bindings, or stale descriptor data.">Unreachable Addresses</dt>
+    <dt class="al-status-danger" title="OR addresses declared in relay descriptor but found unreachable by the directory authorities. May indicate firewall issues, misconfigured bindings, or stale descriptor data.">Unreachable Addresses</dt>
     <dd>
         <span style="color: #dc3545; font-size: 12px;">[Warning] Declared but unreachable:</span><br>
         {% for addr in relay['unreachable_or_addresses'] -%}
-            <span style="color: #dc3545;">{{ addr|escape }}</span>{% if not loop.last %}<br>{% endif %}
+            <span class="al-status-danger">{{ addr|escape }}</span>{% if not loop.last %}<br>{% endif %}
         {% endfor %}
     </dd>
     {% endif %}
@@ -516,18 +386,18 @@ Country: unknown
     {%- set reach = diag.reachability_summary -%}
     <dt>IPv4</dt>
     <dd>
-        <span class="status-{{ reach.ipv4.status_class }}">{{ reach.ipv4.reachable_count }}/{{ reach.ipv4.total }}</span>
+        <span class="al-status-{{ reach.ipv4.status_class }}">{{ reach.ipv4.reachable_count }}/{{ reach.ipv4.total }}</span>
     </dd>
     {# IPv6: Use ipv6.total > 0 check (same as Health Status line 212) - no new loop needed #}
     {% if reach.ipv6.total > 0 %}
     <dt>IPv6</dt>
     <dd>
-        <span class="status-{{ reach.ipv6.status_class }}">{{ reach.ipv6.reachable_count }}/{{ reach.ipv6.total }}</span>{% if reach.ipv6.not_tested %} <span class="status-note">({{ reach.ipv6.not_tested|length }} don't test)</span>{% endif %}
+        <span class="al-status-{{ reach.ipv6.status_class }}">{{ reach.ipv6.reachable_count }}/{{ reach.ipv6.total }}</span>{% if reach.ipv6.not_tested %} <span class="al-status-note">({{ reach.ipv6.not_tested|length }} don't test)</span>{% endif %}
     </dd>
     {% endif %}
     {% else %}
     <dt>Status</dt>
-    <dd><span class="status-note">Reachability data unavailable</span></dd>
+    <dd><span class="al-status-note">Reachability data unavailable</span></dd>
     {% endif %}
 </dl>
 </div>
@@ -697,7 +567,7 @@ Country: unknown
                 {% if relay['advertised_bandwidth'] %}
                     <span title="Advertised: {{ bw(relay['advertised_bandwidth']) }}">{{ bw(relay['advertised_bandwidth']) }}</span>
                 {% else %}
-                    <span style="color: #6c757d;">Unknown</span>
+                    <span class="al-status-muted">Unknown</span>
                 {% endif %}
             </dd>
             
@@ -706,7 +576,7 @@ Country: unknown
                 {% if relay['bandwidth_rate'] %}
                     <span title="Rate: {{ bw(relay['bandwidth_rate']) }}">{{ bw(relay['bandwidth_rate']) }}</span>
                 {% else %}
-                    <span style="color: #6c757d;">Not set</span>
+                    <span class="al-status-muted">Not set</span>
                 {% endif %}
             </dd>
             
@@ -715,7 +585,7 @@ Country: unknown
                 {% if relay['bandwidth_burst'] %}
                     <span title="Burst: {{ bw(relay['bandwidth_burst']) }}">{{ bw(relay['bandwidth_burst']) }}</span>
                 {% else %}
-                    <span style="color: #6c757d;">Not set</span>
+                    <span class="al-status-muted">Not set</span>
                 {% endif %}
             </dd>
             
@@ -723,17 +593,17 @@ Country: unknown
             <dd>
                 {% if relay.get('total_data_display') and relay['total_data_display'] != 'N/A' %}
                     <span title="Total data transferred over {{ relay['total_data_period'] }}">{{ relay['total_data_display'] }}</span>
-                    <span class="text-small-muted">({{ relay['total_data_period'] }})</span>
+                    <span class="al-text-small-muted">({{ relay['total_data_period'] }})</span>
                     {% set periods = [] %}
                     {% if relay.get('total_data_1_month_display') and relay['total_data_1_month_display'] != 'N/A' %}{% set _ = periods.append('1mo: ' + relay['total_data_1_month_display']) %}{% endif %}
                     {% if relay.get('total_data_6_months_display') and relay['total_data_6_months_display'] != 'N/A' %}{% set _ = periods.append('6mo: ' + relay['total_data_6_months_display']) %}{% endif %}
                     {% if relay.get('total_data_1_year_display') and relay['total_data_1_year_display'] != 'N/A' %}{% set _ = periods.append('1y: ' + relay['total_data_1_year_display']) %}{% endif %}
                     {% if relay.get('total_data_5_years_display') and relay['total_data_5_years_display'] != 'N/A' %}{% set _ = periods.append('5y: ' + relay['total_data_5_years_display']) %}{% endif %}
                     {% if periods|length > 1 %}
-                    <br><span class="text-small-note">{{ periods|join(' | ') }}</span>
+                    <br><span class="al-text-small-note">{{ periods|join(' | ') }}</span>
                     {% endif %}
                 {% else %}
-                    <span style="color: #6c757d;">N/A</span>
+                    <span class="al-status-muted">N/A</span>
                 {% endif %}
             </dd>
         </dl>
@@ -757,12 +627,12 @@ Country: unknown
                     {% endif %}
                 {% elif relay['measured'] is not none %}
                     {% if relay['measured'] %}
-                        <span class="status-success-bold">Yes</span> (≥3 authorities)
+                        <span class="al-status-success-bold">Yes</span> (≥3 authorities)
                     {% else %}
-                        <span class="status-warning">Not Yet Measured</span>
+                        <span class="al-status-warning">Not Yet Measured</span>
                     {% endif %}
                 {% else %}
-                    <span style="color: #6c757d;">Unknown</span>
+                    <span class="al-status-muted">Unknown</span>
                 {% endif %}
             </dd>
             
@@ -778,8 +648,8 @@ Country: unknown
             {% if diag.bandwidth_summary.deviation_class == 'warning' %}
             <dt title="Large variation in measurements across authorities">Deviation</dt>
             <dd>
-                <span style="color: #856404;">{{ diag.bandwidth_summary.deviation_display }}</span>
-                <small style="color: #856404;">[Warning] High variation</small>
+                <span class="al-status-warning">{{ diag.bandwidth_summary.deviation_display }}</span>
+                <small class="al-status-warning">[Warning] High variation</small>
             </dd>
             {% endif %}
             {% endif %}
@@ -796,7 +666,7 @@ Country: unknown
             {{ relay['consensus_weight_percentage_precise'] }} of network
             {{ pctile(relay.get('cw_percentile'), 'consensus weight') }}
         {% else %}
-            <span style="color: #6c757d;">N/A</span>
+            <span class="al-status-muted">N/A</span>
         {% endif %}
     </span>
     |
@@ -829,20 +699,20 @@ Country: unknown
     <div class="col-md-6">
         <h5 class="subsection-header">Uptime Metrics</h5>
         <dl>
-            <dt id="uptime-downtime" title="Current uptime or downtime duration based on relay's running status and last_restarted timestamp."><a href="#uptime-downtime" class="anchor-link" style="text-decoration: none; color: inherit;">Current Status</a></dt>
+            <dt id="uptime-downtime" title="Current uptime or downtime duration based on relay's running status and last_restarted timestamp."><a href="#uptime-downtime" class="anchor-link al-link-plain" style="color: inherit;">Current Status</a></dt>
             <dd>
                 {% if relay.get('uptime_display') -%}
                     {% if relay['uptime_display'].startswith('DOWN') -%}
-                        <span class="status-danger-bold">{{ relay['uptime_display']|escape }}</span>
+                        <span class="al-status-danger-bold">{{ relay['uptime_display']|escape }}</span>
                     {% else -%}
-                        <span class="status-success">{{ relay['uptime_display']|escape }}</span>
+                        <span class="al-status-success">{{ relay['uptime_display']|escape }}</span>
                     {% endif -%}
                 {% else -%}
-                    <span class="status-note">Unknown</span>
+                    <span class="al-status-note">Unknown</span>
                 {% endif -%}
             </dd>
 
-            <dt id="uptime-history" title="{% if contact_display_data and contact_display_data.outliers and contact_display_data.outliers.tooltip %}{{ contact_display_data.outliers.tooltip }}{% else %}Percentage of time relay had Running flag over 1 Month / 6 Months / 1 Year / 5 Years. Source: Onionoo uptime API.{% endif %}"><a href="#uptime-history" class="anchor-link" style="text-decoration: none; color: inherit;">Overall Uptime (1M/6M/1Y/5Y)</a></dt>
+            <dt id="uptime-history" title="{% if contact_display_data and contact_display_data.outliers and contact_display_data.outliers.tooltip %}{{ contact_display_data.outliers.tooltip }}{% else %}Percentage of time relay had Running flag over 1 Month / 6 Months / 1 Year / 5 Years. Source: Onionoo uptime API.{% endif %}"><a href="#uptime-history" class="anchor-link al-link-plain" style="color: inherit;">Overall Uptime (1M/6M/1Y/5Y)</a></dt>
             <dd>
                 {% if relay.get('uptime_api_display') -%}
                     {{ relay['uptime_api_display']|safe }}
@@ -851,7 +721,7 @@ Country: unknown
                 {% endif -%}
             </dd>
 
-            <dt id="flag-uptime" title="{{ relay.get('flag_uptime_tooltip', 'Flag-specific uptime percentages showing reliability in primary network role.')|escape }}"><a href="#flag-uptime" class="anchor-link" style="text-decoration: none; color: inherit;">Flag Uptime (1M/6M/1Y/5Y)</a></dt>
+            <dt id="flag-uptime" title="{{ relay.get('flag_uptime_tooltip', 'Flag-specific uptime percentages showing reliability in primary network role.')|escape }}"><a href="#flag-uptime" class="anchor-link al-link-plain" style="color: inherit;">Flag Uptime (1M/6M/1Y/5Y)</a></dt>
             <dd>
                 {% if relay.get('flag_uptime_display') and relay['flag_uptime_display'] != 'N/A' -%}
                     {% if relay['flag_uptime_display'] == 'Match' -%}
@@ -868,13 +738,13 @@ Country: unknown
             <dd>
                 {% if relay['hibernating'] is not none -%}
                     {% if relay['hibernating'] -%}
-                        <span style="color: #856404; font-weight: bold;">Yes</span>
-                        <span style="font-size: 11px; color: #666;">(relay reached accounting limit)</span>
+                        <span class="al-status-warning-bold">Yes</span>
+                        <span class="al-text-small-muted">(relay reached accounting limit)</span>
                     {% else -%}
                         No
                     {% endif -%}
                 {% else -%}
-                    <span style="color: #6c757d;">Unknown</span>
+                    <span class="al-status-muted">Unknown</span>
                 {% endif -%}
             </dd>
         </dl>
@@ -888,9 +758,9 @@ Country: unknown
             <dd>
                 {% if relay['first_seen'] -%}
                     <a href="{{ page_ctx.path_prefix }}first_seen/{{ relay['first_seen'].split(' ', 1)[0]|escape }}/">{{ relay['first_seen_ago'] }}</a>
-                    <span class="text-small-muted">({{ relay['first_seen']|escape }})</span>
+                    <span class="al-text-small-muted">({{ relay['first_seen']|escape }})</span>
                 {% else -%}
-                    <span class="status-note">Unknown</span>
+                    <span class="al-status-note">Unknown</span>
                 {% endif -%}
             </dd>
 
@@ -898,9 +768,9 @@ Country: unknown
             <dd>
                 {% if relay['last_seen'] -%}
                     {{ relay['last_seen_ago'] }}
-                    <span class="text-small-muted">({{ relay['last_seen']|escape }})</span>
+                    <span class="al-text-small-muted">({{ relay['last_seen']|escape }})</span>
                 {% else -%}
-                    <span class="status-note">Unknown</span>
+                    <span class="al-status-note">Unknown</span>
                 {% endif -%}
             </dd>
 
@@ -908,9 +778,9 @@ Country: unknown
             <dd>
                 {% if relay['last_restarted'] -%}
                     {{ relay['last_restarted_ago'] }}
-                    <span class="text-small-muted">({{ relay['last_restarted']|escape }})</span>
+                    <span class="al-text-small-muted">({{ relay['last_restarted']|escape }})</span>
                 {% else -%}
-                    <span class="status-note">Unknown</span>
+                    <span class="al-status-note">Unknown</span>
                 {% endif -%}
             </dd>
 
@@ -919,7 +789,7 @@ Country: unknown
                 {% if relay['last_changed_address_or_port'] -%}
                     {{ relay['last_changed_address_or_port']|escape }}
                 {% else -%}
-                    <span class="status-note">Unknown</span>
+                    <span class="al-status-note">Unknown</span>
                 {% endif -%}
             </dd>
         </dl>
@@ -940,8 +810,8 @@ Country: unknown
 {% if not is_overloaded %}
 {# Not overloaded: compact single line #}
 <div style="margin-top: 12px; padding: 10px; background: #d4edda; border-radius: 4px; border-left: 3px solid #28a745;">
-    <strong style="color: #155724;">Overload Status:</strong>
-    <span style="color: #155724;">Not Overloaded — No overload conditions reported.</span>
+    <strong class="al-status-success">Overload Status:</strong>
+    <span class="al-status-success">Not Overloaded — No overload conditions reported.</span>
     {% if 'Last general overload' in stability_tooltip %}
     <span style="color: #155724; font-size: 12px;"> ({{ stability_tooltip }})</span>
     {% endif %}
@@ -958,14 +828,14 @@ Country: unknown
     <div class="row">
         {# Left: General Overload + File Descriptors #}
         <div class="col-md-6">
-            <h5 style="margin-top: 0; font-size: 13px; font-weight: bold;">General Overload <small style="color: #6c757d;">(from /details)</small></h5>
+            <h5 style="margin-top: 0; font-size: 13px; font-weight: bold;">General Overload <small class="al-status-muted">(from /details)</small></h5>
             <dl>
                 <dt>Status</dt>
                 <dd>
                     {% if general_ts %}
-                        <span class="status-danger-bold">Reported</span>
+                        <span class="al-status-danger-bold">Reported</span>
                     {% else %}
-                        <span style="color: #28a745;">Not Reported</span>
+                        <span class="al-status-success">Not Reported</span>
                     {% endif %}
                 </dd>
                 {% if general_ts %}
@@ -978,17 +848,17 @@ Country: unknown
                 Flag remains 72h after last event (Tor spec 328).
             </p>
             
-            <h5 style="font-size: 13px; font-weight: bold;">File Descriptor Exhaustion <small style="color: #6c757d;">(from /bandwidth)</small></h5>
+            <h5 style="font-size: 13px; font-weight: bold;">File Descriptor Exhaustion <small class="al-status-muted">(from /bandwidth)</small></h5>
             <dl>
                 <dt>Status</dt>
                 <dd>
                     {% if fd_exhausted %}
-                        <span class="status-danger-bold">Reported</span>
+                        <span class="al-status-danger-bold">Reported</span>
                         {% if fd_exhausted.get('timestamp') %}
                          — {{ fd_exhausted['timestamp']|format_timestamp }} UTC ({{ fd_exhausted['timestamp']|format_timestamp_ago }})
                         {% endif %}
                     {% else %}
-                        <span style="color: #28a745;">Not Reported</span>
+                        <span class="al-status-success">Not Reported</span>
                     {% endif %}
                 </dd>
             </dl>
@@ -996,7 +866,7 @@ Country: unknown
         
         {# Right: Rate Limits + Recommendations #}
         <div class="col-md-6">
-            <h5 style="margin-top: 0; font-size: 13px; font-weight: bold;">Rate Limits <small style="color: #6c757d;">(from /bandwidth)</small></h5>
+            <h5 style="margin-top: 0; font-size: 13px; font-weight: bold;">Rate Limits <small class="al-status-muted">(from /bandwidth)</small></h5>
             {% if ratelimits %}
             <dl>
                 <dt>Rate Limit</dt>
@@ -1012,17 +882,17 @@ Country: unknown
                 <dt>Write Limit Hit</dt>
                 <dd>
                     {% if ratelimits.get('write-count', 0) > 0 %}
-                        <span class="status-danger-bold">{{ "{:,}".format(ratelimits.get('write-count', 0)) }} times</span>
+                        <span class="al-status-danger-bold">{{ "{:,}".format(ratelimits.get('write-count', 0)) }} times</span>
                     {% else %}
-                        <span class="status-success">0 times</span>
+                        <span class="al-status-success">0 times</span>
                     {% endif %}
                 </dd>
                 <dt>Read Limit Hit</dt>
                 <dd>
                     {% if ratelimits.get('read-count', 0) > 0 %}
-                        <span class="status-danger-bold">{{ "{:,}".format(ratelimits.get('read-count', 0)) }} times</span>
+                        <span class="al-status-danger-bold">{{ "{:,}".format(ratelimits.get('read-count', 0)) }} times</span>
                     {% else %}
-                        <span class="status-success">0 times</span>
+                        <span class="al-status-success">0 times</span>
                     {% endif %}
                 </dd>
                 {% if ratelimits.get('timestamp') %}
@@ -1031,7 +901,7 @@ Country: unknown
                 {% endif %}
             </dl>
             {% else %}
-            <p style="color: #6c757d;">No rate limit data from /bandwidth endpoint.</p>
+            <p class="al-status-muted">No rate limit data from /bandwidth endpoint.</p>
             {% endif %}
             
             <h5 style="font-size: 13px; font-weight: bold;">Recommendations</h5>
@@ -1089,13 +959,13 @@ Country: unknown
         {% set cvs_status = contact_validation_status.validation_status -%}
         {% set operator_validated_url = operator_url ~ '#validated-relays' -%}
         {% if cvs_status == 'validated' -%}
-            <span style="color: #28a745;" title="All {{ vs.validated_count }} relays have valid AROI proof">
+            <span class="al-status-success" title="All {{ vs.validated_count }} relays have valid AROI proof">
                 Validated (<a href="{{ operator_validated_url }}" title="View validated relays on operator page">{{ vs.validated_count }}/{{ vs.total_relays }} relays</a>)</span>
         {% elif cvs_status == 'partially_validated' -%}
             <span style="color: #ffc107;" title="{{ vs.validated_count }} of {{ vs.total_relays }} relays have valid proof">
                 Partially Validated (<a href="{{ operator_validated_url }}" title="View validated relays on operator page">{{ vs.validated_count }}/{{ vs.total_relays }} relays</a>)</span>
         {% else -%}
-            <span style="color: #dc3545;" title="No relays have AROI validation proof">Unvalidated</span>
+            <span class="al-status-danger" title="No relays have AROI validation proof">Unvalidated</span>
         {% endif -%}
     </dd>
     
@@ -1103,18 +973,18 @@ Country: unknown
     <dd>
         {% set this_fp = relay['fingerprint'] -%}
         {% if this_fp in contact_validation_status.validated_fingerprints -%}
-            <span style="color: #28a745;">Validated</span>
+            <span class="al-status-success">Validated</span>
             {% for vr in contact_validation_status.validated_relays if vr.fingerprint == this_fp -%}
                 {% if vr.proof_type == 'dns-rsa' -%}
-                    <span style="font-size: 12px; color: #333;" title="Proof: DNS TXT record with RSA signature. The operator's domain has a TXT record containing this relay's fingerprint, signed with an RSA key. Verified by the AROI validator.">(dns-rsa)</span>
+                    <span class="al-text-small-note" title="Proof: DNS TXT record with RSA signature. The operator's domain has a TXT record containing this relay's fingerprint, signed with an RSA key. Verified by the AROI validator.">(dns-rsa)</span>
                 {% elif vr.proof_type == 'uri-rsa' -%}
-                    <span style="font-size: 12px; color: #333;" title="Proof: URI with RSA signature. A well-known URI on the operator's domain serves a document containing this relay's fingerprint, signed with an RSA key. Verified by the AROI validator.">(uri-rsa)</span>
+                    <span class="al-text-small-note" title="Proof: URI with RSA signature. A well-known URI on the operator's domain serves a document containing this relay's fingerprint, signed with an RSA key. Verified by the AROI validator.">(uri-rsa)</span>
                 {% elif vr.proof_type -%}
-                    <span style="font-size: 12px; color: #333;" title="Proof type: {{ vr.proof_type|escape }}">({{ vr.proof_type|escape }})</span>
+                    <span class="al-text-small-note" title="Proof type: {{ vr.proof_type|escape }}">({{ vr.proof_type|escape }})</span>
                 {% endif -%}
             {% endfor -%}
         {% elif relay['aroi_domain'] and relay['aroi_domain'] != 'none' -%}
-            <span style="color: #dc3545;">Unvalidated</span>
+            <span class="al-status-danger">Unvalidated</span>
             {# Check unauthorized_relays: fingerprint not found in proof #}
             {% for ur in contact_validation_status.unauthorized_relays|default([]) if ur.fingerprint == this_fp -%}
                 <br><span style="font-size: 12px; color: #856404;">Error: {{ ur.error|escape }}</span>
@@ -1124,7 +994,7 @@ Country: unknown
                 <br><span style="font-size: 12px; color: #856404;">Error: {{ mr.error|escape }}</span>
             {% endfor -%}
         {% else -%}
-            <span style="color: #6c757d;">N/A (no AROI configured)</span>
+            <span class="al-status-muted">N/A (no AROI configured)</span>
         {% endif -%}
     </dd>
     {% endif -%}
@@ -1158,13 +1028,13 @@ Country: unknown
     </dt>
     <dd>
         {% if relay.get('family_support_type') == 'both' -%}
-            <span style="color: #28a745;">Both</span> — Happy Families ({{ hf_eff|length }}{% if total_family > 0 %} / {{ (hf_eff|length / total_family * 100)|round(0)|int }}%{% endif %}) and MyFamily ({{ mf_eff|length }}{% if total_family > 0 %} / {{ (mf_eff|length / total_family * 100)|round(0)|int }}%{% endif %})
+            <span class="al-status-success">Both</span> — Happy Families ({{ hf_eff|length }}{% if total_family > 0 %} / {{ (hf_eff|length / total_family * 100)|round(0)|int }}%{% endif %}) and MyFamily ({{ mf_eff|length }}{% if total_family > 0 %} / {{ (mf_eff|length / total_family * 100)|round(0)|int }}%{% endif %})
         {% elif relay.get('family_support_type') == 'happy_families' -%}
-            <span style="color: #28a745;">Happy Families</span> ({{ hf_eff|length }}) — Has family-cert in server descriptor (<a href="https://community.torproject.org/relay/setup/post-install/family-ids/" target="_blank" rel="noopener">guide</a>)
+            <span class="al-status-success">Happy Families</span> ({{ hf_eff|length }}) — Has family-cert in server descriptor (<a href="https://community.torproject.org/relay/setup/post-install/family-ids/" target="_blank" rel="noopener">guide</a>)
         {% elif relay.get('family_support_type') == 'my_family' -%}
-            <span style="color: #dc3545;">MyFamily Only</span> ({{ mf_eff|length }}) — Legacy only. <span class="text-small-note">Consider migrating to <a href="https://community.torproject.org/relay/setup/post-install/family-ids/" target="_blank" rel="noopener">Happy Families</a>.</span>
+            <span class="al-status-danger">MyFamily Only</span> ({{ mf_eff|length }}) — Legacy only. <span class="al-text-small-note">Consider migrating to <a href="https://community.torproject.org/relay/setup/post-install/family-ids/" target="_blank" rel="noopener">Happy Families</a>.</span>
         {% else -%}
-            <span style="color: #6c757d;">None</span> — No family membership configured
+            <span class="al-status-muted">None</span> — No family membership configured
         {% endif -%}
         {% if relay['effective_family']|length > 1 %} | <a href="{{ page_ctx.path_prefix }}family/{{ relay['fingerprint']|escape }}/">View Full Family ({{ relay['effective_family']|length }})</a>{% endif %}
     </dd>
@@ -1202,7 +1072,7 @@ Country: unknown
         <span style="color: #856404; font-size: 11px;">(they don't list you back)</span>
         {{ family_member_list(mf_alleged, relay['fingerprint']) }}
         {%- else -%}
-        <span style="color: #6c757d;">none</span>
+        <span class="al-status-muted">none</span>
         {%- endif %}
     </dd>
 
@@ -1214,7 +1084,7 @@ Country: unknown
         <span style="color: #856404; font-size: 11px;">(they list you, you don't list them)</span>
         {{ family_member_list(mf_indirect, relay['fingerprint']) }}
         {%- else -%}
-        <span style="color: #6c757d;">none</span>
+        <span class="al-status-muted">none</span>
         {%- endif %}
     </dd>
 </dl>
@@ -1243,7 +1113,7 @@ Country: unknown
     <dd>
         <a href="{{ page_ctx.path_prefix }}platform/{{ relay['platform']|escape }}/" title="View all relays on this platform">{{ relay['platform']|escape }}</a>
         {% if relay['platform_raw'] and relay['platform_raw'] != relay['platform'] -%}
-            <span style="font-size: 12px; color: #666;" title="Complete platform information as reported by relay"> — {{ relay['platform_raw']|escape }}</span>
+            <span class="al-text-small-note" title="Complete platform information as reported by relay"> — {{ relay['platform_raw']|escape }}</span>
         {% endif -%}
     </dd>
 
@@ -1253,13 +1123,13 @@ Country: unknown
             <span>{{ relay['version']|escape }}</span>
             {% if relay['recommended_version'] is not none -%}
                 {% if relay['recommended_version'] -%}
-                    — <span class="status-success-bold" title="This Tor version is on the recommended list.">Recommended</span>
+                    — <span class="al-status-success-bold" title="This Tor version is on the recommended list.">Recommended</span>
                 {% else -%}
-                    — <span class="status-danger-bold" title="This Tor version is NOT recommended. Update to the latest stable version.">Not Recommended</span>
+                    — <span class="al-status-danger-bold" title="This Tor version is NOT recommended. Update to the latest stable version.">Not Recommended</span>
                 {% endif -%}
             {% endif -%}
         {% else -%}
-            <span style="color: #6c757d;">Unknown</span>
+            <span class="al-status-muted">Unknown</span>
         {% endif -%}
     </dd>
 
@@ -1267,14 +1137,14 @@ Country: unknown
     <dt title="Version status as determined by directory authorities: recommended, experimental, obsolete, new in series, unrecommended">Version Status</dt>
     <dd>
         {% if relay['version_status'] == 'recommended' -%}
-            <span class="status-success">{{ relay['version_status']|capitalize|escape }}</span>
+            <span class="al-status-success">{{ relay['version_status']|capitalize|escape }}</span>
         {% elif relay['version_status'] == 'obsolete' -%}
-            <span class="status-danger-bold">{{ relay['version_status']|capitalize|escape }}</span>
-            <span style="font-size: 11px; color: #666;"> — Update urgently. See <a href="https://www.torproject.org/download/tor/" target="_blank" rel="noopener">torproject.org/download</a></span>
+            <span class="al-status-danger-bold">{{ relay['version_status']|capitalize|escape }}</span>
+            <span class="al-text-small-muted"> — Update urgently. See <a href="https://www.torproject.org/download/tor/" target="_blank" rel="noopener">torproject.org/download</a></span>
         {% elif relay['version_status'] == 'experimental' -%}
-            <span class="status-warning">{{ relay['version_status']|capitalize|escape }}</span>
+            <span class="al-status-warning">{{ relay['version_status']|capitalize|escape }}</span>
         {% else -%}
-            <span class="status-note">{{ relay['version_status']|capitalize|escape }}</span>
+            <span class="al-status-note">{{ relay['version_status']|capitalize|escape }}</span>
         {% endif -%}
     </dd>
     {% endif %}
@@ -1298,25 +1168,25 @@ Country: unknown
             <dt>Status</dt>
             <dd>
                 {% if relay.exit_dns_health_status == 'success' %}
-                    <span class="status-success-bold">Healthy</span>
+                    <span class="al-status-success-bold">Healthy</span>
                     {% if relay.exit_dns_health_timing_ms %}
-                        <span class="text-small-muted">(avg. {{ "%.1f"|format(relay.exit_dns_health_timing_ms / 1000) }}s{% if relay.exit_dns_health_timing_percentile is not none %}, {{ relay.exit_dns_health_timing_percentile|ordinal }} percentile{% endif %})</span>
+                        <span class="al-text-small-muted">(avg. {{ "%.1f"|format(relay.exit_dns_health_timing_ms / 1000) }}s{% if relay.exit_dns_health_timing_percentile is not none %}, {{ relay.exit_dns_health_timing_percentile|ordinal }} percentile{% endif %})</span>
                     {% endif %}
                 {% elif relay.exit_dns_health_status == 'fail' %}
-                    <span class="status-danger-bold">
+                    <span class="al-status-danger-bold">
                         {% if relay.exit_dns_health_detail == 'dns_fail' %}DNS Lookup Failed{% elif relay.exit_dns_health_detail == 'timeout' %}DNS Query Timeout{% elif relay.exit_dns_health_detail == 'relay_unreachable' %}Relay Unreachable{% elif relay.exit_dns_health_detail == 'dns_wrong_ip' %}DNS Returned Wrong IP{% else %}{{ relay.exit_dns_health_detail|escape }}{% endif %}
                     </span>
                     {% if relay.exit_dns_health_consecutive_failures > 0 %}
-                        <span class="text-small-muted">(failed last {{ relay.exit_dns_health_consecutive_failures }} scan{{ 's' if relay.exit_dns_health_consecutive_failures != 1 }})</span>
+                        <span class="al-text-small-muted">(failed last {{ relay.exit_dns_health_consecutive_failures }} scan{{ 's' if relay.exit_dns_health_consecutive_failures != 1 }})</span>
                     {% endif %}
                 {% else %}
-                    <span class="status-warning">Not Tested</span>
+                    <span class="al-status-warning">Not Tested</span>
                 {% endif %}
             </dd>
 
             {% if relay.exit_dns_health_error %}
             <dt>Error</dt>
-            <dd><code class="status-danger">{{ relay.exit_dns_health_error|escape }}</code></dd>
+            <dd><code class="al-status-danger">{{ relay.exit_dns_health_error|escape }}</code></dd>
             {% endif %}
 
             {% if relay.exit_dns_health_query_domain %}
@@ -1329,14 +1199,14 @@ Country: unknown
             <dd>
                 {% if relay.exit_dns_health_resolved_ip %}
                     {% if relay.exit_dns_health_expected_ip and relay.exit_dns_health_resolved_ip == relay.exit_dns_health_expected_ip %}
-                        <span class="status-success">Resolved to <code>{{ relay.exit_dns_health_resolved_ip|escape }}</code></span>
+                        <span class="al-status-success">Resolved to <code>{{ relay.exit_dns_health_resolved_ip|escape }}</code></span>
                     {% elif relay.exit_dns_health_expected_ip %}
-                        <span class="status-danger">Resolved to <code>{{ relay.exit_dns_health_resolved_ip|escape }}</code> (expected <code>{{ relay.exit_dns_health_expected_ip|escape }}</code>)</span>
+                        <span class="al-status-danger">Resolved to <code>{{ relay.exit_dns_health_resolved_ip|escape }}</code> (expected <code>{{ relay.exit_dns_health_expected_ip|escape }}</code>)</span>
                     {% else %}
                         Resolved to <code>{{ relay.exit_dns_health_resolved_ip|escape }}</code>
                     {% endif %}
                 {% else %}
-                    <span class="status-danger">No Response</span>{% if relay.exit_dns_health_expected_ip %} <span class="text-small-muted">(expected <code>{{ relay.exit_dns_health_expected_ip|escape }}</code>)</span>{% endif %}
+                    <span class="al-status-danger">No Response</span>{% if relay.exit_dns_health_expected_ip %} <span class="al-text-small-muted">(expected <code>{{ relay.exit_dns_health_expected_ip|escape }}</code>)</span>{% endif %}
                 {% endif %}
             </dd>
             {% endif %}
@@ -1345,11 +1215,11 @@ Country: unknown
             <dt title="Each relay is tested through multiple independent Tor circuits built via different guard relays. A relay is only marked as failing if all instances agree. If any instance succeeds, the relay is marked healthy (cross-validation recovery).">Cross-Validation</dt>
             <dd>
                 {% if relay.exit_dns_health_status == 'success' %}
-                    <span class="status-success">{{ relay.exit_dns_health_cv_success }}/{{ relay.exit_dns_health_cv_total }}</span> instances succeeded
+                    <span class="al-status-success">{{ relay.exit_dns_health_cv_success }}/{{ relay.exit_dns_health_cv_total }}</span> instances succeeded
                 {% else %}
-                    <span class="status-danger">{{ relay.exit_dns_health_cv_success }}/{{ relay.exit_dns_health_cv_total }}</span> instances succeeded
+                    <span class="al-status-danger">{{ relay.exit_dns_health_cv_success }}/{{ relay.exit_dns_health_cv_total }}</span> instances succeeded
                 {% endif %}
-                {% if relay.exit_dns_health_cv_improved %}<span class="status-success">(improved by cross-validation)</span>{% endif %}
+                {% if relay.exit_dns_health_cv_improved %}<span class="al-status-success">(improved by cross-validation)</span>{% endif %}
             </dd>
             {% endif %}
 
@@ -1377,9 +1247,9 @@ Country: unknown
                     <tr>
                         <td style="padding-right: 8px;" title="Cross-validation instance {{ cv_counter[0] }}, {{ inst_name }} — independent Tor circuit used to verify DNS resolution">Cross Validation Attempt {{ cv_counter[0] }}:</td>
                         <td style="padding-right: 8px;">
-                            {% if inst_data.status == 'success' %}<span class="status-success">Success</span>{% elif inst_data.status == 'dns_fail' %}<span class="status-danger">DNS Fail</span>{% elif inst_data.status == 'timeout' %}<span class="status-warning">Timeout</span>{% else %}<span style="color: #dc3545;">{{ inst_data.status|escape|title }}</span>{% endif %}{% if inst_data.timing %}, {{ "%.1f"|format(inst_data.timing.total_ms / 1000) }}s{% endif %}
+                            {% if inst_data.status == 'success' %}<span class="al-status-success">Success</span>{% elif inst_data.status == 'dns_fail' %}<span class="al-status-danger">DNS Fail</span>{% elif inst_data.status == 'timeout' %}<span class="al-status-warning">Timeout</span>{% else %}<span class="al-status-danger">{{ inst_data.status|escape|title }}</span>{% endif %}{% if inst_data.timing %}, {{ "%.1f"|format(inst_data.timing.total_ms / 1000) }}s{% endif %}
                         </td>
-                        <td class="text-small-muted">({{ inst_name|escape }})</td>
+                        <td class="al-text-small-muted">({{ inst_name|escape }})</td>
                     </tr>
                 {% endfor %}
                 </table>
@@ -1387,11 +1257,11 @@ Country: unknown
             {% endif %}
         </dl>
         {% if relay.exit_dns_health_timestamp %}
-        <div class="text-small-muted">Tested: {{ relay.exit_dns_health_timestamp|format_unix_timestamp }}</div>
+        <div class="al-text-small-muted">Tested: {{ relay.exit_dns_health_timestamp|format_unix_timestamp }}</div>
         {% endif %}
-        <div class="text-small-muted">Source: <a href="https://exitdnshealth.1aeo.com" target="_blank" rel="noopener">exitdnshealth.1aeo.com</a></div>
+        <div class="al-text-small-muted">Source: <a href="https://exitdnshealth.1aeo.com" target="_blank" rel="noopener">exitdnshealth.1aeo.com</a></div>
         {% else %}
-        <span style="color: #6c757d;">Not an exit relay — DNS health testing does not apply.</span>
+        <span class="al-status-muted">Not an exit relay — DNS health testing does not apply.</span>
         {% endif %}
     </div>
 
@@ -1403,7 +1273,7 @@ Country: unknown
 {{ k|escape }}: {{ '\n  ' + v|join('\n  ')|escape }}
 {% endfor -%}</pre>
         {% else -%}
-            <span style="color: #6c757d;">None</span>
+            <span class="al-status-muted">None</span>
         {% endif -%}
 
         <h5 id="ipv6-exit-policy-summary" class="subsection-header" style="margin-top: 12px;"><a href="#ipv6-exit-policy-summary" class="anchor-link">IPv6 Exit Policy Summary</a></h5>
@@ -1412,7 +1282,7 @@ Country: unknown
 {{ k|escape }}: {{ '\n  ' + v|join('\n  ')|escape }}
 {% endfor -%}</pre>
         {% else -%}
-            <span style="color: #6c757d;">None</span>
+            <span class="al-status-muted">None</span>
         {% endif -%}
 
         <h5 class="subsection-header" style="margin-top: 12px;">Full Exit Policy</h5>
@@ -1448,8 +1318,8 @@ Data from <a href="https://collector.torproject.org/recent/relay-descriptors/vot
 </h4>
 <p class="text-muted" style="font-size: 11px; margin-bottom: 8px;">
 Each cell shows: <strong>your measured value | authority threshold</strong>. 
-<span style="color: #28a745;">Green</span> = meets, <span style="color: #dc3545;">red</span> = below.
-Flags: <span style="color: #28a745; font-weight: bold;">green</span> = all authorities agree, <span style="color: #856404; font-weight: bold;">yellow</span> = partial.
+<span class="al-status-success">Green</span> = meets, <span class="al-status-danger">red</span> = below.
+Flags: <span class="al-status-success-bold">green</span> = all authorities agree, <span class="al-status-warning-bold">yellow</span> = partial.
 </p>
 <div style="overflow-x: auto; overflow-y: visible; padding-top: 60px; margin-top: -50px;">
 <table class="table table-condensed table-striped" style="font-size: 11px;">
@@ -1488,36 +1358,36 @@ Flags: <span style="color: #28a745; font-weight: bold;">green</span> = all autho
         <strong>{{ vote.authority_display|default(vote.authority) }}</strong>
         {% endif %}
     </td>
-    <td>{% if vote.voted %}<span style="color: #28a745;">Yes</span>{% else %}<span style="color: #dc3545;">No</span>{% endif %}</td>
-    <td>{% if vote.voted and vote.flags %}{% if 'Valid' in vote.flags %}<span style="color: #28a745;">Yes</span>{% else %}<span style="color: #dc3545;">No</span>{% endif %}{% else %}<span style="color: #6c757d;">—</span>{% endif %}</td>
-    <td>{% if vote.voted and vote.flags %}{% if 'Exit' in vote.flags %}<span style="color: #28a745;">Yes</span>{% else %}<span style="color: #6c757d;">No</span>{% endif %}{% else %}<span style="color: #6c757d;">—</span>{% endif %}</td>
-    <td>{% if vote.voted and vote.flags and 'MiddleOnly' in vote.flags %}<span style="color: #dc3545;">Yes</span>{% else %}<span style="color: #6c757d;">—</span>{% endif %}</td>
-    <td>{% if vote.is_bw_authority %}<span style="color: #28a745;">Y</span>{% else %}<span style="color: #6c757d;">N</span>{% endif %}</td>
-    <td>{% if vote.ipv4_reachable %}<span style="color: #28a745;">Yes</span>{% else %}<span style="color: #dc3545;">No</span>{% endif %}</td>
+    <td>{% if vote.voted %}<span class="al-status-success">Yes</span>{% else %}<span class="al-status-danger">No</span>{% endif %}</td>
+    <td>{% if vote.voted and vote.flags %}{% if 'Valid' in vote.flags %}<span class="al-status-success">Yes</span>{% else %}<span class="al-status-danger">No</span>{% endif %}{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
+    <td>{% if vote.voted and vote.flags %}{% if 'Exit' in vote.flags %}<span class="al-status-success">Yes</span>{% else %}<span class="al-status-muted">No</span>{% endif %}{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
+    <td>{% if vote.voted and vote.flags and 'MiddleOnly' in vote.flags %}<span class="al-status-danger">Yes</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
+    <td>{% if vote.is_bw_authority %}<span class="al-status-success">Y</span>{% else %}<span class="al-status-muted">N</span>{% endif %}</td>
+    <td>{% if vote.ipv4_reachable %}<span class="al-status-success">Yes</span>{% else %}<span class="al-status-danger">No</span>{% endif %}</td>
     {% if has_ipv6 %}
-    <td>{% if vote.ipv6_reachable == true %}<span style="color: #28a745;">Yes</span>{% elif vote.ipv6_reachable == false %}<span style="color: #dc3545;">No</span>{% else %}<span style="color: #6c757d;">—</span>{% endif %}</td>
+    <td>{% if vote.ipv6_reachable == true %}<span class="al-status-success">Yes</span>{% elif vote.ipv6_reachable == false %}<span class="al-status-danger">No</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
     {% endif %}
     <td style="max-width: 180px; word-wrap: break-word; font-size: 10px;">
         {% if vote.flags_with_consensus %}
             {% for flag_info in vote.flags_with_consensus %}
-                {%- if flag_info.unanimous %}<span style="color: #28a745; font-weight: bold;">{{ flag_info.name }}</span>
-                {%- elif flag_info.partial %}<span style="color: #856404; font-weight: bold;">{{ flag_info.name }}</span>
+                {%- if flag_info.unanimous %}<span class="al-status-success-bold">{{ flag_info.name }}</span>
+                {%- elif flag_info.partial %}<span class="al-status-warning-bold">{{ flag_info.name }}</span>
                 {%- else %}{{ flag_info.name }}{%- endif %}
                 {%- if not loop.last %}, {% endif %}
             {% endfor %}
         {% elif vote.flags %}{{ vote.flags_display }}
-        {% else %}<span style="color: #6c757d;">—</span>{% endif %}
+        {% else %}<span class="al-status-muted">—</span>{% endif %}
     </td>
-    <td>{% if vote.voted and vote.fast_threshold_display %}<span style="color: {% if vote.fast_meets %}#28a745{% else %}#dc3545{% endif %};" title="Relay: {{ vote.fast_speed_display }} | Threshold: {{ vote.fast_threshold_display }}">{{ vote.fast_speed_display }} | {{ vote.fast_threshold_display }}</span>{% else %}<span style="color: #6c757d;">—</span>{% endif %}</td>
-    <td>{% if vote.voted and vote.guard_bw_guarantee_display %}<span style="color: {% if vote.guard_bw_meets %}#28a745{% else %}#dc3545{% endif %};" title="Relay: {{ vote.guard_bw_value_display }} | Top 25%: {{ vote.guard_bw_top25_display }} | Tor spec min: {{ vote.guard_bw_guarantee_display }}">{{ vote.guard_bw_value_display }} | {{ vote.guard_bw_top25_display }} OR {{ vote.guard_bw_guarantee_display }}</span>{% else %}<span style="color: #6c757d;">—</span>{% endif %}</td>
-    <td>{% if vote.voted and vote.wfu is not none %}<span style="color: {% if vote.wfu_meets %}#28a745{% else %}#dc3545{% endif %};" title="WFU: {{ vote.wfu_display }} | Threshold: {{ vote.wfu_threshold_display }}">{{ vote.wfu_display }} | {{ vote.wfu_threshold_display }}</span>{% else %}<span style="color: #6c757d;">—</span>{% endif %}</td>
-    <td>{% if vote.voted and vote.tk is not none %}<span style="color: {% if vote.tk_meets %}#28a745{% else %}#dc3545{% endif %};" title="TK: {{ vote.tk_display }} | Threshold: {{ vote.tk_threshold_display }}">{{ vote.tk_display }} | {{ vote.tk_threshold_display }}</span>{% else %}<span style="color: #6c757d;">—</span>{% endif %}</td>
-    <td>{% if vote.voted and vote.stable_threshold %}<span style="color: {% if vote.stable_meets %}#28a745{% else %}#dc3545{% endif %};" title="MTBF: {{ vote.stable_mtbf_display }} | Threshold: {{ vote.stable_threshold_display }}">{{ vote.stable_mtbf_display }} | {{ vote.stable_threshold_display }}</span>{% elif vote.voted and vote.stable_mtbf %}{{ vote.stable_mtbf_display }} | <span style="color: #6c757d;">—</span>{% else %}<span style="color: #6c757d;">—</span>{% endif %}</td>
-    <td>{% if vote.voted and vote.stable_uptime_threshold %}{% if vote.stable_uptime_meets is not none %}<span style="color: {% if vote.stable_uptime_meets %}#28a745{% else %}#dc3545{% endif %};" title="Relay Uptime: {{ vote.stable_uptime_display }} | Threshold: {{ vote.stable_uptime_threshold_display }}">{{ vote.stable_uptime_display }} | {{ vote.stable_uptime_threshold_display }}</span>{% else %}<span style="color: #6c757d;">N/A | {{ vote.stable_uptime_threshold_display }}</span>{% endif %}{% elif vote.voted and vote.stable_uptime is not none %}{{ vote.stable_uptime_display }} | <span style="color: #6c757d;">—</span>{% else %}<span style="color: #6c757d;">—</span>{% endif %}</td>
-    <td>{% if vote.voted and vote.wfu is not none %}<span style="color: {% if vote.wfu >= 0.98 %}#28a745{% else %}#dc3545{% endif %};" title="WFU: {{ vote.wfu_display }} | Threshold: ≥98%">{{ vote.wfu_display }} | 98.0%</span>{% else %}<span style="color: #6c757d;">—</span>{% endif %}</td>
-    <td>{% if vote.voted and vote.hsdir_tk_threshold %}<span style="color: {% if vote.hsdir_tk_meets %}#28a745{% else %}#dc3545{% endif %};" title="TK: {{ vote.hsdir_tk_value_display }} | Threshold: {{ vote.hsdir_tk_threshold_display }}">{{ vote.hsdir_tk_value_display }} | {{ vote.hsdir_tk_threshold_display }}</span>{% elif vote.voted and vote.tk %}{{ vote.tk_display }} | <span style="color: #6c757d;">—</span>{% else %}<span style="color: #6c757d;">—</span>{% endif %}</td>
-    <td>{% if vote.voted %}{% if vote.has_staledesc %}<span style="color: #8b0000; font-weight: bold;" title="StaleDesc - descriptor >18h old">{{ vote.descriptor_published|default('N/A') }} [Stale]</span>{% else %}<span style="color: #28a745;">{{ vote.descriptor_published|default('N/A') }}</span>{% endif %}{% else %}<span style="color: #6c757d;">—</span>{% endif %}</td>
-    <td>{% if vote.voted and vote.measured %}<span title="Consensus weight: {{ vote.measured_display }}">{{ vote.measured_display }}</span>{% else %}<span style="color: #6c757d;">—</span>{% endif %}</td>
+    <td>{% if vote.voted and vote.fast_threshold_display %}<span class="{% if vote.fast_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="Relay: {{ vote.fast_speed_display }} | Threshold: {{ vote.fast_threshold_display }}">{{ vote.fast_speed_display }} | {{ vote.fast_threshold_display }}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
+    <td>{% if vote.voted and vote.guard_bw_guarantee_display %}<span class="{% if vote.guard_bw_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="Relay: {{ vote.guard_bw_value_display }} | Top 25%: {{ vote.guard_bw_top25_display }} | Tor spec min: {{ vote.guard_bw_guarantee_display }}">{{ vote.guard_bw_value_display }} | {{ vote.guard_bw_top25_display }} OR {{ vote.guard_bw_guarantee_display }}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
+    <td>{% if vote.voted and vote.wfu is not none %}<span class="{% if vote.wfu_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="WFU: {{ vote.wfu_display }} | Threshold: {{ vote.wfu_threshold_display }}">{{ vote.wfu_display }} | {{ vote.wfu_threshold_display }}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
+    <td>{% if vote.voted and vote.tk is not none %}<span class="{% if vote.tk_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="TK: {{ vote.tk_display }} | Threshold: {{ vote.tk_threshold_display }}">{{ vote.tk_display }} | {{ vote.tk_threshold_display }}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
+    <td>{% if vote.voted and vote.stable_threshold %}<span class="{% if vote.stable_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="MTBF: {{ vote.stable_mtbf_display }} | Threshold: {{ vote.stable_threshold_display }}">{{ vote.stable_mtbf_display }} | {{ vote.stable_threshold_display }}</span>{% elif vote.voted and vote.stable_mtbf %}{{ vote.stable_mtbf_display }} | <span class="al-status-muted">—</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
+    <td>{% if vote.voted and vote.stable_uptime_threshold %}{% if vote.stable_uptime_meets is not none %}<span class="{% if vote.stable_uptime_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="Relay Uptime: {{ vote.stable_uptime_display }} | Threshold: {{ vote.stable_uptime_threshold_display }}">{{ vote.stable_uptime_display }} | {{ vote.stable_uptime_threshold_display }}</span>{% else %}<span class="al-status-muted">N/A | {{ vote.stable_uptime_threshold_display }}</span>{% endif %}{% elif vote.voted and vote.stable_uptime is not none %}{{ vote.stable_uptime_display }} | <span class="al-status-muted">—</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
+    <td>{% if vote.voted and vote.wfu is not none %}<span class="{% if vote.wfu >= 0.98 %}al-status-success{% else %}al-status-danger{% endif %}" title="WFU: {{ vote.wfu_display }} | Threshold: ≥98%">{{ vote.wfu_display }} | 98.0%</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
+    <td>{% if vote.voted and vote.hsdir_tk_threshold %}<span class="{% if vote.hsdir_tk_meets %}al-status-success{% else %}al-status-danger{% endif %}" title="TK: {{ vote.hsdir_tk_value_display }} | Threshold: {{ vote.hsdir_tk_threshold_display }}">{{ vote.hsdir_tk_value_display }} | {{ vote.hsdir_tk_threshold_display }}</span>{% elif vote.voted and vote.tk %}{{ vote.tk_display }} | <span class="al-status-muted">—</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
+    <td>{% if vote.voted %}{% if vote.has_staledesc %}<span style="color: #8b0000; font-weight: bold;" title="StaleDesc - descriptor >18h old">{{ vote.descriptor_published|default('N/A') }} [Stale]</span>{% else %}<span class="al-status-success">{{ vote.descriptor_published|default('N/A') }}</span>{% endif %}{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
+    <td>{% if vote.voted and vote.measured %}<span title="Consensus weight: {{ vote.measured_display }}">{{ vote.measured_display }}</span>{% else %}<span class="al-status-muted">—</span>{% endif %}</td>
 </tr>
 {% endfor %}
 </tbody>

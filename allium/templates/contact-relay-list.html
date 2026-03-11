@@ -82,13 +82,13 @@
         {# Show validation icon based on category #}
         {% if show_validation_icon -%}
             {% if validation_icon_type == 'validated' -%}
-                <span style="color: #28a745; margin-left: 4px;" title="AROI Validated: This relay's fingerprint has been cryptographically verified via the operator's AROI proof">✓</span>
+                <span class="al-status-success" style="margin-left: 4px;" title="AROI Validated: This relay's fingerprint has been cryptographically verified via the operator's AROI proof">✓</span>
             {% elif validation_icon_type == 'unauthorized' -%}
-                <span style="color: #dc3545; margin-left: 4px;" title="Unauthorized Relay: This relay claims the domain but fingerprint is NOT in the AROI proof file">🚫</span>
+                <span class="al-status-danger" style="margin-left: 4px;" title="Unauthorized Relay: This relay claims the domain but fingerprint is NOT in the AROI proof file">🚫</span>
             {% elif validation_icon_type == 'misconfigured' -%}
-                <span style="color: #ffc107; margin-left: 4px;" title="AROI Misconfigured: Validation failed due to DNS/SSL/connection errors">⚠</span>
+                <span class="al-status-warning" style="margin-left: 4px;" title="AROI Misconfigured: Validation failed due to DNS/SSL/connection errors">⚠</span>
             {% elif validation_icon_type == 'not_configured' -%}
-                <span style="color: #6c757d; margin-left: 4px;" title="Not Configured: No AROI validation configured for this relay">○</span>
+                <span class="al-status-muted" style="margin-left: 4px;" title="Not Configured: No AROI validation configured for this relay">○</span>
             {% else -%}
                 {{- aroi_validation_icon(relay['fingerprint'], relay['aroi_domain'], validated_fps, unauthorized_fps, misconfigured_fps) }}
             {% endif -%}
@@ -108,12 +108,12 @@
         {{ obs_bandwidth }} {{ obs_unit }}
         {% if relay['measured'] is not none -%}
             {% if relay['measured'] -%}
-                &nbsp;&nbsp;<span style="color: #28a745; font-weight: bold;" title="Bandwidth measured by ≥3 bandwidth authorities">✓</span>
+                &nbsp;&nbsp;<span class="al-status-success-bold" title="Bandwidth measured by ≥3 bandwidth authorities">✓</span>
             {% else -%}
-                &nbsp;&nbsp;<span style="color: #dc3545; font-weight: bold;" title="Bandwidth not measured by ≥3 bandwidth authorities">✗</span>
+                &nbsp;&nbsp;<span class="al-status-danger-bold" title="Bandwidth not measured by ≥3 bandwidth authorities">✗</span>
             {% endif -%}
         {% else -%}
-            &nbsp;&nbsp;<span style="color: #6c757d;" title="Bandwidth measurement status unknown">?</span>
+            &nbsp;&nbsp;<span class="al-status-muted" title="Bandwidth measurement status unknown">?</span>
         {% endif -%}
     </td>
     <td>
@@ -126,7 +126,7 @@
     <td>
         {% if relay.get('uptime_display') -%}
             {% if relay['uptime_display'].startswith('DOWN') -%}
-                <span style="color: #dc3545;">{{ relay['uptime_display']|escape }}</span>
+                <span class="al-status-danger">{{ relay['uptime_display']|escape }}</span>
             {% else -%}
                 {{ relay['uptime_display']|escape }}
             {% endif -%}
@@ -158,16 +158,16 @@
     </td>
     {# PERF: Use pre-rendered flags HTML from Python (eliminates Jinja2 loop) - THE KEY OPTIMIZATION #}
     <td>{{ relay['_flags_html']|replace('{path}', page_ctx.path_prefix)|safe }}</td>
-    <td>{% if relay.get('exit_dns_health_status') == 'success' %}<span style="color: #28a745;" title="DNS resolution healthy">Ok</span>{% elif relay.get('exit_dns_health_status') == 'fail' %}<span style="color: #dc3545;" title="DNS resolution failing">Fail</span>{% elif relay.get('exit_dns_health_status') == 'untested' %}<span style="color: #6c757d;" title="Not yet tested">-</span>{% else %}<span style="color: #6c757d;">NA</span>{% endif %}</td>
+    <td>{% if relay.get('exit_dns_health_status') == 'success' %}<span class="al-status-success" title="DNS resolution healthy">Ok</span>{% elif relay.get('exit_dns_health_status') == 'fail' %}<span class="al-status-danger" title="DNS resolution failing">Fail</span>{% elif relay.get('exit_dns_health_status') == 'untested' %}<span class="al-status-muted" title="Not yet tested">-</span>{% else %}<span class="al-status-muted">NA</span>{% endif %}</td>
     <td>
         {% if relay.get('family_support_type') == 'both' -%}
-            <span style="color: #28a745;" title="Has both Happy Families (family-cert) and MyFamily declarations">Both</span>
+            <span class="al-status-success" title="Has both Happy Families (family-cert) and MyFamily declarations">Both</span>
         {% elif relay.get('family_support_type') == 'happy_families' -%}
-            <span style="color: #28a745;" title="Has family-cert in server descriptor (Happy Families)">Happy Families</span>
+            <span class="al-status-success" title="Has family-cert in server descriptor (Happy Families)">Happy Families</span>
         {% elif relay.get('family_support_type') == 'my_family' -%}
-            <span style="color: #dc3545;" title="MyFamily only — no family-cert. Consider migrating to Happy Families.">MyFamily</span>
+            <span class="al-status-danger" title="MyFamily only — no family-cert. Consider migrating to Happy Families.">MyFamily</span>
         {% else -%}
-            <span style="color: #6c757d;">None</span>
+            <span class="al-status-muted">None</span>
         {% endif -%}
     </td>
     {% if relay['country'] -%}

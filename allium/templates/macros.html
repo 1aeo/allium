@@ -159,17 +159,17 @@
 {% macro family_support_inline(fsc) -%}
 {% set fsc_total = fsc.get('both', 0) + fsc.get('happy_families', 0) + fsc.get('my_family', 0) + fsc.get('none', 0) -%}
 {% if fsc_total > 0 -%}
-{% if fsc.get('both', 0) > 0 %}<span style="color: #28a745;">{{ fsc.both }} Both, Happy Families and MyFamily ({{ (fsc.both / fsc_total * 100)|round(0)|int }}%)</span>{% if fsc.get('happy_families', 0) > 0 or fsc.get('my_family', 0) > 0 or fsc.get('none', 0) > 0 %}, {% endif %}{% endif -%}
-{% if fsc.get('happy_families', 0) > 0 %}<span style="color: #28a745;">{{ fsc.happy_families }} Happy Families ({{ (fsc.happy_families / fsc_total * 100)|round(0)|int }}%)</span>{% if fsc.get('my_family', 0) > 0 or fsc.get('none', 0) > 0 %}, {% endif %}{% endif -%}
-{% if fsc.get('my_family', 0) > 0 %}<span style="color: #dc3545;">{{ fsc.my_family }} MyFamily ({{ (fsc.my_family / fsc_total * 100)|round(0)|int }}%)</span>{% if fsc.get('none', 0) > 0 %}, {% endif %}{% endif -%}
-{% if fsc.get('none', 0) > 0 %}<span style="color: #6c757d;">{{ fsc.none }} None ({{ (fsc.none / fsc_total * 100)|round(0)|int }}%)</span>{% endif -%}
+{% if fsc.get('both', 0) > 0 %}<span class="al-status-success">{{ fsc.both }} Both, Happy Families and MyFamily ({{ (fsc.both / fsc_total * 100)|round(0)|int }}%)</span>{% if fsc.get('happy_families', 0) > 0 or fsc.get('my_family', 0) > 0 or fsc.get('none', 0) > 0 %}, {% endif %}{% endif -%}
+{% if fsc.get('happy_families', 0) > 0 %}<span class="al-status-success">{{ fsc.happy_families }} Happy Families ({{ (fsc.happy_families / fsc_total * 100)|round(0)|int }}%)</span>{% if fsc.get('my_family', 0) > 0 or fsc.get('none', 0) > 0 %}, {% endif %}{% endif -%}
+{% if fsc.get('my_family', 0) > 0 %}<span class="al-status-danger">{{ fsc.my_family }} MyFamily ({{ (fsc.my_family / fsc_total * 100)|round(0)|int }}%)</span>{% if fsc.get('none', 0) > 0 %}, {% endif %}{% endif -%}
+{% if fsc.get('none', 0) > 0 %}<span class="al-status-muted">{{ fsc.none }} None ({{ (fsc.none / fsc_total * 100)|round(0)|int }}%)</span>{% endif -%}
 {% endif -%}
 {%- endmacro %}
 
 {# DRY: DNS health summary bullet — used by detail_summary, contact.html, country.html #}
 {%- macro dns_health_bullet(summary, label="exit relays") -%}
-<span style="color: #28a745;">{{ summary.healthy }} healthy ({{ summary.healthy_pct }}%)</span>
-{%- if summary.failing > 0 %}, <span style="color: #dc3545;">{{ summary.failing }} failing ({{ summary.failing_pct }}%)</span>{% endif %}
+<span class="al-status-success">{{ summary.healthy }} healthy ({{ summary.healthy_pct }}%)</span>
+{%- if summary.failing > 0 %}, <span class="al-status-danger">{{ summary.failing }} failing ({{ summary.failing_pct }}%)</span>{% endif %}
 {%- if summary.untested > 0 %}, {{ summary.untested }} untested ({{ summary.untested_pct }}%){% endif %}
  of {{ summary.exit_count }} {{ label }}
 {%- endmacro -%}
@@ -177,7 +177,7 @@
 {# DRY: Network-wide DNS health bullet — used by all 5 misc listing pages #}
 {%- macro network_dns_health_bullet(nh) -%}
 {% if nh.exit_dns_health_available %}
-<li><strong>Exit DNS Health</strong>: <span style="color: #28a745;">{{ nh.exit_dns_health_success_formatted }} healthy</span> / <span style="color: #dc3545;">{{ nh.exit_dns_health_total_failures_formatted }} unhealthy</span> ({{ "%.1f"|format(nh.exit_dns_health_success_rate) }}% success rate, {{ nh.exit_dns_health_tested_formatted }} of {{ nh.exit_dns_health_consensus_exits_formatted }} exits tested)</li>
+<li><strong>Exit DNS Health</strong>: <span class="al-status-success">{{ nh.exit_dns_health_success_formatted }} healthy</span> / <span class="al-status-danger">{{ nh.exit_dns_health_total_failures_formatted }} unhealthy</span> ({{ "%.1f"|format(nh.exit_dns_health_success_rate) }}% success rate, {{ nh.exit_dns_health_tested_formatted }} of {{ nh.exit_dns_health_consensus_exits_formatted }} exits tested)</li>
 {% endif %}
 {%- endmacro -%}
 
@@ -211,8 +211,8 @@
     {%- endif %}
     {%- if exit_dns_health_summary %}
     <li><strong><span title="DNS resolution health of exit relays in this group. Source: exitdnshealth.1aeo.com">Exit DNS Health</span>:</strong>
-        <span style="color: #28a745;">{{ exit_dns_health_summary.healthy }} healthy ({{ exit_dns_health_summary.healthy_pct }}%)</span>
-        {%- if exit_dns_health_summary.failing > 0 %}, <span style="color: #dc3545;">{{ exit_dns_health_summary.failing }} failing ({{ exit_dns_health_summary.failing_pct }}%)</span>{% endif %}
+        <span class="al-status-success">{{ exit_dns_health_summary.healthy }} healthy ({{ exit_dns_health_summary.healthy_pct }}%)</span>
+        {%- if exit_dns_health_summary.failing > 0 %}, <span class="al-status-danger">{{ exit_dns_health_summary.failing }} failing ({{ exit_dns_health_summary.failing_pct }}%)</span>{% endif %}
         {%- if exit_dns_health_summary.untested > 0 %}, {{ exit_dns_health_summary.untested }} untested ({{ exit_dns_health_summary.untested_pct }}%){% endif %}
         of {{ exit_dns_health_summary.exit_count }} exit relay{{ 's' if exit_dns_health_summary.exit_count != 1 else '' }}
     </li>
@@ -248,13 +248,13 @@
 
 {% macro aroi_validation_icon(fingerprint, aroi_domain, validated_fps, unauthorized_fps, misconfigured_fps) -%}
     {% if fingerprint in validated_fps -%}
-        <span style="color: #28a745; margin-left: 4px;" title="AROI Validated: This relay's fingerprint has been cryptographically verified via the operator's AROI proof">✓</span>
+        <span class="al-status-success" style="margin-left: 4px;" title="AROI Validated: This relay's fingerprint has been cryptographically verified via the operator's AROI proof">✓</span>
     {% elif fingerprint in unauthorized_fps -%}
-        <a href="#unauthorized-relays" style="color: #dc3545; margin-left: 4px; text-decoration: none;" title="Unauthorized Relay: This relay claims the domain but fingerprint is NOT in the AROI proof file">🚫</a>
+        <a href="#unauthorized-relays" class="al-status-danger al-link-plain" style="margin-left: 4px;" title="Unauthorized Relay: This relay claims the domain but fingerprint is NOT in the AROI proof file">🚫</a>
     {% elif fingerprint in misconfigured_fps -%}
-        <a href="#misconfigured-relays" style="color: #ffc107; margin-left: 4px; text-decoration: none;" title="AROI Misconfigured: Validation failed due to DNS/SSL/connection errors - see details below">⚠</a>
+        <a href="#misconfigured-relays" class="al-status-warning al-link-plain" style="margin-left: 4px;" title="AROI Misconfigured: Validation failed due to DNS/SSL/connection errors - see details below">⚠</a>
     {% elif aroi_domain and aroi_domain != 'none' -%}
-        <span style="color: #dc3545; margin-left: 4px;" title="No AROI Validation: This relay has AROI configured but no validation data is available">✗</span>
+        <span class="al-status-danger" style="margin-left: 4px;" title="No AROI Validation: This relay has AROI configured but no validation data is available">✗</span>
     {% endif -%}
 {%- endmacro %}
 
@@ -275,13 +275,13 @@
     {%- set summary = contact_validation_status.validation_summary -%}
     {%- set status = contact_validation_status.validation_status -%}
     {% if status == 'validated' -%}
-        <span style="color: #28a745; font-weight: bold;{% if not show_count %} margin-left: 5px;{% endif %}" title="{{ summary.validated_count }} relays validated{% if summary.unauthorized_count > 0 %}, {{ summary.unauthorized_count }} unauthorized claims{% endif %}{% if summary.misconfigured_count > 0 %}, {{ summary.misconfigured_count }} misconfigured{% endif %}">✓ Validated{% if show_count %} ({{ summary.validated_count }} relays){% endif %}</span>
+        <span class="al-status-success-bold"{% if not show_count %} style="margin-left: 5px;"{% endif %} title="{{ summary.validated_count }} relays validated{% if summary.unauthorized_count > 0 %}, {{ summary.unauthorized_count }} unauthorized claims{% endif %}{% if summary.misconfigured_count > 0 %}, {{ summary.misconfigured_count }} misconfigured{% endif %}">✓ Validated{% if show_count %} ({{ summary.validated_count }} relays){% endif %}</span>
     {% elif status == 'unauthorized' -%}
-        <a href="#unauthorized-relays" style="color: #dc3545; font-weight: bold;{% if not show_count %} margin-left: 5px;{% endif %} text-decoration: none;" title="{{ summary.unauthorized_count }} relays claiming this domain but NOT in proof file - see details below">🚫 Unauthorized{% if show_count %} ({{ summary.unauthorized_count }} relays){% endif %}</a>
+        <a href="#unauthorized-relays" class="al-status-danger-bold al-link-plain"{% if not show_count %} style="margin-left: 5px;"{% endif %} title="{{ summary.unauthorized_count }} relays claiming this domain but NOT in proof file - see details below">🚫 Unauthorized{% if show_count %} ({{ summary.unauthorized_count }} relays){% endif %}</a>
     {% elif status == 'misconfigured' -%}
-        <a href="#misconfigured-relays" style="color: #ffc107; font-weight: bold;{% if not show_count %} margin-left: 5px;{% endif %} text-decoration: none;" title="{{ summary.misconfigured_count }} relays with AROI config errors - see details below">⚠ Misconfigured{% if show_count %} ({{ summary.misconfigured_count }} relays){% endif %}</a>
+        <a href="#misconfigured-relays" class="al-status-warning-bold al-link-plain"{% if not show_count %} style="margin-left: 5px;"{% endif %} title="{{ summary.misconfigured_count }} relays with AROI config errors - see details below">⚠ Misconfigured{% if show_count %} ({{ summary.misconfigured_count }} relays){% endif %}</a>
     {% elif status == 'incomplete' -%}
-        <a href="#not_configured-relays" style="color: #6c757d; font-weight: bold;{% if not show_count %} margin-left: 5px;{% endif %} text-decoration: none;" title="{{ summary.incomplete_count }} relays with incomplete AROI configuration - see details below">Incomplete{% if show_count %} ({{ summary.incomplete_count }} relays){% endif %}</a>
+        <a href="#not_configured-relays" class="al-status-muted al-link-plain" style="font-weight: bold;{% if not show_count %} margin-left: 5px;{% endif %}" title="{{ summary.incomplete_count }} relays with incomplete AROI configuration - see details below">Incomplete{% if show_count %} ({{ summary.incomplete_count }} relays){% endif %}</a>
     {# not_configured status shows no badge #}
     {% endif -%}
 {% endif -%}
@@ -303,16 +303,16 @@
 {% if show_unauthorized or show_misconfigured or show_incomplete or show_not_configured -%}
 <ul style="list-style-type: circle; padding-left: 20px; margin-top: 0; margin-bottom: 0;">
 {% if show_unauthorized -%}
-<li><a href="#unauthorized-relays" style="color: #dc3545; text-decoration: none;">🚫 Unauthorized: {{ summary.unauthorized_count }} relay{{ 's' if summary.unauthorized_count != 1 else '' }}</a></li>
+<li><a href="#unauthorized-relays" class="al-status-danger al-link-plain">🚫 Unauthorized: {{ summary.unauthorized_count }} relay{{ 's' if summary.unauthorized_count != 1 else '' }}</a></li>
 {% endif -%}
 {% if show_misconfigured -%}
-<li><a href="#misconfigured-relays" style="color: #ffc107; text-decoration: none;">⚠ Misconfigured: {{ summary.misconfigured_count }} relay{{ 's' if summary.misconfigured_count != 1 else '' }}</a></li>
+<li><a href="#misconfigured-relays" class="al-status-warning al-link-plain">⚠ Misconfigured: {{ summary.misconfigured_count }} relay{{ 's' if summary.misconfigured_count != 1 else '' }}</a></li>
 {% endif -%}
 {% if show_incomplete -%}
-<li><a href="#not_configured-relays" style="color: #6c757d; text-decoration: none;">○ Incomplete: {{ summary.incomplete_count }} relay{{ 's' if summary.incomplete_count != 1 else '' }}</a></li>
+<li><a href="#not_configured-relays" class="al-status-muted al-link-plain">○ Incomplete: {{ summary.incomplete_count }} relay{{ 's' if summary.incomplete_count != 1 else '' }}</a></li>
 {% endif -%}
 {% if show_not_configured -%}
-<li><a href="#not_configured-relays" style="color: #6c757d; text-decoration: none;">○ Not configured: {{ summary.not_configured_count }} relay{{ 's' if summary.not_configured_count != 1 else '' }}</a></li>
+<li><a href="#not_configured-relays" class="al-status-muted al-link-plain">○ Not configured: {{ summary.not_configured_count }} relay{{ 's' if summary.not_configured_count != 1 else '' }}</a></li>
 {% endif -%}
 </ul>
 {% endif -%}
@@ -328,7 +328,7 @@
 {% if relays %}
     {# Style configuration based on box type #}
     {% if box_type == 'misconfigured' -%}
-        {% set bg_color = '#fff3cd' -%}
+        {% set box_class = 'al-box-warning' -%}
         {% set border_color = '#ffc107' -%}
         {% set text_color = '#856404' -%}
         {% set icon = '⚠️' -%}
@@ -336,7 +336,7 @@
         {% set description = 'These relays have AROI configured but validation failed due to errors.' -%}
         {% set help_text = 'Fix: Check DNS records, renew SSL certificates, or verify server connectivity.' -%}
     {% elif box_type == 'unauthorized' -%}
-        {% set bg_color = '#f8d7da' -%}
+        {% set box_class = 'al-box-danger' -%}
         {% set border_color = '#dc3545' -%}
         {% set text_color = '#721c24' -%}
         {% set icon = '🚫' -%}
@@ -344,7 +344,7 @@
         {% set description = 'These relays claim this domain but their fingerprints are NOT in the AROI proof file. This could be someone falsely claiming your domain.' -%}
         {% set help_text = 'If this is YOUR relay: Add the fingerprint to your AROI proof file.' -%}
     {% else -%}
-        {% set bg_color = '#e9ecef' -%}
+        {% set box_class = 'al-box-muted' -%}
         {% set border_color = '#6c757d' -%}
         {% set text_color = '#495057' -%}
         {% set icon = '○' -%}
@@ -353,7 +353,7 @@
         {% set help_text = 'To add AROI: Set contact info with ciissversion:2, proof:dns-rsa or proof:uri-rsa, and url:yourdomain.com' -%}
     {% endif -%}
     
-<div style="margin-top: 15px; padding: 15px; background-color: {{ bg_color }}; border-left: 4px solid {{ border_color }}; border-radius: 4px;">
+<div class="{{ box_class }}" style="margin-top: 15px; padding: 15px; border-left-width: 4px; border-left-style: solid; border-radius: 4px;">
     <h5 style="margin-top: 0; margin-bottom: 10px; color: {{ text_color }}; font-size: 14px;">
         <strong>{{ icon }} {{ title }}</strong>
     </h5>
@@ -374,9 +374,9 @@
             <strong><a href="{{ page_ctx.path_prefix }}relay/{{ relay_info.fingerprint }}/">{{ relay_info.nickname|escape }}</a></strong>
             <span style="color: #666;">•</span>
             {% if relay_info.error -%}
-                <span style="color: #dc3545;">{{ relay_info.error|escape }}</span>
+                <span class="al-status-danger">{{ relay_info.error|escape }}</span>
             {% elif relay_info.missing -%}
-                <span style="color: #856404;">{{ relay_info.missing|escape }}</span>
+                <span class="al-status-warning">{{ relay_info.missing|escape }}</span>
             {% endif -%}
             {% if relay_info.proof_type and relay_info.proof_type != 'unknown' %}
                 <span style="color: #666;">• Proof: {{ relay_info.proof_type }}</span>
@@ -402,23 +402,23 @@
 {% if style_type == 'validated' -%}
     {% set border_style = '3px solid #28a745' -%}
     {% set icon = '✓' -%}
-    {% set color = '#28a745' -%}
+    {% set link_class = 'al-status-success al-link-plain' -%}
 {% elif style_type == 'misconfigured' -%}
     {% set border_style = '3px solid #ffc107' -%}
     {% set icon = '⚠' -%}
-    {% set color = '#ffc107' -%}
+    {% set link_class = 'al-status-warning al-link-plain' -%}
 {% elif style_type == 'unauthorized' -%}
     {% set border_style = '3px dashed #dc3545' -%}
     {% set icon = '🚫' -%}
-    {% set color = '#dc3545' -%}
+    {% set link_class = 'al-status-danger al-link-plain' -%}
 {% else -%}
     {% set border_style = '3px solid #6c757d' -%}
     {% set icon = '○' -%}
-    {% set color = '#6c757d' -%}
+    {% set link_class = 'al-status-muted al-link-plain' -%}
 {% endif -%}
 <div id="{{ style_type }}-relays" style="margin-top: 30px; padding: 15px 0; border-top: {{ border_style }};">
     <h3 style="margin: 0 0 15px 0; font-size: 16px;">
-        <a href="#{{ style_type }}-relays" style="color: {{ color }}; text-decoration: none;">{{ icon }} {{ title }} ({{ count }})</a>
+        <a href="#{{ style_type }}-relays" class="{{ link_class }}">{{ icon }} {{ title }} ({{ count }})</a>
     </h3>
 {%- endmacro %}
 

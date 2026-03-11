@@ -269,42 +269,42 @@ class TestAROIPaginationSystem(unittest.TestCase):
         self.assertIn('Operator (AROI)', rendered)  # Standard header from macro
 
     def test_skeleton_css_integration(self):
-        """Test that pagination CSS is defined in aroi-leaderboards.html page_css block.
+        """Test that pagination CSS is defined in AROI page CSS.
         
-        Note: Pagination CSS was moved from skeleton.html to aroi-leaderboards.html
-        as part of CSS inheritance optimization — it's only needed by AROI pages.
+        Note: Pagination CSS was extracted from aroi-leaderboards.html template
+        to external aroi-leaderboards.css file in Phase 5 CSS extraction.
         """
-        # Read aroi-leaderboards.html to verify CSS classes are defined
-        aroi_path = os.path.join(os.path.dirname(__file__), '..', '..', 'allium', 'templates', 'aroi-leaderboards.html')
-        with open(aroi_path, 'r') as f:
-            aroi_content = f.read()
+        # Read aroi-leaderboards.css to verify CSS classes are defined
+        css_path = os.path.join(os.path.dirname(__file__), '..', '..', 'allium', 'static', 'css', 'aroi-leaderboards.css')
+        with open(css_path, 'r') as f:
+            css_content = f.read()
         
-        # Verify key CSS classes for pagination are defined in AROI template
-        self.assertIn('.pagination-section', aroi_content)
-        self.assertIn('.pagination-nav-bottom', aroi_content)
-        self.assertIn(':target', aroi_content)
+        # Verify key CSS classes for pagination are defined in AROI CSS
+        self.assertIn('.pagination-section', css_content)
+        self.assertIn('.pagination-nav-bottom', css_content)
+        self.assertIn(':target', css_content)
         
         # Verify CSS uses dynamic patterns for category-specific targeting
         # The template generates IDs like #bandwidth-1-10, but CSS targets them
         # using attribute selectors like [id$="-1-10"]
-        self.assertIn('[id$="-1-10"]', aroi_content)
+        self.assertIn('[id$="-1-10"]', css_content)
         
         # Verify backward-compatible pagination approach:
         # - Flex container for visual reordering (DOM order != visual order)
-        self.assertIn('.pagination-container', aroi_content)
+        self.assertIn('.pagination-container', css_content)
         # - Sibling combinator hides default page when another is :target
         #   (no :has() needed — works on all Tor Browser versions)
-        self.assertIn('.pagination-section:target ~ .pagination-section:not(:target)', aroi_content)
+        self.assertIn('.pagination-section:target ~ .pagination-section:not(:target)', css_content)
         
         # Verify all champion badge classes have CSS definitions
-        self.assertIn('.aroi-champion-total-data', aroi_content)
-        self.assertIn('.aroi-champion-validation', aroi_content)
+        self.assertIn('.aroi-champion-total-data', css_content)
+        self.assertIn('.aroi-champion-validation', css_content)
         
         # Verify skeleton.html has the page_css block mechanism
         skeleton_path = os.path.join(os.path.dirname(__file__), '..', '..', 'allium', 'templates', 'skeleton.html')
         with open(skeleton_path, 'r') as f:
             skeleton_content = f.read()
-        self.assertIn('{% block page_css %}', skeleton_content)
+        self.assertIn('{% block page_css_link %}', skeleton_content)
 
     def test_pagination_performance_structure(self):
         """Test that pagination structure is optimized for performance."""

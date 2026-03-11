@@ -97,19 +97,19 @@ def apply_statistical_coloring(relays, network_statistics):
             if period_stats and percentage > 0:
                 # Green for perfect uptime (100.0%)
                 if percentage >= 100.0 or abs(percentage - 100.0) < 0.01:
-                    percentage_str = f'<span style="color: #28a745;">{percentage_str}</span>'
+                    percentage_str = f'<span class="al-status-success">{percentage_str}</span>'
                 # Red for low outliers (>2 std dev below mean)
                 elif percentage < period_stats['two_sigma_low']:
-                    percentage_str = f'<span style="color: #dc3545;">{percentage_str}</span>'
+                    percentage_str = f'<span class="al-status-danger">{percentage_str}</span>'
                 # Green for high outliers (>2 std dev above mean)
                 elif percentage > period_stats['two_sigma_high']:
-                    percentage_str = f'<span style="color: #28a745;">{percentage_str}</span>'
+                    percentage_str = f'<span class="al-status-success">{percentage_str}</span>'
                 # Yellow for below-mean values
                 elif percentage < period_stats['mean']:
-                    percentage_str = f'<span style="color: #cc9900;">{percentage_str}</span>'
+                    percentage_str = f'<span class="al-status-warning">{percentage_str}</span>'
                 else:
                     # Above mean but within normal range
-                    percentage_str = f'<span style="color: #28a745;">{percentage_str}</span>'
+                    percentage_str = f'<span class="al-status-success">{percentage_str}</span>'
             
             display_parts.append(percentage_str)
         
@@ -190,13 +190,13 @@ def process_flag_bandwidth_display(relays, network_flag_statistics, bandwidth_fo
                 
                 # Apply color styling based on class
                 if color_class == 'high-performance':
-                    styled_bandwidth = f'<span style="color: #28a745; font-weight: bold;">{bandwidth_str}</span>'
+                    styled_bandwidth = f'<span class="al-status-success-bold">{bandwidth_str}</span>'
                 elif color_class == 'statistical-outlier-low':
-                    styled_bandwidth = f'<span style="color: #dc3545; font-weight: bold;">{bandwidth_str}</span>'
+                    styled_bandwidth = f'<span class="al-status-danger-bold">{bandwidth_str}</span>'
                 elif color_class == 'statistical-outlier-high':
-                    styled_bandwidth = f'<span style="color: #28a745; font-weight: bold;">{bandwidth_str}</span>'
+                    styled_bandwidth = f'<span class="al-status-success-bold">{bandwidth_str}</span>'
                 elif color_class == 'below-mean':
-                    styled_bandwidth = f'<span style="color: #cc9900; font-weight: bold;">{bandwidth_str}</span>'
+                    styled_bandwidth = f'<span class="al-status-warning-bold">{bandwidth_str}</span>'
                 else:
                     styled_bandwidth = bandwidth_str
                 
@@ -293,24 +293,24 @@ def process_flag_uptime_display(relays, network_flag_statistics):
                     # Enhanced color coding logic matching flag reliability:
                     # Special handling for very low values (≤1%) - likely to be statistical outliers
                     if uptime_val <= 1.0:
-                        colored_str = f'<span style="color: #dc3545;">{percentage_str}</span>'  # Red
+                        colored_str = f'<span class="al-status-danger">{percentage_str}</span>'  # Red
                     elif uptime_val <= two_sigma_low:
-                        colored_str = f'<span style="color: #dc3545;">{percentage_str}</span>'  # Red
+                        colored_str = f'<span class="al-status-danger">{percentage_str}</span>'  # Red
                     elif uptime_val >= 99.0:
-                        colored_str = f'<span style="color: #28a745;">{percentage_str}</span>'  # Green
+                        colored_str = f'<span class="al-status-success">{percentage_str}</span>'  # Green
                     elif uptime_val > two_sigma_high:
-                        colored_str = f'<span style="color: #28a745;">{percentage_str}</span>'  # Green
+                        colored_str = f'<span class="al-status-success">{percentage_str}</span>'  # Green
                     elif uptime_val < net_mean:
-                        colored_str = f'<span style="color: #cc9900;">{percentage_str}</span>'  # Yellow
+                        colored_str = f'<span class="al-status-warning">{percentage_str}</span>'  # Yellow
                     else:
                         # Above mean but within normal range - no special coloring
                         colored_str = percentage_str
                 else:
                     # Fallback color coding when no network statistics available
                     if uptime_val <= 1.0:
-                        colored_str = f'<span style="color: #dc3545;">{percentage_str}</span>'  # Red
+                        colored_str = f'<span class="al-status-danger">{percentage_str}</span>'  # Red
                     elif uptime_val >= 99.0:
-                        colored_str = f'<span style="color: #28a745;">{percentage_str}</span>'  # Green
+                        colored_str = f'<span class="al-status-success">{percentage_str}</span>'  # Green
                     else:
                         # Default: no special coloring
                         colored_str = percentage_str

@@ -954,7 +954,7 @@ def _format_stricter_threshold(strict_auths: list, max_display: str) -> str:
     """Format stricter threshold exception HTML snippet."""
     if not strict_auths:
         return ''
-    return f'<br><span style="color: #856404; font-size: 10px;">[Stricter] {", ".join(strict_auths)}: ≥{max_display}</span>'
+    return f'<br><span class="al-text-small-note al-status-warning">[Stricter] {", ".join(strict_auths)}: ≥{max_display}</span>'
 
 
 # Status text lookup (avoid repeated conditionals)
@@ -1013,12 +1013,12 @@ def _format_da_value_html(stats: dict, source_label: str = 'DA') -> str:
     
     if has_majority:
         # Majority exists: show value with agreement count (≥5)
-        line1 = (f'<span style="color: #666; font-size: 10px;">Majority:</span> '
+        line1 = (f'<span class="al-text-small-muted">Majority:</span> '
                  f'<strong>{stats["primary_display"]}</strong> '
-                 f'<span style="color: #6c757d; font-size: 10px;">({primary_count}/{total_possible} {source_label})</span>')
+                 f'<span class="al-text-small-muted">({primary_count}/{total_possible} {source_label})</span>')
         # Second row: Min/Med/Max with total voting ratio and clarification
         if stats.get('has_variation'):
-            line2 = (f'<br><span style="color: #666; font-size: 10px;">Min/Med/Max: '
+            line2 = (f'<br><span class="al-text-small-muted">Min/Med/Max: '
                      f'{stats["min_display"]} / {stats["median_display"]} / {stats["max_display"]} '
                      f'{vote_clarification}</span>')
             return line1 + line2
@@ -1028,16 +1028,16 @@ def _format_da_value_html(stats: dict, source_label: str = 'DA') -> str:
         # For time metrics with threshold, show "X/9 DA above threshold" instead of "No Majority"
         if meets_threshold is not None:
             threshold_text = f'{meets_threshold}/{total_possible} {source_label} above threshold'
-            line1 = (f'<span style="color: #666; font-size: 10px;">Median:</span> '
+            line1 = (f'<span class="al-text-small-muted">Median:</span> '
                      f'<strong>{stats["primary_display"]}</strong> '
-                     f'<span style="color: #6c757d; font-size: 10px;">({threshold_text})</span>')
+                     f'<span class="al-text-small-muted">({threshold_text})</span>')
         else:
-            line1 = (f'<span style="color: #666; font-size: 10px;">Median:</span> '
+            line1 = (f'<span class="al-text-small-muted">Median:</span> '
                      f'<strong>{stats["primary_display"]}</strong> '
-                     f'<span style="color: #6c757d; font-size: 10px;">({primary_count}/{total_possible} {source_label}, No Majority)</span>')
+                     f'<span class="al-text-small-muted">({primary_count}/{total_possible} {source_label}, No Majority)</span>')
         # Second row: Min/Max with total voting ratio and clarification
         if stats.get('has_variation'):
-            line2 = (f'<br><span style="color: #666; font-size: 10px;">Min/Max: '
+            line2 = (f'<br><span class="al-text-small-muted">Min/Max: '
                      f'{stats["min_display"]} / {stats["max_display"]} '
                      f'{vote_clarification}</span>')
             return line1 + line2
@@ -1046,7 +1046,7 @@ def _format_da_value_html(stats: dict, source_label: str = 'DA') -> str:
 
 def _format_relay_value_html(value_display: str) -> str:
     """Format relay-reported value (single source - the relay itself)."""
-    return f'<strong>{value_display}</strong> <span style="color: #6c757d; font-size: 10px;">(R)</span>'
+    return f'<strong>{value_display}</strong> <span class="al-text-small-muted">(R)</span>'
 
 
 def _majority_status(count: int, required: int) -> str:

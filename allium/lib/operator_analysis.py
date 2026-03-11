@@ -402,11 +402,11 @@ def format_intelligence_rating(rating_text):
     rating, details = rating_text.split(', ', 1)
     
     if 'Poor' in rating:
-        return f'<span style="color: #c82333; font-weight: bold;">Poor</span>, {details}'
+        return f'<span class="al-rating-poor">Poor</span>, {details}'
     elif 'Okay' in rating:
-        return f'<span style="color: #cc9900; font-weight: bold;">Okay</span>, {details}'
+        return f'<span class="al-rating-okay">Okay</span>, {details}'
     else:  # Great or other
-        return f'<span style="color: #2e7d2e; font-weight: bold;">Great</span>, {details}'
+        return f'<span class="al-rating-great">Great</span>, {details}'
 
 def _format_bandwidth_breakdown(i, bandwidth_unit, relay_set):
     """Format bandwidth breakdown by role (guard/middle/exit) for contact pages."""
@@ -443,7 +443,7 @@ def _format_uptime_periods(operator_reliability):
             
             if avg >= 99.99 or abs(avg - 100.0) < 0.01:
                 uptime_formatted[period] = {
-                    'display': f'<span style="color: #28a745; font-weight: bold;">{display_name} {avg:.1f}%</span>',
+                    'display': f'<span class="al-status-success-bold">{display_name} {avg:.1f}%</span>',
                     'relay_count': relay_count
                 }
             else:
@@ -625,11 +625,11 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
         intelligence_formatted['version_compliance'] = '0 compliant'
     elif version_compliant == total_relays:
         # All relays are compliant (recommended_version=True)
-        intelligence_formatted['version_compliance'] = f'<span style="color: #2e7d2e; font-weight: bold;">All</span>, {version_compliant} (100%) compliant'
+        intelligence_formatted['version_compliance'] = f'<span class="al-rating-great">All</span>, {version_compliant} (100%) compliant'
     elif version_compliant > 0 and (version_compliant / total_relays) > 0.5:
         # More than 50% are compliant
         compliant_pct = round((version_compliant / total_relays) * 100)
-        result = f'<span style="color: #cc9900; font-weight: bold;">Partial</span>, {version_compliant} ({compliant_pct}%) compliant'
+        result = f'<span class="al-rating-okay">Partial</span>, {version_compliant} ({compliant_pct}%) compliant'
         # Add non-zero counts for not compliant and unknown
         parts = []
         if version_not_compliant > 0:
@@ -644,7 +644,7 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
     else:
         # 50% or less are compliant (or no compliant relays)
         compliant_pct = round((version_compliant / total_relays) * 100) if total_relays > 0 else 0
-        result = f'<span style="color: #c82333; font-weight: bold;">Poor</span>, {version_compliant} ({compliant_pct}%) compliant'
+        result = f'<span class="al-rating-poor">Poor</span>, {version_compliant} ({compliant_pct}%) compliant'
         # Add non-zero counts for not compliant and unknown
         parts = []
         if version_not_compliant > 0:
@@ -684,12 +684,12 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
     elif recommended_count == total_relays:
         # All relays have recommended status
         recommended_tooltip = version_status_tooltips.get('recommended', 'All relays have recommended versions')
-        intelligence_formatted['version_status'] = f'<span style="color: #2e7d2e; font-weight: bold;">All</span>, <span title="{recommended_tooltip}" style="cursor: help;">{recommended_count} (100%) recommended</span>'
+        intelligence_formatted['version_status'] = f'<span class="al-rating-great">All</span>, <span title="{recommended_tooltip}">{recommended_count} (100%) recommended</span>'
     elif recommended_count > 0 and (recommended_count / total_relays) > 0.5:
         # More than 50% have recommended status
         recommended_pct = round((recommended_count / total_relays) * 100)
         recommended_tooltip = version_status_tooltips.get('recommended', 'Recommended versions')
-        result = f'<span style="color: #cc9900; font-weight: bold;">Partial</span>, <span title="{recommended_tooltip}" style="cursor: help;">{recommended_count} ({recommended_pct}%) recommended</span>'
+        result = f'<span class="al-rating-okay">Partial</span>, <span title="{recommended_tooltip}">{recommended_count} ({recommended_pct}%) recommended</span>'
         
         # Add other status counts with tooltips
         other_parts = []
@@ -698,7 +698,7 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
                 status_display = status.replace('_', ' ')  # Convert new_in_series to "new in series"
                 status_pct = round((count / total_relays) * 100)
                 tooltip = version_status_tooltips.get(status, f'{status_display.capitalize()} versions')
-                other_parts.append(f'<span title="{tooltip}" style="cursor: help;">{count} ({status_pct}%) {status_display}</span>')
+                other_parts.append(f'<span title="{tooltip}">{count} ({status_pct}%) {status_display}</span>')
         
         if other_parts:
             result += ', ' + ', '.join(other_parts)
@@ -707,7 +707,7 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
         # 50% or less have recommended status (or no recommended relays)
         recommended_pct = round((recommended_count / total_relays) * 100) if total_relays > 0 else 0
         recommended_tooltip = version_status_tooltips.get('recommended', 'Recommended versions')
-        result = f'<span style="color: #c82333; font-weight: bold;">Poor</span>, <span title="{recommended_tooltip}" style="cursor: help;">{recommended_count} ({recommended_pct}%) recommended</span>'
+        result = f'<span class="al-rating-poor">Poor</span>, <span title="{recommended_tooltip}">{recommended_count} ({recommended_pct}%) recommended</span>'
         
         # Add other status counts with tooltips
         other_parts = []
@@ -716,7 +716,7 @@ def compute_contact_display_data(i, bandwidth_unit, operator_reliability, v, mem
                 status_display = status.replace('_', ' ')  # Convert new_in_series to "new in series"
                 status_pct = round((count / total_relays) * 100)
                 tooltip = version_status_tooltips.get(status, f'{status_display.capitalize()} versions')
-                other_parts.append(f'<span title="{tooltip}" style="cursor: help;">{count} ({status_pct}%) {status_display}</span>')
+                other_parts.append(f'<span title="{tooltip}">{count} ({status_pct}%) {status_display}</span>')
         
         if other_parts:
             result += ', ' + ', '.join(other_parts)
