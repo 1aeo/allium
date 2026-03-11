@@ -889,13 +889,18 @@ class TestContactMultiprocessingRegression(unittest.TestCase):
 
         contact_hashes = list(relay_set.json["sorted"]["contact"].keys())
         self.assertGreater(len(contact_hashes), 0)
-        contact_dir = os.path.join(self.temp_dir, "contact", contact_hashes[0])
 
-        # Should have index.html only
-        self.assertTrue(os.path.exists(os.path.join(contact_dir, "index.html")))
-        # Should NOT have sort variant files
-        self.assertFalse(os.path.exists(os.path.join(contact_dir, "by-status.html")))
-        self.assertFalse(os.path.exists(os.path.join(contact_dir, "by-nickname.html")))
+        for contact_hash in contact_hashes:
+            contact_dir = os.path.join(self.temp_dir, "contact", contact_hash)
+            self.assertTrue(
+                os.path.exists(os.path.join(contact_dir, "index.html")),
+                f"missing index.html for contact {contact_hash}")
+            self.assertFalse(
+                os.path.exists(os.path.join(contact_dir, "by-status.html")),
+                f"stale by-status.html for contact {contact_hash}")
+            self.assertFalse(
+                os.path.exists(os.path.join(contact_dir, "by-nickname.html")),
+                f"stale by-nickname.html for contact {contact_hash}")
 
     def test_contact_page_generation_omits_ipv6_variant_when_not_visible(self):
         """Contacts with ≥3 relays but no IPv6 visibility should not emit by-ipv6.html."""

@@ -769,26 +769,52 @@ def get_detail_page_context(relay_set, category, value):
     return get_detail_page_context(category, value)
 
 
+def _cleanup_vanity_sort_files(vanity_dir):
+    """Remove all contact sort variant files from a vanity directory.
+
+    Prevents stale pages when sort modes change (e.g. IPv6 relays removed)
+    or an operator loses AROI validation between generations.
+    """
+    if not os.path.isdir(vanity_dir):
+        return
+    for filename in CONTACT_SORT_FILE_MAP.values():
+        filepath = os.path.join(vanity_dir, filename)
+        try:
+            os.remove(filepath)
+        except FileNotFoundError:
+            pass
+    try:
+        os.rmdir(vanity_dir)
+    except OSError:
+        pass
+
+
 def _render_contact_variants(template, relay_set, base_template_args, dir_path, contact_data, output_root):
     """Render all static sort variants for one contact page.
 
     Respects two gating rules:
     - Threshold: operators with ≤2 relays get only index.html (no sort links).
     - IPv6: by-ipv6.html is only emitted when IPv6 is visible in the contact.
+
+    Vanity cleanup: removes stale vanity files when an operator loses
+    validation or when sort modes change between generations.
     """
     files_written = 0
+
+    aroi_domain = contact_data.get('aroi_domain')
+    has_vanity_domain = aroi_domain and aroi_domain != 'none' and output_root
     vanity_dir = None
 
-    if (
-        relay_set.base_url
-        and base_template_args.get('is_validated_aroi')
-        and contact_data.get('aroi_domain')
-        and contact_data.get('aroi_domain') != 'none'
-        and output_root
-    ):
-        safe_domain = _sanitize_path_component(contact_data['aroi_domain'].lower())
-        vanity_dir = os.path.join(output_root, safe_domain)
-        os.makedirs(vanity_dir, exist_ok=True)
+    if has_vanity_domain:
+        safe_domain = _sanitize_path_component(aroi_domain.lower())
+        potential_vanity_dir = os.path.join(output_root, safe_domain)
+
+        if relay_set.base_url and base_template_args.get('is_validated_aroi'):
+            _cleanup_vanity_sort_files(potential_vanity_dir)
+            vanity_dir = potential_vanity_dir
+            os.makedirs(vanity_dir, exist_ok=True)
+        else:
+            _cleanup_vanity_sort_files(potential_vanity_dir)
 
     # Determine which sort modes to generate
     relay_count = _contact_relay_count(base_template_args)
