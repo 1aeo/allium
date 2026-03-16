@@ -3,10 +3,10 @@ Prometheus metrics generator for allium.
 
 Generates a static Prometheus exposition format file containing:
   - Section 1: Exit DNS Health (per-relay + aggregates)
-  - Section 2: AROI Monitoring (per-relay + aggregates)
+  - Section 2: AROI Monitoring (state-based schema v2)
   - Meta: build info, generation timestamp, source availability
 
-Schema v1. Metric names and frozen label keys are the public API contract.
+Schema v2. Metric names and frozen label keys are the public API contract.
 See docs/prometheus/README.md for the full schema reference.
 """
 
@@ -18,11 +18,19 @@ from typing import Callable, Dict, List, Optional, Set
 from .aroi_validation import _check_aroi_fields
 
 # Schema version — bump on breaking changes (metric renames, label key changes)
-SCHEMA_VERSION = "1"
+SCHEMA_VERSION = "2"
 GENERATOR = "allium"
 
-# Allowed status values (frozen in schema v1)
-_DNS_STATUS_VALUES = ("success", "dns_fail", "timeout", "relay_unreachable")
+# Allowed status values (frozen in schema v2)
+_DNS_STATUS_VALUES = ("success", "dns_fail", "timeout", "relay_unreachable", "untested")
+
+# AROI state values (frozen in schema v2)
+_AROI_STATE_VALUES = (
+    "not_configured",
+    "configured_unchecked",
+    "configured_checked_invalid",
+    "configured_checked_valid",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -122,6 +130,19 @@ def _build_aroi_map(relay_set) -> Dict[str, dict]:
                 "proof_type": entry.get("proof_type") or "",
             }
     return result_map
+
+
+def _get_aroi_state(relay: dict, aroi_map: Dict[str, dict]) -> str:
+    """Classify a relay into one of the schema-v2 AROI states."""
+    if not _is_aroi_configured(relay):
+        return "not_configured"
+
+    fp = relay.get("fingerprint", "").upper()
+    entry = aroi_map.get(fp)
+    if not entry:
+        return "configured_unchecked"
+
+    return "configured_checked_valid" if entry.get("valid") else "configured_checked_invalid"
 
 
 def _get_verified_aroi(relay: dict, aroi_map: Dict[str, dict],
@@ -311,7 +332,7 @@ def _write_dns_health_section(lines: List[str], relay_set,
     for relay in exit_relays:
         fp = relay.get("fingerprint", "")
         detail = relay.get("exit_dns_health_detail", "untested")
-        failed = 0 if detail == "success" else 1
+        failed = 0 if detail in ("success", "untested") else 1
         # Map detail to allowed status values
         if detail in _DNS_STATUS_VALUES:
             status = detail
@@ -371,60 +392,44 @@ def _write_dns_health_section(lines: List[str], relay_set,
 def _write_aroi_section(lines: List[str], relay_set,
                         fp_to_family: Callable[[str], str],
                         aroi_map: Dict[str, dict]) -> int:
-    """Emit AROI aggregates and per-relay metrics. Returns configured relay count."""
+    """Emit AROI state metrics (schema v2). Returns configured relay count."""
     aroi_data = getattr(relay_set, "aroi_validation_data", None)
     if not aroi_data or not isinstance(aroi_data, dict):
         return 0
 
     metadata = aroi_data.get("metadata", {})
-    statistics = aroi_data.get("statistics", {})
 
     lines.append("")
     lines.append("# =========================================================================")
-    lines.append("# SECTION 2: AROI MONITORING (only AROI-configured relays)")
+    lines.append("# SECTION 2: AROI MONITORING (state model)")
     lines.append("# =========================================================================")
     lines.append("")
 
-    # --- Aggregates ---
-    total_relays = metadata.get("total_relays", 0)
-    valid_relays = metadata.get("valid_relays", 0)
-
-    _emit_help_type(lines, "aeo1_aroi_network_relays_count",
-                    "Total relays observed in network snapshot")
-    _emit(lines, "aeo1_aroi_network_relays_count", {}, total_relays)
-    lines.append("")
-
-    # Count configured relays from the relay data (relays passing _is_aroi_configured)
+    # --- Relay-state classification ---
     all_relays = relay_set.json.get("relays", [])
-    configured_relays = [r for r in all_relays if _is_aroi_configured(r)]
-    configured_count = len(configured_relays)
+    relays_sorted = sorted(all_relays, key=lambda r: r.get("fingerprint", ""))
+    state_counts = {state: 0 for state in _AROI_STATE_VALUES}
+    configured_count = 0
 
-    _emit_help_type(lines, "aeo1_aroi_configured_relays_count",
-                    "Relays with all required AROI fields configured")
-    _emit(lines, "aeo1_aroi_configured_relays_count", {}, configured_count)
+    _emit_help_type(lines, "aeo1_aroi_relay_state",
+                    "Canonical AROI relay state in schema v2 (always 1 for emitted state)")
+    for relay in relays_sorted:
+        state = _get_aroi_state(relay, aroi_map)
+        state_counts[state] += 1
+        if state != "not_configured":
+            configured_count += 1
+        fp = relay.get("fingerprint", "")
+        _emit(lines, "aeo1_aroi_relay_state", {
+            "fingerprint": fp,
+            "familyid": fp_to_family(fp),
+            "state": state,
+        }, 1)
     lines.append("")
 
-    _emit_help_type(lines, "aeo1_aroi_valid_relays_count",
-                    "AROI-configured relays that validated successfully")
-    _emit(lines, "aeo1_aroi_valid_relays_count", {}, valid_relays)
-    lines.append("")
-
-    success_ratio = round(valid_relays / configured_count, 4) if configured_count > 0 else 0
-    _emit_help_type(lines, "aeo1_aroi_success_ratio",
-                    "Fraction of AROI-configured relays that validated (0..1)")
-    _emit(lines, "aeo1_aroi_success_ratio", {}, success_ratio)
-    lines.append("")
-
-    # Proof type breakdown
-    proof_types = statistics.get("proof_types", {})
-    _emit_help_type(lines, "aeo1_aroi_proof_type_count",
-                    "Snapshot relay counts by proof_type and result")
-    for pt_key, prom_pt in [("uri_rsa", "uri-rsa"), ("dns_rsa", "dns-rsa")]:
-        pt_data = proof_types.get(pt_key, {})
-        _emit(lines, "aeo1_aroi_proof_type_count",
-              {"proof_type": prom_pt, "result": "valid"}, pt_data.get("valid", 0))
-        _emit(lines, "aeo1_aroi_proof_type_count",
-              {"proof_type": prom_pt, "result": "total"}, pt_data.get("total", 0))
+    _emit_help_type(lines, "aeo1_aroi_relays_count",
+                    "Relay count by canonical AROI state in schema v2")
+    for state in _AROI_STATE_VALUES:
+        _emit(lines, "aeo1_aroi_relays_count", {"state": state}, state_counts[state])
     lines.append("")
 
     # Scan timestamp
@@ -434,36 +439,26 @@ def _write_aroi_section(lines: List[str], relay_set,
     _emit(lines, "aeo1_aroi_scan_timestamp_seconds", {}, int(aroi_ts))
     lines.append("")
 
-    # --- Per-relay ---
-    configured_sorted = sorted(configured_relays, key=lambda r: r.get("fingerprint", ""))
-
-    _emit_help_type(lines, "aeo1_aroi_valid",
-                    "Whether relay AROI validation passed (1=valid, 0=failing)")
-    for relay in configured_sorted:
-        fp = relay.get("fingerprint", "").upper()
-        aroi_entry = aroi_map.get(fp, {})
-        valid_val = 1 if aroi_entry.get("valid") else 0
-        _emit(lines, "aeo1_aroi_valid", {
-            "fingerprint": relay.get("fingerprint", ""),
-            "familyid": fp_to_family(relay.get("fingerprint", "")),
-        }, valid_val)
-    lines.append("")
-
     # aeo1_aroi_relay_info (non-ABI, mutable labels)
     _emit_help_type(lines, "aeo1_aroi_relay_info",
-                    "Human-readable AROI relay metadata (always 1)")
-    for relay in configured_sorted:
+                    "Human-readable AROI relay metadata for configured relays (always 1)")
+    for relay in relays_sorted:
+        if not _is_aroi_configured(relay):
+            continue
         fp = relay.get("fingerprint", "").upper()
         aroi_entry = aroi_map.get(fp, {})
+        relay_domain = relay.get("aroi_domain", "")
+        if relay_domain in ("none", None):
+            relay_domain = ""
         _emit(lines, "aeo1_aroi_relay_info", {
             "fingerprint": relay.get("fingerprint", ""),
             "familyid": fp_to_family(relay.get("fingerprint", "")),
             "nick": relay.get("nickname", ""),
-            "domain": aroi_entry.get("domain", ""),
+            "domain": aroi_entry.get("domain", "") or relay_domain,
             "proof_type": aroi_entry.get("proof_type", ""),
         }, 1)
 
-    return len(configured_sorted)
+    return configured_count
 
 
 # ---------------------------------------------------------------------------
