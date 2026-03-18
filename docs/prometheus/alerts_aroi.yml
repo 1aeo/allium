@@ -6,6 +6,7 @@
 #
 # Source: https://github.com/1aeo/allium/docs/prometheus/
 # Metrics endpoint: https://metrics.1aeo.com/metrics
+# Optional recording rules: docs/prometheus/recording_rules.yml
 
 groups:
   - name: aeo1_aroi_monitoring
@@ -47,6 +48,15 @@ groups:
           severity: warning
         annotations:
           summary: "{{ $value }} configured relay(s) missing validator result"
+
+      # Optional if you install recording_rules.yml:
+      # - alert: AroiCheckedCoverageLow
+      #   expr: aeo1_aroi_checked_ratio_derived < 0.95
+      #   for: 1h
+      #   labels:
+      #     severity: warning
+      #   annotations:
+      #     summary: "AROI checked coverage is low ({{ $value | humanizePercentage }})"
 
   - name: aeo1_freshness
     interval: 1m

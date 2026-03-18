@@ -153,6 +153,15 @@ up{job="aeo1_tor_metrics"}
 - Removed legacy per-relay `aeo1_aroi_valid` (ambiguous for unchecked relays).
 - Removed emitted `aeo1_aroi_success_ratio`; compute via `aeo1_aroi_relays_count{state=...}`.
 - Canonical relay state now encoded in `aeo1_aroi_relay_state{state=...}`.
+- DNS behavior update: `status="untested"` now emits `aeo1_exit_dns_failed ... 0` (not failed).
+
+### Migration checklist (recommended)
+
+1. Update all alerts/queries that reference `aeo1_aroi_valid`.
+2. Replace family/domain failure checks with `state="configured_checked_invalid"`.
+3. Add explicit monitoring for `state="configured_unchecked"` to detect validator coverage gaps.
+4. Replace direct `aeo1_aroi_success_ratio` usage with derived expressions from `aeo1_aroi_relays_count`.
+5. Validate rule outputs in a staging Prometheus before production rollout.
 
 ### Side-by-side query mapping (including domain/family joins)
 
@@ -163,6 +172,59 @@ up{job="aeo1_tor_metrics"}
 | Domain failures | `aeo1_aroi_valid == 0 and on(fingerprint) aeo1_aroi_relay_info{domain="YOUR_DOMAIN"}` | `aeo1_aroi_relay_state{state="configured_checked_invalid"} == 1 and on(fingerprint) aeo1_aroi_relay_info{domain="YOUR_DOMAIN"}` |
 | Domain valid | `aeo1_aroi_valid == 1 and on(fingerprint) aeo1_aroi_relay_info{domain="YOUR_DOMAIN"}` | `aeo1_aroi_relay_state{state="configured_checked_valid"} == 1 and on(fingerprint) aeo1_aroi_relay_info{domain="YOUR_DOMAIN"}` |
 | Domain unchecked | not expressible cleanly | `aeo1_aroi_relay_state{state="configured_unchecked"} == 1 and on(fingerprint) aeo1_aroi_relay_info{domain="YOUR_DOMAIN"}` |
+
+---
+
+## Operator Runbook (quick triage)
+
+When an AROI alert fires:
+
+1. **Check source freshness**
+   - `aeo1_source_up{source="aroi"}`
+   - `time() - aeo1_aroi_scan_timestamp_seconds`
+2. **Identify state**
+   - `configured_checked_invalid` => validator checked and failed
+   - `configured_unchecked` => validator had no result for relay fingerprint
+3. **Drill down per relay**
+   - `aeo1_aroi_relay_state{state="configured_checked_invalid"} == 1 and on(fingerprint) aeo1_aroi_relay_info`
+4. **Assess blast radius**
+   - `aeo1_aroi_relays_count{state="configured_checked_invalid"}`
+   - `aeo1_aroi_relays_count{state="configured_unchecked"}`
+
+## Aggregate-only dashboard mode (low cardinality)
+
+If you do not need per-relay visuals, build dashboards from `aeo1_aroi_relays_count` only:
+
+```promql
+# State distribution (4-series panel)
+aeo1_aroi_relays_count
+
+# Checked coverage over configured relays
+(aeo1_aroi_relays_count{state="configured_checked_invalid"}
+ + aeo1_aroi_relays_count{state="configured_checked_valid"})
+/
+(aeo1_aroi_relays_count{state="configured_unchecked"}
+ + aeo1_aroi_relays_count{state="configured_checked_invalid"}
+ + aeo1_aroi_relays_count{state="configured_checked_valid"})
+
+# Success over configured relays
+aeo1_aroi_relays_count{state="configured_checked_valid"}
+/
+(aeo1_aroi_relays_count{state="configured_unchecked"}
+ + aeo1_aroi_relays_count{state="configured_checked_invalid"}
+ + aeo1_aroi_relays_count{state="configured_checked_valid"})
+```
+
+## Recording rules (optional)
+
+If you want stable precomputed ratio series, use recording rules:
+
+```bash
+cp recording_rules.yml /etc/prometheus/rules/
+kill -HUP $(pidof prometheus)
+```
+
+See `docs/prometheus/recording_rules.yml` for ready-to-use examples.
 
 ---
 
