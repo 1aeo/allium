@@ -13,7 +13,7 @@ See docs/prometheus/README.md for the full schema reference.
 import math
 import os
 import time
-from typing import Callable, Dict, List, Optional, Set
+from typing import Callable, Dict, List, Set
 
 from .aroi_validation import _check_aroi_fields
 
@@ -132,17 +132,58 @@ def _build_aroi_map(relay_set) -> Dict[str, dict]:
     return result_map
 
 
-def _get_aroi_state(relay: dict, aroi_map: Dict[str, dict]) -> str:
-    """Classify a relay into one of the schema-v2 AROI states."""
-    if not _is_aroi_configured(relay):
-        return "not_configured"
+def _build_aroi_relay_rows(relays: List[dict], fp_to_family: Callable[[str], str],
+                           aroi_map: Dict[str, dict]):
+    """Build canonical relay rows and aggregate state counts in one pass.
 
-    fp = relay.get("fingerprint", "").upper()
-    entry = aroi_map.get(fp)
-    if not entry:
-        return "configured_unchecked"
+    Returns:
+        tuple(rows, state_counts, configured_count)
+        - rows: list of dicts with precomputed labels/state for emission
+        - state_counts: dict[state] -> count
+        - configured_count: number of configured relays
+    """
+    rows = []
+    state_counts = {state: 0 for state in _AROI_STATE_VALUES}
+    configured_count = 0
 
-    return "configured_checked_valid" if entry.get("valid") else "configured_checked_invalid"
+    for relay in sorted(relays, key=lambda r: r.get("fingerprint", "")):
+        fp = relay.get("fingerprint", "")
+        fp_upper = fp.upper()
+        familyid = fp_to_family(fp)
+
+        configured = _is_aroi_configured(relay)
+        aroi_entry = aroi_map.get(fp_upper, {}) if configured else {}
+
+        if not configured:
+            state = "not_configured"
+            domain = ""
+            proof_type = ""
+        else:
+            configured_count += 1
+            relay_domain = relay.get("aroi_domain", "")
+            if relay_domain in ("none", None):
+                relay_domain = ""
+
+            if not aroi_entry:
+                state = "configured_unchecked"
+            else:
+                state = "configured_checked_valid" if aroi_entry.get("valid") else "configured_checked_invalid"
+
+            domain = aroi_entry.get("domain", "") or relay_domain
+            proof_type = aroi_entry.get("proof_type", "")
+
+        state_counts[state] += 1
+        rows.append({
+            "fingerprint": fp,
+            "familyid": familyid,
+            "nick": relay.get("nickname", ""),
+            "state": state,
+            "configured": configured,
+            "domain": domain,
+            "proof_type": proof_type,
+        })
+
+    return rows, state_counts, configured_count
 
 
 def _get_verified_aroi(relay: dict, aroi_map: Dict[str, dict],
@@ -405,24 +446,18 @@ def _write_aroi_section(lines: List[str], relay_set,
     lines.append("# =========================================================================")
     lines.append("")
 
-    # --- Relay-state classification ---
+    # --- Relay-state classification (single pass precompute) ---
     all_relays = relay_set.json.get("relays", [])
-    relays_sorted = sorted(all_relays, key=lambda r: r.get("fingerprint", ""))
-    state_counts = {state: 0 for state in _AROI_STATE_VALUES}
-    configured_count = 0
+    relay_rows, state_counts, configured_count = _build_aroi_relay_rows(
+        all_relays, fp_to_family, aroi_map)
 
     _emit_help_type(lines, "aeo1_aroi_relay_state",
                     "Canonical AROI relay state in schema v2 (always 1 for emitted state)")
-    for relay in relays_sorted:
-        state = _get_aroi_state(relay, aroi_map)
-        state_counts[state] += 1
-        if state != "not_configured":
-            configured_count += 1
-        fp = relay.get("fingerprint", "")
+    for row in relay_rows:
         _emit(lines, "aeo1_aroi_relay_state", {
-            "fingerprint": fp,
-            "familyid": fp_to_family(fp),
-            "state": state,
+            "fingerprint": row["fingerprint"],
+            "familyid": row["familyid"],
+            "state": row["state"],
         }, 1)
     lines.append("")
 
@@ -442,20 +477,15 @@ def _write_aroi_section(lines: List[str], relay_set,
     # aeo1_aroi_relay_info (non-ABI, mutable labels)
     _emit_help_type(lines, "aeo1_aroi_relay_info",
                     "Human-readable AROI relay metadata for configured relays (always 1)")
-    for relay in relays_sorted:
-        if not _is_aroi_configured(relay):
+    for row in relay_rows:
+        if not row["configured"]:
             continue
-        fp = relay.get("fingerprint", "").upper()
-        aroi_entry = aroi_map.get(fp, {})
-        relay_domain = relay.get("aroi_domain", "")
-        if relay_domain in ("none", None):
-            relay_domain = ""
         _emit(lines, "aeo1_aroi_relay_info", {
-            "fingerprint": relay.get("fingerprint", ""),
-            "familyid": fp_to_family(relay.get("fingerprint", "")),
-            "nick": relay.get("nickname", ""),
-            "domain": aroi_entry.get("domain", "") or relay_domain,
-            "proof_type": aroi_entry.get("proof_type", ""),
+            "fingerprint": row["fingerprint"],
+            "familyid": row["familyid"],
+            "nick": row["nick"],
+            "domain": row["domain"],
+            "proof_type": row["proof_type"],
         }, 1)
 
     return configured_count
