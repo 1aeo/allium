@@ -12,9 +12,16 @@ import sys
 import tempfile
 import unittest
 
+sys.path.insert(0, os.path.dirname(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "allium"))
 
 from lib.prometheus_metrics import generate_prometheus_metrics  # noqa: E402
+from prometheus_fixtures import (  # noqa: E402
+    make_relay as _make_base_relay,
+    make_relay_set as _make_base_relay_set,
+    sample_aroi_data as _sample_base_aroi_data,
+    sample_dns_metadata as _sample_base_dns_metadata,
+)
 
 
 def _relay(
@@ -24,61 +31,57 @@ def _relay(
     flags=None,
     dns_detail="success",
 ):
-    return {
-        "fingerprint": fingerprint,
-        "nickname": f"n{fingerprint[:4]}",
-        "contact": contact,
-        "aroi_domain": aroi_domain,
-        "flags": flags or ["Exit", "Running", "Valid"],
-        "exit_dns_health_detail": dns_detail,
-        "exit_dns_health_timing_ms": None if dns_detail in ("relay_unreachable", "untested") else 1000,
-        "exit_dns_health_consecutive_failures": 0,
-    }
+    return _make_base_relay(
+        fingerprint=fingerprint,
+        nickname=f"n{fingerprint[:4]}",
+        flags=flags or ["Exit", "Running", "Valid"],
+        contact=contact,
+        aroi_domain=aroi_domain,
+        dns_status=dns_detail,
+        dns_timing=None if dns_detail in ("relay_unreachable", "untested") else 1000,
+        dns_consecutive=0,
+    )
 
 
 def _relay_set(relays, dns_data, aroi_data):
-    class RS:
-        pass
-
-    rs = RS()
-    rs.json = {"relays": relays}
-    rs.exit_dns_health_data = dns_data
-    rs.aroi_validation_data = aroi_data
-    rs._fp_to_family_key = {}
-    rs.validated_aroi_domains = set()
-    return rs
+    return _make_base_relay_set(
+        relays,
+        exit_dns_health_data=dns_data,
+        aroi_validation_data=aroi_data,
+        fp_to_family_key={},
+        validated_aroi_domains=set(),
+    )
 
 
 def _dns_data():
-    return {
-        "metadata": {
-            "timestamp": "2026-03-08T08:00:00Z",
-            "consensus_relays": 5,
-            "tested_relays": 5,
-            "unreachable_relays": 0,
-            "dns_success": 1,
-            "dns_fail": 1,
-            "dns_timeout": 1,
-            "dns_wrong_ip": 0,
-            "dns_socks_error": 0,
-            "dns_network_error": 0,
-            "dns_error": 1,
-            "dns_exception": 0,
-            "dns_unknown": 1,
-            "timing": {"total": {"avg_ms": 1, "min_ms": 1, "max_ms": 1, "p50_ms": 1, "p95_ms": 1, "p99_ms": 1}},
-        }
-    }
+    data = _sample_base_dns_metadata()
+    data["metadata"].update({
+        "consensus_relays": 5,
+        "tested_relays": 5,
+        "unreachable_relays": 0,
+        "dns_success": 1,
+        "dns_fail": 1,
+        "dns_timeout": 1,
+        "dns_wrong_ip": 0,
+        "dns_socks_error": 0,
+        "dns_network_error": 0,
+        "dns_error": 1,
+        "dns_exception": 0,
+        "dns_unknown": 1,
+    })
+    data["metadata"]["timing"] = {"total": {"avg_ms": 1, "min_ms": 1, "max_ms": 1, "p50_ms": 1, "p95_ms": 1, "p99_ms": 1}}
+    return data
 
 
 def _aroi_data():
-    return {
-        "metadata": {"timestamp": "2026-03-08T10:00:00Z"},
-        "statistics": {},
-        "results": [
-            {"fingerprint": "AAAA", "valid": True, "domain": "example.com", "proof_type": "uri-rsa"},
-            {"fingerprint": "BBBB", "valid": False, "domain": "broken.org", "proof_type": "dns-rsa"},
-        ],
-    }
+    data = _sample_base_aroi_data()
+    data["metadata"] = {"timestamp": "2026-03-08T10:00:00Z"}
+    data["statistics"] = {}
+    data["results"] = [
+        {"fingerprint": "AAAA", "valid": True, "domain": "example.com", "proof_type": "uri-rsa"},
+        {"fingerprint": "BBBB", "valid": False, "domain": "broken.org", "proof_type": "dns-rsa"},
+    ]
+    return data
 
 
 def _render_metrics():
@@ -99,6 +102,34 @@ def _render_metrics():
         generate_prometheus_metrics(rs, td)
         with open(os.path.join(td, "metrics"), encoding="utf-8") as f:
             return f.read()
+
+
+def _metric_names_from_content(content: str):
+    names = set()
+    for line in content.split("\n"):
+        if not line or line.startswith("#"):
+            continue
+        names.add(line.split("{", 1)[0].split(" ", 1)[0])
+    return names
+
+
+def _extract_non_comment_aeo1_tokens(path: str):
+    with open(path, encoding="utf-8") as f:
+        lines = f.readlines()
+    active_lines = [ln for ln in lines if not ln.lstrip().startswith("#")]
+    return set(re.findall(r"\baeo1_[a-zA-Z0-9_:]+\b", "".join(active_lines)))
+
+
+def _extract_record_names(path: str):
+    with open(path, encoding="utf-8") as f:
+        text = f.read()
+    return set(re.findall(r"^\s*-\s*record:\s*(aeo1_[a-zA-Z0-9_:]+)\s*$", text, re.MULTILINE))
+
+
+def _extract_group_names(path: str):
+    with open(path, encoding="utf-8") as f:
+        text = f.read()
+    return set(re.findall(r"^\s*-\s*name:\s*(aeo1_[a-zA-Z0-9_:]+)\s*$", text, re.MULTILINE))
 
 
 class TestPrometheusSchemaV2Contract(unittest.TestCase):
@@ -231,6 +262,21 @@ class TestPrometheusDocsAndAlertsContract(unittest.TestCase):
         self.assertIn('state="configured_unchecked"', text)
         self.assertIn('state="configured_checked_invalid"', text)
         self.assertIn('state="configured_checked_valid"', text)
+
+    def test_alert_and_recording_rule_metric_references_exist(self):
+        emitted = _metric_names_from_content(_render_metrics())
+
+        alerts_path = "/workspace/docs/prometheus/alerts_aroi.yml"
+        alerts_refs = _extract_non_comment_aeo1_tokens(alerts_path)
+        alerts_refs -= _extract_group_names(alerts_path)
+        self.assertTrue(alerts_refs.issubset(emitted), f"unknown alert refs: {sorted(alerts_refs - emitted)}")
+
+        rules_path = "/workspace/docs/prometheus/recording_rules.yml"
+        rules_refs = _extract_non_comment_aeo1_tokens(rules_path)
+        record_names = _extract_record_names(rules_path)
+        group_names = _extract_group_names(rules_path)
+        expr_refs = rules_refs - record_names - group_names
+        self.assertTrue(expr_refs.issubset(emitted), f"unknown recording expr refs: {sorted(expr_refs - emitted)}")
 
 
 if __name__ == "__main__":
