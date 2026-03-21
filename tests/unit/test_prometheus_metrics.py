@@ -136,6 +136,14 @@ class TestGetFamilyId(unittest.TestCase):
 
 
 class TestIsAroiConfigured(unittest.TestCase):
+    def test_uses_cached_boolean_true(self):
+        relay = {"contact": "invalid", "aroi_configured": True}
+        self.assertTrue(_is_aroi_configured(relay))
+
+    def test_uses_cached_boolean_false(self):
+        relay = {"contact": "url:https://x proof:uri-rsa ciissversion:2", "aroi_configured": False}
+        self.assertFalse(_is_aroi_configured(relay))
+
     def test_all_fields(self):
         relay = {"contact": "email:a@b.com url:https://b.com proof:uri-rsa ciissversion:2"}
         self.assertTrue(_is_aroi_configured(relay))

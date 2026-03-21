@@ -13,7 +13,7 @@ See docs/prometheus/README.md for the full schema reference.
 import math
 import os
 import time
-from typing import Callable, Dict, List, Set
+from typing import Callable, Dict, List, Protocol, Set
 
 from .aroi_validation import _check_aroi_fields
 
@@ -31,6 +31,26 @@ _AROI_STATE_VALUES = (
     "configured_checked_invalid",
     "configured_checked_valid",
 )
+
+
+class _LineAppender(Protocol):
+    """Protocol for line sinks used by metric emitters."""
+
+    def append(self, value: str) -> None:
+        """Append one line (without trailing newline)."""
+
+
+class _StreamingLineSink:
+    """Stream line-based output directly to a file handle."""
+
+    def __init__(self, file_handle):
+        self._file_handle = file_handle
+        self.bytes_written = 0
+
+    def append(self, value: str) -> None:
+        line = f"{value}\n"
+        self._file_handle.write(line)
+        self.bytes_written += len(line.encode("utf-8"))
 
 
 # ---------------------------------------------------------------------------
@@ -79,12 +99,12 @@ def _safe_numeric(value) -> str:
     return str(f)
 
 
-def _emit(lines: List[str], name: str, labels: Dict[str, str], value) -> None:
+def _emit(lines: _LineAppender, name: str, labels: Dict[str, str], value) -> None:
     """Append a single metric line."""
     lines.append(f"{name}{_format_labels(labels)} {_safe_numeric(value)}")
 
 
-def _emit_help_type(lines: List[str], name: str, help_text: str, type_name: str = "gauge") -> None:
+def _emit_help_type(lines: _LineAppender, name: str, help_text: str, type_name: str = "gauge") -> None:
     """Append HELP and TYPE header lines for a metric."""
     lines.append(f"# HELP {name} {help_text}")
     lines.append(f"# TYPE {name} {type_name}")
@@ -110,6 +130,10 @@ def _is_aroi_configured(relay: dict) -> bool:
 
     Uses the canonical ``_check_aroi_fields`` predicate from aroi_validation.
     """
+    cached = relay.get("aroi_configured")
+    if isinstance(cached, bool):
+        return cached
+
     contact = relay.get("contact", "") or ""
     fields = _check_aroi_fields(contact)
     return fields.get("complete", False)
@@ -228,7 +252,7 @@ def _parse_timestamp_epoch(ts_str) -> float:
 # Meta section (always emitted)
 # ---------------------------------------------------------------------------
 
-def _write_meta_section(lines: List[str], relay_set) -> None:
+def _write_meta_section(lines: _LineAppender, relay_set) -> None:
     """Emit build info, generation timestamp, and source-availability metrics."""
     lines.append("# =========================================================================")
     lines.append("# META (always emitted)")
@@ -281,7 +305,38 @@ def _write_meta_section(lines: List[str], relay_set) -> None:
 # DNS Health section
 # ---------------------------------------------------------------------------
 
-def _write_dns_health_section(lines: List[str], relay_set,
+def _build_exit_dns_rows(relays: List[dict],
+                         fp_to_family: Callable[[str], str],
+                         aroi_map: Dict[str, dict],
+                         validated_domains: Set[str]):
+    """Build precomputed DNS metric rows for exit relays."""
+    rows = []
+    exit_relays = sorted(
+        [r for r in relays if "Exit" in r.get("flags", [])],
+        key=lambda r: r.get("fingerprint", "")
+    )
+    for relay in exit_relays:
+        fp = relay.get("fingerprint", "")
+        detail = relay.get("exit_dns_health_detail", "untested")
+        failed = 0 if detail in ("success", "untested") else 1
+        if detail in _DNS_STATUS_VALUES:
+            status = detail
+        else:
+            status = "dns_fail" if failed else "success"
+        rows.append({
+            "fingerprint": fp,
+            "familyid": fp_to_family(fp),
+            "status": status,
+            "failed": failed,
+            "latency": relay.get("exit_dns_health_timing_ms"),
+            "consecutive_failures": relay.get("exit_dns_health_consecutive_failures", 0),
+            "nick": relay.get("nickname", ""),
+            "verifiedaroi": _get_verified_aroi(relay, aroi_map, validated_domains),
+        })
+    return rows
+
+
+def _write_dns_health_section(lines: _LineAppender, relay_set,
                               fp_to_family: Callable[[str], str],
                               aroi_map: Dict[str, dict],
                               validated_domains: Set[str]) -> int:
@@ -362,75 +417,60 @@ def _write_dns_health_section(lines: List[str], relay_set,
 
     # --- Per-relay metrics ---
     relays = relay_set.json.get("relays", [])
-    exit_relays = sorted(
-        [r for r in relays if "Exit" in r.get("flags", [])],
-        key=lambda r: r.get("fingerprint", "")
-    )
+    dns_rows = _build_exit_dns_rows(relays, fp_to_family, aroi_map, validated_domains)
 
     # aeo1_exit_dns_failed
     _emit_help_type(lines, "aeo1_exit_dns_failed",
                     "Whether exit relay DNS health check failed (1=failed, 0=healthy)")
-    for relay in exit_relays:
-        fp = relay.get("fingerprint", "")
-        detail = relay.get("exit_dns_health_detail", "untested")
-        failed = 0 if detail in ("success", "untested") else 1
-        # Map detail to allowed status values
-        if detail in _DNS_STATUS_VALUES:
-            status = detail
-        else:
-            status = "dns_fail" if failed else "success"
+    for row in dns_rows:
         _emit(lines, "aeo1_exit_dns_failed", {
-            "fingerprint": fp,
-            "familyid": fp_to_family(fp),
-            "status": status,
-        }, failed)
+            "fingerprint": row["fingerprint"],
+            "familyid": row["familyid"],
+            "status": row["status"],
+        }, row["failed"])
     lines.append("")
 
     # aeo1_exit_dns_latency_ms
     _emit_help_type(lines, "aeo1_exit_dns_latency_ms",
                     "DNS resolution latency in milliseconds for the relay in latest scan")
-    for relay in exit_relays:
-        latency = relay.get("exit_dns_health_timing_ms")
+    for row in dns_rows:
+        latency = row["latency"]
         if latency is not None:
-            fp = relay.get("fingerprint", "")
             _emit(lines, "aeo1_exit_dns_latency_ms", {
-                "fingerprint": fp,
-                "familyid": fp_to_family(fp),
+                "fingerprint": row["fingerprint"],
+                "familyid": row["familyid"],
             }, latency)
     lines.append("")
 
     # aeo1_exit_dns_consecutive_failures
     _emit_help_type(lines, "aeo1_exit_dns_consecutive_failures",
                     "Consecutive DNS scan failures for this relay")
-    for relay in exit_relays:
-        fp = relay.get("fingerprint", "")
-        cf = relay.get("exit_dns_health_consecutive_failures", 0)
+    for row in dns_rows:
         _emit(lines, "aeo1_exit_dns_consecutive_failures", {
-            "fingerprint": fp,
-            "familyid": fp_to_family(fp),
-        }, cf)
+            "fingerprint": row["fingerprint"],
+            "familyid": row["familyid"],
+        }, row["consecutive_failures"])
     lines.append("")
 
     # aeo1_exit_relay_info (non-ABI, mutable labels)
     _emit_help_type(lines, "aeo1_exit_relay_info",
                     "Human-readable exit relay metadata (always 1)")
-    for relay in exit_relays:
-        fp = relay.get("fingerprint", "")
+    for row in dns_rows:
         _emit(lines, "aeo1_exit_relay_info", {
-            "fingerprint": fp,
-            "familyid": fp_to_family(fp),
-            "nick": relay.get("nickname", ""),
-            "verifiedaroi": _get_verified_aroi(relay, aroi_map, validated_domains),
+            "fingerprint": row["fingerprint"],
+            "familyid": row["familyid"],
+            "nick": row["nick"],
+            "verifiedaroi": row["verifiedaroi"],
         }, 1)
 
-    return len(exit_relays)
+    return len(dns_rows)
 
 
 # ---------------------------------------------------------------------------
 # AROI section
 # ---------------------------------------------------------------------------
 
-def _write_aroi_section(lines: List[str], relay_set,
+def _write_aroi_section(lines: _LineAppender, relay_set,
                         fp_to_family: Callable[[str], str],
                         aroi_map: Dict[str, dict]) -> int:
     """Emit AROI state metrics (schema v2). Returns configured relay count."""
@@ -505,8 +545,6 @@ def generate_prometheus_metrics(relay_set, output_dir: str) -> dict:
     Returns:
         dict with generation statistics.
     """
-    lines: List[str] = []
-
     # Build shared lookups once
     aroi_map = _build_aroi_map(relay_set)
     validated_domains = getattr(relay_set, "validated_aroi_domains", set()) or set()
@@ -514,33 +552,31 @@ def generate_prometheus_metrics(relay_set, output_dir: str) -> dict:
     def fp_to_family(fingerprint: str) -> str:
         return _get_family_id(relay_set, fingerprint)
 
-    # Meta — always emitted
-    _write_meta_section(lines, relay_set)
-
-    # DNS Health — conditional
-    exit_count = _write_dns_health_section(
-        lines, relay_set, fp_to_family, aroi_map, validated_domains)
-    dns_available = bool(getattr(relay_set, "exit_dns_health_data", None))
-
-    # AROI — conditional
-    aroi_count = _write_aroi_section(lines, relay_set, fp_to_family, aroi_map)
-    aroi_available = bool(getattr(relay_set, "aroi_validation_data", None))
-
-    # Trailing newline + EOF
-    lines.append("# EOF")
-    lines.append("")
-
-    content = "\n".join(lines)
-
     # Atomic write: tmp file then rename
     os.makedirs(output_dir, exist_ok=True)
     tmp_path = os.path.join(output_dir, "metrics.tmp")
     final_path = os.path.join(output_dir, "metrics")
     with open(tmp_path, "w", encoding="utf-8") as f:
-        f.write(content)
-    os.replace(tmp_path, final_path)
+        lines = _StreamingLineSink(f)
 
-    file_size_kb = round(len(content.encode("utf-8")) / 1024, 1)
+        # Meta — always emitted
+        _write_meta_section(lines, relay_set)
+
+        # DNS Health — conditional
+        exit_count = _write_dns_health_section(
+            lines, relay_set, fp_to_family, aroi_map, validated_domains)
+        dns_available = bool(getattr(relay_set, "exit_dns_health_data", None))
+
+        # AROI — conditional
+        aroi_count = _write_aroi_section(lines, relay_set, fp_to_family, aroi_map)
+        aroi_available = bool(getattr(relay_set, "aroi_validation_data", None))
+
+        # Trailing newline + EOF
+        lines.append("# EOF")
+        lines.append("")
+
+        file_size_kb = round(lines.bytes_written / 1024, 1)
+    os.replace(tmp_path, final_path)
 
     return {
         "exit_relays": exit_count,

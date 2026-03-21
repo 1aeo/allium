@@ -113,6 +113,22 @@ def _metric_names_from_content(content: str):
     return names
 
 
+def _label_key_sets_for_metric(content: str, metric_name: str):
+    label_sets = set()
+    pattern = re.compile(rf'^{re.escape(metric_name)}(?:\{{([^}}]*)\}})?\s', re.MULTILINE)
+    for labels_blob in pattern.findall(content):
+        if not labels_blob:
+            label_sets.add(frozenset())
+            continue
+        keys = []
+        for token in labels_blob.split(","):
+            key = token.split("=", 1)[0].strip()
+            if key:
+                keys.append(key)
+        label_sets.add(frozenset(keys))
+    return label_sets
+
+
 def _extract_non_comment_aeo1_tokens(path: str):
     with open(path, encoding="utf-8") as f:
         lines = f.readlines()
@@ -179,6 +195,27 @@ class TestPrometheusSchemaV2Contract(unittest.TestCase):
                 "configured_checked_valid",
             },
         )
+
+    def test_frozen_label_keys_for_core_metrics(self):
+        content = _render_metrics()
+        expected = {
+            "aeo1_build_info": {"schema", "generator"},
+            "aeo1_source_up": {"source"},
+            "aeo1_source_last_success_timestamp_seconds": {"source"},
+            "aeo1_exit_dns_errors_count": {"error_type"},
+            "aeo1_exit_dns_latency_ms_stat": {"stat"},
+            "aeo1_exit_dns_failed": {"fingerprint", "familyid", "status"},
+            "aeo1_exit_dns_latency_ms": {"fingerprint", "familyid"},
+            "aeo1_exit_dns_consecutive_failures": {"fingerprint", "familyid"},
+            "aeo1_exit_relay_info": {"fingerprint", "familyid", "nick", "verifiedaroi"},
+            "aeo1_aroi_relay_state": {"fingerprint", "familyid", "state"},
+            "aeo1_aroi_relays_count": {"state"},
+            "aeo1_aroi_relay_info": {"fingerprint", "familyid", "nick", "domain", "proof_type"},
+        }
+        for metric, expected_keys in expected.items():
+            found = _label_key_sets_for_metric(content, metric)
+            self.assertTrue(found, f"missing metric lines for {metric}")
+            self.assertEqual(found, {frozenset(expected_keys)}, f"unexpected labels for {metric}")
 
     def test_dns_status_enum_includes_untested(self):
         content = _render_metrics()
