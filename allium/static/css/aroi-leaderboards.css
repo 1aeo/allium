@@ -298,8 +298,7 @@
 }
 .aroi-rankings-table.aroi-standard-table { margin-bottom: 10px; }
 
-/* Pagination nav above and below tables (shared styling) */
-.pagination-nav,
+/* Pagination nav below tables */
 .pagination-nav-bottom {
     margin: 0 0 30px 0;
     text-align: center;
@@ -308,7 +307,6 @@
     padding: 4px;
     background-color: var(--color-bg-light);
 }
-.pagination-nav a,
 .pagination-nav-bottom a {
     display: inline-block;
     padding: 4px 8px;
@@ -321,8 +319,6 @@
     font-size: 14px;
     line-height: 1.2;
 }
-.pagination-nav a:hover,
-.pagination-nav a.active,
 .pagination-nav-bottom a:hover,
 .pagination-nav-bottom a.active {
     background-color: var(--color-link);

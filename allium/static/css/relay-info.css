@@ -100,9 +100,10 @@ dt:target {
     }
 }
 
-/* Authority table: dim rows where the authority did not vote for this relay */
+/* Authority table: dim rows where the authority did not vote for this relay.
+   opacity chosen to be clearly "secondary" while keeping links/status readable. */
 .row-not-voted {
-    opacity: 0.5;
+    opacity: 0.55;
 }
 
 /* Shared section styling for new consolidated sections (#bandwidth, #uptime, #operator, etc.) */
