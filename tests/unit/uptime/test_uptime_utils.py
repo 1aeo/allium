@@ -14,6 +14,8 @@ import statistics
 import time
 import unittest
 
+import pytest
+
 from allium.lib.uptime_utils import (
     normalize_uptime_value,
     calculate_relay_uptime_average,
@@ -292,6 +294,7 @@ class TestConsolidatedProcessing(unittest.TestCase):
                 }
             })
     
+    @pytest.mark.slow
     def test_consolidated_processing_performance(self):
         """Test performance of consolidated uptime processing"""
         start_time = time.time()
@@ -419,6 +422,7 @@ class TestDataIntegrityAndEdgeCases(unittest.TestCase):
             # Function doesn't handle None input - this is acceptable behavior
             pass
     
+    @pytest.mark.slow
     def test_memory_efficiency(self):
         """Test memory efficiency with large datasets"""
         # This test verifies that large datasets don't cause memory issues
