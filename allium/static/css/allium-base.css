@@ -184,7 +184,7 @@
 
 /* verified-hostname, unverified-hostname, status classes,
    section-box, subsection-card, subsection-header, and
-   status-note moved to relay-info.html (only consumer) */
+   status-note moved to relay-info.css (only consumer) */
 
 /* ========== 6. CONTACT & TEXT TRUNCATION ========== */
 .contact-text {
@@ -261,8 +261,8 @@
 .aroi-center-text { text-align: center; }
 .aroi-subsection { margin-bottom: 30px; }
 
-/* AROI Leaderboard CSS moved to aroi-leaderboards.html (only consumer) */
-/* Network Health CSS moved to network-health-dashboard.html (only consumer) */
+/* AROI Leaderboard CSS moved to aroi-leaderboards.css (only consumer) */
+/* Network Health CSS moved to network-health.css (only consumer) */
 
 /* ========== 10. CSS-ONLY TOOLTIPS ========== */
 /* Base tooltip styling for elements with title attributes */
@@ -566,7 +566,7 @@ th[title]::after {
         display: block !important;
     }
 }
-/* API Diagnostics CSS moved to api-diagnostics.html (only consumer) */
+/* API Diagnostics CSS moved to api-diagnostics.css (only consumer) */
 
 /* ========== 13. SHARED SEMANTIC CLASSES (al- namespaced) ========== */
 /*
