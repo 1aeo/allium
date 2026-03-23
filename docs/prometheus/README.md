@@ -226,6 +226,12 @@ kill -HUP $(pidof prometheus)
 
 See `docs/prometheus/recording_rules.yml` for ready-to-use examples.
 
+## Production Go/No-Go Checklist
+
+Before deploying schema updates to production, run the explicit gate checklist in:
+
+- `docs/prometheus/PRODUCTION_CHECKLIST.md`
+
 ---
 
 ## Schema Policy
