@@ -12,6 +12,7 @@ To add a new sorted-by variant (e.g., "by-latency"):
   - Add an entry to SORTED_BY_VARIANTS
 """
 
+import filecmp
 import os
 from shutil import copy2
 
@@ -202,7 +203,9 @@ def _sync_static_files(src_dir, dst_dir):
     """Copy only new or changed files from src_dir to dst_dir.
 
     A file is copied when the destination is missing, the size differs,
-    or the source mtime is newer.  Returns (copied, skipped) counts.
+    the source mtime is newer, or byte content differs (same size/mtime
+    can still diverge after checkout or archive extraction).  Returns
+    (copied, skipped) counts.
     """
     copied = skipped = 0
     for dirpath, _dirnames, filenames in os.walk(src_dir):
@@ -214,11 +217,12 @@ def _sync_static_files(src_dir, dst_dir):
             src_file = os.path.join(dirpath, fname)
             dst_file = os.path.join(dst_subdir, fname)
 
-            if os.path.exists(dst_file):
+            if os.path.isfile(dst_file):
                 src_stat = os.stat(src_file)
                 dst_stat = os.stat(dst_file)
                 if (src_stat.st_size == dst_stat.st_size
-                        and src_stat.st_mtime <= dst_stat.st_mtime):
+                        and src_stat.st_mtime <= dst_stat.st_mtime
+                        and filecmp.cmp(src_file, dst_file, shallow=False)):
                     skipped += 1
                     continue
 
