@@ -138,7 +138,12 @@ def test_is_aroi_configured_variants(relay, expected):
 
 
 def test_build_aroi_map_uppercase(make_relay_set, sample_aroi_data):
-    rs = make_relay_set([], aroi_validation_data=sample_aroi_data())
+    aroi_payload = sample_aroi_data()
+    aroi_payload["results"] = [
+        {"fingerprint": "aaaa", "valid": True, "domain": "example.com", "proof_type": "uri-rsa"},
+        {"fingerprint": "BbBb", "valid": False, "domain": "broken.org", "proof_type": "dns-rsa"},
+    ]
+    rs = make_relay_set([], aroi_validation_data=aroi_payload)
     amap = _build_aroi_map(rs)
     assert "AAAA" in amap
     assert "BBBB" in amap
@@ -236,10 +241,10 @@ def test_aroi_state_and_counts(tmp_path, make_relay, make_relay_set, sample_dns_
         tmp_path, make_relay_set, sample_dns_metadata, sample_aroi_metadata, relays, aroi_data=sample_aroi_data()
     )
     assert stats["aroi_relays"] == 3
-    assert 'state="configured_checked_valid"} 1' in content
-    assert 'state="configured_checked_invalid"} 1' in content
-    assert 'state="configured_unchecked"} 1' in content
-    assert 'state="not_configured"} 1' in content
+    assert 'aeo1_aroi_relay_state{fingerprint="AAAA",familyid="",state="configured_checked_valid"} 1' in content
+    assert 'aeo1_aroi_relay_state{fingerprint="BBBB",familyid="",state="configured_checked_invalid"} 1' in content
+    assert 'aeo1_aroi_relay_state{fingerprint="CCCC",familyid="",state="configured_unchecked"} 1' in content
+    assert 'aeo1_aroi_relay_state{fingerprint="DDDD",familyid="",state="not_configured"} 1' in content
     assert 'aeo1_aroi_relays_count{state="not_configured"} 1' in content
     assert 'aeo1_aroi_relays_count{state="configured_unchecked"} 1' in content
     assert 'aeo1_aroi_relays_count{state="configured_checked_invalid"} 1' in content
@@ -257,13 +262,22 @@ def test_aroi_exactly_one_state_per_relay(tmp_path, make_relay, make_relay_set, 
     content, _ = _generate(
         tmp_path, make_relay_set, sample_dns_metadata, sample_aroi_metadata, relays, aroi_data=sample_aroi_data()
     )
-    for fp in ("AAAA", "BBBB", "CCCC", "DDDD"):
+    expected_states = {
+        "AAAA": "configured_checked_valid",
+        "BBBB": "configured_checked_invalid",
+        "CCCC": "configured_unchecked",
+        "DDDD": "not_configured",
+    }
+    for fp, expected_state in expected_states.items():
         matches = re.findall(
             rf'^aeo1_aroi_relay_state\{{fingerprint="{fp}",familyid="",state="[^"]+"\}} 1$',
             content,
             re.MULTILINE,
         )
         assert len(matches) == 1, f"expected exactly one state for {fp}"
+        assert (
+            f'aeo1_aroi_relay_state{{fingerprint="{fp}",familyid="",state="{expected_state}"}} 1' in content
+        ), f"expected state {expected_state} for {fp}"
 
 
 def test_aroi_legacy_metrics_removed(tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_data,
