@@ -13,13 +13,20 @@ def make_relay(
     dns_consecutive=0,
     aroi_domain="none",
 ):
+    if dns_status == "success":
+        health_status = "success"
+    elif dns_status == "untested":
+        health_status = "untested"
+    else:
+        health_status = "fail"
+
     return {
         "fingerprint": fingerprint,
         "nickname": nickname,
         "flags": flags or ["Exit", "Fast", "Guard", "Running", "Stable", "Valid"],
         "contact": contact,
         "aroi_domain": aroi_domain,
-        "exit_dns_health_status": "success" if dns_status == "success" else "fail",
+        "exit_dns_health_status": health_status,
         "exit_dns_health_detail": dns_status,
         "exit_dns_health_timing_ms": dns_timing,
         "exit_dns_health_consecutive_failures": dns_consecutive,

@@ -1,20 +1,12 @@
-"""
-Unit tests for allium.lib.prometheus_metrics (schema v2).
-"""
+"""Pytest tests for allium.lib.prometheus_metrics (schema v2)."""
 
-import os
 import re
-import sys
-import tempfile
 import time
-import unittest
+from pathlib import Path
 
-# Add test utilities to path
-sys.path.insert(0, os.path.dirname(__file__))
-# Add the allium package to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "allium"))
+import pytest
 
-from lib.prometheus_metrics import (  # noqa: E402
+from allium.lib.prometheus_metrics import (
     SCHEMA_VERSION,
     _build_aroi_map,
     _format_labels,
@@ -25,504 +17,405 @@ from lib.prometheus_metrics import (  # noqa: E402
     _sanitize_prom_label,
     generate_prometheus_metrics,
 )
-from prometheus_fixtures import (  # noqa: E402
+from tests.unit.prometheus_fixtures import (
     make_relay as _make_relay,
     make_relay_set as _make_relay_set,
     sample_aroi_data as _sample_aroi_data,
     sample_dns_metadata as _sample_dns_metadata,
 )
 
-
-# ---------------------------------------------------------------------------
-# Tests: label escaping
-# ---------------------------------------------------------------------------
-
-class TestSanitizeLabel(unittest.TestCase):
-    def test_normal_string(self):
-        self.assertEqual(_sanitize_prom_label("hello"), "hello")
-
-    def test_quotes(self):
-        self.assertEqual(_sanitize_prom_label('say "hi"'), 'say \\"hi\\"')
-
-    def test_backslash(self):
-        self.assertEqual(_sanitize_prom_label("a\\b"), "a\\\\b")
-
-    def test_newline(self):
-        self.assertEqual(_sanitize_prom_label("line1\nline2"), "line1\\nline2")
-
-    def test_none(self):
-        self.assertEqual(_sanitize_prom_label(None), "")
-
-    def test_empty(self):
-        self.assertEqual(_sanitize_prom_label(""), "")
+_USE_DEFAULT = object()
 
 
-class TestFormatLabels(unittest.TestCase):
-    def test_empty(self):
-        self.assertEqual(_format_labels({}), "")
-
-    def test_single(self):
-        self.assertEqual(_format_labels({"k": "v"}), '{k="v"}')
-
-    def test_multiple_preserves_order(self):
-        result = _format_labels({"a": "1", "b": "2", "c": "3"})
-        self.assertEqual(result, '{a="1",b="2",c="3"}')
-
-    def test_escaping_in_values(self):
-        result = _format_labels({"nick": 'say "hi"'})
-        self.assertEqual(result, '{nick="say \\"hi\\""}')
+@pytest.fixture
+def make_relay():
+    return _make_relay
 
 
-# ---------------------------------------------------------------------------
-# Tests: numeric coercion
-# ---------------------------------------------------------------------------
-
-class TestSafeNumeric(unittest.TestCase):
-    def test_int(self):
-        self.assertEqual(_safe_numeric(42), "42")
-
-    def test_zero(self):
-        self.assertEqual(_safe_numeric(0), "0")
-
-    def test_float(self):
-        self.assertEqual(_safe_numeric(3.14), "3.14")
-
-    def test_string_number(self):
-        self.assertEqual(_safe_numeric("99"), "99.0")
-
-    def test_non_numeric_string(self):
-        self.assertEqual(_safe_numeric("hello"), "0")
-
-    def test_injection_attempt(self):
-        self.assertEqual(_safe_numeric("1\naeo1_injected_metric 42"), "0")
-
-    def test_none(self):
-        self.assertEqual(_safe_numeric(None), "0")
-
-    def test_nan(self):
-        self.assertEqual(_safe_numeric(float("nan")), "0")
-
-    def test_inf(self):
-        self.assertEqual(_safe_numeric(float("inf")), "0")
-
-    def test_negative_inf(self):
-        self.assertEqual(_safe_numeric(float("-inf")), "0")
-
-    def test_bool_false(self):
-        self.assertEqual(_safe_numeric(False), "0.0")
-
-    def test_bool_true(self):
-        self.assertEqual(_safe_numeric(True), "1.0")
+@pytest.fixture
+def make_relay_set():
+    return _make_relay_set
 
 
-# ---------------------------------------------------------------------------
-# Tests: helpers
-# ---------------------------------------------------------------------------
-
-class TestGetFamilyId(unittest.TestCase):
-    def test_found(self):
-        rs = _make_relay_set([], fp_to_family_key={"AAAA": "FAMKEY1"})
-        self.assertEqual(_get_family_id(rs, "AAAA"), "FAMKEY1")
-        self.assertEqual(_get_family_id(rs, "aaaa"), "FAMKEY1")
-
-    def test_not_found(self):
-        rs = _make_relay_set([], fp_to_family_key={"AAAA": "FAMKEY1"})
-        self.assertEqual(_get_family_id(rs, "BBBB"), "")
-
-    def test_no_map(self):
-        rs = _make_relay_set([])
-        rs._fp_to_family_key = None
-        self.assertEqual(_get_family_id(rs, "AAAA"), "")
+@pytest.fixture
+def sample_aroi_data():
+    return _sample_aroi_data
 
 
-class TestIsAroiConfigured(unittest.TestCase):
-    def test_uses_cached_boolean_true(self):
-        relay = {"contact": "invalid", "aroi_configured": True}
-        self.assertTrue(_is_aroi_configured(relay))
-
-    def test_uses_cached_boolean_false(self):
-        relay = {"contact": "url:https://x proof:uri-rsa ciissversion:2", "aroi_configured": False}
-        self.assertFalse(_is_aroi_configured(relay))
-
-    def test_all_fields(self):
-        relay = {"contact": "email:a@b.com url:https://b.com proof:uri-rsa ciissversion:2"}
-        self.assertTrue(_is_aroi_configured(relay))
-
-    def test_missing_proof(self):
-        relay = {"contact": "email:a@b.com url:https://b.com ciissversion:2"}
-        self.assertFalse(_is_aroi_configured(relay))
-
-    def test_no_contact(self):
-        relay = {"contact": ""}
-        self.assertFalse(_is_aroi_configured(relay))
-
-    def test_none_contact(self):
-        relay = {}
-        self.assertFalse(_is_aroi_configured(relay))
+@pytest.fixture
+def sample_dns_metadata():
+    return _sample_dns_metadata
 
 
-class TestBuildAroiMap(unittest.TestCase):
-    def test_map_uses_uppercase_fingerprints(self):
-        rs = _make_relay_set([], aroi_validation_data=_sample_aroi_data())
-        amap = _build_aroi_map(rs)
-        self.assertIn("AAAA", amap)
-        self.assertIn("BBBB", amap)
-        self.assertTrue(amap["AAAA"]["valid"])
-        self.assertFalse(amap["BBBB"]["valid"])
+def _generate(
+    tmp_path: Path,
+    make_relay_set,
+    sample_dns_metadata,
+    relays,
+    dns_data=_USE_DEFAULT,
+    aroi_data=_USE_DEFAULT,
+    fp_to_family=None,
+    validated_domains=None,
+):
+    selected_dns = sample_dns_metadata() if dns_data is _USE_DEFAULT else dns_data
+    selected_aroi = _sample_aroi_data() if aroi_data is _USE_DEFAULT else aroi_data
+    rs = make_relay_set(
+        relays,
+        exit_dns_health_data=selected_dns,
+        aroi_validation_data=selected_aroi,
+        fp_to_family_key=fp_to_family or {},
+        validated_aroi_domains=validated_domains or set(),
+    )
+    stats = generate_prometheus_metrics(rs, str(tmp_path))
+    content = (tmp_path / "metrics").read_text(encoding="utf-8")
+    return content, stats
 
 
-# ---------------------------------------------------------------------------
-# Tests: DNS health section
-# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("hello", "hello"),
+        ('say "hi"', 'say \\"hi\\"'),
+        ("a\\b", "a\\\\b"),
+        ("line1\nline2", "line1\\nline2"),
+        (None, ""),
+        ("", ""),
+    ],
+)
+def test_sanitize_prom_label(value, expected):
+    assert _sanitize_prom_label(value) == expected
 
-class TestDnsHealthMetrics(unittest.TestCase):
-    def _generate(self, relays, dns_data=None, aroi_data=None, fp_to_family=None, validated_domains=None):
-        rs = _make_relay_set(
-            relays,
-            exit_dns_health_data=dns_data or _sample_dns_metadata(),
-            aroi_validation_data=aroi_data,
-            fp_to_family_key=fp_to_family or {},
-            validated_aroi_domains=validated_domains or set(),
+
+def test_format_labels_empty():
+    assert _format_labels({}) == ""
+
+
+def test_format_labels_single():
+    assert _format_labels({"k": "v"}) == '{k="v"}'
+
+
+def test_format_labels_multiple_preserves_order():
+    assert _format_labels({"a": "1", "b": "2", "c": "3"}) == '{a="1",b="2",c="3"}'
+
+
+def test_format_labels_escaping():
+    assert _format_labels({"nick": 'say "hi"'}) == '{nick="say \\"hi\\""}'
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (42, "42"),
+        (0, "0"),
+        (3.14, "3.14"),
+        ("99", "99.0"),
+        ("hello", "0"),
+        ("1\naeo1_injected_metric 42", "0"),
+        (None, "0"),
+        (float("nan"), "0"),
+        (float("inf"), "0"),
+        (float("-inf"), "0"),
+        (False, "0.0"),
+        (True, "1.0"),
+    ],
+)
+def test_safe_numeric(value, expected):
+    assert _safe_numeric(value) == expected
+
+
+def test_get_family_id_found(make_relay_set):
+    rs = make_relay_set([], fp_to_family_key={"AAAA": "FAMKEY1"})
+    assert _get_family_id(rs, "AAAA") == "FAMKEY1"
+    assert _get_family_id(rs, "aaaa") == "FAMKEY1"
+
+
+def test_get_family_id_not_found(make_relay_set):
+    rs = make_relay_set([], fp_to_family_key={"AAAA": "FAMKEY1"})
+    assert _get_family_id(rs, "BBBB") == ""
+
+
+def test_get_family_id_no_map(make_relay_set):
+    rs = make_relay_set([])
+    rs._fp_to_family_key = None
+    assert _get_family_id(rs, "AAAA") == ""
+
+
+def test_is_aroi_configured_uses_cached_true():
+    assert _is_aroi_configured({"contact": "invalid", "aroi_configured": True}) is True
+
+
+def test_is_aroi_configured_uses_cached_false():
+    relay = {"contact": "url:https://x proof:uri-rsa ciissversion:2", "aroi_configured": False}
+    assert _is_aroi_configured(relay) is False
+
+
+@pytest.mark.parametrize(
+    ("relay", "expected"),
+    [
+        ({"contact": "email:a@b.com url:https://b.com proof:uri-rsa ciissversion:2"}, True),
+        ({"contact": "email:a@b.com url:https://b.com ciissversion:2"}, False),
+        ({"contact": ""}, False),
+        ({}, False),
+    ],
+)
+def test_is_aroi_configured_variants(relay, expected):
+    assert _is_aroi_configured(relay) is expected
+
+
+def test_build_aroi_map_uppercase(make_relay_set, sample_aroi_data):
+    rs = make_relay_set([], aroi_validation_data=sample_aroi_data())
+    amap = _build_aroi_map(rs)
+    assert "AAAA" in amap
+    assert "BBBB" in amap
+    assert amap["AAAA"]["valid"] is True
+    assert amap["BBBB"]["valid"] is False
+
+
+def test_dns_metrics_healthy(tmp_path, make_relay, make_relay_set, sample_dns_metadata):
+    content, _ = _generate(tmp_path, make_relay_set, sample_dns_metadata, [make_relay("AAAA", dns_status="success")])
+    assert 'aeo1_exit_dns_failed{fingerprint="AAAA",familyid="",status="success"} 0' in content
+
+
+def test_dns_metrics_failure(tmp_path, make_relay, make_relay_set, sample_dns_metadata):
+    relays = [make_relay("BBBB", dns_status="dns_fail", dns_timing=5000, dns_consecutive=3)]
+    content, _ = _generate(tmp_path, make_relay_set, sample_dns_metadata, relays)
+    assert 'aeo1_exit_dns_failed{fingerprint="BBBB",familyid="",status="dns_fail"} 1' in content
+    assert 'aeo1_exit_dns_latency_ms{fingerprint="BBBB",familyid=""} 5000' in content
+    assert 'aeo1_exit_dns_consecutive_failures{fingerprint="BBBB",familyid=""} 3' in content
+
+
+def test_dns_unreachable_no_latency(tmp_path, make_relay, make_relay_set, sample_dns_metadata):
+    relays = [make_relay("CCCC", dns_status="relay_unreachable", dns_timing=None)]
+    content, _ = _generate(tmp_path, make_relay_set, sample_dns_metadata, relays)
+    assert 'aeo1_exit_dns_failed{fingerprint="CCCC",familyid="",status="relay_unreachable"} 1' in content
+    assert 'aeo1_exit_dns_latency_ms{fingerprint="CCCC"' not in content
+
+
+def test_dns_untested_not_failed(tmp_path, make_relay, make_relay_set, sample_dns_metadata):
+    relays = [make_relay("DDDD", dns_status="untested", dns_timing=None)]
+    content, _ = _generate(tmp_path, make_relay_set, sample_dns_metadata, relays)
+    assert 'aeo1_exit_dns_failed{fingerprint="DDDD",familyid="",status="untested"} 0' in content
+    assert 'aeo1_exit_dns_latency_ms{fingerprint="DDDD"' not in content
+
+
+def test_dns_non_exit_excluded(tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_data):
+    relays = [make_relay("AAAA", flags=["Guard", "Running"]), make_relay("BBBB", flags=["Exit", "Running"])]
+    content, stats = _generate(
+        tmp_path, make_relay_set, sample_dns_metadata, relays, aroi_data=sample_aroi_data()
+    )
+    assert stats["exit_relays"] == 1
+    assert 'aeo1_exit_dns_failed{fingerprint="AAAA"' not in content
+
+
+def test_dns_familyid_populated(tmp_path, make_relay, make_relay_set, sample_dns_metadata):
+    content, _ = _generate(
+        tmp_path,
+        make_relay_set,
+        sample_dns_metadata,
+        [make_relay("AAAA")],
+        fp_to_family={"AAAA": "MYFAMKEY"},
+    )
+    assert 'familyid="MYFAMKEY"' in content
+
+
+def test_dns_verifiedaroi_info(tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_data):
+    relays = [make_relay("AAAA", aroi_domain="example.com", contact="url:https://example.com proof:uri-rsa ciissversion:2")]
+    aroi_data = sample_aroi_data()
+    aroi_data["results"] = [{"fingerprint": "AAAA", "valid": True, "domain": "example.com", "proof_type": "uri-rsa"}]
+    content, _ = _generate(
+        tmp_path,
+        make_relay_set,
+        sample_dns_metadata,
+        relays,
+        aroi_data=aroi_data,
+        validated_domains={"example.com"},
+    )
+    assert 'verifiedaroi="example.com"' in content
+
+
+def test_dns_metrics_sorted_by_fingerprint(tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_data):
+    relays = [make_relay("CCCC"), make_relay("AAAA"), make_relay("BBBB")]
+    content, _ = _generate(tmp_path, make_relay_set, sample_dns_metadata, relays, aroi_data=sample_aroi_data())
+    fps = re.findall(r'aeo1_exit_dns_failed\{fingerprint="(\w+)"', content)
+    assert fps == sorted(fps)
+
+
+def test_aroi_state_and_counts(tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_data):
+    relays = [
+        make_relay("AAAA", contact="url:https://example.com proof:uri-rsa ciissversion:2", aroi_domain="example.com"),
+        make_relay("BBBB", contact="url:https://broken.org proof:dns-rsa ciissversion:2", aroi_domain="broken.org"),
+        make_relay("CCCC", contact="url:https://missing.org proof:dns-rsa ciissversion:2", aroi_domain="missing.org"),
+        make_relay("DDDD", contact="plain"),
+    ]
+    content, stats = _generate(tmp_path, make_relay_set, sample_dns_metadata, relays, aroi_data=sample_aroi_data())
+    assert stats["aroi_relays"] == 3
+    assert 'state="configured_checked_valid"} 1' in content
+    assert 'state="configured_checked_invalid"} 1' in content
+    assert 'state="configured_unchecked"} 1' in content
+    assert 'state="not_configured"} 1' in content
+    assert 'aeo1_aroi_relays_count{state="not_configured"} 1' in content
+    assert 'aeo1_aroi_relays_count{state="configured_unchecked"} 1' in content
+    assert 'aeo1_aroi_relays_count{state="configured_checked_invalid"} 1' in content
+    assert 'aeo1_aroi_relays_count{state="configured_checked_valid"} 1' in content
+
+
+def test_aroi_exactly_one_state_per_relay(tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_data):
+    relays = [
+        make_relay("AAAA", contact="url:https://example.com proof:uri-rsa ciissversion:2", aroi_domain="example.com"),
+        make_relay("BBBB", contact="url:https://broken.org proof:dns-rsa ciissversion:2", aroi_domain="broken.org"),
+        make_relay("CCCC", contact="url:https://missing.org proof:dns-rsa ciissversion:2", aroi_domain="missing.org"),
+        make_relay("DDDD", contact="plain"),
+    ]
+    content, _ = _generate(tmp_path, make_relay_set, sample_dns_metadata, relays, aroi_data=sample_aroi_data())
+    for fp in ("AAAA", "BBBB", "CCCC", "DDDD"):
+        matches = re.findall(
+            rf'^aeo1_aroi_relay_state\{{fingerprint="{fp}",familyid="",state="[^"]+"\}} 1$',
+            content,
+            re.MULTILINE,
         )
-        with tempfile.TemporaryDirectory() as td:
-            stats = generate_prometheus_metrics(rs, td)
-            with open(os.path.join(td, "metrics"), encoding="utf-8") as f:
-                content = f.read()
-        return content, stats
-
-    def test_healthy_relay(self):
-        relays = [_make_relay("AAAA", dns_status="success")]
-        content, _ = self._generate(relays)
-        self.assertIn('aeo1_exit_dns_failed{fingerprint="AAAA",familyid="",status="success"} 0', content)
-
-    def test_failing_relay(self):
-        relays = [_make_relay("BBBB", dns_status="dns_fail", dns_timing=5000, dns_consecutive=3)]
-        content, _ = self._generate(relays)
-        self.assertIn('aeo1_exit_dns_failed{fingerprint="BBBB",familyid="",status="dns_fail"} 1', content)
-        self.assertIn('aeo1_exit_dns_latency_ms{fingerprint="BBBB",familyid=""} 5000', content)
-        self.assertIn('aeo1_exit_dns_consecutive_failures{fingerprint="BBBB",familyid=""} 3', content)
-
-    def test_unreachable_relay_no_latency(self):
-        relays = [_make_relay("CCCC", dns_status="relay_unreachable", dns_timing=None)]
-        content, _ = self._generate(relays)
-        self.assertIn('aeo1_exit_dns_failed{fingerprint="CCCC",familyid="",status="relay_unreachable"} 1', content)
-        self.assertNotIn('aeo1_exit_dns_latency_ms{fingerprint="CCCC"', content)
-
-    def test_untested_relay_not_marked_failed(self):
-        relays = [_make_relay("DDDD", dns_status="untested", dns_timing=None)]
-        content, _ = self._generate(relays)
-        self.assertIn('aeo1_exit_dns_failed{fingerprint="DDDD",familyid="",status="untested"} 0', content)
-        self.assertNotIn('aeo1_exit_dns_latency_ms{fingerprint="DDDD"', content)
-
-    def test_non_exit_excluded(self):
-        relays = [
-            _make_relay("AAAA", flags=["Guard", "Running"]),
-            _make_relay("BBBB", flags=["Exit", "Running"]),
-        ]
-        content, stats = self._generate(relays, aroi_data=_sample_aroi_data())
-        self.assertEqual(stats["exit_relays"], 1)
-        self.assertNotIn('aeo1_exit_dns_failed{fingerprint="AAAA"', content)
-
-    def test_familyid_populated(self):
-        relays = [_make_relay("AAAA")]
-        content, _ = self._generate(relays, fp_to_family={"AAAA": "MYFAMKEY"})
-        self.assertIn('familyid="MYFAMKEY"', content)
-
-    def test_verifiedaroi_in_info(self):
-        relays = [_make_relay("AAAA", aroi_domain="example.com",
-                              contact="url:https://example.com proof:uri-rsa ciissversion:2")]
-        aroi_data = _sample_aroi_data()
-        aroi_data["results"] = [
-            {"fingerprint": "AAAA", "valid": True, "domain": "example.com", "proof_type": "uri-rsa"}
-        ]
-        content, _ = self._generate(relays, aroi_data=aroi_data, validated_domains={"example.com"})
-        self.assertIn('verifiedaroi="example.com"', content)
-
-    def test_sorted_by_fingerprint(self):
-        relays = [_make_relay("CCCC"), _make_relay("AAAA"), _make_relay("BBBB")]
-        content, _ = self._generate(relays, aroi_data=_sample_aroi_data())
-        fps = re.findall(r'aeo1_exit_dns_failed\{fingerprint="(\w+)"', content)
-        self.assertEqual(fps, sorted(fps))
+        assert len(matches) == 1, f"expected exactly one state for {fp}"
 
 
-# ---------------------------------------------------------------------------
-# Tests: AROI section (schema v2)
-# ---------------------------------------------------------------------------
-
-class TestAroiStateMetrics(unittest.TestCase):
-    def _generate(self, relays, aroi_data=None, fp_to_family=None):
-        rs = _make_relay_set(
-            relays,
-            exit_dns_health_data=_sample_dns_metadata(),
-            aroi_validation_data=aroi_data or _sample_aroi_data(),
-            fp_to_family_key=fp_to_family or {},
-        )
-        with tempfile.TemporaryDirectory() as td:
-            stats = generate_prometheus_metrics(rs, td)
-            with open(os.path.join(td, "metrics"), encoding="utf-8") as f:
-                content = f.read()
-        return content, stats
-
-    def test_state_configured_checked_valid(self):
-        relay = _make_relay("AAAA", contact="url:https://example.com proof:uri-rsa ciissversion:2", aroi_domain="example.com")
-        content, _ = self._generate([relay], aroi_data=_sample_aroi_data())
-        self.assertIn('aeo1_aroi_relay_state{fingerprint="AAAA",familyid="",state="configured_checked_valid"} 1', content)
-
-    def test_state_configured_checked_invalid(self):
-        relay = _make_relay("BBBB", contact="url:https://broken.org proof:dns-rsa ciissversion:2", aroi_domain="broken.org")
-        content, _ = self._generate([relay], aroi_data=_sample_aroi_data())
-        self.assertIn('aeo1_aroi_relay_state{fingerprint="BBBB",familyid="",state="configured_checked_invalid"} 1', content)
-
-    def test_state_configured_unchecked(self):
-        relay = _make_relay("CCCC", contact="url:https://missing.org proof:dns-rsa ciissversion:2", aroi_domain="missing.org")
-        content, _ = self._generate([relay], aroi_data=_sample_aroi_data())
-        self.assertIn('aeo1_aroi_relay_state{fingerprint="CCCC",familyid="",state="configured_unchecked"} 1', content)
-
-    def test_state_not_configured(self):
-        relay = _make_relay("DDDD", contact="just a contact")
-        content, _ = self._generate([relay], aroi_data=_sample_aroi_data())
-        self.assertIn('aeo1_aroi_relay_state{fingerprint="DDDD",familyid="",state="not_configured"} 1', content)
-
-    def test_exactly_one_state_series_per_relay(self):
-        relays = [
-            _make_relay("AAAA", contact="url:https://example.com proof:uri-rsa ciissversion:2", aroi_domain="example.com"),
-            _make_relay("BBBB", contact="url:https://broken.org proof:dns-rsa ciissversion:2", aroi_domain="broken.org"),
-            _make_relay("CCCC", contact="url:https://missing.org proof:dns-rsa ciissversion:2", aroi_domain="missing.org"),
-            _make_relay("DDDD", contact="plain"),
-        ]
-        content, _ = self._generate(relays, aroi_data=_sample_aroi_data())
-        for fp in ("AAAA", "BBBB", "CCCC", "DDDD"):
-            matches = re.findall(
-                rf'^aeo1_aroi_relay_state\{{fingerprint="{fp}",familyid="",state="[^"]+"\}} 1$',
-                content,
-                re.MULTILINE,
-            )
-            self.assertEqual(len(matches), 1, f"expected exactly one state for {fp}")
-
-    def test_aggregate_state_counts(self):
-        relays = [
-            _make_relay("AAAA", contact="url:https://example.com proof:uri-rsa ciissversion:2", aroi_domain="example.com"),
-            _make_relay("BBBB", contact="url:https://broken.org proof:dns-rsa ciissversion:2", aroi_domain="broken.org"),
-            _make_relay("CCCC", contact="url:https://missing.org proof:dns-rsa ciissversion:2", aroi_domain="missing.org"),
-            _make_relay("DDDD", contact="plain"),
-        ]
-        content, stats = self._generate(relays, aroi_data=_sample_aroi_data())
-        self.assertEqual(stats["aroi_relays"], 3)
-        self.assertIn('aeo1_aroi_relays_count{state="not_configured"} 1', content)
-        self.assertIn('aeo1_aroi_relays_count{state="configured_unchecked"} 1', content)
-        self.assertIn('aeo1_aroi_relays_count{state="configured_checked_invalid"} 1', content)
-        self.assertIn('aeo1_aroi_relays_count{state="configured_checked_valid"} 1', content)
-
-    def test_legacy_aroi_valid_removed(self):
-        relay = _make_relay("AAAA", contact="url:https://example.com proof:uri-rsa ciissversion:2", aroi_domain="example.com")
-        content, _ = self._generate([relay], aroi_data=_sample_aroi_data())
-        self.assertNotIn("aeo1_aroi_valid{", content)
-        self.assertNotIn("aeo1_aroi_success_ratio", content)
-
-    def test_relay_info_uses_claimed_domain_when_unchecked(self):
-        relay = _make_relay("CCCC", nickname="RelayC", contact="url:https://missing.org proof:dns-rsa ciissversion:2", aroi_domain="missing.org")
-        content, _ = self._generate([relay], aroi_data=_sample_aroi_data())
-        line = next((ln for ln in content.split("\n") if ln.startswith('aeo1_aroi_relay_info{fingerprint="CCCC"')), "")
-        self.assertIn('domain="missing.org"', line)
+def test_aroi_legacy_metrics_removed(tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_data):
+    relays = [make_relay("AAAA", contact="url:https://example.com proof:uri-rsa ciissversion:2", aroi_domain="example.com")]
+    content, _ = _generate(tmp_path, make_relay_set, sample_dns_metadata, relays, aroi_data=sample_aroi_data())
+    assert "aeo1_aroi_valid{" not in content
+    assert "aeo1_aroi_success_ratio" not in content
 
 
-# ---------------------------------------------------------------------------
-# Tests: source availability
-# ---------------------------------------------------------------------------
-
-class TestSourceAvailability(unittest.TestCase):
-    def test_both_sources_up(self):
-        rs = _make_relay_set(
-            [_make_relay("AAAA", contact="url:https://example.com proof:uri-rsa ciissversion:2", aroi_domain="example.com")],
-            exit_dns_health_data=_sample_dns_metadata(),
-            aroi_validation_data=_sample_aroi_data(),
-        )
-        with tempfile.TemporaryDirectory() as td:
-            generate_prometheus_metrics(rs, td)
-            with open(os.path.join(td, "metrics"), encoding="utf-8") as f:
-                content = f.read()
-        self.assertIn('aeo1_source_up{source="exitdnshealth"} 1', content)
-        self.assertIn('aeo1_source_up{source="aroi"} 1', content)
-
-    def test_dns_source_down(self):
-        rs = _make_relay_set(
-            [_make_relay("AAAA", contact="url:https://example.com proof:uri-rsa ciissversion:2", aroi_domain="example.com")],
-            exit_dns_health_data=None,
-            aroi_validation_data=_sample_aroi_data(),
-        )
-        with tempfile.TemporaryDirectory() as td:
-            generate_prometheus_metrics(rs, td)
-            with open(os.path.join(td, "metrics"), encoding="utf-8") as f:
-                content = f.read()
-        self.assertIn('aeo1_source_up{source="exitdnshealth"} 0', content)
-        self.assertIn('aeo1_source_up{source="aroi"} 1', content)
-        self.assertNotIn("aeo1_exit_dns_failed", content)
-
-    def test_aroi_source_down(self):
-        rs = _make_relay_set(
-            [_make_relay("AAAA", contact="url:https://example.com proof:uri-rsa ciissversion:2", aroi_domain="example.com")],
-            exit_dns_health_data=_sample_dns_metadata(),
-            aroi_validation_data=None,
-        )
-        with tempfile.TemporaryDirectory() as td:
-            generate_prometheus_metrics(rs, td)
-            with open(os.path.join(td, "metrics"), encoding="utf-8") as f:
-                content = f.read()
-        self.assertIn('aeo1_source_up{source="exitdnshealth"} 1', content)
-        self.assertIn('aeo1_source_up{source="aroi"} 0', content)
-        self.assertNotIn("aeo1_aroi_relay_state", content)
-        self.assertNotIn("aeo1_aroi_relays_count", content)
-
-    def test_both_sources_down(self):
-        rs = _make_relay_set(
-            [_make_relay("AAAA")],
-            exit_dns_health_data=None,
-            aroi_validation_data=None,
-        )
-        with tempfile.TemporaryDirectory() as td:
-            generate_prometheus_metrics(rs, td)
-            with open(os.path.join(td, "metrics"), encoding="utf-8") as f:
-                content = f.read()
-        self.assertIn('aeo1_source_up{source="exitdnshealth"} 0', content)
-        self.assertIn('aeo1_source_up{source="aroi"} 0', content)
-        self.assertIn("aeo1_build_info", content)
-        self.assertIn("aeo1_generation_timestamp_seconds", content)
+def test_aroi_unchecked_relay_info_uses_claimed_domain(tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_data):
+    relays = [make_relay("CCCC", nickname="RelayC", contact="url:https://missing.org proof:dns-rsa ciissversion:2", aroi_domain="missing.org")]
+    content, _ = _generate(tmp_path, make_relay_set, sample_dns_metadata, relays, aroi_data=sample_aroi_data())
+    line = next((ln for ln in content.split("\n") if ln.startswith('aeo1_aroi_relay_info{fingerprint="CCCC"')), "")
+    assert 'domain="missing.org"' in line
 
 
-# ---------------------------------------------------------------------------
-# Tests: meta and file integrity
-# ---------------------------------------------------------------------------
-
-class TestMetaAndFile(unittest.TestCase):
-    def test_build_info_present_schema_v2(self):
-        rs = _make_relay_set([], exit_dns_health_data=_sample_dns_metadata())
-        with tempfile.TemporaryDirectory() as td:
-            generate_prometheus_metrics(rs, td)
-            with open(os.path.join(td, "metrics"), encoding="utf-8") as f:
-                content = f.read()
-        self.assertIn(f'aeo1_build_info{{schema="{SCHEMA_VERSION}",generator="allium"}} 1', content)
-        self.assertEqual(SCHEMA_VERSION, "2")
-
-    def test_generation_timestamp_recent(self):
-        rs = _make_relay_set([])
-        with tempfile.TemporaryDirectory() as td:
-            before = int(time.time())
-            generate_prometheus_metrics(rs, td)
-            after = int(time.time())
-            with open(os.path.join(td, "metrics"), encoding="utf-8") as f:
-                content = f.read()
-        match = re.search(r"aeo1_generation_timestamp_seconds (\d+)", content)
-        self.assertIsNotNone(match)
-        ts = int(match.group(1))
-        self.assertGreaterEqual(ts, before)
-        self.assertLessEqual(ts, after)
-
-    def test_file_exists(self):
-        rs = _make_relay_set([])
-        with tempfile.TemporaryDirectory() as td:
-            generate_prometheus_metrics(rs, td)
-            self.assertTrue(os.path.exists(os.path.join(td, "metrics")))
-
-    def test_no_tmp_file_left(self):
-        rs = _make_relay_set([])
-        with tempfile.TemporaryDirectory() as td:
-            generate_prometheus_metrics(rs, td)
-            self.assertFalse(os.path.exists(os.path.join(td, "metrics.tmp")))
-
-    def test_unique_help_type_per_metric(self):
-        relay = _make_relay("AAAA", contact="url:https://example.com proof:uri-rsa ciissversion:2", aroi_domain="example.com")
-        rs = _make_relay_set([relay], exit_dns_health_data=_sample_dns_metadata(), aroi_validation_data=_sample_aroi_data())
-        with tempfile.TemporaryDirectory() as td:
-            generate_prometheus_metrics(rs, td)
-            with open(os.path.join(td, "metrics"), encoding="utf-8") as f:
-                content = f.read()
-
-        help_counts = {}
-        type_counts = {}
-        for line in content.split("\n"):
-            if line.startswith("# HELP "):
-                name = line.split()[2]
-                help_counts[name] = help_counts.get(name, 0) + 1
-            elif line.startswith("# TYPE "):
-                name = line.split()[2]
-                type_counts[name] = type_counts.get(name, 0) + 1
-
-        for name, count in help_counts.items():
-            self.assertEqual(count, 1, f"Duplicate HELP for {name}")
-        for name, count in type_counts.items():
-            self.assertEqual(count, 1, f"Duplicate TYPE for {name}")
-
-    def test_eof_marker(self):
-        rs = _make_relay_set([])
-        with tempfile.TemporaryDirectory() as td:
-            generate_prometheus_metrics(rs, td)
-            with open(os.path.join(td, "metrics"), encoding="utf-8") as f:
-                content = f.read()
-        self.assertIn("# EOF", content)
+def test_source_availability_permutations(tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_data):
+    relay = make_relay("AAAA", contact="url:https://example.com proof:uri-rsa ciissversion:2", aroi_domain="example.com")
+    # both up
+    content, _ = _generate(
+        tmp_path, make_relay_set, sample_dns_metadata, [relay], aroi_data=sample_aroi_data()
+    )
+    assert 'aeo1_source_up{source="exitdnshealth"} 1' in content
+    assert 'aeo1_source_up{source="aroi"} 1' in content
 
 
-# ---------------------------------------------------------------------------
-# Regression tests
-# ---------------------------------------------------------------------------
-
-class TestParseTimestampEpoch(unittest.TestCase):
-    def test_z_suffix(self):
-        from datetime import datetime, timezone
-
-        expected = datetime(2026, 3, 8, 12, 0, 0, tzinfo=timezone.utc).timestamp()
-        self.assertEqual(_parse_timestamp_epoch("2026-03-08T12:00:00Z"), expected)
-
-    def test_offset_suffix(self):
-        from datetime import datetime, timezone
-
-        expected = datetime(2026, 3, 8, 12, 0, 0, tzinfo=timezone.utc).timestamp()
-        self.assertEqual(_parse_timestamp_epoch("2026-03-08T12:00:00+00:00"), expected)
-
-    def test_naive_timestamp_assumed_utc(self):
-        from datetime import datetime, timezone
-
-        expected = datetime(2026, 3, 8, 12, 0, 0, tzinfo=timezone.utc).timestamp()
-        self.assertEqual(_parse_timestamp_epoch("2026-03-08T12:00:00"), expected)
-
-    def test_empty_returns_zero(self):
-        self.assertEqual(_parse_timestamp_epoch(""), 0)
-        self.assertEqual(_parse_timestamp_epoch(None), 0)
-
-    def test_numeric_passthrough(self):
-        self.assertEqual(_parse_timestamp_epoch("1234567890"), 1234567890.0)
+def test_source_dns_down(tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_data):
+    relay = make_relay("AAAA", contact="url:https://example.com proof:uri-rsa ciissversion:2", aroi_domain="example.com")
+    content, _ = _generate(
+        tmp_path, make_relay_set, sample_dns_metadata, [relay], dns_data=None, aroi_data=sample_aroi_data()
+    )
+    assert 'aeo1_source_up{source="exitdnshealth"} 0' in content
+    assert 'aeo1_source_up{source="aroi"} 1' in content
+    assert "aeo1_exit_dns_failed" not in content
 
 
-class TestDnsErrorTypesComplete(unittest.TestCase):
-    def test_dns_error_and_unknown_emitted(self):
-        rs = _make_relay_set(
-            [_make_relay("AAAA")],
-            exit_dns_health_data={
-                "metadata": {
-                    "timestamp": "2026-03-08T08:00:00Z",
-                    "consensus_relays": 100,
-                    "tested_relays": 95,
-                    "unreachable_relays": 5,
-                    "dns_success": 80,
-                    "dns_fail": 3,
-                    "dns_timeout": 1,
-                    "dns_wrong_ip": 1,
-                    "dns_socks_error": 0,
-                    "dns_network_error": 0,
-                    "dns_error": 7,
-                    "dns_exception": 0,
-                    "dns_unknown": 3,
-                    "timing": {"total": {}},
-                }
-            },
-        )
-        with tempfile.TemporaryDirectory() as td:
-            generate_prometheus_metrics(rs, td)
-            with open(os.path.join(td, "metrics"), encoding="utf-8") as f:
-                content = f.read()
-
-        self.assertIn('aeo1_exit_dns_errors_count{error_type="error"} 7', content)
-        self.assertIn('aeo1_exit_dns_errors_count{error_type="unknown"} 3', content)
+def test_source_aroi_down(tmp_path, make_relay, make_relay_set, sample_dns_metadata):
+    relay = make_relay("AAAA", contact="url:https://example.com proof:uri-rsa ciissversion:2", aroi_domain="example.com")
+    content, _ = _generate(tmp_path, make_relay_set, sample_dns_metadata, [relay], aroi_data=None)
+    assert 'aeo1_source_up{source="exitdnshealth"} 1' in content
+    assert 'aeo1_source_up{source="aroi"} 0' in content
+    assert "aeo1_aroi_relay_state" not in content
+    assert "aeo1_aroi_relays_count" not in content
 
 
-if __name__ == "__main__":
-    unittest.main(verbosity=2)
+def test_source_both_down(tmp_path, make_relay, make_relay_set, sample_dns_metadata):
+    content, _ = _generate(tmp_path, make_relay_set, sample_dns_metadata, [make_relay("AAAA")], dns_data=None, aroi_data=None)
+    assert 'aeo1_source_up{source="exitdnshealth"} 0' in content
+    assert 'aeo1_source_up{source="aroi"} 0' in content
+    assert "aeo1_build_info" in content
+    assert "aeo1_generation_timestamp_seconds" in content
+
+
+def test_meta_build_info(tmp_path, make_relay_set, sample_dns_metadata):
+    rs = make_relay_set([], exit_dns_health_data=sample_dns_metadata())
+    generate_prometheus_metrics(rs, str(tmp_path))
+    content = (tmp_path / "metrics").read_text(encoding="utf-8")
+    assert f'aeo1_build_info{{schema="{SCHEMA_VERSION}",generator="allium"}} 1' in content
+    assert SCHEMA_VERSION == "2"
+
+
+def test_generation_timestamp_recent(tmp_path, make_relay_set):
+    rs = make_relay_set([])
+    before = int(time.time())
+    generate_prometheus_metrics(rs, str(tmp_path))
+    after = int(time.time())
+    content = (tmp_path / "metrics").read_text(encoding="utf-8")
+    match = re.search(r"aeo1_generation_timestamp_seconds (\d+)", content)
+    assert match is not None
+    ts = int(match.group(1))
+    assert before <= ts <= after
+
+
+def test_file_written_and_tmp_removed(tmp_path, make_relay_set):
+    rs = make_relay_set([])
+    generate_prometheus_metrics(rs, str(tmp_path))
+    assert (tmp_path / "metrics").exists()
+    assert not (tmp_path / "metrics.tmp").exists()
+
+
+def test_unique_help_type_per_metric(tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_data):
+    relay = make_relay("AAAA", contact="url:https://example.com proof:uri-rsa ciissversion:2", aroi_domain="example.com")
+    rs = make_relay_set([relay], exit_dns_health_data=sample_dns_metadata(), aroi_validation_data=sample_aroi_data())
+    generate_prometheus_metrics(rs, str(tmp_path))
+    content = (tmp_path / "metrics").read_text(encoding="utf-8")
+
+    help_counts = {}
+    type_counts = {}
+    for line in content.split("\n"):
+        if line.startswith("# HELP "):
+            name = line.split()[2]
+            help_counts[name] = help_counts.get(name, 0) + 1
+        elif line.startswith("# TYPE "):
+            name = line.split()[2]
+            type_counts[name] = type_counts.get(name, 0) + 1
+
+    assert all(count == 1 for count in help_counts.values())
+    assert all(count == 1 for count in type_counts.values())
+
+
+def test_eof_marker_present(tmp_path, make_relay_set):
+    rs = make_relay_set([])
+    generate_prometheus_metrics(rs, str(tmp_path))
+    content = (tmp_path / "metrics").read_text(encoding="utf-8")
+    assert "# EOF" in content
+
+
+def test_parse_timestamp_epoch_variants():
+    from datetime import datetime, timezone
+
+    expected = datetime(2026, 3, 8, 12, 0, 0, tzinfo=timezone.utc).timestamp()
+    assert _parse_timestamp_epoch("2026-03-08T12:00:00Z") == expected
+    assert _parse_timestamp_epoch("2026-03-08T12:00:00+00:00") == expected
+    assert _parse_timestamp_epoch("2026-03-08T12:00:00") == expected
+    assert _parse_timestamp_epoch("") == 0
+    assert _parse_timestamp_epoch(None) == 0
+    assert _parse_timestamp_epoch("1234567890") == 1234567890.0
+
+
+def test_dns_error_and_unknown_emitted(tmp_path, make_relay, make_relay_set):
+    rs = make_relay_set(
+        [make_relay("AAAA")],
+        exit_dns_health_data={
+            "metadata": {
+                "timestamp": "2026-03-08T08:00:00Z",
+                "consensus_relays": 100,
+                "tested_relays": 95,
+                "unreachable_relays": 5,
+                "dns_success": 80,
+                "dns_fail": 3,
+                "dns_timeout": 1,
+                "dns_wrong_ip": 1,
+                "dns_socks_error": 0,
+                "dns_network_error": 0,
+                "dns_error": 7,
+                "dns_exception": 0,
+                "dns_unknown": 3,
+                "timing": {"total": {}},
+            }
+        },
+    )
+    generate_prometheus_metrics(rs, str(tmp_path))
+    content = (tmp_path / "metrics").read_text(encoding="utf-8")
+    assert 'aeo1_exit_dns_errors_count{error_type="error"} 7' in content
+    assert 'aeo1_exit_dns_errors_count{error_type="unknown"} 3' in content

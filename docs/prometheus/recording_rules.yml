@@ -30,19 +30,11 @@ groups:
             + aeo1_aroi_relays_count{state="configured_checked_valid"}
           )
           /
-          (
-            aeo1_aroi_relays_count{state="configured_unchecked"}
-            + aeo1_aroi_relays_count{state="configured_checked_invalid"}
-            + aeo1_aroi_relays_count{state="configured_checked_valid"}
-          )
+          clamp_min(aeo1_aroi_configured_relays_count_derived, 1)
 
       # Success ratio over configured relays
       - record: aeo1_aroi_success_ratio_derived
         expr: >
           aeo1_aroi_relays_count{state="configured_checked_valid"}
           /
-          (
-            aeo1_aroi_relays_count{state="configured_unchecked"}
-            + aeo1_aroi_relays_count{state="configured_checked_invalid"}
-            + aeo1_aroi_relays_count{state="configured_checked_valid"}
-          )
+          clamp_min(aeo1_aroi_configured_relays_count_derived, 1)
