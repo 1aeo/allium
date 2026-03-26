@@ -18,6 +18,12 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
+from tests.unit.prometheus_fixtures import (
+    make_relay as _make_relay,
+    make_relay_set as _make_relay_set,
+    sample_aroi_data as _sample_aroi_data,
+    sample_dns_metadata as _sample_dns_metadata,
+)
 
 # ============================================================================
 # PATH SETUP
@@ -76,6 +82,31 @@ def temp_dir():
     """Fixture that provides a temporary directory that's cleaned up after the test."""
     with tempfile.TemporaryDirectory() as tmpdir:
         yield tmpdir
+
+
+@pytest.fixture
+def make_relay():
+    return _make_relay
+
+
+@pytest.fixture
+def make_relay_set():
+    return _make_relay_set
+
+
+@pytest.fixture
+def sample_aroi_data():
+    return _sample_aroi_data
+
+
+@pytest.fixture
+def sample_aroi_metadata():
+    return _sample_aroi_data
+
+
+@pytest.fixture
+def sample_dns_metadata():
+    return _sample_dns_metadata
 
 
 @pytest.fixture

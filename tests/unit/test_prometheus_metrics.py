@@ -19,40 +19,13 @@ from allium.lib.prometheus_metrics import (
     _sanitize_prom_label,
     generate_prometheus_metrics,
 )
-from tests.unit.prometheus_fixtures import (
-    make_relay as _make_relay,
-    make_relay_set as _make_relay_set,
-    sample_aroi_data as _sample_aroi_data,
-    sample_dns_metadata as _sample_dns_metadata,
-)
-
 _USE_DEFAULT = object()
-
-
-@pytest.fixture
-def make_relay():
-    return _make_relay
-
-
-@pytest.fixture
-def make_relay_set():
-    return _make_relay_set
-
-
-@pytest.fixture
-def sample_aroi_data():
-    return _sample_aroi_data
-
-
-@pytest.fixture
-def sample_dns_metadata():
-    return _sample_dns_metadata
-
 
 def _generate(
     tmp_path: Path,
     make_relay_set,
     sample_dns_metadata,
+    sample_aroi_metadata,
     relays,
     dns_data=_USE_DEFAULT,
     aroi_data=_USE_DEFAULT,
@@ -60,7 +33,7 @@ def _generate(
     validated_domains=None,
 ) -> tuple[str, dict]:
     selected_dns = sample_dns_metadata() if dns_data is _USE_DEFAULT else dns_data
-    selected_aroi = _sample_aroi_data() if aroi_data is _USE_DEFAULT else aroi_data
+    selected_aroi = sample_aroi_metadata() if aroi_data is _USE_DEFAULT else aroi_data
     rs = make_relay_set(
         relays,
         exit_dns_health_data=selected_dns,
@@ -173,54 +146,59 @@ def test_build_aroi_map_uppercase(make_relay_set, sample_aroi_data):
     assert amap["BBBB"]["valid"] is False
 
 
-def test_dns_metrics_healthy(tmp_path, make_relay, make_relay_set, sample_dns_metadata):
-    content, _ = _generate(tmp_path, make_relay_set, sample_dns_metadata, [make_relay("AAAA", dns_status="success")])
+def test_dns_metrics_healthy(tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_metadata):
+    content, _ = _generate(
+        tmp_path, make_relay_set, sample_dns_metadata, sample_aroi_metadata, [make_relay("AAAA", dns_status="success")]
+    )
     assert 'aeo1_exit_dns_failed{fingerprint="AAAA",familyid="",status="success"} 0' in content
 
 
-def test_dns_metrics_failure(tmp_path, make_relay, make_relay_set, sample_dns_metadata):
+def test_dns_metrics_failure(tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_metadata):
     relays = [make_relay("BBBB", dns_status="dns_fail", dns_timing=5000, dns_consecutive=3)]
-    content, _ = _generate(tmp_path, make_relay_set, sample_dns_metadata, relays)
+    content, _ = _generate(tmp_path, make_relay_set, sample_dns_metadata, sample_aroi_metadata, relays)
     assert 'aeo1_exit_dns_failed{fingerprint="BBBB",familyid="",status="dns_fail"} 1' in content
     assert 'aeo1_exit_dns_latency_ms{fingerprint="BBBB",familyid=""} 5000' in content
     assert 'aeo1_exit_dns_consecutive_failures{fingerprint="BBBB",familyid=""} 3' in content
 
 
-def test_dns_unreachable_no_latency(tmp_path, make_relay, make_relay_set, sample_dns_metadata):
+def test_dns_unreachable_no_latency(tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_metadata):
     relays = [make_relay("CCCC", dns_status="relay_unreachable", dns_timing=None)]
-    content, _ = _generate(tmp_path, make_relay_set, sample_dns_metadata, relays)
+    content, _ = _generate(tmp_path, make_relay_set, sample_dns_metadata, sample_aroi_metadata, relays)
     assert 'aeo1_exit_dns_failed{fingerprint="CCCC",familyid="",status="relay_unreachable"} 1' in content
     assert 'aeo1_exit_dns_latency_ms{fingerprint="CCCC"' not in content
 
 
-def test_dns_untested_not_failed(tmp_path, make_relay, make_relay_set, sample_dns_metadata):
+def test_dns_untested_not_failed(tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_metadata):
     relays = [make_relay("DDDD", dns_status="untested", dns_timing=None)]
-    content, _ = _generate(tmp_path, make_relay_set, sample_dns_metadata, relays)
+    content, _ = _generate(tmp_path, make_relay_set, sample_dns_metadata, sample_aroi_metadata, relays)
     assert 'aeo1_exit_dns_failed{fingerprint="DDDD",familyid="",status="untested"} 0' in content
     assert 'aeo1_exit_dns_latency_ms{fingerprint="DDDD"' not in content
 
 
-def test_dns_non_exit_excluded(tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_data):
+def test_dns_non_exit_excluded(tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_data,
+                               sample_aroi_metadata):
     relays = [make_relay("AAAA", flags=["Guard", "Running"]), make_relay("BBBB", flags=["Exit", "Running"])]
     content, stats = _generate(
-        tmp_path, make_relay_set, sample_dns_metadata, relays, aroi_data=sample_aroi_data()
+        tmp_path, make_relay_set, sample_dns_metadata, sample_aroi_metadata, relays, aroi_data=sample_aroi_data()
     )
     assert stats["exit_relays"] == 1
     assert 'aeo1_exit_dns_failed{fingerprint="AAAA"' not in content
 
 
-def test_dns_familyid_populated(tmp_path, make_relay, make_relay_set, sample_dns_metadata):
+def test_dns_familyid_populated(tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_metadata):
     content, _ = _generate(
         tmp_path,
         make_relay_set,
         sample_dns_metadata,
+        sample_aroi_metadata,
         [make_relay("AAAA")],
         fp_to_family={"AAAA": "MYFAMKEY"},
     )
     assert 'familyid="MYFAMKEY"' in content
 
 
-def test_dns_verifiedaroi_info(tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_data):
+def test_dns_verifiedaroi_info(tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_data,
+                               sample_aroi_metadata):
     relays = [make_relay("AAAA", aroi_domain="example.com", contact="url:https://example.com proof:uri-rsa ciissversion:2")]
     aroi_data = sample_aroi_data()
     aroi_data["results"] = [{"fingerprint": "AAAA", "valid": True, "domain": "example.com", "proof_type": "uri-rsa"}]
@@ -228,6 +206,7 @@ def test_dns_verifiedaroi_info(tmp_path, make_relay, make_relay_set, sample_dns_
         tmp_path,
         make_relay_set,
         sample_dns_metadata,
+        sample_aroi_metadata,
         relays,
         aroi_data=aroi_data,
         validated_domains={"example.com"},
@@ -235,21 +214,27 @@ def test_dns_verifiedaroi_info(tmp_path, make_relay, make_relay_set, sample_dns_
     assert 'verifiedaroi="example.com"' in content
 
 
-def test_dns_metrics_sorted_by_fingerprint(tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_data):
+def test_dns_metrics_sorted_by_fingerprint(tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_data,
+                                           sample_aroi_metadata):
     relays = [make_relay("CCCC"), make_relay("AAAA"), make_relay("BBBB")]
-    content, _ = _generate(tmp_path, make_relay_set, sample_dns_metadata, relays, aroi_data=sample_aroi_data())
+    content, _ = _generate(
+        tmp_path, make_relay_set, sample_dns_metadata, sample_aroi_metadata, relays, aroi_data=sample_aroi_data()
+    )
     fps = re.findall(r'aeo1_exit_dns_failed\{fingerprint="(\w+)"', content)
     assert fps == sorted(fps)
 
 
-def test_aroi_state_and_counts(tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_data):
+def test_aroi_state_and_counts(tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_data,
+                               sample_aroi_metadata):
     relays = [
         make_relay("AAAA", contact="url:https://example.com proof:uri-rsa ciissversion:2", aroi_domain="example.com"),
         make_relay("BBBB", contact="url:https://broken.org proof:dns-rsa ciissversion:2", aroi_domain="broken.org"),
         make_relay("CCCC", contact="url:https://missing.org proof:dns-rsa ciissversion:2", aroi_domain="missing.org"),
         make_relay("DDDD", contact="plain"),
     ]
-    content, stats = _generate(tmp_path, make_relay_set, sample_dns_metadata, relays, aroi_data=sample_aroi_data())
+    content, stats = _generate(
+        tmp_path, make_relay_set, sample_dns_metadata, sample_aroi_metadata, relays, aroi_data=sample_aroi_data()
+    )
     assert stats["aroi_relays"] == 3
     assert 'state="configured_checked_valid"} 1' in content
     assert 'state="configured_checked_invalid"} 1' in content
@@ -261,14 +246,17 @@ def test_aroi_state_and_counts(tmp_path, make_relay, make_relay_set, sample_dns_
     assert 'aeo1_aroi_relays_count{state="configured_checked_valid"} 1' in content
 
 
-def test_aroi_exactly_one_state_per_relay(tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_data):
+def test_aroi_exactly_one_state_per_relay(tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_data,
+                                          sample_aroi_metadata):
     relays = [
         make_relay("AAAA", contact="url:https://example.com proof:uri-rsa ciissversion:2", aroi_domain="example.com"),
         make_relay("BBBB", contact="url:https://broken.org proof:dns-rsa ciissversion:2", aroi_domain="broken.org"),
         make_relay("CCCC", contact="url:https://missing.org proof:dns-rsa ciissversion:2", aroi_domain="missing.org"),
         make_relay("DDDD", contact="plain"),
     ]
-    content, _ = _generate(tmp_path, make_relay_set, sample_dns_metadata, relays, aroi_data=sample_aroi_data())
+    content, _ = _generate(
+        tmp_path, make_relay_set, sample_dns_metadata, sample_aroi_metadata, relays, aroi_data=sample_aroi_data()
+    )
     for fp in ("AAAA", "BBBB", "CCCC", "DDDD"):
         matches = re.findall(
             rf'^aeo1_aroi_relay_state\{{fingerprint="{fp}",familyid="",state="[^"]+"\}} 1$',
@@ -278,51 +266,63 @@ def test_aroi_exactly_one_state_per_relay(tmp_path, make_relay, make_relay_set, 
         assert len(matches) == 1, f"expected exactly one state for {fp}"
 
 
-def test_aroi_legacy_metrics_removed(tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_data):
+def test_aroi_legacy_metrics_removed(tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_data,
+                                     sample_aroi_metadata):
     relays = [make_relay("AAAA", contact="url:https://example.com proof:uri-rsa ciissversion:2", aroi_domain="example.com")]
-    content, _ = _generate(tmp_path, make_relay_set, sample_dns_metadata, relays, aroi_data=sample_aroi_data())
+    content, _ = _generate(
+        tmp_path, make_relay_set, sample_dns_metadata, sample_aroi_metadata, relays, aroi_data=sample_aroi_data()
+    )
     assert "aeo1_aroi_valid{" not in content
     assert "aeo1_aroi_success_ratio" not in content
 
 
-def test_aroi_unchecked_relay_info_uses_claimed_domain(tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_data):
+def test_aroi_unchecked_relay_info_uses_claimed_domain(tmp_path, make_relay, make_relay_set, sample_dns_metadata,
+                                                       sample_aroi_data, sample_aroi_metadata):
     relays = [make_relay("CCCC", nickname="RelayC", contact="url:https://missing.org proof:dns-rsa ciissversion:2", aroi_domain="missing.org")]
-    content, _ = _generate(tmp_path, make_relay_set, sample_dns_metadata, relays, aroi_data=sample_aroi_data())
+    content, _ = _generate(
+        tmp_path, make_relay_set, sample_dns_metadata, sample_aroi_metadata, relays, aroi_data=sample_aroi_data()
+    )
     line = next((ln for ln in content.split("\n") if ln.startswith('aeo1_aroi_relay_info{fingerprint="CCCC"')), "")
     assert 'domain="missing.org"' in line
 
 
-def test_source_availability_permutations(tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_data):
+def test_source_availability_permutations(tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_data,
+                                          sample_aroi_metadata):
     relay = make_relay("AAAA", contact="url:https://example.com proof:uri-rsa ciissversion:2", aroi_domain="example.com")
     # both up
     content, _ = _generate(
-        tmp_path, make_relay_set, sample_dns_metadata, [relay], aroi_data=sample_aroi_data()
+        tmp_path, make_relay_set, sample_dns_metadata, sample_aroi_metadata, [relay], aroi_data=sample_aroi_data()
     )
     assert 'aeo1_source_up{source="exitdnshealth"} 1' in content
     assert 'aeo1_source_up{source="aroi"} 1' in content
 
 
-def test_source_dns_down(tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_data):
+def test_source_dns_down(tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_data,
+                         sample_aroi_metadata):
     relay = make_relay("AAAA", contact="url:https://example.com proof:uri-rsa ciissversion:2", aroi_domain="example.com")
     content, _ = _generate(
-        tmp_path, make_relay_set, sample_dns_metadata, [relay], dns_data=None, aroi_data=sample_aroi_data()
+        tmp_path, make_relay_set, sample_dns_metadata, sample_aroi_metadata, [relay], dns_data=None,
+        aroi_data=sample_aroi_data()
     )
     assert 'aeo1_source_up{source="exitdnshealth"} 0' in content
     assert 'aeo1_source_up{source="aroi"} 1' in content
     assert "aeo1_exit_dns_failed" not in content
 
 
-def test_source_aroi_down(tmp_path, make_relay, make_relay_set, sample_dns_metadata):
+def test_source_aroi_down(tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_metadata):
     relay = make_relay("AAAA", contact="url:https://example.com proof:uri-rsa ciissversion:2", aroi_domain="example.com")
-    content, _ = _generate(tmp_path, make_relay_set, sample_dns_metadata, [relay], aroi_data=None)
+    content, _ = _generate(tmp_path, make_relay_set, sample_dns_metadata, sample_aroi_metadata, [relay], aroi_data=None)
     assert 'aeo1_source_up{source="exitdnshealth"} 1' in content
     assert 'aeo1_source_up{source="aroi"} 0' in content
     assert "aeo1_aroi_relay_state" not in content
     assert "aeo1_aroi_relays_count" not in content
 
 
-def test_source_both_down(tmp_path, make_relay, make_relay_set, sample_dns_metadata):
-    content, _ = _generate(tmp_path, make_relay_set, sample_dns_metadata, [make_relay("AAAA")], dns_data=None, aroi_data=None)
+def test_source_both_down(tmp_path, make_relay, make_relay_set, sample_dns_metadata, sample_aroi_metadata):
+    content, _ = _generate(
+        tmp_path, make_relay_set, sample_dns_metadata, sample_aroi_metadata, [make_relay("AAAA")], dns_data=None,
+        aroi_data=None
+    )
     assert 'aeo1_source_up{source="exitdnshealth"} 0' in content
     assert 'aeo1_source_up{source="aroi"} 0' in content
     assert "aeo1_build_info" in content
