@@ -3,6 +3,7 @@
 import re
 import time
 from pathlib import Path
+from typing import Tuple
 
 import pytest
 
@@ -56,7 +57,7 @@ def _generate(
     aroi_data=_USE_DEFAULT,
     fp_to_family=None,
     validated_domains=None,
-):
+) -> Tuple[str, dict]:
     selected_dns = sample_dns_metadata() if dns_data is _USE_DEFAULT else dns_data
     selected_aroi = _sample_aroi_data() if aroi_data is _USE_DEFAULT else aroi_data
     rs = make_relay_set(
