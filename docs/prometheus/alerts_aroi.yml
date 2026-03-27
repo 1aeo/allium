@@ -1,35 +1,36 @@
 # 1AEO AROI Monitoring + Freshness Alerts
-# Schema: v1
+# Schema: v2
 # Install: copy to /etc/prometheus/rules/ and reload Prometheus
 # Customize: replace YOUR_FAMILY_ID with your Ed25519 family key (64-char hex)
 #            replace YOUR_DOMAIN with your AROI domain (e.g., www.1aeo.com)
 #
 # Source: https://github.com/1aeo/allium/docs/prometheus/
 # Metrics endpoint: https://metrics.1aeo.com/metrics
+# Optional recording rules: docs/prometheus/recording_rules.yml
 
 groups:
   - name: aeo1_aroi_monitoring
     interval: 1m
     rules:
 
-      # AROI configured but validation failing (proof file removed? DNS changed?)
+      # AROI configured and checked, but validation failing
       - alert: AroiValidationLost
         expr: >
-          aeo1_aroi_valid{familyid="YOUR_FAMILY_ID"} == 0
+          aeo1_aroi_relay_state{familyid="YOUR_FAMILY_ID",state="configured_checked_invalid"} == 1
           and on(fingerprint) aeo1_aroi_relay_info{domain="YOUR_DOMAIN"}
         for: 1h
         labels:
           severity: critical
         annotations:
           summary: "AROI validation FAILED for {{ $labels.nick }}"
-          description: "Check proof file at {{ $labels.domain }}"
+          description: "Check proof file for {{ $labels.domain }}"
           dashboard: "https://metrics.1aeo.com/relay/{{ $labels.fingerprint }}/"
 
       # Multiple relays failing for same domain (proof server or DNS down)
       - alert: AroiDomainOutage
         expr: >
           count(
-            aeo1_aroi_valid == 0
+            aeo1_aroi_relay_state{state="configured_checked_invalid"} == 1
             and on(fingerprint) aeo1_aroi_relay_info{domain="YOUR_DOMAIN"}
           ) > 5
         for: 30m
@@ -37,6 +38,25 @@ groups:
           severity: critical
         annotations:
           summary: "{{ $value }} relays failing AROI validation for YOUR_DOMAIN"
+
+      # Configured relays are not being checked (validator coverage gap)
+      - alert: AroiUncheckedRelaysPresent
+        expr: >
+          aeo1_aroi_relays_count{state="configured_unchecked"} > 0
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $value }} configured relay(s) missing validator result"
+
+      # Optional if you install recording_rules.yml:
+      # - alert: AroiCheckedCoverageLow
+      #   expr: aeo1_aroi_checked_ratio_derived < 0.95
+      #   for: 1h
+      #   labels:
+      #     severity: warning
+      #   annotations:
+      #     summary: "AROI checked coverage is low ({{ $value | humanizePercentage }})"
 
   - name: aeo1_freshness
     interval: 1m

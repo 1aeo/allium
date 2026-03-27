@@ -322,6 +322,7 @@ class Relays:
             
             # Store AROI domain on relay (extracted during contact hashing for efficiency)
             relay["aroi_domain"] = aroi_domain
+            relay["aroi_configured"] = aroi_domain not in ("none", "", None)
             
             # Use AROI domain as key if available, otherwise use contact hash as key
             if aroi_domain and aroi_domain != "none" and contact.strip():

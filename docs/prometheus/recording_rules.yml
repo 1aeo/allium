@@ -1,0 +1,40 @@
+# 1AEO Prometheus Recording Rules (Schema v2)
+# Optional: precompute common AROI ratios for simpler dashboards/alerts.
+#
+# Install:
+#   cp recording_rules.yml /etc/prometheus/rules/
+#   kill -HUP $(pidof prometheus)
+
+groups:
+  - name: aeo1_aroi_recording
+    interval: 1m
+    rules:
+      # Configured relay denominator: unchecked + checked-invalid + checked-valid
+      - record: aeo1_aroi_configured_relays_count_derived
+        expr: >
+          aeo1_aroi_relays_count{state="configured_unchecked"}
+          + aeo1_aroi_relays_count{state="configured_checked_invalid"}
+          + aeo1_aroi_relays_count{state="configured_checked_valid"}
+
+      # Checked relay numerator: checked-invalid + checked-valid
+      - record: aeo1_aroi_checked_relays_count_derived
+        expr: >
+          aeo1_aroi_relays_count{state="configured_checked_invalid"}
+          + aeo1_aroi_relays_count{state="configured_checked_valid"}
+
+      # Checked coverage ratio over configured relays
+      - record: aeo1_aroi_checked_ratio_derived
+        expr: >
+          (
+            aeo1_aroi_relays_count{state="configured_checked_invalid"}
+            + aeo1_aroi_relays_count{state="configured_checked_valid"}
+          )
+          /
+          clamp_min(aeo1_aroi_configured_relays_count_derived, 1)
+
+      # Success ratio over configured relays
+      - record: aeo1_aroi_success_ratio_derived
+        expr: >
+          aeo1_aroi_relays_count{state="configured_checked_valid"}
+          /
+          clamp_min(aeo1_aroi_configured_relays_count_derived, 1)

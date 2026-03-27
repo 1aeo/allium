@@ -3,7 +3,7 @@
 Prometheus endpoint for monitoring Tor exit relay DNS health and AROI validation status.
 
 **Endpoint:** `https://metrics.1aeo.com/metrics`  
-**Schema:** v1  
+**Schema:** v2  
 **Update frequency:** Every 30 minutes (allium regeneration cycle)  
 **Format:** Prometheus text exposition format 0.0.4
 
@@ -16,9 +16,6 @@ Prometheus endpoint for monitoring Tor exit relay DNS health and AROI validation
 ```yaml
 scrape_configs:
   - job_name: 'aeo1_tor_metrics'
-    # 1m recommended. Data updates every 30 min but Prometheus needs
-    # sub-5m scrapes for reliable alerting (default lookback is 5m).
-    # Endpoint is ~220KB gzipped — 1m scraping is fine.
     scrape_interval: 1m
     scrape_timeout: 30s
     static_configs:
@@ -29,15 +26,8 @@ scrape_configs:
 ### Install Alert Rules
 
 ```bash
-# Copy alert rules to your Prometheus rules directory
 cp alerts_dns_health.yml /etc/prometheus/rules/
 cp alerts_aroi.yml /etc/prometheus/rules/
-
-# Edit: replace YOUR_FAMILY_ID and YOUR_DOMAIN with your values
-vim /etc/prometheus/rules/alerts_dns_health.yml
-vim /etc/prometheus/rules/alerts_aroi.yml
-
-# Reload Prometheus
 kill -HUP $(pidof prometheus)
 ```
 
@@ -49,10 +39,10 @@ kill -HUP $(pidof prometheus)
 
 | Metric | Labels | Description |
 |--------|--------|-------------|
-| `aeo1_build_info` | `schema`, `generator` | Schema version (always 1) |
-| `aeo1_generation_timestamp_seconds` | — | When this file was generated |
-| `aeo1_source_up` | `source` | 1=data available, 0=unavailable |
-| `aeo1_source_last_success_timestamp_seconds` | `source` | Last successful ingest, 0 if never |
+| `aeo1_build_info` | `schema`, `generator` | Schema version/build info (v2) |
+| `aeo1_generation_timestamp_seconds` | — | Metrics file generation time |
+| `aeo1_source_up` | `source` | 1=data source available, 0=unavailable |
+| `aeo1_source_last_success_timestamp_seconds` | `source` | Last successful ingest timestamp, 0 if never |
 
 `source` values: `exitdnshealth`, `aroi`
 
@@ -62,128 +52,191 @@ kill -HUP $(pidof prometheus)
 |--------|--------|-------------|
 | `aeo1_exit_consensus_relays_count` | — | Total exit relays in consensus |
 | `aeo1_exit_tested_relays_count` | — | Relays with DNS test results |
-| `aeo1_exit_unreachable_relays_count` | — | Relays with circuit failures |
+| `aeo1_exit_unreachable_relays_count` | — | Relays unreachable during latest scan |
 | `aeo1_exit_dns_success_ratio` | — | Success fraction (0..1) |
 | `aeo1_exit_reachability_ratio` | — | Reachability fraction (0..1) |
 | `aeo1_exit_dns_errors_count` | `error_type` | Error count by type |
 | `aeo1_exit_dns_latency_ms_stat` | `stat` | Latency statistics (ms) |
-| `aeo1_exit_scan_timestamp_seconds` | — | When DNS scan ran |
+| `aeo1_exit_scan_timestamp_seconds` | — | Exit DNS scan timestamp |
 
-`error_type` values: `fail`, `timeout`, `wrong_ip`, `socks_error`, `network_error`, `exception`  
+`error_type` values: `fail`, `timeout`, `wrong_ip`, `socks_error`, `network_error`, `error`, `exception`, `unknown`  
 `stat` values: `p50`, `p95`, `p99`, `avg`, `min`, `max`
 
-### Exit DNS Health — Per-Relay (exit relays only)
+### Exit DNS Health — Per Relay (exit relays only)
 
 | Metric | Frozen Labels | Description |
 |--------|---------------|-------------|
-| `aeo1_exit_dns_failed` | `fingerprint`, `familyid`, `status` | 1=failed, 0=healthy |
-| `aeo1_exit_dns_latency_ms` | `fingerprint`, `familyid` | Latency (ms), omitted if untested |
+| `aeo1_exit_dns_failed` | `fingerprint`, `familyid`, `status` | 1=failed, 0=healthy/untested |
+| `aeo1_exit_dns_latency_ms` | `fingerprint`, `familyid` | Latency (ms), omitted when unavailable |
 | `aeo1_exit_dns_consecutive_failures` | `fingerprint`, `familyid` | Consecutive failure streak |
 | `aeo1_exit_relay_info` | `fingerprint`, `familyid`, `nick`, `verifiedaroi` | Relay metadata (always 1, non-ABI) |
 
-`status` values: `success`, `dns_fail`, `timeout`, `relay_unreachable`
+`status` values: `success`, `dns_fail`, `timeout`, `relay_unreachable`, `untested`
 
-### AROI Monitoring — Aggregates
+### AROI Monitoring — Relay State Model (schema v2)
+
+AROI status is represented by a single canonical relay state enum.
 
 | Metric | Labels | Description |
 |--------|--------|-------------|
-| `aeo1_aroi_network_relays_count` | — | Total relays in network |
-| `aeo1_aroi_configured_relays_count` | — | Relays with all 3 AROI fields |
-| `aeo1_aroi_valid_relays_count` | — | Configured + validated |
-| `aeo1_aroi_success_ratio` | — | Validation fraction (0..1) |
-| `aeo1_aroi_proof_type_count` | `proof_type`, `result` | Count by proof type |
-| `aeo1_aroi_scan_timestamp_seconds` | — | When AROI scan ran |
+| `aeo1_aroi_relay_state` | `fingerprint`, `familyid`, `state` | Per-relay AROI state (always 1 for emitted state) |
+| `aeo1_aroi_relays_count` | `state` | Aggregate relay count by state |
+| `aeo1_aroi_scan_timestamp_seconds` | — | AROI scan timestamp |
+| `aeo1_aroi_relay_info` | `fingerprint`, `familyid`, `nick`, `domain`, `proof_type` | Configured relay metadata (always 1, non-ABI) |
 
-`proof_type` values: `uri-rsa`, `dns-rsa`  
-`result` values: `valid`, `total`
+Frozen `state` label values:
+- `not_configured`
+- `configured_unchecked`
+- `configured_checked_invalid`
+- `configured_checked_valid`
 
-### AROI Monitoring — Per-Relay (configured relays only)
-
-| Metric | Frozen Labels | Description |
-|--------|---------------|-------------|
-| `aeo1_aroi_valid` | `fingerprint`, `familyid` | 1=valid, 0=failing |
-| `aeo1_aroi_relay_info` | `fingerprint`, `familyid`, `nick`, `domain`, `proof_type` | Relay metadata (always 1, non-ABI) |
+Interpretation:
+- `configured_checked_invalid` = validation was attempted and failed
+- `configured_unchecked` = relay is configured, but validator had no result for its fingerprint
 
 ---
 
-## PromQL Cheatsheet
+## PromQL Cheatsheet (v2)
 
-### DNS Health — Filter by Family
+### AROI State Queries
 
 ```promql
-# All relays in my family:
-aeo1_exit_dns_failed{familyid="YOUR_FAMILY_ID"}
+# Family: checked + invalid relays
+aeo1_aroi_relay_state{familyid="YOUR_FAMILY_ID",state="configured_checked_invalid"} == 1
 
-# Failing relays in my family:
-aeo1_exit_dns_failed{familyid="YOUR_FAMILY_ID"} == 1
+# Family: checked + valid relays
+aeo1_aroi_relay_state{familyid="YOUR_FAMILY_ID",state="configured_checked_valid"} == 1
 
-# Count of healthy vs failing:
-count(aeo1_exit_dns_failed{familyid="YOUR_FAMILY_ID"} == 0)  # healthy
-count(aeo1_exit_dns_failed{familyid="YOUR_FAMILY_ID"} == 1)  # failing
+# Domain: checked + invalid relays
+aeo1_aroi_relay_state{state="configured_checked_invalid"} == 1
+  and on(fingerprint) aeo1_aroi_relay_info{domain="YOUR_DOMAIN"}
 
-# Average latency for my family:
-avg(aeo1_exit_dns_latency_ms{familyid="YOUR_FAMILY_ID"})
-
-# Relays with escalating failures:
-aeo1_exit_dns_consecutive_failures{familyid="YOUR_FAMILY_ID"} > 2
+# Domain: configured but unchecked relays
+aeo1_aroi_relay_state{state="configured_unchecked"} == 1
+  and on(fingerprint) aeo1_aroi_relay_info{domain="YOUR_DOMAIN"}
 ```
 
-### DNS Health — Filter by AROI Domain
+### Derived Ratios (from canonical counts)
 
 ```promql
-# All relays for my AROI domain (join with info metric):
-aeo1_exit_dns_failed == 1
-  and on(fingerprint) aeo1_exit_relay_info{verifiedaroi="www.1aeo.com"}
+# Success ratio over configured relays
+aeo1_aroi_relays_count{state="configured_checked_valid"}
+/
+(aeo1_aroi_relays_count{state="configured_unchecked"}
+ + aeo1_aroi_relays_count{state="configured_checked_invalid"}
+ + aeo1_aroi_relays_count{state="configured_checked_valid"})
 
-# Nicknames of my failing relays:
-aeo1_exit_relay_info
-  and on(fingerprint) (aeo1_exit_dns_failed{familyid="YOUR_FAMILY_ID"} == 1)
-```
-
-### AROI Monitoring
-
-```promql
-# My relays with broken AROI:
-aeo1_aroi_valid{familyid="YOUR_FAMILY_ID"} == 0
-
-# AROI failing for a specific domain:
-aeo1_aroi_valid == 0
-  and on(fingerprint) aeo1_aroi_relay_info{domain="www.1aeo.com"}
-
-# Network AROI adoption rate:
-aeo1_aroi_success_ratio
+# Checked coverage ratio over configured relays
+(aeo1_aroi_relays_count{state="configured_checked_invalid"}
+ + aeo1_aroi_relays_count{state="configured_checked_valid"})
+/
+(aeo1_aroi_relays_count{state="configured_unchecked"}
+ + aeo1_aroi_relays_count{state="configured_checked_invalid"}
+ + aeo1_aroi_relays_count{state="configured_checked_valid"})
 ```
 
 ### Freshness
 
 ```promql
-# How old is the metrics file:
 time() - aeo1_generation_timestamp_seconds
-
-# How old is the DNS scan data:
 time() - aeo1_exit_scan_timestamp_seconds
-
-# Is the endpoint reachable:
+time() - aeo1_aroi_scan_timestamp_seconds
 up{job="aeo1_tor_metrics"}
 ```
 
 ---
 
-## Schema Policy
+## Migration: v1 → v2
 
-- **v1 is frozen**: metric names, types, and frozen label keys will not change
-- **Non-ABI metrics** (`_info` metrics): label keys may evolve without schema bump
-- **New metrics** may be added without schema bump
-- **Breaking changes** (renames, type changes, frozen label changes): require schema version bump in `aeo1_build_info`
-- **`familyid` encoding**: currently 64-char uppercase hex (CollecTor Ed25519 key). Will change to base64 when onionoo adds `family_ids` support — this will require a schema bump
+### Breaking changes
+
+- Removed legacy per-relay `aeo1_aroi_valid` (ambiguous for unchecked relays).
+- Removed emitted `aeo1_aroi_success_ratio`; compute via `aeo1_aroi_relays_count{state=...}`.
+- Canonical relay state now encoded in `aeo1_aroi_relay_state{state=...}`.
+- DNS behavior update: `status="untested"` now emits `aeo1_exit_dns_failed ... 0` (not failed).
+
+### Migration checklist (recommended)
+
+1. Update all alerts/queries that reference `aeo1_aroi_valid`.
+2. Replace family/domain failure checks with `state="configured_checked_invalid"`.
+3. Add explicit monitoring for `state="configured_unchecked"` to detect validator coverage gaps.
+4. Replace direct `aeo1_aroi_success_ratio` usage with derived expressions from `aeo1_aroi_relays_count`.
+5. Validate rule outputs in a staging Prometheus before production rollout.
+
+### Side-by-side query mapping (including domain/family joins)
+
+| Intent | v1 | v2 |
+|---|---|---|
+| Family failures | `aeo1_aroi_valid{familyid="YOUR_FAMILY_ID"} == 0` | `aeo1_aroi_relay_state{familyid="YOUR_FAMILY_ID",state="configured_checked_invalid"} == 1` |
+| Family valid | `aeo1_aroi_valid{familyid="YOUR_FAMILY_ID"} == 1` | `aeo1_aroi_relay_state{familyid="YOUR_FAMILY_ID",state="configured_checked_valid"} == 1` |
+| Domain failures | `aeo1_aroi_valid == 0 and on(fingerprint) aeo1_aroi_relay_info{domain="YOUR_DOMAIN"}` | `aeo1_aroi_relay_state{state="configured_checked_invalid"} == 1 and on(fingerprint) aeo1_aroi_relay_info{domain="YOUR_DOMAIN"}` |
+| Domain valid | `aeo1_aroi_valid == 1 and on(fingerprint) aeo1_aroi_relay_info{domain="YOUR_DOMAIN"}` | `aeo1_aroi_relay_state{state="configured_checked_valid"} == 1 and on(fingerprint) aeo1_aroi_relay_info{domain="YOUR_DOMAIN"}` |
+| Domain unchecked | not expressible cleanly | `aeo1_aroi_relay_state{state="configured_unchecked"} == 1 and on(fingerprint) aeo1_aroi_relay_info{domain="YOUR_DOMAIN"}` |
 
 ---
 
-## Data Freshness
+## Operator Runbook (quick triage)
 
-| Source | Update Frequency | Metric |
-|--------|-----------------|--------|
-| Allium generation | Every 30 min | `aeo1_generation_timestamp_seconds` |
-| Exit DNS health scan | Every 6-12 hours | `aeo1_exit_scan_timestamp_seconds` |
-| AROI validation | Every few hours | `aeo1_aroi_scan_timestamp_seconds` |
-| CollecTor family keys | Hourly incremental | (embedded in `familyid` labels) |
+When an AROI alert fires:
+
+1. **Check source freshness**
+   - `aeo1_source_up{source="aroi"}`
+   - `time() - aeo1_aroi_scan_timestamp_seconds`
+2. **Identify state**
+   - `configured_checked_invalid` => validator checked and failed
+   - `configured_unchecked` => validator had no result for relay fingerprint
+3. **Drill down per relay**
+   - `aeo1_aroi_relay_state{state="configured_checked_invalid"} == 1 and on(fingerprint) aeo1_aroi_relay_info`
+4. **Assess blast radius**
+   - `aeo1_aroi_relays_count{state="configured_checked_invalid"}`
+   - `aeo1_aroi_relays_count{state="configured_unchecked"}`
+
+## Aggregate-only dashboard mode (low cardinality)
+
+If you do not need per-relay visuals, build dashboards from `aeo1_aroi_relays_count` only:
+
+```promql
+# State distribution (4-series panel)
+aeo1_aroi_relays_count
+
+# Checked coverage over configured relays
+(aeo1_aroi_relays_count{state="configured_checked_invalid"}
+ + aeo1_aroi_relays_count{state="configured_checked_valid"})
+/
+(aeo1_aroi_relays_count{state="configured_unchecked"}
+ + aeo1_aroi_relays_count{state="configured_checked_invalid"}
+ + aeo1_aroi_relays_count{state="configured_checked_valid"})
+
+# Success over configured relays
+aeo1_aroi_relays_count{state="configured_checked_valid"}
+/
+(aeo1_aroi_relays_count{state="configured_unchecked"}
+ + aeo1_aroi_relays_count{state="configured_checked_invalid"}
+ + aeo1_aroi_relays_count{state="configured_checked_valid"})
+```
+
+## Recording rules (optional)
+
+If you want stable precomputed ratio series, use recording rules:
+
+```bash
+cp recording_rules.yml /etc/prometheus/rules/
+kill -HUP $(pidof prometheus)
+```
+
+See `docs/prometheus/recording_rules.yml` for ready-to-use examples.
+
+## Production Go/No-Go Checklist
+
+Before deploying schema updates to production, run the explicit gate checklist in:
+
+- `docs/prometheus/PRODUCTION_CHECKLIST.md`
+
+---
+
+## Schema Policy
+
+- **v2 state labels are frozen** for `aeo1_aroi_relay_state` and `aeo1_aroi_relays_count`.
+- **Non-ABI `_info` metrics** may evolve label keys without schema bump.
+- **New additive metrics** may be added without schema bump.
+- **Breaking changes** require schema bump in `aeo1_build_info`.
