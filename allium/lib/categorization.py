@@ -256,6 +256,21 @@ def sort_relay(relay_set, relay, idx, k, v, cw, cw_fraction):
         relay_set.json["sorted"][k][v]["contact"] = relay.get("contact", "")
         relay_set.json["sorted"][k][v]["contact_md5"] = relay.get("contact_md5", "")
         relay_set.json["sorted"][k][v]["aroi_domain"] = relay.get("aroi_domain", "")
+
+        # Item 3 (variant-aware list views): track distinct raw ContactInfo
+        # strings per contact group so list-view tooltips can stop showing
+        # one representative string and instead say "N distinct ContactInfo
+        # strings — see operator page". A single set.add() per relay is
+        # the cheapest way to count without a second pass; we keep it
+        # ONLY for contact groups (the only listing where the operator-
+        # detail page is the authoritative variant view).
+        if k == "contact":
+            cv_set = relay_set.json["sorted"][k][v].get("_contact_variant_set")
+            if cv_set is None:
+                cv_set = set()
+                relay_set.json["sorted"][k][v]["_contact_variant_set"] = cv_set
+            cv_set.add(relay.get("contact", "") or "")
+            relay_set.json["sorted"][k][v]["contact_variant_count"] = len(cv_set)
         
         # Track country counts for contacts (primary country calculation)
         # relay["country"] is already UPPERCASE from _preprocess_template_data()

@@ -332,6 +332,117 @@ def _format_timestamp(epoch_time):
     return time.strftime("%Y-%m-%d %H:%M:%S GMT", time.gmtime(epoch_time))
 
 
+# ============================================================================
+# AROI extended diagnostics — Python-side row formatters (item D)
+# ============================================================================
+# These helpers move presentation logic out of api-diagnostics.html so
+# the template just iterates ready-to-render lists. Each row is a small
+# dict with stable keys the template renders verbatim. Centralizing the
+# version-classification logic here also makes it test-able from Python
+# (no Jinja string-substring quirks).
+#
+# P3 (DRY): proof-type -> version classification lives in ONE place
+# now — aroi_validation.get_proof_type_version. Previously this module
+# carried a local _PROOF_TYPE_VERSION_MAP duplicating that knowledge,
+# which would silently drift if upstream ever added a new proof type.
+
+# Badge color cache for the version-classification result. Built once,
+# reused for every row.
+_VERSION_BADGE_COLOR = {
+    '3': '#007bff',     # blue — v3 (recommended)
+    '2': '#6c757d',     # grey — v2 (legacy)
+    'unknown': '#adb5bd',  # neutral grey
+}
+
+
+def _format_proof_type_rows(proof_types_summary):
+    """Pre-build the per-proof-type render rows for the diagnostics page.
+
+    Inputs:
+        proof_types_summary: dict mapping proof_type key -> {'valid': N,
+                             'total': M, ...} (from upstream stats_block)
+
+    Returns:
+        list of dicts sorted alphabetically by proof_type, EXCLUDING
+        the 'no_proof' bucket and any zero-total entries. Each row:
+            {
+                'proof_type': str,
+                'version': '2'|'3'|'unknown',
+                'valid': int,
+                'total': int,
+                'badge_color': hex string,
+            }
+    """
+    from .aroi_validation import get_proof_type_version
+    rows = []
+    if not isinstance(proof_types_summary, dict):
+        return rows
+    for pt, info in sorted(proof_types_summary.items()):
+        if pt == 'no_proof':
+            continue
+        if not isinstance(info, dict):
+            continue
+        total = info.get('total', 0) or 0
+        if total <= 0:
+            continue
+        # P3: single source of truth for proof_type -> version. Accepts
+        # both dashed and underscored proof_type keys; future proof
+        # types added upstream classify as 'unknown' until the central
+        # PROOF_TYPE_VERSION dict in aroi_validation.py is updated.
+        version = get_proof_type_version(pt)
+        rows.append({
+            'proof_type': pt,
+            'version': version,
+            'valid': info.get('valid', 0) or 0,
+            'total': total,
+            # Template uses badge_color directly — no inline ternaries.
+            'badge_color': _VERSION_BADGE_COLOR.get(version, _VERSION_BADGE_COLOR['unknown']),
+        })
+    return rows
+
+
+def _format_ciissversion_rows(ciissversion_declared):
+    """Pre-build the per-version row list for the 'ciissversion declared'
+    metric in the diagnostics page.
+
+    Output rows are sorted with 'none' last (the legacy template displays
+    none with no badge after the v1/v2/v3 badges).
+
+    Each row:
+        {
+            'key':         '1'|'2'|'3'|'none' (or whatever upstream returns),
+            'count':       int,
+            'is_none':     True/False (templates use this directly),
+            'badge_color': hex string,
+        }
+    """
+    rows = []
+    if not isinstance(ciissversion_declared, dict):
+        return rows
+    # P4 (future-proof sort): numeric versions ascend numerically (so a
+    # hypothetical v10 sorts AFTER v3, not after v1 like a plain string
+    # sort would). Non-numeric keys ('none', 'unknown', or whatever
+    # upstream invents next) sort last in alphabetical order.
+    def _sort_key(kv):
+        k = kv[0]
+        try:
+            return (0, int(k), '')   # numeric first, ascending by int value
+        except (TypeError, ValueError):
+            return (1, 0, k)         # non-numeric last, alpha by key
+    items = sorted(ciissversion_declared.items(), key=_sort_key)
+    for k, v in items:
+        is_none = (k == 'none')
+        rows.append({
+            'key': k,
+            'count': v,
+            'is_none': is_none,
+            # v3 is highlighted (blue, recommended); everything else
+            # (v1, v2, unknown future versions, 'none') uses neutral grey.
+            'badge_color': '#007bff' if k == '3' else '#6c757d',
+        })
+    return rows
+
+
 def _get_api_data(relay_set, metadata):
     """
     Get the raw API data dict from relay_set using metadata-driven lookup.
@@ -474,6 +585,46 @@ def collect_api_diagnostics(relay_set, args):
         item_count = _get_item_count(relay_set, metadata) if enabled else None
         extra_info = _get_extra_info(relay_set, metadata) if enabled else None
 
+        # B6: AROI-specific extended diagnostics — schema version, version
+        # distribution, top error_category counts. Helps non-developer
+        # operators diagnose upstream regressions.
+        aroi_extras = {}
+        if api_name == "aroi_validation" and enabled:
+            aroi_data = _get_api_data(relay_set, metadata)
+            if aroi_data and isinstance(aroi_data, dict):
+                meta_block = aroi_data.get("metadata", {}) or {}
+                stats_block = aroi_data.get("statistics", {}) or {}
+                aroi_extras["schema_version"] = meta_block.get("aroivalidator_schema_version")
+                # Item D (template-side formatting -> Python helpers):
+                # Pre-format the version-declared block + proof-types
+                # block so the template just iterates ready-to-render
+                # lists instead of doing dictsort + per-row
+                # 'v2/v3' string-classification logic in Jinja.
+                aroi_extras["ciissversion_declared"] = stats_block.get("ciissversion_declared", {}) or {}
+                aroi_extras["ciissversion_declared_rows"] = _format_ciissversion_rows(
+                    aroi_extras["ciissversion_declared"]
+                )
+                aroi_extras["proof_types_summary"] = stats_block.get("proof_types", {}) or {}
+                aroi_extras["proof_types_rows"] = _format_proof_type_rows(
+                    aroi_extras["proof_types_summary"]
+                )
+                # Top error_category counts (already aggregated upstream).
+                v3_cats = stats_block.get("v3_failure_categories", {}) or {}
+                aroi_extras["top_error_categories"] = sorted(
+                    [(k, v) for k, v in v3_cats.items() if v > 0],
+                    key=lambda x: -x[1],
+                )[:5]
+                # B6 (final): warning feed from this build's aroi_validation
+                # module. Plan called for "Last warning timestamp for:
+                # unknown error_category, unknown proof_type, schema version
+                # mismatch" — surfaced here as a structured list so the
+                # template can render with timestamps.
+                try:
+                    from .aroi_validation import get_aroi_warnings_log
+                    aroi_extras["warnings"] = get_aroi_warnings_log()
+                except Exception:
+                    aroi_extras["warnings"] = []
+
         api_diagnostics.append({
             "name": api_name,
             "display_name": metadata["display_name"],
@@ -499,6 +650,8 @@ def collect_api_diagnostics(relay_set, args):
             "extra_info": extra_info,
             "enabled": enabled,
             "affected_sections": metadata["affected_sections"],
+            # B6: extended fields populated only for AROI API
+            "aroi_extras": aroi_extras,
         })
 
     # Build section dependencies with freshness propagation

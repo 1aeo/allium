@@ -117,8 +117,12 @@ def compact_relay_entry(
 ) -> Dict[str, Any]:
     """
     Create a compact relay entry for the search index.
-    
-    Only includes non-empty fields to minimize JSON size.
+
+    Only includes non-empty fields to minimize JSON size. Schema version
+    1.6 adds the optional `vn` field (CIISS ContactInfo declared
+    ciissversion: '2' or '3') so the search frontend (Cloudflare Pages
+    Function in the separate allium-deploy repo) can show version
+    indicators in disambiguation pages without a separate API call.
     """
     entry = {
         'f': relay['fingerprint'],
@@ -148,6 +152,12 @@ def compact_relay_entry(
 
     if family_id:
         entry['fam'] = family_id
+
+    # B5.1 (v1.6): CIISS spec version this relay declares. Only emitted
+    # when present (sparse-field convention). Values: '2' or '3'.
+    aroi_version = relay.get('aroi_version')
+    if aroi_version:
+        entry['vn'] = aroi_version
 
     return entry
 
@@ -183,12 +193,20 @@ def compact_family_entry(
     # (avoids 300k+ .lower() calls per search query)
     nickname_counts = dict(Counter(name.lower() for name in nicknames))
 
+    # B5.1 (v1.6): tally v3 declarations across the family's relays so
+    # the search frontend can show a tier badge without per-relay scan.
+    v3_count = sum(1 for m in members if m.get('aroi_version') == '3')
+
     # Build base entry
     entry: Dict[str, Any] = {
         'id': family_id,
         'sz': len(members),
         'nn': nickname_counts,  # {nickname: count} format for compactness
     }
+
+    # v3 percentage as int 0-100. Sparse: only emitted when > 0.
+    if v3_count > 0 and len(members) > 0:
+        entry['v3p'] = int(round(v3_count / len(members) * 100))
 
     # Add prefix if detected (non-generic preferred for search relevance)
     prefix = extract_common_prefix(nicknames)
@@ -418,7 +436,11 @@ def generate_search_index(
             'generated_at': relays_data.get('relays_published', ''),
             'relay_count': len(relays),
             'family_count': len(valid_family_ids),
-            'version': '1.5'  # 1.1: nn->dict, 1.2: pxg sparse, 1.3: nn keys lowercase, 1.4: v (validated) field, 1.5: validated_aroi_domains in lookups
+            # 1.1: nn->dict, 1.2: pxg sparse, 1.3: nn keys lowercase,
+            # 1.4: v (validated) field, 1.5: validated_aroi_domains in lookups,
+            # 1.6: per-relay 'vn' (ciissversion) + per-family 'v3p'
+            #      (v3 percentage int 0-100) + lookups.v3_thresholds
+            'version': '1.6'
         },
         'relays': relay_entries,
         'families': family_entries,
@@ -427,7 +449,18 @@ def generate_search_index(
             'country_names': country_names,
             'platforms': sorted(platforms),
             'flags': sorted(flags),
-            'validated_aroi_domains': validated_aroi_list
+            'validated_aroi_domains': validated_aroi_list,
+            # B5.1 (v1.6): tier thresholds for the Cloudflare Pages Function
+            # to use without hardcoding. Mirrors V3_TIER_* constants in
+            # aroi_validation.py exactly so contact-page pills, listing
+            # icons, leaderboard badges, and search-frontend badges
+            # all agree.
+            'v3_thresholds': {
+                'explorer': 1,    # >=1 v3 relay (special: count, not pct)
+                'migrating': 25,
+                'mostly': 75,
+                'complete': 100,
+            },
         }
     }
 

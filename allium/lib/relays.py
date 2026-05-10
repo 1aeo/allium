@@ -34,10 +34,16 @@ from datetime import datetime, timedelta, timezone
 
 ABS_PATH = os.path.dirname(os.path.abspath(__file__))
 
-# Pre-compiled AROI parsing regexes (called ~7000 times per relay set)
-_AROI_URL_RE = re.compile(r'\burl:(?:https?://)?([^,\s]+)', re.IGNORECASE)
-_AROI_CIISS_RE = re.compile(r'\bciissversion:2\b', re.IGNORECASE)
-_AROI_PROOF_RE = re.compile(r'\bproof:(dns-rsa|uri-rsa)\b', re.IGNORECASE)
+# AROI parsing — share regex pair with aroi_validation.py to keep parsing
+# semantics identical across the codebase. Both v2 and v3 ciissversions
+# are accepted; all 4 supported proof types (dns-rsa, uri-rsa,
+# dns-familyid-ed25519, uri-familyid-ed25519) match. Hot path: called
+# ~7000 times per relay set, so module-level pre-compile.
+from .aroi_validation import (
+    _CIISS_VERSION_RE as _AROI_CIISS_RE,
+    _PROOF_TYPE_RE as _AROI_PROOF_RE,
+    _URL_FIELD_RE as _AROI_URL_RE,
+)
 
 # Page writing infrastructure imported from page_writer.py
 from .page_writer import (
@@ -261,49 +267,59 @@ class Relays:
 
     def _simple_aroi_parsing(self, contact):
         """
-        Extract AROI domain from contact information if conditions are met.
+        Extract AROI domain + version + proof type from a contact string.
         For display purposes only - does not affect the stored/hashed contact info.
-        More details: https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/
-        
-        According to the AROI spec, a valid contact string must have ALL 3:
-        - ciissversion:2
-        - proof:dns-rsa or proof:uri-rsa  
-        - url:<domain>
-        
-        Args:
-            contact: The contact string to process
+        Spec: https://nusenu.github.io/ContactInfo-Information-Sharing-Specification/
+
+        Recognises both CIISS v2 (ciissversion:2 + dns-rsa|uri-rsa) and
+        CIISS v3 (ciissversion:3 + dns-familyid-ed25519|uri-familyid-ed25519).
+        Both versions need all 3 fields present (ciissversion, proof, url)
+        AND a matching proof type for the declared version.
+
+        Hot path: called ~7000 times per relay set. Uses module-level
+        pre-compiled regexes shared with aroi_validation.py.
+
         Returns:
-            Tuple of (domain, aroi_field_status) where:
-            - domain: extracted domain or "none" if incomplete
-            - aroi_field_status: dict with presence of each field
+            Tuple of (domain, version, proof_type) where:
+              - domain: extracted domain string (e.g. 'example.com'), or
+                        'none' if the relay's contact does not declare a
+                        complete AROI (or has version/proof mismatch).
+              - version: '2' | '3' | None
+              - proof_type: full proof type string ('uri-rsa',
+                            'dns-familyid-ed25519', etc.) or None
         """
         if not contact:
-            return "none"
-            
-        # Check if ALL required patterns are present (ciissversion, proof, and url)
-        # Uses pre-compiled regexes for performance (called ~7000 times)
+            return ("none", None, None)
+
         url_match = _AROI_URL_RE.search(contact)
         ciiss_match = _AROI_CIISS_RE.search(contact)
         proof_match = _AROI_PROOF_RE.search(contact)
-        
-        if url_match and ciiss_match and proof_match:
-            # All 3 fields present - extract domain and clean it up
-            domain = url_match.group(1)
-            
-            # Handle protocol URLs (e.g. https://domain.com/path)
-            if '://' in domain:
-                domain = domain.split('://', 1)[1]
-            
-            # Remove www. prefix if present
-            if domain.startswith('www.'):
-                domain = domain[4:]
-                
-            # Remove trailing slash and anything after first /
-            domain = domain.split('/')[0]
-            
-            return domain
-        
-        return "none"
+
+        version = ciiss_match.group(1) if ciiss_match else None
+        proof_type = proof_match.group(1).lower() if proof_match else None
+
+        if not (url_match and version and proof_type):
+            return ("none", version, proof_type)
+
+        # Reject version/proof mismatches (e.g. ciissversion:2 +
+        # proof:uri-familyid-ed25519). This is a real-world operator
+        # copy-paste error during migration; we surface it as "no
+        # complete AROI" so it bubbles up to the contact page's
+        # incomplete bucket where the operator is told what to fix.
+        from .aroi_validation import PROOF_TYPE_VERSION
+        expected_version = PROOF_TYPE_VERSION.get(proof_type)
+        if expected_version and expected_version != version:
+            return ("none", version, proof_type)
+
+        # All 3 fields present and consistent — extract the domain.
+        domain = url_match.group(1)
+        if '://' in domain:
+            domain = domain.split('://', 1)[1]
+        if domain.startswith('www.'):
+            domain = domain[4:]
+        domain = domain.split('/')[0]
+
+        return (domain, version, proof_type)
 
     def _add_hashed_contact(self):
         """
@@ -318,11 +334,17 @@ class Relays:
         
         for idx, relay in enumerate(self.json["relays"]):
             contact = relay.get("contact", "")
-            aroi_domain = self._simple_aroi_parsing(contact)
-            
-            # Store AROI domain on relay (extracted during contact hashing for efficiency)
+            aroi_domain, aroi_version, aroi_proof_type = self._simple_aroi_parsing(contact)
+
+            # Store AROI domain + version + proof type on relay (extracted
+            # during contact hashing for efficiency). aroi_domain is "none"
+            # unless ALL fields are present and consistent. aroi_version /
+            # aroi_proof_type may be set independently for diagnostic use
+            # (e.g. an operator who declared ciissversion but not url).
             relay["aroi_domain"] = aroi_domain
             relay["aroi_configured"] = aroi_domain not in ("none", "", None)
+            relay["aroi_version"] = aroi_version            # '2' | '3' | None
+            relay["aroi_proof_type"] = aroi_proof_type      # full string or None
             
             # Use AROI domain as key if available, otherwise use contact hash as key
             if aroi_domain and aroi_domain != "none" and contact.strip():
