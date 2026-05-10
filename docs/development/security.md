@@ -86,6 +86,33 @@ display_name = onionoo_data['nickname']  # UNSAFE
 - [ ] No sensitive data in commits
 - [ ] Bandit scan passes
 
+## AROI v3 Security Surfacing
+
+When the upstream AROI validator
+(`https://aroivalidator.1aeo.com/latest.json`) reports a
+`secret_key_leaked` `error_category` for a relay, allium escalates that
+relay to a **first-class security incident** category that surfaces:
+
+- A `🚨 SECURITY` badge next to the operator's AROI status (renders
+  alongside, NOT replacing, the cascade status).
+- A dedicated `SECURITY INCIDENT — ROTATE FAMILY KEY` section above
+  all other issue sections on the contact page, with an explicit
+  `tor --keygen-family <newfile>` rotation hint sourced verbatim from
+  the validator's `hint` field.
+- A `🚨 SECURITY` per-relay flag on the affected relay-info page.
+- A `🚨` marker on the misc-contacts listing for the operator.
+
+This is allium's only "always above the fold" UI signal — a relay
+publishing `.secret_family_key` content (instead of
+`.public_family_id`) is a credential exposure that must be rotated
+immediately. The validator detects this server-side; allium's job is to
+make sure the affected operator sees it the next time they (or anyone)
+loads their contact page.
+
+See `allium/lib/aroi_validation.py::get_contact_validation_status` for
+the bucketing logic and `allium/templates/macros.html::aroi_validation_badge`
++ `aroi_relay_detail_box` for the rendering.
+
 ## How to Verify
 
 ```bash

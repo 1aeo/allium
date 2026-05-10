@@ -52,8 +52,24 @@
 | **Memory** | Minimal |
 | **Required** | No |
 | **Failure** | AROI validation features disabled |
+| **Schema versions tested** | 1, 2 (see `AROIVALIDATOR_TESTED_SCHEMAS`) |
 
-**Purpose**: Provides cryptographic proof of relay operator identity for AROI leaderboards.
+**Purpose**: Provides cryptographic proof of relay operator identity for
+AROI leaderboards. Allium consumes the validator's output for both
+**CIISS ContactInfo specification version 2** (RSA-fingerprint proofs:
+`dns-rsa`, `uri-rsa`) and **version 3** (ed25519 happy-family proofs:
+`dns-familyid-ed25519`, `uri-familyid-ed25519`). Both versions are
+supported concurrently during the migration window — operators are
+nudged toward v3 but not forced.
+
+**Schema-version handshake**: Allium reads
+`metadata.aroivalidator_schema_version` and logs a one-time warning
+when an unrecognized schema is received but does **not** reject the
+data — this is forward-compatible by design. The schema version is
+surfaced as `aroi_schema_version` in `network_health` metrics and shown
+as a footnote on the dashboard. When the validator adds a new
+`error_category` value, allium logs a one-time warning so we know to
+update `V3_CATEGORY_LABELS` in `aroi_validation.py`.
 
 ### CollecTor Consensus (Optional)
 

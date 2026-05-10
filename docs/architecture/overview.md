@@ -85,7 +85,23 @@ Core data processing class. Responsibilities:
 Multiprocessing workers for page generation. Uses fork-based process pool with copy-on-write memory sharing.
 
 ### `lib/aroileaders.py`
-AROI leaderboard calculations. Computes rankings across 18 categories for authenticated operators.
+AROI leaderboard calculations. Computes rankings across 18 categories
+for authenticated operators. Supports both CIISS spec v2 (RSA-fingerprint
+proofs) and v3 (ed25519 happy-family proofs); the AROI Validation
+Champions table surfaces v2/v3 split columns plus tiered v3 migration
+badges (Explorer / Migrating / Mostly / Complete) at 1% / 25% / 75% /
+100% v3 adoption thresholds.
+
+### `lib/aroi_validation.py`
+Single source of truth for CIISS spec parsing, validation-result
+processing, and v3 tier classification. Exports the constants
+(`SUPPORTED_CIISSVERSIONS`, `V2_PROOF_TYPES`, `V3_PROOF_TYPES`,
+`PROOF_TYPE_STAT_KEYS`, `V3_TIER_*`), the regex pair shared with
+`lib/relays.py`, and the `V3_CATEGORY_LABELS` dict that maps every
+upstream `error_category` to a pasteable-example operator hint.
+`get_contact_validation_status` does the per-contact cascade and emits
+the peer-issue buckets (`security_incident_relays`,
+`pending_onionoo_relays`) consumed by templates.
 
 ### `lib/uptime_utils.py`
 Uptime data processing. Normalizes Onionoo values (0-999 → 0-100%), calculates averages, detects outliers.

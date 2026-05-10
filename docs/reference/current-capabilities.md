@@ -12,7 +12,7 @@
 | Onionoo Details API | Core relay data | ~400MB |
 | Onionoo Uptime API | Historical uptime | ~2GB |
 | Onionoo Bandwidth API | Historical bandwidth | ~500MB |
-| AROI Validator API | Authenticated operators | Minimal |
+| AROI Validator API | Authenticated operators (CIISS v2 + v3 dual-spec) | Minimal |
 | CollecTor Consensus | Flag thresholds (optional) | Minimal |
 
 ### Processing

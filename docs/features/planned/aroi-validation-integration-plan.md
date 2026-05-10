@@ -245,10 +245,28 @@ Network Health Dashboard
 ## Implementation Timeline
 
 - **Phase 1:** ✅ Complete (Nov 23, 2025) - Network Health Dashboard
-- **Phase 2:** High priority (Operator badges)
+- **Phase 2:** ✅ Complete (May 5, 2026) - Operator pages (Part B1 of dual-spec rollout)
 - **Phase 3:** Medium priority (Validation status page)
 - **Phase 4:** ✅ Complete (Nov 29, 2025) - AROI Leaderboards Enhancement
-- **Phase 5:** Low priority (Relay pages)
+- **Phase 5:** ✅ Complete (May 5, 2026) - Relay pages (Part B3 of dual-spec rollout)
+- **Phase 6:** ✅ Complete (May 5, 2026) - Dual-spec support (CIISS v2 + v3)
+  - Part A — data backend (constants, schema handshake, error_category
+    cascade, hint passthrough, peer buckets, error rollup, V3_CATEGORY_LABELS,
+    build-time observability)
+  - Part B1 — operator pages (v2/v3 pills, peer-issue sections, pasteable
+    examples, per-operator rollup table, misc-contacts tier markers)
+  - Part B2 — network health dashboard (v2/v3 panels, ciissversion
+    adoption tile, schema footnote)
+  - Part B3 — individual relay pages (per-relay version badge + status flags)
+  - Part B4 — leaderboards (v2/v3 split columns + tiered migration badges
+    Explorer/Migrating/Mostly/Complete at 1%/25%/75%/100%)
+  - Part B5 — search index v1.6 (vn/v3p/v3_thresholds) + v2→v3
+    upgrade nudge for v2-only validated operators
+  - Part B6 — API diagnostics page (schema, version distribution, error
+    categories)
+  - Part B7 — Prometheus per-version labels + new
+    aeo1_aroi_relays_count_by_version metric
+  - Part B8 — documentation
 
 ---
 
@@ -260,6 +278,7 @@ Network Health Dashboard
 
 ---
 
-**Last Updated:** 2025-11-29  
-**Current Phase:** Phases 1 & 4 Complete, Phase 2 Ready to Start
+**Last Updated:** 2026-05-05
+**Current Phase:** Phases 1, 2, 4, 5, and 6 (dual-spec v2 + v3) all complete.
+Phase 3 (dedicated validation status page) remains as future work.
 
