@@ -135,18 +135,43 @@
                     {% set d = v['display'] -%}
                     <td class="contact-cell">
                         {% if v['aroi_domain'] and v['aroi_domain'] != 'none' -%}
+                            {# B1.6: peer issue markers FIRST (security + pending). Render
+                               alongside the cascade icon — they're orthogonal signals. #}
+                            {% if v.get('aroi_security_count', 0) > 0 -%}
+                            <span title="🚨 SECURITY: leaked .secret_family_key" class="al-status-danger">🚨</span> {% endif -%}
+                            {% if v.get('aroi_pending_count', 0) > 0 -%}
+                            <span title="⏳ v3 relays waiting for Onionoo to refresh family_ids" class="al-status-info">⏳</span> {% endif -%}
                             {% if v.get('aroi_validation_status') == 'validated' -%}
                             <span title="All relays validated" class="al-status-success">✓</span> {% elif v.get('aroi_validation_status') == 'unauthorized' -%}
                             <span title="Unauthorized: fingerprints not in proof file" class="al-status-danger">🚫</span> {% elif v.get('aroi_validation_status') == 'misconfigured' -%}
                             <span title="Misconfigured: validation errors" class="al-status-warning">⚠</span> {% elif v.get('aroi_validation_status') == 'incomplete' -%}
                             <span title="Incomplete: missing AROI fields" class="al-status-muted">⚬</span> {% endif -%}
+                            {# v3 tier markers removed per UX feedback —
+                               the operator-listing was visually noisy
+                               with trophy/etc. icons. v3 tier still
+                               surfaces on the operator detail page
+                               (contact.html) and in the AROI Validation
+                               Champions leaderboard column. #}
+                            {# Item 3 (variant-aware list views): when the
+                               operator publishes >1 distinct ContactInfo
+                               string under the same AROI domain (mid-
+                               migration v2 + v3 mix is the canonical
+                               case), the listing tooltip says so
+                               explicitly instead of pretending one
+                               representative string speaks for all
+                               relays. The operator-detail page remains
+                               the authoritative variant view. #}
+                            {%- set _cv = v.get('contact_variant_count', 1) or 1 -%}
+                            {%- set _ctitle = ((_cv ~ ' distinct ContactInfo strings under this AROI domain — see operator page for breakdown') if _cv > 1 else ('Contact: ' ~ v['contact']|e)) -%}
                             {% if base_url and v['aroi_domain'] in validated_aroi_domains -%}
-                            <a href="{{ base_url }}/{{ v['aroi_domain']|lower|escape }}/" title="Contact: {{ v['contact']|escape }}" style="text-decoration: underline;">{{ d.display_name|escape }}</a>
+                            <a href="{{ base_url }}/{{ v['aroi_domain']|lower|escape }}/" title="{{ _ctitle }}" style="text-decoration: underline;">{{ d.display_name|escape }}</a>
                             {% else -%}
-                            <a href="{{ page_ctx.path_prefix }}contact/{{ k|escape }}/" title="Contact: {{ v['contact']|escape }}" style="text-decoration: underline;">{{ d.display_name|escape }}</a>
+                            <a href="{{ page_ctx.path_prefix }}contact/{{ k|escape }}/" title="{{ _ctitle }}" style="text-decoration: underline;">{{ d.display_name|escape }}</a>
                             {% endif -%}
                         {% elif v['contact'] and v['contact'] != '' -%}
-                            <a href="{{ page_ctx.path_prefix }}contact/{{ k|escape }}/" title="Contact: {{ v['contact']|escape }}" style="text-decoration: underline;">{{ d.display_name|escape }}</a>
+                            {%- set _cv2 = v.get('contact_variant_count', 1) or 1 -%}
+                            {%- set _ctitle2 = ((_cv2 ~ ' distinct ContactInfo strings — see operator page') if _cv2 > 1 else ('Contact: ' ~ v['contact']|e)) -%}
+                            <a href="{{ page_ctx.path_prefix }}contact/{{ k|escape }}/" title="{{ _ctitle2 }}" style="text-decoration: underline;">{{ d.display_name|escape }}</a>
                         {% else -%}
                             <a href="{{ page_ctx.path_prefix }}contact/{{ k|escape }}/" title="No contact info" style="text-decoration: underline;">none</a>
                         {% endif -%}

@@ -108,6 +108,93 @@ API Diagnostics
             </div>
             {% endif %}
 
+            {# B6: AROI-specific extended diagnostics block. Helps
+               non-developer operators diagnose upstream regressions.
+               Uses a CSS grid for clean label-on-left/value-on-right
+               layout that doesn't break when content wraps (the prior
+               dt/dd inline-display approach broke with line wrap). #}
+            {% if api.aroi_extras %}
+            <div style="margin-top: 12px; padding: 10px; background-color: #f8f9fa; border-radius: 4px; font-size: 12px;">
+                <strong style="color: #495057;">AROI extended diagnostics</strong>
+                <table style="width: 100%; margin-top: 6px; font-size: 12px; border-collapse: collapse;">
+                    {% if api.aroi_extras.schema_version is not none %}
+                    <tr>
+                        <td style="vertical-align: top; padding: 3px 8px 3px 0; font-weight: bold; white-space: nowrap; width: 1%;">Schema version:</td>
+                        <td style="vertical-align: top; padding: 3px 0;">v{{ api.aroi_extras.schema_version }}{% if api.aroi_extras.schema_version > 2 %} <span style="color: #c82333;">⚠ newer than tested</span>{% endif %}</td>
+                    </tr>
+                    {% endif %}
+                    {# Item D: ciissversion_declared_rows is pre-formatted in
+                       api_diagnostics.py (_format_ciissversion_rows) so the
+                       template just iterates ready-to-render rows with
+                       stable badge_color/is_none flags. #}
+                    {% if api.aroi_extras.ciissversion_declared_rows %}
+                    <tr>
+                        <td style="vertical-align: top; padding: 3px 8px 3px 0; font-weight: bold; white-space: nowrap; width: 1%;">ciissversion declared:</td>
+                        <td style="vertical-align: top; padding: 3px 0;">
+                        {% for row in api.aroi_extras.ciissversion_declared_rows -%}
+                        {%- if not loop.first %} {% endif -%}
+                        {%- if row.is_none -%}<span style="color: #6c757d; margin-right: 4px;">none: {{ row.count }}</span>
+                        {%- else -%}<span style="background-color: {{ row.badge_color }}; color: white; padding: 1px 4px; border-radius: 2px; margin-right: 4px;">v{{ row.key }}: {{ row.count }}</span>
+                        {%- endif -%}
+                        {% endfor %}
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {# Item D: proof_types_rows is pre-formatted in
+                       api_diagnostics.py (_format_proof_type_rows) so the
+                       template doesn't need to do dictsort + 'familyid in
+                       pt' string classification + bucket exclusion in
+                       Jinja. Each row already carries version + badge_color. #}
+                    {% if api.aroi_extras.proof_types_rows %}
+                    <tr>
+                        <td style="vertical-align: top; padding: 3px 8px 3px 0; font-weight: bold; white-space: nowrap; width: 1%;">Proof types:</td>
+                        <td style="vertical-align: top; padding: 3px 0;">
+                        {% for row in api.aroi_extras.proof_types_rows -%}
+                        <span style="display: inline-block; margin-right: 4px; margin-bottom: 2px;">
+                            <span style="font-size: 10px; padding: 1px 4px; background-color: {{ row.badge_color }}; color: white; border-radius: 2px;">v{{ row.version }}</span>
+                            <code style="background: #fff; padding: 1px 4px; border-radius: 2px;">{{ row.proof_type }}: {{ row.valid }}/{{ row.total }}</code>
+                        </span>
+                        {% endfor %}
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% if api.aroi_extras.top_error_categories %}
+                    <tr>
+                        <td style="vertical-align: top; padding: 3px 8px 3px 0; font-weight: bold; white-space: nowrap; width: 1%;">Top v3 error categories:</td>
+                        <td style="vertical-align: top; padding: 3px 0;">
+                        {% for cat, count in api.aroi_extras.top_error_categories -%}
+                        <code style="background: #fff3cd; padding: 1px 4px; border-radius: 2px; margin-right: 4px; display: inline-block;">{{ cat }}: {{ count }}</code>
+                        {%- endfor %}
+                        </td>
+                    </tr>
+                    {% endif %}
+                </table>
+
+                {# B6 (final): warning feed from this build's
+                   aroi_validation module. Plan called for last-warning
+                   timestamps so operators can spot upstream regressions. #}
+                {% if api.aroi_extras.warnings %}
+                <div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed #dee2e6;">
+                    <strong style="color: #495057; font-size: 11px;">⚠️ Build-time warnings ({{ api.aroi_extras.warnings|length }}):</strong>
+                    <ul style="margin: 4px 0 0 0; padding-left: 20px; font-size: 11px;">
+                        {% for w in api.aroi_extras.warnings -%}
+                        <li>
+                            <code style="background: #fff3cd; padding: 1px 3px; border-radius: 2px;">{{ w.kind }}</code>
+                            =
+                            <code style="background: #fff; padding: 1px 3px; border-radius: 2px; border: 1px solid #dee2e6;">{{ w.value|escape }}</code>
+                            <span style="color: #6c757d;">(first seen {{ w.timestamp_iso }}{% if w.count > 1 %}, ×{{ w.count }}{% endif %})</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% else %}
+                <div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed #dee2e6; font-size: 11px; color: #6c757d;">
+                    ✓ No build-time AROI warnings (no unknown error_categories, proof_types, or schema mismatches).
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+
             <div class="diag-affected {% if api.freshness == 'stale' %}diag-affected-stale{% endif %}">
                 {% if api.freshness == 'stale' %}
                 <strong>Affected sections (may show stale data):</strong>

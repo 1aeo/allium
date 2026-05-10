@@ -377,21 +377,83 @@ Network Health Dashboard
                         <div class="al-text-small-muted metric-subtext">{{ "%.1f%%"|format(relays.json.network_health.relays_without_aroi_percentage) }} of all relays</div>
                     </div>
                 </div>
-                <!-- DNS-RSA and URI-RSA Validation Rates -->
+                <!-- B2.1: v2 (RSA-fingerprint) proof types -->
                 <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
-                    <div class="metric-item" title="DNS-RSA validation: {{ "{:,}".format(relays.json.network_health.dns_rsa_valid) }}/{{ "{:,}".format(relays.json.network_health.dns_rsa_total) }} relays validated. DNS-RSA uses DNS TXT records for domain verification.{% if relays.json.network_health.dns_error_top5 %}
+                    <div class="metric-item" title="DNS-RSA (v2): {{ "{:,}".format(relays.json.network_health.dns_rsa_valid) }}/{{ "{:,}".format(relays.json.network_health.dns_rsa_total) }} relays validated. CIISS v2 — DNS TXT record at <fingerprint>.<domain>.{% if relays.json.network_health.dns_error_top5 %}
 &#10;&#10;Top DNS failure reasons:{% for error, count in relays.json.network_health.dns_error_top5 %}
 &#10;• {{ error }} — {{ "{:,}".format(count) }} relays{% endfor %}{% endif %}">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.dns_rsa_valid) }}/{{ "{:,}".format(relays.json.network_health.dns_rsa_total) }} ({{ "%.1f%%"|format(relays.json.network_health.dns_rsa_success_rate) }})</span>
-                        <span class="metric-label">DNS-RSA Validated</span>
+                        <span class="metric-label">DNS-RSA <span style="font-size: 9px; padding: 0 4px; background-color: #6c757d; color: white; border-radius: 2px;">v2</span></span>
                     </div>
-                    <div class="metric-item" title="URI-RSA validation: {{ "{:,}".format(relays.json.network_health.uri_rsa_valid) }}/{{ "{:,}".format(relays.json.network_health.uri_rsa_total) }} relays validated. URI-RSA fetches proof from web server.{% if relays.json.network_health.uri_error_top5 %}
+                    <div class="metric-item" title="URI-RSA (v2): {{ "{:,}".format(relays.json.network_health.uri_rsa_valid) }}/{{ "{:,}".format(relays.json.network_health.uri_rsa_total) }} relays validated. CIISS v2 — file at /.well-known/tor-relay/rsa-fingerprint.txt.{% if relays.json.network_health.uri_error_top5 %}
 &#10;&#10;Top URI failure reasons:{% for error, count in relays.json.network_health.uri_error_top5 %}
 &#10;• {{ error }} — {{ "{:,}".format(count) }} relays{% endfor %}{% endif %}">
                         <span class="metric-value">{{ "{:,}".format(relays.json.network_health.uri_rsa_valid) }}/{{ "{:,}".format(relays.json.network_health.uri_rsa_total) }} ({{ "%.1f%%"|format(relays.json.network_health.uri_rsa_success_rate) }})</span>
-                        <span class="metric-label">URI-RSA Validated</span>
+                        <span class="metric-label">URI-RSA <span style="font-size: 9px; padding: 0 4px; background-color: #6c757d; color: white; border-radius: 2px;">v2</span></span>
                     </div>
                 </div>
+
+                <!-- B2.1: v3 (ed25519 happy-family) proof types. Only rendered
+                     when v3 totals > 0. -->
+                {% if (relays.json.network_health.dns_familyid_ed25519_total + relays.json.network_health.uri_familyid_ed25519_total) > 0 %}
+                {# B2.4 (final): v3 tile tooltips include top failure categories
+                   sourced from upstream's structured v3_failure_categories
+                   (preferred over substring matching). These complement the
+                   legacy dns_error_top5 / uri_error_top5 lists used by v2
+                   tiles, which remain in place per the planned alias-sunset
+                   schedule (next release after B2 ships). #}
+                {% set _v3_cats = relays.json.network_health.v3_failure_categories or {} %}
+                {% set _v3_top = _v3_cats.items()|sort(attribute=1, reverse=true)|list %}
+                <div class="metric-grid" style="grid-template-columns: repeat(2, 1fr);">
+                    <div class="metric-item" title="DNS-FamilyID (v3): {{ "{:,}".format(relays.json.network_health.dns_familyid_ed25519_valid) }}/{{ "{:,}".format(relays.json.network_health.dns_familyid_ed25519_total) }} relays validated. CIISS v3 — DNS TXT at we-run-this-tor-ed25519-family-id.<domain>. Single shared family-ID proof for all relays.{% if _v3_top %}
+&#10;&#10;Top v3 failure categories (network-wide):{% for cat, count in _v3_top[:5] %}{% if count > 0 %}
+&#10;• {{ cat }} — {{ count }} relays{% endif %}{% endfor %}{% endif %}">
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.dns_familyid_ed25519_valid) }}/{{ "{:,}".format(relays.json.network_health.dns_familyid_ed25519_total) }} ({{ "%.1f%%"|format(relays.json.network_health.dns_familyid_ed25519_success_rate) }})</span>
+                        <span class="metric-label">DNS-FamilyID <span style="font-size: 9px; padding: 0 4px; background-color: #007bff; color: white; border-radius: 2px;">v3</span></span>
+                    </div>
+                    <div class="metric-item" title="URI-FamilyID (v3): {{ "{:,}".format(relays.json.network_health.uri_familyid_ed25519_valid) }}/{{ "{:,}".format(relays.json.network_health.uri_familyid_ed25519_total) }} relays validated. CIISS v3 — file at /.well-known/tor-relay/ed25519-family-id.txt. Single shared family-ID proof for all relays.{% if _v3_top %}
+&#10;&#10;Top v3 failure categories (network-wide):{% for cat, count in _v3_top[:5] %}{% if count > 0 %}
+&#10;• {{ cat }} — {{ count }} relays{% endif %}{% endfor %}{% endif %}">
+                        <span class="metric-value">{{ "{:,}".format(relays.json.network_health.uri_familyid_ed25519_valid) }}/{{ "{:,}".format(relays.json.network_health.uri_familyid_ed25519_total) }} ({{ "%.1f%%"|format(relays.json.network_health.uri_familyid_ed25519_success_rate) }})</span>
+                        <span class="metric-label">URI-FamilyID <span style="font-size: 9px; padding: 0 4px; background-color: #007bff; color: white; border-radius: 2px;">v3</span></span>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- B2.2 (revised per UX feedback): ciissversion adoption
+                     as 3 separate metric tiles matching the standard
+                     dashboard pattern (bold-black-value on top, grey
+                     label below). -->
+                {% set _decl = relays.json.network_health.ciissversion_declared or {} %}
+                {% if _decl.get('3', 0) > 0 %}
+                {%- set _v2_count = _decl.get('2', 0) -%}
+                {%- set _v3_count = _decl.get('3', 0) -%}
+                {%- set _none_count = _decl.get('none', 0) -%}
+                {%- set _v2_pct = relays.json.network_health.v2_success_rate -%}
+                {%- set _v3_pct = relays.json.network_health.v3_success_rate -%}
+                <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
+                    <div class="metric-item" title="Relays declaring ciissversion:2 in their ContactInfo. v2 uses RSA-fingerprint proofs (dns-rsa, uri-rsa) and is the legacy spec.">
+                        <span class="metric-value">{{ "{:,}".format(_v2_count) }} ({{ "%.0f%%"|format(_v2_pct) }} valid)</span>
+                        <span class="metric-label">ciissversion v2</span>
+                    </div>
+                    <div class="metric-item" title="Relays declaring ciissversion:3 in their ContactInfo. v3 uses ed25519 happy-family proofs (dns-familyid-ed25519, uri-familyid-ed25519) and is the recommended new spec.">
+                        <span class="metric-value">{{ "{:,}".format(_v3_count) }} ({{ "%.0f%%"|format(_v3_pct) }} valid)</span>
+                        <span class="metric-label">ciissversion v3</span>
+                    </div>
+                    <div class="metric-item" title="Relays not declaring any ciissversion in their ContactInfo (no AROI configured).">
+                        <span class="metric-value">{{ "{:,}".format(_none_count) }}</span>
+                        <span class="metric-label">No ciissversion</span>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- B2.3: Schema-version footnote -->
+                {% if relays.json.network_health.aroi_schema_version is not none %}
+                <div style="margin-top: 8px; font-size: 10px; color: #6c757d; text-align: right;">
+                    Source: <a href="https://aroivalidator.1aeo.com/" target="_blank" rel="noopener" style="color: #6c757d;">aroivalidator.1aeo.com</a>
+                    (schema v{{ relays.json.network_health.aroi_schema_version }}{% if relays.json.network_health.aroi_schema_version > 2 %} <span style="color: #c82333;">⚠ newer than tested</span>{% endif %})
+                </div>
+                {% endif %}
                 <!-- Contact Row (moved before Family) -->
                 <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
                     <div class="metric-item" title="Total number of unique contact addresses provided by relay operators.">

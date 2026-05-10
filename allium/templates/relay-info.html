@@ -51,12 +51,103 @@
 {# AROI section with verification badge and relay count #}
 {% if has_aroi -%}
     <a href="{{ operator_url }}" title="View all relays by this operator">Operator: {{ relay['aroi_domain']|escape }}</a>
+    {%- if relay.get('aroi_version') %}
+        <span style="font-size: 9px; padding: 0 4px; border-radius: 2px; background-color: {{ '#007bff' if relay.get('aroi_version') == '3' else '#6c757d' }}; color: white;" title="ciissversion:{{ relay.get('aroi_version') }}{%- if relay.get('aroi_proof_type') %} / proof:{{ relay.get('aroi_proof_type') }}{% endif %}">v{{ relay.get('aroi_version') }}</span>
+    {% endif -%}
     {% if contact_validation_status and contact_validation_status.validation_summary -%}
         ({{ contact_validation_status.validation_summary.total_relays }} {{ plural(contact_validation_status.validation_summary.total_relays) }})
     {% endif -%}
     {{- aroi_validation_badge(contact_validation_status) -}}
+    {# B3.1: per-relay status flag for THIS relay specifically (distinct
+       from the operator-level cascade badge above). Prefixed with
+       "this relay:" to disambiguate when operator and relay statuses
+       differ (e.g. operator validated overall but THIS relay is pending).
+
+       The cascade-status overlap suppression logic below avoids
+       redundant badges when the per-relay status matches what the
+       operator-level cascade already shows. Cascade ↔ relay-status
+       overlap rules:
+         - operator status 'unauthorized' suppresses _unauth relay flag
+         - operator status 'misconfigured' suppresses _miscfg relay flag
+       Peer issues (security/pending) ALWAYS show because they're
+       relay-level signals not directly captured by the cascade. #}
+    {# B3.1: per-relay status flag for THIS relay specifically. Only
+       rendered when DIFFERENT from what the operator-level cascade /
+       peer badges already convey, to avoid redundant duplicates like
+       "⏳ Pending ⏳ Pending" or "🚫 Unauthorized 🚫 Unauthorized".
+       Suppression rules:
+         - operator cascade matches this relay's status → suppress
+         - operator-level peer badge (security/pending) covers this
+           relay → suppress
+       Renders ONLY when this relay's status genuinely diverges from
+       operator-level (e.g. operator validated overall but THIS relay
+       is uniquely pending). #}
+    {# Per-relay status flag determined by classifying the relay into
+       its TRUE bucket FIRST, then deciding whether to render based on
+       suppression rules. Bucket priority:
+         security_incident > pending_onionoo > validated >
+         unauthorized > misconfigured
+       Pending-and-misconfigured dual-bucketing (for cascade purposes)
+       is resolved here: if a relay is in the pending bucket, its
+       TRUE category is "pending", not "misconfigured", regardless of
+       what other sets it appears in. #}
+    {%- if contact_validation_status -%}
+        {%- set _fp = relay['fingerprint'] -%}
+        {%- set _summary = contact_validation_status.validation_summary or {} -%}
+        {%- set _op_status = contact_validation_status.validation_status -%}
+        {%- set _op_has_security = _summary.get('security_incident_count', 0) > 0 -%}
+        {%- set _op_has_pending = _summary.get('pending_onionoo_count', 0) > 0 -%}
+        {%- set _sec_fps = contact_validation_status.security_incident_fingerprints or [] -%}
+        {%- set _pend_fps = contact_validation_status.pending_onionoo_fingerprints or [] -%}
+        {%- set _unauth_fps = contact_validation_status.unauthorized_fingerprints or [] -%}
+        {%- set _miscfg_fps = contact_validation_status.misconfigured_fingerprints or [] -%}
+        {%- set _val_fps = contact_validation_status.validated_fingerprints or [] -%}
+        {# Resolve the relay's TRUE category respecting bucket priority. #}
+        {%- if _fp in _sec_fps -%}
+            {%- set _true_cat = 'security' -%}
+        {%- elif _fp in _pend_fps -%}
+            {%- set _true_cat = 'pending' -%}
+        {%- elif _fp in _val_fps -%}
+            {%- set _true_cat = 'validated' -%}
+        {%- elif _fp in _unauth_fps -%}
+            {%- set _true_cat = 'unauthorized' -%}
+        {%- elif _fp in _miscfg_fps -%}
+            {%- set _true_cat = 'misconfigured' -%}
+        {%- else -%}
+            {%- set _true_cat = none -%}
+        {%- endif -%}
+        {# Now decide whether to render: only when relay's true category
+           DIFFERS from what operator-level badges already convey. #}
+        {%- if _true_cat == 'security' and not _op_has_security -%}
+            <span class="al-status-danger" style="margin-left: 5px; padding: 1px 5px; background-color: #f8d7da; border-radius: 3px;" title="🚨 SECURITY: this relay's contact appears to have leaked .secret_family_key. Rotate the family key immediately.">🚨 this relay: SECURITY</span>
+        {%- elif _true_cat == 'pending' and not _op_has_pending -%}
+            <span class="al-status-info" style="margin-left: 5px; padding: 1px 5px; background-color: #d1ecf1; border-radius: 3px;" title="⏳ Pending Onionoo refresh — this relay declared ciissversion:3 but family_ids haven't propagated yet.">⏳ this relay: Pending</span>
+        {%- elif _true_cat == 'validated' and _op_status != 'validated' -%}
+            <span class="al-status-success" style="margin-left: 5px; padding: 1px 5px; background-color: #d4edda; border-radius: 3px;" title="✓ This specific relay's AROI proof validated — sibling relays may not have.">✓ this relay: Validated</span>
+        {%- elif _true_cat == 'unauthorized' and _op_status != 'unauthorized' -%}
+            <span class="al-status-danger" style="margin-left: 5px; padding: 1px 5px; background-color: #f8d7da; border-radius: 3px;" title="🚫 Unauthorized — this relay's fingerprint is not in the operator's published proof file.">🚫 this relay: Unauthorized</span>
+        {%- elif _true_cat == 'misconfigured' and _op_status != 'misconfigured' -%}
+            <span class="al-status-warning" style="margin-left: 5px; padding: 1px 5px; background-color: #fff3cd; border-radius: 3px;" title="⚠ Misconfigured — see operator page for details.">⚠ this relay: Misconfigured</span>
+        {%- endif -%}
+    {%- endif -%}
     | 
 {% endif -%}
+{# B3.1 (re-opened): explicit one-line pending-Onionoo note when this
+   relay's contact declared ciissversion:3 but family_ids hasn't
+   propagated yet. Plan called for a "same explicit ⏳ note as on
+   the contact page" — operators landing on a v3 relay page with
+   no validation should immediately understand it's transient. #}
+{%- if has_aroi and contact_validation_status -%}
+    {%- set _fp = relay['fingerprint'] -%}
+    {%- set _pend_fps = contact_validation_status.pending_onionoo_fingerprints or [] -%}
+    {%- if _fp in _pend_fps %}
+<div style="margin: 4px 0 8px 0; padding: 6px 10px; background-color: #d1ecf1; border-left: 3px dotted #17a2b8; font-size: 11px; color: #0c5460;">
+    ⏳ <strong>Pending Onionoo refresh:</strong> this relay declared <code>ciissversion:3</code> but
+    Onionoo hasn't picked up <code>family_ids</code> yet. Typically resolves within 24h after
+    restarting Tor with the happy-family directive. No action needed unless still pending after 24h.
+</div>
+    {%- endif %}
+{%- endif %}
 {% if relay['effective_family']|length > 1 -%}
     <a href="{{ page_ctx.path_prefix }}family/{{ relay['fingerprint']|escape }}/" title="View family members">Family: {{ relay['effective_family']|length }} relays</a>
 {% else -%}

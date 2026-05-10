@@ -150,6 +150,16 @@
                         {% set d = v['display'] -%}
                         <td>
                                                     {% if v['aroi_domain'] and v['aroi_domain'] != 'none' -%}
+                            {# B5.2: v3 tier marker inline before the AROI domain link.
+                               Only renders when the family has at least one
+                               ciissversion:3 relay (sparse — same convention as
+                               misc-contacts.html B1.6 markers). #}
+                            {% set _ftier = v.get('aroi_v3_tier', 'none') -%}
+                            {% if _ftier == 'complete' -%}
+                            <span title="v3 Complete: all relays on ciissversion:3" class="al-status-success">🏆</span> {% elif _ftier == 'mostly' -%}
+                            <span title="v3 Mostly Migrated: {{ '%.0f'|format(v.get('aroi_v3_pct', 0)) }}% of relays on v3" class="al-status-success">🚀</span> {% elif _ftier == 'migrating' -%}
+                            <span title="v3 Migrating: {{ '%.0f'|format(v.get('aroi_v3_pct', 0)) }}% of relays on v3" class="al-status-info">🔁</span> {% elif _ftier == 'explorer' -%}
+                            <span title="v3 Explorer: started migrating to ciissversion:3" class="al-status-info">🔍</span> {% endif -%}
                             <a href="{{ page_ctx.path_prefix }}family/{{ k|escape }}/" title="Family {{ k|escape }}" style="text-decoration: underline;">{{ v['aroi_domain']|escape }} ({{ v['relays']|length }} relays) {{ k[:4]|escape }}</a>
                         {% else -%}
                             <a href="{{ page_ctx.path_prefix }}family/{{ k|escape }}/" title="Family {{ k|escape }}" style="text-decoration: underline;">{{ v['relays']|length }} Relays {{ k[:8]|escape }}</a>

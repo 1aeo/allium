@@ -35,6 +35,9 @@
 {% set validated_fps = contact_validation_status.validated_fingerprints if contact_validation_status else {} -%}
 {% set unauthorized_fps = contact_validation_status.unauthorized_fingerprints if contact_validation_status else {} -%}
 {% set misconfigured_fps = contact_validation_status.misconfigured_fingerprints if contact_validation_status else {} -%}
+{# B1.5: peer-issue fingerprint sets for inline icons #}
+{% set security_fps = contact_validation_status.security_incident_fingerprints if contact_validation_status else {} -%}
+{% set pending_fps = contact_validation_status.pending_onionoo_fingerprints if contact_validation_status else {} -%}
 
 {# Determine if we should use the 4-section layout #}
 {% set use_sections = contact_validation_status and contact_validation_status.has_aroi and contact_validation_status.validation_status != 'not_configured' -%}
@@ -132,7 +135,7 @@
             {% elif validation_icon_type == 'not_configured' -%}
                 <span class="al-status-muted" style="margin-left: 4px;" title="Not Configured: No AROI validation configured for this relay">○</span>
             {% else -%}
-                {{- aroi_validation_icon(relay['fingerprint'], relay['aroi_domain'], validated_fps, unauthorized_fps, misconfigured_fps) }}
+                {{- aroi_validation_icon(relay['fingerprint'], relay['aroi_domain'], validated_fps, unauthorized_fps, misconfigured_fps, security_fps, pending_fps, relay.get('aroi_version')) }}
             {% endif -%}
         {% endif -%}
     </td>
@@ -312,6 +315,167 @@
 {%- endmacro %}
 
 {% if use_sections %}
+{# =============================================================================
+   B5.3: v2 \u2192 v3 UPGRADE NUDGE for v2-only validated operators.
+   Rendered ONLY when:
+     - operator status == 'validated' (v2 setup is working today)
+     - v3_relay_count == 0 (haven't started migrating yet)
+     - has_aroi (operator declared AROI in the first place)
+   Goal: keep the migration funnel moving without nagging operators
+   with active issues.
+   ============================================================================= #}
+{%- set _summary = contact_validation_status.validation_summary -%}
+{%- if contact_validation_status.validation_status == 'validated'
+        and _summary.v3_relay_count == 0
+        and _summary.v2_relay_count > 0 %}
+{%- set _all_relays = (contact_validation_status.validated_relays or []) -%}
+{%- set _example_domain = (_all_relays[0].aroi_domain if _all_relays else 'yourdomain.com') -%}
+<div style="margin-top: 30px; padding: 15px; background-color: #fff3cd; border-left: 3px solid #ffc107; border-radius: 4px; font-size: 13px;">
+    <h3 style="margin: 0 0 10px 0; font-size: 14px; color: #856404;">💡 Want to upgrade to ciissversion:3?</h3>
+    <p style="margin: 0 0 8px 0; color: #856404;">
+        All {{ _summary.v2_relay_count }} of your relays validate cleanly on CIISS v2 (RSA fingerprint proofs). The new <strong>CIISS v3</strong> spec replaces per-relay RSA proofs with a single shared ed25519 family-id proof — same url, one published file for the whole family.
+    </p>
+    <p style="margin: 0 0 6px 0; color: #856404;"><strong>To migrate, change torrc ContactInfo to:</strong></p>
+    <code style="display: block; padding: 8px; background-color: #fff; border: 1px solid #ffe69c; border-radius: 3px; font-size: 12px; word-break: break-all;">ciissversion:3 url:{{ _example_domain|escape }} proof:uri-familyid-ed25519</code>
+    <p style="margin: 8px 0 6px 0; color: #856404;"><strong>And on a secure host, generate the happy-family key:</strong></p>
+    <code style="display: block; padding: 8px; background-color: #fff; border: 1px solid #ffe69c; border-radius: 3px; font-size: 12px;">tor --keygen-family /path/to/myfamily   # then deploy myfamily.secret_family_key to every relay's KeyDir</code>
+    <p style="margin: 8px 0 0 0; font-size: 12px; color: #856404;">
+        Publish <code>.public_family_id</code> at <code>/.well-known/tor-relay/ed25519-family-id.txt</code>.
+        Allow ~24h after restarting Tor for Onionoo to refresh family_ids.
+        Full guide: <a href="https://github.com/1aeo/aroivalidator#operator-setup-guide-building-a-ciissversion3-aroi-from-scratch" target="_blank" rel="noopener">aroivalidator setup guide</a>.
+    </p>
+</div>
+{%- endif %}
+
+{# =============================================================================
+   B1.4: PER-OPERATOR ERROR ROLLUP TABLE
+   For operators with >= 3 failing relays, render a small grouped summary
+   so they see the "what's wrong" pattern at a glance without scanning
+   each per-relay detail box. Sourced from each operator's OWN
+   error_category counts; does not duplicate the network-wide rollup
+   that B2.4 will surface on the dashboard.
+   ============================================================================= #}
+{%- set error_relays = (contact_validation_status.unauthorized_relays or [])
+    + (contact_validation_status.misconfigured_relays or [])
+    + (contact_validation_status.pending_onionoo_relays or [])
+    + (contact_validation_status.security_incident_relays or []) -%}
+{%- if error_relays|length >= 3 -%}
+    {%- set ns = namespace(rollup={}) -%}
+    {%- for r in error_relays -%}
+        {%- set cat = r.error_category or 'unknown' -%}
+        {%- if cat in ns.rollup -%}
+            {%- set _ = ns.rollup.update({cat: ns.rollup[cat] + 1}) -%}
+        {%- else -%}
+            {%- set _ = ns.rollup.update({cat: 1}) -%}
+        {%- endif -%}
+    {%- endfor -%}
+    {%- if ns.rollup -%}
+<div style="margin-top: 30px; padding: 15px; background-color: #f8f9fa; border-left: 3px solid #6c757d; border-radius: 4px;">
+    <h3 style="margin: 0 0 10px 0; font-size: 14px; color: #495057;">📋 Issues Across This Operator's Relays ({{ error_relays|length }} affected)</h3>
+    <table style="width: 100%; font-size: 13px; border-collapse: collapse;">
+        <thead>
+            <tr style="border-bottom: 1px solid #dee2e6;">
+                <th style="text-align: left; padding: 4px 6px;">Issue</th>
+                <th style="text-align: right; padding: 4px 6px;">Affected relays</th>
+            </tr>
+        </thead>
+        <tbody>
+        {%- for cat, count in ns.rollup|dictsort(by='value', reverse=true) %}
+            <tr style="border-bottom: 1px solid #f1f3f5;">
+                <td style="padding: 4px 6px;">{{ cat|replace('_', ' ')|capitalize|escape }}</td>
+                <td style="text-align: right; padding: 4px 6px;"><strong>{{ count }}</strong></td>
+            </tr>
+        {%- endfor %}
+        </tbody>
+    </table>
+    <p style="margin: 8px 0 0 0; color: #6c757d; font-size: 11px;">See per-relay details with pasteable fix examples in the sections below.</p>
+</div>
+    {%- endif -%}
+{%- endif %}
+
+{# =============================================================================
+   B1.1: PEER ISSUE SECTIONS (rendered above the cascade so urgent
+   problems surface first regardless of operator-level status).
+   ============================================================================= #}
+
+{# PEER 1: Security incident (highest urgency) — leaked .secret_family_key. #}
+{% if contact_validation_status.security_incident_relays %}
+{% set sec_relays = contact_validation_status.security_incident_relays|map(attribute='relay')|list %}
+{% set sec_has_ipv6 = sec_relays|selectattr('ipv6_support', 'equalto', 'both')|list|length > 0 or sec_relays|selectattr('ipv6_support', 'equalto', 'ipv6_only')|list|length > 0 %}
+{{ aroi_section_header('SECURITY INCIDENT — ROTATE FAMILY KEY', contact_validation_status.security_incident_relays|length, 'security_incident') }}
+<table class="table table-condensed" style="border-left: 4px solid #c82333;">
+{{ relay_table_header(sec_has_ipv6) }}
+<tbody>
+    {% for relay_info in contact_validation_status.security_incident_relays -%}
+        {{ relay_row(relay_info.relay, show_validation_icon=true, validation_icon_type='security_incident', table_has_ipv6=sec_has_ipv6) }}
+    {% endfor -%}
+</tbody>
+</table>
+{{ aroi_relay_detail_box(contact_validation_status.security_incident_relays, 'security_incident', page_ctx, aroi_validation_timestamp) }}
+</div>
+{% endif %}
+
+{# PEER 2: Pending Onionoo refresh — transient (< 24h after torrc change). #}
+{% if contact_validation_status.pending_onionoo_relays %}
+{% set pend_relays = contact_validation_status.pending_onionoo_relays|map(attribute='relay')|list %}
+{% set pend_has_ipv6 = pend_relays|selectattr('ipv6_support', 'equalto', 'both')|list|length > 0 or pend_relays|selectattr('ipv6_support', 'equalto', 'ipv6_only')|list|length > 0 %}
+{{ aroi_section_header('PENDING ONIONOO REFRESH', contact_validation_status.pending_onionoo_relays|length, 'pending_onionoo') }}
+<table class="table table-condensed" style="border-left: 3px dotted #17a2b8;">
+{{ relay_table_header(pend_has_ipv6) }}
+<tbody>
+    {% for relay_info in contact_validation_status.pending_onionoo_relays -%}
+        {{ relay_row(relay_info.relay, show_validation_icon=true, validation_icon_type='pending_onionoo', table_has_ipv6=pend_has_ipv6) }}
+    {% endfor -%}
+</tbody>
+</table>
+{{ aroi_relay_detail_box(contact_validation_status.pending_onionoo_relays, 'pending_onionoo', page_ctx, aroi_validation_timestamp) }}
+</div>
+{% endif %}
+
+{# PEER 3: v3 migration summary — informational. Operator has both v2
+   and v3 declarations. Help text shows pasteable v3 example using the
+   operator's actual url so they can finish the migration. #}
+{% if contact_validation_status.validation_summary.is_mixed_migration %}
+{%- set summary = contact_validation_status.validation_summary -%}
+{# Pull aroi_domain from validation_status (parent template variable name
+   differs between contact.html and family.html contexts). #}
+{%- set _all_validated_or_failed = (contact_validation_status.validated_relays or [])
+    + (contact_validation_status.unauthorized_relays or [])
+    + (contact_validation_status.misconfigured_relays or []) -%}
+{%- set _example_domain = (_all_validated_or_failed[0].aroi_domain if _all_validated_or_failed else 'yourdomain.com') -%}
+{{ aroi_section_header('v2 → v3 MIGRATION IN PROGRESS', summary.v3_relay_count|string + '/' + summary.total_relays|string + ' on v3', 'v3_migration') }}
+<div style="padding: 15px; background-color: #d1ecf1; border-left: 3px dotted #007bff; border-radius: 4px; font-size: 13px;">
+    {# B1.1 (final): per-version success-rate pills side-by-side, as plan
+       called for. Visualizes where each version is failing for THIS
+       operator (e.g. v2 100% but v3 25% means v3 setup not yet propagated). #}
+    <div style="margin-bottom: 10px;">
+        <span style="display: inline-block; padding: 4px 10px; background-color: #fff; border: 1px solid #6c757d; border-radius: 3px; margin-right: 8px;">
+            <strong style="color: #495057;">v2:</strong>
+            <span style="color: #28a745;">{{ summary.v2_validated_count }}</span> /
+            {{ summary.v2_relay_count }}
+            <small style="color: #6c757d;">({{ '%.0f'|format(summary.v2_success_rate) }}%)</small>
+        </span>
+        <span style="display: inline-block; padding: 4px 10px; background-color: #fff; border: 1px solid #007bff; border-radius: 3px;">
+            <strong style="color: #007bff;">v3:</strong>
+            <span style="color: #28a745;">{{ summary.v3_validated_count }}</span> /
+            {{ summary.v3_relay_count }}
+            <small style="color: #6c757d;">({{ '%.0f'|format(summary.v3_success_rate) }}%)</small>
+        </span>
+    </div>
+    <p style="margin: 0 0 8px 0;">
+        <strong>{{ '%.0f'|format(summary.v3_relay_percentage) }}%</strong> of this operator's relays already declare ciissversion:3
+        ({{ summary.v3_relay_count }} of {{ summary.total_relays }}).
+        Tier: <strong>{{ summary.v3_tier|capitalize }}</strong>.
+    </p>
+    <p style="margin: 0 0 8px 0;">To finish the migration, change v2 relays' ContactInfo to:</p>
+    <code style="display: block; padding: 8px; background-color: #fff; border: 1px solid #b8daff; border-radius: 3px; font-size: 12px;">ciissversion:3 url:{{ _example_domain|escape }} proof:uri-familyid-ed25519</code>
+    <p style="margin: 8px 0 0 0; color: #0c5460; font-size: 12px;">
+        💡 The same url and family key apply across all relays — one shared proof, not per-relay RSA fingerprints.
+    </p>
+</div>
+</div>
+{% endif %}
+
 {# =============================================================================
    4-SECTION LAYOUT (for operators with AROI: validated/unauthorized/misconfigured)
    ============================================================================= #}

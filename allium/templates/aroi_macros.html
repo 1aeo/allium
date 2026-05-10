@@ -51,7 +51,7 @@
                         {% elif category_key == "ipv6_leaders" %}
                             <span title="Number of unique IPv6 addresses across relay infrastructure">{{ champion.unique_ipv6_count }} unique IPv6</span>
                         {% elif category_key == "validated_relays" %}
-                            <span title="Number of relays with valid AROI cryptographic proofs">{{ champion.validated_relay_count }} validated relays</span>
+                            <span title="Number of relays with valid AROI cryptographic proofs (v2 + v3 combined)">{{ champion.validated_relay_count }} validated relays</span>
                         {% elif category_key == "total_data_champions" %}
                             <span title="Total cumulative data transferred (read + write)">{{ champion.total_data_transferred }}{% if champion.total_data_pct %} ({{ champion.total_data_pct }}){% endif %}</span>
                         {% endif %}
@@ -770,7 +770,11 @@
                 <tr>
                     <th title="Position in AROI validation champions leaderboard">Rank</th>
                     <th title="Authenticated Relay Operator Identifier following ContactInfo specification">Operator (AROI)</th>
-                    <th title="Number of relays with valid AROI cryptographic proofs (DNS-RSA or URI-RSA)">Validated Relays</th>
+                    <th title="Number of relays with valid AROI cryptographic proofs (CIISS v2 dns-rsa/uri-rsa or CIISS v3 ed25519 family-id)">Validated Relays</th>
+                    {# B4.1: v2/v3 split columns. #}
+                    <th title="Validated relays declaring CIISS v2 (RSA-fingerprint proofs)">v2 Valid</th>
+                    <th title="Validated relays declaring CIISS v3 (ed25519 happy-family proofs)">v3 Valid</th>
+                    <th title="Percentage of operator's relays that declare ciissversion:3.">v3 Migration</th>
                     <th title="Number of guard/middle/exit relays with valid AROI proofs">Guard/Middle/Exit Validated</th>
                     <th title="Total bandwidth capacity on validated relays in {% if use_bits %}bits per second{% else %}bytes per second{% endif %}">Bandwidth Capacity Validated</th>
                     <th title="Consensus weight percentage on validated relays">Consensus Weight Validated</th>
@@ -787,6 +791,12 @@
                         {% if entry.invalid_relay_count > 0 %}
                             <small class="text-muted" title="Relays with failed AROI validation">({{ entry.invalid_relay_count }} invalid)</small>
                         {% endif %}
+                    </td>
+                    {# B4.1: v2/v3 split + tier badge cells. #}
+                    <td title="v2 (RSA-fingerprint) validated relays for this operator"><span style="font-size: 11px; padding: 1px 5px; background-color: #6c757d; color: white; border-radius: 2px;">{{ entry.validated_v2_relay_count }}</span></td>
+                    <td title="v3 (ed25519 happy-family) validated relays for this operator"><span style="font-size: 11px; padding: 1px 5px; background-color: #007bff; color: white; border-radius: 2px;">{{ entry.validated_v3_relay_count }}</span></td>
+                    <td title="{{ entry.v3_relay_count }} of operator's relays declare ciissversion:3 ({{ entry.v3_relay_pct_str }}). Tier: {{ entry.v3_tier|capitalize }}.">
+                        {{ entry.v3_relay_pct_str }}
                     </td>
                     <td>
                         <span title="Guard: {{ entry.validated_guard_count }} | Exit: {{ entry.validated_exit_count }} | Middle: {{ entry.validated_middle_count }}">

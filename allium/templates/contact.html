@@ -1,5 +1,5 @@
 {% extends "contact-relay-list.html" %}
-{% from "macros.html" import navigation, detail_summary, aroi_validation_badge, aroi_sub_bullets, family_support_inline, dns_health_bullet %}
+{% from "macros.html" import navigation, detail_summary, aroi_validation_badge, aroi_sub_bullets, aroi_v2v3_pills, family_support_inline, dns_health_bullet %}
 {% set contact_hash = relay_subset[0]['contact_md5'] %}
 {% if relay_subset[0]['contact'] %}
     {% set contact = relay_subset[0]['contact']|escape %}
@@ -60,9 +60,41 @@
                         {{ aroi_sub_bullets(contact_validation_status) }}
                     </li>
                     {% endif %}
-                    {% if contact != 'none' %}
+                    {# Phase 1: source-faithful ContactInfo display.
+                       Single variant → keep the simple Contact: line.
+                       Multiple variants → render an explicit
+                       "ContactInfo variants" block so operators (and
+                       reviewers) can see exactly what each subset of
+                       relays publishes. #}
+                    {%- set _variants = (contact_display_data.get('contact_variants') if contact_display_data else None) or [] -%}
+                    {%- set _variant_count = (contact_display_data.get('contact_variant_count') if contact_display_data else None) or 0 -%}
+                    {%- if _variant_count <= 1 %}
+                        {%- if contact != 'none' %}
                     <li><strong>Contact:</strong> {{ contact }}</li>
-                    {% endif %}
+                        {%- endif %}
+                    {%- else %}
+                    <li><strong>ContactInfo variants:</strong>
+                        {{ _variant_count }} distinct ContactInfo strings across this operator's
+                        {{ contact_validation_status.validation_summary.total_relays if contact_validation_status else 'all' }} relays
+                        (grouped by AROI domain).
+                        <ul style="list-style-type: circle; padding-left: 20px; margin-top: 4px; margin-bottom: 4px;">
+                        {%- for v in _variants %}
+                            <li style="margin-bottom: 6px;">
+                                <strong>{{ v.count }}</strong> relay{{ 's' if v.count != 1 else '' }}
+                                {%- if v.aroi_version %}
+                                    <code style="font-size: 11px; padding: 1px 5px; background-color: {{ '#007bff' if v.aroi_version == '3' else '#6c757d' }}; color: white; border-radius: 2px; margin: 0 4px;">v{{ v.aroi_version }}{%- if v.aroi_proof_type %} {{ v.aroi_proof_type }}{% endif %}</code>
+                                {%- elif v.has_complete_aroi %}
+                                    <code style="font-size: 11px; padding: 1px 5px; background-color: #6c757d; color: white; border-radius: 2px; margin: 0 4px;">AROI</code>
+                                {%- else %}
+                                    <code style="font-size: 11px; padding: 1px 5px; background-color: #adb5bd; color: white; border-radius: 2px; margin: 0 4px;">no AROI</code>
+                                {%- endif %}
+                                <br>
+                                <code style="display: block; margin-top: 3px; padding: 6px 8px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 3px; font-size: 11px; word-break: break-all;">{% if v.raw %}{{ v.raw|escape }}{% else %}<em style="color: #6c757d;">(no contact info)</em>{% endif %}</code>
+                            </li>
+                        {%- endfor %}
+                        </ul>
+                    </li>
+                    {%- endif %}
                     <li><strong>Hash:</strong> {{ contact_hash }}</li>
                     {% if primary_country_data %}
                     <li><strong>Countries:</strong> 

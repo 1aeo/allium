@@ -81,6 +81,12 @@
 			    {% else -%}
 			    <a href="{{ page_ctx.path_prefix }}contact/{{ relay['contact_md5'] }}/" title="{{ relay['aroi_domain']|escape }}">{{ relay['aroi_domain']|escape }}</a>
 			    {% endif -%}
+			    {#- B5.2: per-relay version badge in AROI cell of relay-list pages
+			        (country, AS, family, networks, platforms, all-relays).
+			        Sparse: omitted when relay didn't declare a version. -#}
+			    {%- if relay.get('aroi_version') %}
+			    <span style="font-size: 9px; padding: 0 3px; border-radius: 2px; background-color: {{ '#007bff' if relay.get('aroi_version') == '3' else '#6c757d' }}; color: white; vertical-align: middle;" title="ciissversion:{{ relay.get('aroi_version') }}">v{{ relay.get('aroi_version') }}</span>
+			    {%- endif %}
 			</td>
 		    {% else -%}
 			<td>none</td>
