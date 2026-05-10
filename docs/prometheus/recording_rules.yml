@@ -38,3 +38,47 @@ groups:
           aeo1_aroi_relays_count{state="configured_checked_valid"}
           /
           clamp_min(aeo1_aroi_configured_relays_count_derived, 1)
+
+      # ----------------------------------------------------------------
+      # B7.2: per-version recording rules (CIISS v2 + v3 dual-spec)
+      # Sourced from aeo1_aroi_relays_count_by_version{state, ciissversion}.
+      # Cardinality bound: 4 states × 4 ciissversion = 16 series per scrape.
+      # ----------------------------------------------------------------
+
+      # v2 declared (configured) relay count
+      - record: aeo1_aroi_v2_configured_relays_count_derived
+        expr: >
+          sum(aeo1_aroi_relays_count_by_version{ciissversion="2"})
+          - aeo1_aroi_relays_count_by_version{ciissversion="2",state="not_configured"}
+
+      # v3 declared (configured) relay count
+      - record: aeo1_aroi_v3_configured_relays_count_derived
+        expr: >
+          sum(aeo1_aroi_relays_count_by_version{ciissversion="3"})
+          - aeo1_aroi_relays_count_by_version{ciissversion="3",state="not_configured"}
+
+      # v3 success ratio (over v3 configured)
+      - record: aeo1_aroi_v3_success_ratio_derived
+        expr: >
+          aeo1_aroi_relays_count_by_version{ciissversion="3",state="configured_checked_valid"}
+          /
+          clamp_min(aeo1_aroi_v3_configured_relays_count_derived, 1)
+
+      # v2 success ratio (over v2 configured)
+      - record: aeo1_aroi_v2_success_ratio_derived
+        expr: >
+          aeo1_aroi_relays_count_by_version{ciissversion="2",state="configured_checked_valid"}
+          /
+          clamp_min(aeo1_aroi_v2_configured_relays_count_derived, 1)
+
+      # v3 migration adoption ratio: v3 declared / total declared.
+      # Network-wide migration progress KPI for dashboards.
+      - record: aeo1_aroi_v3_adoption_ratio_derived
+        expr: >
+          aeo1_aroi_v3_configured_relays_count_derived
+          /
+          clamp_min(
+            aeo1_aroi_v2_configured_relays_count_derived
+            + aeo1_aroi_v3_configured_relays_count_derived,
+            1
+          )
