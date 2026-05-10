@@ -551,5 +551,735 @@ class TestAROIValidation(unittest.TestCase):
         self.assertIsInstance(result['misconfigured_fingerprints'], set)
 
 
+class TestAROIValidationV3(unittest.TestCase):
+    """v3 (CIISS spec version 3) integration tests covering Part A.
+
+    Verifies:
+      - all 4 proof types read into metrics (A.3)
+      - ciissversion adoption + v3_failure_categories passthrough (A.3)
+      - error_category-driven cascade (A.4)
+      - upstream hint passthrough (A.4)
+      - peer issue categories: security_incident, pending_onionoo (A.5)
+      - operator-level v2/v3 counts + tier classification (A.5)
+      - is_mixed_migration / is_v3_adopter flags (A.5)
+      - schema-version handshake (A.1)
+      - error rollup buckets (A.6)
+      - V3_CATEGORY_LABELS coverage of all upstream categories (A.7)
+    """
+
+    def test_all_four_proof_types_populated(self):
+        """A.3: dns_familyid_ed25519 + uri_familyid_ed25519 must be read."""
+        relays = [
+            {'fingerprint': 'V2A', 'aroi_domain': 'v2.org', 'aroi_version': '2',
+             'aroi_proof_type': 'dns-rsa', 'contact': 'ciissversion:2 proof:dns-rsa url:v2.org'},
+            {'fingerprint': 'V3A', 'aroi_domain': 'v3.org', 'aroi_version': '3',
+             'aroi_proof_type': 'uri-familyid-ed25519',
+             'contact': 'ciissversion:3 proof:uri-familyid-ed25519 url:v3.org'},
+        ]
+        validation_data = {
+            'metadata': {'timestamp': '2026-05-05T00:00:00Z',
+                         'aroivalidator_schema_version': 2},
+            'statistics': {
+                'proof_types': {
+                    'dns_rsa':              {'total': 100, 'valid': 80, 'success_rate': 80.0},
+                    'uri_rsa':              {'total': 200, 'valid': 180, 'success_rate': 90.0},
+                    'dns_familyid_ed25519': {'total': 50, 'valid': 50, 'success_rate': 100.0},
+                    'uri_familyid_ed25519': {'total': 30, 'valid': 28, 'success_rate': 93.3},
+                },
+                'ciissversion_declared':  {'2': 300, '3': 80, 'none': 100},
+                'ciissversion_validated': {'2': 300, '3': 80, 'filtered_out': 0},
+                'v3_failure_categories':  {'missing_family_ids': 2,
+                                            'uri_content_mismatch': 1},
+            },
+            'results': [
+                {'fingerprint': 'V2A', 'valid': True, 'proof_type': 'dns-rsa',
+                 'ciissversion': '2'},
+                {'fingerprint': 'V3A', 'valid': True,
+                 'proof_type': 'uri-familyid-ed25519', 'ciissversion': '3'},
+            ]
+        }
+        m = calculate_aroi_validation_metrics(relays, validation_data)
+
+        # Per-proof-type keys (12 total: 4 types * 3 stats each).
+        self.assertEqual(m['dns_rsa_total'], 100)
+        self.assertEqual(m['uri_rsa_total'], 200)
+        self.assertEqual(m['dns_familyid_ed25519_total'], 50)
+        self.assertEqual(m['dns_familyid_ed25519_valid'], 50)
+        self.assertEqual(m['dns_familyid_ed25519_success_rate'], 100.0)
+        self.assertEqual(m['uri_familyid_ed25519_total'], 30)
+        self.assertEqual(m['uri_familyid_ed25519_valid'], 28)
+
+        # v2 / v3 aggregates.
+        self.assertEqual(m['v2_total'], 300)   # 100 + 200
+        self.assertEqual(m['v2_valid'], 260)   # 80 + 180
+        self.assertEqual(m['v3_total'], 80)    # 50 + 30
+        self.assertEqual(m['v3_valid'], 78)    # 50 + 28
+        self.assertAlmostEqual(m['v2_success_rate'], 260/300*100, places=1)
+        self.assertAlmostEqual(m['v3_success_rate'], 78/80*100, places=1)
+
+        # Upstream stats passthrough.
+        self.assertEqual(m['ciissversion_declared'],
+                         {'2': 300, '3': 80, 'none': 100})
+        self.assertEqual(m['v3_failure_categories'],
+                         {'missing_family_ids': 2, 'uri_content_mismatch': 1})
+
+    def test_security_incident_peer_bucket(self):
+        """A.5: secret_key_leaked relays go into security_incident_relays."""
+        relays = [{
+            'fingerprint': 'BAD', 'aroi_domain': 'leak.org',
+            'aroi_version': '3', 'aroi_proof_type': 'uri-familyid-ed25519',
+            'nickname': 'leakedrelay',
+            'contact': 'ciissversion:3 proof:uri-familyid-ed25519 url:leak.org',
+        }]
+        validation_data = {
+            'metadata': {'aroivalidator_schema_version': 2},
+            'statistics': {'proof_types': {}},
+            'results': [{
+                'fingerprint': 'BAD', 'valid': False, 'ciissversion': '3',
+                'proof_type': 'uri-familyid-ed25519',
+                'error': ('SECURITY: URI-FamilyID: published content '
+                          'appears to contain .secret_family_key. '
+                          'Rotate immediately.'),
+                'error_category': 'secret_key_leaked',
+                'hint': 'tor --keygen-family <newfile>',
+            }],
+        }
+        s = get_contact_validation_status(relays, validation_data)
+
+        # Peer bucket populated.
+        self.assertEqual(s['validation_summary']['security_incident_count'], 1)
+        self.assertEqual(len(s['security_incident_relays']), 1)
+        self.assertIn('BAD', s['security_incident_fingerprints'])
+
+        # Hint passes through verbatim from upstream.
+        self.assertEqual(s['security_incident_relays'][0]['hint'],
+                         'tor --keygen-family <newfile>')
+
+        # Top-level cascade still reports "misconfigured" (cascade DOES
+        # NOT change for peer alerts; templates render the security
+        # banner alongside whatever cascade picks).
+        self.assertEqual(s['validation_status'], 'misconfigured')
+
+    def test_pending_onionoo_peer_bucket(self):
+        """A.5: missing_family_ids -> pending_onionoo_relays bucket."""
+        relays = [{
+            'fingerprint': 'NEW', 'aroi_domain': 'fresh.org',
+            'aroi_version': '3', 'aroi_proof_type': 'uri-familyid-ed25519',
+            'contact': 'ciissversion:3 proof:uri-familyid-ed25519 url:fresh.org',
+        }]
+        validation_data = {
+            'metadata': {'aroivalidator_schema_version': 2},
+            'statistics': {'proof_types': {}},
+            'results': [{
+                'fingerprint': 'NEW', 'valid': False, 'ciissversion': '3',
+                'error_category': 'missing_family_ids',
+                'hint': "Run 'tor --keygen-family ...'",
+            }],
+        }
+        s = get_contact_validation_status(relays, validation_data)
+        self.assertEqual(s['validation_summary']['pending_onionoo_count'], 1)
+        self.assertEqual(len(s['pending_onionoo_relays']), 1)
+        self.assertIn('NEW', s['pending_onionoo_fingerprints'])
+
+    def test_dns_content_mismatch_unauthorized_via_error_category(self):
+        """A.4: error_category='dns_content_mismatch' -> unauthorized cascade.
+
+        Today's substring heuristic would not catch this (the v3 error
+        message says 'TXT record content does not match...' which
+        doesn't include 'fingerprint not found'). With error_category
+        plumbed through, classification is correct.
+        """
+        relays = [{
+            'fingerprint': 'X', 'aroi_domain': 'x.org', 'aroi_version': '3',
+            'contact': 'ciissversion:3 proof:dns-familyid-ed25519 url:x.org',
+        }]
+        validation_data = {
+            'metadata': {},
+            'statistics': {'proof_types': {}},
+            'results': [{
+                'fingerprint': 'X', 'valid': False, 'ciissversion': '3',
+                'error': 'DNS-FamilyID: TXT record content does not match relay family_ids',
+                'error_category': 'dns_content_mismatch',
+            }],
+        }
+        s = get_contact_validation_status(relays, validation_data)
+        self.assertEqual(s['validation_status'], 'unauthorized')
+        self.assertEqual(s['validation_summary']['unauthorized_count'], 1)
+
+    def test_v3_tier_classification_explorer(self):
+        """A.5: 1 v3 relay out of 50 -> 'explorer' tier."""
+        from allium.lib.aroi_validation import classify_v3_tier
+        self.assertEqual(classify_v3_tier(0, 50), 'none')
+        self.assertEqual(classify_v3_tier(1, 50), 'explorer')   # 2%
+        self.assertEqual(classify_v3_tier(12, 50), 'explorer')  # 24%
+        self.assertEqual(classify_v3_tier(13, 50), 'migrating') # 26%
+        self.assertEqual(classify_v3_tier(37, 50), 'migrating') # 74%
+        self.assertEqual(classify_v3_tier(38, 50), 'mostly')    # 76%
+        self.assertEqual(classify_v3_tier(49, 50), 'mostly')    # 98%
+        self.assertEqual(classify_v3_tier(50, 50), 'complete')  # 100%
+        self.assertEqual(classify_v3_tier(0, 0), 'none')
+        self.assertEqual(classify_v3_tier(5, 0), 'none')
+
+    def test_mixed_migration_operator_metadata(self):
+        """A.5: operator with both v2 and v3 -> is_mixed_migration=True."""
+        relays = [
+            {'fingerprint': 'V2', 'aroi_domain': 'mix.org',
+             'aroi_version': '2', 'aroi_proof_type': 'uri-rsa',
+             'contact': 'ciissversion:2 proof:uri-rsa url:mix.org'},
+            {'fingerprint': 'V3A', 'aroi_domain': 'mix.org',
+             'aroi_version': '3', 'aroi_proof_type': 'uri-familyid-ed25519',
+             'contact': 'ciissversion:3 proof:uri-familyid-ed25519 url:mix.org'},
+            {'fingerprint': 'V3B', 'aroi_domain': 'mix.org',
+             'aroi_version': '3', 'aroi_proof_type': 'uri-familyid-ed25519',
+             'contact': 'ciissversion:3 proof:uri-familyid-ed25519 url:mix.org'},
+        ]
+        s = get_contact_validation_status(relays, {'results': []})
+        self.assertEqual(s['validation_summary']['v2_relay_count'], 1)
+        self.assertEqual(s['validation_summary']['v3_relay_count'], 2)
+        self.assertAlmostEqual(s['validation_summary']['v3_relay_percentage'],
+                                66.66666, places=2)
+        self.assertTrue(s['validation_summary']['is_mixed_migration'])
+        self.assertTrue(s['validation_summary']['is_v3_adopter'])
+        # 2 of 3 = 66% -> 'migrating' tier (>=25%, <75%)
+        self.assertEqual(s['validation_summary']['v3_tier'], 'migrating')
+
+    def test_aroi_warnings_log_records_unknown_proof_type(self):
+        """B6 (final): _record_warning surfaces unknown_proof_type for the
+        api-diagnostics page. Each kind+value pair recorded once with
+        timestamp + count of occurrences."""
+        from allium.lib.aroi_validation import (
+            _check_aroi_fields, get_aroi_warnings_log, reset_aroi_warnings_log,
+        )
+        reset_aroi_warnings_log()
+
+        # First occurrence: a relay declaring an unknown proof type
+        _check_aroi_fields(
+            'ciissversion:3 url:foo.bar proof:dns-future-cipher-2030'
+        )
+        # Same unknown proof type again should NOT add a duplicate entry
+        _check_aroi_fields(
+            'ciissversion:3 url:bar.baz proof:dns-future-cipher-2030'
+        )
+        # Different unknown proof type should add a new entry
+        _check_aroi_fields(
+            'ciissversion:3 url:foo.bar proof:another-unknown-thing'
+        )
+
+        warnings = get_aroi_warnings_log()
+        kinds_values = {(w['kind'], w['value']) for w in warnings}
+        # Both unknown proof types tracked; one warning each (first-occurrence dedup)
+        self.assertIn(('unsupported_proof_type', 'dns-future-cipher-2030'), kinds_values)
+        self.assertIn(('unsupported_proof_type', 'another-unknown-thing'), kinds_values)
+
+        # Each entry must have a timestamp_iso (Z-suffixed)
+        for w in warnings:
+            self.assertIn('timestamp_iso', w)
+            self.assertTrue(w['timestamp_iso'].endswith('Z'))
+            self.assertGreaterEqual(w['count'], 1)
+
+    def test_aroi_warnings_log_records_schema_mismatch(self):
+        """B6 (final): schema-version mismatch logged in the warning feed."""
+        from allium.lib.aroi_validation import (
+            check_schema_version, get_aroi_warnings_log,
+            reset_aroi_warnings_log,
+        )
+        reset_aroi_warnings_log()
+        check_schema_version(
+            {'metadata': {'aroivalidator_schema_version': 99}},
+            lambda m: None,
+        )
+        warnings = get_aroi_warnings_log()
+        kinds_values = {(w['kind'], w['value']) for w in warnings}
+        self.assertIn(('schema_mismatch', '99'), kinds_values)
+
+    def test_aroi_warnings_log_timestamp_format(self):
+        """B6 (final): timestamp_iso uses Python 3.12-safe APIs.
+
+        Pins the contract that timestamps are ISO format with Z suffix
+        and represent UTC. Catches accidental introduction of deprecated
+        datetime.utcnow() (deprecated in Python 3.12+, scheduled removal
+        in a future release)."""
+        import re
+        from allium.lib.aroi_validation import (
+            _check_aroi_fields, get_aroi_warnings_log, reset_aroi_warnings_log,
+        )
+        reset_aroi_warnings_log()
+        _check_aroi_fields(
+            'ciissversion:3 url:foo.bar proof:future-cipher-x'
+        )
+        warnings = get_aroi_warnings_log()
+        self.assertTrue(warnings)
+        ts = warnings[0]['timestamp_iso']
+        # ISO 8601 second-precision UTC: YYYY-MM-DDTHH:MM:SSZ
+        self.assertRegex(
+            ts,
+            r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$',
+            f'timestamp_iso has invalid format: {ts!r}'
+        )
+
+    def test_aroi_warnings_propagates_through_api_diagnostics(self):
+        """B6 (final): collect_api_diagnostics surfaces warnings as
+        aroi_extras['warnings'] so the template can render them.
+
+        End-to-end test exercising the
+        aroi_validation._record_warning → get_aroi_warnings_log
+        → api_diagnostics.collect_api_diagnostics path."""
+        from allium.lib.aroi_validation import (
+            _check_aroi_fields, reset_aroi_warnings_log,
+        )
+
+        # Trigger an unsupported_proof_type warning during this test.
+        reset_aroi_warnings_log()
+        _check_aroi_fields(
+            'ciissversion:3 url:foo.bar proof:future-cipher-2030'
+        )
+
+        # Stub a relay_set + args minimally so collect_api_diagnostics
+        # can produce its dict for the AROI entry.
+        from allium.lib.api_diagnostics import collect_api_diagnostics
+
+        class _StubArgs:
+            enabled_apis = 'all'
+            aroi_url = 'https://aroivalidator.1aeo.com/latest.json'
+
+        class _StubRelaySet:
+            aroi_validation_data = {
+                'metadata': {'aroivalidator_schema_version': 2},
+                'statistics': {'proof_types': {}, 'v3_failure_categories': {}},
+                'results': [],
+            }
+            # Other APIs read .json or other attributes; stub them as empty
+            # dicts so collect_api_diagnostics doesn't crash on the non-AROI
+            # entries.
+            json = {'relays': []}
+            exit_dns_health_data = None
+            collector_consensus_data = None
+            collector_descriptors_data = None
+            uptime_data = None
+            bandwidth_data = None
+
+        diag = collect_api_diagnostics(_StubRelaySet(), _StubArgs())
+        aroi_entry = next(a for a in diag['apis'] if a['name'] == 'aroi_validation')
+        warnings = aroi_entry.get('aroi_extras', {}).get('warnings') or []
+        kinds_values = {(w['kind'], w['value']) for w in warnings}
+        self.assertIn(('unsupported_proof_type', 'future-cipher-2030'), kinds_values)
+
+    def test_per_version_success_rate_pills(self):
+        """B1.1 (final): per-version validated counts + success rates
+        populated for the v3_migration_summary section's success-rate pills.
+        Plan called for 'v2 relay count and v3 relay count side-by-side
+        with success-rate pills'."""
+        relays = [
+            # v2 relays: 2 declared, both valid
+            {'fingerprint': 'V2A', 'aroi_domain': 'mix.org',
+             'aroi_version': '2', 'aroi_proof_type': 'uri-rsa',
+             'contact': 'ciissversion:2 proof:uri-rsa url:mix.org'},
+            {'fingerprint': 'V2B', 'aroi_domain': 'mix.org',
+             'aroi_version': '2', 'aroi_proof_type': 'uri-rsa',
+             'contact': 'ciissversion:2 proof:uri-rsa url:mix.org'},
+            # v3 relays: 4 declared, only 1 valid (3 pending)
+            {'fingerprint': 'V3A', 'aroi_domain': 'mix.org',
+             'aroi_version': '3', 'aroi_proof_type': 'uri-familyid-ed25519',
+             'contact': 'ciissversion:3 proof:uri-familyid-ed25519 url:mix.org'},
+            {'fingerprint': 'V3B', 'aroi_domain': 'mix.org',
+             'aroi_version': '3', 'aroi_proof_type': 'uri-familyid-ed25519',
+             'contact': 'ciissversion:3 proof:uri-familyid-ed25519 url:mix.org'},
+            {'fingerprint': 'V3C', 'aroi_domain': 'mix.org',
+             'aroi_version': '3', 'aroi_proof_type': 'uri-familyid-ed25519',
+             'contact': 'ciissversion:3 proof:uri-familyid-ed25519 url:mix.org'},
+            {'fingerprint': 'V3D', 'aroi_domain': 'mix.org',
+             'aroi_version': '3', 'aroi_proof_type': 'uri-familyid-ed25519',
+             'contact': 'ciissversion:3 proof:uri-familyid-ed25519 url:mix.org'},
+        ]
+        validation_data = {
+            'metadata': {'aroivalidator_schema_version': 2},
+            'statistics': {'proof_types': {}},
+            'results': [
+                {'fingerprint': 'V2A', 'valid': True, 'ciissversion': '2',
+                 'proof_type': 'uri-rsa'},
+                {'fingerprint': 'V2B', 'valid': True, 'ciissversion': '2',
+                 'proof_type': 'uri-rsa'},
+                {'fingerprint': 'V3A', 'valid': True, 'ciissversion': '3',
+                 'proof_type': 'uri-familyid-ed25519'},
+                {'fingerprint': 'V3B', 'valid': False, 'ciissversion': '3',
+                 'error_category': 'missing_family_ids',
+                 'error': 'no family_ids in Onionoo'},
+                {'fingerprint': 'V3C', 'valid': False, 'ciissversion': '3',
+                 'error_category': 'missing_family_ids',
+                 'error': 'no family_ids in Onionoo'},
+                {'fingerprint': 'V3D', 'valid': False, 'ciissversion': '3',
+                 'error_category': 'missing_family_ids',
+                 'error': 'no family_ids in Onionoo'},
+            ],
+        }
+        s = get_contact_validation_status(relays, validation_data)
+        summary = s['validation_summary']
+        # v2 declarations + validations
+        self.assertEqual(summary['v2_relay_count'], 2)
+        self.assertEqual(summary['v2_validated_count'], 2)
+        self.assertEqual(summary['v2_success_rate'], 100.0)
+        # v3 declarations + validations
+        self.assertEqual(summary['v3_relay_count'], 4)
+        self.assertEqual(summary['v3_validated_count'], 1)
+        self.assertEqual(summary['v3_success_rate'], 25.0)
+
+    def test_pure_v3_operator_complete_tier(self):
+        """A.5: 100% v3 operator -> v3_tier='complete'."""
+        relays = [
+            {'fingerprint': 'A', 'aroi_domain': 'pure.org',
+             'aroi_version': '3', 'aroi_proof_type': 'dns-familyid-ed25519',
+             'contact': 'ciissversion:3 proof:dns-familyid-ed25519 url:pure.org'},
+            {'fingerprint': 'B', 'aroi_domain': 'pure.org',
+             'aroi_version': '3', 'aroi_proof_type': 'dns-familyid-ed25519',
+             'contact': 'ciissversion:3 proof:dns-familyid-ed25519 url:pure.org'},
+        ]
+        s = get_contact_validation_status(relays, {'results': []})
+        self.assertEqual(s['validation_summary']['v3_tier'], 'complete')
+        self.assertFalse(s['validation_summary']['is_mixed_migration'])
+        self.assertTrue(s['validation_summary']['is_v3_adopter'])
+
+    def test_v2_only_operator_no_tier(self):
+        """A.5: v2-only operator -> v3_tier='none', is_v3_adopter=False."""
+        relays = [
+            {'fingerprint': 'A', 'aroi_domain': 'old.org',
+             'aroi_version': '2', 'aroi_proof_type': 'uri-rsa',
+             'contact': 'ciissversion:2 proof:uri-rsa url:old.org'},
+        ]
+        s = get_contact_validation_status(relays, {'results': []})
+        self.assertEqual(s['validation_summary']['v3_tier'], 'none')
+        self.assertFalse(s['validation_summary']['is_v3_adopter'])
+
+    def test_schema_version_handshake_unknown(self):
+        """A.1: schema version outside tested set logs a warning, doesn't crash."""
+        from allium.lib.aroi_validation import (
+            check_schema_version, _warned_schema_versions
+        )
+        _warned_schema_versions.clear()  # Test isolation
+        warnings = []
+
+        def capture(msg):
+            warnings.append(msg)
+
+        # Schema 99 is far in the future of tested schemas.
+        result = check_schema_version(
+            {'metadata': {'aroivalidator_schema_version': 99}}, capture
+        )
+        self.assertEqual(result, 99)
+        self.assertEqual(len(warnings), 1)
+        self.assertIn('schema version 99', warnings[0])
+        self.assertIn('newer than tested', warnings[0])
+
+        # Second call with same version: no duplicate warning.
+        result2 = check_schema_version(
+            {'metadata': {'aroivalidator_schema_version': 99}}, capture
+        )
+        self.assertEqual(result2, 99)
+        self.assertEqual(len(warnings), 1, "duplicate warning emitted")
+
+    def test_schema_version_handshake_known(self):
+        """A.1: schema version in tested set -> no warning."""
+        from allium.lib.aroi_validation import check_schema_version
+        warnings = []
+        result = check_schema_version(
+            {'metadata': {'aroivalidator_schema_version': 2}},
+            lambda m: warnings.append(m)
+        )
+        self.assertEqual(result, 2)
+        self.assertEqual(warnings, [])
+
+    def test_schema_version_handshake_missing(self):
+        """A.1: no schema version -> returns None, no warning."""
+        from allium.lib.aroi_validation import check_schema_version
+        warnings = []
+        result = check_schema_version(
+            {'metadata': {}}, lambda m: warnings.append(m)
+        )
+        self.assertIsNone(result)
+        self.assertEqual(warnings, [])
+
+    def test_error_rollup_shared_v2_v3_split(self):
+        """A.6: _build_error_rollup splits errors into shared / v2-only / v3-only."""
+        from allium.lib.aroi_validation import _build_error_rollup
+        results = [
+            # Shared category: both v2 and v3 hit transport errors
+            {'fingerprint': 'A', 'valid': False, 'ciissversion': '2',
+             'error_category': 'transport_error'},
+            {'fingerprint': 'B', 'valid': False, 'ciissversion': '3',
+             'error_category': 'transport_error'},
+            # v3-only: missing_family_ids
+            {'fingerprint': 'C', 'valid': False, 'ciissversion': '3',
+             'error_category': 'missing_family_ids'},
+            {'fingerprint': 'D', 'valid': False, 'ciissversion': '3',
+             'error_category': 'missing_family_ids'},
+            # v2-only: imagine a future v2-specific category
+            {'fingerprint': 'E', 'valid': False, 'ciissversion': '2',
+             'error_category': 'some_v2_only_thing'},
+            # Valid relay should not appear in any rollup
+            {'fingerprint': 'F', 'valid': True, 'ciissversion': '3'},
+        ]
+        shared, v2_only, v3_only = _build_error_rollup(results)
+        # Shared: transport_error counted across both versions = 2
+        self.assertEqual(len(shared), 1)
+        self.assertEqual(shared[0][0], 'transport_error')
+        self.assertEqual(shared[0][2], 2)
+        # v3-only: missing_family_ids count 2
+        v3_categories = {row[0]: row[2] for row in v3_only}
+        self.assertEqual(v3_categories.get('missing_family_ids'), 2)
+        # v2-only: some_v2_only_thing
+        v2_categories = {row[0]: row[2] for row in v2_only}
+        self.assertEqual(v2_categories.get('some_v2_only_thing'), 1)
+
+    def test_v3_category_labels_cover_upstream_categories(self):
+        """A.7: every upstream error_category we expect must have a label."""
+        from allium.lib.aroi_validation import V3_CATEGORY_LABELS
+        # The 13 categories from upstream's CATEGORY_INFO.
+        upstream_cats = {
+            'missing_family_ids', 'dns_txt_missing', 'dns_content_mismatch',
+            'uri_file_missing', 'uri_content_mismatch',
+            'wrong_proof_type_rsa', 'missing_proof_field', 'invalid_url',
+            'unsafe_target', 'redirect_disallowed', 'secret_key_leaked',
+            'ciissversion_unsupported', 'transport_error',
+        }
+        for cat in upstream_cats:
+            self.assertIn(cat, V3_CATEGORY_LABELS, f"missing label for {cat}")
+            entry = V3_CATEGORY_LABELS[cat]
+            self.assertTrue(entry.get('title'), f"{cat} missing title")
+            self.assertTrue(entry.get('example'),
+                            f"{cat} missing pasteable example")
+
+    def test_version_proof_mismatch_routes_to_incomplete(self):
+        """A.5: ciissversion:2 + proof:uri-familyid-ed25519 -> incomplete bucket
+        with version_proof_mismatch sub-category and pasteable hint."""
+        # _simple_aroi_parsing returns aroi_domain="none" for mismatches, so
+        # the relay reaches get_contact_validation_status with aroi_domain="none"
+        # but contact has all 3 fields detected by _check_aroi_fields.
+        relays = [{
+            'fingerprint': 'MIX', 'aroi_domain': 'none',
+            'aroi_version': '2', 'aroi_proof_type': 'uri-familyid-ed25519',
+            'contact': 'ciissversion:2 url:foo.bar proof:uri-familyid-ed25519',
+        }]
+        s = get_contact_validation_status(relays, {'results': []})
+        # Should be in incomplete bucket with version_proof_mismatch flag.
+        self.assertEqual(s['validation_summary']['incomplete_count'], 1)
+        self.assertEqual(
+            s['validation_summary']['incomplete_version_proof_mismatch_count'], 1
+        )
+        relay_info = s['incomplete_relays'][0]
+        self.assertEqual(relay_info['error_category'], 'version_proof_mismatch')
+        # Pasteable example hint surfaced.
+        self.assertIn('ciissversion:3', relay_info['hint'])
+        self.assertIn('proof:uri-familyid-ed25519', relay_info['hint'])
+
+
+class TestAROIPasteableExamples(unittest.TestCase):
+    """Pasteable-example contract enforcement (UX feedback round 2).
+
+    Categories that fire for both CIISS v2 and CIISS v3 must render
+    version-appropriate file paths in their pasteable curl/DNS examples.
+
+    The user-reported bug: a v2 relay hitting 'URI-RSA fingerprint not found'
+    was rendering the ed25519-family-id.txt path (the v3 file). After the
+    fix, V3_CATEGORY_LABELS may declare an alternate 'example_v2' entry,
+    and _resolve_example_for_proof picks it when proof_type is RSA-flavored.
+    """
+
+    def test_resolve_example_for_proof_picks_v2_for_uri_rsa(self):
+        from allium.lib.aroi_validation import (
+            V3_CATEGORY_LABELS, _resolve_example_for_proof,
+        )
+        label = V3_CATEGORY_LABELS['uri_content_mismatch']
+        v2_example = _resolve_example_for_proof(label, 'uri-rsa')
+        v3_example = _resolve_example_for_proof(label, 'uri-familyid-ed25519')
+        # v2 must reference rsa-fingerprint.txt (the v2 spec file).
+        self.assertIn('rsa-fingerprint.txt', v2_example)
+        self.assertNotIn('ed25519-family-id.txt', v2_example)
+        # v3 must reference ed25519-family-id.txt (the v3 spec file).
+        self.assertIn('ed25519-family-id.txt', v3_example)
+
+    def test_resolve_example_for_proof_picks_v2_for_dns_rsa(self):
+        from allium.lib.aroi_validation import (
+            V3_CATEGORY_LABELS, _resolve_example_for_proof,
+        )
+        label = V3_CATEGORY_LABELS['dns_txt_missing']
+        v2_example = _resolve_example_for_proof(label, 'dns-rsa')
+        # v2 DNS uses 'we-run-this-tor-relay <fingerprint>' pattern.
+        self.assertIn('we-run-this-tor-relay', v2_example)
+        self.assertIn('<fingerprint>', v2_example)
+
+    def test_resolve_example_for_proof_falls_back_to_v3_when_no_v2_field(self):
+        """v3-only categories (no example_v2 key) still return the v3 example
+        even if proof_type is somehow RSA — fail-open, never None."""
+        from allium.lib.aroi_validation import (
+            V3_CATEGORY_LABELS, _resolve_example_for_proof,
+        )
+        # 'wrong_proof_type_rsa' is v3-only (it describes "v3 contact declares
+        # v2 proof type"). No example_v2 declared.
+        label = V3_CATEGORY_LABELS['wrong_proof_type_rsa']
+        self.assertIsNone(label.get('example_v2'))
+        result = _resolve_example_for_proof(label, 'uri-rsa')
+        # Should still return *something* (the default v3 example) — never None.
+        self.assertIsNotNone(result)
+        self.assertEqual(result, label['example'])
+
+    def test_uri_rsa_misconfigured_relay_renders_full_v2_url(self):
+        """User-reported bug: a v2 (URI-RSA) misconfigured relay with category
+        'uri_content_mismatch' must render the FULL v2 URL in its pasteable
+        example, not just '~/.well-known' nor the ed25519 file path.
+
+        The path must include https:// + domain + /.well-known/tor-relay/ +
+        rsa-fingerprint.txt + the actual relay's fingerprint."""
+        relay = {
+            'fingerprint': '0' * 40,
+            'aroi_domain': 'example.org',
+            'aroi_version': '2',
+            'aroi_proof_type': 'uri-rsa',
+            'contact': 'ciissversion:2 proof:uri-rsa url:example.org',
+        }
+        validation_data = {
+            'results': [{
+                'fingerprint': '0' * 40,
+                'valid': False,
+                'proof_type': 'uri-rsa',
+                'ciissversion': '2',
+                'error_category': 'uri_content_mismatch',
+                'error': 'URI-RSA: Fingerprint not found at example.org',
+            }],
+        }
+        s = get_contact_validation_status([relay], validation_data)
+        # uri_content_mismatch routes to 'unauthorized' (per A.4 cascade),
+        # not misconfigured. The pasteable-example contract is the same
+        # regardless of which bucket the relay lands in.
+        unauthorized = s['unauthorized_relays']
+        self.assertEqual(len(unauthorized), 1)
+        info = unauthorized[0]
+        ex = info.get('pasteable_example') or ''
+        # Must reference v2 (RSA) path, not v3 (ed25519) path.
+        self.assertIn('rsa-fingerprint.txt', ex)
+        self.assertNotIn('ed25519-family-id.txt', ex)
+        # Must include the operator's actual domain.
+        self.assertIn('example.org', ex)
+        # Must include the actual relay fingerprint (substituted in by
+        # _render_pasteable_example).
+        self.assertIn('0' * 40, ex)
+        # Must be a fully-qualified URL, not '~/.well-known'.
+        self.assertIn('https://', ex)
+        self.assertIn('/.well-known/tor-relay/', ex)
+
+
+class TestAROIValidationMapCacheRegression(unittest.TestCase):
+    """Regression test for commit 119687b33e -> d68fcec7ec.
+
+    Phase 2 caching used .pop('_validation_map', {}) to extract the
+    validation_map from the metrics dict, then assigned it to
+    relay_set.validation_map. The .pop is destructive: on the first call
+    it extracted the map correctly, but on subsequent CACHE-HIT calls
+    it found no '_validation_map' key (already popped) and overwrote
+    relay_set.validation_map with {} (the .pop default).
+
+    Net effect was: every contact page rendered AFTER the first
+    _calculate_network_health_metrics call had relay_set.validation_map
+    = {} -> every fingerprint lookup missed -> every relay rendered as
+    'misconfigured' / 0% valid even when upstream said 100% valid.
+
+    Visible to operators as: 'all operators show misconfigured AROI'.
+
+    The fix: cache the validation_map separately on
+    relay_set._aroi_metrics_cache and restore it from the cache on
+    every call (not just first compute). This test enforces that
+    contract.
+    """
+
+    def _build_mock_relay_set(self):
+        """Construct a minimal relay_set with one v2-AROI relay that
+        upstream marks as valid, and the validation_data needed."""
+        validation_data = {
+            'results': [{
+                'fingerprint': '1' * 40,
+                'valid': True,
+                'proof_type': 'uri-rsa',
+                'ciissversion': '2',
+            }],
+            'metadata': {'aroivalidator_schema_version': 1},
+        }
+        relays = [{
+            'fingerprint': '1' * 40,
+            'nickname': 'TestRelay',
+            'contact': 'ciissversion:2 proof:uri-rsa url:test.example',
+            'aroi_domain': 'test.example',
+            'aroi_version': '2',
+            'aroi_proof_type': 'uri-rsa',
+            'aroi_configured': True,
+        }]
+
+        class MockRelaySet:
+            progress = False
+            progress_logger = None
+
+            def __init__(self):
+                self.aroi_validation_data = validation_data
+                self.json = {'relays': relays}
+
+        return MockRelaySet(), validation_data, relays
+
+    def test_validation_map_survives_multiple_cache_hits(self):
+        """The cache-hit path must NOT wipe relay_set.validation_map."""
+        from allium.lib.network_health import _integrate_aroi_validation
+        rs, _, _ = self._build_mock_relay_set()
+
+        # First call (cache miss): map populated.
+        hm1 = {}
+        _integrate_aroi_validation(hm1, rs, 1)
+        size_after_1st = len(getattr(rs, 'validation_map', {}))
+        self.assertGreater(
+            size_after_1st, 0,
+            "validation_map empty after first call - cache miss path broken"
+        )
+
+        # Second call (cache hit): map MUST still be populated.
+        hm2 = {}
+        _integrate_aroi_validation(hm2, rs, 1)
+        size_after_2nd = len(getattr(rs, 'validation_map', {}))
+        self.assertEqual(
+            size_after_2nd, size_after_1st,
+            "validation_map was wiped on cache hit "
+            "(regression of commit 119687b33e)"
+        )
+
+        # Third call (still cache hit) - reinforces the contract.
+        hm3 = {}
+        _integrate_aroi_validation(hm3, rs, 1)
+        size_after_3rd = len(getattr(rs, 'validation_map', {}))
+        self.assertEqual(size_after_3rd, size_after_1st)
+
+    def test_contact_validation_correct_after_cache_hits(self):
+        """End-to-end: a valid v2 relay must still be reported as
+        validated after the cache has been hit multiple times.
+
+        This is the BEHAVIOURAL contract that the cache regression
+        violated: contact pages rendered after the first call were
+        seeing every relay as misconfigured.
+        """
+        from allium.lib.network_health import _integrate_aroi_validation
+        from allium.lib.aroi_validation import get_contact_validation_status
+        rs, validation_data, relays = self._build_mock_relay_set()
+
+        # Drive 4 calls (matches typical _calculate_network_health_metrics
+        # call count: uptime + bandwidth + exit_dns + fallback).
+        for _ in range(4):
+            _integrate_aroi_validation({}, rs, 1)
+
+        # After all those cache hits, validation_map must still let the
+        # one valid relay round-trip as 'validated'.
+        result = get_contact_validation_status(
+            relays, validation_data, rs.validation_map
+        )
+        s = result['validation_summary']
+        self.assertEqual(s['validated_count'], 1)
+        self.assertEqual(s['v2_validated_count'], 1)
+        self.assertEqual(s['v2_relay_count'], 1)
+        self.assertEqual(s['v2_success_rate'], 100.0)
+        self.assertEqual(result['validation_status'], 'validated')
+
+
 if __name__ == '__main__':
     unittest.main()

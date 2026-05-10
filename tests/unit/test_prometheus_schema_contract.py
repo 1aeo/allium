@@ -158,6 +158,7 @@ def test_metric_family_contract_and_legacy_absence(render_metrics):
         "aeo1_exit_dns_errors_count",
         "aeo1_aroi_relay_state",
         "aeo1_aroi_relays_count",
+        "aeo1_aroi_relays_count_by_version",
         "aeo1_aroi_scan_timestamp_seconds",
         "aeo1_aroi_relay_info",
     }
@@ -172,9 +173,11 @@ def test_metric_family_contract_and_legacy_absence(render_metrics):
 
 
 def test_frozen_aroi_state_enum_values(render_metrics):
+    # B7.1: regex updated for new labelset (state still extractable as
+    # before; bounded enum unchanged from schema v2).
     states = set(
         re.findall(
-            r'aeo1_aroi_relay_state\{[^}]*state="([^"]+)"\} 1',
+            r'aeo1_aroi_relay_state\{[^}]*?state="([^"]+)"',
             render_metrics,
         )
     )
@@ -197,8 +200,13 @@ def test_frozen_label_keys_for_core_metrics(render_metrics):
         "aeo1_exit_dns_latency_ms": {"fingerprint", "familyid"},
         "aeo1_exit_dns_consecutive_failures": {"fingerprint", "familyid"},
         "aeo1_exit_relay_info": {"fingerprint", "familyid", "nick", "verifiedaroi"},
-        "aeo1_aroi_relay_state": {"fingerprint", "familyid", "state"},
+        # B7.1: aeo1_aroi_relay_state labelset extended with bounded
+        # ciissversion + proof_type_family labels (cardinality cap = 4×5=20).
+        "aeo1_aroi_relay_state": {"fingerprint", "familyid", "state",
+                                   "ciissversion", "proof_type_family"},
         "aeo1_aroi_relays_count": {"state"},
+        # B7.2: new metric for per-version state counts.
+        "aeo1_aroi_relays_count_by_version": {"state", "ciissversion"},
         "aeo1_aroi_relay_info": {"fingerprint", "familyid", "nick", "domain", "proof_type"},
     }
     for metric, expected_keys in expected.items():
@@ -284,14 +292,19 @@ def test_recording_rules_file_exists_and_uses_v2_states():
 def test_alert_and_recording_rule_metric_references_exist(render_metrics):
     emitted = _metric_names_from_content(render_metrics)
 
+    rules_path = _DOCS_DIR / "recording_rules.yml"
+    record_names = _extract_record_names(rules_path)
+    group_names = _extract_group_names(rules_path)
+
     alerts_path = _DOCS_DIR / "alerts_aroi.yml"
     alerts_refs = _extract_non_comment_aeo1_tokens(alerts_path)
     alerts_refs -= _extract_group_names(alerts_path)
-    assert alerts_refs.issubset(emitted), f"unknown alert refs: {sorted(alerts_refs - emitted)}"
+    # B7.2: alerts may reference recording rule outputs (derived metrics)
+    # in addition to directly-emitted metrics. Both are valid sources.
+    valid_alert_targets = emitted | record_names
+    assert alerts_refs.issubset(valid_alert_targets), \
+        f"unknown alert refs: {sorted(alerts_refs - valid_alert_targets)}"
 
-    rules_path = _DOCS_DIR / "recording_rules.yml"
     rules_refs = _extract_non_comment_aeo1_tokens(rules_path)
-    record_names = _extract_record_names(rules_path)
-    group_names = _extract_group_names(rules_path)
     expr_refs = rules_refs - record_names - group_names
     assert expr_refs.issubset(emitted), f"unknown recording expr refs: {sorted(expr_refs - emitted)}"
